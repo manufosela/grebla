@@ -152,13 +152,19 @@ Resumen de las reglas:
 - `/admins/**` — lectura para autenticados; escritura solo para admins.
 - `/config/org` — lectura para autenticados; escritura solo para admins.
 
-### 6. Primer administrador
+### 6. Administradores
 
-El rol admin se gestiona en `/admins/{uid}` (documento vacío = es admin). La
-primera persona que entra puede **reclamarse administrador desde `/login`**
-mientras no exista ninguno (las reglas lo permiten una sola vez y marcan
-`/config/adminsInitialized`). A partir de ahí, los nuevos admins los da de alta
-un admin existente.
+El rol admin se gestiona en `/admins/{uid}` y **solo se concede server-side**
+(no hay ningún mecanismo cliente para auto-concederse admin: sería un agujero de
+seguridad). Opciones:
+
+- **Primer admin**: inicia sesión una vez con Google (para existir en Auth) y
+  ejecuta `pnpm seed --admin=tu-email@dominio.com` (Admin SDK, omite las reglas).
+- **Nuevos admins**: un admin existente los da de alta con la Cloud Function
+  `grantAdmin` (custom claim + `/admins/{uid}`), o de nuevo con `pnpm seed`.
+
+Las reglas de Firestore solo permiten escribir en `/admins` a un admin ya
+existente; el alta inicial se hace con el Admin SDK, que omite las reglas.
 
 ## Cómo funciona el cálculo
 
@@ -197,8 +203,8 @@ pnpm seed --admin=tu-email@dominio.com
 ### Primer administrador
 
 1. Entra una vez en **/login** con tu cuenta Google (te crea en Auth).
-2. Reclama admin desde el bootstrap de **/login**, o ejecuta
-   `pnpm seed --admin=tu-email@dominio.com`.
+2. Ejecuta `pnpm seed --admin=tu-email@dominio.com` (Admin SDK). No hay claim de
+   admin desde la UI.
 
 También se puede usar el sitio estático en Netlify, Vercel (static) o GitHub
 Pages configurando las variables `PUBLIC_FIREBASE_*` en el build.
