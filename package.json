@@ -8,7 +8,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "assets": "node scripts/gen-assets.mjs"
   },
   "dependencies": {
     "@astrojs/lit": "^4.3.0",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "sharp": "^0.34.5",
     "typescript": "^6.0.3"
   },
   "pnpm": {

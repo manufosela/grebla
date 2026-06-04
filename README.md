@@ -18,6 +18,13 @@ Paleta extraída del logo (brújula + corazón):
 Definidos en `:root` (`src/layouts/Base.astro`) y consumidos por los componentes
 Lit vía `var(--rm-*)` / `var(--gr-*)`.
 
+**Assets de marca.** El icono (brújula + corazón) y la imagen social se generan
+desde SVG con `pnpm assets` (script `scripts/gen-assets.mjs`, usa `sharp`):
+`public/favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` y `og-image.png`
+(1200×630). Las meta Open Graph/Twitter están en `Base.astro`. Para que la
+imagen social use URL **absoluta**, configura `site` en `astro.config.mjs` con tu
+dominio de despliegue (si no, se usa una ruta relativa).
+
 ## Role Mirror (`/tools/role-mirror`)
 
 Primera herramienta del framework: **autodiagnóstico de perfil de ingeniería**.
