@@ -241,13 +241,13 @@ Ese score por rol alimenta el polígono del radar de equipo (9 ejes = 9 roles). 
 | Hueco | Estado |
 |------|--------|
 | H1 (app vs framework) | **Resuelto**: GREBLA = suite; esta es una herramienta más; Role Mirror se conserva. |
-| H2 (stack) | **Propuesta**: shell Astro + tool Lit embebida (PWA) + dominio hexagonal compartido. *(Confirmar.)* |
+| H2 (stack) | **Confirmado**: shell Astro + tool Lit embebida (PWA) + dominio hexagonal compartido en `src/`. |
 | H3 (contribución) | **Resuelto**: primario/secundario; cobertura = 1.0/0.5 sumado. |
 | H5 (emocional vs notas) | **Resuelto**: dimensión Emocional con nivel ≠ support notes sin nivel. |
 | H6 (7 niveles + 9 Belbin) | **Resuelto** (§6). |
-| H4 (umbral bus factor) | Pendiente: default ≥ nivel 3 (Peritus). *(Confirmar.)* |
-| H7 (áreas conocimiento) | Pendiente: las crea el líder (CRUD), seed vacío. *(Confirmar.)* |
-| H8 (ficheros on/off) | Pendiente: default OFF en MVP por coste. *(Confirmar.)* |
-| H9 (cadencia) | Pendiente: global en MVP. *(Confirmar.)* |
-| H10 (salud cualitativa) | Pendiente: cobertura roles + bus factor 1 + % silencio + distribución seniority. *(Confirmar.)* |
-| H11 (PWA offline) | Pendiente: instalable + app-shell; datos online (offline Firestore opcional). *(Confirmar.)* |
+| H4 (umbral bus factor) | **Confirmado**: riesgo si el área la cubren <2 personas con nivel ≥ Peritus (3). |
+| H7 (áreas conocimiento) | **Confirmado**: las crea el líder (CRUD), sin seed inicial. |
+| H8 (ficheros on/off) | **Confirmado**: puerto de ficheros **OFF** en el MVP (activable por flag). |
+| H9 (cadencia) | **Confirmado**: global en MVP; override por persona en fase posterior. |
+| H10 (salud cualitativa) | **Confirmado**: cobertura de roles + nº áreas con bus factor 1 + % personas en silencio + distribución de seniority (sin rankear personas). |
+| H11 (PWA offline) | **Confirmado**: instalable + app-shell offline; datos requieren conexión (offline de datos = fase 2). |
