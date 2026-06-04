@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#f6f9fa" />
+  <rect x="0" y="0" width="1200" height="10" fill="#2a9d8f" />
+  <rect x="0" y="620" width="1200" height="10" fill="#f2887a" />
+
+  <!-- Icono brújula + corazón -->
+  <g transform="translate(120,205) scale(3.4)">
+    <circle cx="32" cy="32" r="25" fill="none" stroke="#1e3a5f" stroke-opacity="0.35" stroke-width="3" />
+    <circle cx="7" cy="32" r="4" fill="#2a9d8f" />
+    <circle cx="57" cy="32" r="4" fill="#2a9d8f" />
+    <polygon points="32,6 26,31 38,31" fill="#2a9d8f" />
+    <polygon points="32,58 26,33 38,33" fill="#1e3a5f" />
+    <path d="M32 38 C 27 33 23 31 23 27.2 C 23 24.6 25 23 27.5 23 C 29.6 23 31 24.6 32 26.2 C 33 24.6 34.4 23 36.5 23 C 39 23 41 24.6 41 27.2 C 41 31 37 33 32 38 Z" fill="#f2887a" />
+  </g>
+
+  <!-- Wordmark y tagline -->
+  <text x="408" y="295" font-family="DejaVu Sans, Arial, sans-serif" font-size="112" font-weight="700" letter-spacing="8" fill="#1e3a5f">GREBLA</text>
+  <text x="412" y="356" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" fill="#2a9d8f">Guía de Referencia de Equipos Bajo Liderazgo Afectivo</text>
+  <text x="412" y="406" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="#5b6b7d">Herramientas para entender y desarrollar equipos y personas.</text>
+</svg>

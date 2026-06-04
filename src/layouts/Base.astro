@@ -9,6 +9,11 @@
  *  - requireAdmin?: boolean  redirige a / si hay sesión pero no es admin
  */
 const { title = 'GREBLA', requireAuth = false, requireAdmin = false } = Astro.props;
+
+const ogDescription =
+  'GREBLA — Guía de Referencia de Equipos Bajo Liderazgo Afectivo. Herramientas para entender y desarrollar equipos y personas.';
+// Si se configura `site` en astro.config.mjs, la imagen social usará URL absoluta.
+const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-image.png';
 ---
 
 <!doctype html>
@@ -16,8 +21,22 @@ const { title = 'GREBLA', requireAuth = false, requireAdmin = false } = Astro.pr
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="GREBLA — Guía de Referencia de Equipos Bajo Liderazgo Afectivo. Herramientas para entender y desarrollar equipos y personas." />
+    <meta name="description" content={ogDescription} />
     <title>{title}</title>
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GREBLA" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={ogDescription} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={ogDescription} />
+    <meta name="twitter:image" content={ogImage} />
   </head>
   <body data-require-auth={String(requireAuth)} data-require-admin={String(requireAdmin)}>
     <header class="site-header">
