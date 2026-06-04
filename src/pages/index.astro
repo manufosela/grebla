@@ -1,0 +1,19 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Role Mirror — Cuestionario">
+  <h1 class="page-title">¿Cuál es tu perfil de ingeniería?</h1>
+  <p class="page-lead">
+    Responde el cuestionario. Las preguntas se adaptan a tus respuestas y, al
+    terminar, verás tu rol dominante, tu afinidad con cada rol y tu mapa de
+    competencias. Inicia sesión con Google para guardar tu progreso.
+  </p>
+
+  <!-- El web component se define y recibe sus datos desde el script de cliente. -->
+  <role-questionnaire></role-questionnaire>
+</Base>
+
+<script>
+  import '../client/home.js';
+</script>

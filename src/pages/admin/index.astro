@@ -1,0 +1,17 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Role Mirror — Admin" requireAuth={true} requireAdmin={true}>
+  <h1 class="page-title">Panel de administración</h1>
+  <p class="page-lead">
+    Perfiles del equipo, comparativas, distribución de roles, exportación CSV y
+    configuración de la fase de la organización.
+  </p>
+
+  <admin-dashboard></admin-dashboard>
+</Base>
+
+<script>
+  import '../../client/admin.js';
+</script>
