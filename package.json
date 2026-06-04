@@ -1,9 +1,9 @@
 {
-  "name": "role-mirror",
+  "name": "grebla",
   "version": "1.0.0",
   "type": "module",
   "private": true,
-  "description": "Autodiagnóstico de perfil de ingeniería: cuestionario adaptativo y mapa de competencias.",
+  "description": "GREBLA — Guía de Referencia de Equipos Bajo Liderazgo Afectivo. Framework de herramientas para equipos y personas (primera: Role Mirror).",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",

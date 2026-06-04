@@ -8,7 +8,7 @@
  *  - requireAuth?: boolean   redirige a /login si no hay sesión
  *  - requireAdmin?: boolean  redirige a / si hay sesión pero no es admin
  */
-const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Astro.props;
+const { title = 'GREBLA', requireAuth = false, requireAdmin = false } = Astro.props;
 ---
 
 <!doctype html>
@@ -16,13 +16,21 @@ const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Ast
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Autodiagnóstico de perfil de ingeniería: cuestionario adaptativo y mapa de competencias." />
+    <meta name="description" content="GREBLA — Guía de Referencia de Equipos Bajo Liderazgo Afectivo. Herramientas para entender y desarrollar equipos y personas." />
     <title>{title}</title>
   </head>
   <body data-require-auth={String(requireAuth)} data-require-admin={String(requireAdmin)}>
     <header class="site-header">
       <a class="brand" href="/">
-        <span class="brand-mark" aria-hidden="true">▦</span> Framework
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="25" fill="none" stroke="var(--gr-navy)" stroke-opacity="0.35" stroke-width="3" />
+          <circle cx="7" cy="32" r="4" fill="var(--gr-teal)" />
+          <circle cx="57" cy="32" r="4" fill="var(--gr-teal)" />
+          <polygon points="32,6 26,31 38,31" fill="var(--gr-teal)" />
+          <polygon points="32,58 26,33 38,33" fill="var(--gr-navy)" />
+          <path d="M32 38 C 27 33 23 31 23 27.2 C 23 24.6 25 23 27.5 23 C 29.6 23 31 24.6 32 26.2 C 33 24.6 34.4 23 36.5 23 C 39 23 41 24.6 41 27.2 C 41 31 37 33 32 38 Z" fill="var(--gr-coral)" />
+        </svg>
+        <span class="brand-word">GREBLA</span>
       </a>
       <nav class="site-nav">
         <a href="/">Inicio</a>
@@ -36,24 +44,35 @@ const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Ast
       <slot />
     </main>
     <footer class="site-footer">
-      <p>Framework de gestión</p>
+      <p>GREBLA · Guía de Referencia de Equipos Bajo Liderazgo Afectivo</p>
     </footer>
 
     <style is:global>
       :root {
-        --rm-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-        --rm-bg: #f8fafc;
+        /* Paleta GREBLA (extraída del logo) */
+        --gr-navy: #1e3a5f;       /* azul marino: marca, texto */
+        --gr-navy-700: #16304f;
+        --gr-teal: #2a9d8f;       /* teal: acento interactivo */
+        --gr-teal-600: #23867a;
+        --gr-teal-soft: #e6f4f1;
+        --gr-coral: #f2887a;      /* coral: acento afectivo (el corazón) */
+        --gr-coral-600: #e26d5e;
+        --gr-coral-soft: #fdecea;
+
+        --rm-font: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', sans-serif;
+        --rm-bg: #f6f9fa;
         --rm-surface: #ffffff;
-        --rm-surface-hover: #f3f4f6;
-        --rm-text: #111827;
-        --rm-muted: #6b7280;
-        --rm-border: #e5e7eb;
-        --rm-track: #f1f5f9;
-        --rm-accent: #4f46e5;
-        --rm-warning: #f59e0b;
+        --rm-surface-hover: #eef3f5;
+        --rm-text: var(--gr-navy);
+        --rm-muted: #5b6b7d;
+        --rm-border: #dde7ec;
+        --rm-track: #e9f0f2;
+        --rm-accent: var(--gr-teal);
+        --rm-brand: var(--gr-navy);
+        --rm-warning: var(--gr-coral);
         --rm-danger: #dc2626;
         --rm-success: #16a34a;
-        --rm-radius: 12px;
+        --rm-radius: 14px;
         --rm-max: 1100px;
       }
 
@@ -79,15 +98,16 @@ const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Ast
         flex-wrap: wrap;
       }
       .brand {
-        font-weight: 800;
-        font-size: 1.15rem;
+        font-weight: 700;
+        font-size: 1.2rem;
         text-decoration: none;
-        color: var(--rm-text);
+        color: var(--gr-navy);
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        gap: 0.55rem;
       }
-      .brand-mark { color: var(--rm-accent); font-size: 1.3rem; }
+      .brand-word { letter-spacing: 0.14em; }
+      .brand-mark { width: 30px; height: 30px; display: block; }
       .site-nav { display: flex; align-items: center; gap: 1.25rem; }
       .site-nav a {
         text-decoration: none;

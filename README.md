@@ -1,10 +1,31 @@
-# Role Mirror
+# GREBLA
 
-Herramienta de **autodiagnóstico de perfil de ingeniería**. Respondes un
-cuestionario adaptativo (las preguntas se ramifican según tus respuestas) y
-obtienes un mapa de competencias con tu **rol dominante** y tu **distancia** al
-resto de roles. Los resultados se guardan en Firestore vinculados a tu cuenta de
-Google, de modo que puedes tener varias sesiones y ver tu evolución.
+**Guía de Referencia de Equipos Bajo Liderazgo Afectivo.** Framework de
+herramientas para entender y desarrollar equipos y personas. Cada herramienta se
+sirve bajo `/tools/<herramienta>` sobre una base común (Astro + Lit + Firebase),
+con `/` como landing y `/login` como acceso global.
+
+## Identidad visual
+
+Paleta extraída del logo (brújula + corazón):
+
+| Token | Color | Uso |
+|-------|-------|-----|
+| `--gr-navy` | `#1E3A5F` | Marca, texto principal |
+| `--gr-teal` | `#2A9D8F` | Acento interactivo (enlaces, barras, CTAs) |
+| `--gr-coral` | `#F2887A` | Acento afectivo (el "corazón"), perfil objetivo |
+
+Definidos en `:root` (`src/layouts/Base.astro`) y consumidos por los componentes
+Lit vía `var(--rm-*)` / `var(--gr-*)`.
+
+## Role Mirror (`/tools/role-mirror`)
+
+Primera herramienta del framework: **autodiagnóstico de perfil de ingeniería**.
+Respondes un cuestionario adaptativo (las preguntas se ramifican según tus
+respuestas) y obtienes un mapa de competencias con tu **rol dominante** y tu
+**distancia** al resto de roles. Los resultados se guardan en Firestore
+vinculados a tu cuenta de Google, de modo que puedes tener varias sesiones y ver
+tu evolución.
 
 ## Stack
 
