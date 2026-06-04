@@ -94,6 +94,25 @@ export class RoleQuestionnaire extends LitElement {
     }
     .item-text { font-size: 0.95rem; margin-bottom: 0.5rem; display: block; }
     .checkbox { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+    .yesno { display: inline-flex; gap: 0.4rem; }
+    .yesno-btn {
+      border: 1px solid var(--rm-border, #d1d5db);
+      background: var(--rm-surface, #fff);
+      color: var(--rm-muted, #6b7280);
+      border-radius: 999px;
+      padding: 0.35rem 1.25rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .yesno-btn:hover { border-color: var(--rm-accent, #4f46e5); color: var(--rm-text, #111827); }
+    .yesno-btn.active {
+      background: var(--rm-accent, #4f46e5);
+      border-color: var(--rm-accent, #4f46e5);
+      color: #fff;
+    }
+    .yesno-btn:focus-visible { outline: 2px solid var(--rm-accent, #4f46e5); outline-offset: 2px; }
     .scale { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
     .scale-ends { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
     .scale fieldset { border: 0; padding: 0; margin: 0; display: inline-flex; gap: 0.25rem; }
@@ -343,16 +362,26 @@ export class RoleQuestionnaire extends LitElement {
   }
 
   _renderCheckbox(item) {
-    const checked = this.answers[item.id] === true;
+    const value = this.answers[item.id];
     return html`
-      <label class="checkbox">
-        <input
-          type="checkbox"
-          .checked=${checked}
-          @change=${(e) => this._setAnswer(item.id, e.target.checked)}
-        />
-        <span>${checked ? 'Sí' : 'No'}</span>
-      </label>
+      <div class="yesno" role="group" aria-label=${item.text}>
+        <button
+          type="button"
+          class="yesno-btn ${value === true ? 'active' : ''}"
+          aria-pressed=${value === true}
+          @click=${() => this._setAnswer(item.id, true)}
+        >
+          Sí
+        </button>
+        <button
+          type="button"
+          class="yesno-btn ${value === false ? 'active' : ''}"
+          aria-pressed=${value === false}
+          @click=${() => this._setAnswer(item.id, false)}
+        >
+          No
+        </button>
+      </div>
     `;
   }
 
