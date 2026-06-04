@@ -169,8 +169,36 @@ muestra el rol dominante, las barras de afinidad ordenadas, el mapa por
 dimensión (radar) y la **brecha** frente a un rol objetivo. La configuración de
 fase de la organización (`/config/org`) ajusta los pesos por rol.
 
-## Despliegue
+## Despliegue (proyecto `grebla-app`)
 
-`pnpm build` produce un sitio estático en `dist/` desplegable en Firebase
-Hosting, Netlify, Vercel (static), GitHub Pages, etc. Recuerda configurar las
-variables `PUBLIC_FIREBASE_*` en el entorno de build del proveedor.
+El sitio está en producción en **https://grebla-app.web.app** (Firebase Hosting).
+
+Config local en `firebase.json` / `.firebaserc`. Comandos:
+
+```bash
+# Reglas de Firestore
+firebase deploy --only firestore:rules
+
+# Hosting (sirve dist/ — ejecuta antes pnpm build)
+pnpm build && firebase deploy --only hosting
+
+# Cloud Functions (requiere plan Blaze) — callable grantAdmin en europe-west1
+npm install --prefix functions
+firebase deploy --only functions
+
+# Seed de datos: crea /config/org y (opcional) marca admin por email
+pnpm seed --admin=tu-email@dominio.com
+```
+
+> Las variables `PUBLIC_FIREBASE_*` viven en `.env` (gitignored). En un proveedor
+> de build externo, configúralas en su entorno. La service account del Admin SDK
+> (`*firebase-adminsdk*.json`) también está gitignored: nunca se versiona.
+
+### Primer administrador
+
+1. Entra una vez en **/login** con tu cuenta Google (te crea en Auth).
+2. Reclama admin desde el bootstrap de **/login**, o ejecuta
+   `pnpm seed --admin=tu-email@dominio.com`.
+
+También se puede usar el sitio estático en Netlify, Vercel (static) o GitHub
+Pages configurando las variables `PUBLIC_FIREBASE_*` en el build.
