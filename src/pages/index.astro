@@ -1,19 +1,69 @@
 ---
 import Base from '../layouts/Base.astro';
+
+/**
+ * Landing del framework de gestión. Punto de entrada que lista las herramientas
+ * disponibles. Por ahora solo Role Mirror; aquí se irán añadiendo más.
+ */
+const tools = [
+  {
+    name: 'Role Mirror',
+    href: '/tools/role-mirror',
+    description: 'Autodiagnóstico de perfil de ingeniería: cuestionario adaptativo y mapa de competencias.',
+    available: true,
+  },
+];
 ---
 
-<Base title="Role Mirror — Cuestionario">
-  <h1 class="page-title">¿Cuál es tu perfil de ingeniería?</h1>
-  <p class="page-lead">
-    Responde el cuestionario. Las preguntas se adaptan a tus respuestas y, al
-    terminar, verás tu rol dominante, tu afinidad con cada rol y tu mapa de
-    competencias. Inicia sesión con Google para guardar tu progreso.
-  </p>
+<Base title="Framework de gestión">
+  <section class="hero">
+    <h1 class="page-title">Framework de gestión</h1>
+    <p class="page-lead">
+      Un espacio para tus herramientas de gestión de ingeniería. Elige una para
+      empezar.
+    </p>
+  </section>
 
-  <!-- El web component se define y recibe sus datos desde el script de cliente. -->
-  <role-questionnaire></role-questionnaire>
+  <section class="tools">
+    {
+      tools.map((tool) => (
+        <a class="tool-card" href={tool.href} aria-disabled={!tool.available}>
+          <h2>{tool.name}</h2>
+          <p>{tool.description}</p>
+          <span class="cta">Abrir →</span>
+        </a>
+      ))
+    }
+    <div class="tool-card placeholder" aria-hidden="true">
+      <h2>Más herramientas</h2>
+      <p>Próximamente. Aquí se añadirán nuevos módulos del framework.</p>
+    </div>
+  </section>
 </Base>
 
-<script>
-  import '../client/home.js';
-</script>
+<style>
+  .hero { margin-bottom: 2rem; }
+  .tools {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+  .tool-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--rm-surface);
+    border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius);
+    padding: 1.25rem 1.4rem;
+    text-decoration: none;
+    color: var(--rm-text);
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .tool-card:hover { border-color: var(--rm-accent); transform: translateY(-2px); }
+  .tool-card h2 { margin: 0; font-size: 1.15rem; }
+  .tool-card p { margin: 0; color: var(--rm-muted); font-size: 0.9rem; }
+  .tool-card .cta { margin-top: auto; color: var(--rm-accent); font-weight: 700; font-size: 0.9rem; }
+  .tool-card.placeholder { opacity: 0.6; border-style: dashed; cursor: default; }
+  .tool-card.placeholder:hover { border-color: var(--rm-border); transform: none; }
+</style>

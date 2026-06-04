@@ -1,8 +1,8 @@
 ---
-import Base from '../../layouts/Base.astro';
+import RoleMirror from '../../../../layouts/RoleMirror.astro';
 ---
 
-<Base title="Role Mirror — Admin" requireAuth={true} requireAdmin={true}>
+<RoleMirror title="Role Mirror — Admin" requireAuth={true} requireAdmin={true}>
   <h1 class="page-title">Panel de administración</h1>
   <p class="page-lead">
     Perfiles del equipo, comparativas, distribución de roles, exportación CSV y
@@ -10,8 +10,8 @@ import Base from '../../layouts/Base.astro';
   </p>
 
   <admin-dashboard></admin-dashboard>
-</Base>
+</RoleMirror>
 
 <script>
-  import '../../client/admin.js';
+  import '../../../../client/admin.js';
 </script>
