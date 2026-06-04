@@ -22,11 +22,11 @@ const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Ast
   <body data-require-auth={String(requireAuth)} data-require-admin={String(requireAdmin)}>
     <header class="site-header">
       <a class="brand" href="/">
-        <span class="brand-mark" aria-hidden="true">◑</span> Role&nbsp;Mirror
+        <span class="brand-mark" aria-hidden="true">▦</span> Framework
       </a>
       <nav class="site-nav">
-        <a href="/">Cuestionario</a>
-        <a href="/admin">Admin</a>
+        <a href="/">Inicio</a>
+        <a href="/tools/role-mirror">Role Mirror</a>
         <!-- Web component definido e hidratado desde el <script> de cliente de
              abajo. No usamos client:only para no importar firebase en el build. -->
         <auth-button></auth-button>
@@ -36,7 +36,7 @@ const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Ast
       <slot />
     </main>
     <footer class="site-footer">
-      <p>Role Mirror · autodiagnóstico de perfil de ingeniería</p>
+      <p>Framework de gestión</p>
     </footer>
 
     <style is:global>

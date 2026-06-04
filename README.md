@@ -37,10 +37,20 @@ src/
   lib/        firebase.js · auth.js · firestore.js · scoring.js
   components/  auth-button.js · role-questionnaire.js · role-result.js · admin-dashboard.js
   client/     home.js · admin.js · login.js · layout.js   (glue de cliente)
-  layouts/    Base.astro
-  pages/      index.astro · login.astro · admin/index.astro
+  layouts/    Base.astro (global) · RoleMirror.astro (herramienta)
+  pages/
+    index.astro                       → /          landing del framework
+    login.astro                       → /login     login global
+    tools/role-mirror/index.astro     → /tools/role-mirror        cuestionario
+    tools/role-mirror/admin/index.astro → /tools/role-mirror/admin  panel admin
 firestore.rules
 ```
+
+> **Estructura como framework.** Role Mirror es una herramienta servida bajo
+> `/tools/role-mirror`. La raíz `/` es la landing del framework (lista de
+> herramientas) y `/login` es el login global compartido. Para añadir otra
+> herramienta, crea `src/pages/tools/<otra>/` y, si quieres, su propio layout
+> análogo a `RoleMirror.astro`.
 
 > **Nota de arquitectura.** Firebase se inicializa en `src/lib/firebase.js` y
 > **solo se importa desde scripts de cliente** (`src/client/*`), nunca desde el

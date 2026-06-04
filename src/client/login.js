@@ -34,7 +34,7 @@ onUserChanged(async (user) => {
         if (claimError) claimError.textContent = '';
         try {
           await claimFirstAdmin(user);
-          location.replace('/admin');
+          location.replace('/tools/role-mirror/admin');
         } catch (err) {
           if (claimError) {
             claimError.textContent = err instanceof Error ? err.message : 'No se pudo completar.';

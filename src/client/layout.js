@@ -17,7 +17,7 @@ if (requireAuth || requireAdmin) {
       return;
     }
     if (requireAdmin && !(await isAdmin(user.uid))) {
-      location.replace('/');
+      location.replace('/tools/role-mirror');
     }
   });
 }
