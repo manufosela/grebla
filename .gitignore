@@ -13,8 +13,11 @@ node_modules/
 .env.local
 .env.*.local
 
-# firebase
+# firebase — claves de servicio / Admin SDK (NUNCA commitear)
 serviceAccountKey.json
+*firebase-adminsdk*.json
+*-adminsdk-*.json
+*serviceAccount*.json
 .firebase/
 firebase-debug.log*
 firestore-debug.log*
