@@ -1,0 +1,122 @@
+---
+/**
+ * Layout base. Declara las CSS custom properties en :root (consumidas por los
+ * componentes Lit con var(--rm-*)) y un guard de auth client-side opcional.
+ *
+ * Props:
+ *  - title: string
+ *  - requireAuth?: boolean   redirige a /login si no hay sesión
+ *  - requireAdmin?: boolean  redirige a / si hay sesión pero no es admin
+ */
+const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Autodiagnóstico de perfil de ingeniería: cuestionario adaptativo y mapa de competencias." />
+    <title>{title}</title>
+  </head>
+  <body data-require-auth={String(requireAuth)} data-require-admin={String(requireAdmin)}>
+    <header class="site-header">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">◑</span> Role&nbsp;Mirror
+      </a>
+      <nav class="site-nav">
+        <a href="/">Cuestionario</a>
+        <a href="/admin">Admin</a>
+        <!-- Web component definido e hidratado desde el <script> de cliente de
+             abajo. No usamos client:only para no importar firebase en el build. -->
+        <auth-button></auth-button>
+      </nav>
+    </header>
+    <main class="site-main">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <p>Role Mirror · autodiagnóstico de perfil de ingeniería</p>
+    </footer>
+
+    <style is:global>
+      :root {
+        --rm-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --rm-bg: #f8fafc;
+        --rm-surface: #ffffff;
+        --rm-surface-hover: #f3f4f6;
+        --rm-text: #111827;
+        --rm-muted: #6b7280;
+        --rm-border: #e5e7eb;
+        --rm-track: #f1f5f9;
+        --rm-accent: #4f46e5;
+        --rm-warning: #f59e0b;
+        --rm-danger: #dc2626;
+        --rm-success: #16a34a;
+        --rm-radius: 12px;
+        --rm-max: 1100px;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--rm-bg);
+        color: var(--rm-text);
+        font-family: var(--rm-font);
+        line-height: 1.5;
+      }
+
+      .site-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        max-width: var(--rm-max);
+        margin: 0 auto;
+        padding: 1rem 1.5rem;
+        flex-wrap: wrap;
+      }
+      .brand {
+        font-weight: 800;
+        font-size: 1.15rem;
+        text-decoration: none;
+        color: var(--rm-text);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      .brand-mark { color: var(--rm-accent); font-size: 1.3rem; }
+      .site-nav { display: flex; align-items: center; gap: 1.25rem; }
+      .site-nav a {
+        text-decoration: none;
+        color: var(--rm-muted);
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .site-nav a:hover { color: var(--rm-text); }
+
+      .site-main {
+        max-width: var(--rm-max);
+        margin: 0 auto;
+        padding: 1rem 1.5rem 3rem;
+      }
+      .site-footer {
+        max-width: var(--rm-max);
+        margin: 0 auto;
+        padding: 1.5rem;
+        color: var(--rm-muted);
+        font-size: 0.8rem;
+        border-top: 1px solid var(--rm-border);
+      }
+      h1.page-title { font-size: 1.6rem; margin: 0.5rem 0 0.25rem; }
+      p.page-lead { color: var(--rm-muted); margin: 0 0 1.5rem; max-width: 60ch; }
+    </style>
+
+    <!-- Define <auth-button> y aplica el guard de rutas protegidas. -->
+    <script>
+      import '../client/layout.js';
+    </script>
+  </body>
+</html>

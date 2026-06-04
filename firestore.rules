@@ -1,0 +1,71 @@
+rules_version = '2';
+
+// Reglas de seguridad de Role Mirror.
+//
+// Modelo:
+//   /users/{uid}                      Solo el propio uid (admin puede leer).
+//   /users/{uid}/sessions/{sessionId} Solo el propio uid (admin puede leer).
+//   /admins/{uid}                     Lectura para autenticados; escritura para admins.
+//                                     Bootstrap: el primer usuario puede reclamarse
+//                                     admin mientras no exista /config/adminsInitialized.
+//   /config/org                       Lectura para autenticados; escritura para admins.
+//   /config/adminsInitialized         Marca inmutable de bootstrap completado.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function adminsInitialized() {
+      return exists(/databases/$(database)/documents/config/adminsInitialized);
+    }
+
+    // Datos del usuario: solo su dueño escribe; dueño o admin leen.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid);
+
+      match /sessions/{sessionId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if isOwner(uid);
+      }
+    }
+
+    // Administradores.
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      // Un admin puede dar de alta a otros; o bootstrap del primer admin.
+      allow create: if isAdmin()
+        || (isOwner(adminId) && !adminsInitialized());
+      allow update, delete: if isAdmin();
+    }
+
+    // Configuración: org legible por autenticados, escribible por admins.
+    match /config/org {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Marca de bootstrap: creable una sola vez (durante el claim), inmutable.
+    match /config/adminsInitialized {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && !adminsInitialized();
+      allow update, delete: if false;
+    }
+
+    // Resto: denegado por defecto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

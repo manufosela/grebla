@@ -1,0 +1,53 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Role Mirror — Entrar">
+  <h1 class="page-title">Entra para guardar tu perfil</h1>
+  <p class="page-lead">
+    Usa tu cuenta de Google. Tu progreso se guarda vinculado a tu cuenta y
+    podrás retomar el cuestionario cuando quieras.
+  </p>
+
+  <section class="login-box">
+    <auth-button></auth-button>
+
+    <div id="claim" hidden>
+      <p class="claim-text">
+        Eres la primera persona en entrar y aún no hay administrador. ¿Quieres
+        administrar esta instancia?
+      </p>
+      <button id="claim-btn" class="claim-btn">Hazme administrador</button>
+      <p id="claim-error" class="claim-error" role="alert"></p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .login-box {
+    background: var(--rm-surface);
+    border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius);
+    padding: 2rem;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    align-items: flex-start;
+  }
+  .claim-text { margin: 0; color: var(--rm-muted); }
+  .claim-btn {
+    border: 1px solid var(--rm-accent);
+    background: var(--rm-accent);
+    color: #fff;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .claim-error { color: var(--rm-danger); font-size: 0.85rem; margin: 0; }
+</style>
+
+<script>
+  import '../client/login.js';
+</script>
