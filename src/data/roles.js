@@ -25,7 +25,7 @@ export const ROLES = [
     tagline: 'Tu valor está en construir: profundizas en el código y entregas con autonomía.',
     description:
       'Individual contributor de squad. Foco en implementar bien, aprender y crecer técnicamente dentro del equipo.',
-    color: '#3b82f6',
+    color: '#2a9d8f',
   },
   {
     key: 'techLead',
@@ -34,7 +34,7 @@ export const ROLES = [
     tagline: 'Alineas a tu squad técnicamente: decides el cómo y desbloqueas a la gente.',
     description:
       'Referente técnico de un equipo. Equilibra contribución hands-on con coordinación técnica, calidad y delivery del squad.',
-    color: '#06b6d4',
+    color: '#4fb3a6',
   },
   {
     key: 'staff',
@@ -43,7 +43,7 @@ export const ROLES = [
     tagline: 'Tu impacto cruza equipos: resuelves los problemas técnicos que nadie más toca.',
     description:
       'IC senior con impacto multi-equipo. Lidera arquitectura transversal, mentoring horizontal y decisiones técnicas de alto alcance sin gestionar personas.',
-    color: '#8b5cf6',
+    color: '#3e7cb1',
   },
   {
     key: 'em',
@@ -52,7 +52,7 @@ export const ROLES = [
     tagline: 'Tu producto son las personas: haces crecer al equipo y proteges su delivery.',
     description:
       'Responsable de personas y delivery de uno o varios equipos. Foco en 1:1s, desempeño, procesos y salud del equipo.',
-    color: '#10b981',
+    color: '#5566a6',
   },
   {
     key: 'hoe',
@@ -61,7 +61,7 @@ export const ROLES = [
     tagline: 'Diriges la función de ingeniería: equilibras personas, técnica y negocio a escala de área.',
     description:
       'Lidera varios equipos o un área de producto. Conecta estrategia técnica con objetivos de negocio y gestiona managers.',
-    color: '#f59e0b',
+    color: '#e0a458',
   },
   {
     key: 'vp',
@@ -70,7 +70,7 @@ export const ROLES = [
     tagline: 'Escalas la organización: procesos, cultura y ejecución de toda la ingeniería.',
     description:
       'Responsable de la ejecución de la organización de ingeniería. Foco en escalado de equipos, procesos, presupuesto y cultura.',
-    color: '#ef4444',
+    color: '#c9748a',
   },
   {
     key: 'cto',
@@ -79,7 +79,7 @@ export const ROLES = [
     tagline: 'Defines hacia dónde va la tecnología: visión, apuestas técnicas y relación con el negocio.',
     description:
       'Máximo responsable de la estrategia tecnológica. Foco en visión, decisiones de plataforma a largo plazo y representación técnica ante el negocio y el mercado.',
-    color: '#ec4899',
+    color: '#f2887a',
   },
 ];
 
