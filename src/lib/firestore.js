@@ -36,6 +36,19 @@ export function deleteSession(uid, sessionId) {
 }
 
 /**
+ * Borra TODOS los datos de un usuario: sus mediciones (subcolección sessions) y
+ * su documento de perfil. No borra la cuenta de Auth (se recrea limpia al
+ * reentrar). Permitido al propio uid o a un admin (ver firestore.rules).
+ * @param {string} uid
+ * @returns {Promise<void>}
+ */
+export async function deleteUserData(uid) {
+  const sessions = await getDocs(collection(db, 'users', uid, 'sessions'));
+  await Promise.all(sessions.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, 'users', uid));
+}
+
+/**
  * Crea un debouncer reutilizable.
  * @template {(...args: any[]) => void} F
  * @param {F} fn

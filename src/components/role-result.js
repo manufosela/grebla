@@ -55,6 +55,12 @@ export class RoleResult extends LitElement {
       font-weight: 700;
       color: var(--dominant-color, #3b82f6);
     }
+    .dominant .runners {
+      margin: 0.5rem 0 0;
+      font-size: 0.82rem;
+      color: var(--rm-muted, #6b7280);
+    }
+    .dominant .runner { font-weight: 600; font-variant-numeric: tabular-nums; }
     h3 {
       font-size: 1rem;
       text-transform: uppercase;
@@ -166,6 +172,7 @@ export class RoleResult extends LitElement {
         <p class="role">${dominant.label}</p>
         <p class="tagline">${dominant.tagline}</p>
         <p class="pct">${Math.round(dominant.affinity)}% de afinidad · ${Math.round(profile.completion)}% completado</p>
+        ${this._renderRunnersUp(profile.affinities)}
       </div>
 
       <h3>Afinidad por rol</h3>
@@ -190,6 +197,20 @@ export class RoleResult extends LitElement {
       </div>
 
       ${this._renderTarget()}
+    `;
+  }
+
+  /** Los 2 roles más próximos al dominante (con afinidad > 0). */
+  _renderRunnersUp(affinities) {
+    const runners = (affinities || []).slice(1, 3).filter((a) => a.affinity > 0);
+    if (runners.length === 0) return null;
+    return html`
+      <p class="runners">
+        También cerca:
+        ${runners.map(
+          (a, i) => html`${i > 0 ? html` · ` : ''}<span class="runner" style=${`color:${a.color}`}>${a.label} ${Math.round(a.affinity)}%</span>`,
+        )}
+      </p>
     `;
   }
 

@@ -29,7 +29,10 @@ service cloud.firestore {
     // Datos del usuario: solo su dueño escribe; dueño o admin leen.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow write: if isOwner(uid);
+      allow create, update: if isOwner(uid);
+      // El dueño borra su perfil; un admin puede borrar el de cualquier usuario
+      // (gestión desde el panel admin). La cuenta de Auth se gestiona aparte.
+      allow delete: if isOwner(uid) || isAdmin();
 
       match /sessions/{sessionId} {
         allow read: if isOwner(uid) || isAdmin();
