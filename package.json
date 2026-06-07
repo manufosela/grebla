@@ -9,6 +9,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "assets": "node scripts/gen-assets.mjs",
     "seed": "node scripts/seed.mjs"
   },
@@ -24,7 +26,8 @@
     "@astrojs/check": "^0.9.9",
     "firebase-admin": "^13.10.0",
     "sharp": "^0.34.5",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
