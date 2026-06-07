@@ -9,7 +9,7 @@
  *  - currentPhase: string|null
  */
 import { LitElement, html, css } from 'lit';
-import { listUsers, listSessions, saveOrgConfig, deleteSession } from '../lib/firestore.js';
+import { listUsers, listSessions, saveOrgConfig, deleteSession, deleteUserData } from '../lib/firestore.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -34,6 +34,7 @@ export class AdminDashboard extends LitElement {
     uid: { attribute: false },
     users: { state: true },
     _confirmDelete: { state: true },
+    _confirmDeleteUser: { state: true },
     selected: { state: true },
     detail: { state: true },
     loading: { state: true },
@@ -124,6 +125,8 @@ export class AdminDashboard extends LitElement {
     this.detail = null;
     /** @type {string|null} sessionId pendiente de confirmar borrado */
     this._confirmDelete = null;
+    /** @type {string|null} uid de usuario pendiente de confirmar borrado */
+    this._confirmDeleteUser = null;
     this.loading = true;
     this.error = '';
   }
@@ -199,6 +202,30 @@ export class AdminDashboard extends LitElement {
       if (user) await this._openDetail(user);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo borrar la medición.';
+    }
+  }
+
+  _renderDeleteUserCell(uid) {
+    if (this._confirmDeleteUser === uid) {
+      return html`
+        <span class="confirm">¿Borrar usuario?
+          <button class="link-danger" @click=${() => this._deleteUser(uid)}>Sí</button>
+          <button class="link" @click=${() => { this._confirmDeleteUser = null; }}>No</button>
+        </span>
+      `;
+    }
+    return html`<button class="del-btn" @click=${() => { this._confirmDeleteUser = uid; }}>Borrar usuario</button>`;
+  }
+
+  async _deleteUser(uid) {
+    this._confirmDeleteUser = null;
+    this.error = '';
+    try {
+      await deleteUserData(uid);
+      if (this.detail?.user?.id === uid) this.detail = null;
+      await this._loadUsers();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo borrar el usuario.';
     }
   }
 
@@ -284,6 +311,7 @@ export class AdminDashboard extends LitElement {
                     <th>Última sesión</th>
                     <th>Rol dominante</th>
                     <th>Completitud</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -307,6 +335,7 @@ export class AdminDashboard extends LitElement {
                             : html`<span class="muted">—</span>`}
                         </td>
                         <td class="completion">${u.completion ?? 0}%</td>
+                        <td class="num" @click=${(e) => e.stopPropagation()}>${this._renderDeleteUserCell(u.id)}</td>
                       </tr>
                     `,
                   )}
