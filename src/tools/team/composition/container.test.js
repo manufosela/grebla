@@ -9,13 +9,25 @@ describe('createTeamContainer', () => {
     expect((await persistence.people.getById(id)).name).toBe('X');
   });
 
-  it('mode firestore con db y ownerId inyectados no inicializa Firebase', async () => {
-    const { mode, persistence } = await createTeamContainer({ mode: 'firestore', db: {}, ownerId: 'o1' });
-    expect(mode).toBe('firestore');
-    expect(typeof persistence.people.list).toBe('function');
-  });
+  // El modo 'firestore' requiere un Firestore real (lee config para elegir el
+  // adapter de ficheros); la forma del PersistencePort Firestore se valida en
+  // infrastructure/firestore/firestore.test.js.
 
   it('modo desconocido lanza', async () => {
     await expect(createTeamContainer({ mode: 'nope' })).rejects.toThrow();
+  });
+
+  it('usa NullStorage por defecto (fileStorage OFF)', async () => {
+    const { storage } = await createTeamContainer({ mode: 'memory' });
+    expect(storage.enabled).toBe(false);
+  });
+
+  it('usa Firebase Storage cuando fileStorage está ON (storage inyectado)', async () => {
+    const { storage } = await createTeamContainer({
+      mode: 'memory',
+      seed: { settings: { features: { fileStorage: true } } },
+      storage: {},
+    });
+    expect(storage.enabled).toBe(true);
   });
 });
