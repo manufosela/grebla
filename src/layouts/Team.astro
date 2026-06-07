@@ -1,0 +1,32 @@
+---
+/**
+ * Layout de la herramienta de seguimiento de equipo (GREBLA). Envuelve el layout
+ * global Base y marca la ruta como protegida (requireAuth). La navegación interna
+ * (Personas / Equipo / Ajustes) la gestiona la mini-SPA Lit <team-app>.
+ *
+ * Props:
+ *  - title: string
+ */
+import Base from './Base.astro';
+
+const { title = 'Equipo' } = Astro.props;
+---
+
+<Base title={title} requireAuth={true}>
+  <nav class="tool-nav" aria-label="Seguimiento de equipo">
+    <span class="tool-name">◈ Equipo</span>
+  </nav>
+  <slot />
+</Base>
+
+<style>
+  .tool-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--rm-border);
+  }
+  .tool-name { font-weight: 800; color: var(--rm-accent); }
+</style>
