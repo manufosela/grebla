@@ -9,7 +9,7 @@
  *  - currentPhase: string|null
  */
 import { LitElement, html, css } from 'lit';
-import { listUsers, listSessions, saveOrgConfig } from '../lib/firestore.js';
+import { listUsers, listSessions, saveOrgConfig, deleteSession } from '../lib/firestore.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -33,6 +33,7 @@ export class AdminDashboard extends LitElement {
     currentPhase: { attribute: false },
     uid: { attribute: false },
     users: { state: true },
+    _confirmDelete: { state: true },
     selected: { state: true },
     detail: { state: true },
     loading: { state: true },
@@ -84,6 +85,23 @@ export class AdminDashboard extends LitElement {
     .detail { border-left: 4px solid var(--rm-accent, #3b82f6); }
     .check { width: 16px; height: 16px; }
     .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
+    .del-btn {
+      border: 1px solid var(--rm-border, #d1d5db);
+      background: var(--rm-surface, #fff);
+      color: var(--rm-danger, #dc2626);
+      border-radius: 6px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .del-btn:hover { border-color: var(--rm-danger, #dc2626); }
+    .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .confirm .link-danger, .confirm .link {
+      border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem;
+    }
+    .confirm .link-danger { color: var(--rm-danger, #dc2626); }
+    .confirm .link { color: var(--rm-muted, #6b7280); }
     .phase-desc { font-size: 0.82rem; color: var(--rm-muted, #6b7280); margin-top: 0.5rem; }
   `;
 
@@ -104,6 +122,8 @@ export class AdminDashboard extends LitElement {
     this.selected = new Set();
     /** @type {{ user: Object, sessions: Array<Object> }|null} */
     this.detail = null;
+    /** @type {string|null} sessionId pendiente de confirmar borrado */
+    this._confirmDelete = null;
     this.loading = true;
     this.error = '';
   }
@@ -154,6 +174,31 @@ export class AdminDashboard extends LitElement {
       this.detail = { user, sessions: measurements };
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el detalle.';
+    }
+  }
+
+  _renderDeleteCell(userId, sessionId) {
+    if (this._confirmDelete === sessionId) {
+      return html`
+        <span class="confirm">¿Borrar?
+          <button class="link-danger" @click=${() => this._deleteMeasurement(userId, sessionId)}>Sí</button>
+          <button class="link" @click=${() => { this._confirmDelete = null; }}>No</button>
+        </span>
+      `;
+    }
+    return html`<button class="del-btn" @click=${() => { this._confirmDelete = sessionId; }}>Borrar</button>`;
+  }
+
+  async _deleteMeasurement(userId, sessionId) {
+    this._confirmDelete = null;
+    this.error = '';
+    const user = this.detail?.user;
+    try {
+      await deleteSession(userId, sessionId);
+      await this._loadUsers();
+      if (user) await this._openDetail(user);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo borrar la medición.';
     }
   }
 
@@ -285,7 +330,7 @@ export class AdminDashboard extends LitElement {
           : html`
               <table>
                 <thead>
-                  <tr><th>Fecha</th><th>Rol dominante</th><th>Completitud</th><th>Objetivo</th></tr>
+                  <tr><th>Fecha</th><th>Rol dominante</th><th>Completitud</th><th>Objetivo</th><th></th></tr>
                 </thead>
                 <tbody>
                   ${sessions.map(
@@ -299,6 +344,7 @@ export class AdminDashboard extends LitElement {
                         </td>
                         <td class="completion">${s.completion ?? 0}%</td>
                         <td class="muted">${s.targetRole ? this._roleLabel(s.targetRole) : '—'}</td>
+                        <td class="num">${this._renderDeleteCell(user.id, s.id)}</td>
                       </tr>
                     `,
                   )}

@@ -33,7 +33,10 @@ service cloud.firestore {
 
       match /sessions/{sessionId} {
         allow read: if isOwner(uid) || isAdmin();
-        allow write: if isOwner(uid);
+        allow create, update: if isOwner(uid);
+        // El dueño borra sus mediciones; un admin puede borrar las de cualquier
+        // usuario (gestión de datos desde el panel admin). No crea ni edita.
+        allow delete: if isOwner(uid) || isAdmin();
       }
     }
 

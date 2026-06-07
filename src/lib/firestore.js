@@ -17,11 +17,23 @@ import {
   setDoc,
   getDoc,
   getDocs,
+  deleteDoc,
   query,
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
+
+/**
+ * Borra una medición (sesión) de un usuario. Permitido al propio uid o a un
+ * admin (ver firestore.rules). Para gestión de datos en el panel admin.
+ * @param {string} uid
+ * @param {string} sessionId
+ * @returns {Promise<void>}
+ */
+export function deleteSession(uid, sessionId) {
+  return deleteDoc(doc(db, 'users', uid, 'sessions', sessionId));
+}
 
 /**
  * Crea un debouncer reutilizable.
