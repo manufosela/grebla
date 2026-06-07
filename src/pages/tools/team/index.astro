@@ -1,0 +1,19 @@
+---
+import Team from '../../../layouts/Team.astro';
+---
+
+<Team title="GREBLA — Seguimiento de equipo">
+  <h1 class="page-title">Tu equipo</h1>
+  <p class="page-lead">
+    Da seguimiento a las personas de tu equipo en cuatro dimensiones independientes
+    (seniority, emocional, conocimiento y contribución), registra conversaciones y
+    detecta riesgos de cobertura. Los datos son privados: solo tú los ves.
+  </p>
+
+  <!-- Mini-SPA Lit: se define e hidrata desde el script de cliente. -->
+  <team-app></team-app>
+</Team>
+
+<script>
+  import '../../../client/team.js';
+</script>
