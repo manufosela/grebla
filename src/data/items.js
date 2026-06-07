@@ -27,6 +27,14 @@
  */
 
 /**
+ * Valor reservado de las preguntas de selección múltiple para "No procede":
+ * marca el ítem como respondido (no queda pendiente) pero se excluye del cálculo
+ * de afinidad, de modo que un ítem que no aplica no penaliza a ningún rol.
+ * @type {string}
+ */
+export const MULTI_NA = 'na';
+
+/**
  * Dimensiones de evaluación. El orden define el orden del mapa de competencias.
  * @type {ReadonlyArray<{ key: string, label: string }>}
  */
@@ -247,6 +255,7 @@ export const ITEMS = [
       { value: 'service', label: 'Servicio o aplicación completa' },
       { value: 'cross', label: 'Varios sistemas o equipos' },
       { value: 'platform', label: 'Plataforma de toda la organización' },
+      { value: MULTI_NA, label: 'No procede' },
     ],
     weights: { engineer: 1, techLead: 1, staff: 2, em: 0, hoe: 1, vp: 0, cto: 2 },
   },
@@ -308,6 +317,7 @@ export const ITEMS = [
       { value: 'breadth', label: 'Impacto técnico más amplio (multi-equipo)' },
       { value: 'people', label: 'Liderazgo de personas' },
       { value: 'strategy', label: 'Estrategia y negocio' },
+      { value: MULTI_NA, label: 'No procede' },
     ],
     weights: { engineer: 1, techLead: 1, staff: 1, em: 1, hoe: 1, vp: 1, cto: 1 },
   },

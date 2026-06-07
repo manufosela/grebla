@@ -14,10 +14,22 @@
  * @property {Object<string, Partial<Record<RoleKey, 0|1|2>>>} [weightOverrides]
  *   Sobrescritura puntual del peso de un ítem para un rol: weightOverrides[itemId][roleKey].
  */
-import { DIMENSIONS } from '../data/items.js';
+import { DIMENSIONS, MULTI_NA } from '../data/items.js';
 
 /** @param {number} n @param {number} min @param {number} max */
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+/**
+ * Indica si la respuesta de un ítem de selección múltiple es "No procede": el
+ * usuario ha marcado únicamente la opción reservada `MULTI_NA`. En ese caso el
+ * ítem se considera respondido (no penaliza la completitud) pero queda fuera del
+ * cálculo de afinidad y de la media por dimensión: lo que no aplica no puntúa.
+ * @param {boolean|number|string[]|undefined} value
+ * @returns {boolean}
+ */
+export function isNotApplicable(value) {
+  return Array.isArray(value) && value.length > 0 && value.every((v) => v === MULTI_NA);
+}
 
 /**
  * Normaliza la respuesta de un ítem al rango [0, 1].
@@ -35,7 +47,11 @@ export function normalizeAnswer(item, value) {
     }
     case 'multi': {
       if (!Array.isArray(value) || !item.options || item.options.length === 0) return 0;
-      return clamp(value.length / item.options.length, 0, 1);
+      // Las opciones de un multi no llevan peso por rol: no miden intensidad sino
+      // alcance. Por eso es binario — tener alcance en algún ámbito real cuenta
+      // como respuesta plena del ítem. "No procede" (solo MULTI_NA) no es alcance.
+      const real = value.filter((v) => v !== MULTI_NA);
+      return real.length > 0 ? 1 : 0;
     }
     default:
       return 0;
@@ -90,9 +106,9 @@ export function resolveWeight(item, roleKey, orgConfig) {
  * @property {string} short
  * @property {string} color
  * @property {string} tagline
- * @property {number} affinity  Porcentaje 0-100.
- * @property {number} score     Suma ponderada obtenida.
- * @property {number} max       Suma ponderada máxima posible.
+ * @property {number} affinity  Porcentaje 0-100 (similitud con el patrón del rol).
+ * @property {number} match     Similitud 0-1 (1 = patrón idéntico al del rol).
+ * @property {number} considered Nº de ítems comparados (relevantes para el rol o el usuario).
  */
 
 /**
@@ -125,29 +141,40 @@ export function computeProfile({ items, roles, answers, orgConfig }) {
 
   /** @type {RoleAffinity[]} */
   const affinities = roles.map((role) => {
-    let score = 0;
-    let max = 0;
+    // Afinidad por similitud de patrón: comparamos la respuesta del usuario con
+    // el "patrón ideal" del rol (peso/2 ∈ [0,1]) en cada ítem. Penaliza tanto
+    // quedarse corto donde el rol exige como puntuar alto donde el rol NO pone
+    // foco. Así un perfil senior maximizado no se confunde con el rol junior que
+    // engloba: el ideal del junior es 0 justo donde el senior puntúa alto, por lo
+    // que el patrón diverge y la afinidad con el junior baja.
+    let err = 0;
+    let considered = 0;
     for (const item of visible) {
-      const weight = resolveWeight(item, role.key, orgConfig);
-      if (weight <= 0) continue;
-      score += normalizeAnswer(item, answers[item.id]) * weight;
-      max += weight; // respuesta máxima normalizada = 1
+      if (isNotApplicable(answers[item.id])) continue; // "No procede": fuera del cálculo.
+      const ideal = clamp(resolveWeight(item, role.key, orgConfig) / 2, 0, 1);
+      const user = normalizeAnswer(item, answers[item.id]);
+      if (ideal === 0 && user === 0) continue; // ítem irrelevante para rol y usuario.
+      err += Math.abs(user - ideal);
+      considered += 1;
     }
-    const affinity = max > 0 ? (score / max) * 100 : 0;
+    const match = considered > 0 ? 1 - err / considered : 0;
     return {
       key: role.key,
       label: role.label,
       short: role.short,
       color: role.color,
       tagline: role.tagline,
-      affinity,
-      score,
-      max,
+      affinity: clamp(match * 100, 0, 100),
+      match,
+      considered,
     };
   });
 
   affinities.sort((a, b) => b.affinity - a.affinity);
-  const dominant = affinities.length > 0 && affinities[0].max > 0 ? affinities[0] : null;
+  // Hay rol dominante solo si el usuario ha respondido algo (si no, todo es 0).
+  const answered = visible.some((item) => isAnswered(item, answers));
+  const dominant =
+    answered && affinities.length > 0 && affinities[0].considered > 0 ? affinities[0] : null;
 
   const byDimension = computeDimensionLevels(visible, answers);
   const completion = computeCompletion(visible, answers);
@@ -163,7 +190,10 @@ export function computeProfile({ items, roles, answers, orgConfig }) {
  */
 export function computeDimensionLevels(visibleItems, answers) {
   return DIMENSIONS.map(({ key, label }) => {
-    const dimItems = visibleItems.filter((item) => item.dimension === key);
+    // Los ítems "No procede" no cuentan en el nivel de la dimensión.
+    const dimItems = visibleItems.filter(
+      (item) => item.dimension === key && !isNotApplicable(answers[item.id]),
+    );
     if (dimItems.length === 0) return { key, label, level: 0, count: 0 };
     const sum = dimItems.reduce((acc, item) => acc + normalizeAnswer(item, answers[item.id]), 0);
     return { key, label, level: (sum / dimItems.length) * 100, count: dimItems.length };
