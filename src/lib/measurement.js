@@ -26,6 +26,28 @@ export function tsToMs(ts) {
 }
 
 /**
+ * ¿La sesión tiene contenido real (al menos una respuesta)? Sirve para ignorar
+ * las mediciones vacías (p. ej. heredadas de versiones que creaban una sesión
+ * por cada entrada).
+ * @param {*} session
+ * @returns {boolean}
+ */
+export function hasContent(session) {
+  return !!session && !!session.answers && Object.keys(session.answers).length > 0;
+}
+
+/**
+ * De una lista de sesiones (ordenada de más reciente a más antigua), devuelve la
+ * medición activa: la más reciente CON contenido. null si ninguna tiene.
+ * @param {Array<object>} sessions
+ * @returns {object|null}
+ */
+export function pickActiveMeasurement(sessions) {
+  if (!Array.isArray(sessions)) return null;
+  return sessions.find(hasContent) ?? null;
+}
+
+/**
  * ¿La medición ha superado la ventana y procede crear un nuevo punto del histórico?
  * @param {number|null} measuredAtMs  Fecha de creación de la medición, en ms.
  * @param {number} nowMs

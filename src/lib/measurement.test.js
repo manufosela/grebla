@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isMeasurementStale, tsToMs, MEASUREMENT_WINDOW_DAYS } from './measurement.js';
+import { isMeasurementStale, tsToMs, MEASUREMENT_WINDOW_DAYS, hasContent, pickActiveMeasurement } from './measurement.js';
 
 const DAY = 86_400_000;
 const NOW = Date.parse('2026-06-07T00:00:00Z');
@@ -26,6 +26,30 @@ describe('isMeasurementStale (ventana trimestral por defecto)', () => {
 
   it('la ventana por defecto es 90 días', () => {
     expect(MEASUREMENT_WINDOW_DAYS).toBe(90);
+  });
+});
+
+describe('hasContent / pickActiveMeasurement (ignorar sesiones vacías)', () => {
+  it('hasContent distingue sesiones con y sin respuestas', () => {
+    expect(hasContent({ answers: { q1: 3 } })).toBe(true);
+    expect(hasContent({ answers: {} })).toBe(false);
+    expect(hasContent({})).toBe(false);
+    expect(hasContent(null)).toBe(false);
+  });
+
+  it('pickActiveMeasurement devuelve la más reciente con contenido, ignorando vacías', () => {
+    const sessions = [
+      { id: 'vacia-reciente', answers: {} }, // más reciente pero vacía → se ignora
+      { id: 'con-datos', answers: { q1: 4 } },
+      { id: 'otra-vacia', answers: {} },
+    ];
+    expect(pickActiveMeasurement(sessions)?.id).toBe('con-datos');
+  });
+
+  it('pickActiveMeasurement devuelve null si todas están vacías', () => {
+    expect(pickActiveMeasurement([{ answers: {} }, { answers: {} }])).toBeNull();
+    expect(pickActiveMeasurement([])).toBeNull();
+    expect(pickActiveMeasurement(null)).toBeNull();
   });
 });
 

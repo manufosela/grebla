@@ -146,7 +146,12 @@ export class AdminDashboard extends LitElement {
     this.detail = { user, sessions: [] };
     try {
       const sessions = await listSessions(user.id);
-      this.detail = { user, sessions };
+      // Solo mediciones con contenido: las sesiones vacías no son puntos del
+      // histórico (evita la "evolución absurda" de cuestionarios sin rellenar).
+      const measurements = sessions.filter(
+        (s) => (s.completion ?? 0) > 0 || s.dominantRole || (s.answers && Object.keys(s.answers).length > 0),
+      );
+      this.detail = { user, sessions: measurements };
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el detalle.';
     }

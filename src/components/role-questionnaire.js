@@ -28,7 +28,7 @@ import {
   listSessions,
   upsertUserSummary,
 } from '../lib/firestore.js';
-import { isMeasurementStale, tsToMs } from '../lib/measurement.js';
+import { isMeasurementStale, tsToMs, pickActiveMeasurement } from '../lib/measurement.js';
 
 export class RoleQuestionnaire extends LitElement {
   static properties = {
@@ -228,10 +228,12 @@ export class RoleQuestionnaire extends LitElement {
       if (this.sessionId) {
         session = await getSession(this.uid, this.sessionId);
       } else {
-        // Sin sesión en la URL: cargar la última medición del usuario (la más
-        // reciente) para no perder lo rellenado (RMR-BUG-0003).
+        // Sin sesión en la URL: cargar la última medición CON contenido (RMR-BUG-0003).
+        // Se ignoran las sesiones vacías (heredadas de versiones que creaban una
+        // por cada entrada). NO se crea ninguna sesión aquí: la medición se crea
+        // en el primer guardado real (ver _persist), para no generar vacías.
         const sessions = await listSessions(this.uid);
-        session = sessions[0] ?? null;
+        session = pickActiveMeasurement(sessions);
         if (session) {
           this.sessionId = session.id;
           this._emitSession(session.id);
@@ -242,13 +244,9 @@ export class RoleQuestionnaire extends LitElement {
         this.answers = session.answers ?? {};
         this.targetRole = session.targetRole ?? null;
         this._measuredAtMs = tsToMs(session.createdAt);
-      } else {
-        // Primera vez: crear una medición vacía.
-        const id = await createSession(this.uid, { answers: {} });
-        this.sessionId = id;
-        this._measuredAtMs = Date.now();
-        this._emitSession(id);
       }
+      // Si no hay medición con contenido, quedamos sin sesión: se creará al
+      // primer cambio. Así nunca se persisten cuestionarios vacíos.
       this.status = 'idle';
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la sesión.';
@@ -286,19 +284,22 @@ export class RoleQuestionnaire extends LitElement {
    */
   _setAnswer(id, value) {
     this.answers = { ...this.answers, [id]: value };
-    if (this.uid && this.sessionId) {
+    // Guarda aunque aún no exista sesión: _persist la crea en el primer cambio
+    // real (evita sesiones vacías).
+    if (this.uid) {
       this.status = 'saving';
       this._save();
     }
   }
 
   async _persist() {
-    if (!this.uid || !this.sessionId) return;
+    if (!this.uid) return;
     try {
-      // Cadencia: si la medición actual superó la ventana (90 días), el guardado
-      // crea un NUEVO punto del histórico en vez de sobrescribir, preservando la
-      // evolución. Dentro de la ventana, se sobrescribe la misma medición.
-      if (isMeasurementStale(this._measuredAtMs, Date.now())) {
+      // La medición se crea en el PRIMER guardado real (no al entrar) para no
+      // generar sesiones vacías. Y si la medición actual superó la ventana
+      // (90 días), el guardado crea un NUEVO punto del histórico en vez de
+      // sobrescribir, preservando la evolución (cadencia trimestral).
+      if (!this.sessionId || isMeasurementStale(this._measuredAtMs, Date.now())) {
         const id = await createSession(this.uid, { answers: this.answers, targetRole: this.targetRole });
         this.sessionId = id;
         this._measuredAtMs = Date.now();
@@ -334,7 +335,7 @@ export class RoleQuestionnaire extends LitElement {
 
   _onTargetChanged(event) {
     this.targetRole = event.detail.targetRole;
-    if (this.uid && this.sessionId) {
+    if (this.uid) {
       this.status = 'saving';
       this._save();
     }
