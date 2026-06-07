@@ -29,6 +29,7 @@ import {
   upsertUserSummary,
 } from '../lib/firestore.js';
 import { isMeasurementStale, tsToMs, pickActiveMeasurement } from '../lib/measurement.js';
+import { fillAnswersFromRole } from '../lib/roleTemplate.js';
 
 export class RoleQuestionnaire extends LitElement {
   static properties = {
@@ -146,6 +147,24 @@ export class RoleQuestionnaire extends LitElement {
     .multi { display: grid; gap: 0.35rem; }
     .multi label { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; }
     .save-state { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); }
+    .template {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--rm-muted, #6b7280);
+    }
+    .template select {
+      padding: 0.35rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid var(--rm-border, #d1d5db);
+      background: var(--rm-surface, #fff);
+      color: var(--rm-text, #111827);
+      font-size: 0.85rem;
+    }
+    .template-hint { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
     .measurement {
       display: flex;
       align-items: center;
@@ -352,6 +371,14 @@ export class RoleQuestionnaire extends LitElement {
           ${this.uid
             ? null
             : html`<div class="notice">Estás en modo local: inicia sesión con Google para guardar tu progreso.</div>`}
+          <div class="template">
+            <label for="role-template">Empezar desde un rol:</label>
+            <select id="role-template" @change=${this._applyRoleTemplate}>
+              <option value="">— Autorrellenar según un rol —</option>
+              ${this.roles.map((r) => html`<option value=${r.key}>${r.label}</option>`)}
+            </select>
+            <span class="template-hint">Rellena el cuestionario con el perfil tipo de ese rol; luego ajústalo.</span>
+          </div>
           <div class="progress">
             <span class="progress-track">
               <span class="progress-fill" style=${`width:${profile.completion}%`}></span>
@@ -403,6 +430,21 @@ export class RoleQuestionnaire extends LitElement {
         </button>
       </div>
     `;
+  }
+
+  /**
+   * Modo inverso: autorrellena el cuestionario con la plantilla de un rol como
+   * punto de partida editable. El usuario puede ajustar después.
+   */
+  _applyRoleTemplate(event) {
+    const roleKey = event.target.value;
+    event.target.value = '';
+    if (!roleKey) return;
+    this.answers = fillAnswersFromRole(roleKey, this.items);
+    if (this.uid) {
+      this.status = 'saving';
+      this._save();
+    }
   }
 
   /**
