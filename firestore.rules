@@ -57,6 +57,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // GREBLA — herramienta de seguimiento de equipo. Todo el árbol de un owner
+    // (personas, lecturas por dimensión, conversaciones, support notes R5,
+    // áreas y config) es accesible SOLO por su dueño. La frontera R5/R6 (support
+    // notes y agregado vs individual) se garantiza en servicios/export; si en el
+    // futuro hay roles, ya es estructural y se traduce a reglas por colección.
+    match /owners/{ownerId}/{document=**} {
+      allow read, write: if isOwner(ownerId);
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
