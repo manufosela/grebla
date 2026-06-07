@@ -25,8 +25,10 @@ import {
   saveSession,
   createSession,
   getSession,
+  listSessions,
   upsertUserSummary,
 } from '../lib/firestore.js';
+import { isMeasurementStale, tsToMs } from '../lib/measurement.js';
 
 export class RoleQuestionnaire extends LitElement {
   static properties = {
@@ -144,6 +146,27 @@ export class RoleQuestionnaire extends LitElement {
     .multi { display: grid; gap: 0.35rem; }
     .multi label { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; }
     .save-state { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); }
+    .measurement {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+      font-size: 0.8rem;
+      color: var(--rm-muted, #6b7280);
+    }
+    .measurement-new {
+      border: 1px solid var(--rm-border, #d1d5db);
+      background: var(--rm-surface, #fff);
+      color: var(--rm-accent, #4f46e5);
+      border-radius: 999px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .measurement-new:hover { border-color: var(--rm-accent, #4f46e5); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; margin: 0.5rem 0; }
     .notice {
       background: var(--rm-surface-hover, #f3f4f6);
@@ -177,6 +200,8 @@ export class RoleQuestionnaire extends LitElement {
     this.status = 'idle';
     this.error = '';
     this._sessionInit = false;
+    /** @type {number|null} Fecha (ms) de creación de la medición actual; para la cadencia. */
+    this._measuredAtMs = null;
     this._save = debounce(() => this._persist(), 1000);
   }
 
@@ -198,24 +223,44 @@ export class RoleQuestionnaire extends LitElement {
     this.status = 'loading';
     this.error = '';
     try {
+      /** @type {object|null} */
+      let session = null;
       if (this.sessionId) {
-        const session = await getSession(this.uid, this.sessionId);
-        if (session) {
-          this.answers = session.answers ?? {};
-          this.targetRole = session.targetRole ?? null;
-        }
+        session = await getSession(this.uid, this.sessionId);
       } else {
+        // Sin sesión en la URL: cargar la última medición del usuario (la más
+        // reciente) para no perder lo rellenado (RMR-BUG-0003).
+        const sessions = await listSessions(this.uid);
+        session = sessions[0] ?? null;
+        if (session) {
+          this.sessionId = session.id;
+          this._emitSession(session.id);
+        }
+      }
+
+      if (session) {
+        this.answers = session.answers ?? {};
+        this.targetRole = session.targetRole ?? null;
+        this._measuredAtMs = tsToMs(session.createdAt);
+      } else {
+        // Primera vez: crear una medición vacía.
         const id = await createSession(this.uid, { answers: {} });
         this.sessionId = id;
-        this.dispatchEvent(
-          new CustomEvent('session-created', { detail: { sessionId: id }, bubbles: true, composed: true }),
-        );
+        this._measuredAtMs = Date.now();
+        this._emitSession(id);
       }
       this.status = 'idle';
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la sesión.';
       this.status = 'idle';
     }
+  }
+
+  /** Notifica el id de sesión activo para que la página lo refleje en la URL. */
+  _emitSession(sessionId) {
+    this.dispatchEvent(
+      new CustomEvent('session-created', { detail: { sessionId }, bubbles: true, composed: true }),
+    );
   }
 
   /** @returns {import('../lib/scoring.js').Profile} */
@@ -250,6 +295,16 @@ export class RoleQuestionnaire extends LitElement {
   async _persist() {
     if (!this.uid || !this.sessionId) return;
     try {
+      // Cadencia: si la medición actual superó la ventana (90 días), el guardado
+      // crea un NUEVO punto del histórico en vez de sobrescribir, preservando la
+      // evolución. Dentro de la ventana, se sobrescribe la misma medición.
+      if (isMeasurementStale(this._measuredAtMs, Date.now())) {
+        const id = await createSession(this.uid, { answers: this.answers, targetRole: this.targetRole });
+        this.sessionId = id;
+        this._measuredAtMs = Date.now();
+        this._emitSession(id);
+      }
+
       const profile = this._profile;
       const affinities = Object.fromEntries(
         profile.affinities.map((a) => [a.key, Math.round(a.affinity)]),
@@ -303,6 +358,7 @@ export class RoleQuestionnaire extends LitElement {
             <span>${Math.round(profile.completion)}%</span>
             ${this._renderSaveState()}
           </div>
+          ${this._renderMeasurementBar()}
           ${this.error ? html`<p class="error">${this.error}</p>` : null}
           ${this._renderGroups(visible)}
         </div>
@@ -330,6 +386,41 @@ export class RoleQuestionnaire extends LitElement {
             ? 'Cargando…'
             : '';
     return label ? html`<span class="save-state">${label}</span>` : null;
+  }
+
+  _renderMeasurementBar() {
+    if (!this.uid) return null;
+    let when = '';
+    if (this._measuredAtMs) {
+      when = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(this._measuredAtMs));
+    }
+    return html`
+      <div class="measurement">
+        <span class="measurement-when">${when ? `Medición del ${when}` : 'Nueva medición'}</span>
+        <button type="button" class="measurement-new" @click=${this._startNewMeasurement}>
+          Guardar como nueva medición
+        </button>
+      </div>
+    `;
+  }
+
+  /**
+   * Crea un nuevo punto del histórico a partir de las respuestas actuales y
+   * pasa a editarlo (acción manual; complementa la cadencia automática de 90 días).
+   */
+  async _startNewMeasurement() {
+    if (!this.uid) return;
+    this.status = 'saving';
+    try {
+      const id = await createSession(this.uid, { answers: this.answers, targetRole: this.targetRole });
+      this.sessionId = id;
+      this._measuredAtMs = Date.now();
+      this._emitSession(id);
+      await this._persist();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo crear la medición.';
+      this.status = 'idle';
+    }
   }
 
   /** @param {import('../data/items.js').Item[]} visible */
