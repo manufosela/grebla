@@ -5,6 +5,7 @@
  *
  * @typedef {import('./types.js').Person} Person
  * @typedef {import('./types.js').Area} Area
+ * @typedef {import('./types.js').TeamRole} TeamRole
  * @typedef {import('./types.js').Conversation} Conversation
  * @typedef {import('./types.js').SupportNote} SupportNote
  * @typedef {import('./types.js').OrgSettings} OrgSettings
@@ -23,6 +24,11 @@
  *
  * @typedef {Object} AreaRepository
  * @property {() => Promise<Area[]>} list
+ * @property {(name: string) => Promise<string>} create
+ * @property {(id: string) => Promise<void>} remove
+ *
+ * @typedef {Object} TeamRoleRepository   Catálogo de roles funcionales del equipo (mismo patrón que Area).
+ * @property {() => Promise<TeamRole[]>} list
  * @property {(name: string) => Promise<string>} create
  * @property {(id: string) => Promise<void>} remove
  *
@@ -50,6 +56,7 @@
  * @property {PeopleRepository} people
  * @property {Record<'seniority'|'emotional'|'knowledge'|'contribution', ReadingRepository>} readings
  * @property {AreaRepository} areas
+ * @property {TeamRoleRepository} teamRoles
  * @property {ConversationRepository} conversations
  * @property {SupportNoteRepository} supportNotes
  * @property {ConfigRepository} config

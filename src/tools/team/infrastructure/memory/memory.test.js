@@ -113,7 +113,7 @@ describe('memory ConfigRepository', () => {
 describe('createMemoryPersistence (PersistencePort)', () => {
   it('expone los repos y una lectura por cada dimensión', () => {
     const p = createMemoryPersistence();
-    for (const key of ['people', 'readings', 'areas', 'conversations', 'supportNotes', 'config']) {
+    for (const key of ['people', 'readings', 'areas', 'teamRoles', 'conversations', 'supportNotes', 'config']) {
       expect(p).toHaveProperty(key);
     }
     for (const dim of DIMENSIONS) {

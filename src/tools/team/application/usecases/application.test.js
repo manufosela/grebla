@@ -3,6 +3,10 @@ import { createMemoryPersistence } from '../../infrastructure/memory/index.js';
 import {
   addPerson,
   listActivePeople,
+  normalizePerson,
+  addTeamRole,
+  listTeamRoles,
+  removeTeamRole,
   addArea,
   addReading,
   getPersonTimeline,
@@ -54,6 +58,26 @@ describe('Fase 2b — casos de uso', () => {
   it('listActivePeople excluye inactivos', async () => {
     const active = await listActivePeople(p);
     expect(active.map((x) => x.name).sort()).toEqual(['Ana', 'Beto']);
+  });
+
+  it('addPerson guarda varios roles y se normalizan al listar', async () => {
+    await addPerson(p, { name: 'Zoe', teamRoles: ['Backend', 'Líder técnico'], startDate: '2025-02-01' });
+    const zoe = (await listActivePeople(p)).find((x) => x.name === 'Zoe');
+    expect(zoe.teamRoles).toEqual(['Backend', 'Líder técnico']);
+  });
+
+  it('normalizePerson deriva teamRoles del legacy teamRole', () => {
+    expect(normalizePerson({ teamRole: 'QA' }).teamRoles).toEqual(['QA']);
+    expect(normalizePerson({ teamRoles: ['A', 'B'] }).teamRoles).toEqual(['A', 'B']);
+    expect(normalizePerson({}).teamRoles).toEqual([]);
+  });
+
+  it('catálogo de roles de equipo: add / list / remove', async () => {
+    const id = await addTeamRole(p, 'Backend');
+    expect((await listTeamRoles(p)).map((r) => r.name)).toEqual(['Backend']);
+    await removeTeamRole(p, id);
+    expect(await listTeamRoles(p)).toEqual([]);
+    expect(() => addTeamRole(p, '   ')).toThrow();
   });
 
   it('addReading rechaza dimensión inválida', () => {

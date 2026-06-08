@@ -8,7 +8,8 @@
  * @typedef {Object} Person
  * @property {string} id
  * @property {string} name
- * @property {string} teamRole        Rol funcional en el equipo (texto libre, p. ej. "Backend"). No es Belbin.
+ * @property {string[]} teamRoles     Roles funcionales en el equipo (del catálogo TeamRole). No es Belbin.
+ * @property {string} [teamRole]      LEGACY: rol único (string). Se deriva a teamRoles al leer (retrocompat).
  * @property {string} startDate       ISO date
  * @property {boolean} active
  *
@@ -59,6 +60,10 @@
  * @property {string[]} [linkedDimensions]
  *
  * @typedef {Object} Area
+ * @property {string} id
+ * @property {string} name
+ *
+ * @typedef {Object} TeamRole   Rol funcional del equipo (catálogo ampliable por el líder).
  * @property {string} id
  * @property {string} name
  *

@@ -8,7 +8,13 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
-import { addPerson, listActivePeople, deactivatePerson } from '../../tools/team/application/usecases/index.js';
+import {
+  addPerson,
+  listActivePeople,
+  deactivatePerson,
+  listTeamRoles,
+  addTeamRole,
+} from '../../tools/team/application/usecases/index.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
@@ -23,10 +29,12 @@ export class TeamPeople extends LitElement {
   static properties = {
     persistence: { attribute: false },
     people: { state: true },
+    roles: { state: true },
     loading: { state: true },
     error: { state: true },
     _name: { state: true },
-    _teamRole: { state: true },
+    _selected: { state: true },
+    _newRole: { state: true },
     _startDate: { state: true },
     _confirmOff: { state: true },
   };
@@ -41,9 +49,19 @@ export class TeamPeople extends LitElement {
       margin-bottom: 1.5rem;
     }
     h2 { font-size: 1.05rem; margin: 0 0 1rem; }
-    form { display: grid; grid-template-columns: 2fr 2fr 1.3fr auto; gap: 0.75rem; align-items: end; }
-    @media (max-width: 640px) { form { grid-template-columns: 1fr; } }
+    form { display: flex; flex-direction: column; gap: 1rem; }
+    .row { display: grid; grid-template-columns: 2fr 1.3fr auto; gap: 0.75rem; align-items: end; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
     label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    fieldset.roles { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.75rem 0.9rem; margin: 0; }
+    fieldset.roles legend { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; padding: 0 0.4rem; }
+    .role-checks { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
+    .role-check { flex-direction: row; align-items: center; gap: 0.4rem; font-weight: 500; color: var(--rm-text, #111827); cursor: pointer; }
+    .role-add { display: flex; gap: 0.5rem; align-items: center; }
+    .role-add input { flex: 1; }
+    .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+    .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #111827); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
+    .muted { color: var(--rm-muted, #9ca3af); }
     input {
       padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem;
@@ -77,10 +95,14 @@ export class TeamPeople extends LitElement {
     this.persistence = null;
     /** @type {import('../../tools/team/domain/types.js').Person[]} */
     this.people = [];
+    /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
+    this.roles = [];
     this.loading = true;
     this.error = '';
     this._name = '';
-    this._teamRole = '';
+    /** @type {string[]} nombres de roles seleccionados para el alta */
+    this._selected = [];
+    this._newRole = '';
     this._startDate = '';
     /** @type {string|null} */
     this._confirmOff = null;
@@ -98,11 +120,38 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      this.people = await listActivePeople(this.persistence);
+      const [people, roles] = await Promise.all([
+        listActivePeople(this.persistence),
+        listTeamRoles(this.persistence),
+      ]);
+      this.people = people;
+      this.roles = roles;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
     } finally {
       this.loading = false;
+    }
+  }
+
+  _toggleRole(name, checked) {
+    this._selected = checked
+      ? [...this._selected, name]
+      : this._selected.filter((r) => r !== name);
+  }
+
+  async _addRole() {
+    const name = this._newRole.trim();
+    if (!name) return;
+    this.error = '';
+    try {
+      if (!this.roles.some((r) => r.name.toLowerCase() === name.toLowerCase())) {
+        await addTeamRole(this.persistence, name);
+        this.roles = await listTeamRoles(this.persistence);
+      }
+      if (!this._selected.includes(name)) this._selected = [...this._selected, name];
+      this._newRole = '';
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo añadir el rol.';
     }
   }
 
@@ -117,11 +166,12 @@ export class TeamPeople extends LitElement {
     try {
       await addPerson(this.persistence, {
         name,
-        teamRole: this._teamRole.trim(),
+        teamRoles: [...this._selected],
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
       });
       this._name = '';
-      this._teamRole = '';
+      this._selected = [];
+      this._newRole = '';
       this._startDate = '';
       await this._load();
     } catch (err) {
@@ -155,16 +205,44 @@ export class TeamPeople extends LitElement {
       <section>
         <h2>Añadir persona</h2>
         <form @submit=${this._add}>
-          <label>Nombre
-            <input type="text" .value=${this._name} @input=${(e) => { this._name = e.target.value; }} required />
-          </label>
-          <label>Rol en el equipo
-            <input type="text" placeholder="p. ej. Backend" .value=${this._teamRole} @input=${(e) => { this._teamRole = e.target.value; }} />
-          </label>
-          <label>Fecha de inicio
-            <input type="date" .value=${this._startDate} @input=${(e) => { this._startDate = e.target.value; }} />
-          </label>
-          <button class="primary" type="submit">Añadir</button>
+          <div class="row">
+            <label>Nombre
+              <input type="text" .value=${this._name} @input=${(e) => { this._name = e.target.value; }} required />
+            </label>
+            <label>Fecha de inicio
+              <input type="date" .value=${this._startDate} @input=${(e) => { this._startDate = e.target.value; }} />
+            </label>
+            <button class="primary" type="submit">Añadir</button>
+          </div>
+          <fieldset class="roles">
+            <legend>Roles en el equipo</legend>
+            <div class="role-checks">
+              ${this.roles.length === 0
+                ? html`<span class="muted">Aún no hay roles. Añade el primero abajo.</span>`
+                : this.roles.map(
+                    (r) => html`
+                      <label class="role-check">
+                        <input
+                          type="checkbox"
+                          .checked=${this._selected.includes(r.name)}
+                          @change=${(e) => this._toggleRole(r.name, e.target.checked)}
+                        />
+                        <span>${r.name}</span>
+                      </label>
+                    `,
+                  )}
+            </div>
+            <div class="role-add">
+              <input
+                type="text"
+                placeholder="Añadir un rol nuevo…"
+                .value=${this._newRole}
+                @input=${(e) => { this._newRole = e.target.value; }}
+                @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
+              />
+              <button type="button" @click=${this._addRole}>Añadir rol</button>
+            </div>
+          </fieldset>
         </form>
         ${this.error ? html`<p class="error">${this.error}</p>` : null}
       </section>
@@ -178,14 +256,18 @@ export class TeamPeople extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Nombre</th><th>Rol</th><th>Desde</th><th></th></tr>
+                    <tr><th>Nombre</th><th>Roles</th><th>Desde</th><th></th></tr>
                   </thead>
                   <tbody>
                     ${this.people.map(
                       (p) => html`
                         <tr>
                           <td>${p.name}</td>
-                          <td>${p.teamRole || '—'}</td>
+                          <td>
+                            ${(p.teamRoles ?? []).length === 0
+                              ? html`<span class="muted">—</span>`
+                              : html`<span class="chips">${p.teamRoles.map((r) => html`<span class="chip">${r}</span>`)}</span>`}
+                          </td>
                           <td>${formatDate(p.startDate)}</td>
                           <td class="actions">${this._renderActions(p)}</td>
                         </tr>
