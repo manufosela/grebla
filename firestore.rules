@@ -57,6 +57,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Catálogo GLOBAL de roles de equipo (GREBLA): común a toda la organización.
+    // Cualquier autenticado lo lee; solo un admin puede crear/borrar roles.
+    match /teamRoles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // GREBLA — herramienta de seguimiento de equipo. Todo el árbol de un owner
     // (personas, lecturas por dimensión, conversaciones, support notes R5,
     // áreas y config) es accesible SOLO por su dueño. La frontera R5/R6 (support

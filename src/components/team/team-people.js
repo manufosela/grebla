@@ -28,6 +28,7 @@ function formatDate(iso) {
 export class TeamPeople extends LitElement {
   static properties = {
     persistence: { attribute: false },
+    isAdmin: { attribute: false },
     people: { state: true },
     roles: { state: true },
     loading: { state: true },
@@ -59,6 +60,7 @@ export class TeamPeople extends LitElement {
     .role-check { flex-direction: row; align-items: center; gap: 0.4rem; font-weight: 500; color: var(--rm-text, #111827); cursor: pointer; }
     .role-add { display: flex; gap: 0.5rem; align-items: center; }
     .role-add input { flex: 1; }
+    .role-hint { font-size: 0.78rem; margin: 0; }
     .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
     .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #111827); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
     .muted { color: var(--rm-muted, #9ca3af); }
@@ -93,6 +95,8 @@ export class TeamPeople extends LitElement {
     super();
     /** @type {import('../../tools/team/domain/ports.js').PersistencePort|null} */
     this.persistence = null;
+    /** @type {boolean} Solo un admin puede añadir roles al catálogo global. */
+    this.isAdmin = false;
     /** @type {import('../../tools/team/domain/types.js').Person[]} */
     this.people = [];
     /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
@@ -232,16 +236,20 @@ export class TeamPeople extends LitElement {
                     `,
                   )}
             </div>
-            <div class="role-add">
-              <input
-                type="text"
-                placeholder="Añadir un rol nuevo…"
-                .value=${this._newRole}
-                @input=${(e) => { this._newRole = e.target.value; }}
-                @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
-              />
-              <button type="button" @click=${this._addRole}>Añadir rol</button>
-            </div>
+            ${this.isAdmin
+              ? html`
+                  <div class="role-add">
+                    <input
+                      type="text"
+                      placeholder="Añadir un rol nuevo…"
+                      .value=${this._newRole}
+                      @input=${(e) => { this._newRole = e.target.value; }}
+                      @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
+                    />
+                    <button type="button" @click=${this._addRole}>Añadir rol</button>
+                  </div>
+                `
+              : html`<p class="role-hint muted">El catálogo de roles es común a toda la organización. Solo un administrador puede añadir o quitar roles.</p>`}
           </fieldset>
         </form>
         ${this.error ? html`<p class="error">${this.error}</p>` : null}
