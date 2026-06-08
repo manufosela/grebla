@@ -19,6 +19,7 @@ export class TeamApp extends LitElement {
     persistence: { attribute: false },
     storage: { attribute: false },
     uid: { attribute: false },
+    isAdmin: { attribute: false },
     view: { state: true },
     error: { state: true },
   };
@@ -52,6 +53,8 @@ export class TeamApp extends LitElement {
     this.storage = null;
     /** @type {string|null} */
     this.uid = null;
+    /** @type {boolean} */
+    this.isAdmin = false;
     /** @type {'people'|'departures'|'team'|'settings'} */
     this.view = 'people';
     this.error = '';
@@ -85,7 +88,7 @@ export class TeamApp extends LitElement {
   _renderView() {
     switch (this.view) {
       case 'people':
-        return html`<team-people .persistence=${this.persistence}></team-people>`;
+        return html`<team-people .persistence=${this.persistence} .isAdmin=${this.isAdmin}></team-people>`;
       case 'departures':
         return html`<team-departures .persistence=${this.persistence}></team-departures>`;
       case 'team':

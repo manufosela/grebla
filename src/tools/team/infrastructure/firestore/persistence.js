@@ -37,8 +37,10 @@ const readingCol = (db, owner, personId, dim) =>
   collection(db, 'owners', owner, 'people', personId, dim);
 const areaCol = (db, owner) => collection(db, 'owners', owner, 'areas');
 const areaDoc = (db, owner, id) => doc(db, 'owners', owner, 'areas', id);
-const teamRoleCol = (db, owner) => collection(db, 'owners', owner, 'teamRoles');
-const teamRoleDoc = (db, owner, id) => doc(db, 'owners', owner, 'teamRoles', id);
+// El catálogo de roles de equipo es GLOBAL (no por owner): colección /teamRoles.
+// Lectura para autenticados, escritura solo admin (ver firestore.rules).
+const teamRoleCol = (db) => collection(db, 'teamRoles');
+const teamRoleDoc = (db, id) => doc(db, 'teamRoles', id);
 const convCol = (db, owner, personId) =>
   collection(db, 'owners', owner, 'people', personId, 'conversations');
 const convDoc = (db, owner, personId, id) =>
@@ -106,17 +108,17 @@ function areaRepo(db, owner) {
   };
 }
 
-function teamRoleRepo(db, owner) {
+function teamRoleRepo(db) {
   return {
     async list() {
-      return mapDocs(await getDocs(teamRoleCol(db, owner)));
+      return mapDocs(await getDocs(teamRoleCol(db)));
     },
     async create(name) {
-      const ref = await addDoc(teamRoleCol(db, owner), { name });
+      const ref = await addDoc(teamRoleCol(db), { name });
       return ref.id;
     },
     async remove(id) {
-      await deleteDoc(teamRoleDoc(db, owner, id));
+      await deleteDoc(teamRoleDoc(db, id));
     },
   };
 }
@@ -183,7 +185,7 @@ export function createFirestorePersistence(db, ownerId) {
     people: peopleRepo(db, ownerId),
     readings,
     areas: areaRepo(db, ownerId),
-    teamRoles: teamRoleRepo(db, ownerId),
+    teamRoles: teamRoleRepo(db), // catálogo global, no namespaced por owner
     conversations: conversationRepo(db, ownerId),
     supportNotes: supportNoteRepo(db, ownerId),
     config: configRepo(db, ownerId),

@@ -5,7 +5,7 @@
  * /tools/team (requireAuth en el layout) ya redirige a /login sin sesión.
  */
 import '../components/team/team-app.js';
-import { onUserChanged } from '../lib/auth.js';
+import { onUserChanged, isAdmin } from '../lib/auth.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 
 const app = document.querySelector('team-app');
@@ -13,9 +13,13 @@ const app = document.querySelector('team-app');
 onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
-    const { persistence, storage } = await createTeamContainer({ mode: 'firestore', ownerId: user.uid });
+    const [{ persistence, storage }, admin] = await Promise.all([
+      createTeamContainer({ mode: 'firestore', ownerId: user.uid }),
+      isAdmin(user.uid),
+    ]);
     app.uid = user.uid;
     app.storage = storage;
+    app.isAdmin = admin; // solo un admin puede añadir roles al catálogo global
     app.persistence = persistence; // dispara la carga inicial en el componente
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar la herramienta.';
