@@ -7,13 +7,30 @@
  */
 
 /**
- * Alta de una persona (activa por defecto).
+ * Normaliza una persona leída: deriva teamRoles[] del antiguo teamRole (string)
+ * si solo existe el campo legacy. Garantiza siempre un array teamRoles.
+ * @param {Person & { teamRole?: string }} person
+ * @returns {Person}
+ */
+export function normalizePerson(person) {
+  const teamRoles = Array.isArray(person.teamRoles)
+    ? person.teamRoles
+    : person.teamRole
+      ? [person.teamRole]
+      : [];
+  return { ...person, teamRoles };
+}
+
+/**
+ * Alta de una persona (activa por defecto). `teamRoles` es un array de roles del
+ * catálogo (puede ir vacío).
  * @param {PersistencePort} persistence
- * @param {{ name: string, teamRole: string, startDate: string, active?: boolean }} input
+ * @param {{ name: string, teamRoles?: string[], startDate: string, active?: boolean }} input
  * @returns {Promise<string>}
  */
 export function addPerson(persistence, input) {
-  return persistence.people.create({ active: true, ...input });
+  const { teamRoles = [], teamRole: _legacy, ...rest } = input;
+  return persistence.people.create({ active: true, teamRoles, ...rest });
 }
 
 /**
@@ -22,7 +39,7 @@ export function addPerson(persistence, input) {
  */
 export async function listActivePeople(persistence) {
   const people = await persistence.people.list();
-  return people.filter((p) => p.active);
+  return people.filter((p) => p.active).map(normalizePerson);
 }
 
 /**
