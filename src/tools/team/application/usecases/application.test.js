@@ -3,6 +3,9 @@ import { createMemoryPersistence } from '../../infrastructure/memory/index.js';
 import {
   addPerson,
   listActivePeople,
+  listDepartedPeople,
+  deactivatePerson,
+  getTurnover,
   normalizePerson,
   addTeamRole,
   listTeamRoles,
@@ -78,6 +81,22 @@ describe('Fase 2b — casos de uso', () => {
     await removeTeamRole(p, id);
     expect(await listTeamRoles(p)).toEqual([]);
     expect(() => addTeamRole(p, '   ')).toThrow();
+  });
+
+  it('deactivatePerson sella fecha, mueve a Bajas (no borra) y cuenta en rotación', async () => {
+    const fresh = createMemoryPersistence();
+    await addPerson(fresh, { name: 'Keep', teamRoles: [], startDate: '2025-01-01' });
+    const gone = await addPerson(fresh, { name: 'Gone', teamRoles: [], startDate: '2025-01-01' });
+    await deactivatePerson(fresh, gone);
+
+    expect((await listActivePeople(fresh)).map((x) => x.name)).toEqual(['Keep']);
+    const departed = await listDepartedPeople(fresh);
+    expect(departed.map((x) => x.name)).toEqual(['Gone']);
+    expect(departed[0].deactivatedAt).toBeTruthy();
+
+    const t = await getTurnover(fresh, { from: '2025-01-01', to: '2100-01-01' });
+    expect(t.hires).toBe(2);
+    expect(t.departures).toBe(1);
   });
 
   it('addReading rechaza dimensión inválida', () => {

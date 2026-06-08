@@ -10,8 +10,9 @@
  * @property {string} name
  * @property {string[]} teamRoles     Roles funcionales en el equipo (del catálogo TeamRole). No es Belbin.
  * @property {string} [teamRole]      LEGACY: rol único (string). Se deriva a teamRoles al leer (retrocompat).
- * @property {string} startDate       ISO date
+ * @property {string} startDate       ISO date (alta)
  * @property {boolean} active
+ * @property {string|null} [deactivatedAt]  ISO date de la baja (null/ausente si activa)
  *
  * @typedef {Object} SeniorityReading
  * @property {LevelValue} level

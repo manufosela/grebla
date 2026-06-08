@@ -9,9 +9,10 @@
 
 /**
  * @param {Person[]} [seed]
+ * @param {() => string} [now] Inyectable para tests deterministas (ISO date de baja).
  * @returns {PeopleRepository}
  */
-export function createMemoryPeopleRepository(seed = []) {
+export function createMemoryPeopleRepository(seed = [], now = () => new Date().toISOString()) {
   /** @type {Map<string, Person>} */
   const store = new Map(seed.map((p) => [p.id, { ...p }]));
 
@@ -36,7 +37,7 @@ export function createMemoryPeopleRepository(seed = []) {
     async deactivate(id) {
       const person = store.get(id);
       if (!person) throw new Error(`Person ${id} no existe`);
-      store.set(id, { ...person, active: false });
+      store.set(id, { ...person, active: false, deactivatedAt: now() });
     },
   };
 }

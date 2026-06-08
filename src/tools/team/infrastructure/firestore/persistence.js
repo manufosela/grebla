@@ -69,7 +69,7 @@ function peopleRepo(db, owner) {
       await updateDoc(personDoc(db, owner, id), { ...patch });
     },
     async deactivate(id) {
-      await updateDoc(personDoc(db, owner, id), { active: false });
+      await updateDoc(personDoc(db, owner, id), { active: false, deactivatedAt: new Date().toISOString() });
     },
   };
 }
