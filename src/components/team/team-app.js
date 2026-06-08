@@ -12,6 +12,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import './team-people.js';
+import './team-departures.js';
 
 export class TeamApp extends LitElement {
   static properties = {
@@ -51,7 +52,7 @@ export class TeamApp extends LitElement {
     this.storage = null;
     /** @type {string|null} */
     this.uid = null;
-    /** @type {'people'|'team'|'settings'} */
+    /** @type {'people'|'departures'|'team'|'settings'} */
     this.view = 'people';
     this.error = '';
   }
@@ -73,6 +74,7 @@ export class TeamApp extends LitElement {
     return html`
       <nav class="sections" aria-label="Secciones">
         ${this._tab('people', 'Personas')}
+        ${this._tab('departures', 'Bajas')}
         ${this._tab('team', 'Equipo')}
         ${this._tab('settings', 'Ajustes')}
       </nav>
@@ -84,6 +86,8 @@ export class TeamApp extends LitElement {
     switch (this.view) {
       case 'people':
         return html`<team-people .persistence=${this.persistence}></team-people>`;
+      case 'departures':
+        return html`<team-departures .persistence=${this.persistence}></team-departures>`;
       case 'team':
         return html`<div class="placeholder">Cobertura de roles, bus factor y avisos de silencio — próximamente (Fase 3c).</div>`;
       case 'settings':

@@ -2,7 +2,15 @@
  * API de la capa de aplicación del seguimiento de equipo. La UI importa desde
  * aquí; nunca toca puertos ni dominio directamente.
  */
-export { addPerson, listActivePeople, deactivatePerson, updatePerson, normalizePerson } from './people.js';
+export {
+  addPerson,
+  listActivePeople,
+  listDepartedPeople,
+  deactivatePerson,
+  updatePerson,
+  normalizePerson,
+  getTurnover,
+} from './people.js';
 export { addArea, listAreas, removeArea } from './areas.js';
 export { addTeamRole, listTeamRoles, removeTeamRole } from './teamRoles.js';
 export { addReading, getCurrentReading, getPersonTimeline } from './readings.js';

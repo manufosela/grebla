@@ -5,6 +5,7 @@
  * @typedef {import('../../domain/ports.js').PersistencePort} PersistencePort
  * @typedef {import('../../domain/types.js').Person} Person
  */
+import { turnover } from '../../domain/services/turnover.js';
 
 /**
  * Normaliza una persona leída: deriva teamRoles[] del antiguo teamRole (string)
@@ -40,6 +41,31 @@ export function addPerson(persistence, input) {
 export async function listActivePeople(persistence) {
   const people = await persistence.people.list();
   return people.filter((p) => p.active).map(normalizePerson);
+}
+
+/**
+ * Personas dadas de baja (no se borran: conservan su histórico), ordenadas por
+ * fecha de baja descendente. Alimenta la sección "Bajas" y la rotación.
+ * @param {PersistencePort} persistence
+ * @returns {Promise<Person[]>}
+ */
+export async function listDepartedPeople(persistence) {
+  const people = await persistence.people.list();
+  return people
+    .filter((p) => !p.active)
+    .map(normalizePerson)
+    .sort((a, b) => String(b.deactivatedAt ?? '').localeCompare(String(a.deactivatedAt ?? '')));
+}
+
+/**
+ * Tasa de rotación del equipo en un periodo (agregado, no compara personas).
+ * @param {PersistencePort} persistence
+ * @param {{ from: string|number|Date, to: string|number|Date }} period
+ * @returns {Promise<ReturnType<typeof turnover>>}
+ */
+export async function getTurnover(persistence, period) {
+  const people = await persistence.people.list();
+  return turnover(people, period);
 }
 
 /**
