@@ -13,6 +13,7 @@
 import { LitElement, html, css } from 'lit';
 import './team-people.js';
 import './team-departures.js';
+import './team-person-detail.js';
 
 export class TeamApp extends LitElement {
   static properties = {
@@ -21,6 +22,7 @@ export class TeamApp extends LitElement {
     uid: { attribute: false },
     isAdmin: { attribute: false },
     view: { state: true },
+    selected: { state: true },
     error: { state: true },
   };
 
@@ -39,6 +41,10 @@ export class TeamApp extends LitElement {
     }
     .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
+    .back {
+      border: 0; background: none; color: var(--rm-accent, #2a9d8f);
+      font-size: 0.88rem; font-weight: 600; cursor: pointer; padding: 0; margin-bottom: 1rem;
+    }
     .loading, .placeholder {
       padding: 2rem; text-align: center; color: var(--rm-muted, #6b7280);
       border: 1px dashed var(--rm-border, #d1d5db); border-radius: var(--rm-radius, 12px);
@@ -55,13 +61,21 @@ export class TeamApp extends LitElement {
     this.uid = null;
     /** @type {boolean} */
     this.isAdmin = false;
-    /** @type {'people'|'departures'|'team'|'settings'} */
+    /** @type {'people'|'departures'|'team'|'settings'|'person'} */
     this.view = 'people';
+    /** @type {import('../../tools/team/domain/types.js').Person|null} */
+    this.selected = null;
     this.error = '';
   }
 
   _go(view) {
     this.view = view;
+    if (view !== 'person') this.selected = null;
+  }
+
+  _onOpenPerson(event) {
+    this.selected = event.detail.person;
+    this.view = 'person';
   }
 
   _tab(key, label) {
@@ -88,7 +102,16 @@ export class TeamApp extends LitElement {
   _renderView() {
     switch (this.view) {
       case 'people':
-        return html`<team-people .persistence=${this.persistence} .isAdmin=${this.isAdmin}></team-people>`;
+        return html`<team-people
+          .persistence=${this.persistence}
+          .isAdmin=${this.isAdmin}
+          @open-person=${this._onOpenPerson}
+        ></team-people>`;
+      case 'person':
+        return html`
+          <button class="back" @click=${() => this._go('people')}>← Volver a personas</button>
+          <team-person-detail .persistence=${this.persistence} .person=${this.selected}></team-person-detail>
+        `;
       case 'departures':
         return html`<team-departures .persistence=${this.persistence}></team-departures>`;
       case 'team':
