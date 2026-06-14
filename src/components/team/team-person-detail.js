@@ -12,8 +12,21 @@
  */
 import { LitElement, html, css } from 'lit';
 import './team-level-input.js';
-import { addReading, getPersonTimeline } from '../../tools/team/application/usecases/index.js';
+import {
+  addReading,
+  getPersonTimeline,
+  registerConversation,
+  listConversations,
+  addSupportNote,
+  listSupportNotes,
+  removeSupportNote,
+} from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
+
+const CONVERSATION_TYPES = [
+  { value: 'o2o', label: '1:1 (O2O)' },
+  { value: 'catchup', label: 'Catch-up' },
+];
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
@@ -34,9 +47,14 @@ export class TeamPersonDetail extends LitElement {
     persistence: { attribute: false },
     person: { attribute: false },
     timeline: { state: true },
+    conversations: { state: true },
+    notes: { state: true },
     loading: { state: true },
     error: { state: true },
     _form: { state: true },
+    _conv: { state: true },
+    _noteText: { state: true },
+    _confirmNote: { state: true },
   };
 
   static styles = css`
@@ -73,6 +91,12 @@ export class TeamPersonDetail extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     label.fld { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    select { border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem; font: inherit; font-size: 0.9rem; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+    section.support { border-left: 4px solid var(--rm-warning, #f2887a); }
+    .disclaimer { font-size: 0.8rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0 0 0.75rem; }
+    .hist .del { margin-left: auto; white-space: nowrap; }
+    .link { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.8rem; color: var(--rm-muted, #6b7280); padding: 0 0.2rem; }
+    .link.yes { color: var(--rm-danger, #dc2626); }
   `;
 
   constructor() {
@@ -81,12 +105,20 @@ export class TeamPersonDetail extends LitElement {
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.person = null;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
+    /** @type {import('../../tools/team/domain/types.js').Conversation[]} */
+    this.conversations = [];
+    /** @type {import('../../tools/team/domain/types.js').SupportNote[]} */
+    this.notes = [];
     this.loading = true;
     this.error = '';
     this._form = {
       seniority: { level: 0, toNext: false, note: '', date: '' },
       emotional: { level: 0, toNext: false, note: '', date: '' },
     };
+    this._conv = { type: 'o2o', date: '', notes: '' };
+    this._noteText = '';
+    /** @type {string|null} */
+    this._confirmNote = null;
     this._loadedFor = null;
   }
 
@@ -101,11 +133,66 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      this.timeline = await getPersonTimeline(this.persistence, this.person.id);
+      const [timeline, conversations, notes] = await Promise.all([
+        getPersonTimeline(this.persistence, this.person.id),
+        listConversations(this.persistence, this.person.id),
+        listSupportNotes(this.persistence, this.person.id),
+      ]);
+      this.timeline = timeline;
+      this.conversations = conversations;
+      this.notes = notes;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
     } finally {
       this.loading = false;
+    }
+  }
+
+  async _reload() {
+    this._loadedFor = null;
+    await this._load();
+    this._loadedFor = this.person.id;
+  }
+
+  async _saveConversation() {
+    const c = this._conv;
+    if (!c.notes.trim()) {
+      this.error = 'Escribe las notas de la conversación.';
+      return;
+    }
+    this.error = '';
+    try {
+      await registerConversation(this.persistence, this.person.id, {
+        type: c.type,
+        date: c.date || new Date().toISOString(),
+        notes: c.notes.trim(),
+      });
+      this._conv = { type: 'o2o', date: '', notes: '' };
+      await this._reload();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar la conversación.';
+    }
+  }
+
+  async _saveNote() {
+    if (!this._noteText.trim()) return;
+    this.error = '';
+    try {
+      await addSupportNote(this.persistence, this.person.id, this._noteText.trim());
+      this._noteText = '';
+      await this._reload();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar la nota.';
+    }
+  }
+
+  async _deleteNote(id) {
+    this._confirmNote = null;
+    try {
+      await removeSupportNote(this.persistence, this.person.id, id);
+      await this._reload();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo borrar la nota.';
     }
   }
 
@@ -128,9 +215,7 @@ export class TeamPersonDetail extends LitElement {
         date: f.date || new Date().toISOString(),
       });
       this._patchForm(dim, { level: 0, toNext: false, note: '', date: '' });
-      this._loadedFor = null; // forzar recarga
-      await this._load();
-      this._loadedFor = this.person.id;
+      await this._reload();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar la lectura.';
     }
@@ -191,6 +276,98 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
+  _renderConversations() {
+    const c = this._conv;
+    const typeLabel = (t) => CONVERSATION_TYPES.find((x) => x.value === t)?.label ?? t;
+    return html`
+      <section>
+        <h3>Conversaciones</h3>
+        <div class="form">
+          <div class="row">
+            <label class="fld">Tipo
+              <select .value=${c.type} @change=${(e) => { this._conv = { ...this._conv, type: e.target.value }; }}>
+                ${CONVERSATION_TYPES.map((t) => html`<option value=${t.value} ?selected=${t.value === c.type}>${t.label}</option>`)}
+              </select>
+            </label>
+            <label class="fld">Fecha
+              <input type="date" .value=${c.date} @input=${(e) => { this._conv = { ...this._conv, date: e.target.value }; }} />
+            </label>
+          </div>
+          <label class="fld">Notas
+            <textarea
+              .value=${c.notes}
+              @input=${(e) => { this._conv = { ...this._conv, notes: e.target.value }; }}
+              placeholder="Qué se habló, acuerdos, comportamientos observados…"
+            ></textarea>
+          </label>
+          <div class="row">
+            <button class="primary" ?disabled=${!c.notes.trim()} @click=${this._saveConversation}>Registrar conversación</button>
+          </div>
+        </div>
+        ${this.conversations.length === 0
+          ? html`<p class="empty">Sin conversaciones registradas.</p>`
+          : html`
+              <ul class="hist">
+                ${this.conversations.map(
+                  (cv) => html`
+                    <li>
+                      <span class="when">${formatDate(cv.date)}</span>
+                      <span class="lvl">${typeLabel(cv.type)}</span>
+                      <span class="note">${cv.notes}</span>
+                    </li>
+                  `,
+                )}
+              </ul>
+            `}
+      </section>
+    `;
+  }
+
+  _renderNotes() {
+    return html`
+      <section class="support">
+        <h3>Notas de acompañamiento</h3>
+        <p class="disclaimer">
+          Espacio sensible y <strong>no diagnóstico</strong>, separado de la dimensión Emocional.
+          No tiene nivel y nunca se incluye en exports ni en agregados.
+        </p>
+        <div class="form">
+          <label class="fld">Nueva nota
+            <textarea
+              .value=${this._noteText}
+              @input=${(e) => { this._noteText = e.target.value; }}
+              placeholder="Acompañamiento, contexto personal relevante para tu apoyo…"
+            ></textarea>
+          </label>
+          <div class="row">
+            <button class="primary" ?disabled=${!this._noteText.trim()} @click=${this._saveNote}>Guardar nota</button>
+          </div>
+        </div>
+        ${this.notes.length === 0
+          ? html`<p class="empty">Sin notas.</p>`
+          : html`
+              <ul class="hist">
+                ${this.notes.map(
+                  (n) => html`
+                    <li>
+                      <span class="when">${formatDate(n.date)}</span>
+                      <span class="note">${n.text}</span>
+                      <span class="del">
+                        ${this._confirmNote === n.id
+                          ? html`¿Borrar?
+                              <button class="link yes" @click=${() => this._deleteNote(n.id)}>Sí</button>
+                              <button class="link" @click=${() => { this._confirmNote = null; }}>No</button>`
+                          : html`<button class="link" @click=${() => { this._confirmNote = n.id; }}>Borrar</button>`}
+                      </span>
+                    </li>
+                  `,
+                )}
+              </ul>
+            `}
+      </section>
+    `;
+  }
+
   render() {
     if (!this.person) return null;
     return html`
@@ -201,7 +378,13 @@ export class TeamPersonDetail extends LitElement {
           : null}
       </div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
-      ${this.loading ? html`<p class="empty">Cargando…</p>` : DIMENSIONS.map((d) => this._renderDimension(d))}
+      ${this.loading
+        ? html`<p class="empty">Cargando…</p>`
+        : html`
+            ${DIMENSIONS.map((d) => this._renderDimension(d))}
+            ${this._renderConversations()}
+            ${this._renderNotes()}
+          `}
     `;
   }
 }
