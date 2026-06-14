@@ -15,6 +15,7 @@ import './team-people.js';
 import './team-departures.js';
 import './team-person-detail.js';
 import './team-settings.js';
+import './team-overview.js';
 
 export class TeamApp extends LitElement {
   static properties = {
@@ -116,7 +117,7 @@ export class TeamApp extends LitElement {
       case 'departures':
         return html`<team-departures .persistence=${this.persistence}></team-departures>`;
       case 'team':
-        return html`<div class="placeholder">Cobertura de roles, bus factor y avisos de silencio — próximamente (Fase 3c).</div>`;
+        return html`<team-overview .persistence=${this.persistence}></team-overview>`;
       case 'settings':
         return html`<team-settings .persistence=${this.persistence}></team-settings>`;
       default:
