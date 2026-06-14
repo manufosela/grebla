@@ -14,6 +14,7 @@ import { LitElement, html, css } from 'lit';
 import './team-people.js';
 import './team-departures.js';
 import './team-person-detail.js';
+import './team-settings.js';
 
 export class TeamApp extends LitElement {
   static properties = {
@@ -117,7 +118,7 @@ export class TeamApp extends LitElement {
       case 'team':
         return html`<div class="placeholder">Cobertura de roles, bus factor y avisos de silencio — próximamente (Fase 3c).</div>`;
       case 'settings':
-        return html`<div class="placeholder">Áreas de conocimiento, cadencia y umbrales — próximamente (Fase 3c).</div>`;
+        return html`<team-settings .persistence=${this.persistence}></team-settings>`;
       default:
         return null;
     }
