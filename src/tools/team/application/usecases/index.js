@@ -12,6 +12,7 @@ export {
   getTurnover,
 } from './people.js';
 export { addArea, listAreas, removeArea } from './areas.js';
+export { getSettings, updateSettings } from './config.js';
 export { addTeamRole, listTeamRoles, removeTeamRole } from './teamRoles.js';
 export { addReading, getCurrentReading, getPersonTimeline } from './readings.js';
 export { registerConversation, listConversations, updateConversation } from './conversations.js';

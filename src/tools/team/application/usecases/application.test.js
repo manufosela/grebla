@@ -11,6 +11,8 @@ import {
   listTeamRoles,
   removeTeamRole,
   addArea,
+  getSettings,
+  updateSettings,
   addReading,
   getPersonTimeline,
   registerConversation,
@@ -139,6 +141,17 @@ describe('Fase 2b — casos de uso', () => {
     expect(h).not.toHaveProperty('globalLevel');
     expect(h.busFactorOneCount).toBe(1); // Auth
     expect(h.silenceCount).toBe(1);
+  });
+
+  it('configuración: getSettings devuelve defaults; updateSettings valida y guarda', async () => {
+    const fresh = createMemoryPersistence();
+    expect((await getSettings(fresh)).cadenceDays).toBeGreaterThan(0);
+    await updateSettings(fresh, { cadenceDays: 45, busFactorMinLevel: 4 });
+    const s = await getSettings(fresh);
+    expect(s.cadenceDays).toBe(45);
+    expect(s.busFactorMinLevel).toBe(4);
+    expect(() => updateSettings(fresh, { cadenceDays: 0 })).toThrow();
+    expect(() => updateSettings(fresh, { busFactorMinLevel: 9 })).toThrow();
   });
 
   it('exportAggregate (R6) no incluye datos individuales ni support notes', async () => {
