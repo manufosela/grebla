@@ -21,3 +21,12 @@ if (requireAuth || requireAdmin) {
     }
   });
 }
+
+// PWA (H11): registra el service worker para instalación y app-shell offline.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* sin SW la app sigue funcionando online */
+    });
+  });
+}

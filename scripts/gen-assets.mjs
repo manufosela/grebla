@@ -25,6 +25,8 @@ async function render(svg, w, h, file) {
 
 await render(faviconSvg, 32, 32, 'favicon-32.png');
 await render(iconPaddedSvg, 180, 180, 'apple-touch-icon.png');
+await render(iconPaddedSvg, 192, 192, 'icon-192.png');
+await render(iconPaddedSvg, 512, 512, 'icon-512.png');
 await render(ogCardSvg, 1200, 630, 'og-image.png');
 
 console.log('Assets generados en public/.');
