@@ -15,6 +15,7 @@ import './team-level-input.js';
 import {
   addReading,
   getPersonTimeline,
+  listAreas,
   registerConversation,
   listConversations,
   addSupportNote,
@@ -22,6 +23,13 @@ import {
   removeSupportNote,
 } from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
+import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
+
+const CONTRIB_STATES = [
+  { value: '', label: '—' },
+  { value: 'secondary', label: 'Secundario' },
+  { value: 'primary', label: 'Primario' },
+];
 
 const CONVERSATION_TYPES = [
   { value: 'o2o', label: '1:1 (O2O)' },
@@ -47,11 +55,14 @@ export class TeamPersonDetail extends LitElement {
     persistence: { attribute: false },
     person: { attribute: false },
     timeline: { state: true },
+    areas: { state: true },
     conversations: { state: true },
     notes: { state: true },
     loading: { state: true },
     error: { state: true },
     _form: { state: true },
+    _know: { state: true },
+    _contrib: { state: true },
     _conv: { state: true },
     _noteText: { state: true },
     _confirmNote: { state: true },
@@ -97,6 +108,10 @@ export class TeamPersonDetail extends LitElement {
     .hist .del { margin-left: auto; white-space: nowrap; }
     .link { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.8rem; color: var(--rm-muted, #6b7280); padding: 0 0.2rem; }
     .link.yes { color: var(--rm-danger, #dc2626); }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.75rem; }
+    .belbin { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.4rem 1rem; }
+    .belbin-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+    .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   `;
 
   constructor() {
@@ -105,6 +120,8 @@ export class TeamPersonDetail extends LitElement {
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.person = null;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
+    /** @type {import('../../tools/team/domain/types.js').Area[]} */
+    this.areas = [];
     /** @type {import('../../tools/team/domain/types.js').Conversation[]} */
     this.conversations = [];
     /** @type {import('../../tools/team/domain/types.js').SupportNote[]} */
@@ -115,6 +132,8 @@ export class TeamPersonDetail extends LitElement {
       seniority: { level: 0, toNext: false, note: '', date: '' },
       emotional: { level: 0, toNext: false, note: '', date: '' },
     };
+    this._know = { areaId: '', level: 0, toNext: false, note: '', date: '' };
+    this._contrib = { roles: {}, note: '', date: '' };
     this._conv = { type: 'o2o', date: '', notes: '' };
     this._noteText = '';
     /** @type {string|null} */
@@ -133,12 +152,14 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, conversations, notes] = await Promise.all([
+      const [timeline, areas, conversations, notes] = await Promise.all([
         getPersonTimeline(this.persistence, this.person.id),
+        listAreas(this.persistence),
         listConversations(this.persistence, this.person.id),
         listSupportNotes(this.persistence, this.person.id),
       ]);
       this.timeline = timeline;
+      this.areas = areas;
       this.conversations = conversations;
       this.notes = notes;
     } catch (err) {
@@ -152,6 +173,50 @@ export class TeamPersonDetail extends LitElement {
     this._loadedFor = null;
     await this._load();
     this._loadedFor = this.person.id;
+  }
+
+  async _saveKnowledge() {
+    const k = this._know;
+    if (!k.areaId) { this.error = 'Elige un área.'; return; }
+    if (!k.level) { this.error = 'Selecciona un nivel.'; return; }
+    this.error = '';
+    try {
+      await addReading(this.persistence, 'knowledge', this.person.id, {
+        areaId: k.areaId,
+        level: k.level,
+        toNext: k.toNext,
+        note: k.note.trim() || undefined,
+        date: k.date || new Date().toISOString(),
+      });
+      this._know = { areaId: '', level: 0, toNext: false, note: '', date: '' };
+      await this._reload();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar el conocimiento.';
+    }
+  }
+
+  _setContribRole(sigla, value) {
+    const roles = { ...this._contrib.roles };
+    if (value) roles[sigla] = value;
+    else delete roles[sigla];
+    this._contrib = { ...this._contrib, roles };
+  }
+
+  async _saveContribution() {
+    const c = this._contrib;
+    if (Object.keys(c.roles).length === 0) { this.error = 'Marca al menos un rol.'; return; }
+    this.error = '';
+    try {
+      await addReading(this.persistence, 'contribution', this.person.id, {
+        roles: c.roles,
+        note: c.note.trim() || undefined,
+        date: c.date || new Date().toISOString(),
+      });
+      this._contrib = { roles: {}, note: '', date: '' };
+      await this._reload();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar la contribución.';
+    }
   }
 
   async _saveConversation() {
@@ -276,6 +341,119 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
+  _renderKnowledge() {
+    const history = this.timeline.knowledge ?? [];
+    const currentByArea = new Map();
+    for (const r of history) currentByArea.set(r.areaId, r); // asc → última gana
+    const areaName = (id) => this.areas.find((a) => a.id === id)?.name ?? '—';
+    const k = this._know;
+    return html`
+      <section>
+        <h3>Conocimiento por área</h3>
+        ${this.areas.length === 0
+          ? html`<p class="empty">No hay áreas. Créalas en <strong>Ajustes</strong> para registrar conocimiento.</p>`
+          : html`
+              ${currentByArea.size > 0
+                ? html`<div class="chips">
+                    ${[...currentByArea.entries()].map(
+                      ([id, r]) => html`<span class="chip">${areaName(id)}: ${levelLabel(r.level, r.toNext)}</span>`,
+                    )}
+                  </div>`
+                : null}
+              <div class="form">
+                <label class="fld">Área
+                  <select .value=${k.areaId} @change=${(e) => { this._know = { ...this._know, areaId: e.target.value }; }}>
+                    <option value="">— Elige un área —</option>
+                    ${this.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === k.areaId}>${a.name}</option>`)}
+                  </select>
+                </label>
+                <team-level-input
+                  .level=${k.level}
+                  .toNext=${k.toNext}
+                  @level-change=${(e) => { this._know = { ...this._know, level: e.detail.level, toNext: e.detail.toNext }; }}
+                ></team-level-input>
+                <label class="fld">Nota (opcional)
+                  <textarea .value=${k.note} @input=${(e) => { this._know = { ...this._know, note: e.target.value }; }}></textarea>
+                </label>
+                <div class="row">
+                  <label class="fld">Fecha
+                    <input type="date" .value=${k.date} @input=${(e) => { this._know = { ...this._know, date: e.target.value }; }} />
+                  </label>
+                  <button class="primary" ?disabled=${!k.areaId || !k.level} @click=${this._saveKnowledge}>Registrar conocimiento</button>
+                </div>
+              </div>
+              ${history.length === 0
+                ? html`<p class="empty">Sin histórico.</p>`
+                : html`<ul class="hist">
+                    ${history.map(
+                      (r) => html`<li>
+                        <span class="when">${formatDate(r.date)}</span>
+                        <span class="lvl">${areaName(r.areaId)}: ${levelLabel(r.level, r.toNext)}</span>
+                        ${r.note ? html`<span class="note">${r.note}</span>` : null}
+                      </li>`,
+                    )}
+                  </ul>`}
+            `}
+      </section>
+    `;
+  }
+
+  _renderContribution() {
+    const history = this.timeline.contribution ?? [];
+    const current = history.at(-1);
+    const c = this._contrib;
+    const summary = (roles) =>
+      Object.entries(roles || {})
+        .map(([s, kind]) => `${s} ${kind === 'primary' ? '(P)' : '(S)'}`)
+        .join(' · ') || '—';
+    return html`
+      <section>
+        <h3>Contribución (Belbin)</h3>
+        <p class="current">
+          ${current
+            ? html`Actual: <strong>${summary(current.roles)}</strong> · ${formatDate(current.date)}`
+            : 'Sin perfil todavía'}
+        </p>
+        <div class="form">
+          <div class="belbin">
+            ${BELBIN_ROLES.map(
+              (role) => html`
+                <div class="belbin-row">
+                  <span class="b-name" title=${role.name}>${role.sigla} · ${role.name}</span>
+                  <select @change=${(e) => this._setContribRole(role.sigla, e.target.value)}>
+                    ${CONTRIB_STATES.map(
+                      (st) => html`<option value=${st.value} ?selected=${(c.roles[role.sigla] ?? '') === st.value}>${st.label}</option>`,
+                    )}
+                  </select>
+                </div>
+              `,
+            )}
+          </div>
+          <label class="fld">Nota (opcional)
+            <textarea .value=${c.note} @input=${(e) => { this._contrib = { ...this._contrib, note: e.target.value }; }}></textarea>
+          </label>
+          <div class="row">
+            <label class="fld">Fecha
+              <input type="date" .value=${c.date} @input=${(e) => { this._contrib = { ...this._contrib, date: e.target.value }; }} />
+            </label>
+            <button class="primary" ?disabled=${Object.keys(c.roles).length === 0} @click=${this._saveContribution}>Registrar contribución</button>
+          </div>
+        </div>
+        ${history.length === 0
+          ? null
+          : html`<ul class="hist">
+              ${history.map(
+                (r) => html`<li>
+                  <span class="when">${formatDate(r.date)}</span>
+                  <span class="lvl">${summary(r.roles)}</span>
+                  ${r.note ? html`<span class="note">${r.note}</span>` : null}
+                </li>`,
+              )}
+            </ul>`}
+      </section>
+    `;
+  }
+
   _renderConversations() {
     const c = this._conv;
     const typeLabel = (t) => CONVERSATION_TYPES.find((x) => x.value === t)?.label ?? t;
@@ -382,6 +560,8 @@ export class TeamPersonDetail extends LitElement {
         ? html`<p class="empty">Cargando…</p>`
         : html`
             ${DIMENSIONS.map((d) => this._renderDimension(d))}
+            ${this._renderKnowledge()}
+            ${this._renderContribution()}
             ${this._renderConversations()}
             ${this._renderNotes()}
           `}
