@@ -79,6 +79,8 @@ export class TeamPeople extends LitElement {
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #6b7280); font-weight: 600; }
     td.actions { text-align: right; }
+    tr.rowlink { cursor: pointer; }
+    tr.rowlink:hover td { background: var(--rm-surface-hover, #f9fafb); }
     .off-btn {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
       color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.25rem 0.6rem;
@@ -183,6 +185,12 @@ export class TeamPeople extends LitElement {
     }
   }
 
+  _openPerson(person) {
+    this.dispatchEvent(
+      new CustomEvent('open-person', { detail: { person }, bubbles: true, composed: true }),
+    );
+  }
+
   async _deactivate(id) {
     this._confirmOff = null;
     this.error = '';
@@ -269,7 +277,7 @@ export class TeamPeople extends LitElement {
                   <tbody>
                     ${this.people.map(
                       (p) => html`
-                        <tr>
+                        <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
                           <td>${p.name}</td>
                           <td>
                             ${(p.teamRoles ?? []).length === 0
@@ -277,7 +285,7 @@ export class TeamPeople extends LitElement {
                               : html`<span class="chips">${p.teamRoles.map((r) => html`<span class="chip">${r}</span>`)}</span>`}
                           </td>
                           <td>${formatDate(p.startDate)}</td>
-                          <td class="actions">${this._renderActions(p)}</td>
+                          <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
                         </tr>
                       `,
                     )}
