@@ -10,6 +10,7 @@ import { roleCoverage, uncoveredRoles } from '../../domain/services/roleCoverage
 import { busFactor } from '../../domain/services/busFactor.js';
 import { silenceAlerts } from '../../domain/services/silenceAlerts.js';
 import { teamHealth } from '../../domain/services/teamHealth.js';
+import { diagnoseTeam } from '../../domain/services/diagnosis.js';
 
 /** @param {PersistencePort} persistence */
 async function activePeople(persistence) {
@@ -123,6 +124,17 @@ export async function getTeamHealth(persistence, now) {
     now,
     teamSize: people.length,
   });
+}
+
+/**
+ * Diagnóstico del equipo (§13): gaps por prioridad, recomendaciones y score de
+ * salud, derivados del agregado de salud. Orientativo, no veredicto.
+ * @param {PersistencePort} persistence
+ * @param {Date|string|number} now
+ */
+export async function getDiagnosis(persistence, now) {
+  const health = await getTeamHealth(persistence, now);
+  return diagnoseTeam(health);
 }
 
 /**
