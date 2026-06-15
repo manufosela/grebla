@@ -24,3 +24,4 @@ export {
   getTeamHealth,
   exportAggregate,
 } from './team.js';
+export { getTeamMap } from './teamMap.js';
