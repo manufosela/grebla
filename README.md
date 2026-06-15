@@ -1,6 +1,6 @@
 # GREBLA
 
-**Guía de Referencia de Equipos Bajo Liderazgo Afectivo.** Framework de
+**Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo.** Framework de
 herramientas para entender y desarrollar equipos y personas. Cada herramienta se
 sirve bajo `/tools/<herramienta>` sobre una base común (Astro + Lit + Firebase),
 con `/` como landing y `/login` como acceso global.
