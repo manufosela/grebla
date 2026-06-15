@@ -10,6 +10,7 @@
 import { LitElement, html, css, svg } from 'lit';
 import {
   getTeamHealth,
+  getDiagnosis,
   exportAggregate,
   listActivePeople,
   listAreas,
@@ -19,6 +20,7 @@ export class TeamOverview extends LitElement {
   static properties = {
     persistence: { attribute: false },
     health: { state: true },
+    diagnosis: { state: true },
     loading: { state: true },
     error: { state: true },
   };
@@ -59,12 +61,26 @@ export class TeamOverview extends LitElement {
       border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
     }
     .note { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0.5rem 0 0; }
+    .diag .score { display: flex; align-items: baseline; gap: 0.15rem; }
+    .diag .score-num { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .diag .score-max { font-size: 0.9rem; color: var(--rm-muted, #9ca3af); }
+    .score-bar { height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; margin-bottom: 0.75rem; }
+    .score-bar span { display: block; height: 100%; border-radius: 999px; }
+    ul.gaps { list-style: none; margin: 0; padding: 0; }
+    ul.gaps li { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.4rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); font-size: 0.88rem; }
+    .sev { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .sev.crit { background: var(--rm-coral-soft, #fdecea); color: var(--rm-danger, #dc2626); }
+    .sev.med { background: #fff4e5; color: #b25e09; }
+    .sev.low { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    .gap-text { flex: 1; min-width: 12ch; }
+    .lever { color: var(--rm-accent, #2a9d8f); font-weight: 600; }
   `;
 
   constructor() {
     super();
     this.persistence = null;
     this.health = null;
+    this.diagnosis = null;
     this._areaName = new Map();
     this._personName = new Map();
     this.loading = true;
@@ -84,14 +100,16 @@ export class TeamOverview extends LitElement {
     this.error = '';
     try {
       const now = new Date().toISOString();
-      const [health, people, areas] = await Promise.all([
+      const [health, diagnosis, people, areas] = await Promise.all([
         getTeamHealth(this.persistence, now),
+        getDiagnosis(this.persistence, now),
         listActivePeople(this.persistence),
         listAreas(this.persistence),
       ]);
       this._personName = new Map(people.map((p) => [p.id, p.name]));
       this._areaName = new Map(areas.map((a) => [a.id, a.name]));
       this.health = health;
+      this.diagnosis = diagnosis;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el panel de equipo.';
     } finally {
@@ -145,6 +163,63 @@ export class TeamOverview extends LitElement {
     `;
   }
 
+  _scoreColor(score) {
+    if (score >= 80) return 'var(--rm-success, #16a34a)';
+    if (score >= 50) return 'var(--rm-warning, #f2887a)';
+    return 'var(--rm-danger, #dc2626)';
+  }
+
+  _gapText(g) {
+    switch (g.kind) {
+      case 'busFactorZero':
+        return `Área «${this._areaName.get(g.areaId) ?? '—'}»: sin nadie que la cubra`;
+      case 'busFactorOne':
+        return `Área «${this._areaName.get(g.areaId) ?? '—'}»: bus factor 1 (depende de una sola persona)`;
+      case 'uncoveredRole':
+        return `Rol Belbin sin cubrir: ${g.sigla} · ${g.name}`;
+      case 'silence':
+        return `${g.count} persona(s) superan la cadencia de seguimiento`;
+      case 'sizeSmall':
+        return `Equipo pequeño (${g.teamSize}): habrá roles de contribución sin cubrir`;
+      case 'sizeLarge':
+        return `Equipo grande (${g.teamSize}): vigilar la superposición de roles`;
+      default:
+        return g.kind;
+    }
+  }
+
+  _renderDiagnosis() {
+    const d = this.diagnosis;
+    if (!d) return null;
+    const sevClass = { critical: 'crit', medium: 'med', low: 'low' };
+    const sevLabel = { critical: 'Crítico', medium: 'Medio', low: 'Bajo' };
+    return html`
+      <section class="diag">
+        <div class="head">
+          <h2>Diagnóstico</h2>
+          <div class="score"><span class="score-num" style=${`color:${this._scoreColor(d.healthScore)}`}>${d.healthScore}</span><span class="score-max">/100</span></div>
+        </div>
+        <div class="score-bar"><span style=${`width:${d.healthScore}%;background:${this._scoreColor(d.healthScore)}`}></span></div>
+        ${d.gaps.length === 0
+          ? html`<p class="note">Sin gaps detectados. Mantén el seguimiento.</p>`
+          : html`
+              <ul class="gaps">
+                ${d.gaps.map(
+                  (g) => html`
+                    <li>
+                      <span class="sev ${sevClass[g.severity]}">${sevLabel[g.severity]}</span>
+                      <span class="gap-text">${this._gapText(g)}</span>
+                      <span class="lever">→ ${g.lever}</span>
+                    </li>
+                  `,
+                )}
+              </ul>
+            `}
+        <p class="note">Score orientativo (penaliza bus factor, roles sin cubrir, silencios y tamaño). No es un veredicto sobre personas (R3).</p>
+      </section>
+    `;
+  }
+
   render() {
     if (this.loading) return html`<p class="empty">Cargando panel…</p>`;
     if (this.error) return html`<p class="error">${this.error}</p>`;
@@ -153,6 +228,7 @@ export class TeamOverview extends LitElement {
     const maxCov = Math.max(1, ...h.roleCoverage.map((r) => r.score));
     const maxSenior = Math.max(1, ...h.seniorityDistribution.map((s) => s.count));
     return html`
+      ${this._renderDiagnosis()}
       <section>
         <div class="head">
           <h2>Equipo (${h.teamSize} ${h.teamSize === 1 ? 'persona' : 'personas'})</h2>

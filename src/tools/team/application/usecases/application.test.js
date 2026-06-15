@@ -21,6 +21,7 @@ import {
   getBusFactor,
   getSilenceAlerts,
   getTeamHealth,
+  getDiagnosis,
   exportAggregate,
   getTeamMap,
 } from './index.js';
@@ -142,6 +143,14 @@ describe('Fase 2b — casos de uso', () => {
     expect(h).not.toHaveProperty('globalLevel');
     expect(h.busFactorOneCount).toBe(1); // Auth
     expect(h.silenceCount).toBe(1);
+  });
+
+  it('getDiagnosis produce score y gaps (Auth con bus factor 1 es crítico)', async () => {
+    const d = await getDiagnosis(p, NOW);
+    expect(d.healthScore).toBeGreaterThanOrEqual(0);
+    expect(d.healthScore).toBeLessThanOrEqual(100);
+    expect(d.gaps.length).toBeGreaterThan(0);
+    expect(d.counts.critical).toBeGreaterThanOrEqual(1); // Auth lo cubre solo Ana
   });
 
   it('getTeamMap reúne el estado actual de las 4 dimensiones por persona', async () => {

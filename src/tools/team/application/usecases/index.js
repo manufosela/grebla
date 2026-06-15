@@ -22,6 +22,7 @@ export {
   getBusFactor,
   getSilenceAlerts,
   getTeamHealth,
+  getDiagnosis,
   exportAggregate,
 } from './team.js';
 export { getTeamMap } from './teamMap.js';
