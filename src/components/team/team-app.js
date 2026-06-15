@@ -16,6 +16,7 @@ import './team-departures.js';
 import './team-person-detail.js';
 import './team-settings.js';
 import './team-overview.js';
+import './team-map.js';
 
 export class TeamApp extends LitElement {
   static properties = {
@@ -63,7 +64,7 @@ export class TeamApp extends LitElement {
     this.uid = null;
     /** @type {boolean} */
     this.isAdmin = false;
-    /** @type {'people'|'departures'|'team'|'settings'|'person'} */
+    /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
     this.view = 'people';
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.selected = null;
@@ -93,6 +94,7 @@ export class TeamApp extends LitElement {
     return html`
       <nav class="sections" aria-label="Secciones">
         ${this._tab('people', 'Personas')}
+        ${this._tab('map', 'Mapa')}
         ${this._tab('departures', 'Bajas')}
         ${this._tab('team', 'Equipo')}
         ${this._tab('settings', 'Ajustes')}
@@ -114,6 +116,8 @@ export class TeamApp extends LitElement {
           <button class="back" @click=${() => this._go('people')}>← Volver a personas</button>
           <team-person-detail .persistence=${this.persistence} .person=${this.selected}></team-person-detail>
         `;
+      case 'map':
+        return html`<team-map .persistence=${this.persistence}></team-map>`;
       case 'departures':
         return html`<team-departures .persistence=${this.persistence}></team-departures>`;
       case 'team':

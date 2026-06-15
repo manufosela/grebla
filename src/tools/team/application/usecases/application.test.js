@@ -22,6 +22,7 @@ import {
   getSilenceAlerts,
   getTeamHealth,
   exportAggregate,
+  getTeamMap,
 } from './index.js';
 
 const NOW = '2026-06-07T00:00:00.000Z';
@@ -141,6 +142,25 @@ describe('Fase 2b — casos de uso', () => {
     expect(h).not.toHaveProperty('globalLevel');
     expect(h.busFactorOneCount).toBe(1); // Auth
     expect(h.silenceCount).toBe(1);
+  });
+
+  it('getTeamMap reúne el estado actual de las 4 dimensiones por persona', async () => {
+    const fresh = createMemoryPersistence();
+    const id = await addPerson(fresh, { name: 'Ana', teamRoles: ['Backend'], startDate: '2025-01-01' });
+    const pagos = await addArea(fresh, 'Pagos');
+    await addReading(fresh, 'seniority', id, { level: 4, date: '2025-05-01' });
+    await addReading(fresh, 'seniority', id, { level: 5, toNext: true, date: '2025-06-01' }); // más reciente
+    await addReading(fresh, 'emotional', id, { level: 6, date: '2025-05-01' });
+    await addReading(fresh, 'knowledge', id, { areaId: pagos, level: 6, date: '2025-05-01' });
+    await addReading(fresh, 'contribution', id, { roles: { PL: 'primary', CO: 'secondary' }, date: '2025-05-01' });
+
+    const [row] = await getTeamMap(fresh);
+    expect(row.name).toBe('Ana');
+    expect(row.seniority).toEqual({ level: 5, toNext: true }); // la última
+    expect(row.emotional.level).toBe(6);
+    expect(row.knowledge.areas).toEqual([{ areaId: pagos, level: 6, toNext: false }]);
+    expect(row.knowledge.profile.shape).toBe('I'); // 1 área sólida
+    expect(row.contribution).toEqual({ PL: 'primary', CO: 'secondary' });
   });
 
   it('configuración: getSettings devuelve defaults; updateSettings valida y guarda', async () => {
