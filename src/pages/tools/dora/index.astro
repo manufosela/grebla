@@ -1,0 +1,17 @@
+---
+import Dora from '../../../layouts/Dora.astro';
+---
+
+<Dora title="GREBLA — DORA (métricas de entrega)">
+  <h1 class="page-title">Métricas de entrega (DORA)</h1>
+  <p class="page-lead">
+    Configura los repositorios de la organización que quieres medir, asígnalos a un equipo y a sus
+    gremios, e indica desde qué fecha medir. Las métricas DORA son siempre de equipo, nunca individuales.
+  </p>
+
+  <dora-app></dora-app>
+</Dora>
+
+<script>
+  import '../../../client/dora.js';
+</script>
