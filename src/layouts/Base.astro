@@ -11,7 +11,7 @@
 const { title = 'GREBLA', requireAuth = false, requireAdmin = false } = Astro.props;
 
 const ogDescription =
-  'GREBLA — Guía de Referencia de Equipos Bajo Liderazgo Afectivo. Herramientas para entender y desarrollar equipos y personas.';
+  'GREBLA — Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo. Herramientas para entender y desarrollar equipos y personas.';
 // Si se configura `site` en astro.config.mjs, la imagen social usará URL absoluta.
 const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-image.png';
 ---
@@ -66,7 +66,7 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       <slot />
     </main>
     <footer class="site-footer">
-      <p>GREBLA · Guía de Referencia de Equipos Bajo Liderazgo Afectivo</p>
+      <p>GREBLA · Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo</p>
     </footer>
 
     <style is:global>
