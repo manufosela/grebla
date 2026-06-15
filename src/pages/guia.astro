@@ -1,0 +1,119 @@
+---
+import Base from '../layouts/Base.astro';
+import { LEVELS } from '../tools/team/domain/levels.js';
+import { BELBIN_ROLES } from '../tools/team/domain/belbin.js';
+
+/**
+ * Guía del framework GREBLA: el manifiesto del liderazgo afectivo, la escala de
+ * niveles, los roles de contribución (Belbin) y la frontera con el career path.
+ * Página estática y pública (referencia compartible). Importa el dominio puro.
+ */
+const commitments = [
+  'Pongo a las personas en el centro. Son la estrategia: todo lo demás depende de que estén bien y se complementen.',
+  'Las personas no somos métricas. No mido a nadie por su rastro de actividad ni infiero su valor del delivery.',
+  'No elimino la subjetividad: la gestiono. Gestionar bien cuesta más que medir, y ese es el precio de no engañarse.',
+  'Un buen equipo no suma talento, combina aportaciones que encajan. Ni quien destaca es más, ni quien no destaca es menos.',
+  'No existe "el nivel de una persona". Un nivel es una temperatura, no una esencia: dice cómo estás ahora, no lo que eres.',
+  'Pienso en la persona, no por la persona. No diagnostico su vida; creo condiciones para que exprese lo que necesita.',
+  'En la conversación se habla de comportamientos, no de niveles. El objetivo no es subir de nivel, es aportar mejor.',
+  'El seguimiento frecuente es el método, no un trámite. Pocas muestras dan una señal falsa.',
+  'Mi primer sesgo que gestionar es el mío. No escondo mis sesgos: los nombro, porque uno conocido se compensa y uno ignorado contamina.',
+  'Nadie es más que nadie. El cargo no da más derecho; mi trabajo es acompañar y hacer crecer, no clasificar.',
+];
+
+const glossary = [
+  ['Nivel', 'Una temperatura, no una esencia. Describe cómo aporta alguien en una dimensión ahora, no lo que es. Nunca se comparte como clasificación.'],
+  ['Bus factor', 'Nº de personas que dominan un área. 1 = crítico: si esa persona falta, el conocimiento se pierde.'],
+  ['O2O', 'One to One: conversación individual regular. Se habla de comportamientos, nunca de niveles.'],
+  ['Belbin', 'Taxonomía de 9 roles de contribución. Referencia interna; el equipo no necesita conocerla.'],
+  ['Perfil I/T/π/Comb', 'Amplitud del conocimiento según el nº de áreas sólidas. I = especialista (riesgo de silo); Comb = visión sistémica.'],
+];
+---
+
+<Base title="GREBLA — Guía del framework">
+  <h1 class="page-title">Guía de GREBLA</h1>
+  <p class="page-lead">
+    GREBLA — Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo. No es un cuestionario ni una
+    herramienta de evaluación de personas: es una guía de lectura para quien lidera. No elimina la
+    subjetividad, la gestiona.
+  </p>
+
+  <section class="card">
+    <h2>El manifiesto del liderazgo afectivo</h2>
+    <ol class="commitments">
+      {commitments.map((c) => <li>{c}</li>)}
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>La escala de niveles</h2>
+    <p class="muted">Común a las cuatro dimensiones. Colores cálidos = niveles iniciales, fríos = avanzados. La mezcla de colores en un equipo indica diversidad sana.</p>
+    <ul class="levels">
+      {LEVELS.map((l) => (
+        <li>
+          <span class="dot" style={`background:${l.color}`}></span>
+          <span class="lv-name">{l.order}. {l.name}</span>
+          <span class="lv-group">{l.groupName}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Roles de contribución (Belbin)</h2>
+    <table>
+      <thead><tr><th>Sigla</th><th>Rol</th><th>Categoría</th></tr></thead>
+      <tbody>
+        {BELBIN_ROLES.map((r) => (
+          <tr><td><strong>{r.sigla}</strong></td><td>{r.name}</td><td class="muted">{r.category}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card boundary">
+    <h2>Frontera con el career path</h2>
+    <p>
+      Los niveles de GREBLA son una <strong>lectura privada de desarrollo</strong> de quien lidera.
+      <strong> Nunca alimentan el nivel de carrera ni el salario</strong> — eso pertenece al career path y
+      su calibración. Solo viaja hacia arriba o lateralmente la información <strong>agregada de equipo</strong>
+      (cobertura de roles, bus factor, métricas de entrega), nunca los niveles individuales. En el momento en
+      que un nivel determina el salario, la gente actúa para la lectura en vez de ser honesta en ella, y la
+      lectura deja de valer.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>Glosario</h2>
+    <dl>
+      {glossary.map(([term, def]) => (<><dt>{term}</dt><dd>{def}</dd></>))}
+    </dl>
+  </section>
+</Base>
+
+<style>
+  .card {
+    background: var(--rm-surface);
+    border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .card h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+  .muted { color: var(--rm-muted); font-size: 0.88rem; }
+  .commitments { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.5rem; }
+  .commitments li { line-height: 1.5; }
+  ul.levels { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+  ul.levels li { display: flex; align-items: center; gap: 0.6rem; }
+  ul.levels .dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); flex: none; }
+  ul.levels .lv-name { font-weight: 600; min-width: 12ch; }
+  ul.levels .lv-group { color: var(--rm-muted); font-size: 0.85rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border); }
+  th { color: var(--rm-muted); font-weight: 600; }
+  .boundary { border-left: 4px solid var(--gr-coral); }
+  .boundary p { margin: 0; line-height: 1.6; }
+  dl { margin: 0; display: grid; gap: 0.5rem; }
+  dt { font-weight: 700; }
+  dd { margin: 0 0 0.5rem; color: var(--rm-muted); font-size: 0.9rem; }
+</style>

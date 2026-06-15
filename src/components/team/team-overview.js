@@ -163,6 +163,13 @@ export class TeamOverview extends LitElement {
     `;
   }
 
+  _sizeNote(size) {
+    if (!size) return 'Aún no hay personas activas.';
+    if (size < 5) return `Tamaño ${size}: por debajo de 5 probablemente falten roles de contribución; quien lidera puede cubrir alguno temporalmente (§10).`;
+    if (size <= 6) return `Tamaño ${size}: rango de referencia (5-6); la cobertura natural de roles es más favorable (§10).`;
+    return `Tamaño ${size}: por encima de 6, vigila la superposición de roles para que no genere redundancia (§10).`;
+  }
+
   _scoreColor(score) {
     if (score >= 80) return 'var(--rm-success, #16a34a)';
     if (score >= 50) return 'var(--rm-warning, #f2887a)';
@@ -235,6 +242,7 @@ export class TeamOverview extends LitElement {
           <button @click=${this._export}>Exportar agregados (JSON)</button>
         </div>
         <p class="note">Vistas agregadas del equipo. No se comparan ni se ordenan personas por desempeño (R3).</p>
+        <p class="note">${this._sizeNote(h.teamSize)}</p>
       </section>
 
       <section>

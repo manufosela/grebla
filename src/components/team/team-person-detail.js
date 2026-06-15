@@ -46,8 +46,16 @@ function formatDate(iso) {
 }
 
 const DIMENSIONS = [
-  { key: 'seniority', label: 'Seniority' },
-  { key: 'emotional', label: 'Emocional' },
+  {
+    key: 'seniority',
+    label: 'Seniority',
+    bias: 'Sesgo de observabilidad: lo visible no es toda la capacidad. Provoca que emerja lo que no se manifiesta solo; no confundas volumen con madurez.',
+  },
+  {
+    key: 'emotional',
+    label: 'Emocional',
+    bias: 'Sesgo jerárquico y relacional: la persona filtra lo que muestra a quien tiene autoridad. Contrasta con otros observadores y cuida a quien tratas menos. Marca como provisional si aún hay poca historia.',
+  },
 ];
 
 export class TeamPersonDetail extends LitElement {
@@ -112,6 +120,7 @@ export class TeamPersonDetail extends LitElement {
     .belbin { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.4rem 1rem; }
     .belbin-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
     .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bias { font-size: 0.78rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 0 0.75rem; }
   `;
 
   constructor() {
@@ -286,7 +295,7 @@ export class TeamPersonDetail extends LitElement {
     }
   }
 
-  _renderDimension({ key, label }) {
+  _renderDimension({ key, label, bias }) {
     const history = this.timeline[key] ?? [];
     const current = history.at(-1);
     const f = this._form[key];
@@ -300,6 +309,7 @@ export class TeamPersonDetail extends LitElement {
               : 'Sin lecturas todavía'}
           </span>
         </div>
+        ${bias ? html`<p class="bias">⚠ ${bias}</p>` : null}
 
         <div class="form">
           <team-level-input
