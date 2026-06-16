@@ -26,6 +26,21 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // Plataforma multi-tenant: /admins son los super-admins de plataforma.
+    function isSuperAdmin() {
+      return isAdmin();
+    }
+    function isTenantMember(tenantId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid));
+    }
+    function tenantRole(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
+    }
+    function isTenantAdmin(tenantId) {
+      return isTenantMember(tenantId) && tenantRole(tenantId) == 'admin';
+    }
+
     // Datos del usuario: solo su dueño escribe; dueño o admin leen.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
@@ -79,6 +94,46 @@ service cloud.firestore {
     // futuro hay roles, ya es estructural y se traduce a reglas por colección.
     match /owners/{ownerId}/{document=**} {
       allow read, write: if isOwner(ownerId);
+    }
+
+    // ── SaaS multi-tenant ──────────────────────────────────────────────────
+    // Mapa host → tenantId: legible por todos (se consulta ANTES del login para
+    // resolver el tenant por dominio); escritura solo super-admin de plataforma.
+    match /tenantDomains/{host} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Árbol de cada tenant. La plataforma crea/gestiona el tenant; sus admins
+    // gestionan miembros y catálogos; cada líder gestiona SU propio subárbol.
+    match /tenants/{tenantId} {
+      allow read: if isTenantMember(tenantId) || isSuperAdmin();
+      allow write: if isSuperAdmin();
+
+      match /members/{uid} {
+        allow read: if isTenantMember(tenantId) || isSuperAdmin();
+        allow write: if isTenantAdmin(tenantId) || isSuperAdmin();
+      }
+
+      // Secretos (p. ej. token GitHub de DORA): NUNCA accesibles desde el cliente;
+      // solo la Cloud Function vía Admin SDK (omite reglas).
+      match /private/{document=**} {
+        allow read, write: if false;
+      }
+
+      // Datos de las herramientas migradas bajo tenant (la migración real de los
+      // tools actuales es 1b/1c; aquí ya quedan las reglas listas).
+      match /leaders/{leaderUid}/{document=**} {
+        allow read, write: if isTenantMember(tenantId) && request.auth.uid == leaderUid;
+      }
+      match /teamRoles/{roleId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId);
+      }
+      match /dora/{document=**} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId);
+      }
     }
 
     // Resto: denegado por defecto.
