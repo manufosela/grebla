@@ -4,9 +4,9 @@
  * adecuado. La UI y los casos de uso reciben el puerto inyectado.
  *
  * - mode 'memory'    → adapters in-memory (tests, prototipos).
- * - mode 'firestore' → adapters Firestore; `db`/`ownerId` se resuelven de
- *   src/lib/firebase.js (import dinámico, para no inicializar Firebase salvo que
- *   se use realmente este modo).
+ * - mode 'firestore' → adapters Firestore bajo /tenants/{tenantId}/leaders/{leaderUid}.
+ *   `tenantId` y `leaderUid` los resuelve el cliente (por dominio + sesión) y se
+ *   pasan aquí; `db` se resuelve de src/lib/firebase.js por import dinámico.
  *
  * @typedef {import('../domain/ports.js').PersistencePort} PersistencePort
  */
@@ -39,13 +39,14 @@ async function resolveStorage(persistence, storage) {
  * @param {Object} [options]
  * @param {'memory'|'firestore'} [options.mode]
  * @param {import('firebase/firestore').Firestore|null} [options.db]
- * @param {string|null} [options.ownerId]
+ * @param {string|null} [options.tenantId]
+ * @param {string|null} [options.leaderUid]
  * @param {import('firebase/storage').FirebaseStorage|null} [options.storage]
  * @param {object} [options.seed]  Solo para mode 'memory'.
  * @returns {Promise<{ mode: string, persistence: PersistencePort, storage: import('../domain/ports.js').FileStoragePort }>}
  */
 export async function createTeamContainer(options = {}) {
-  const { mode = 'firestore', db = null, ownerId = null, storage = null, seed } = options;
+  const { mode = 'firestore', db = null, tenantId = null, leaderUid = null, storage = null, seed } = options;
 
   if (mode === 'memory') {
     const persistence = createMemoryPersistence(seed);
@@ -53,17 +54,15 @@ export async function createTeamContainer(options = {}) {
   }
 
   if (mode === 'firestore') {
+    if (!tenantId || !leaderUid) {
+      throw new Error('El modo Firestore requiere tenantId y leaderUid (resueltos por el cliente)');
+    }
     let database = db;
-    let owner = ownerId;
-    if (!database || !owner) {
+    if (!database) {
       const firebase = await import('../../../lib/firebase.js');
-      database = database ?? firebase.db;
-      owner = owner ?? firebase.auth.currentUser?.uid ?? null;
+      database = firebase.db;
     }
-    if (!owner) {
-      throw new Error('No hay usuario autenticado: se requiere ownerId para el modo Firestore');
-    }
-    const persistence = createFirestorePersistence(database, owner);
+    const persistence = createFirestorePersistence(database, tenantId, leaderUid);
     return { mode, persistence, storage: await resolveStorage(persistence, storage) };
   }
 
