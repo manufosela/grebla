@@ -72,29 +72,8 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Catálogo GLOBAL de roles de equipo (GREBLA): común a toda la organización.
-    // Cualquier autenticado lo lee; solo un admin puede crear/borrar roles.
-    match /teamRoles/{roleId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    // DORA — configuración GLOBAL de repos de la organización. Lectura para
-    // autenticados (las métricas son de equipo, compartibles); escritura solo
-    // admin. El token de GitHub NO vive aquí: es un secreto de la Cloud Function.
-    match /doraRepos/{repoId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    // GREBLA — herramienta de seguimiento de equipo. Todo el árbol de un owner
-    // (personas, lecturas por dimensión, conversaciones, support notes R5,
-    // áreas y config) es accesible SOLO por su dueño. La frontera R5/R6 (support
-    // notes y agregado vs individual) se garantiza en servicios/export; si en el
-    // futuro hay roles, ya es estructural y se traduce a reglas por colección.
-    match /owners/{ownerId}/{document=**} {
-      allow read, write: if isOwner(ownerId);
-    }
+    // (Las colecciones globales /teamRoles, /doraRepos y /owners se han retirado:
+    //  ahora viven por tenant — ver /tenants más abajo.)
 
     // ── SaaS multi-tenant ──────────────────────────────────────────────────
     // Mapa host → tenantId: legible por todos (se consulta ANTES del login para
