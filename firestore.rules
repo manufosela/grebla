@@ -113,6 +113,11 @@ service cloud.firestore {
         allow read: if isTenantMember(tenantId);
         allow write: if isTenantAdmin(tenantId);
       }
+
+      // Mapa de Carrera: el journey de cada ingeniero, solo suyo.
+      match /journeys/{uid} {
+        allow read, write: if isTenantMember(tenantId) && request.auth.uid == uid;
+      }
     }
 
     // Resto: denegado por defecto.
