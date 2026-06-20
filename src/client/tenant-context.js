@@ -13,7 +13,10 @@ import { resolveTenant, getRole } from '../tenants/application/usecases.js';
  */
 export async function resolveTenantContext(user) {
   const store = createFirestoreTenantStore(db);
-  const tenant = await resolveTenant(store, location.hostname);
+  const tenant = await resolveTenant(store, {
+    hostname: location.hostname,
+    pathname: location.pathname,
+  });
   if (!tenant) {
     throw new Error('No se ha podido resolver la organización para este dominio.');
   }

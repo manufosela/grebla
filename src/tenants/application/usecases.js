@@ -6,22 +6,29 @@
  * @typedef {import('../domain/ports.js').TenantStore} TenantStore
  * @typedef {import('../domain/types.js').Tenant} Tenant
  */
-import { resolveTenantSlug } from '../domain/resolve.js';
+import { tenantSlugFromPath, tenantSlugFromHost } from '../domain/resolve.js';
 import { isValidTenantRole } from '../domain/types.js';
 
 /**
- * Resuelve el tenant activo para un hostname.
+ * Resuelve el tenant activo a partir de la ubicación. Prioridad: path (tenant en
+ * directorio) → dominio propio (/tenantDomains) → host (subdominio/defecto).
  * @param {TenantStore} store
- * @param {string} hostname
+ * @param {{ hostname?: string, pathname?: string }} location
  * @param {{ baseDomain?: string, defaultSlug?: string }} [opts]
  * @returns {Promise<Tenant|null>}
  */
-export async function resolveTenant(store, hostname, opts = {}) {
-  const host = String(hostname || '').toLowerCase().split(':')[0].trim();
+export async function resolveTenant(store, location = {}, opts = {}) {
+  const { hostname = '', pathname = '/' } = location;
+  const pathSlug = tenantSlugFromPath(pathname);
+  if (pathSlug) {
+    const byPath = await store.tenants.getBySlug(pathSlug);
+    if (byPath) return byPath;
+  }
+  const host = String(hostname).toLowerCase().split(':')[0].trim();
   const byDomain = await store.tenants.getByDomain(host);
   if (byDomain) return byDomain;
-  const slug = resolveTenantSlug(hostname, opts);
-  return slug ? store.tenants.getBySlug(slug) : null;
+  const hostSlug = tenantSlugFromHost(hostname, opts);
+  return hostSlug ? store.tenants.getBySlug(hostSlug) : null;
 }
 
 /** @param {TenantStore} store @param {string} id */

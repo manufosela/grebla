@@ -22,6 +22,23 @@ if (requireAuth || requireAdmin) {
   });
 }
 
+// Tenant en directorio: si la URL está dentro de /{tenant}, prefija los enlaces
+// internos de las tools del tenant con /{tenant} para no perder el contexto.
+// (Role Mirror, Guía, Login y assets quedan a nivel plataforma, sin prefijo.)
+(() => {
+  const reserved = new Set(['', 'guia', 'login', 'tools', '_astro']);
+  const seg = location.pathname.split('/')[1] || '';
+  const tenant = seg && !reserved.has(seg) ? seg : null;
+  if (!tenant) return;
+  const prefixable = (href) => href === '/' || /^\/tools\/(team|dora|career-map)(\/|$|\?|#)/.test(href);
+  for (const a of document.querySelectorAll('a[href^="/"]')) {
+    const href = a.getAttribute('href');
+    if (!prefixable(href)) continue;
+    if (href === `/${tenant}` || href.startsWith(`/${tenant}/`)) continue;
+    a.setAttribute('href', href === '/' ? `/${tenant}` : `/${tenant}${href}`);
+  }
+})();
+
 // PWA (H11): registra el service worker para instalación y app-shell offline.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

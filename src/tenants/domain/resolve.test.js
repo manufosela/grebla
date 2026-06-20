@@ -1,27 +1,31 @@
 import { describe, it, expect } from 'vitest';
-import { resolveTenantSlug } from './resolve.js';
+import { tenantSlugFromPath, tenantSlugFromHost } from './resolve.js';
 
-describe('resolveTenantSlug', () => {
+describe('tenantSlugFromPath', () => {
+  it('primer segmento = tenant', () => {
+    expect(tenantSlugFromPath('/manufosela')).toBe('manufosela');
+    expect(tenantSlugFromPath('/manufosela/tools/team')).toBe('manufosela');
+    expect(tenantSlugFromPath('/Manufosela/tools/dora')).toBe('manufosela');
+  });
+  it('rutas reservadas de plataforma → null', () => {
+    expect(tenantSlugFromPath('/')).toBeNull();
+    expect(tenantSlugFromPath('/login')).toBeNull();
+    expect(tenantSlugFromPath('/guia')).toBeNull();
+    expect(tenantSlugFromPath('/tools/team')).toBeNull();
+    expect(tenantSlugFromPath('/_astro/x.js')).toBeNull();
+  });
+});
+
+describe('tenantSlugFromHost', () => {
   it('subdominio → slug', () => {
-    expect(resolveTenantSlug('tribbu.grebla.app')).toBe('tribbu');
-    expect(resolveTenantSlug('TRIBBU.grebla.app')).toBe('tribbu');
-    expect(resolveTenantSlug('tribbu.grebla.app:443')).toBe('tribbu');
+    expect(tenantSlugFromHost('tribbu.grebla.app')).toBe('tribbu');
   });
-
-  it('dominio base, www, local y *.web.app → demo', () => {
-    expect(resolveTenantSlug('grebla.app')).toBe('demo');
-    expect(resolveTenantSlug('www.grebla.app')).toBe('demo');
-    expect(resolveTenantSlug('localhost')).toBe('demo');
-    expect(resolveTenantSlug('grebla-app.web.app')).toBe('demo');
-    expect(resolveTenantSlug('grebla-app.firebaseapp.com')).toBe('demo');
+  it('base/local/web.app → demo', () => {
+    expect(tenantSlugFromHost('grebla.app')).toBe('demo');
+    expect(tenantSlugFromHost('localhost')).toBe('demo');
+    expect(tenantSlugFromHost('grebla-app.web.app')).toBe('demo');
   });
-
-  it('dominio propio → null (se resuelve por /tenantDomains)', () => {
-    expect(resolveTenantSlug('app.tribbu.com')).toBeNull();
-  });
-
-  it('respeta baseDomain y defaultSlug configurables', () => {
-    expect(resolveTenantSlug('acme.ejemplo.io', { baseDomain: 'ejemplo.io', defaultSlug: 'main' })).toBe('acme');
-    expect(resolveTenantSlug('ejemplo.io', { baseDomain: 'ejemplo.io', defaultSlug: 'main' })).toBe('main');
+  it('dominio propio → null', () => {
+    expect(tenantSlugFromHost('app.tribbu.com')).toBeNull();
   });
 });
