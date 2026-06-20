@@ -14,6 +14,12 @@
     "public": "dist",
     "cleanUrls": true,
     "trailingSlash": false,
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/:tenant/tools/team", "destination": "/tools/team/index.html" },
+      { "source": "/:tenant/tools/dora", "destination": "/tools/dora/index.html" },
+      { "source": "/:tenant/tools/career-map", "destination": "/tools/career-map/index.html" },
+      { "source": "/:tenant", "destination": "/index.html" }
+    ]
   }
 }

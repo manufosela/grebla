@@ -24,13 +24,17 @@ describe('tenants — casos de uso', () => {
     expect(t).toMatchObject({ slug: 'tribbu', name: 'TRIBBU' });
   });
 
-  it('resuelve por subdominio (slug) y por dominio propio (/tenantDomains)', async () => {
+  it('resuelve por path, subdominio (slug) y dominio propio (/tenantDomains)', async () => {
     await createTenant(store, { slug: 'demo', name: 'Demo' });
     const tribbuId = await createTenant(store, { slug: 'tribbu', name: 'TRIBBU', domains: ['app.tribbu.com'] });
+    await createTenant(store, { slug: 'manufosela', name: 'manufosela' });
 
-    expect((await resolveTenant(store, 'tribbu.grebla.app'))?.slug).toBe('tribbu');
-    expect((await resolveTenant(store, 'grebla-app.web.app'))?.slug).toBe('demo');
-    const byDomain = await resolveTenant(store, 'app.tribbu.com');
+    // PATH tiene prioridad (tenant en directorio)
+    expect((await resolveTenant(store, { hostname: 'grebla-app.web.app', pathname: '/manufosela/tools/team' }))?.slug).toBe('manufosela');
+    // sin tenant en el path → host
+    expect((await resolveTenant(store, { hostname: 'tribbu.grebla.app', pathname: '/' }))?.slug).toBe('tribbu');
+    expect((await resolveTenant(store, { hostname: 'grebla-app.web.app', pathname: '/' }))?.slug).toBe('demo');
+    const byDomain = await resolveTenant(store, { hostname: 'app.tribbu.com', pathname: '/' });
     expect(byDomain?.id).toBe(tribbuId);
   });
 
