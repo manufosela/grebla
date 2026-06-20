@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryDoraPersistence } from '../infrastructure/memory/index.js';
-import { addRepo, listRepos, updateRepo, removeRepo, listTeams, listGuilds } from './usecases.js';
+import { addRepo, listRepos, updateRepo, removeRepo, listTeams, listGuilds, getDoraSummary } from './usecases.js';
 
 describe('DORA — configuración de repos', () => {
   /** @type {ReturnType<typeof createMemoryDoraPersistence>} */
@@ -29,6 +29,18 @@ describe('DORA — configuración de repos', () => {
     await addRepo(p, { fullName: 'org/api', team: 'Pagos', guilds: ['Backend', 'Frontend'], startDate: '2025-01-01' });
     expect(await listTeams(p)).toEqual(['Pagos', 'Plataforma']);
     expect(await listGuilds(p)).toEqual(['Backend', 'Frontend']);
+  });
+
+  it('getDoraSummary agrega global, por equipo y por gremio', async () => {
+    const a = await addRepo(p, { fullName: 'org/a', team: 'Plataforma', guilds: ['Frontend'], startDate: '2025-01-01' });
+    await addRepo(p, { fullName: 'org/b', team: 'Plataforma', guilds: ['Backend'], startDate: '2025-01-01' });
+    // simula métricas calculadas en un repo
+    await updateRepo(p, a, { metrics: { deployments: 10, deployFrequencyPerWeek: 2.5, leadTimeHoursAvg: 10 } });
+    const s = await getDoraSummary(p);
+    expect(s.global.measured).toBe(1);
+    expect(s.global.deployments).toBe(10);
+    expect(s.byTeam.find((g) => g.key === 'Plataforma').deployments).toBe(10);
+    expect(s.byGuild.map((g) => g.key)).toContain('Frontend');
   });
 
   it('actualiza y elimina', async () => {

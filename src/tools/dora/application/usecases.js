@@ -6,6 +6,7 @@
  * @typedef {import('../domain/types.js').DoraRepo} DoraRepo
  */
 import { isValidFullName } from '../domain/types.js';
+import { aggregateMetrics, aggregateByKey, teamKeyOf, guildKeyOf } from '../domain/aggregate.js';
 
 /**
  * @param {DoraPersistence} persistence
@@ -63,4 +64,19 @@ export async function listTeams(persistence) {
 export async function listGuilds(persistence) {
   const repos = await persistence.repos.list();
   return [...new Set(repos.flatMap((r) => r.guilds ?? []).filter(Boolean))].sort();
+}
+
+/**
+ * Resumen DORA agregado: global, por equipo y por gremio (sobre el campo metrics
+ * ya calculado en cada repo). Siempre a nivel de equipo, nunca por persona.
+ * @param {DoraPersistence} persistence
+ */
+export async function getDoraSummary(persistence) {
+  const repos = await listRepos(persistence);
+  return {
+    global: aggregateMetrics(repos),
+    byTeam: aggregateByKey(repos, teamKeyOf),
+    byGuild: aggregateByKey(repos, guildKeyOf),
+    repos,
+  };
 }
