@@ -11,6 +11,7 @@ export class DoraApp extends LitElement {
   static properties = {
     persistence: { attribute: false },
     isAdmin: { attribute: false },
+    refresh: { attribute: false },
     error: { state: true },
   };
 
@@ -25,6 +26,7 @@ export class DoraApp extends LitElement {
     super();
     this.persistence = null;
     this.isAdmin = false;
+    this.refresh = null;
     this.error = '';
   }
 
@@ -32,8 +34,8 @@ export class DoraApp extends LitElement {
     if (this.error) return html`<p class="error">${this.error}</p>`;
     if (!this.persistence) return html`<p class="loading">Cargando configuración…</p>`;
     return html`
-      <p class="hint">Configuración de repos. Las métricas (lead time, deploy frequency…) se calcularán en la siguiente fase desde GitHub.</p>
-      <dora-repos .persistence=${this.persistence} .isAdmin=${this.isAdmin}></dora-repos>
+      <p class="hint">Configura los repos y pulsa “Actualizar métricas” para calcular lead time y deploy frequency desde GitHub. Métricas a nivel de equipo, nunca individuales.</p>
+      <dora-repos .persistence=${this.persistence} .isAdmin=${this.isAdmin} .refresh=${this.refresh}></dora-repos>
     `;
   }
 }

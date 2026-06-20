@@ -40,6 +40,8 @@ export class DoraRepos extends LitElement {
     _newGuild: { state: true },
     _start: { state: true },
     _confirm: { state: true },
+    refresh: { attribute: false },
+    _refreshing: { state: true },
   };
 
   static styles = css`
@@ -72,6 +74,10 @@ export class DoraRepos extends LitElement {
     .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+    .toolbar h2 { margin: 0; }
+    button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .note { margin-top: 0.5rem; font-size: 0.75rem; }
   `;
 
   constructor() {
@@ -92,7 +98,23 @@ export class DoraRepos extends LitElement {
     this._start = '';
     /** @type {string|null} */
     this._confirm = null;
+    this.refresh = null;
+    this._refreshing = false;
     this._loaded = false;
+  }
+
+  async _refreshMetrics() {
+    if (!this.refresh) return;
+    this._refreshing = true;
+    this.error = '';
+    try {
+      await this.refresh();
+      await this._load();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudieron calcular las métricas.';
+    } finally {
+      this._refreshing = false;
+    }
   }
 
   updated() {
@@ -220,6 +242,15 @@ export class DoraRepos extends LitElement {
     `;
   }
 
+  _metricCells(repo) {
+    const m = repo.metrics;
+    if (!m) return html`<td class="muted">—</td><td class="muted">—</td>`;
+    if (m.error) return html`<td class="muted" colspan="2" title=${m.error}>error</td>`;
+    const lt = m.leadTimeHoursAvg != null ? `${m.leadTimeHoursAvg} h` : '—';
+    const df = m.deployFrequencyPerWeek != null ? `${m.deployFrequencyPerWeek}` : '—';
+    return html`<td title=${m.computedAt ? `Calculado ${fmtDate(m.computedAt)}` : ''}>${lt}</td><td>${df}</td>`;
+  }
+
   _renderActions(repo) {
     if (!this.isAdmin) return null;
     if (this._confirm === repo.id) {
@@ -234,7 +265,14 @@ export class DoraRepos extends LitElement {
   render() {
     return html`
       <section>
-        <h2>Repositorios a medir (${this.repos.length})</h2>
+        <div class="toolbar">
+          <h2>Repositorios a medir (${this.repos.length})</h2>
+          ${this.refresh && this.repos.length > 0
+            ? html`<button class="primary" ?disabled=${this._refreshing} @click=${this._refreshMetrics}>
+                ${this._refreshing ? 'Calculando…' : 'Actualizar métricas'}
+              </button>`
+            : null}
+        </div>
         ${this.loading
           ? html`<p class="empty">Cargando…</p>`
           : this.repos.length === 0
@@ -242,7 +280,7 @@ export class DoraRepos extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Desde</th>${this.isAdmin ? html`<th></th>` : null}</tr>
+                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th>${this.isAdmin ? html`<th></th>` : null}</tr>
                   </thead>
                   <tbody>
                     ${this.repos.map(
@@ -256,12 +294,14 @@ export class DoraRepos extends LitElement {
                               : html`<span class="chips">${r.guilds.map((g) => html`<span class="chip">${g}</span>`)}</span>`}
                           </td>
                           <td>${fmtDate(r.startDate)}</td>
+                          ${this._metricCells(r)}
                           ${this.isAdmin ? html`<td class="num">${this._renderActions(r)}</td>` : null}
                         </tr>
                       `,
                     )}
                   </tbody>
                 </table>
+                <p class="muted note">Métricas desde la API pública de GitHub (repos públicos). Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>
 
