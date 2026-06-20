@@ -15,7 +15,7 @@ import { createFirestoreDoraPersistence } from '../infrastructure/firestore/pers
 export async function createDoraContainer(options = {}) {
   const { mode = 'firestore', db = null, tenantId = null, seed } = options;
   if (mode === 'memory') {
-    return { mode, persistence: createMemoryDoraPersistence(seed) };
+    return { mode, persistence: createMemoryDoraPersistence(seed), refresh: async () => ({ results: [] }) };
   }
   if (mode === 'firestore') {
     if (!tenantId) throw new Error('El modo Firestore requiere tenantId (resuelto por el cliente)');
@@ -24,7 +24,15 @@ export async function createDoraContainer(options = {}) {
       const firebase = await import('../../../lib/firebase.js');
       database = firebase.db;
     }
-    return { mode, persistence: createFirestoreDoraPersistence(database, tenantId) };
+    // refresh: invoca la Cloud Function que calcula las métricas DORA desde GitHub.
+    const refresh = async () => {
+      const { app } = await import('../../../lib/firebase.js');
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const fns = getFunctions(app, 'europe-west1');
+      const res = await httpsCallable(fns, 'refreshDora')({ tenantId });
+      return res.data;
+    };
+    return { mode, persistence: createFirestoreDoraPersistence(database, tenantId), refresh };
   }
   throw new Error(`Modo de container DORA desconocido: ${mode}`);
 }

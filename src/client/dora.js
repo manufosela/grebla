@@ -18,8 +18,9 @@ onUserChanged(async (user) => {
       app.error = 'No perteneces a esta organización. Pide acceso a un administrador.';
       return;
     }
-    const { persistence } = await createDoraContainer({ mode: 'firestore', tenantId: tenant.id });
+    const { persistence, refresh } = await createDoraContainer({ mode: 'firestore', tenantId: tenant.id });
     app.isAdmin = role === 'admin'; // solo tenant-admin configura repos
+    app.refresh = refresh;
     app.persistence = persistence;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar DORA.';
