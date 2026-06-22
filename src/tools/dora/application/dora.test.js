@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryDoraPersistence } from '../infrastructure/memory/index.js';
-import { addRepo, listRepos, updateRepo, removeRepo, listTeams, listGuilds, getDoraSummary } from './usecases.js';
+import {
+  addRepo,
+  listRepos,
+  updateRepo,
+  removeRepo,
+  listTeams,
+  listGuilds,
+  getDoraSummary,
+  assignRepoGrouping,
+} from './usecases.js';
 
 describe('DORA — configuración de repos', () => {
   /** @type {ReturnType<typeof createMemoryDoraPersistence>} */
@@ -50,5 +59,29 @@ describe('DORA — configuración de repos', () => {
     expect((await listRepos(p))[0].team).toBe('Plataforma');
     await removeRepo(p, id);
     expect(await listRepos(p)).toEqual([]);
+  });
+
+  it('assignRepoGrouping asigna equipo/gremios a posteriori, normalizados', async () => {
+    // Alta sin clasificación (solo el repo), como en el flujo real.
+    const id = await addRepo(p, { fullName: 'org/web', startDate: '2025-01-01' });
+    expect((await listRepos(p))[0].team).toBeNull();
+    // Asignación a posteriori, con espacios, vacíos y duplicados a normalizar.
+    await assignRepoGrouping(p, id, { team: '  Plataforma  ', guilds: [' Frontend ', '', 'Frontend', 'Backend'] });
+    const repo = (await listRepos(p))[0];
+    expect(repo.team).toBe('Plataforma');
+    expect(repo.guilds).toEqual(['Frontend', 'Backend']);
+    // Ya aparece en los catálogos vivos y en el agregado por equipo/gremio.
+    expect(await listTeams(p)).toEqual(['Plataforma']);
+    expect(await listGuilds(p)).toEqual(['Backend', 'Frontend']);
+  });
+
+  it('assignRepoGrouping con equipo vacío deja el repo en (sin equipo)', async () => {
+    const id = await addRepo(p, { fullName: 'org/web', team: 'Plataforma', startDate: '2025-01-01' });
+    await assignRepoGrouping(p, id, { team: '   ', guilds: [] });
+    const repo = (await listRepos(p))[0];
+    expect(repo.team).toBeNull();
+    expect(repo.guilds).toEqual([]);
+    const s = await getDoraSummary(p);
+    expect(s.byTeam.map((g) => g.key)).toContain('(sin equipo)');
   });
 });
