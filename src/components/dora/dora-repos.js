@@ -78,6 +78,8 @@ export class DoraRepos extends LitElement {
     .toolbar h2 { margin: 0; }
     button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .note { margin-top: 0.5rem; font-size: 0.75rem; }
+    .help { font-size: 0.78rem; line-height: 1.5; margin: 0; }
+    td.err { color: var(--rm-danger, #dc2626); font-size: 0.8rem; }
   `;
 
   constructor() {
@@ -203,12 +205,12 @@ export class DoraRepos extends LitElement {
           <label>Repositorio (owner/repo)
             <input type="text" placeholder="mi-org/mi-repo" .value=${this._full} @input=${(e) => { this._full = e.target.value; }} required />
           </label>
-          <label>Equipo
-            <input type="text" list="dora-teams" placeholder="p. ej. Plataforma" .value=${this._team} @input=${(e) => { this._team = e.target.value; }} />
+          <label>Equipo (opcional)
+            <input type="text" list="dora-teams" placeholder="solo para agrupar" .value=${this._team} @input=${(e) => { this._team = e.target.value; }} />
             <datalist id="dora-teams">${this.teams.map((t) => html`<option value=${t}></option>`)}</datalist>
           </label>
-          <label>Medir desde
-            <input type="date" .value=${this._start} @input=${(e) => { this._start = e.target.value; }} required />
+          <label>Medir desde (opcional)
+            <input type="date" .value=${this._start} @input=${(e) => { this._start = e.target.value; }} />
           </label>
           <button class="primary" type="submit">Añadir repo</button>
         </div>
@@ -237,6 +239,7 @@ export class DoraRepos extends LitElement {
             <button type="button" @click=${this._addGuild}>Añadir gremio</button>
           </div>
         </fieldset>
+        <p class="muted help">El <strong>equipo</strong> y los <strong>gremios</strong> son opcionales: solo agrupan las métricas en los dashboards (no hacen falta para medir un repo). Si dejas la fecha vacía, se mide desde la <strong>creación del repo</strong>. Por ahora solo repos <strong>públicos</strong> (los privados necesitarán token).</p>
       </form>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
     `;
@@ -245,7 +248,7 @@ export class DoraRepos extends LitElement {
   _metricCells(repo) {
     const m = repo.metrics;
     if (!m) return html`<td class="muted">—</td><td class="muted">—</td>`;
-    if (m.error) return html`<td class="muted" colspan="2" title=${m.error}>error</td>`;
+    if (m.error) return html`<td class="err" colspan="2" title=${m.error}>${m.error}</td>`;
     const lt = m.leadTimeHoursAvg != null ? `${m.leadTimeHoursAvg} h` : '—';
     const df = m.deployFrequencyPerWeek != null ? `${m.deployFrequencyPerWeek}` : '—';
     return html`<td title=${m.computedAt ? `Calculado ${fmtDate(m.computedAt)}` : ''}>${lt}</td><td>${df}</td>`;

@@ -77,11 +77,30 @@ function computeRepoMetrics(mergedPrs, from, to) {
   };
 }
 
+const GH_HEADERS = { Accept: 'application/vnd.github+json', 'User-Agent': 'grebla-dora' };
+
+/** Mensaje legible según el código de estado de GitHub. */
+function githubError(status, fullName) {
+  if (status === 404) return new Error(`Repo no encontrado o privado: ${fullName} (los privados necesitan token).`);
+  if (status === 401 || status === 403) {
+    return new Error('Sin acceso o límite de la API pública de GitHub (60/h sin token). Si es privado, requiere token.');
+  }
+  return new Error(`GitHub respondió ${status} para ${fullName}.`);
+}
+
+/** Fecha de creación del repo (para medir "desde el principio" cuando no hay fecha). */
+async function fetchRepoCreatedAt(fullName) {
+  const res = await fetch(`https://api.github.com/repos/${fullName}`, { headers: GH_HEADERS });
+  if (!res.ok) throw githubError(res.status, fullName);
+  const data = await res.json();
+  return data.created_at || '2008-01-01T00:00:00Z';
+}
+
 /** PRs mergeados de un repo público desde `sinceMs` (API pública de GitHub, sin token). */
 async function fetchMergedPrs(fullName, sinceMs) {
   const url = `https://api.github.com/repos/${fullName}/pulls?state=closed&per_page=100&sort=updated&direction=desc`;
-  const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'grebla-dora' } });
-  if (!res.ok) throw new Error(`GitHub ${res.status} en ${fullName}`);
+  const res = await fetch(url, { headers: GH_HEADERS });
+  if (!res.ok) throw githubError(res.status, fullName);
   const arr = await res.json();
   return (Array.isArray(arr) ? arr : [])
     .filter((p) => p.merged_at && toMs(p.merged_at) >= sinceMs)
@@ -109,8 +128,9 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
 
   for (const docSnap of reposSnap.docs) {
     const repo = docSnap.data();
-    const from = repo.startDate || '2020-01-01';
     try {
+      // Sin fecha → desde la creación del repo en GitHub.
+      const from = repo.startDate || (await fetchRepoCreatedAt(repo.fullName));
       const prs = await fetchMergedPrs(repo.fullName, toMs(from));
       const metrics = computeRepoMetrics(prs, from, now);
       await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: now, computedAt: now } }, { merge: true });

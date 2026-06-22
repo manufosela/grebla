@@ -16,12 +16,13 @@ import { aggregateMetrics, aggregateByKey, teamKeyOf, guildKeyOf } from '../doma
 export function addRepo(persistence, input) {
   const fullName = String(input?.fullName ?? '').trim();
   if (!isValidFullName(fullName)) throw new Error('El repositorio debe tener el formato owner/repo');
-  if (!input?.startDate) throw new Error('La fecha de inicio de medición es obligatoria');
+  // Fecha y equipo son OPCIONALES. Si no hay fecha, se medirá desde la creación
+  // del repo en GitHub (lo resuelve la Cloud Function).
   return persistence.repos.add({
     fullName,
     team: (input.team ?? '').trim() || null,
     guilds: Array.isArray(input.guilds) ? input.guilds.map((g) => g.trim()).filter(Boolean) : [],
-    startDate: input.startDate,
+    startDate: input.startDate || null,
     createdAt: new Date().toISOString(),
   });
 }
