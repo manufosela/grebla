@@ -9,9 +9,10 @@ describe('DORA — configuración de repos', () => {
     p = createMemoryDoraPersistence();
   });
 
-  it('addRepo valida el formato owner/repo y la fecha', () => {
-    expect(() => addRepo(p, { fullName: 'sin-barra', startDate: '2025-01-01' })).toThrow(/owner\/repo/i);
-    expect(() => addRepo(p, { fullName: 'org/repo' })).toThrow(/fecha/i);
+  it('addRepo valida el formato owner/repo; la fecha es opcional', async () => {
+    expect(() => addRepo(p, { fullName: 'sin-barra' })).toThrow(/owner\/repo/i);
+    await addRepo(p, { fullName: 'org/repo' }); // sin fecha → ok
+    expect((await listRepos(p))[0].startDate).toBeNull();
   });
 
   it('crea y lista repos ordenados, con equipo y gremios normalizados', async () => {
