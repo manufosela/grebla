@@ -8,7 +8,7 @@
  *  - Assets same-origin: cache-first con relleno.
  *  - activate: limpia cachés de versiones anteriores (no se queda pegado a una vieja).
  */
-const VERSION = 'grebla-v1';
+const VERSION = 'grebla-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
