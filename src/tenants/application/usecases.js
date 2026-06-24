@@ -14,7 +14,7 @@ import { isValidTenantRole } from '../domain/types.js';
  * directorio) → dominio propio (/tenantDomains) → host (subdominio/defecto).
  * @param {TenantStore} store
  * @param {{ hostname?: string, pathname?: string }} location
- * @param {{ baseDomain?: string, defaultSlug?: string }} [opts]
+ * @param {{ baseDomain?: string }} [opts]
  * @returns {Promise<Tenant|null>}
  */
 export async function resolveTenant(store, location = {}, opts = {}) {
