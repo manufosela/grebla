@@ -9,7 +9,8 @@ rules_version = '2';
 //                                     El alta de administradores se hace server-side
 //                                     (Admin SDK / seed / Cloud Function grantAdmin):
 //                                     NO existe ningún bootstrap self-service desde el cliente.
-//   /config/org                       Lectura para autenticados; escritura SOLO para admins.
+//   /config/org                       (Legacy) config global; la de Role Mirror vive
+//                                     ahora por tenant en /tenants/{tid}/config/org.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -112,6 +113,13 @@ service cloud.firestore {
       match /dora/{document=**} {
         allow read: if isTenantMember(tenantId);
         allow write: if isTenantAdmin(tenantId);
+      }
+
+      // Configuración de Role Mirror (fase/pesos) del tenant: la leen los
+      // miembros; la escribe el admin del tenant (o el super-admin de plataforma).
+      match /config/org {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId) || isSuperAdmin();
       }
 
       // Mapa de Carrera: el journey de cada ingeniero, solo suyo.

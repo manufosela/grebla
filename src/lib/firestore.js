@@ -181,22 +181,24 @@ export async function listSessions(uid) {
 // ── Configuración de organización ──────────────────────────────────────────
 
 /**
- * Obtiene la configuración activa de la organización.
+ * Obtiene la configuración activa de la organización (tenant).
+ * @param {string} tenantId
  * @returns {Promise<(OrgConfig & { updatedAt?: unknown })|null>}
  */
-export async function getOrgConfig() {
-  const snapshot = await getDoc(doc(db, 'config', 'org'));
+export async function getOrgConfig(tenantId) {
+  const snapshot = await getDoc(doc(db, 'tenants', tenantId, 'config', 'org'));
   return snapshot.exists() ? /** @type {any} */ (snapshot.data()) : null;
 }
 
 /**
- * Guarda/actualiza la configuración de la organización (solo admin).
+ * Guarda/actualiza la configuración de la organización (tenant; solo tenant-admin).
+ * @param {string} tenantId
  * @param {OrgConfig} config
  * @returns {Promise<void>}
  */
-export function saveOrgConfig(config) {
+export function saveOrgConfig(tenantId, config) {
   return setDoc(
-    doc(db, 'config', 'org'),
+    doc(db, 'tenants', tenantId, 'config', 'org'),
     { ...config, updatedAt: serverTimestamp() },
     { merge: true },
   );
