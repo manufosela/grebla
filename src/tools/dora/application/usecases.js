@@ -9,6 +9,21 @@ import { isValidFullName } from '../domain/types.js';
 import { aggregateMetrics, aggregateByKey, teamKeyOf, guildKeyOf } from '../domain/aggregate.js';
 
 /**
+ * Normaliza la agrupación (equipo/gremios) de un repo: equipo recortado o null,
+ * gremios recortados, sin vacíos ni duplicados. Compartido por el alta y por la
+ * asignación a posteriori para que ambos caminos guarden el mismo formato.
+ * @param {{ team?: string|null, guilds?: string[] }} input
+ * @returns {{ team: string|null, guilds: string[] }}
+ */
+export function normalizeGrouping(input) {
+  const team = (input?.team ?? '').trim() || null;
+  const guilds = Array.isArray(input?.guilds)
+    ? [...new Set(input.guilds.map((g) => g.trim()).filter(Boolean))]
+    : [];
+  return { team, guilds };
+}
+
+/**
  * @param {DoraPersistence} persistence
  * @param {{ fullName: string, team?: string|null, guilds?: string[], startDate: string }} input
  * @returns {Promise<string>}
@@ -20,11 +35,23 @@ export function addRepo(persistence, input) {
   // del repo en GitHub (lo resuelve la Cloud Function).
   return persistence.repos.add({
     fullName,
-    team: (input.team ?? '').trim() || null,
-    guilds: Array.isArray(input.guilds) ? input.guilds.map((g) => g.trim()).filter(Boolean) : [],
+    ...normalizeGrouping(input),
     startDate: input.startDate || null,
     createdAt: new Date().toISOString(),
   });
+}
+
+/**
+ * Asigna equipo/gremios a un repo YA configurado (a posteriori, una vez hay
+ * métricas). No es el alta: solo reescribe la agrupación, normalizada igual que
+ * en addRepo. La clasificación por equipo/gremio se hace aquí, nunca en el alta.
+ * @param {DoraPersistence} persistence
+ * @param {string} id
+ * @param {{ team?: string|null, guilds?: string[] }} input
+ * @returns {Promise<void>}
+ */
+export function assignRepoGrouping(persistence, id, input) {
+  return persistence.repos.update(id, normalizeGrouping(input));
 }
 
 /**

@@ -14,6 +14,9 @@ import {
   addRepo,
   listRepos,
   removeRepo,
+  assignRepoGrouping,
+  listTeams,
+  listGuilds,
 } from '../../tools/dora/application/usecases.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
@@ -35,6 +38,11 @@ export class DoraRepos extends LitElement {
     _confirm: { state: true },
     refresh: { attribute: false },
     _refreshing: { state: true },
+    _teams: { state: true },
+    _guilds: { state: true },
+    _editing: { state: true },
+    _editTeam: { state: true },
+    _editGuilds: { state: true },
   };
 
   static styles = css`
@@ -65,6 +73,9 @@ export class DoraRepos extends LitElement {
     .note { margin-top: 0.5rem; font-size: 0.75rem; }
     .help { font-size: 0.78rem; line-height: 1.5; margin: 0; }
     td.err { color: var(--rm-danger, #dc2626); font-size: 0.8rem; }
+    input.edit-in { width: 100%; min-width: 8rem; font-size: 0.82rem; padding: 0.3rem 0.4rem; }
+    .del-btn.edit { color: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); margin-right: 0.4rem; }
+    .tag { display: inline-block; background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.76rem; margin: 0 0.2rem 0.2rem 0; }
   `;
 
   constructor() {
@@ -82,6 +93,13 @@ export class DoraRepos extends LitElement {
     this.refresh = null;
     this._refreshing = false;
     this._loaded = false;
+    /** @type {string[]} catálogos vivos derivados de los repos */
+    this._teams = [];
+    this._guilds = [];
+    /** @type {string|null} id del repo en edición de agrupación */
+    this._editing = null;
+    this._editTeam = '';
+    this._editGuilds = '';
   }
 
   async _refreshMetrics() {
@@ -109,11 +127,45 @@ export class DoraRepos extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      this.repos = await listRepos(this.persistence);
+      const [repos, teams, guilds] = await Promise.all([
+        listRepos(this.persistence),
+        listTeams(this.persistence),
+        listGuilds(this.persistence),
+      ]);
+      this.repos = repos;
+      this._teams = teams;
+      this._guilds = guilds;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar los repos.';
     } finally {
       this.loading = false;
+    }
+  }
+
+  _startEdit(repo) {
+    this._confirm = null;
+    this._editing = repo.id;
+    this._editTeam = repo.team ?? '';
+    this._editGuilds = (repo.guilds ?? []).join(', ');
+  }
+
+  _cancelEdit() {
+    this._editing = null;
+    this._editTeam = '';
+    this._editGuilds = '';
+  }
+
+  async _saveEdit(id) {
+    this.error = '';
+    try {
+      await assignRepoGrouping(this.persistence, id, {
+        team: this._editTeam,
+        guilds: this._editGuilds.split(',').map((g) => g.trim()).filter(Boolean),
+      });
+      this._cancelEdit();
+      await this._load();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar la agrupación.';
     }
   }
 
@@ -173,13 +225,39 @@ export class DoraRepos extends LitElement {
 
   _renderActions(repo) {
     if (!this.isAdmin) return null;
+    if (this._editing === repo.id) {
+      return html`<span class="confirm">
+        <button class="yes" @click=${() => this._saveEdit(repo.id)}>Guardar</button>
+        <button @click=${() => this._cancelEdit()}>Cancelar</button>
+      </span>`;
+    }
     if (this._confirm === repo.id) {
       return html`<span class="confirm">¿Quitar?
         <button class="yes" @click=${() => this._remove(repo.id)}>Sí</button>
         <button @click=${() => { this._confirm = null; }}>No</button>
       </span>`;
     }
-    return html`<button class="del-btn" @click=${() => { this._confirm = repo.id; }}>Quitar</button>`;
+    return html`
+      <button class="del-btn edit" @click=${() => this._startEdit(repo)}>Equipo/gremio</button>
+      <button class="del-btn" @click=${() => { this._confirm = repo.id; }}>Quitar</button>
+    `;
+  }
+
+  /** Celdas de equipo y gremios: en modo edición (admin) muestran inputs con catálogo vivo. */
+  _renderGroupingCells(repo) {
+    if (this.isAdmin && this._editing === repo.id) {
+      return html`
+        <td><input class="edit-in" list="dora-teams" placeholder="(sin equipo)"
+          .value=${this._editTeam} @input=${(e) => { this._editTeam = e.target.value; }} /></td>
+        <td><input class="edit-in" list="dora-guilds" placeholder="gremios, separados por comas"
+          .value=${this._editGuilds} @input=${(e) => { this._editGuilds = e.target.value; }} /></td>
+      `;
+    }
+    const guilds = repo.guilds ?? [];
+    return html`
+      <td>${repo.team || html`<span class="muted">—</span>`}</td>
+      <td>${guilds.length ? guilds.map((g) => html`<span class="tag">${g}</span>`) : html`<span class="muted">—</span>`}</td>
+    `;
   }
 
   render() {
@@ -200,13 +278,14 @@ export class DoraRepos extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Repositorio</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th>${this.isAdmin ? html`<th></th>` : null}</tr>
+                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th>${this.isAdmin ? html`<th></th>` : null}</tr>
                   </thead>
                   <tbody>
                     ${this.repos.map(
                       (r) => html`
                         <tr>
                           <td><code>${r.fullName}</code></td>
+                          ${this._renderGroupingCells(r)}
                           <td>${fmtDate(r.startDate)}</td>
                           ${this._metricCells(r)}
                           ${this.isAdmin ? html`<td class="num">${this._renderActions(r)}</td>` : null}
@@ -215,7 +294,9 @@ export class DoraRepos extends LitElement {
                     )}
                   </tbody>
                 </table>
-                <p class="muted note">Métricas desde la API pública de GitHub (repos públicos). Siempre a nivel de equipo, nunca por persona.</p>
+                <datalist id="dora-teams">${this._teams.map((t) => html`<option value=${t}></option>`)}</datalist>
+                <datalist id="dora-guilds">${this._guilds.map((g) => html`<option value=${g}></option>`)}</datalist>
+                <p class="muted note">Equipo y gremios se asignan aquí, a posteriori (no en el alta). Métricas desde la API pública de GitHub (repos públicos). Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>
 
