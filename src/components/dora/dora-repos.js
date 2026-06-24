@@ -216,11 +216,12 @@ export class DoraRepos extends LitElement {
 
   _metricCells(repo) {
     const m = repo.metrics;
-    if (!m) return html`<td class="muted">—</td><td class="muted">—</td>`;
-    if (m.error) return html`<td class="err" colspan="2" title=${m.error}>${m.error}</td>`;
+    if (!m) return html`<td class="muted">—</td><td class="muted">—</td><td class="muted">—</td>`;
+    if (m.error) return html`<td class="err" colspan="3" title=${m.error}>${m.error}</td>`;
     const lt = m.leadTimeHoursAvg != null ? `${m.leadTimeHoursAvg} h` : '—';
     const df = m.deployFrequencyPerWeek != null ? `${m.deployFrequencyPerWeek}` : '—';
-    return html`<td title=${m.computedAt ? `Calculado ${fmtDate(m.computedAt)}` : ''}>${lt}</td><td>${df}</td>`;
+    const people = m.contributors != null ? m.contributors : '—';
+    return html`<td title=${m.computedAt ? `Calculado ${fmtDate(m.computedAt)}` : ''}>${lt}</td><td>${df}</td><td>${people}</td>`;
   }
 
   _renderActions(repo) {
@@ -278,7 +279,7 @@ export class DoraRepos extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th>${this.isAdmin ? html`<th></th>` : null}</tr>
+                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.isAdmin ? html`<th></th>` : null}</tr>
                   </thead>
                   <tbody>
                     ${this.repos.map(

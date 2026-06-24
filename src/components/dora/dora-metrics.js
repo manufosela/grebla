@@ -73,7 +73,7 @@ export class DoraMetrics extends LitElement {
           : html`
               <table>
                 <thead>
-                  <tr><th>${title.includes('equipo') ? 'Equipo' : 'Gremio'}</th><th class="num">Repos</th><th class="num">Despliegues</th><th class="num">Deploy/sem</th><th class="num">Lead time</th></tr>
+                  <tr><th>${title.includes('equipo') ? 'Equipo' : 'Gremio'}</th><th class="num">Repos</th><th class="num">Despliegues</th><th class="num">Deploy/sem</th><th class="num">Lead time</th><th class="num">Personas</th></tr>
                 </thead>
                 <tbody>
                   ${rows.map(
@@ -83,6 +83,7 @@ export class DoraMetrics extends LitElement {
                       <td class="num">${g.deployments}</td>
                       <td class="num">${g.deployFrequencyPerWeek}</td>
                       <td class="num">${lt(g.leadTimeHoursAvg)}</td>
+                      <td class="num">${g.people}</td>
                     </tr>`,
                   )}
                 </tbody>
@@ -108,6 +109,7 @@ export class DoraMetrics extends LitElement {
           <div class="card"><span class="value">${g.deployments}</span><span class="label">Despliegues (merges)</span></div>
           <div class="card"><span class="value">${g.deployFrequencyPerWeek}</span><span class="label">Deploy / semana</span></div>
           <div class="card"><span class="value">${lt(g.leadTimeHoursAvg)}</span><span class="label">Lead time medio</span></div>
+          <div class="card"><span class="value">${g.people}</span><span class="label">Personas que participan</span></div>
         </div>
         <p class="note">Lead time agregado = media ponderada por despliegues. Métricas de equipo, nunca por persona (R3).</p>
       </section>

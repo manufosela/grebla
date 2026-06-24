@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { aggregateMetrics, aggregateByKey, teamKeyOf, guildKeyOf } from './aggregate.js';
 
 const repos = [
-  { fullName: 'o/a', team: 'Plataforma', guilds: ['Frontend'], metrics: { deployments: 10, deployFrequencyPerWeek: 2.5, leadTimeHoursAvg: 10 } },
-  { fullName: 'o/b', team: 'Plataforma', guilds: ['Backend'], metrics: { deployments: 30, deployFrequencyPerWeek: 7.5, leadTimeHoursAvg: 20 } },
+  { fullName: 'o/a', team: 'Plataforma', guilds: ['Frontend'], metrics: { deployments: 10, deployFrequencyPerWeek: 2.5, leadTimeHoursAvg: 10, contributorLogins: ['ana', 'bea'] } },
+  { fullName: 'o/b', team: 'Plataforma', guilds: ['Backend'], metrics: { deployments: 30, deployFrequencyPerWeek: 7.5, leadTimeHoursAvg: 20, contributorLogins: ['bea', 'caro'] } },
   { fullName: 'o/c', team: 'Pagos', guilds: ['Backend', 'Frontend'], metrics: { error: 'GitHub 404' } },
   { fullName: 'o/d', team: null, guilds: [] }, // sin métricas
 ];
@@ -20,6 +20,10 @@ describe('aggregateMetrics', () => {
 
   it('sin repos medidos → lead time null', () => {
     expect(aggregateMetrics([{ metrics: { error: 'x' } }]).leadTimeHoursAvg).toBeNull();
+  });
+
+  it('personas = unión única de logins (bea está en o/a y o/b → cuenta una vez)', () => {
+    expect(aggregateMetrics(repos).people).toBe(3); // ana, bea, caro
   });
 });
 

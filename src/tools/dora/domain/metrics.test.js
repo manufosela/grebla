@@ -21,5 +21,20 @@ describe('computeRepoMetrics', () => {
     expect(m.deployFrequencyPerWeek).toBe(0);
     expect(m.leadTimeHoursAvg).toBeNull();
     expect(m.leadTimeHoursMedian).toBeNull();
+    expect(m.contributors).toBe(0);
+    expect(m.contributorLogins).toEqual([]);
+  });
+
+  it('personas que participan = autores únicos de los PR (sin vacíos, ordenados)', () => {
+    const prs = [
+      { createdAt: '', mergedAt: '', author: 'ana' },
+      { createdAt: '', mergedAt: '', author: 'bea' },
+      { createdAt: '', mergedAt: '', author: 'ana' }, // repetida → no cuenta doble
+      { createdAt: '', mergedAt: '', author: '' }, // sin autor → se ignora
+      { createdAt: '', mergedAt: '' }, // sin campo author → se ignora
+    ];
+    const m = computeRepoMetrics(prs, { from: '2025-01-01', to: '2025-01-29' });
+    expect(m.contributors).toBe(2);
+    expect(m.contributorLogins).toEqual(['ana', 'bea']);
   });
 });
