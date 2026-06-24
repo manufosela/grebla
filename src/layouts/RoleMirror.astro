@@ -11,7 +11,9 @@
  */
 import Base from './Base.astro';
 
-const { title = 'Role Mirror', requireAuth = false, requireAdmin = false } = Astro.props;
+// Role Mirror exige sesión por defecto: ninguna vista de la herramienta es
+// accesible sin login (las páginas admin añaden además requireAdmin).
+const { title = 'Role Mirror', requireAuth = true, requireAdmin = false } = Astro.props;
 const path = Astro.url.pathname.replace(/\/$/, '');
 const isAdmin = path.startsWith('/tools/role-mirror/admin');
 const isQuestionnaire = path === '/tools/role-mirror';
