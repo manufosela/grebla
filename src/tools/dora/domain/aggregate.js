@@ -10,7 +10,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
  * @param {DoraRepoDoc[]} repos
- * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null }}
+ * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null, people: number }}
  */
 export function aggregateMetrics(repos) {
   const list = Array.isArray(repos) ? repos : [];
@@ -19,6 +19,9 @@ export function aggregateMetrics(repos) {
   let freq = 0;
   let leadWeighted = 0;
   let leadWeight = 0;
+  // Personas únicas del grupo: unión de logins, no suma (una persona en dos repos
+  // del mismo equipo cuenta una vez).
+  const people = new Set();
   for (const r of measured) {
     const m = r.metrics;
     deployments += m.deployments || 0;
@@ -27,6 +30,7 @@ export function aggregateMetrics(repos) {
       leadWeighted += m.leadTimeHoursAvg * m.deployments;
       leadWeight += m.deployments;
     }
+    for (const login of m.contributorLogins ?? []) people.add(login);
   }
   return {
     repos: list.length,
@@ -34,6 +38,7 @@ export function aggregateMetrics(repos) {
     deployments,
     deployFrequencyPerWeek: round1(freq),
     leadTimeHoursAvg: leadWeight > 0 ? round1(leadWeighted / leadWeight) : null,
+    people: people.size,
   };
 }
 

@@ -69,11 +69,14 @@ function computeRepoMetrics(mergedPrs, from, to) {
     .sort((a, b) => a - b);
   const deployments = mergedPrs.length;
   const weeks = Math.max(1, (toMs2 - fromMs) / (7 * 24 * MS_HOUR));
+  const contributorLogins = [...new Set(mergedPrs.map((p) => (p.author ?? '').trim()).filter(Boolean))].sort();
   return {
     deployments,
     deployFrequencyPerWeek: round1(deployments / weeks),
     leadTimeHoursAvg: lead.length ? round1(lead.reduce((s, h) => s + h, 0) / lead.length) : null,
     leadTimeHoursMedian: lead.length ? round1(lead[Math.floor((lead.length - 1) / 2)]) : null,
+    contributors: contributorLogins.length,
+    contributorLogins,
   };
 }
 
@@ -104,7 +107,7 @@ async function fetchMergedPrs(fullName, sinceMs) {
   const arr = await res.json();
   return (Array.isArray(arr) ? arr : [])
     .filter((p) => p.merged_at && toMs(p.merged_at) >= sinceMs)
-    .map((p) => ({ createdAt: p.created_at, mergedAt: p.merged_at }));
+    .map((p) => ({ createdAt: p.created_at, mergedAt: p.merged_at, author: p.user?.login || '' }));
 }
 
 /**
