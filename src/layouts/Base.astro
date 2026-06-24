@@ -99,6 +99,11 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
 
       * { box-sizing: border-box; }
 
+      /* El atributo `hidden` debe ocultar SIEMPRE, también en elementos con un
+         display propio (p. ej. .tools usa display:grid, que de otro modo gana a
+         la regla del navegador para [hidden]). */
+      [hidden] { display: none !important; }
+
       html, body {
         margin: 0;
         padding: 0;
