@@ -8,6 +8,8 @@
  */
 import { LitElement, html, css } from 'lit';
 import { getDoraSummary } from '../../tools/dora/application/usecases.js';
+import { leadTimeLevel, deployFrequencyLevel } from '../../tools/dora/domain/levels.js';
+import { levelBadge, levelStyles } from './level-badge.js';
 
 const lt = (v) => (v != null ? `${v} h` : '—');
 
@@ -19,7 +21,7 @@ export class DoraMetrics extends LitElement {
     error: { state: true },
   };
 
-  static styles = css`
+  static styles = [css`
     :host { display: block; }
     section { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
     h2 { font-size: 1.05rem; margin: 0 0 1rem; }
@@ -34,7 +36,7 @@ export class DoraMetrics extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .note { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); margin-top: 0.5rem; }
-  `;
+  `, levelStyles];
 
   constructor() {
     super();
@@ -81,8 +83,8 @@ export class DoraMetrics extends LitElement {
                       <td>${g.key}</td>
                       <td class="num">${g.measured}/${g.repos}</td>
                       <td class="num">${g.deployments}</td>
-                      <td class="num">${g.deployFrequencyPerWeek}</td>
-                      <td class="num">${lt(g.leadTimeHoursAvg)}</td>
+                      <td class="num">${g.deployFrequencyPerWeek}${levelBadge(deployFrequencyLevel(g.deployFrequencyPerWeek))}</td>
+                      <td class="num">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</td>
                       <td class="num">${g.people}</td>
                     </tr>`,
                   )}
@@ -107,8 +109,8 @@ export class DoraMetrics extends LitElement {
         <h2>Global (${g.measured}/${g.repos} repos medidos)</h2>
         <div class="cards">
           <div class="card"><span class="value">${g.deployments}</span><span class="label">Despliegues (merges)</span></div>
-          <div class="card"><span class="value">${g.deployFrequencyPerWeek}</span><span class="label">Deploy / semana</span></div>
-          <div class="card"><span class="value">${lt(g.leadTimeHoursAvg)}</span><span class="label">Lead time medio</span></div>
+          <div class="card"><span class="value">${g.deployFrequencyPerWeek}${levelBadge(deployFrequencyLevel(g.deployFrequencyPerWeek))}</span><span class="label">Deploy / semana</span></div>
+          <div class="card"><span class="value">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</span><span class="label">Lead time medio</span></div>
           <div class="card"><span class="value">${g.people}</span><span class="label">Personas que participan</span></div>
         </div>
         <p class="note">Lead time agregado = media ponderada por despliegues. Métricas de equipo, nunca por persona (R3).</p>

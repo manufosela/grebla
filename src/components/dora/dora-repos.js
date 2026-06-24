@@ -18,6 +18,8 @@ import {
   listTeams,
   listGuilds,
 } from '../../tools/dora/application/usecases.js';
+import { leadTimeLevel, deployFrequencyLevel } from '../../tools/dora/domain/levels.js';
+import { levelBadge, levelStyles } from './level-badge.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 const fmtDate = (iso) => {
@@ -45,7 +47,7 @@ export class DoraRepos extends LitElement {
     _editGuilds: { state: true },
   };
 
-  static styles = css`
+  static styles = [css`
     :host { display: block; }
     section { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
     h2 { font-size: 1.05rem; margin: 0 0 1rem; }
@@ -76,7 +78,7 @@ export class DoraRepos extends LitElement {
     input.edit-in { width: 100%; min-width: 8rem; font-size: 0.82rem; padding: 0.3rem 0.4rem; }
     .del-btn.edit { color: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); margin-right: 0.4rem; }
     .tag { display: inline-block; background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.76rem; margin: 0 0.2rem 0.2rem 0; }
-  `;
+  `, levelStyles];
 
   constructor() {
     super();
@@ -221,7 +223,7 @@ export class DoraRepos extends LitElement {
     const lt = m.leadTimeHoursAvg != null ? `${m.leadTimeHoursAvg} h` : '—';
     const df = m.deployFrequencyPerWeek != null ? `${m.deployFrequencyPerWeek}` : '—';
     const people = m.contributors != null ? m.contributors : '—';
-    return html`<td title=${m.computedAt ? `Calculado ${fmtDate(m.computedAt)}` : ''}>${lt}</td><td>${df}</td><td>${people}</td>`;
+    return html`<td title=${m.computedAt ? `Calculado ${fmtDate(m.computedAt)}` : ''}>${lt}${levelBadge(leadTimeLevel(m.leadTimeHoursAvg))}</td><td>${df}${levelBadge(deployFrequencyLevel(m.deployFrequencyPerWeek))}</td><td>${people}</td>`;
   }
 
   _renderActions(repo) {
