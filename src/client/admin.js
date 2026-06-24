@@ -7,6 +7,7 @@ import { ROLES } from '../data/roles.js';
 import { ORG_PHASES, DEFAULT_ORG_PHASE } from '../data/org.js';
 import { onUserChanged, isAdmin } from '../lib/auth.js';
 import { getOrgConfig } from '../lib/firestore.js';
+import { resolveTenantContext } from './tenant-context.js';
 
 const el = document.querySelector('admin-dashboard');
 
@@ -19,7 +20,9 @@ if (el) {
     if (!user) return; // el guard del layout redirige a /login
     if (!(await isAdmin(user.uid))) return; // el guard redirige a /
     try {
-      const cfg = await getOrgConfig();
+      const { tenant } = await resolveTenantContext(user);
+      el.tenantId = tenant.id;
+      const cfg = await getOrgConfig(tenant.id);
       if (cfg?.phase) el.currentPhase = cfg.phase;
     } catch {
       /* se mantiene la fase por defecto */

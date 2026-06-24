@@ -31,6 +31,7 @@ export class AdminDashboard extends LitElement {
     roles: { attribute: false },
     orgPhases: { attribute: false },
     currentPhase: { attribute: false },
+    tenantId: { attribute: false },
     uid: { attribute: false },
     users: { state: true },
     _confirmDelete: { state: true },
@@ -241,8 +242,12 @@ export class AdminDashboard extends LitElement {
     const phase = this.orgPhases.find((p) => p.key === key);
     if (!phase) return;
     this.error = '';
+    if (!this.tenantId) {
+      this.error = 'No se ha resuelto la organización; recarga la página.';
+      return;
+    }
     try {
-      await saveOrgConfig({ phase: phase.key, roleMultipliers: phase.roleMultipliers });
+      await saveOrgConfig(this.tenantId, { phase: phase.key, roleMultipliers: phase.roleMultipliers });
       this.currentPhase = phase.key;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar la configuración.';

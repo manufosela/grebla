@@ -8,6 +8,7 @@ import { ITEMS, DIMENSIONS } from '../data/items.js';
 import { ROLES } from '../data/roles.js';
 import { onUserChanged } from '../lib/auth.js';
 import { getOrgConfig } from '../lib/firestore.js';
+import { resolveTenantContext } from './tenant-context.js';
 
 const el = document.querySelector('role-questionnaire');
 
@@ -27,16 +28,18 @@ if (el) {
     history.replaceState(null, '', url);
   });
 
-  // Estado de sesión: asigna uid y carga la configuración de org activa.
+  // Estado de sesión: asigna uid y carga la configuración del tenant activo
+  // (resuelto por el path /{tenant}). Solo si el usuario es miembro del tenant.
   onUserChanged(async (user) => {
     el.uid = user ? user.uid : null;
-    if (user) {
-      try {
-        el.orgConfig = await getOrgConfig();
-      } catch {
-        el.orgConfig = null;
-      }
-    } else {
+    if (!user) {
+      el.orgConfig = null;
+      return;
+    }
+    try {
+      const { tenant, role } = await resolveTenantContext(user);
+      el.orgConfig = role ? await getOrgConfig(tenant.id) : null;
+    } catch {
       el.orgConfig = null;
     }
   });
