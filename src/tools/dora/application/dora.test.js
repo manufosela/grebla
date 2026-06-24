@@ -8,7 +8,7 @@ import {
   listTeams,
   listGuilds,
   getDoraSummary,
-  assignRepoGrouping,
+  updateRepoConfig,
 } from './usecases.js';
 
 describe('DORA — configuración de repos', () => {
@@ -61,12 +61,12 @@ describe('DORA — configuración de repos', () => {
     expect(await listRepos(p)).toEqual([]);
   });
 
-  it('assignRepoGrouping asigna equipo/gremios a posteriori, normalizados', async () => {
+  it('updateRepoConfig asigna equipo/gremios a posteriori, normalizados', async () => {
     // Alta sin clasificación (solo el repo), como en el flujo real.
     const id = await addRepo(p, { fullName: 'org/web', startDate: '2025-01-01' });
     expect((await listRepos(p))[0].team).toBeNull();
     // Asignación a posteriori, con espacios, vacíos y duplicados a normalizar.
-    await assignRepoGrouping(p, id, { team: '  Plataforma  ', guilds: [' Frontend ', '', 'Frontend', 'Backend'] });
+    await updateRepoConfig(p, id, { team: '  Plataforma  ', guilds: [' Frontend ', '', 'Frontend', 'Backend'] });
     const repo = (await listRepos(p))[0];
     expect(repo.team).toBe('Plataforma');
     expect(repo.guilds).toEqual(['Frontend', 'Backend']);
@@ -75,13 +75,23 @@ describe('DORA — configuración de repos', () => {
     expect(await listGuilds(p)).toEqual(['Backend', 'Frontend']);
   });
 
-  it('assignRepoGrouping con equipo vacío deja el repo en (sin equipo)', async () => {
+  it('updateRepoConfig con equipo vacío deja el repo en (sin equipo)', async () => {
     const id = await addRepo(p, { fullName: 'org/web', team: 'Plataforma', startDate: '2025-01-01' });
-    await assignRepoGrouping(p, id, { team: '   ', guilds: [] });
+    await updateRepoConfig(p, id, { team: '   ', guilds: [] });
     const repo = (await listRepos(p))[0];
     expect(repo.team).toBeNull();
     expect(repo.guilds).toEqual([]);
     const s = await getDoraSummary(p);
     expect(s.byTeam.map((g) => g.key)).toContain('(sin equipo)');
+  });
+
+  it('baseBranch: main por defecto en el alta; updateRepoConfig la cambia normalizada', async () => {
+    const id = await addRepo(p, { fullName: 'org/web', startDate: '2025-01-01' });
+    expect((await listRepos(p))[0].baseBranch).toBe('main');
+    await updateRepoConfig(p, id, { baseBranch: '  develop  ' });
+    expect((await listRepos(p))[0].baseBranch).toBe('develop');
+    // rama vacía → vuelve al default 'main'
+    await updateRepoConfig(p, id, { baseBranch: '' });
+    expect((await listRepos(p))[0].baseBranch).toBe('main');
   });
 });

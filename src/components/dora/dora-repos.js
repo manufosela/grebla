@@ -14,7 +14,7 @@ import {
   addRepo,
   listRepos,
   removeRepo,
-  assignRepoGrouping,
+  updateRepoConfig,
   listTeams,
   listGuilds,
 } from '../../tools/dora/application/usecases.js';
@@ -45,6 +45,7 @@ export class DoraRepos extends LitElement {
     _editing: { state: true },
     _editTeam: { state: true },
     _editGuilds: { state: true },
+    _editBranch: { state: true },
   };
 
   static styles = [css`
@@ -102,6 +103,7 @@ export class DoraRepos extends LitElement {
     this._editing = null;
     this._editTeam = '';
     this._editGuilds = '';
+    this._editBranch = '';
   }
 
   async _refreshMetrics() {
@@ -149,25 +151,28 @@ export class DoraRepos extends LitElement {
     this._editing = repo.id;
     this._editTeam = repo.team ?? '';
     this._editGuilds = (repo.guilds ?? []).join(', ');
+    this._editBranch = repo.baseBranch || 'main';
   }
 
   _cancelEdit() {
     this._editing = null;
     this._editTeam = '';
     this._editGuilds = '';
+    this._editBranch = '';
   }
 
   async _saveEdit(id) {
     this.error = '';
     try {
-      await assignRepoGrouping(this.persistence, id, {
+      await updateRepoConfig(this.persistence, id, {
         team: this._editTeam,
         guilds: this._editGuilds.split(',').map((g) => g.trim()).filter(Boolean),
+        baseBranch: this._editBranch,
       });
       this._cancelEdit();
       await this._load();
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo guardar la agrupación.';
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar la configuración.';
     }
   }
 
@@ -241,25 +246,28 @@ export class DoraRepos extends LitElement {
       </span>`;
     }
     return html`
-      <button class="del-btn edit" @click=${() => this._startEdit(repo)}>Equipo/gremio</button>
+      <button class="del-btn edit" @click=${() => this._startEdit(repo)}>Configurar</button>
       <button class="del-btn" @click=${() => { this._confirm = repo.id; }}>Quitar</button>
     `;
   }
 
-  /** Celdas de equipo y gremios: en modo edición (admin) muestran inputs con catálogo vivo. */
-  _renderGroupingCells(repo) {
+  /** Celdas de equipo, gremios y rama base: en edición (admin) muestran inputs. */
+  _renderConfigCells(repo) {
     if (this.isAdmin && this._editing === repo.id) {
       return html`
         <td><input class="edit-in" list="dora-teams" placeholder="(sin equipo)"
           .value=${this._editTeam} @input=${(e) => { this._editTeam = e.target.value; }} /></td>
         <td><input class="edit-in" list="dora-guilds" placeholder="gremios, separados por comas"
           .value=${this._editGuilds} @input=${(e) => { this._editGuilds = e.target.value; }} /></td>
+        <td><input class="edit-in" placeholder="main"
+          .value=${this._editBranch} @input=${(e) => { this._editBranch = e.target.value; }} /></td>
       `;
     }
     const guilds = repo.guilds ?? [];
     return html`
       <td>${repo.team || html`<span class="muted">—</span>`}</td>
       <td>${guilds.length ? guilds.map((g) => html`<span class="tag">${g}</span>`) : html`<span class="muted">—</span>`}</td>
+      <td><code>${repo.baseBranch || 'main'}</code></td>
     `;
   }
 
@@ -281,14 +289,14 @@ export class DoraRepos extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.isAdmin ? html`<th></th>` : null}</tr>
+                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Rama</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.isAdmin ? html`<th></th>` : null}</tr>
                   </thead>
                   <tbody>
                     ${this.repos.map(
                       (r) => html`
                         <tr>
                           <td><code>${r.fullName}</code></td>
-                          ${this._renderGroupingCells(r)}
+                          ${this._renderConfigCells(r)}
                           <td>${fmtDate(r.startDate)}</td>
                           ${this._metricCells(r)}
                           ${this.isAdmin ? html`<td class="num">${this._renderActions(r)}</td>` : null}
@@ -299,7 +307,7 @@ export class DoraRepos extends LitElement {
                 </table>
                 <datalist id="dora-teams">${this._teams.map((t) => html`<option value=${t}></option>`)}</datalist>
                 <datalist id="dora-guilds">${this._guilds.map((g) => html`<option value=${g}></option>`)}</datalist>
-                <p class="muted note">Equipo y gremios se asignan aquí, a posteriori (no en el alta). Métricas desde la API pública de GitHub (repos públicos). Siempre a nivel de equipo, nunca por persona.</p>
+                <p class="muted note">Equipo, gremios y rama base (señal de despliegue, por defecto <code>main</code>) se configuran aquí, a posteriori. Solo cuentan los merges a esa rama. Métricas desde la API pública de GitHub (repos públicos). Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>
 

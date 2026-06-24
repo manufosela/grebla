@@ -99,9 +99,10 @@ async function fetchRepoCreatedAt(fullName) {
   return data.created_at || '2008-01-01T00:00:00Z';
 }
 
-/** PRs mergeados de un repo público desde `sinceMs` (API pública de GitHub, sin token). */
-async function fetchMergedPrs(fullName, sinceMs) {
-  const url = `https://api.github.com/repos/${fullName}/pulls?state=closed&per_page=100&sort=updated&direction=desc`;
+/** PRs mergeados a `baseBranch` de un repo público desde `sinceMs` (API pública de GitHub, sin token). */
+async function fetchMergedPrs(fullName, sinceMs, baseBranch) {
+  const base = encodeURIComponent(baseBranch || 'main');
+  const url = `https://api.github.com/repos/${fullName}/pulls?state=closed&base=${base}&per_page=100&sort=updated&direction=desc`;
   const res = await fetch(url, { headers: GH_HEADERS });
   if (!res.ok) throw githubError(res.status, fullName);
   const arr = await res.json();
@@ -134,7 +135,8 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
     try {
       // Sin fecha → desde la creación del repo en GitHub.
       const from = repo.startDate || (await fetchRepoCreatedAt(repo.fullName));
-      const prs = await fetchMergedPrs(repo.fullName, toMs(from));
+      // Solo cuentan los merges a la rama base (señal de despliegue; default main).
+      const prs = await fetchMergedPrs(repo.fullName, toMs(from), repo.baseBranch || 'main');
       const metrics = computeRepoMetrics(prs, from, now);
       await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: now, computedAt: now } }, { merge: true });
       results.push({ repo: repo.fullName, ok: true, ...metrics });

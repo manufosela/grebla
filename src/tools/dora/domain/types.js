@@ -9,6 +9,7 @@
  * @property {string} fullName   Identificador GitHub "owner/repo".
  * @property {string|null} [team] Equipo al que pertenece el repo.
  * @property {string[]} guilds    Gremios (cross-team) del repo.
+ * @property {string} baseBranch  Rama base que cuenta como despliegue (default "main").
  * @property {string} startDate   ISO date desde la que medir.
  * @property {string} [createdAt]
  */
