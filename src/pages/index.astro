@@ -39,11 +39,25 @@ const tools = [
     <p class="page-tagline">Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo</p>
     <p class="page-lead">
       Herramientas para entender y desarrollar a tus equipos y a las personas
-      que los forman. Elige una para empezar.
+      que los forman.
     </p>
   </section>
 
-  <section class="tools">
+  <!-- Plataforma (sin tenant): visible por defecto. landing.js la oculta dentro de /{tenant}. -->
+  <section id="platform-landing" class="landing">
+    <p class="page-lead">
+      Las herramientas viven dentro de tu organización:
+      <code>grebla.app/tu-organización</code>.
+    </p>
+    <p class="muted">
+      Inicia sesión arriba a la derecha para entrar. Si no conoces el identificador
+      de tu organización, pídeselo a un administrador.
+    </p>
+  </section>
+
+  <!-- Tenant: oculto por defecto. landing.js lo muestra cuando hay /{tenant} en la URL;
+       layout.js prefija los enlaces de las tarjetas con /{tenant}. -->
+  <section id="tenant-tools" class="tools" hidden>
     {
       tools.map((tool) => (
         <a class="tool-card" href={tool.href} aria-disabled={!tool.available}>
@@ -58,6 +72,10 @@ const tools = [
       <p>Próximamente. Aquí se añadirán nuevos módulos del framework.</p>
     </div>
   </section>
+
+  <script>
+    import '../client/landing.js';
+  </script>
 </Base>
 
 <style>
