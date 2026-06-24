@@ -20,10 +20,10 @@ describe('tenantSlugFromHost', () => {
   it('subdominio → slug', () => {
     expect(tenantSlugFromHost('tribbu.grebla.app')).toBe('tribbu');
   });
-  it('base/local/web.app → demo', () => {
-    expect(tenantSlugFromHost('grebla.app')).toBe('demo');
-    expect(tenantSlugFromHost('localhost')).toBe('demo');
-    expect(tenantSlugFromHost('grebla-app.web.app')).toBe('demo');
+  it('base/local/web.app → null (sin tenant por defecto)', () => {
+    expect(tenantSlugFromHost('grebla.app')).toBeNull();
+    expect(tenantSlugFromHost('localhost')).toBeNull();
+    expect(tenantSlugFromHost('grebla-app.web.app')).toBeNull();
   });
   it('dominio propio → null', () => {
     expect(tenantSlugFromHost('app.tribbu.com')).toBeNull();

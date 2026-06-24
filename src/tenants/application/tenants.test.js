@@ -31,9 +31,10 @@ describe('tenants — casos de uso', () => {
 
     // PATH tiene prioridad (tenant en directorio)
     expect((await resolveTenant(store, { hostname: 'grebla-app.web.app', pathname: '/manufosela/tools/team' }))?.slug).toBe('manufosela');
-    // sin tenant en el path → host
+    // sin tenant en el path → host (subdominio)
     expect((await resolveTenant(store, { hostname: 'tribbu.grebla.app', pathname: '/' }))?.slug).toBe('tribbu');
-    expect((await resolveTenant(store, { hostname: 'grebla-app.web.app', pathname: '/' }))?.slug).toBe('demo');
+    // raíz de plataforma (web.app/base) sin /{tenant} → no resuelve ningún tenant
+    expect(await resolveTenant(store, { hostname: 'grebla-app.web.app', pathname: '/' })).toBeNull();
     const byDomain = await resolveTenant(store, { hostname: 'app.tribbu.com', pathname: '/' });
     expect(byDomain?.id).toBe(tribbuId);
   });
