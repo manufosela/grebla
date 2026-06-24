@@ -23,6 +23,18 @@ export function normalizeGrouping(input) {
   return { team, guilds };
 }
 
+/** Rama base que cuenta como despliegue. */
+export const DEFAULT_BASE_BRANCH = 'main';
+
+/**
+ * Normaliza la rama base: recortada, o 'main' por defecto.
+ * @param {string} [v]
+ * @returns {string}
+ */
+export function normalizeBaseBranch(v) {
+  return String(v ?? '').trim() || DEFAULT_BASE_BRANCH;
+}
+
 /**
  * @param {DoraPersistence} persistence
  * @param {{ fullName: string, team?: string|null, guilds?: string[], startDate: string }} input
@@ -36,22 +48,26 @@ export function addRepo(persistence, input) {
   return persistence.repos.add({
     fullName,
     ...normalizeGrouping(input),
+    baseBranch: normalizeBaseBranch(input.baseBranch),
     startDate: input.startDate || null,
     createdAt: new Date().toISOString(),
   });
 }
 
 /**
- * Asigna equipo/gremios a un repo YA configurado (a posteriori, una vez hay
- * métricas). No es el alta: solo reescribe la agrupación, normalizada igual que
- * en addRepo. La clasificación por equipo/gremio se hace aquí, nunca en el alta.
+ * Actualiza la configuración a posteriori de un repo YA dado de alta: equipo,
+ * gremios y rama base (señal de despliegue). No es el alta: solo reescribe la
+ * configuración, normalizada igual que en addRepo.
  * @param {DoraPersistence} persistence
  * @param {string} id
- * @param {{ team?: string|null, guilds?: string[] }} input
+ * @param {{ team?: string|null, guilds?: string[], baseBranch?: string }} input
  * @returns {Promise<void>}
  */
-export function assignRepoGrouping(persistence, id, input) {
-  return persistence.repos.update(id, normalizeGrouping(input));
+export function updateRepoConfig(persistence, id, input) {
+  return persistence.repos.update(id, {
+    ...normalizeGrouping(input),
+    baseBranch: normalizeBaseBranch(input.baseBranch),
+  });
 }
 
 /**
