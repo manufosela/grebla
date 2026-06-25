@@ -229,8 +229,8 @@ export class RoleQuestionnaire extends LitElement {
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
-    // uid puede llegar de forma asíncrona tras resolverse el estado de auth.
-    if (this.uid && !this._sessionInit) {
+    // uid y tenantId pueden llegar de forma asíncrona tras resolverse auth+tenant.
+    if (this.uid && this.tenantId && !this._sessionInit) {
       this._sessionInit = true;
       this._initSession();
     }
@@ -248,13 +248,13 @@ export class RoleQuestionnaire extends LitElement {
       /** @type {object|null} */
       let session = null;
       if (this.sessionId) {
-        session = await getSession(this.uid, this.sessionId);
+        session = await getSession(this.tenantId, this.uid, this.sessionId);
       } else {
         // Sin sesión en la URL: cargar la última medición CON contenido (RMR-BUG-0003).
         // Se ignoran las sesiones vacías (heredadas de versiones que creaban una
         // por cada entrada). NO se crea ninguna sesión aquí: la medición se crea
         // en el primer guardado real (ver _persist), para no generar vacías.
-        const sessions = await listSessions(this.uid);
+        const sessions = await listSessions(this.tenantId, this.uid);
         session = pickActiveMeasurement(sessions);
         if (session) {
           this.sessionId = session.id;
@@ -322,7 +322,7 @@ export class RoleQuestionnaire extends LitElement {
       // (90 días), el guardado crea un NUEVO punto del histórico en vez de
       // sobrescribir, preservando la evolución (cadencia trimestral).
       if (!this.sessionId || isMeasurementStale(this._measuredAtMs, Date.now())) {
-        const id = await createSession(this.uid, { answers: this.answers, targetRole: this.targetRole });
+        const id = await createSession(this.tenantId, this.uid, { answers: this.answers, targetRole: this.targetRole });
         this.sessionId = id;
         this._measuredAtMs = Date.now();
         this._emitSession(id);
@@ -332,7 +332,7 @@ export class RoleQuestionnaire extends LitElement {
       const affinities = Object.fromEntries(
         profile.affinities.map((a) => [a.key, Math.round(a.affinity)]),
       );
-      await saveSession(this.uid, this.sessionId, {
+      await saveSession(this.tenantId, this.uid, this.sessionId, {
         answers: this.answers,
         targetRole: this.targetRole,
         dominantRole: profile.dominant?.key ?? null,
@@ -456,10 +456,10 @@ export class RoleQuestionnaire extends LitElement {
    * pasa a editarlo (acción manual; complementa la cadencia automática de 90 días).
    */
   async _startNewMeasurement() {
-    if (!this.uid) return;
+    if (!this.uid || !this.tenantId) return;
     this.status = 'saving';
     try {
-      const id = await createSession(this.uid, { answers: this.answers, targetRole: this.targetRole });
+      const id = await createSession(this.tenantId, this.uid, { answers: this.answers, targetRole: this.targetRole });
       this.sessionId = id;
       this._measuredAtMs = Date.now();
       this._emitSession(id);

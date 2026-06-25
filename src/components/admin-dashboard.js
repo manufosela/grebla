@@ -170,7 +170,7 @@ export class AdminDashboard extends LitElement {
   async _openDetail(user) {
     this.detail = { user, sessions: [] };
     try {
-      const sessions = await listSessions(user.id);
+      const sessions = await listSessions(this.tenantId, user.id);
       // Solo mediciones con contenido: las sesiones vacías no son puntos del
       // histórico (evita la "evolución absurda" de cuestionarios sin rellenar).
       const measurements = sessions.filter(
@@ -199,7 +199,7 @@ export class AdminDashboard extends LitElement {
     this.error = '';
     const user = this.detail?.user;
     try {
-      await deleteSession(userId, sessionId);
+      await deleteSession(this.tenantId, userId, sessionId);
       await this._loadUsers();
       if (user) await this._openDetail(user);
     } catch (err) {
@@ -223,7 +223,7 @@ export class AdminDashboard extends LitElement {
     this._confirmDeleteUser = null;
     this.error = '';
     try {
-      await deleteUserData(uid);
+      await deleteUserData(this.tenantId, uid);
       if (this.detail?.user?.id === uid) this.detail = null;
       await this._loadUsers();
     } catch (err) {

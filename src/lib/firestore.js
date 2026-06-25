@@ -27,25 +27,28 @@ import { db } from './firebase.js';
 /**
  * Borra una medición (sesión) de un usuario. Permitido al propio uid o a un
  * admin (ver firestore.rules). Para gestión de datos en el panel admin.
+ * @param {string} tenantId
  * @param {string} uid
  * @param {string} sessionId
  * @returns {Promise<void>}
  */
-export function deleteSession(uid, sessionId) {
-  return deleteDoc(doc(db, 'users', uid, 'sessions', sessionId));
+export function deleteSession(tenantId, uid, sessionId) {
+  return deleteDoc(doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId));
 }
 
 /**
  * Borra TODOS los datos de un usuario: sus mediciones (subcolección sessions) y
- * su documento de perfil. No borra la cuenta de Auth (se recrea limpia al
- * reentrar). Permitido al propio uid o a un admin (ver firestore.rules).
+ * su documento de perfil en el tenant. No borra la cuenta de Auth (se recrea
+ * limpia al reentrar). Permitido al propio uid o al tenant-admin (ver firestore.rules).
+ * @param {string} tenantId
  * @param {string} uid
  * @returns {Promise<void>}
  */
-export async function deleteUserData(uid) {
-  const sessions = await getDocs(collection(db, 'users', uid, 'sessions'));
+export async function deleteUserData(tenantId, uid) {
+  const base = doc(db, 'tenants', tenantId, 'rolemirror', uid);
+  const sessions = await getDocs(collection(base, 'sessions'));
   await Promise.all(sessions.docs.map((d) => deleteDoc(d.ref)));
-  await deleteDoc(doc(db, 'users', uid));
+  await deleteDoc(base);
 }
 
 /**
@@ -128,12 +131,13 @@ export async function listProfiles(tenantId) {
 
 /**
  * Crea una nueva sesión vacía y devuelve su id.
+ * @param {string} tenantId
  * @param {string} uid
  * @param {{ answers?: Answers, targetRole?: string|null, orgPhase?: string|null }} [initial]
  * @returns {Promise<string>}
  */
-export async function createSession(uid, initial = {}) {
-  const ref = await addDoc(collection(db, 'users', uid, 'sessions'), {
+export async function createSession(tenantId, uid, initial = {}) {
+  const ref = await addDoc(collection(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions'), {
     answers: initial.answers ?? {},
     targetRole: initial.targetRole ?? null,
     orgPhase: initial.orgPhase ?? null,
@@ -145,14 +149,15 @@ export async function createSession(uid, initial = {}) {
 
 /**
  * Persiste el estado de una sesión (merge).
+ * @param {string} tenantId
  * @param {string} uid
  * @param {string} sessionId
  * @param {{ answers?: Answers, targetRole?: string|null, dominantRole?: string|null, completion?: number, orgPhase?: string|null }} data
  * @returns {Promise<void>}
  */
-export function saveSession(uid, sessionId, data) {
+export function saveSession(tenantId, uid, sessionId, data) {
   return setDoc(
-    doc(db, 'users', uid, 'sessions', sessionId),
+    doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId),
     { ...data, updatedAt: serverTimestamp() },
     { merge: true },
   );
@@ -160,23 +165,25 @@ export function saveSession(uid, sessionId, data) {
 
 /**
  * Obtiene una sesión por id.
+ * @param {string} tenantId
  * @param {string} uid
  * @param {string} sessionId
  * @returns {Promise<Object|null>}
  */
-export async function getSession(uid, sessionId) {
-  const snapshot = await getDoc(doc(db, 'users', uid, 'sessions', sessionId));
+export async function getSession(tenantId, uid, sessionId) {
+  const snapshot = await getDoc(doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId));
   return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
 }
 
 /**
  * Lista las sesiones de un usuario, de más reciente a más antigua.
+ * @param {string} tenantId
  * @param {string} uid
  * @returns {Promise<Array<Object>>}
  */
-export async function listSessions(uid) {
+export async function listSessions(tenantId, uid) {
   const snapshot = await getDocs(
-    query(collection(db, 'users', uid, 'sessions'), orderBy('updatedAt', 'desc')),
+    query(collection(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions'), orderBy('updatedAt', 'desc')),
   );
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
