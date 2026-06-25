@@ -122,6 +122,20 @@ service cloud.firestore {
         allow write: if isTenantAdmin(tenantId) || isSuperAdmin();
       }
 
+      // Role Mirror: perfil (resumen) y sesiones de cada miembro. El dueño
+      // escribe lo suyo; el dueño o el admin del tenant (líder) leen/borran.
+      match /rolemirror/{uid} {
+        allow read:           if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+        allow create, update: if isTenantMember(tenantId) && request.auth.uid == uid;
+        allow delete:         if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+
+        match /sessions/{sessionId} {
+          allow read:           if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+          allow create, update: if isTenantMember(tenantId) && request.auth.uid == uid;
+          allow delete:         if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+        }
+      }
+
       // Mapa de Carrera: el journey de cada ingeniero, solo suyo.
       match /journeys/{uid} {
         allow read, write: if isTenantMember(tenantId) && request.auth.uid == uid;
