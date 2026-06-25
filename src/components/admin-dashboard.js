@@ -9,7 +9,7 @@
  *  - currentPhase: string|null
  */
 import { LitElement, html, css } from 'lit';
-import { listUsers, listSessions, saveOrgConfig, deleteSession, deleteUserData } from '../lib/firestore.js';
+import { listProfiles, listSessions, saveOrgConfig, deleteSession, deleteUserData } from '../lib/firestore.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -134,19 +134,20 @@ export class AdminDashboard extends LitElement {
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
-    // Carga los perfiles solo cuando hay sesión admin resuelta (uid presente),
+    // Carga los perfiles solo cuando hay sesión admin y tenant resueltos,
     // para no chocar con las reglas de seguridad antes de autenticarse.
-    if (this.uid && !this._loaded) {
+    if (this.uid && this.tenantId && !this._loaded) {
       this._loaded = true;
       this._loadUsers();
     }
   }
 
   async _loadUsers() {
+    if (!this.tenantId) return;
     this.loading = true;
     this.error = '';
     try {
-      this.users = await listUsers();
+      this.users = await listProfiles(this.tenantId);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar los perfiles.';
     } finally {

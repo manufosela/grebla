@@ -37,6 +37,7 @@ export class RoleQuestionnaire extends LitElement {
     roles: { attribute: false },
     dimensions: { attribute: false },
     orgConfig: { attribute: false },
+    tenantId: { attribute: false },
     uid: { attribute: false },
     sessionId: { attribute: false },
     answers: { state: true },
@@ -208,6 +209,8 @@ export class RoleQuestionnaire extends LitElement {
     /** @type {import('../lib/scoring.js').OrgConfig|null} */
     this.orgConfig = null;
     /** @type {string|null} */
+    this.tenantId = null;
+    /** @type {string|null} */
     this.uid = null;
     /** @type {string|null} */
     this.sessionId = null;
@@ -312,7 +315,7 @@ export class RoleQuestionnaire extends LitElement {
   }
 
   async _persist() {
-    if (!this.uid) return;
+    if (!this.uid || !this.tenantId) return;
     try {
       // La medición se crea en el PRIMER guardado real (no al entrar) para no
       // generar sesiones vacías. Y si la medición actual superó la ventana
@@ -337,6 +340,7 @@ export class RoleQuestionnaire extends LitElement {
         orgPhase: this.orgConfig?.phase ?? null,
       });
       await upsertUserSummary(
+        this.tenantId,
         { uid: this.uid },
         {
           dominantRole: profile.dominant?.key ?? null,

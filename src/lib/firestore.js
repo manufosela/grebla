@@ -92,14 +92,15 @@ export function debounce(fn, delayMs) {
 // ── Resumen de usuario (para el panel admin) ───────────────────────────────
 
 /**
- * Crea o actualiza el documento resumen del usuario.
+ * Crea o actualiza el documento resumen del perfil del usuario en el tenant.
+ * @param {string} tenantId
  * @param {{ uid: string, displayName?: string|null, email?: string|null, photoURL?: string|null }} user
  * @param {Object} [summary] Campos agregados (dominantRole, completion, affinities…).
  * @returns {Promise<void>}
  */
-export function upsertUserSummary(user, summary = {}) {
+export function upsertUserSummary(tenantId, user, summary = {}) {
   return setDoc(
-    doc(db, 'users', user.uid),
+    doc(db, 'tenants', tenantId, 'rolemirror', user.uid),
     {
       uid: user.uid,
       displayName: user.displayName ?? null,
@@ -113,11 +114,13 @@ export function upsertUserSummary(user, summary = {}) {
 }
 
 /**
- * Lista todos los usuarios con resumen (solo accesible por admin según reglas).
+ * Lista los perfiles (resumen) de los miembros del tenant (accesible al
+ * tenant-admin según reglas).
+ * @param {string} tenantId
  * @returns {Promise<Array<Object>>}
  */
-export async function listUsers() {
-  const snapshot = await getDocs(collection(db, 'users'));
+export async function listProfiles(tenantId) {
+  const snapshot = await getDocs(collection(db, 'tenants', tenantId, 'rolemirror'));
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
