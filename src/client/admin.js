@@ -5,7 +5,7 @@
 import '../components/admin-dashboard.js';
 import { ROLES } from '../data/roles.js';
 import { ORG_PHASES, DEFAULT_ORG_PHASE } from '../data/org.js';
-import { onUserChanged, isAdmin } from '../lib/auth.js';
+import { onUserChanged } from '../lib/auth.js';
 import { getOrgConfig } from '../lib/firestore.js';
 import { resolveTenantContext } from './tenant-context.js';
 
@@ -18,16 +18,20 @@ if (el) {
 
   onUserChanged(async (user) => {
     if (!user) return; // el guard del layout redirige a /login
-    if (!(await isAdmin(user.uid))) return; // el guard redirige a /
     try {
-      const { tenant } = await resolveTenantContext(user);
+      const { tenant, role } = await resolveTenantContext(user);
+      // El panel lo administra el admin del tenant (líder); el resto a su home.
+      if (role !== 'admin') {
+        location.replace(`/${tenant.slug}`);
+        return;
+      }
       el.tenantId = tenant.id;
       const cfg = await getOrgConfig(tenant.id);
       if (cfg?.phase) el.currentPhase = cfg.phase;
+      // Dispara la carga de perfiles dentro del componente.
+      el.uid = user.uid;
     } catch {
-      /* se mantiene la fase por defecto */
+      location.replace('/');
     }
-    // Dispara la carga de perfiles dentro del componente.
-    el.uid = user.uid;
   });
 }
