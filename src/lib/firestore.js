@@ -1,11 +1,11 @@
 /**
  * Helpers de lectura/escritura en Firestore.
  *
- * Estructura de datos:
- *   /users/{uid}                      Resumen del usuario (para listado admin).
- *   /users/{uid}/sessions/{sessionId} Cada sesión del cuestionario.
- *   /config/org                       Configuración de la organización (fase/pesos).
- *   /admins/{uid}                     Marca de administrador.
+ * Estructura de datos (Role Mirror vive por tenant):
+ *   /tenants/{tid}/rolemirror/{uid}                      Resumen del perfil (listado admin).
+ *   /tenants/{tid}/rolemirror/{uid}/sessions/{sessionId} Cada sesión del cuestionario.
+ *   /tenants/{tid}/config/org                            Configuración del tenant (fase/pesos).
+ *   /admins/{uid}                                        Marca de super-admin de plataforma.
  *
  * @typedef {import('./scoring.js').OrgConfig} OrgConfig
  * @typedef {import('../data/items.js').Answers} Answers
