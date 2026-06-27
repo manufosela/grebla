@@ -1,11 +1,11 @@
 /**
  * Helpers de lectura/escritura en Firestore.
  *
- * Estructura de datos:
- *   /users/{uid}                      Resumen del usuario (para listado admin).
- *   /users/{uid}/sessions/{sessionId} Cada sesión del cuestionario.
- *   /config/org                       Configuración de la organización (fase/pesos).
- *   /admins/{uid}                     Marca de administrador.
+ * Estructura de datos (Role Mirror vive por tenant):
+ *   /tenants/{tid}/rolemirror/{uid}                      Resumen del perfil (listado admin).
+ *   /tenants/{tid}/rolemirror/{uid}/sessions/{sessionId} Cada sesión del cuestionario.
+ *   /tenants/{tid}/config/org                            Configuración del tenant (fase/pesos).
+ *   /admins/{uid}                                        Marca de super-admin de plataforma.
  *
  * @typedef {import('./scoring.js').OrgConfig} OrgConfig
  * @typedef {import('../data/items.js').Answers} Answers
@@ -27,25 +27,28 @@ import { db } from './firebase.js';
 /**
  * Borra una medición (sesión) de un usuario. Permitido al propio uid o a un
  * admin (ver firestore.rules). Para gestión de datos en el panel admin.
+ * @param {string} tenantId
  * @param {string} uid
  * @param {string} sessionId
  * @returns {Promise<void>}
  */
-export function deleteSession(uid, sessionId) {
-  return deleteDoc(doc(db, 'users', uid, 'sessions', sessionId));
+export function deleteSession(tenantId, uid, sessionId) {
+  return deleteDoc(doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId));
 }
 
 /**
  * Borra TODOS los datos de un usuario: sus mediciones (subcolección sessions) y
- * su documento de perfil. No borra la cuenta de Auth (se recrea limpia al
- * reentrar). Permitido al propio uid o a un admin (ver firestore.rules).
+ * su documento de perfil en el tenant. No borra la cuenta de Auth (se recrea
+ * limpia al reentrar). Permitido al propio uid o al tenant-admin (ver firestore.rules).
+ * @param {string} tenantId
  * @param {string} uid
  * @returns {Promise<void>}
  */
-export async function deleteUserData(uid) {
-  const sessions = await getDocs(collection(db, 'users', uid, 'sessions'));
+export async function deleteUserData(tenantId, uid) {
+  const base = doc(db, 'tenants', tenantId, 'rolemirror', uid);
+  const sessions = await getDocs(collection(base, 'sessions'));
   await Promise.all(sessions.docs.map((d) => deleteDoc(d.ref)));
-  await deleteDoc(doc(db, 'users', uid));
+  await deleteDoc(base);
 }
 
 /**
@@ -92,14 +95,15 @@ export function debounce(fn, delayMs) {
 // ── Resumen de usuario (para el panel admin) ───────────────────────────────
 
 /**
- * Crea o actualiza el documento resumen del usuario.
+ * Crea o actualiza el documento resumen del perfil del usuario en el tenant.
+ * @param {string} tenantId
  * @param {{ uid: string, displayName?: string|null, email?: string|null, photoURL?: string|null }} user
  * @param {Object} [summary] Campos agregados (dominantRole, completion, affinities…).
  * @returns {Promise<void>}
  */
-export function upsertUserSummary(user, summary = {}) {
+export function upsertUserSummary(tenantId, user, summary = {}) {
   return setDoc(
-    doc(db, 'users', user.uid),
+    doc(db, 'tenants', tenantId, 'rolemirror', user.uid),
     {
       uid: user.uid,
       displayName: user.displayName ?? null,
@@ -113,11 +117,13 @@ export function upsertUserSummary(user, summary = {}) {
 }
 
 /**
- * Lista todos los usuarios con resumen (solo accesible por admin según reglas).
+ * Lista los perfiles (resumen) de los miembros del tenant (accesible al
+ * tenant-admin según reglas).
+ * @param {string} tenantId
  * @returns {Promise<Array<Object>>}
  */
-export async function listUsers() {
-  const snapshot = await getDocs(collection(db, 'users'));
+export async function listProfiles(tenantId) {
+  const snapshot = await getDocs(collection(db, 'tenants', tenantId, 'rolemirror'));
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
@@ -125,12 +131,13 @@ export async function listUsers() {
 
 /**
  * Crea una nueva sesión vacía y devuelve su id.
+ * @param {string} tenantId
  * @param {string} uid
  * @param {{ answers?: Answers, targetRole?: string|null, orgPhase?: string|null }} [initial]
  * @returns {Promise<string>}
  */
-export async function createSession(uid, initial = {}) {
-  const ref = await addDoc(collection(db, 'users', uid, 'sessions'), {
+export async function createSession(tenantId, uid, initial = {}) {
+  const ref = await addDoc(collection(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions'), {
     answers: initial.answers ?? {},
     targetRole: initial.targetRole ?? null,
     orgPhase: initial.orgPhase ?? null,
@@ -142,14 +149,15 @@ export async function createSession(uid, initial = {}) {
 
 /**
  * Persiste el estado de una sesión (merge).
+ * @param {string} tenantId
  * @param {string} uid
  * @param {string} sessionId
  * @param {{ answers?: Answers, targetRole?: string|null, dominantRole?: string|null, completion?: number, orgPhase?: string|null }} data
  * @returns {Promise<void>}
  */
-export function saveSession(uid, sessionId, data) {
+export function saveSession(tenantId, uid, sessionId, data) {
   return setDoc(
-    doc(db, 'users', uid, 'sessions', sessionId),
+    doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId),
     { ...data, updatedAt: serverTimestamp() },
     { merge: true },
   );
@@ -157,23 +165,25 @@ export function saveSession(uid, sessionId, data) {
 
 /**
  * Obtiene una sesión por id.
+ * @param {string} tenantId
  * @param {string} uid
  * @param {string} sessionId
  * @returns {Promise<Object|null>}
  */
-export async function getSession(uid, sessionId) {
-  const snapshot = await getDoc(doc(db, 'users', uid, 'sessions', sessionId));
+export async function getSession(tenantId, uid, sessionId) {
+  const snapshot = await getDoc(doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId));
   return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
 }
 
 /**
  * Lista las sesiones de un usuario, de más reciente a más antigua.
+ * @param {string} tenantId
  * @param {string} uid
  * @returns {Promise<Array<Object>>}
  */
-export async function listSessions(uid) {
+export async function listSessions(tenantId, uid) {
   const snapshot = await getDocs(
-    query(collection(db, 'users', uid, 'sessions'), orderBy('updatedAt', 'desc')),
+    query(collection(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions'), orderBy('updatedAt', 'desc')),
   );
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }

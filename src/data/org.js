@@ -4,7 +4,7 @@
  * Cada fase define multiplicadores de peso por rol que ajustan el scoring:
  * el mismo ítem pesa distinto según el contexto de empresa (p. ej. un HoE en
  * una startup seed hace más hands-on que en una enterprise). El admin elige la
- * fase activa en /config/org y el cuestionario la aplica.
+ * fase activa en /tenants/{tid}/config/org y el cuestionario la aplica.
  *
  * @typedef {import('./roles.js').RoleKey} RoleKey
  *
@@ -48,5 +48,5 @@ export const ORG_PHASE_BY_KEY = Object.freeze(
   Object.fromEntries(ORG_PHASES.map((phase) => [phase.key, phase])),
 );
 
-/** Fase por defecto cuando /config/org aún no está configurado. */
+/** Fase por defecto cuando el tenant aún no tiene config. */
 export const DEFAULT_ORG_PHASE = 'seriesAB';

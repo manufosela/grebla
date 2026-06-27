@@ -33,13 +33,17 @@ if (el) {
   onUserChanged(async (user) => {
     el.uid = user ? user.uid : null;
     if (!user) {
+      el.tenantId = null;
       el.orgConfig = null;
       return;
     }
     try {
       const { tenant, role } = await resolveTenantContext(user);
+      // Solo miembros del tenant persisten/leen su perfil en él.
+      el.tenantId = role ? tenant.id : null;
       el.orgConfig = role ? await getOrgConfig(tenant.id) : null;
     } catch {
+      el.tenantId = null;
       el.orgConfig = null;
     }
   });

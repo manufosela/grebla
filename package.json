@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "assets": "node scripts/gen-assets.mjs",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "seed:tenant-admin": "node scripts/seed-tenant-admin.mjs"
   },
   "dependencies": {
     "@astrojs/lit": "^4.3.0",
