@@ -5,7 +5,7 @@
 import '../components/admin-dashboard.js';
 import { ROLES } from '../data/roles.js';
 import { ORG_PHASES, DEFAULT_ORG_PHASE } from '../data/org.js';
-import { onUserChanged } from '../lib/auth.js';
+import { onUserChanged, isAdmin } from '../lib/auth.js';
 import { getOrgConfig } from '../lib/firestore.js';
 import { resolveTenantContext } from './tenant-context.js';
 
@@ -20,8 +20,9 @@ if (el) {
     if (!user) return; // el guard del layout redirige a /login
     try {
       const { tenant, role } = await resolveTenantContext(user);
-      // El panel lo administra el admin del tenant (líder); el resto a su home.
-      if (role !== 'admin') {
+      // El panel lo administra el admin del tenant (líder); el super-admin de
+      // plataforma también entra (gestión/soporte). El resto, a su home.
+      if (role !== 'admin' && !(await isAdmin(user.uid))) {
         location.replace(`/${tenant.slug}`);
         return;
       }

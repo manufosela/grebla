@@ -89,21 +89,21 @@ service cloud.firestore {
       // Configuración de Role Mirror (fase/pesos) del tenant: la leen los
       // miembros; la escribe el admin del tenant (o el super-admin de plataforma).
       match /config/org {
-        allow read: if isTenantMember(tenantId);
+        allow read: if isTenantMember(tenantId) || isSuperAdmin();
         allow write: if isTenantAdmin(tenantId) || isSuperAdmin();
       }
 
       // Role Mirror: perfil (resumen) y sesiones de cada miembro. El dueño
       // escribe lo suyo; el dueño o el admin del tenant (líder) leen/borran.
       match /rolemirror/{uid} {
-        allow read:           if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+        allow read:           if isSuperAdmin() || (isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId)));
         allow create, update: if isTenantMember(tenantId) && request.auth.uid == uid;
-        allow delete:         if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+        allow delete:         if isSuperAdmin() || (isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId)));
 
         match /sessions/{sessionId} {
-          allow read:           if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+          allow read:           if isSuperAdmin() || (isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId)));
           allow create, update: if isTenantMember(tenantId) && request.auth.uid == uid;
-          allow delete:         if isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId));
+          allow delete:         if isSuperAdmin() || (isTenantMember(tenantId) && (request.auth.uid == uid || isTenantAdmin(tenantId)));
         }
       }
 
