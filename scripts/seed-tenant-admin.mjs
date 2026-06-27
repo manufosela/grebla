@@ -44,19 +44,24 @@ initializeApp({ credential: cert(join(root, keyFile)) });
 const db = getFirestore();
 const auth = getAuth();
 
-const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
-if (!tenantSnap.exists) {
-  console.error(`✗ El tenant "${tenantId}" no existe en /tenants. Provisiona el tenant antes de asignar miembros.`);
+// El tenant se identifica por SLUG (campo); su doc id es un push id (igual que
+// getBySlug en la app). Se acepta también pasar directamente el doc id.
+let tenantDocId = tenantId;
+const bySlug = await db.collection('tenants').where('slug', '==', tenantId).limit(1).get();
+if (!bySlug.empty) {
+  tenantDocId = bySlug.docs[0].id;
+} else if (!(await db.doc(`tenants/${tenantId}`).get()).exists) {
+  console.error(`✗ No existe ningún tenant con slug ni id "${tenantId}" en /tenants.`);
   process.exit(1);
 }
 
 try {
   const user = await auth.getUserByEmail(email);
-  await db.doc(`tenants/${tenantId}/members/${user.uid}`).set(
+  await db.doc(`tenants/${tenantDocId}/members/${user.uid}`).set(
     { role, email: user.email ?? email, addedAt: FieldValue.serverTimestamp(), addedBy: 'seed-tenant-admin' },
     { merge: true },
   );
-  console.log(`✓ ${email} (${user.uid}) → member "${role}" del tenant "${tenantId}".`);
+  console.log(`✓ ${email} (${user.uid}) → member "${role}" del tenant "${tenantId}" (${tenantDocId}).`);
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err);
   console.error(`✗ No se pudo asignar. ¿El usuario ha iniciado sesión alguna vez en Auth?`);
