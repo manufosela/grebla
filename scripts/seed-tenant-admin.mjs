@@ -47,12 +47,18 @@ const auth = getAuth();
 // El tenant se identifica por SLUG (campo); su doc id es un push id (igual que
 // getBySlug en la app). Se acepta también pasar directamente el doc id.
 let tenantDocId = tenantId;
+let tenantSlug = tenantId;
 const bySlug = await db.collection('tenants').where('slug', '==', tenantId).limit(1).get();
 if (!bySlug.empty) {
   tenantDocId = bySlug.docs[0].id;
-} else if (!(await db.doc(`tenants/${tenantId}`).get()).exists) {
-  console.error(`✗ No existe ningún tenant con slug ni id "${tenantId}" en /tenants.`);
-  process.exit(1);
+  tenantSlug = bySlug.docs[0].data().slug || tenantId;
+} else {
+  const direct = await db.doc(`tenants/${tenantId}`).get();
+  if (!direct.exists) {
+    console.error(`✗ No existe ningún tenant con slug ni id "${tenantId}" en /tenants.`);
+    process.exit(1);
+  }
+  tenantSlug = direct.data().slug || tenantId;
 }
 
 try {
@@ -61,7 +67,12 @@ try {
     { role, email: user.email ?? email, addedAt: FieldValue.serverTimestamp(), addedBy: 'seed-tenant-admin' },
     { merge: true },
   );
-  console.log(`✓ ${email} (${user.uid}) → member "${role}" del tenant "${tenantId}" (${tenantDocId}).`);
+  // Índice inverso usuario→tenants (para la landing "mis organizaciones").
+  await db.doc(`userTenants/${user.uid}/tenants/${tenantDocId}`).set(
+    { slug: tenantSlug, role, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  );
+  console.log(`✓ ${email} (${user.uid}) → member "${role}" del tenant "${tenantId}" (${tenantDocId}); índice userTenants actualizado.`);
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err);
   console.error(`✗ No se pudo asignar. ¿El usuario ha iniciado sesión alguna vez en Auth?`);

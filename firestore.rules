@@ -113,6 +113,14 @@ service cloud.firestore {
       }
     }
 
+    // Índice inverso usuario→tenants (para la landing "mis organizaciones").
+    // Lo lee solo el dueño; lo mantiene quien asigna members (tenant-admin del
+    // tid o super-admin de plataforma).
+    match /userTenants/{uid}/tenants/{tid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isTenantAdmin(tid) || isSuperAdmin();
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
