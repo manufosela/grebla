@@ -111,6 +111,18 @@ async function fetchMergedPrs(fullName, sinceMs, baseBranch) {
     .map((p) => ({ createdAt: p.created_at, mergedAt: p.merged_at, author: p.user?.login || '' }));
 }
 
+/** Nº de releases publicados de un repo público en [sinceMs, toMs2] (despliegue real). */
+async function fetchReleaseCount(fullName, sinceMs, toMs2) {
+  const res = await fetch(`https://api.github.com/repos/${fullName}/releases?per_page=100`, { headers: GH_HEADERS });
+  if (!res.ok) throw githubError(res.status, fullName);
+  const arr = await res.json();
+  return (Array.isArray(arr) ? arr : []).filter((r) => {
+    if (!r.published_at) return false;
+    const t = toMs(r.published_at);
+    return t >= sinceMs && t <= toMs2;
+  }).length;
+}
+
 /**
  * Calcula y guarda las métricas DORA de los repos de un tenant. Solo miembros del
  * tenant. Lee la API pública de GitHub (repos públicos, sin token; rate-limit
@@ -135,9 +147,19 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
     try {
       // Sin fecha → desde la creación del repo en GitHub.
       const from = repo.startDate || (await fetchRepoCreatedAt(repo.fullName));
-      // Solo cuentan los merges a la rama base (señal de despliegue; default main).
+      // Lead time y personas siempre desde los PR mergeados a la rama base.
       const prs = await fetchMergedPrs(repo.fullName, toMs(from), repo.baseBranch || 'main');
       const metrics = computeRepoMetrics(prs, from, now);
+      // Frecuencia de despliegue: por releases si la señal del repo es 'release',
+      // si no, por merges a la rama base (lo que ya calcula computeRepoMetrics).
+      const signal = repo.deploySignal === 'release' ? 'release' : 'branch';
+      if (signal === 'release') {
+        const releases = await fetchReleaseCount(repo.fullName, toMs(from), toMs(now));
+        const weeks = Math.max(1, (toMs(now) - toMs(from)) / (7 * 24 * MS_HOUR));
+        metrics.deployments = releases;
+        metrics.deployFrequencyPerWeek = round1(releases / weeks);
+      }
+      metrics.deploySignal = signal;
       await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: now, computedAt: now } }, { merge: true });
       results.push({ repo: repo.fullName, ok: true, ...metrics });
     } catch (err) {
