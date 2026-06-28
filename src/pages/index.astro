@@ -55,6 +55,14 @@ const tools = [
     </p>
   </section>
 
+  <!-- Mis organizaciones: oculto por defecto. landing.js lo rellena y muestra
+       cuando hay sesión y el usuario es member de uno o varios tenants. -->
+  <section id="my-orgs" class="my-orgs" hidden>
+    <h2 class="page-title">Tus organizaciones</h2>
+    <p class="muted">Elige una para entrar.</p>
+    <div id="my-orgs-list" class="orgs"></div>
+  </section>
+
   <!-- Tenant: oculto por defecto. landing.js lo muestra cuando hay /{tenant} en la URL;
        layout.js prefija los enlaces de las tarjetas con /{tenant}. -->
   <section id="tenant-tools" class="tools" hidden>
@@ -109,4 +117,24 @@ const tools = [
   .tool-card .cta { margin-top: auto; color: var(--rm-accent); font-weight: 700; font-size: 0.9rem; }
   .tool-card.placeholder { opacity: 0.6; border-style: dashed; cursor: default; }
   .tool-card.placeholder:hover { border-color: var(--rm-border); transform: none; }
+
+  .my-orgs { margin-top: 1rem; }
+  .orgs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+  .org-card {
+    display: block;
+    background: var(--rm-surface);
+    border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius);
+    padding: 1rem 1.2rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--rm-text);
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .org-card:hover { border-color: var(--rm-accent); transform: translateY(-2px); }
 </style>
