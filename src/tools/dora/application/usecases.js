@@ -35,6 +35,19 @@ export function normalizeBaseBranch(v) {
   return String(v ?? '').trim() || DEFAULT_BASE_BRANCH;
 }
 
+/** Señales de despliegue válidas para la frecuencia DORA. */
+export const DEPLOY_SIGNALS = Object.freeze(['branch', 'release']);
+
+/**
+ * Normaliza la señal de despliegue: 'branch' (merges a la rama base) o 'release'
+ * (releases/tags de GitHub). Default 'branch'.
+ * @param {string} [v]
+ * @returns {'branch'|'release'}
+ */
+export function normalizeDeploySignal(v) {
+  return v === 'release' ? 'release' : 'branch';
+}
+
 /**
  * @param {DoraPersistence} persistence
  * @param {{ fullName: string, team?: string|null, guilds?: string[], startDate: string }} input
@@ -49,6 +62,7 @@ export function addRepo(persistence, input) {
     fullName,
     ...normalizeGrouping(input),
     baseBranch: normalizeBaseBranch(input.baseBranch),
+    deploySignal: normalizeDeploySignal(input.deploySignal),
     startDate: input.startDate || null,
     createdAt: new Date().toISOString(),
   });
@@ -67,6 +81,7 @@ export function updateRepoConfig(persistence, id, input) {
   return persistence.repos.update(id, {
     ...normalizeGrouping(input),
     baseBranch: normalizeBaseBranch(input.baseBranch),
+    deploySignal: normalizeDeploySignal(input.deploySignal),
   });
 }
 
