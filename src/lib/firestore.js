@@ -122,17 +122,6 @@ export async function getPersonProfile(tenantId, leaderUid, personId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/**
- * Lista los perfiles (resumen) de los miembros del tenant (accesible al
- * tenant-admin según reglas).
- * @param {string} tenantId
- * @returns {Promise<Array<Object>>}
- */
-export async function listProfiles(tenantId) {
-  const snapshot = await getDocs(collection(db, 'tenants', tenantId, 'rolemirror'));
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
 // ── Sesiones ───────────────────────────────────────────────────────────────
 
 /**
