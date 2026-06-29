@@ -2,17 +2,25 @@
 import RoleMirror from '../../../layouts/RoleMirror.astro';
 ---
 
-<RoleMirror title="Role Mirror — Cuestionario">
-  <h1 class="page-title">¿Cuál es tu perfil de ingeniería?</h1>
+<RoleMirror title="Role Mirror — Perfiles del equipo">
+  <h1 class="page-title">Perfil de ingeniería del equipo</h1>
   <p class="page-lead">
-    Responde el cuestionario. Las preguntas se adaptan a tus respuestas y, al
-    terminar, verás tu rol dominante, tu afinidad con cada rol y tu mapa de
-    competencias. Inicia sesión con Google para guardar tu progreso.
+    Elige una persona de tu equipo y registra o actualiza su perfil de rol.
+    Verás su rol dominante, su afinidad con cada rol y su mapa de competencias.
   </p>
+
+  <label class="rm-person">Persona del equipo
+    <select id="rm-person"><option value="">— Elige una persona —</option></select>
+  </label>
 
   <!-- El web component se define y recibe sus datos desde el script de cliente. -->
   <role-questionnaire></role-questionnaire>
 </RoleMirror>
+
+<style>
+  .rm-person { display: inline-flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted); margin-bottom: 1.25rem; }
+  .rm-person select { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border); font-size: 0.95rem; min-width: 16rem; }
+</style>
 
 <script>
   import '../../../client/home.js';

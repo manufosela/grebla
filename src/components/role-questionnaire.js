@@ -232,7 +232,13 @@ export class RoleQuestionnaire extends LitElement {
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
-    // uid y tenantId pueden llegar de forma asíncrona tras resolverse auth+tenant.
+    // Al cambiar de persona, reinicia para cargar SU perfil (no el anterior).
+    if (changed.has('personId')) {
+      this._sessionInit = false;
+      this.answers = {};
+      this.sessionId = null;
+    }
+    // personId/leaderUid/tenantId pueden llegar de forma asíncrona tras auth+tenant.
     if (this.personId && this.leaderUid && this.tenantId && !this._sessionInit) {
       this._sessionInit = true;
       this._initSession();
