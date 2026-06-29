@@ -14,6 +14,7 @@ const { title = 'Equipo' } = Astro.props;
 
 <Base title={title} requireAuth={true}>
   <nav class="tool-nav" aria-label="Seguimiento de equipo">
+    <a href="/" class="tool-back">← Volver</a>
     <span class="tool-name">◈ Equipo</span>
   </nav>
   <slot />
