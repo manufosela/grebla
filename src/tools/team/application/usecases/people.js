@@ -23,15 +23,29 @@ export function normalizePerson(person) {
 }
 
 /**
+ * Normaliza el usuario de GitHub de una persona: recortado, o null si vacío.
+ * @param {string} [v]
+ * @returns {string|null}
+ */
+export function normalizeGithubLogin(v) {
+  return String(v ?? '').trim() || null;
+}
+
+/**
  * Alta de una persona (activa por defecto). `teamRoles` es un array de roles del
- * catálogo (puede ir vacío).
+ * catálogo (puede ir vacío). `githubLogin` es opcional (para DORA).
  * @param {PersistencePort} persistence
- * @param {{ name: string, teamRoles?: string[], startDate: string, active?: boolean }} input
+ * @param {{ name: string, teamRoles?: string[], startDate: string, active?: boolean, githubLogin?: string }} input
  * @returns {Promise<string>}
  */
 export function addPerson(persistence, input) {
-  const { teamRoles = [], teamRole: _legacy, ...rest } = input;
-  return persistence.people.create({ active: true, teamRoles, ...rest });
+  const { teamRoles = [], teamRole: _legacy, githubLogin, ...rest } = input;
+  return persistence.people.create({
+    active: true,
+    teamRoles,
+    githubLogin: normalizeGithubLogin(githubLogin),
+    ...rest,
+  });
 }
 
 /**

@@ -73,6 +73,14 @@ describe('Fase 2b — casos de uso', () => {
     expect(zoe.teamRoles).toEqual(['Backend', 'Líder técnico']);
   });
 
+  it('addPerson normaliza el githubLogin (trim; vacío → null)', async () => {
+    await addPerson(p, { name: 'Gita', teamRoles: [], startDate: '2025-01-01', githubLogin: '  gita-dev  ' });
+    await addPerson(p, { name: 'NoGit', teamRoles: [], startDate: '2025-01-01', githubLogin: '   ' });
+    const people = await listActivePeople(p);
+    expect(people.find((x) => x.name === 'Gita').githubLogin).toBe('gita-dev');
+    expect(people.find((x) => x.name === 'NoGit').githubLogin).toBeNull();
+  });
+
   it('normalizePerson deriva teamRoles del legacy teamRole', () => {
     expect(normalizePerson({ teamRole: 'QA' }).teamRoles).toEqual(['QA']);
     expect(normalizePerson({ teamRoles: ['A', 'B'] }).teamRoles).toEqual(['A', 'B']);
