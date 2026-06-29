@@ -46,6 +46,7 @@ export class DoraRepos extends LitElement {
     _editTeam: { state: true },
     _editGuilds: { state: true },
     _editBranch: { state: true },
+    _editSignal: { state: true },
   };
 
   static styles = [css`
@@ -104,6 +105,7 @@ export class DoraRepos extends LitElement {
     this._editTeam = '';
     this._editGuilds = '';
     this._editBranch = '';
+    this._editSignal = 'branch';
   }
 
   async _refreshMetrics() {
@@ -152,6 +154,7 @@ export class DoraRepos extends LitElement {
     this._editTeam = repo.team ?? '';
     this._editGuilds = (repo.guilds ?? []).join(', ');
     this._editBranch = repo.baseBranch || 'main';
+    this._editSignal = repo.deploySignal || 'branch';
   }
 
   _cancelEdit() {
@@ -159,6 +162,7 @@ export class DoraRepos extends LitElement {
     this._editTeam = '';
     this._editGuilds = '';
     this._editBranch = '';
+    this._editSignal = 'branch';
   }
 
   async _saveEdit(id) {
@@ -168,6 +172,7 @@ export class DoraRepos extends LitElement {
         team: this._editTeam,
         guilds: this._editGuilds.split(',').map((g) => g.trim()).filter(Boolean),
         baseBranch: this._editBranch,
+        deploySignal: this._editSignal,
       });
       this._cancelEdit();
       await this._load();
@@ -259,15 +264,24 @@ export class DoraRepos extends LitElement {
           .value=${this._editTeam} @input=${(e) => { this._editTeam = e.target.value; }} /></td>
         <td><input class="edit-in" list="dora-guilds" placeholder="gremios, separados por comas"
           .value=${this._editGuilds} @input=${(e) => { this._editGuilds = e.target.value; }} /></td>
-        <td><input class="edit-in" placeholder="main"
-          .value=${this._editBranch} @input=${(e) => { this._editBranch = e.target.value; }} /></td>
+        <td>
+          <select class="edit-in" @change=${(e) => { this._editSignal = e.target.value; }}>
+            <option value="branch" ?selected=${this._editSignal !== 'release'}>rama</option>
+            <option value="release" ?selected=${this._editSignal === 'release'}>release/tag</option>
+          </select>
+          ${this._editSignal !== 'release'
+            ? html`<input class="edit-in" placeholder="main" .value=${this._editBranch} @input=${(e) => { this._editBranch = e.target.value; }} />`
+            : null}
+        </td>
       `;
     }
     const guilds = repo.guilds ?? [];
     return html`
       <td>${repo.team || html`<span class="muted">—</span>`}</td>
       <td>${guilds.length ? guilds.map((g) => html`<span class="tag">${g}</span>`) : html`<span class="muted">—</span>`}</td>
-      <td><code>${repo.baseBranch || 'main'}</code></td>
+      <td>${repo.deploySignal === 'release'
+        ? html`<span class="tag">releases</span>`
+        : html`<code>${repo.baseBranch || 'main'}</code>`}</td>
     `;
   }
 
@@ -289,7 +303,7 @@ export class DoraRepos extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Rama</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.isAdmin ? html`<th></th>` : null}</tr>
+                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Despliegue</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.isAdmin ? html`<th></th>` : null}</tr>
                   </thead>
                   <tbody>
                     ${this.repos.map(

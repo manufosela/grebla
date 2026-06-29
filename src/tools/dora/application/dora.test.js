@@ -94,4 +94,13 @@ describe('DORA — configuración de repos', () => {
     await updateRepoConfig(p, id, { baseBranch: '' });
     expect((await listRepos(p))[0].baseBranch).toBe('main');
   });
+
+  it('deploySignal: branch por defecto; updateRepoConfig acepta release y normaliza lo inválido', async () => {
+    const id = await addRepo(p, { fullName: 'org/web', startDate: '2025-01-01' });
+    expect((await listRepos(p))[0].deploySignal).toBe('branch');
+    await updateRepoConfig(p, id, { deploySignal: 'release' });
+    expect((await listRepos(p))[0].deploySignal).toBe('release');
+    await updateRepoConfig(p, id, { deploySignal: 'loquesea' });
+    expect((await listRepos(p))[0].deploySignal).toBe('branch');
+  });
 });
