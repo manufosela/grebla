@@ -9,7 +9,9 @@
  *  - currentPhase: string|null
  */
 import { LitElement, html, css } from 'lit';
-import { listProfiles, listSessions, saveOrgConfig, deleteSession, deleteUserData } from '../lib/firestore.js';
+import { getPersonProfile, listSessions, saveOrgConfig, deleteSession, deleteUserData } from '../lib/firestore.js';
+import { createTeamContainer } from '../tools/team/composition/container.js';
+import { listActivePeople } from '../tools/team/application/usecases/index.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -32,6 +34,7 @@ export class AdminDashboard extends LitElement {
     orgPhases: { attribute: false },
     currentPhase: { attribute: false },
     tenantId: { attribute: false },
+    leaderUid: { attribute: false },
     uid: { attribute: false },
     users: { state: true },
     _confirmDelete: { state: true },
@@ -117,6 +120,8 @@ export class AdminDashboard extends LitElement {
     this.currentPhase = null;
     /** @type {string|null} */
     this.uid = null;
+    /** @type {string|null} uid del líder dueño de las personas */
+    this.leaderUid = null;
     this._loaded = false;
     /** @type {Array<Object>} */
     this.users = [];
@@ -136,18 +141,25 @@ export class AdminDashboard extends LitElement {
   updated(changed) {
     // Carga los perfiles solo cuando hay sesión admin y tenant resueltos,
     // para no chocar con las reglas de seguridad antes de autenticarse.
-    if (this.uid && this.tenantId && !this._loaded) {
+    if (this.uid && this.tenantId && this.leaderUid && !this._loaded) {
       this._loaded = true;
       this._loadUsers();
     }
   }
 
   async _loadUsers() {
-    if (!this.tenantId) return;
+    if (!this.tenantId || !this.leaderUid) return;
     this.loading = true;
     this.error = '';
     try {
-      this.users = await listProfiles(this.tenantId);
+      const { persistence } = await createTeamContainer({ mode: 'firestore', tenantId: this.tenantId, leaderUid: this.leaderUid });
+      const people = await listActivePeople(persistence);
+      this.users = await Promise.all(
+        people.map(async (p) => {
+          const prof = await getPersonProfile(this.tenantId, this.leaderUid, p.id);
+          return { id: p.id, name: p.name, ...(prof || {}) };
+        }),
+      );
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar los perfiles.';
     } finally {
@@ -170,7 +182,7 @@ export class AdminDashboard extends LitElement {
   async _openDetail(user) {
     this.detail = { user, sessions: [] };
     try {
-      const sessions = await listSessions(this.tenantId, user.id);
+      const sessions = await listSessions(this.tenantId, this.leaderUid, user.id);
       // Solo mediciones con contenido: las sesiones vacías no son puntos del
       // histórico (evita la "evolución absurda" de cuestionarios sin rellenar).
       const measurements = sessions.filter(
@@ -199,7 +211,7 @@ export class AdminDashboard extends LitElement {
     this.error = '';
     const user = this.detail?.user;
     try {
-      await deleteSession(this.tenantId, userId, sessionId);
+      await deleteSession(this.tenantId, this.leaderUid, userId, sessionId);
       await this._loadUsers();
       if (user) await this._openDetail(user);
     } catch (err) {
@@ -223,7 +235,7 @@ export class AdminDashboard extends LitElement {
     this._confirmDeleteUser = null;
     this.error = '';
     try {
-      await deleteUserData(this.tenantId, uid);
+      await deleteUserData(this.tenantId, this.leaderUid, uid);
       if (this.detail?.user?.id === uid) this.detail = null;
       await this._loadUsers();
     } catch (err) {

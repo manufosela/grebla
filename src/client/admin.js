@@ -27,6 +27,7 @@ if (el) {
         return;
       }
       el.tenantId = tenant.id;
+      el.leaderUid = user.uid;
       const cfg = await getOrgConfig(tenant.id);
       if (cfg?.phase) el.currentPhase = cfg.phase;
       // Dispara la carga de perfiles dentro del componente.
