@@ -122,6 +122,8 @@ export class TeamApp extends LitElement {
             .person=${this.selected}
             .members=${this.members}
             .currentUid=${this.uid}
+            .isAdmin=${this.isAdmin}
+            @person-transferred=${() => this._go('people')}
           ></team-person-detail>
         `;
       case 'map':

@@ -23,6 +23,7 @@ import {
   removeSupportNote,
   sharePerson,
   unsharePerson,
+  transferOwnership,
 } from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
@@ -66,6 +67,7 @@ export class TeamPersonDetail extends LitElement {
     person: { attribute: false },
     members: { attribute: false },
     currentUid: { attribute: false },
+    isAdmin: { attribute: false },
     timeline: { state: true },
     areas: { state: true },
     conversations: { state: true },
@@ -80,6 +82,8 @@ export class TeamPersonDetail extends LitElement {
     _confirmNote: { state: true },
     _shareSel: { state: true },
     _sharePerm: { state: true },
+    _transferSel: { state: true },
+    _confirmTransfer: { state: true },
   };
 
   static styles = css`
@@ -128,7 +132,9 @@ export class TeamPersonDetail extends LitElement {
     .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .bias { font-size: 0.78rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 0 0.75rem; }
     section.share { border-left: 4px solid var(--rm-accent, #2a9d8f); }
-    section.share .row { align-items: flex-end; }
+    section.share .row, section.transfer .row { align-items: flex-end; }
+    section.transfer { border-left: 4px solid var(--rm-warning, #f2887a); }
+    .confirm { font-size: 0.8rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
   `;
 
   constructor() {
@@ -140,10 +146,16 @@ export class TeamPersonDetail extends LitElement {
     this.members = [];
     /** @type {string|null} uid del líder en sesión (dueño si coincide con ownerLeaderUid) */
     this.currentUid = null;
+    /** @type {boolean} si el usuario en sesión es admin del tenant (puede transferir) */
+    this.isAdmin = false;
     /** @type {string} líder seleccionado en el formulario de compartir */
     this._shareSel = '';
     /** @type {import('../../tools/team/domain/types.js').SharePermission} */
     this._sharePerm = 'view';
+    /** @type {string} nuevo dueño seleccionado para transferir */
+    this._transferSel = '';
+    /** @type {boolean} confirmación de transferencia en dos pasos */
+    this._confirmTransfer = false;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -651,6 +663,57 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
+  async _transfer() {
+    const uid = this._transferSel;
+    if (!uid) return;
+    this.error = '';
+    try {
+      await transferOwnership(this.persistence, this.person.id, uid);
+      this._confirmTransfer = false;
+      this._transferSel = '';
+      // El dueño anterior pierde el acceso: <team-app> vuelve a la lista.
+      this.dispatchEvent(
+        new CustomEvent('person-transferred', {
+          detail: { personId: this.person.id },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo transferir.';
+    }
+  }
+
+  /** Transferencia de propiedad: solo el dueño o un admin del tenant. */
+  _renderTransfer() {
+    const isOwner = this.currentUid && this.person.ownerLeaderUid === this.currentUid;
+    if (!isOwner && !this.isAdmin) return null;
+    const candidates = this.members.filter((m) => m.uid !== this.person.ownerLeaderUid);
+    return html`
+      <section class="transfer">
+        <h3>Transferir propiedad</h3>
+        <p class="empty">Cede esta persona a otro líder. Es una transferencia total: dejarás de tener acceso.</p>
+        <div class="row">
+          <label class="fld">Nuevo dueño
+            <select
+              .value=${this._transferSel}
+              @change=${(e) => { this._transferSel = e.target.value; this._confirmTransfer = false; }}
+            >
+              <option value="">— Elige un líder —</option>
+              ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
+            </select>
+          </label>
+          ${this._confirmTransfer
+            ? html`<span class="confirm">¿Seguro? Perderás el acceso.
+                <button class="link yes" @click=${() => this._transfer()}>Sí, transferir</button>
+                <button class="link" @click=${() => { this._confirmTransfer = false; }}>No</button>
+              </span>`
+            : html`<button class="primary" ?disabled=${!this._transferSel} @click=${() => { this._confirmTransfer = true; }}>Transferir</button>`}
+        </div>
+      </section>
+    `;
+  }
+
   render() {
     if (!this.person) return null;
     return html`
@@ -670,6 +733,7 @@ export class TeamPersonDetail extends LitElement {
             ${this._renderConversations()}
             ${this._renderNotes()}
             ${this._renderShare()}
+            ${this._renderTransfer()}
           `}
     `;
   }
