@@ -72,11 +72,39 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
-      // Datos de las herramientas migradas bajo tenant (la migración real de los
-      // tools actuales es 1b/1c; aquí ya quedan las reglas listas).
-      match /leaders/{leaderUid}/{document=**} {
-        allow read, write: if isTenantMember(tenantId) && request.auth.uid == leaderUid;
+      // Personas del equipo (tool Equipo + Role Mirror), a nivel de tenant para
+      // poder compartirlas/transferirlas entre líderes (Fase 3). Cada persona
+      // lleva `ownerLeaderUid`; por defecto solo accede su dueño (o admin del
+      // tenant). El sharing por `sharedWith` llegará en 3b.
+      match /people/{personId} {
+        function isPersonOwner() {
+          return isTenantMember(tenantId)
+            && resource.data.ownerLeaderUid == request.auth.uid;
+        }
+        allow read: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin();
+        allow create: if isTenantMember(tenantId)
+          && request.resource.data.ownerLeaderUid == request.auth.uid;
+        allow update, delete: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin();
+
+        // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
+        // resumen/sesiones de Role Mirror): mismo acceso que la persona dueña.
+        match /{document=**} {
+          allow read, write: if isTenantAdmin(tenantId) || isSuperAdmin()
+            || (isTenantMember(tenantId)
+                && get(/databases/$(database)/documents/tenants/$(tenantId)/people/$(personId)).data.ownerLeaderUid == request.auth.uid);
+        }
       }
+
+      // Áreas de conocimiento: catálogo del tenant compartido por sus líderes.
+      match /areas/{areaId} {
+        allow read, write: if isTenantMember(tenantId);
+      }
+
+      // Ajustes de la tool Equipo (features, etc.) del tenant.
+      match /config/settings {
+        allow read, write: if isTenantMember(tenantId);
+      }
+
       match /teamRoles/{roleId} {
         allow read: if isTenantMember(tenantId);
         allow write: if isTenantAdmin(tenantId);
@@ -93,9 +121,9 @@ service cloud.firestore {
         allow write: if isTenantAdmin(tenantId) || isSuperAdmin();
       }
 
-      // Role Mirror vive ahora bajo la persona del líder
-      // (/leaders/{leaderUid}/people/{personId}/rolemirror), cubierto por la regla
-      // /leaders/{leaderUid}/** de arriba. La antigua /rolemirror/{uid} se retiró.
+      // Role Mirror vive bajo la persona, a nivel de tenant
+      // (/tenants/{tid}/people/{personId}/rolemirror/...), cubierto por la regla
+      // del subárbol de /people/{personId} de arriba.
 
       // Mapa de Carrera: el journey de cada ingeniero, solo suyo.
       match /journeys/{uid} {

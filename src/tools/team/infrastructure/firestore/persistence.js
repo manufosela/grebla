@@ -1,14 +1,15 @@
 /**
  * Implementación Firestore del puerto de persistencia (PersistencePort).
- * Multi-tenant: cada líder tiene su subárbol dentro de su tenant. El catálogo de
- * roles es del tenant (compartido por sus líderes).
+ * Multi-tenant: personas, áreas y catálogos viven a NIVEL DE TENANT (no bajo el
+ * líder), para poder compartir/transferir personas entre líderes. Cada persona
+ * lleva ownerLeaderUid; el líder ve por defecto las suyas (filtro por owner).
  *
- *   /tenants/{tenantId}/leaders/{leaderUid}/people/{personId}
+ *   /tenants/{tenantId}/people/{personId}              (con ownerLeaderUid, sharedWith)
  *       .../people/{personId}/{seniority|emotional|knowledge|contribution}/{readingId}
  *       .../people/{personId}/conversations/{convId}
  *       .../people/{personId}/supportNotes/{noteId}
- *   /tenants/{tenantId}/leaders/{leaderUid}/areas/{areaId}
- *   /tenants/{tenantId}/leaders/{leaderUid}/config/settings
+ *   /tenants/{tenantId}/areas/{areaId}
+ *   /tenants/{tenantId}/config/settings
  *   /tenants/{tenantId}/teamRoles/{roleId}            (catálogo del tenant)
  *
  * `db` se inyecta (no se importa firebase.js aquí) para mantener el adapter
@@ -28,13 +29,14 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
   limit,
 } from 'firebase/firestore';
 import { DIMENSIONS, DEFAULT_SETTINGS } from '../../domain/types.js';
 
-// `base` = subárbol del líder dentro del tenant: ['tenants', tenantId, 'leaders', leaderUid].
-// `tbase` = árbol del tenant: ['tenants', tenantId].
+// `base` = árbol del tenant: ['tenants', tenantId]. Las personas viven aquí
+// (no bajo el líder) y se distinguen por ownerLeaderUid.
 const peopleCol = (db, base) => collection(db, ...base, 'people');
 const personDoc = (db, base, id) => doc(db, ...base, 'people', id);
 const readingCol = (db, base, personId, dim) =>
@@ -57,17 +59,18 @@ const settingsDoc = (db, base) => doc(db, ...base, 'config', 'settings');
 /** @param {import('firebase/firestore').QuerySnapshot} snap */
 const mapDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-function peopleRepo(db, base) {
+function peopleRepo(db, base, leaderUid) {
   return {
     async list() {
-      return mapDocs(await getDocs(peopleCol(db, base)));
+      // Por defecto, las personas de las que este líder es dueño (sharing en 3b).
+      return mapDocs(await getDocs(query(peopleCol(db, base), where('ownerLeaderUid', '==', leaderUid))));
     },
     async getById(id) {
       const d = await getDoc(personDoc(db, base, id));
       return d.exists() ? { id: d.id, ...d.data() } : null;
     },
     async create(input) {
-      const ref = await addDoc(peopleCol(db, base), { ...input });
+      const ref = await addDoc(peopleCol(db, base), { ...input, ownerLeaderUid: leaderUid });
       return ref.id;
     },
     async update(id, patch) {
@@ -182,16 +185,15 @@ function configRepo(db, base) {
 export function createFirestorePersistence(db, tenantId, leaderUid) {
   if (!db) throw new Error('createFirestorePersistence requiere una instancia de Firestore (db)');
   if (!tenantId || !leaderUid) throw new Error('createFirestorePersistence requiere tenantId y leaderUid');
-  const base = ['tenants', tenantId, 'leaders', leaderUid];
-  const tbase = ['tenants', tenantId];
+  const base = ['tenants', tenantId];
   const readings = /** @type {PersistencePort['readings']} */ (
     Object.fromEntries(DIMENSIONS.map((dim) => [dim, readingRepo(db, base, dim)]))
   );
   return {
-    people: peopleRepo(db, base),
+    people: peopleRepo(db, base, leaderUid),
     readings,
     areas: areaRepo(db, base),
-    teamRoles: teamRoleRepo(db, tbase), // catálogo a nivel de tenant
+    teamRoles: teamRoleRepo(db, base), // catálogo a nivel de tenant
     conversations: conversationRepo(db, base),
     supportNotes: supportNoteRepo(db, base),
     config: configRepo(db, base),

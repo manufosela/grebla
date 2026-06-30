@@ -9,7 +9,7 @@
  *  - roles:  import('../data/roles.js').Role[]
  *  - dimensions: { key: string, label: string }[]
  *  - orgConfig: import('../lib/scoring.js').OrgConfig|null
- *  - personId/leaderUid: string|null   (si null, modo local sin persistencia; el líder evalúa a la persona)
+ *  - personId: string|null   (si null, modo local sin persistencia; el líder evalúa a la persona)
  *  - sessionId: string|null   (si null y hay uid, se crea una sesión)
  */
 import { LitElement, html, css } from 'lit';
@@ -39,7 +39,6 @@ export class RoleQuestionnaire extends LitElement {
     orgConfig: { attribute: false },
     tenantId: { attribute: false },
     personId: { attribute: false },
-    leaderUid: { attribute: false },
     sessionId: { attribute: false },
     answers: { state: true },
     targetRole: { state: true },
@@ -213,8 +212,6 @@ export class RoleQuestionnaire extends LitElement {
     this.tenantId = null;
     /** @type {string|null} persona evaluada (el líder rellena su perfil) */
     this.personId = null;
-    /** @type {string|null} uid del líder dueño de la persona */
-    this.leaderUid = null;
     /** @type {string|null} */
     this.sessionId = null;
     /** @type {import('../data/items.js').Answers} */
@@ -238,8 +235,8 @@ export class RoleQuestionnaire extends LitElement {
       this.answers = {};
       this.sessionId = null;
     }
-    // personId/leaderUid/tenantId pueden llegar de forma asíncrona tras auth+tenant.
-    if (this.personId && this.leaderUid && this.tenantId && !this._sessionInit) {
+    // personId/tenantId pueden llegar de forma asíncrona tras auth+tenant.
+    if (this.personId && this.tenantId && !this._sessionInit) {
       this._sessionInit = true;
       this._initSession();
     }
@@ -257,13 +254,13 @@ export class RoleQuestionnaire extends LitElement {
       /** @type {object|null} */
       let session = null;
       if (this.sessionId) {
-        session = await getSession(this.tenantId, this.leaderUid, this.personId, this.sessionId);
+        session = await getSession(this.tenantId, this.personId, this.sessionId);
       } else {
         // Sin sesión en la URL: cargar la última medición CON contenido (RMR-BUG-0003).
         // Se ignoran las sesiones vacías (heredadas de versiones que creaban una
         // por cada entrada). NO se crea ninguna sesión aquí: la medición se crea
         // en el primer guardado real (ver _persist), para no generar vacías.
-        const sessions = await listSessions(this.tenantId, this.leaderUid, this.personId);
+        const sessions = await listSessions(this.tenantId, this.personId);
         session = pickActiveMeasurement(sessions);
         if (session) {
           this.sessionId = session.id;
@@ -324,14 +321,14 @@ export class RoleQuestionnaire extends LitElement {
   }
 
   async _persist() {
-    if (!this.personId || !this.leaderUid || !this.tenantId) return;
+    if (!this.personId || !this.tenantId) return;
     try {
       // La medición se crea en el PRIMER guardado real (no al entrar) para no
       // generar sesiones vacías. Y si la medición actual superó la ventana
       // (90 días), el guardado crea un NUEVO punto del histórico en vez de
       // sobrescribir, preservando la evolución (cadencia trimestral).
       if (!this.sessionId || isMeasurementStale(this._measuredAtMs, Date.now())) {
-        const id = await createSession(this.tenantId, this.leaderUid, this.personId, { answers: this.answers, targetRole: this.targetRole });
+        const id = await createSession(this.tenantId, this.personId, { answers: this.answers, targetRole: this.targetRole });
         this.sessionId = id;
         this._measuredAtMs = Date.now();
         this._emitSession(id);
@@ -341,7 +338,7 @@ export class RoleQuestionnaire extends LitElement {
       const affinities = Object.fromEntries(
         profile.affinities.map((a) => [a.key, Math.round(a.affinity)]),
       );
-      await saveSession(this.tenantId, this.leaderUid, this.personId, this.sessionId, {
+      await saveSession(this.tenantId, this.personId, this.sessionId, {
         answers: this.answers,
         targetRole: this.targetRole,
         dominantRole: profile.dominant?.key ?? null,
@@ -350,7 +347,6 @@ export class RoleQuestionnaire extends LitElement {
       });
       await upsertUserSummary(
         this.tenantId,
-        this.leaderUid,
         this.personId,
         {
           dominantRole: profile.dominant?.key ?? null,
@@ -466,7 +462,7 @@ export class RoleQuestionnaire extends LitElement {
    * pasa a editarlo (acción manual; complementa la cadencia automática de 90 días).
    */
   async _startNewMeasurement() {
-    if (!this.personId || !this.leaderUid || !this.tenantId) return;
+    if (!this.personId || !this.tenantId) return;
     this.status = 'saving';
     try {
       const id = await createSession(this.tenantId, this.personId, { answers: this.answers, targetRole: this.targetRole });
