@@ -37,6 +37,7 @@ export class TeamPeople extends LitElement {
     _selected: { state: true },
     _newRole: { state: true },
     _startDate: { state: true },
+    _github: { state: true },
     _confirmOff: { state: true },
   };
 
@@ -110,6 +111,7 @@ export class TeamPeople extends LitElement {
     this._selected = [];
     this._newRole = '';
     this._startDate = '';
+    this._github = '';
     /** @type {string|null} */
     this._confirmOff = null;
     this._loaded = false;
@@ -174,11 +176,13 @@ export class TeamPeople extends LitElement {
         name,
         teamRoles: [...this._selected],
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
+        githubLogin: this._github,
       });
       this._name = '';
       this._selected = [];
       this._newRole = '';
       this._startDate = '';
+      this._github = '';
       await this._load();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo crear la persona.';
@@ -223,6 +227,9 @@ export class TeamPeople extends LitElement {
             </label>
             <label>Fecha de inicio
               <input type="date" .value=${this._startDate} @input=${(e) => { this._startDate = e.target.value; }} />
+            </label>
+            <label>Usuario de GitHub (opcional)
+              <input type="text" placeholder="usuario" .value=${this._github} @input=${(e) => { this._github = e.target.value; }} />
             </label>
             <button class="primary" type="submit">Añadir</button>
           </div>

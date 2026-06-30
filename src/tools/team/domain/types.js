@@ -13,6 +13,8 @@
  * @property {string} startDate       ISO date (alta)
  * @property {boolean} active
  * @property {string|null} [deactivatedAt]  ISO date de la baja (null/ausente si activa)
+ * @property {string|null} [githubLogin]    Usuario de GitHub, para mapear la contribución DORA a la persona.
+ * @property {string|null} [uid]            Cuenta vinculada (acceso de solo lectura de la persona). Se vincula al dar acceso.
  *
  * @typedef {Object} SeniorityReading
  * @property {LevelValue} level
