@@ -8,19 +8,27 @@
 
 /**
  * @param {TeamRole[]} [seed]
+ * @param {string|null} [viewerLeaderUid] Líder que mira: list() devuelve globales +
+ *   sus personales, y create() marca el rol como personal suyo. Si es null, list()
+ *   devuelve todos y create() crea global (sin owner).
  * @returns {TeamRoleRepository}
  */
-export function createMemoryTeamRoleRepository(seed = []) {
+export function createMemoryTeamRoleRepository(seed = [], viewerLeaderUid = null) {
   /** @type {Map<string, TeamRole>} */
   const store = new Map(seed.map((r) => [r.id, { ...r }]));
 
   return {
     async list() {
-      return [...store.values()].map((r) => ({ ...r }));
+      return [...store.values()]
+        .filter((r) => !viewerLeaderUid || !r.ownerLeaderUid || r.ownerLeaderUid === viewerLeaderUid)
+        .map((r) => ({ ...r }));
     },
     async create(name) {
       const id = crypto.randomUUID();
-      store.set(id, { id, name });
+      /** @type {TeamRole} */
+      const role = { id, name };
+      if (viewerLeaderUid) role.ownerLeaderUid = viewerLeaderUid;
+      store.set(id, role);
       return id;
     },
     async remove(id) {

@@ -71,9 +71,10 @@
  * @property {string} id
  * @property {string} name
  *
- * @typedef {Object} TeamRole   Rol funcional del equipo (catálogo ampliable por el líder).
+ * @typedef {Object} TeamRole   Rol funcional del equipo (catálogo con ámbito).
  * @property {string} id
  * @property {string} name
+ * @property {string} [ownerLeaderUid]   Líder dueño si es personal; ausente si es global.
  *
  * @typedef {Object} OrgSettings
  * @property {number} cadenceDays            R7: cadencia configurable (global en MVP)
