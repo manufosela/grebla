@@ -54,6 +54,46 @@ export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => 
   return { ok: true, uid: user.uid };
 });
 
+// ── Líderes (multi-leader) ───────────────────────────────────────────────────
+/**
+ * Gestiona los líderes de la instancia. Solo un superadmin. Resuelve el email a
+ * uid (el usuario debe haber iniciado sesión al menos una vez) y crea o borra
+ * /leaders/{uid}. action: 'add' (por defecto) | 'remove'.
+ */
+export const manageLeader = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(caller.uid))) {
+    throw new HttpsError('permission-denied', 'Solo un superadmin puede gestionar líderes.');
+  }
+  const action = request.data?.action === 'remove' ? 'remove' : 'add';
+  const email = typeof request.data?.email === 'string' ? request.data.email.trim() : '';
+  if (!email) throw new HttpsError('invalid-argument', 'Falta el email del líder.');
+
+  let user;
+  try {
+    user = await getAuth().getUserByEmail(email);
+  } catch {
+    throw new HttpsError('not-found', `No existe ningún usuario con el email ${email}. Debe iniciar sesión al menos una vez.`);
+  }
+
+  const ref = getFirestore().doc(`leaders/${user.uid}`);
+  if (action === 'remove') {
+    await ref.delete();
+    return { ok: true, action, uid: user.uid };
+  }
+  await ref.set(
+    {
+      email: user.email ?? email,
+      displayName: user.displayName ?? user.email ?? email,
+      addedBy: caller.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return { ok: true, action, uid: user.uid };
+});
+
 // ── DORA ───────────────────────────────────────────────────────────────────
 const MS_HOUR = 3_600_000;
 const toMs = (d) => new Date(d).getTime();
