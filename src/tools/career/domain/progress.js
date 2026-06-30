@@ -45,6 +45,26 @@ export function reachableCityIds(map, visited) {
     .map((c) => c.id);
 }
 
+/**
+ * Estado de una ciudad para una persona (única fuente de verdad para la UI):
+ *  - 'deprecated': en desuso, no visitable.
+ *  - 'visited': ya recorrida.
+ *  - 'available': no visitada pero alcanzable (prerequisitos cumplidos).
+ *  - 'blocked': no visitada y con prerequisitos pendientes.
+ *  - 'unknown': la ciudad no existe en el mapa.
+ * La "ciudad actual" (journey.currentCity) es un overlay, no un estado de color.
+ * @param {CareerMap} map @param {string} cityId @param {{visitedCities?: string[]}} journey
+ * @returns {'deprecated'|'visited'|'available'|'blocked'|'unknown'}
+ */
+export function cityStatus(map, cityId, journey) {
+  const city = (map?.cities ?? []).find((c) => c.id === cityId);
+  if (!city) return 'unknown';
+  if (city.deprecated) return 'deprecated';
+  const visited = journey?.visitedCities ?? [];
+  if (visited.includes(cityId)) return 'visited';
+  return isReachable(map, cityId, visited) ? 'available' : 'blocked';
+}
+
 /** Niveles de viaje por porcentaje de progreso (gamificación, no es la escala GREBLA). */
 export const TRAVEL_LEVELS = [
   { min: 0, name: 'Aprendiz' },

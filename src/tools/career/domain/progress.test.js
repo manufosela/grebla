@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from './progress.js';
+import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor, cityStatus } from './progress.js';
 
 const map = {
   id: 'm',
@@ -55,5 +55,15 @@ describe('career progress', () => {
     expect(levelFor(0)).toBe('Aprendiz');
     expect(levelFor(50)).toBe('Viajero');
     expect(levelFor(100)).toBe('Leyenda');
+  });
+
+  it('cityStatus: estado por ciudad para la UI', () => {
+    const j = (visitedCities) => ({ visitedCities });
+    expect(cityStatus(map, 'a', j([]))).toBe('available'); // sin prereqs, no visitada
+    expect(cityStatus(map, 'b', j([]))).toBe('blocked'); // prereq 'a' pendiente
+    expect(cityStatus(map, 'b', j(['a']))).toBe('available'); // prereq cumplido
+    expect(cityStatus(map, 'a', j(['a']))).toBe('visited');
+    expect(cityStatus(mapWithDeprecated, 'old', j(['a']))).toBe('deprecated');
+    expect(cityStatus(map, 'nope', j([]))).toBe('unknown');
   });
 });
