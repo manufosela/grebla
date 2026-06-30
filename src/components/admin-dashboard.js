@@ -156,7 +156,7 @@ export class AdminDashboard extends LitElement {
       const people = await listActivePeople(persistence);
       this.users = await Promise.all(
         people.map(async (p) => {
-          const prof = await getPersonProfile(this.tenantId, this.leaderUid, p.id);
+          const prof = await getPersonProfile(this.tenantId,p.id);
           return { id: p.id, name: p.name, ...(prof || {}) };
         }),
       );
@@ -182,7 +182,7 @@ export class AdminDashboard extends LitElement {
   async _openDetail(user) {
     this.detail = { user, sessions: [] };
     try {
-      const sessions = await listSessions(this.tenantId, this.leaderUid, user.id);
+      const sessions = await listSessions(this.tenantId,user.id);
       // Solo mediciones con contenido: las sesiones vacías no son puntos del
       // histórico (evita la "evolución absurda" de cuestionarios sin rellenar).
       const measurements = sessions.filter(
@@ -211,7 +211,7 @@ export class AdminDashboard extends LitElement {
     this.error = '';
     const user = this.detail?.user;
     try {
-      await deleteSession(this.tenantId, this.leaderUid, userId, sessionId);
+      await deleteSession(this.tenantId,userId, sessionId);
       await this._loadUsers();
       if (user) await this._openDetail(user);
     } catch (err) {
@@ -235,7 +235,7 @@ export class AdminDashboard extends LitElement {
     this._confirmDeleteUser = null;
     this.error = '';
     try {
-      await deleteUserData(this.tenantId, this.leaderUid, uid);
+      await deleteUserData(this.tenantId,uid);
       if (this.detail?.user?.id === uid) this.detail = null;
       await this._loadUsers();
     } catch (err) {

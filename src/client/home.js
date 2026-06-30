@@ -1,7 +1,7 @@
 /**
  * Glue de Role Mirror: el LÍDER elige una persona de su equipo y rellena su
  * perfil (heteroevaluación). Carga las personas del líder (tool Equipo) en un
- * selector y, al elegir una, inyecta personId/leaderUid en <role-questionnaire>.
+ * selector y, al elegir una, inyecta personId/tenantId en <role-questionnaire>.
  */
 import '../components/role-questionnaire.js';
 import { ITEMS, DIMENSIONS } from '../data/items.js';
@@ -36,7 +36,6 @@ if (el) {
   onUserChanged(async (user) => {
     if (!user) {
       el.tenantId = null;
-      el.leaderUid = null;
       el.personId = null;
       el.orgConfig = null;
       return;
@@ -49,7 +48,6 @@ if (el) {
         return;
       }
       el.tenantId = tenant.id;
-      el.leaderUid = user.uid;
       el.orgConfig = await getOrgConfig(tenant.id);
       // Personas del equipo del líder (reusa la tool Equipo).
       const { persistence } = await createTeamContainer({ mode: 'firestore', tenantId: tenant.id, leaderUid: user.uid });
