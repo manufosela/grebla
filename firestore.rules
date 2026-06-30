@@ -44,6 +44,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Multi-leader (ADR -OwN-T_4VB3Ut1Dbn-j8): líderes de la instancia, a nivel
+    // raíz (una instancia = una organización). Los da de alta un superadmin.
+    // Legibles por cualquier autenticado (para los selectores de compartir).
+    match /leaders/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // (Las colecciones globales /teamRoles, /doraRepos y /owners se han retirado:
     //  ahora viven por tenant — ver /tenants más abajo.)
 
