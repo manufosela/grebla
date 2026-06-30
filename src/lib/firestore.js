@@ -24,31 +24,35 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 
+// ── Role Mirror por PERSONA (heteroevaluación: el líder lo rellena) ──────────
+// Datos bajo la ficha de la persona del líder:
+//   /tenants/{tid}/leaders/{leaderUid}/people/{personId}/rolemirror/summary        (perfil)
+//   /tenants/{tid}/leaders/{leaderUid}/people/{personId}/rolemirror/summary/sessions/{id}
+/** Doc resumen Role Mirror de una persona del líder. */
+const rmSummaryDoc = (tid, leaderUid, personId) =>
+  doc(db, 'tenants', tid, 'leaders', leaderUid, 'people', personId, 'rolemirror', 'summary');
+/** Colección de sesiones Role Mirror de una persona del líder. */
+const rmSessionsCol = (tid, leaderUid, personId) =>
+  collection(db, 'tenants', tid, 'leaders', leaderUid, 'people', personId, 'rolemirror', 'summary', 'sessions');
+
 /**
- * Borra una medición (sesión) de un usuario. Permitido al propio uid o a un
- * admin (ver firestore.rules). Para gestión de datos en el panel admin.
- * @param {string} tenantId
- * @param {string} uid
- * @param {string} sessionId
+ * Borra una medición (sesión) de una persona. Lo gestiona el líder dueño.
+ * @param {string} tenantId @param {string} leaderUid @param {string} personId @param {string} sessionId
  * @returns {Promise<void>}
  */
-export function deleteSession(tenantId, uid, sessionId) {
-  return deleteDoc(doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId));
+export function deleteSession(tenantId, leaderUid, personId, sessionId) {
+  return deleteDoc(doc(rmSessionsCol(tenantId, leaderUid, personId), sessionId));
 }
 
 /**
- * Borra TODOS los datos de un usuario: sus mediciones (subcolección sessions) y
- * su documento de perfil en el tenant. No borra la cuenta de Auth (se recrea
- * limpia al reentrar). Permitido al propio uid o al tenant-admin (ver firestore.rules).
- * @param {string} tenantId
- * @param {string} uid
+ * Borra TODO el Role Mirror de una persona: sus mediciones y su resumen.
+ * @param {string} tenantId @param {string} leaderUid @param {string} personId
  * @returns {Promise<void>}
  */
-export async function deleteUserData(tenantId, uid) {
-  const base = doc(db, 'tenants', tenantId, 'rolemirror', uid);
-  const sessions = await getDocs(collection(base, 'sessions'));
+export async function deleteUserData(tenantId, leaderUid, personId) {
+  const sessions = await getDocs(rmSessionsCol(tenantId, leaderUid, personId));
   await Promise.all(sessions.docs.map((d) => deleteDoc(d.ref)));
-  await deleteDoc(base);
+  await deleteDoc(rmSummaryDoc(tenantId, leaderUid, personId));
 }
 
 /**
@@ -95,36 +99,27 @@ export function debounce(fn, delayMs) {
 // ── Resumen de usuario (para el panel admin) ───────────────────────────────
 
 /**
- * Crea o actualiza el documento resumen del perfil del usuario en el tenant.
- * @param {string} tenantId
- * @param {{ uid: string, displayName?: string|null, email?: string|null, photoURL?: string|null }} user
- * @param {Object} [summary] Campos agregados (dominantRole, completion, affinities…).
+ * Crea o actualiza el resumen del Role Mirror de una persona (lo rellena el líder).
+ * @param {string} tenantId @param {string} leaderUid @param {string} personId
+ * @param {Object} [summary] dominantRole, completion, affinities, lastSessionId…
  * @returns {Promise<void>}
  */
-export function upsertUserSummary(tenantId, user, summary = {}) {
+export function upsertUserSummary(tenantId, leaderUid, personId, summary = {}) {
   return setDoc(
-    doc(db, 'tenants', tenantId, 'rolemirror', user.uid),
-    {
-      uid: user.uid,
-      displayName: user.displayName ?? null,
-      email: user.email ?? null,
-      photoURL: user.photoURL ?? null,
-      updatedAt: serverTimestamp(),
-      ...summary,
-    },
+    rmSummaryDoc(tenantId, leaderUid, personId),
+    { personId, updatedAt: serverTimestamp(), ...summary },
     { merge: true },
   );
 }
 
 /**
- * Lista los perfiles (resumen) de los miembros del tenant (accesible al
- * tenant-admin según reglas).
- * @param {string} tenantId
- * @returns {Promise<Array<Object>>}
+ * Lee el resumen del Role Mirror de una persona (o null).
+ * @param {string} tenantId @param {string} leaderUid @param {string} personId
+ * @returns {Promise<Object|null>}
  */
-export async function listProfiles(tenantId) {
-  const snapshot = await getDocs(collection(db, 'tenants', tenantId, 'rolemirror'));
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+export async function getPersonProfile(tenantId, leaderUid, personId) {
+  const snap = await getDoc(rmSummaryDoc(tenantId, leaderUid, personId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
 // ── Sesiones ───────────────────────────────────────────────────────────────
@@ -136,8 +131,8 @@ export async function listProfiles(tenantId) {
  * @param {{ answers?: Answers, targetRole?: string|null, orgPhase?: string|null }} [initial]
  * @returns {Promise<string>}
  */
-export async function createSession(tenantId, uid, initial = {}) {
-  const ref = await addDoc(collection(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions'), {
+export async function createSession(tenantId, leaderUid, personId, initial = {}) {
+  const ref = await addDoc(rmSessionsCol(tenantId, leaderUid, personId), {
     answers: initial.answers ?? {},
     targetRole: initial.targetRole ?? null,
     orgPhase: initial.orgPhase ?? null,
@@ -155,9 +150,9 @@ export async function createSession(tenantId, uid, initial = {}) {
  * @param {{ answers?: Answers, targetRole?: string|null, dominantRole?: string|null, completion?: number, orgPhase?: string|null }} data
  * @returns {Promise<void>}
  */
-export function saveSession(tenantId, uid, sessionId, data) {
+export function saveSession(tenantId, leaderUid, personId, sessionId, data) {
   return setDoc(
-    doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId),
+    doc(rmSessionsCol(tenantId, leaderUid, personId), sessionId),
     { ...data, updatedAt: serverTimestamp() },
     { merge: true },
   );
@@ -170,8 +165,8 @@ export function saveSession(tenantId, uid, sessionId, data) {
  * @param {string} sessionId
  * @returns {Promise<Object|null>}
  */
-export async function getSession(tenantId, uid, sessionId) {
-  const snapshot = await getDoc(doc(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions', sessionId));
+export async function getSession(tenantId, leaderUid, personId, sessionId) {
+  const snapshot = await getDoc(doc(rmSessionsCol(tenantId, leaderUid, personId), sessionId));
   return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
 }
 
@@ -181,10 +176,8 @@ export async function getSession(tenantId, uid, sessionId) {
  * @param {string} uid
  * @returns {Promise<Array<Object>>}
  */
-export async function listSessions(tenantId, uid) {
-  const snapshot = await getDocs(
-    query(collection(db, 'tenants', tenantId, 'rolemirror', uid, 'sessions'), orderBy('updatedAt', 'desc')),
-  );
+export async function listSessions(tenantId, leaderUid, personId) {
+  const snapshot = await getDocs(query(rmSessionsCol(tenantId, leaderUid, personId), orderBy('updatedAt', 'desc')));
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
