@@ -1,10 +1,11 @@
 /**
  * Helpers de lectura/escritura en Firestore.
  *
- * Estructura de datos (Role Mirror vive por tenant):
- *   /tenants/{tid}/rolemirror/{uid}                      Resumen del perfil (listado admin).
- *   /tenants/{tid}/rolemirror/{uid}/sessions/{sessionId} Cada sesión del cuestionario.
+ * Estructura de datos (la persona vive a nivel de tenant; su Role Mirror cuelga de ella):
+ *   /tenants/{tid}/people/{personId}/rolemirror/summary            Resumen del perfil (listado admin).
+ *   /tenants/{tid}/people/{personId}/rolemirror/summary/sessions/{sessionId}  Cada sesión.
  *   /tenants/{tid}/config/org                            Configuración del tenant (fase/pesos).
+ *   /tenants/{tid}/members/{uid}                         Líderes/admins del tenant (identidad).
  *   /admins/{uid}                                        Marca de super-admin de plataforma.
  *
  * @typedef {import('./scoring.js').OrgConfig} OrgConfig
@@ -205,4 +206,29 @@ export function saveOrgConfig(tenantId, config) {
     { ...config, updatedAt: serverTimestamp() },
     { merge: true },
   );
+}
+
+// ── Miembros del tenant (líderes/admins) ────────────────────────────────────
+
+/**
+ * @typedef {{ uid: string, displayName: string|null, email: string|null, role: string|null }} TenantMember
+ */
+
+/**
+ * Lista los miembros (líderes/admins) del tenant con su identidad, para poblar
+ * los selectores de compartir/transferir personas (Fase 3b/3c).
+ * @param {string} tenantId
+ * @returns {Promise<TenantMember[]>}
+ */
+export async function listTenantMembers(tenantId) {
+  const snapshot = await getDocs(collection(db, 'tenants', tenantId, 'members'));
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    return {
+      uid: d.id,
+      displayName: data.displayName ?? null,
+      email: data.email ?? null,
+      role: data.role ?? null,
+    };
+  });
 }

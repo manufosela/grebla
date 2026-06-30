@@ -64,7 +64,13 @@ if (!bySlug.empty) {
 try {
   const user = await auth.getUserByEmail(email);
   await db.doc(`tenants/${tenantDocId}/members/${user.uid}`).set(
-    { role, email: user.email ?? email, addedAt: FieldValue.serverTimestamp(), addedBy: 'seed-tenant-admin' },
+    {
+      role,
+      email: user.email ?? email,
+      displayName: user.displayName ?? user.email ?? email,
+      addedAt: FieldValue.serverTimestamp(),
+      addedBy: 'seed-tenant-admin',
+    },
     { merge: true },
   );
   // Índice inverso usuario→tenants (para la landing "mis organizaciones").
