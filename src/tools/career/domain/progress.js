@@ -4,15 +4,19 @@
  * @typedef {import('./types.js').CareerMap} CareerMap
  */
 
-/** Puntos acumulados = suma de pesos de las ciudades visitadas. */
+/** Puntos acumulados = suma de pesos de las ciudades visitadas (las deprecadas no puntúan). */
 export function mapPoints(map, visited) {
   const ids = new Set(visited ?? []);
-  return (map?.cities ?? []).filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.weight || 0), 0);
+  return (map?.cities ?? [])
+    .filter((c) => ids.has(c.id) && !c.deprecated)
+    .reduce((s, c) => s + (c.weight || 0), 0);
 }
 
-/** Puntos máximos del mapa. */
+/** Puntos máximos del mapa (las ciudades deprecadas no cuentan). */
 export function totalPoints(map) {
-  return (map?.cities ?? []).reduce((s, c) => s + (c.weight || 0), 0);
+  return (map?.cities ?? [])
+    .filter((c) => !c.deprecated)
+    .reduce((s, c) => s + (c.weight || 0), 0);
 }
 
 /** Progreso 0..100 (%). */
@@ -21,20 +25,23 @@ export function progressPct(map, visited) {
   return total > 0 ? Math.round((mapPoints(map, visited) / total) * 100) : 0;
 }
 
-/** Una ciudad es alcanzable si ya está visitada o todos sus prerequisitos lo están. */
+/**
+ * Una ciudad es alcanzable si todos sus prerequisitos están visitados. Las
+ * ciudades deprecadas nunca son alcanzables (no se pueden visitar).
+ */
 export function isReachable(map, cityId, visited) {
   const city = (map?.cities ?? []).find((c) => c.id === cityId);
-  if (!city) return false;
+  if (!city || city.deprecated) return false;
   const v = new Set(visited ?? []);
   if (v.has(cityId)) return true;
   return (city.prereqs ?? []).every((p) => v.has(p));
 }
 
-/** ids de ciudades NO visitadas pero alcanzables (siguiente paso posible). */
+/** ids de ciudades NO visitadas, no deprecadas y alcanzables (siguiente paso posible). */
 export function reachableCityIds(map, visited) {
   const v = new Set(visited ?? []);
   return (map?.cities ?? [])
-    .filter((c) => !v.has(c.id) && (c.prereqs ?? []).every((p) => v.has(p)))
+    .filter((c) => !c.deprecated && !v.has(c.id) && (c.prereqs ?? []).every((p) => v.has(p)))
     .map((c) => c.id);
 }
 

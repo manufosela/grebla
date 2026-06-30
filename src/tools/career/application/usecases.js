@@ -1,12 +1,14 @@
 /**
- * Casos de uso del Mapa de Carrera. Los mapas son de muestra (en código); el
- * journey de cada ingeniero se persiste por tenant.
+ * Casos de uso del Mapa de Carrera. El mapa es una isla de muestra (en código);
+ * el journey es de la PERSONA del equipo y se persiste en su subárbol
+ * (/people/{personId}/career/journey).
  *
  * @typedef {import('../domain/ports.js').CareerStore} CareerStore
  * @typedef {import('../domain/types.js').CareerMap} CareerMap
  * @typedef {import('../domain/types.js').Journey} Journey
+ * @typedef {import('../domain/types.js').CityEvidence} CityEvidence
  */
-import { SAMPLE_MAPS } from '../data/maps.js';
+import { SAMPLE_MAPS, ISLAND } from '../data/maps.js';
 import { EMPTY_JOURNEY } from '../domain/types.js';
 import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from '../domain/progress.js';
 
@@ -20,53 +22,81 @@ export function getMap(id) {
   return SAMPLE_MAPS.find((m) => m.id === id) ?? null;
 }
 
+/** La isla actual (modelo de un único mapa). @returns {CareerMap} */
+export function getIslandMap() {
+  return ISLAND;
+}
+
+/** Normaliza un journey persistido (o crea uno vacío) al modelo actual. @returns {Journey} */
+function normalizeJourney(j) {
+  if (!j) return { ...EMPTY_JOURNEY, visitedCities: [], plannedRoute: [], evidences: {} };
+  return {
+    visitedCities: [...(j.visitedCities ?? [])],
+    currentCity: j.currentCity ?? null,
+    plannedRoute: [...(j.plannedRoute ?? [])],
+    evidences: { ...(j.evidences ?? {}) },
+  };
+}
+
 /**
- * @param {CareerStore} store @param {string} uid
+ * @param {CareerStore} store @param {string} personId
  * @returns {Promise<Journey>}
  */
-export async function getJourney(store, uid) {
-  const j = await store.journeys.get(uid);
-  return j ?? { ...EMPTY_JOURNEY };
-}
-
-/** @param {CareerStore} store @param {string} uid @param {string} mapId */
-export async function startMap(store, uid, mapId) {
-  if (!getMap(mapId)) throw new Error(`Mapa desconocido: ${mapId}`);
-  const journey = { mapId, visited: [], current: null, target: null };
-  await store.journeys.save(uid, journey);
-  return journey;
+export async function getJourney(store, personId) {
+  return normalizeJourney(await store.journeys.get(personId));
 }
 
 /**
- * Marca/desmarca una ciudad como visitada. Para visitar exige que sea alcanzable.
- * @param {CareerStore} store @param {string} uid @param {CareerMap} map @param {Journey} journey @param {string} cityId
+ * Marca/desmarca una ciudad como visitada. Para visitar exige que sea alcanzable
+ * (y no esté deprecada).
+ * @param {CareerStore} store @param {string} personId @param {CareerMap} map @param {Journey} journey @param {string} cityId
  */
-export async function toggleVisited(store, uid, map, journey, cityId) {
-  const visited = new Set(journey.visited ?? []);
+export async function toggleVisited(store, personId, map, journey, cityId) {
+  const visited = new Set(journey.visitedCities ?? []);
   if (visited.has(cityId)) {
     visited.delete(cityId);
   } else {
-    if (!isReachable(map, cityId, journey.visited)) {
+    if (!isReachable(map, cityId, journey.visitedCities)) {
       throw new Error('Ciudad bloqueada: visita antes sus prerequisitos.');
     }
     visited.add(cityId);
   }
-  const next = { ...journey, visited: [...visited] };
-  await store.journeys.save(uid, next);
+  const next = { ...journey, visitedCities: [...visited] };
+  await store.journeys.save(personId, next);
   return next;
 }
 
-/** @param {CareerStore} store @param {string} uid @param {Journey} journey @param {string|null} cityId */
-export async function setCurrent(store, uid, journey, cityId) {
-  const next = { ...journey, current: cityId };
-  await store.journeys.save(uid, next);
+/** @param {CareerStore} store @param {string} personId @param {Journey} journey @param {string|null} cityId */
+export async function setCurrent(store, personId, journey, cityId) {
+  const next = { ...journey, currentCity: cityId };
+  await store.journeys.save(personId, next);
   return next;
 }
 
-/** @param {CareerStore} store @param {string} uid @param {Journey} journey @param {string|null} cityId */
-export async function setTarget(store, uid, journey, cityId) {
-  const next = { ...journey, target: cityId };
-  await store.journeys.save(uid, next);
+/**
+ * Añade/quita una ciudad de la ruta planificada.
+ * @param {CareerStore} store @param {string} personId @param {Journey} journey @param {string} cityId
+ */
+export async function toggleRoute(store, personId, journey, cityId) {
+  const route = journey.plannedRoute ?? [];
+  const next = {
+    ...journey,
+    plannedRoute: route.includes(cityId) ? route.filter((id) => id !== cityId) : [...route, cityId],
+  };
+  await store.journeys.save(personId, next);
+  return next;
+}
+
+/**
+ * Guarda/actualiza las evidencias de una ciudad (experiencia previa, formaciones…).
+ * @param {CareerStore} store @param {string} personId @param {Journey} journey @param {string} cityId @param {CityEvidence} evidence
+ */
+export async function setEvidence(store, personId, journey, cityId, evidence) {
+  const next = {
+    ...journey,
+    evidences: { ...(journey.evidences ?? {}), [cityId]: { ...evidence } },
+  };
+  await store.journeys.save(personId, next);
   return next;
 }
 
@@ -75,7 +105,7 @@ export async function setTarget(store, uid, journey, cityId) {
  * @param {CareerMap} map @param {Journey} journey
  */
 export function stats(map, journey) {
-  const visited = journey?.visited ?? [];
+  const visited = journey?.visitedCities ?? [];
   const pct = progressPct(map, visited);
   return {
     points: mapPoints(map, visited),
