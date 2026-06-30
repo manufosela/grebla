@@ -10,12 +10,16 @@
  * @typedef {import('./types.js').SupportNote} SupportNote
  * @typedef {import('./types.js').OrgSettings} OrgSettings
  *
+ * @typedef {import('./types.js').SharePermission} SharePermission
+ *
  * @typedef {Object} PeopleRepository
- * @property {() => Promise<Person[]>} list
+ * @property {() => Promise<Person[]>} list   Personas visibles para el líder: las suyas + las compartidas con él.
  * @property {(id: string) => Promise<Person|null>} getById
  * @property {(input: Omit<Person,'id'>) => Promise<string>} create
  * @property {(id: string, patch: Partial<Person>) => Promise<void>} update
  * @property {(id: string) => Promise<void>} deactivate
+ * @property {(id: string, leaderUid: string, permission: SharePermission) => Promise<void>} share   Comparte la persona con otro líder.
+ * @property {(id: string, leaderUid: string) => Promise<void>} unshare   Deja de compartir la persona con un líder.
  *
  * @typedef {Object} ReadingRepository   // genérico por dimensión (R1: una instancia por dimensión)
  * @property {(personId: string, payload: object) => Promise<string>} add
