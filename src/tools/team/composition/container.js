@@ -41,14 +41,13 @@ async function resolveStorage(persistence, storage) {
  * @param {Object} [options]
  * @param {'memory'|'firestore'} [options.mode]
  * @param {import('firebase/firestore').Firestore|null} [options.db]
- * @param {string|null} [options.tenantId]
  * @param {string|null} [options.leaderUid]
  * @param {import('firebase/storage').FirebaseStorage|null} [options.storage]
  * @param {object} [options.seed]  Solo para mode 'memory'.
  * @returns {Promise<{ mode: string, persistence: PersistencePort, storage: import('../domain/ports.js').FileStoragePort }>}
  */
 export async function createTeamContainer(options = {}) {
-  const { mode = 'firestore', db = null, tenantId = null, leaderUid = null, storage = null, seed } = options;
+  const { mode = 'firestore', db = null, leaderUid = null, storage = null, seed } = options;
 
   if (mode === 'memory') {
     const persistence = createMemoryPersistence(seed);
@@ -56,15 +55,15 @@ export async function createTeamContainer(options = {}) {
   }
 
   if (mode === 'firestore') {
-    if (!tenantId || !leaderUid) {
-      throw new Error('El modo Firestore requiere tenantId y leaderUid (resueltos por el cliente)');
+    if (!leaderUid) {
+      throw new Error('El modo Firestore requiere leaderUid (resuelto por el cliente)');
     }
     let database = db;
     if (!database) {
       const firebase = await import('../../../lib/firebase.js');
       database = firebase.db;
     }
-    const persistence = createFirestorePersistence(database, tenantId, leaderUid);
+    const persistence = createFirestorePersistence(database, leaderUid);
     return { mode, persistence, storage: await resolveStorage(persistence, storage) };
   }
 

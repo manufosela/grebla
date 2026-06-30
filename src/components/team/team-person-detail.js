@@ -142,7 +142,7 @@ export class TeamPersonDetail extends LitElement {
     this.persistence = null;
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.person = null;
-    /** @type {import('../../lib/firestore.js').TenantMember[]} líderes del tenant (para compartir) */
+    /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (para compartir) */
     this.members = [];
     /** @type {string|null} uid del líder en sesión (dueño si coincide con ownerLeaderUid) */
     this.currentUid = null;

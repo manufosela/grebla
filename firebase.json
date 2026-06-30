@@ -14,14 +14,6 @@
     "public": "dist",
     "cleanUrls": true,
     "trailingSlash": false,
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      { "source": "/:tenant/tools/team", "destination": "/tools/team/index.html" },
-      { "source": "/:tenant/tools/dora", "destination": "/tools/dora/index.html" },
-      { "source": "/:tenant/tools/career-map", "destination": "/tools/career-map/index.html" },
-      { "source": "/:tenant/tools/role-mirror", "destination": "/tools/role-mirror/index.html" },
-      { "source": "/:tenant/tools/role-mirror/admin", "destination": "/tools/role-mirror/admin/index.html" },
-      { "source": "/:tenant", "destination": "/index.html" }
-    ]
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
   }
 }

@@ -124,21 +124,25 @@ async function fetchReleaseCount(fullName, sinceMs, toMs2) {
 }
 
 /**
- * Calcula y guarda las métricas DORA de los repos de un tenant. Solo miembros del
- * tenant. Lee la API pública de GitHub (repos públicos, sin token; rate-limit
- * 60/h por IP). Para repos privados habrá que añadir token por tenant.
+ * Calcula y guarda las métricas DORA de los repos de la instancia (modelo
+ * multi-leader). Acceso: superadmin o líder. Lee la API pública de GitHub (repos
+ * públicos, sin token; rate-limit 60/h por IP). Privados requerirán token.
  */
 export const refreshDora = onCall({ region: 'europe-west1' }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
-  const tenantId = typeof request.data?.tenantId === 'string' ? request.data.tenantId : '';
-  if (!tenantId) throw new HttpsError('invalid-argument', 'Falta tenantId.');
 
   const db = getFirestore();
-  const member = await db.doc(`tenants/${tenantId}/members/${uid}`).get();
-  if (!member.exists) throw new HttpsError('permission-denied', 'No eres miembro de esta organización.');
+  // Acceso: superadmin o líder de la instancia.
+  const [adminSnap, leaderSnap] = await Promise.all([
+    db.doc(`admins/${uid}`).get(),
+    db.doc(`leaders/${uid}`).get(),
+  ]);
+  if (!adminSnap.exists && !leaderSnap.exists) {
+    throw new HttpsError('permission-denied', 'No tienes acceso a esta organización.');
+  }
 
-  const reposSnap = await db.collection(`tenants/${tenantId}/dora`).get();
+  const reposSnap = await db.collection('dora').get();
   const now = new Date().toISOString();
   const results = [];
 

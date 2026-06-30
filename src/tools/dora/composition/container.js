@@ -9,16 +9,15 @@ import { createMemoryDoraPersistence } from '../infrastructure/memory/index.js';
 import { createFirestoreDoraPersistence } from '../infrastructure/firestore/persistence.js';
 
 /**
- * @param {{ mode?: 'memory'|'firestore', db?: import('firebase/firestore').Firestore|null, tenantId?: string|null, seed?: object }} [options]
+ * @param {{ mode?: 'memory'|'firestore', db?: import('firebase/firestore').Firestore|null, seed?: object }} [options]
  * @returns {Promise<{ mode: string, persistence: DoraPersistence }>}
  */
 export async function createDoraContainer(options = {}) {
-  const { mode = 'firestore', db = null, tenantId = null, seed } = options;
+  const { mode = 'firestore', db = null, seed } = options;
   if (mode === 'memory') {
     return { mode, persistence: createMemoryDoraPersistence(seed), refresh: async () => ({ results: [] }) };
   }
   if (mode === 'firestore') {
-    if (!tenantId) throw new Error('El modo Firestore requiere tenantId (resuelto por el cliente)');
     let database = db;
     if (!database) {
       const firebase = await import('../../../lib/firebase.js');
@@ -29,10 +28,10 @@ export async function createDoraContainer(options = {}) {
       const { app } = await import('../../../lib/firebase.js');
       const { getFunctions, httpsCallable } = await import('firebase/functions');
       const fns = getFunctions(app, 'europe-west1');
-      const res = await httpsCallable(fns, 'refreshDora')({ tenantId });
+      const res = await httpsCallable(fns, 'refreshDora')({});
       return res.data;
     };
-    return { mode, persistence: createFirestoreDoraPersistence(database, tenantId), refresh };
+    return { mode, persistence: createFirestoreDoraPersistence(database), refresh };
   }
   throw new Error(`Modo de container DORA desconocido: ${mode}`);
 }
