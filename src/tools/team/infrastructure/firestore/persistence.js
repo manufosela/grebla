@@ -49,6 +49,9 @@ const areaDoc = (db, base, id) => doc(db, ...base, 'areas', id);
 // Catálogo de roles a nivel de tenant (compartido por sus líderes).
 const teamRoleCol = (db, tbase) => collection(db, ...tbase, 'teamRoles');
 const teamRoleDoc = (db, tbase, id) => doc(db, ...tbase, 'teamRoles', id);
+// Catálogo de labels (gremios/equipos) con ámbito, mismo modelo que teamRoles.
+const labelCol = (db, tbase) => collection(db, ...tbase, 'labels');
+const labelDoc = (db, tbase, id) => doc(db, ...tbase, 'labels', id);
 const convCol = (db, base, personId) =>
   collection(db, ...base, 'people', personId, 'conversations');
 const convDoc = (db, base, personId, id) =>
@@ -166,6 +169,23 @@ function teamRoleRepo(db, tbase, leaderUid) {
   };
 }
 
+function labelRepo(db, tbase, leaderUid) {
+  return {
+    async list() {
+      // Globales (sin ownerLeaderUid) + los personales de este líder.
+      const all = mapDocs(await getDocs(labelCol(db, tbase)));
+      return all.filter((l) => !l.ownerLeaderUid || l.ownerLeaderUid === leaderUid);
+    },
+    async create(name) {
+      const ref = await addDoc(labelCol(db, tbase), { name, ownerLeaderUid: leaderUid });
+      return ref.id;
+    },
+    async remove(id) {
+      await deleteDoc(labelDoc(db, tbase, id));
+    },
+  };
+}
+
 function conversationRepo(db, base) {
   return {
     async listByPerson(personId) {
@@ -230,6 +250,7 @@ export function createFirestorePersistence(db, leaderUid) {
     readings,
     areas: areaRepo(db, base),
     teamRoles: teamRoleRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
+    labels: labelRepo(db, base, leaderUid),
     conversations: conversationRepo(db, base),
     supportNotes: supportNoteRepo(db, base),
     config: configRepo(db, base),

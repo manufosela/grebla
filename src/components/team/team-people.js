@@ -14,6 +14,8 @@ import {
   deactivatePerson,
   listTeamRoles,
   addTeamRole,
+  listLabels,
+  addLabel,
 } from '../../tools/team/application/usecases/index.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
@@ -31,11 +33,14 @@ export class TeamPeople extends LitElement {
     isAdmin: { attribute: false },
     people: { state: true },
     roles: { state: true },
+    labels: { state: true },
     loading: { state: true },
     error: { state: true },
     _name: { state: true },
     _selected: { state: true },
+    _selectedLabels: { state: true },
     _newRole: { state: true },
+    _newLabel: { state: true },
     _startDate: { state: true },
     _github: { state: true },
     _confirmOff: { state: true },
@@ -104,12 +109,17 @@ export class TeamPeople extends LitElement {
     this.people = [];
     /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
     this.roles = [];
+    /** @type {import('../../tools/team/domain/types.js').Label[]} */
+    this.labels = [];
     this.loading = true;
     this.error = '';
     this._name = '';
     /** @type {string[]} nombres de roles seleccionados para el alta */
     this._selected = [];
+    /** @type {string[]} nombres de labels seleccionados para el alta */
+    this._selectedLabels = [];
     this._newRole = '';
+    this._newLabel = '';
     this._startDate = '';
     this._github = '';
     /** @type {string|null} */
@@ -128,12 +138,14 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [people, roles] = await Promise.all([
+      const [people, roles, labels] = await Promise.all([
         listActivePeople(this.persistence),
         listTeamRoles(this.persistence),
+        listLabels(this.persistence),
       ]);
       this.people = people;
       this.roles = roles;
+      this.labels = labels;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
     } finally {
@@ -163,6 +175,28 @@ export class TeamPeople extends LitElement {
     }
   }
 
+  _toggleLabel(name, checked) {
+    this._selectedLabels = checked
+      ? [...this._selectedLabels, name]
+      : this._selectedLabels.filter((l) => l !== name);
+  }
+
+  async _addLabel() {
+    const name = this._newLabel.trim();
+    if (!name) return;
+    this.error = '';
+    try {
+      if (!this.labels.some((l) => l.name.toLowerCase() === name.toLowerCase())) {
+        await addLabel(this.persistence, name);
+        this.labels = await listLabels(this.persistence);
+      }
+      if (!this._selectedLabels.includes(name)) this._selectedLabels = [...this._selectedLabels, name];
+      this._newLabel = '';
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo añadir el label.';
+    }
+  }
+
   async _add(event) {
     event.preventDefault();
     const name = this._name.trim();
@@ -175,12 +209,15 @@ export class TeamPeople extends LitElement {
       await addPerson(this.persistence, {
         name,
         teamRoles: [...this._selected],
+        labels: [...this._selectedLabels],
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
         githubLogin: this._github,
       });
       this._name = '';
       this._selected = [];
+      this._selectedLabels = [];
       this._newRole = '';
+      this._newLabel = '';
       this._startDate = '';
       this._github = '';
       await this._load();
@@ -251,20 +288,46 @@ export class TeamPeople extends LitElement {
                     `,
                   )}
             </div>
-            ${this.isAdmin
-              ? html`
-                  <div class="role-add">
-                    <input
-                      type="text"
-                      placeholder="Añadir un rol nuevo…"
-                      .value=${this._newRole}
-                      @input=${(e) => { this._newRole = e.target.value; }}
-                      @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
-                    />
-                    <button type="button" @click=${this._addRole}>Añadir rol</button>
-                  </div>
-                `
-              : html`<p class="role-hint muted">El catálogo de roles es común a toda la organización. Solo un administrador puede añadir o quitar roles.</p>`}
+            <div class="role-add">
+              <input
+                type="text"
+                placeholder="Añadir un rol nuevo (tuyo)…"
+                .value=${this._newRole}
+                @input=${(e) => { this._newRole = e.target.value; }}
+                @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
+              />
+              <button type="button" @click=${this._addRole}>Añadir rol</button>
+            </div>
+            <p class="role-hint muted">Los roles globales los ve todo el equipo; los que añadas aquí son tuyos (gestiónalos en Ajustes).</p>
+          </fieldset>
+          <fieldset class="roles">
+            <legend>Labels (gremios / equipos)</legend>
+            <div class="role-checks">
+              ${this.labels.length === 0
+                ? html`<span class="muted">Aún no hay labels. Añade el primero abajo.</span>`
+                : this.labels.map(
+                    (l) => html`
+                      <label class="role-check">
+                        <input
+                          type="checkbox"
+                          .checked=${this._selectedLabels.includes(l.name)}
+                          @change=${(e) => this._toggleLabel(l.name, e.target.checked)}
+                        />
+                        <span>${l.name}</span>
+                      </label>
+                    `,
+                  )}
+            </div>
+            <div class="role-add">
+              <input
+                type="text"
+                placeholder="Añadir un label nuevo (tuyo)…"
+                .value=${this._newLabel}
+                @input=${(e) => { this._newLabel = e.target.value; }}
+                @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addLabel(); } }}
+              />
+              <button type="button" @click=${this._addLabel}>Añadir label</button>
+            </div>
           </fieldset>
         </form>
         ${this.error ? html`<p class="error">${this.error}</p>` : null}
@@ -279,7 +342,7 @@ export class TeamPeople extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Nombre</th><th>Roles</th><th>Desde</th><th></th></tr>
+                    <tr><th>Nombre</th><th>Roles</th><th>Labels</th><th>Desde</th><th></th></tr>
                   </thead>
                   <tbody>
                     ${this.people.map(
@@ -290,6 +353,11 @@ export class TeamPeople extends LitElement {
                             ${(p.teamRoles ?? []).length === 0
                               ? html`<span class="muted">—</span>`
                               : html`<span class="chips">${p.teamRoles.map((r) => html`<span class="chip">${r}</span>`)}</span>`}
+                          </td>
+                          <td>
+                            ${(p.labels ?? []).length === 0
+                              ? html`<span class="muted">—</span>`
+                              : html`<span class="chips">${p.labels.map((l) => html`<span class="chip">${l}</span>`)}</span>`}
                           </td>
                           <td>${formatDate(p.startDate)}</td>
                           <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>

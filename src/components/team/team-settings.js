@@ -18,6 +18,9 @@ import {
   listTeamRoles,
   addTeamRole,
   removeTeamRole,
+  listLabels,
+  addLabel,
+  removeLabel,
 } from '../../tools/team/application/usecases/index.js';
 import { LEVELS } from '../../tools/team/domain/levels.js';
 
@@ -34,6 +37,8 @@ export class TeamSettings extends LitElement {
     _confirmArea: { state: true },
     _newRole: { state: true },
     _confirmRole: { state: true },
+    _newLabel: { state: true },
+    _confirmLabel: { state: true },
   };
 
   static styles = css`
@@ -73,6 +78,8 @@ export class TeamSettings extends LitElement {
     this.areas = [];
     /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
     this.teamRoles = [];
+    /** @type {import('../../tools/team/domain/types.js').Label[]} */
+    this.labels = [];
     /** @type {import('../../tools/team/domain/types.js').OrgSettings|null} */
     this.settings = null;
     this.loading = true;
@@ -83,6 +90,9 @@ export class TeamSettings extends LitElement {
     this._newRole = '';
     /** @type {string|null} */
     this._confirmRole = null;
+    this._newLabel = '';
+    /** @type {string|null} */
+    this._confirmLabel = null;
     this._loaded = false;
   }
 
@@ -97,13 +107,15 @@ export class TeamSettings extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [areas, teamRoles, settings] = await Promise.all([
+      const [areas, teamRoles, labels, settings] = await Promise.all([
         listAreas(this.persistence),
         listTeamRoles(this.persistence),
+        listLabels(this.persistence),
         getSettings(this.persistence),
       ]);
       this.areas = areas;
       this.teamRoles = teamRoles;
+      this.labels = labels;
       this.settings = settings;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la configuración.';
@@ -158,6 +170,31 @@ export class TeamSettings extends LitElement {
       this.teamRoles = await listTeamRoles(this.persistence);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo eliminar el rol.';
+    }
+  }
+
+  async _addLabel() {
+    const name = this._newLabel.trim();
+    if (!name) return;
+    this.error = '';
+    try {
+      await addLabel(this.persistence, name);
+      this._newLabel = '';
+      this.labels = await listLabels(this.persistence);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo añadir el label.';
+    }
+  }
+
+  /** @param {string} id */
+  async _removeLabel(id) {
+    this._confirmLabel = null;
+    this.error = '';
+    try {
+      await removeLabel(this.persistence, id);
+      this.labels = await listLabels(this.persistence);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo eliminar el label.';
     }
   }
 
@@ -244,6 +281,43 @@ export class TeamSettings extends LitElement {
             @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
           />
           <button class="primary" @click=${this._addRole}>Añadir rol</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Labels (gremios / equipos)</h2>
+        <p class="hint">Etiquetas libres para agrupar personas. Las <strong>globales</strong> las define la organización; las que crees aquí son <strong>tuyas</strong>.</p>
+        ${this.labels.length === 0
+          ? html`<p class="empty">Aún no hay labels. Crea los que necesites para agrupar a tu equipo.</p>`
+          : html`
+              <ul class="areas">
+                ${this.labels.map((l) => {
+                  const isGlobal = !l.ownerLeaderUid;
+                  return html`
+                    <li>
+                      <span class="name">${l.name}</span>
+                      ${isGlobal
+                        ? html`<span class="badge">Global</span>`
+                        : this._confirmLabel === l.id
+                          ? html`<span>¿Eliminar?
+                              <button class="link yes" @click=${() => this._removeLabel(l.id)}>Sí</button>
+                              <button class="link" @click=${() => { this._confirmLabel = null; }}>No</button>
+                            </span>`
+                          : html`<button class="link" @click=${() => { this._confirmLabel = l.id; }}>Eliminar</button>`}
+                    </li>
+                  `;
+                })}
+              </ul>
+            `}
+        <div class="row">
+          <input
+            type="text"
+            placeholder="Nuevo label (p. ej. Gremio Frontend)"
+            .value=${this._newLabel}
+            @input=${(e) => { this._newLabel = e.target.value; }}
+            @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addLabel(); } }}
+          />
+          <button class="primary" @click=${this._addLabel}>Añadir label</button>
         </div>
       </section>
 

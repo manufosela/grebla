@@ -15,6 +15,7 @@
  * @property {string|null} [deactivatedAt]  ISO date de la baja (null/ausente si activa)
  * @property {string|null} [githubLogin]    Usuario de GitHub, para mapear la contribución DORA a la persona.
  * @property {string|null} [uid]            Cuenta vinculada (acceso de solo lectura de la persona). Se vincula al dar acceso.
+ * @property {string[]} [labels]            Etiquetas libres (gremios/equipos) asignadas a la persona.
  * @property {string} [ownerLeaderUid]      Líder dueño de la persona (la gestiona y comparte).
  * @property {Record<string, SharePermission>} [sharedWith]   Compartición con otros líderes: uid → permiso.
  * @property {string[]} [sharedWithUids]    Espejo de las claves de sharedWith (para consultas array-contains).
@@ -72,6 +73,11 @@
  * @property {string} name
  *
  * @typedef {Object} TeamRole   Rol funcional del equipo (catálogo con ámbito).
+ * @property {string} id
+ * @property {string} name
+ * @property {string} [ownerLeaderUid]   Líder dueño si es personal; ausente si es global.
+ *
+ * @typedef {Object} Label   Etiqueta libre (gremio/equipo) con ámbito personal/global.
  * @property {string} id
  * @property {string} name
  * @property {string} [ownerLeaderUid]   Líder dueño si es personal; ausente si es global.

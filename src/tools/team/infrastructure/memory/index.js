@@ -15,6 +15,7 @@ import { createMemoryPeopleRepository } from './peopleRepository.js';
 import { createMemoryReadingRepository } from './readingRepository.js';
 import { createMemoryAreaRepository } from './areaRepository.js';
 import { createMemoryTeamRoleRepository } from './teamRoleRepository.js';
+import { createMemoryLabelRepository } from './labelRepository.js';
 import { createMemoryConversationRepository } from './conversationRepository.js';
 import { createMemorySupportNoteRepository } from './supportNoteRepository.js';
 import { createMemoryConfigRepository } from './configRepository.js';
@@ -23,6 +24,7 @@ export { createMemoryPeopleRepository } from './peopleRepository.js';
 export { createMemoryReadingRepository } from './readingRepository.js';
 export { createMemoryAreaRepository } from './areaRepository.js';
 export { createMemoryTeamRoleRepository } from './teamRoleRepository.js';
+export { createMemoryLabelRepository } from './labelRepository.js';
 export { createMemoryConversationRepository } from './conversationRepository.js';
 export { createMemorySupportNoteRepository } from './supportNoteRepository.js';
 export { createMemoryConfigRepository } from './configRepository.js';
@@ -41,6 +43,7 @@ export function createMemoryPersistence(seed = {}) {
     readings,
     areas: createMemoryAreaRepository(seed.areas),
     teamRoles: createMemoryTeamRoleRepository(seed.teamRoles),
+    labels: createMemoryLabelRepository(seed.labels),
     conversations: createMemoryConversationRepository(),
     supportNotes: createMemorySupportNoteRepository(),
     config: createMemoryConfigRepository(seed.settings),

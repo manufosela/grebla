@@ -102,6 +102,18 @@ service cloud.firestore {
         || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
     }
 
+    // Catálogo de labels (gremios/equipos): mismo modelo de ámbito que teamRoles.
+    match /labels/{labelId} {
+      allow read: if isSignedIn();
+      allow create: if isSuperAdmin()
+        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
+      allow update: if isSuperAdmin()
+        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid
+            && request.resource.data.ownerLeaderUid == request.auth.uid);
+      allow delete: if isSuperAdmin()
+        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
+    }
+
     // Configuración: /config/org (Role Mirror, superadmin); /config/settings
     // (ajustes de la tool Equipo, líderes).
     match /config/org {
