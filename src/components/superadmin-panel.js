@@ -11,6 +11,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { listLeaders, addLeaderByEmail, removeLeader } from '../lib/leaders.js';
+import { listCatalog, createGlobal, promoteToGlobal, removeFromCatalog } from '../lib/catalog.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -27,6 +28,9 @@ export class SuperadminPanel extends LitElement {
     teamLoading: { state: true },
     _email: { state: true },
     _error: { state: true },
+    _teamRoles: { state: true },
+    _labels: { state: true },
+    _newCat: { state: true },
   };
 
   static styles = css`
@@ -76,6 +80,11 @@ export class SuperadminPanel extends LitElement {
     this.teamLoading = false;
     this._email = '';
     this._error = '';
+    /** @type {import('../lib/catalog.js').CatalogItem[]} */
+    this._teamRoles = [];
+    /** @type {import('../lib/catalog.js').CatalogItem[]} */
+    this._labels = [];
+    this._newCat = { teamRoles: '', labels: '' };
     this._loaded = false;
   }
 
@@ -83,7 +92,60 @@ export class SuperadminPanel extends LitElement {
     if (this.ready && !this._loaded) {
       this._loaded = true;
       this._loadLeaders();
+      this._loadCatalogs();
     }
+  }
+
+  async _loadCatalogs() {
+    try {
+      const [teamRoles, labels] = await Promise.all([listCatalog('teamRoles'), listCatalog('labels')]);
+      this._teamRoles = teamRoles;
+      this._labels = labels;
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudieron cargar los catálogos.';
+    }
+  }
+
+  /** @param {import('../lib/catalog.js').CatalogKind} kind */
+  async _createGlobalItem(kind) {
+    const name = (this._newCat[kind] || '').trim();
+    if (!name) return;
+    this._error = '';
+    try {
+      await createGlobal(kind, name);
+      this._newCat = { ...this._newCat, [kind]: '' };
+      await this._loadCatalogs();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo crear.';
+    }
+  }
+
+  /** @param {import('../lib/catalog.js').CatalogKind} kind @param {string} id */
+  async _promote(kind, id) {
+    this._error = '';
+    try {
+      await promoteToGlobal(kind, id);
+      await this._loadCatalogs();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo promover.';
+    }
+  }
+
+  /** @param {import('../lib/catalog.js').CatalogKind} kind @param {string} id */
+  async _removeCatalogItem(kind, id) {
+    this._error = '';
+    try {
+      await removeFromCatalog(kind, id);
+      await this._loadCatalogs();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo eliminar.';
+    }
+  }
+
+  /** @param {string} uid */
+  _leaderLabel(uid) {
+    const l = this.leaders.find((x) => x.uid === uid);
+    return l?.displayName ?? l?.email ?? uid;
   }
 
   async _loadLeaders() {
@@ -144,6 +206,62 @@ export class SuperadminPanel extends LitElement {
     location.assign('/');
   }
 
+  /**
+   * @param {import('../lib/catalog.js').CatalogKind} kind
+   * @param {import('../lib/catalog.js').CatalogItem[]} items
+   * @param {string} title @param {string} placeholder
+   */
+  _renderCatalog(kind, items, title, placeholder) {
+    const globals = items.filter((i) => !i.ownerLeaderUid);
+    const personals = items.filter((i) => i.ownerLeaderUid);
+    return html`
+      <section>
+        <h2>${title}</h2>
+        <div class="toolbar">
+          <input
+            type="text"
+            placeholder=${placeholder}
+            .value=${this._newCat[kind]}
+            @input=${(e) => { this._newCat = { ...this._newCat, [kind]: e.target.value }; }}
+          />
+          <button class="primary" ?disabled=${!this._newCat[kind].trim()} @click=${() => this._createGlobalItem(kind)}>Crear global</button>
+        </div>
+        ${globals.length === 0
+          ? html`<p class="empty">Aún no hay globales.</p>`
+          : html`<table>
+              <thead><tr><th>Global</th><th></th></tr></thead>
+              <tbody>
+                ${globals.map(
+                  (i) => html`<tr>
+                    <td>${i.name}</td>
+                    <td><button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button></td>
+                  </tr>`,
+                )}
+              </tbody>
+            </table>`}
+        ${personals.length === 0
+          ? null
+          : html`
+              <p class="ro-note">Personales de líderes — promuévelos a global para compartirlos con todos:</p>
+              <table>
+                <thead><tr><th>Nombre</th><th>Líder</th><th></th></tr></thead>
+                <tbody>
+                  ${personals.map(
+                    (i) => html`<tr>
+                      <td>${i.name}</td>
+                      <td class="muted">${this._leaderLabel(i.ownerLeaderUid)}</td>
+                      <td>
+                        <button @click=${() => this._promote(kind, i.id)}>Promover a global</button>
+                        <button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button>
+                      </td>
+                    </tr>`,
+                  )}
+                </tbody>
+              </table>`}
+      </section>
+    `;
+  }
+
   render() {
     return html`
       <div class="bar">
@@ -154,6 +272,8 @@ export class SuperadminPanel extends LitElement {
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderLeaders()}
+      ${this._renderCatalog('teamRoles', this._teamRoles, 'Roles de equipo (organización)', 'Nuevo rol global…')}
+      ${this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…')}
       ${this.selected ? this._renderTeam() : null}
     `;
   }
