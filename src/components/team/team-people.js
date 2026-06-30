@@ -6,12 +6,20 @@
  *
  * Propiedades:
  *  - persistence: PersistencePort (inyectado por <team-app>)
+ *  - members: Leader[] (líderes de la instancia, para compartir/transferir)
+ *  - currentUid: string (uid del líder en sesión)
+ *  - isAdmin: boolean
  */
 import { LitElement, html, css } from 'lit';
+import '../app-modal.js';
 import {
   addPerson,
   listActivePeople,
   deactivatePerson,
+  updatePerson,
+  sharePerson,
+  unsharePerson,
+  transferOwnership,
   listTeamRoles,
   addTeamRole,
   listLabels,
@@ -30,6 +38,8 @@ function formatDate(iso) {
 export class TeamPeople extends LitElement {
   static properties = {
     persistence: { attribute: false },
+    members: { attribute: false },
+    currentUid: { attribute: false },
     isAdmin: { attribute: false },
     people: { state: true },
     roles: { state: true },
@@ -44,6 +54,15 @@ export class TeamPeople extends LitElement {
     _startDate: { state: true },
     _github: { state: true },
     _confirmOff: { state: true },
+    _shareFor: { state: true },
+    _shareSel: { state: true },
+    _sharePerm: { state: true },
+    _transferFor: { state: true },
+    _transferSel: { state: true },
+    _confirmTransfer: { state: true },
+    _editFor: { state: true },
+    _editRoles: { state: true },
+    _editLabels: { state: true },
   };
 
   static styles = css`
@@ -97,6 +116,68 @@ export class TeamPeople extends LitElement {
     .confirm .yes { color: var(--rm-danger, #dc2626); }
     .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; margin: 0.5rem 0 0; }
+
+    /* Bloques colapsables: alta vs lista. */
+    details {
+      background: var(--rm-surface, #fff);
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: var(--rm-radius, 12px);
+      padding: 0 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    details > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      padding: 1.1rem 0;
+      color: var(--rm-text, #111827);
+    }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before {
+      content: '▸';
+      color: var(--rm-muted, #9ca3af);
+      font-size: 0.9rem;
+      transition: transform 0.15s ease;
+    }
+    details[open] > summary::before { transform: rotate(90deg); }
+    details > summary .count { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    details .body { padding-bottom: 1.25rem; }
+    /* La tarjeta de alta se distingue visualmente de la lista. */
+    details.add-card {
+      background: var(--rm-track, #f4f8f9);
+      border: 1px dashed var(--rm-accent, #2a9d8f);
+      border-left: 4px solid var(--rm-accent, #2a9d8f);
+    }
+    details.add-card > summary { color: var(--rm-accent, #2a9d8f); }
+
+    /* Acciones por fila. */
+    .row-actions { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; justify-content: flex-end; }
+    .act {
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
+      color: var(--rm-text, #111827); border-radius: 6px; padding: 0.25rem 0.6rem;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    }
+    .act:hover { border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
+    .act.danger { color: var(--rm-danger, #dc2626); }
+    .act.danger:hover { border-color: var(--rm-danger, #dc2626); color: var(--rm-danger, #dc2626); }
+
+    /* Contenido de los modales. */
+    .modal-body { display: flex; flex-direction: column; gap: 1rem; }
+    .modal-body p { margin: 0; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .modal-body .fields { display: flex; flex-direction: column; gap: 0.75rem; }
+    .modal-body select { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
+    .modal-body .actions-row { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+    .shared-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .shared-list li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.4rem; }
+    .shared-list .who { font-weight: 600; }
+    .shared-list .perm { color: var(--rm-muted, #6b7280); }
+    .shared-list .rm { margin-left: auto; border: 0; background: none; color: var(--rm-danger, #dc2626); font-weight: 700; font-size: 0.8rem; cursor: pointer; padding: 0 0.25rem; }
+    .confirm-text { font-size: 0.8rem; color: var(--rm-danger, #dc2626); white-space: normal; }
+    .edit-checks { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
   `;
 
   constructor() {
@@ -105,6 +186,10 @@ export class TeamPeople extends LitElement {
     this.persistence = null;
     /** @type {boolean} Solo un admin puede añadir roles al catálogo global. */
     this.isAdmin = false;
+    /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (compartir/transferir) */
+    this.members = [];
+    /** @type {string|null} uid del líder en sesión */
+    this.currentUid = null;
     /** @type {import('../../tools/team/domain/types.js').Person[]} */
     this.people = [];
     /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
@@ -124,6 +209,24 @@ export class TeamPeople extends LitElement {
     this._github = '';
     /** @type {string|null} */
     this._confirmOff = null;
+    /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Compartir */
+    this._shareFor = null;
+    /** @type {string} líder seleccionado en el modal Compartir */
+    this._shareSel = '';
+    /** @type {import('../../tools/team/domain/types.js').SharePermission} */
+    this._sharePerm = 'view';
+    /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Transferir */
+    this._transferFor = null;
+    /** @type {string} nuevo dueño seleccionado en el modal Transferir */
+    this._transferSel = '';
+    /** @type {boolean} confirmación de transferencia */
+    this._confirmTransfer = false;
+    /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Editar */
+    this._editFor = null;
+    /** @type {string[]} roles seleccionados en el modal Editar */
+    this._editRoles = [];
+    /** @type {string[]} labels seleccionados en el modal Editar */
+    this._editLabels = [];
     this._loaded = false;
   }
 
@@ -243,20 +346,325 @@ export class TeamPeople extends LitElement {
     }
   }
 
+  /**
+   * Solo el dueño de la persona o un admin del tenant pueden compartirla o
+   * transferirla.
+   * @param {import('../../tools/team/domain/types.js').Person} person
+   * @returns {boolean}
+   */
+  _canManage(person) {
+    return this.isAdmin || (this.currentUid != null && person.ownerLeaderUid === this.currentUid);
+  }
+
   _renderActions(person) {
-    if (this._confirmOff === person.id) {
-      return html`<span class="confirm">¿Dar de baja?
-        <button class="yes" @click=${() => this._deactivate(person.id)}>Sí</button>
-        <button @click=${() => { this._confirmOff = null; }}>No</button>
-      </span>`;
+    const manage = this._canManage(person);
+    return html`
+      <div class="row-actions">
+        <button class="act" type="button" @click=${() => this._openEdit(person)}>Editar</button>
+        ${manage
+          ? html`
+              <button class="act" type="button" @click=${() => this._openShare(person)}>Compartir</button>
+              <button class="act" type="button" @click=${() => this._openTransfer(person)}>Transferir</button>
+            `
+          : null}
+        ${this._confirmOff === person.id
+          ? html`<span class="confirm">¿Dar de baja?
+              <button class="yes" type="button" @click=${() => this._deactivate(person.id)}>Sí</button>
+              <button type="button" @click=${() => { this._confirmOff = null; }}>No</button>
+            </span>`
+          : html`<button class="act danger" type="button" @click=${() => { this._confirmOff = person.id; }}>Dar de baja</button>`}
+      </div>
+    `;
+  }
+
+  /** @param {string} uid */
+  _leaderName(uid) {
+    const m = (this.members ?? []).find((x) => x.uid === uid);
+    return m?.displayName ?? m?.email ?? uid;
+  }
+
+  /** Refleja en la lista local los cambios de compartición de una persona. */
+  _syncPerson(updated) {
+    this.people = this.people.map((p) => (p.id === updated.id ? updated : p));
+  }
+
+  // ---- Compartir ----
+  _openShare(person) {
+    this._shareFor = person;
+    this._shareSel = '';
+    this._sharePerm = 'view';
+    this.error = '';
+  }
+
+  _closeShare() {
+    this._shareFor = null;
+    this.error = '';
+  }
+
+  async _share() {
+    const person = this._shareFor;
+    const uid = this._shareSel;
+    if (!person || !uid) return;
+    this.error = '';
+    try {
+      await sharePerson(this.persistence, person.id, uid, this._sharePerm);
+      const sharedWith = { ...(person.sharedWith ?? {}), [uid]: this._sharePerm };
+      const updated = { ...person, sharedWith, sharedWithUids: Object.keys(sharedWith) };
+      this._syncPerson(updated);
+      this._shareFor = updated;
+      this._shareSel = '';
+      this._sharePerm = 'view';
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo compartir.';
     }
-    return html`<button class="off-btn" @click=${() => { this._confirmOff = person.id; }}>Dar de baja</button>`;
+  }
+
+  /** @param {string} uid */
+  async _unshare(uid) {
+    const person = this._shareFor;
+    if (!person) return;
+    this.error = '';
+    try {
+      await unsharePerson(this.persistence, person.id, uid);
+      const sharedWith = { ...(person.sharedWith ?? {}) };
+      delete sharedWith[uid];
+      const updated = { ...person, sharedWith, sharedWithUids: Object.keys(sharedWith) };
+      this._syncPerson(updated);
+      this._shareFor = updated;
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo dejar de compartir.';
+    }
+  }
+
+  // ---- Transferir ----
+  _openTransfer(person) {
+    this._transferFor = person;
+    this._transferSel = '';
+    this._confirmTransfer = false;
+    this.error = '';
+  }
+
+  _closeTransfer() {
+    this._transferFor = null;
+    this._confirmTransfer = false;
+    this.error = '';
+  }
+
+  async _transfer() {
+    const person = this._transferFor;
+    const uid = this._transferSel;
+    if (!person || !uid) return;
+    this.error = '';
+    try {
+      await transferOwnership(this.persistence, person.id, uid);
+      this._transferFor = null;
+      this._transferSel = '';
+      this._confirmTransfer = false;
+      await this._load();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo transferir.';
+    }
+  }
+
+  // ---- Editar roles / labels ----
+  _openEdit(person) {
+    this._editFor = person;
+    this._editRoles = [...(person.teamRoles ?? [])];
+    this._editLabels = [...(person.labels ?? [])];
+    this.error = '';
+  }
+
+  _closeEdit() {
+    this._editFor = null;
+    this.error = '';
+  }
+
+  _toggleEditRole(name, checked) {
+    this._editRoles = checked
+      ? [...this._editRoles, name]
+      : this._editRoles.filter((r) => r !== name);
+  }
+
+  _toggleEditLabel(name, checked) {
+    this._editLabels = checked
+      ? [...this._editLabels, name]
+      : this._editLabels.filter((l) => l !== name);
+  }
+
+  async _saveEdit() {
+    const person = this._editFor;
+    if (!person) return;
+    this.error = '';
+    try {
+      await updatePerson(this.persistence, person.id, {
+        teamRoles: [...this._editRoles],
+        labels: [...this._editLabels],
+      });
+      this._editFor = null;
+      await this._load();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar los cambios.';
+    }
+  }
+
+  _renderShareModal() {
+    const person = this._shareFor;
+    const heading = person ? `Compartir · ${person.name}` : 'Compartir';
+    const shared = person?.sharedWith ?? {};
+    const sharedUids = Object.keys(shared);
+    const candidates = person
+      ? (this.members ?? []).filter(
+          (m) => m.uid !== person.ownerLeaderUid && !sharedUids.includes(m.uid),
+        )
+      : [];
+    return html`
+      <app-modal .open=${!!person} heading=${heading} @close=${() => this._closeShare()}>
+        ${person
+          ? html`
+              <div class="modal-body">
+                <p>Comparte esta persona con otro líder para que colabore en su seguimiento.</p>
+                ${sharedUids.length === 0
+                  ? html`<p>Aún no la has compartido con nadie.</p>`
+                  : html`<ul class="shared-list">
+                      ${sharedUids.map(
+                        (uid) => html`<li>
+                          <span class="who">${this._leaderName(uid)}</span>
+                          <span class="perm">${shared[uid] === 'edit' ? 'Puede editar' : 'Solo ver'}</span>
+                          <button class="rm" type="button" @click=${() => this._unshare(uid)}>Quitar</button>
+                        </li>`,
+                      )}
+                    </ul>`}
+                <div class="fields">
+                  <label>Líder
+                    <select .value=${this._shareSel} @change=${(e) => { this._shareSel = e.target.value; }}>
+                      <option value="">— Elige un líder —</option>
+                      ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
+                    </select>
+                  </label>
+                  <label>Permiso
+                    <select .value=${this._sharePerm} @change=${(e) => { this._sharePerm = e.target.value; }}>
+                      <option value="view">Solo ver</option>
+                      <option value="edit">Puede editar</option>
+                    </select>
+                  </label>
+                </div>
+                ${this.error ? html`<p class="error">${this.error}</p>` : null}
+                <div class="actions-row">
+                  <button class="act" type="button" @click=${() => this._closeShare()}>Cerrar</button>
+                  <button class="primary" type="button" ?disabled=${!this._shareSel} @click=${() => this._share()}>Compartir</button>
+                </div>
+              </div>
+            `
+          : null}
+      </app-modal>
+    `;
+  }
+
+  _renderTransferModal() {
+    const person = this._transferFor;
+    const heading = person ? `Transferir · ${person.name}` : 'Transferir';
+    const candidates = person
+      ? (this.members ?? []).filter((m) => m.uid !== person.ownerLeaderUid)
+      : [];
+    return html`
+      <app-modal .open=${!!person} heading=${heading} @close=${() => this._closeTransfer()}>
+        ${person
+          ? html`
+              <div class="modal-body">
+                <p>Cede esta persona a otro líder. Es una transferencia total: dejarás de tener acceso.</p>
+                <div class="fields">
+                  <label>Nuevo dueño
+                    <select
+                      .value=${this._transferSel}
+                      @change=${(e) => { this._transferSel = e.target.value; this._confirmTransfer = false; }}
+                    >
+                      <option value="">— Elige un líder —</option>
+                      ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
+                    </select>
+                  </label>
+                </div>
+                ${this._confirmTransfer
+                  ? html`<p class="confirm-text">Perderás el acceso a esta persona. ¿Confirmas la transferencia?</p>`
+                  : null}
+                ${this.error ? html`<p class="error">${this.error}</p>` : null}
+                <div class="actions-row">
+                  <button class="act" type="button" @click=${() => this._closeTransfer()}>Cancelar</button>
+                  ${this._confirmTransfer
+                    ? html`<button class="primary" type="button" @click=${() => this._transfer()}>Sí, transferir</button>`
+                    : html`<button class="primary" type="button" ?disabled=${!this._transferSel} @click=${() => { this._confirmTransfer = true; }}>Transferir</button>`}
+                </div>
+              </div>
+            `
+          : null}
+      </app-modal>
+    `;
+  }
+
+  _renderEditModal() {
+    const person = this._editFor;
+    const heading = person ? `Editar · ${person.name}` : 'Editar';
+    return html`
+      <app-modal .open=${!!person} heading=${heading} @close=${() => this._closeEdit()}>
+        ${person
+          ? html`
+              <div class="modal-body">
+                <p>Roles y labels de esta persona.</p>
+                <fieldset class="roles">
+                  <legend>Roles en el equipo</legend>
+                  <div class="edit-checks">
+                    ${this.roles.length === 0
+                      ? html`<span class="muted">Aún no hay roles.</span>`
+                      : this.roles.map(
+                          (r) => html`
+                            <label class="role-check">
+                              <input
+                                type="checkbox"
+                                .checked=${this._editRoles.includes(r.name)}
+                                @change=${(e) => this._toggleEditRole(r.name, e.target.checked)}
+                              />
+                              <span>${r.name}</span>
+                            </label>
+                          `,
+                        )}
+                  </div>
+                </fieldset>
+                <fieldset class="roles">
+                  <legend>Labels (gremios / equipos)</legend>
+                  <div class="edit-checks">
+                    ${this.labels.length === 0
+                      ? html`<span class="muted">Aún no hay labels.</span>`
+                      : this.labels.map(
+                          (l) => html`
+                            <label class="role-check">
+                              <input
+                                type="checkbox"
+                                .checked=${this._editLabels.includes(l.name)}
+                                @change=${(e) => this._toggleEditLabel(l.name, e.target.checked)}
+                              />
+                              <span>${l.name}</span>
+                            </label>
+                          `,
+                        )}
+                  </div>
+                </fieldset>
+                ${this.error ? html`<p class="error">${this.error}</p>` : null}
+                <div class="actions-row">
+                  <button class="act" type="button" @click=${() => this._closeEdit()}>Cancelar</button>
+                  <button class="primary" type="button" @click=${() => this._saveEdit()}>Guardar</button>
+                </div>
+              </div>
+            `
+          : null}
+      </app-modal>
+    `;
   }
 
   render() {
     return html`
-      <section>
-        <h2>Añadir persona</h2>
+      ${this.error ? html`<p class="error">${this.error}</p>` : null}
+      <details class="add-card">
+        <summary>Añadir persona</summary>
+        <div class="body">
         <form @submit=${this._add}>
           <div class="row">
             <label>Nombre
@@ -268,7 +676,6 @@ export class TeamPeople extends LitElement {
             <label>Usuario de GitHub (opcional)
               <input type="text" placeholder="usuario" .value=${this._github} @input=${(e) => { this._github = e.target.value; }} />
             </label>
-            <button class="primary" type="submit">Añadir</button>
           </div>
           <fieldset class="roles">
             <legend>Roles en el equipo</legend>
@@ -329,20 +736,24 @@ export class TeamPeople extends LitElement {
               <button type="button" @click=${this._addLabel}>Añadir label</button>
             </div>
           </fieldset>
+          <div class="actions-row">
+            <button class="primary" type="submit">Añadir</button>
+          </div>
         </form>
-        ${this.error ? html`<p class="error">${this.error}</p>` : null}
-      </section>
+        </div>
+      </details>
 
-      <section>
-        <h2>Personas activas (${this.people.length})</h2>
+      <details open>
+        <summary>Personas activas <span class="count">(${this.people.length})</span></summary>
+        <div class="body">
         ${this.loading
           ? html`<p class="empty">Cargando…</p>`
           : this.people.length === 0
-            ? html`<p class="empty">Aún no has añadido a nadie. Empieza con el formulario de arriba.</p>`
+            ? html`<p class="empty">Aún no has añadido a nadie. Despliega «Añadir persona» para empezar.</p>`
             : html`
                 <table>
                   <thead>
-                    <tr><th>Nombre</th><th>Roles</th><th>Labels</th><th>Desde</th><th></th></tr>
+                    <tr><th>Nombre</th><th>Roles</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
                   </thead>
                   <tbody>
                     ${this.people.map(
@@ -367,7 +778,12 @@ export class TeamPeople extends LitElement {
                   </tbody>
                 </table>
               `}
-      </section>
+        </div>
+      </details>
+
+      ${this._renderShareModal()}
+      ${this._renderTransferModal()}
+      ${this._renderEditModal()}
     `;
   }
 }

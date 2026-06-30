@@ -21,9 +21,6 @@ import {
   addSupportNote,
   listSupportNotes,
   removeSupportNote,
-  sharePerson,
-  unsharePerson,
-  transferOwnership,
 } from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
@@ -65,9 +62,6 @@ export class TeamPersonDetail extends LitElement {
   static properties = {
     persistence: { attribute: false },
     person: { attribute: false },
-    members: { attribute: false },
-    currentUid: { attribute: false },
-    isAdmin: { attribute: false },
     timeline: { state: true },
     areas: { state: true },
     conversations: { state: true },
@@ -80,10 +74,6 @@ export class TeamPersonDetail extends LitElement {
     _conv: { state: true },
     _noteText: { state: true },
     _confirmNote: { state: true },
-    _shareSel: { state: true },
-    _sharePerm: { state: true },
-    _transferSel: { state: true },
-    _confirmTransfer: { state: true },
   };
 
   static styles = css`
@@ -131,10 +121,6 @@ export class TeamPersonDetail extends LitElement {
     .belbin-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
     .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .bias { font-size: 0.78rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 0 0.75rem; }
-    section.share { border-left: 4px solid var(--rm-accent, #2a9d8f); }
-    section.share .row, section.transfer .row { align-items: flex-end; }
-    section.transfer { border-left: 4px solid var(--rm-warning, #f2887a); }
-    .confirm { font-size: 0.8rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
   `;
 
   constructor() {
@@ -142,20 +128,6 @@ export class TeamPersonDetail extends LitElement {
     this.persistence = null;
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.person = null;
-    /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (para compartir) */
-    this.members = [];
-    /** @type {string|null} uid del líder en sesión (dueño si coincide con ownerLeaderUid) */
-    this.currentUid = null;
-    /** @type {boolean} si el usuario en sesión es admin del tenant (puede transferir) */
-    this.isAdmin = false;
-    /** @type {string} líder seleccionado en el formulario de compartir */
-    this._shareSel = '';
-    /** @type {import('../../tools/team/domain/types.js').SharePermission} */
-    this._sharePerm = 'view';
-    /** @type {string} nuevo dueño seleccionado para transferir */
-    this._transferSel = '';
-    /** @type {boolean} confirmación de transferencia en dos pasos */
-    this._confirmTransfer = false;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -584,136 +556,6 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
-  /** @param {string} uid */
-  _leaderName(uid) {
-    const m = this.members.find((x) => x.uid === uid);
-    return m?.displayName ?? m?.email ?? uid;
-  }
-
-  async _share() {
-    const uid = this._shareSel;
-    if (!uid) return;
-    this.error = '';
-    try {
-      await sharePerson(this.persistence, this.person.id, uid, this._sharePerm);
-      const sharedWith = { ...(this.person.sharedWith ?? {}), [uid]: this._sharePerm };
-      this.person = { ...this.person, sharedWith, sharedWithUids: Object.keys(sharedWith) };
-      this._shareSel = '';
-      this._sharePerm = 'view';
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo compartir.';
-    }
-  }
-
-  /** @param {string} uid */
-  async _unshare(uid) {
-    this.error = '';
-    try {
-      await unsharePerson(this.persistence, this.person.id, uid);
-      const sharedWith = { ...(this.person.sharedWith ?? {}) };
-      delete sharedWith[uid];
-      this.person = { ...this.person, sharedWith, sharedWithUids: Object.keys(sharedWith) };
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo dejar de compartir.';
-    }
-  }
-
-  /** Solo el líder dueño puede compartir la persona (ver/editar) con otros líderes. */
-  _renderShare() {
-    const isOwner = this.currentUid && this.person.ownerLeaderUid === this.currentUid;
-    if (!isOwner) return null;
-    const shared = this.person.sharedWith ?? {};
-    const sharedUids = Object.keys(shared);
-    const candidates = this.members.filter(
-      (m) => m.uid !== this.currentUid && m.uid !== this.person.ownerLeaderUid && !sharedUids.includes(m.uid),
-    );
-    return html`
-      <section class="share">
-        <h3>Compartir</h3>
-        <p class="empty">Comparte esta persona con otro líder para que colabore en su seguimiento.</p>
-        ${sharedUids.length === 0
-          ? html`<p class="empty">Aún no la has compartido con nadie.</p>`
-          : html`<ul class="hist">
-              ${sharedUids.map(
-                (uid) => html`
-                  <li>
-                    <span class="lvl">${this._leaderName(uid)}</span>
-                    <span class="note">${shared[uid] === 'edit' ? 'Puede editar' : 'Solo ver'}</span>
-                    <span class="del"><button class="link yes" @click=${() => this._unshare(uid)}>Quitar</button></span>
-                  </li>
-                `,
-              )}
-            </ul>`}
-        <div class="row">
-          <label class="fld">Líder
-            <select .value=${this._shareSel} @change=${(e) => { this._shareSel = e.target.value; }}>
-              <option value="">— Elige un líder —</option>
-              ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
-            </select>
-          </label>
-          <label class="fld">Permiso
-            <select .value=${this._sharePerm} @change=${(e) => { this._sharePerm = e.target.value; }}>
-              <option value="view">Solo ver</option>
-              <option value="edit">Puede editar</option>
-            </select>
-          </label>
-          <button class="primary" ?disabled=${!this._shareSel} @click=${() => this._share()}>Compartir</button>
-        </div>
-      </section>
-    `;
-  }
-
-  async _transfer() {
-    const uid = this._transferSel;
-    if (!uid) return;
-    this.error = '';
-    try {
-      await transferOwnership(this.persistence, this.person.id, uid);
-      this._confirmTransfer = false;
-      this._transferSel = '';
-      // El dueño anterior pierde el acceso: <team-app> vuelve a la lista.
-      this.dispatchEvent(
-        new CustomEvent('person-transferred', {
-          detail: { personId: this.person.id },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo transferir.';
-    }
-  }
-
-  /** Transferencia de propiedad: solo el dueño o un admin del tenant. */
-  _renderTransfer() {
-    const isOwner = this.currentUid && this.person.ownerLeaderUid === this.currentUid;
-    if (!isOwner && !this.isAdmin) return null;
-    const candidates = this.members.filter((m) => m.uid !== this.person.ownerLeaderUid);
-    return html`
-      <section class="transfer">
-        <h3>Transferir propiedad</h3>
-        <p class="empty">Cede esta persona a otro líder. Es una transferencia total: dejarás de tener acceso.</p>
-        <div class="row">
-          <label class="fld">Nuevo dueño
-            <select
-              .value=${this._transferSel}
-              @change=${(e) => { this._transferSel = e.target.value; this._confirmTransfer = false; }}
-            >
-              <option value="">— Elige un líder —</option>
-              ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
-            </select>
-          </label>
-          ${this._confirmTransfer
-            ? html`<span class="confirm">¿Seguro? Perderás el acceso.
-                <button class="link yes" @click=${() => this._transfer()}>Sí, transferir</button>
-                <button class="link" @click=${() => { this._confirmTransfer = false; }}>No</button>
-              </span>`
-            : html`<button class="primary" ?disabled=${!this._transferSel} @click=${() => { this._confirmTransfer = true; }}>Transferir</button>`}
-        </div>
-      </section>
-    `;
-  }
-
   render() {
     if (!this.person) return null;
     return html`
@@ -732,8 +574,6 @@ export class TeamPersonDetail extends LitElement {
             ${this._renderContribution()}
             ${this._renderConversations()}
             ${this._renderNotes()}
-            ${this._renderShare()}
-            ${this._renderTransfer()}
           `}
     `;
   }

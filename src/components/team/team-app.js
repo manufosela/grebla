@@ -111,6 +111,8 @@ export class TeamApp extends LitElement {
       case 'people':
         return html`<team-people
           .persistence=${this.persistence}
+          .members=${this.members}
+          .currentUid=${this.uid}
           .isAdmin=${this.isAdmin}
           @open-person=${this._onOpenPerson}
         ></team-people>`;
@@ -120,10 +122,6 @@ export class TeamApp extends LitElement {
           <team-person-detail
             .persistence=${this.persistence}
             .person=${this.selected}
-            .members=${this.members}
-            .currentUid=${this.uid}
-            .isAdmin=${this.isAdmin}
-            @person-transferred=${() => this._go('people')}
           ></team-person-detail>
         `;
       case 'map':
