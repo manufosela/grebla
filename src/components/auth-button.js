@@ -5,12 +5,14 @@
  */
 import { LitElement, html, css } from 'lit';
 import { onUserChanged, signInWithGoogle, signOutUser } from '../lib/auth.js';
+import { resolveAccess } from '../lib/access.js';
 
 export class AuthButton extends LitElement {
   static properties = {
     user: { state: true },
     busy: { state: true },
     error: { state: true },
+    role: { state: true },
   };
 
   static styles = css`
@@ -60,6 +62,16 @@ export class AuthButton extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .role {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      background: var(--rm-track, #e9f0f2);
+      color: var(--rm-muted, #4b5563);
+    }
     .error {
       color: var(--rm-danger, #dc2626);
       font-size: 0.8rem;
@@ -76,14 +88,25 @@ export class AuthButton extends LitElement {
     this.user = null;
     this.busy = false;
     this.error = '';
+    /** @type {import('../lib/access.js').AccessRole} */
+    this.role = null;
     /** @type {(() => void)|null} */
     this._unsub = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    this._unsub = onUserChanged((user) => {
+    this._unsub = onUserChanged(async (user) => {
       this.user = user;
+      this.role = null;
+      if (user) {
+        try {
+          const { role } = await resolveAccess(user);
+          this.role = role;
+        } catch {
+          this.role = null;
+        }
+      }
       this.dispatchEvent(
         new CustomEvent('auth-changed', { detail: { user }, bubbles: true, composed: true }),
       );
@@ -128,6 +151,7 @@ export class AuthButton extends LitElement {
             ? html`<img class="avatar" src=${this.user.photoURL} alt="" referrerpolicy="no-referrer" />`
             : null}
           <span class="name">${this.user.displayName ?? this.user.email}</span>
+          ${this.role ? html`<span class="role">${this.role === 'superadmin' ? 'Superadmin' : 'Líder'}</span>` : null}
         </span>
         <button ?disabled=${this.busy} @click=${this._signOut}>Salir</button>
         ${this.error ? html`<span class="error">${this.error}</span>` : null}

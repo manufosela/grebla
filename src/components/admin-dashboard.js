@@ -10,6 +10,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { getPersonProfile, listSessions, saveOrgConfig, deleteSession, deleteUserData } from '../lib/firestore.js';
+import { listLeaders, addLeaderByEmail, removeLeader } from '../lib/leaders.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 
@@ -35,6 +36,10 @@ export class AdminDashboard extends LitElement {
     currentPhase: { attribute: false },
     leaderUid: { attribute: false },
     uid: { attribute: false },
+    isSuperadmin: { attribute: false },
+    _leaders: { state: true },
+    _leaderEmail: { state: true },
+    _leaderError: { state: true },
     users: { state: true },
     _confirmDelete: { state: true },
     _confirmDeleteUser: { state: true },
@@ -107,6 +112,11 @@ export class AdminDashboard extends LitElement {
     .confirm .link-danger { color: var(--rm-danger, #dc2626); }
     .confirm .link { color: var(--rm-muted, #6b7280); }
     .phase-desc { font-size: 0.82rem; color: var(--rm-muted, #6b7280); margin-top: 0.5rem; }
+    section.leaders { border-left: 4px solid var(--rm-accent, #3b82f6); }
+    section.leaders input {
+      padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
+      font: inherit; font-size: 0.9rem; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); min-width: 16rem;
+    }
   `;
 
   constructor() {
@@ -121,6 +131,13 @@ export class AdminDashboard extends LitElement {
     this.uid = null;
     /** @type {string|null} uid del líder dueño de las personas */
     this.leaderUid = null;
+    /** @type {boolean} si el usuario en sesión es superadmin (gestiona líderes) */
+    this.isSuperadmin = false;
+    /** @type {import('../lib/leaders.js').Leader[]} */
+    this._leaders = [];
+    this._leaderEmail = '';
+    this._leaderError = '';
+    this._leadersLoaded = false;
     this._loaded = false;
     /** @type {Array<Object>} */
     this.users = [];
@@ -144,6 +161,79 @@ export class AdminDashboard extends LitElement {
       this._loaded = true;
       this._loadUsers();
     }
+    if (this.isSuperadmin && !this._leadersLoaded) {
+      this._leadersLoaded = true;
+      this._loadLeaders();
+    }
+  }
+
+  async _loadLeaders() {
+    try {
+      this._leaders = await listLeaders();
+    } catch (err) {
+      this._leaderError = err instanceof Error ? err.message : 'No se pudieron cargar los líderes.';
+    }
+  }
+
+  async _addLeader() {
+    const email = this._leaderEmail.trim();
+    if (!email) return;
+    this._leaderError = '';
+    try {
+      await addLeaderByEmail(email);
+      this._leaderEmail = '';
+      await this._loadLeaders();
+    } catch (err) {
+      this._leaderError = err instanceof Error ? err.message : 'No se pudo añadir el líder.';
+    }
+  }
+
+  /** @param {string} uid */
+  async _removeLeader(uid) {
+    this._leaderError = '';
+    try {
+      await removeLeader(uid);
+      await this._loadLeaders();
+    } catch (err) {
+      this._leaderError = err instanceof Error ? err.message : 'No se pudo quitar el líder.';
+    }
+  }
+
+  _renderLeaders() {
+    return html`
+      <section class="leaders">
+        <h2>Líderes de la organización</h2>
+        <p class="empty">Da de alta a los líderes por su email (deben haber iniciado sesión al menos una vez).</p>
+        ${this._leaderError ? html`<p class="error">${this._leaderError}</p>` : null}
+        <div class="toolbar">
+          <input
+            type="email"
+            placeholder="email@dominio.com"
+            .value=${this._leaderEmail}
+            @input=${(e) => { this._leaderEmail = e.target.value; }}
+          />
+          <button class="primary" ?disabled=${!this._leaderEmail.trim()} @click=${() => this._addLeader()}>
+            Añadir líder
+          </button>
+        </div>
+        ${this._leaders.length === 0
+          ? html`<p class="empty">Aún no hay líderes dados de alta.</p>`
+          : html`<table>
+              <thead><tr><th>Nombre</th><th>Email</th><th></th></tr></thead>
+              <tbody>
+                ${this._leaders.map(
+                  (l) => html`
+                    <tr>
+                      <td>${l.displayName ?? '—'}</td>
+                      <td class="muted">${l.email ?? '—'}</td>
+                      <td class="num"><button class="del-btn" @click=${() => this._removeLeader(l.uid)}>Quitar</button></td>
+                    </tr>
+                  `,
+                )}
+              </tbody>
+            </table>`}
+      </section>
+    `;
   }
 
   async _loadUsers() {
@@ -291,8 +381,10 @@ export class AdminDashboard extends LitElement {
   }
 
   render() {
-    if (this.loading) return html`<p class="empty">Cargando perfiles…</p>`;
+    const leaders = this.isSuperadmin ? this._renderLeaders() : null;
+    if (this.loading) return html`${leaders}<p class="empty">Cargando perfiles…</p>`;
     return html`
+      ${leaders}
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
       ${this._renderProfiles()}
       ${this.detail ? this._renderDetail() : null}

@@ -46,3 +46,18 @@ export function addLeader(uid, data = {}) {
 export function removeLeader(uid) {
   return deleteDoc(doc(db, 'leaders', uid));
 }
+
+/**
+ * Alta de un líder por email (lo invoca un superadmin). Usa la Cloud Function
+ * manageLeader, que resuelve el email a uid (el usuario debe haber iniciado
+ * sesión al menos una vez) y crea /leaders/{uid}.
+ * @param {string} email
+ * @returns {Promise<{ ok: boolean, uid: string }>}
+ */
+export async function addLeaderByEmail(email) {
+  const { app } = await import('./firebase.js');
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const fns = getFunctions(app, 'europe-west1');
+  const res = await httpsCallable(fns, 'manageLeader')({ action: 'add', email: String(email).trim() });
+  return /** @type {any} */ (res.data);
+}
