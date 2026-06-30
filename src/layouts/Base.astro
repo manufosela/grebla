@@ -143,6 +143,16 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       }
       .site-nav a:hover { color: var(--rm-text); }
 
+      /* Enlace "Volver" dentro de la barra de cada herramienta. */
+      .tool-back {
+        text-decoration: none;
+        color: var(--rm-muted);
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-right: 0.75rem;
+      }
+      .tool-back:hover { color: var(--rm-accent); }
+
       .site-main {
         max-width: var(--rm-max);
         margin: 0 auto;

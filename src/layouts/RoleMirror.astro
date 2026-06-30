@@ -21,6 +21,7 @@ const isQuestionnaire = path === '/tools/role-mirror';
 
 <Base title={title} requireAuth={requireAuth} requireAdmin={requireAdmin}>
   <nav class="tool-nav" aria-label="Role Mirror">
+    <a href="/" class="tool-back">← Volver</a>
     <span class="tool-name">◑ Role Mirror</span>
     <a href="/tools/role-mirror" class:list={["tool-link", { active: isQuestionnaire }]}>Cuestionario</a>
     <a href="/tools/role-mirror/admin" class:list={["tool-link", { active: isAdmin }]}>Admin</a>

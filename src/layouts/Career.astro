@@ -10,6 +10,7 @@ const { title = 'Mapa de Carrera' } = Astro.props;
 
 <Base title={title} requireAuth={true}>
   <nav class="tool-nav" aria-label="Mapa de Carrera">
+    <a href="/" class="tool-back">← Volver</a>
     <span class="tool-name">◇ Mapa de Carrera</span>
   </nav>
   <slot />
