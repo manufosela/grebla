@@ -4,7 +4,9 @@
  * adecuado. La UI y los casos de uso reciben el puerto inyectado.
  *
  * - mode 'memory'    → adapters in-memory (tests, prototipos).
- * - mode 'firestore' → adapters Firestore bajo /tenants/{tenantId}/leaders/{leaderUid}.
+ * - mode 'firestore' → adapters Firestore bajo /tenants/{tenantId}. Las personas
+ *   viven a nivel de tenant con `ownerLeaderUid`; `leaderUid` es el líder que
+ *   consulta (filtra sus personas por owner), no parte del path.
  *   `tenantId` y `leaderUid` los resuelve el cliente (por dominio + sesión) y se
  *   pasan aquí; `db` se resuelve de src/lib/firebase.js por import dinámico.
  *

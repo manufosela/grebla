@@ -235,7 +235,7 @@ export class RoleQuestionnaire extends LitElement {
       this.answers = {};
       this.sessionId = null;
     }
-    // personId/leaderUid/tenantId pueden llegar de forma asíncrona tras auth+tenant.
+    // personId/tenantId pueden llegar de forma asíncrona tras auth+tenant.
     if (this.personId && this.tenantId && !this._sessionInit) {
       this._sessionInit = true;
       this._initSession();
