@@ -26,7 +26,6 @@ if (el) {
         return;
       }
       el.leaderUid = user.uid;
-      el.isSuperadmin = role === 'superadmin';
       const cfg = await getOrgConfig();
       if (cfg?.phase) el.currentPhase = cfg.phase;
       // Dispara la carga de perfiles dentro del componente.

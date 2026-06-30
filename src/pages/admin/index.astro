@@ -1,0 +1,17 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * Panel de gestión del superadmin (modelo multi-leader): gestión de líderes y
+ * vista en lectura de sus equipos. El glue verifica el rol; un líder puro o un
+ * usuario sin acceso es redirigido fuera.
+ */
+---
+
+<Base title="GREBLA — Gestión" requireAuth={true}>
+  <superadmin-panel></superadmin-panel>
+
+  <script>
+    import '../../client/superadmin.js';
+  </script>
+</Base>
