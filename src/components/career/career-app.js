@@ -12,7 +12,6 @@
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
 import {
-  getIslandMap,
   getJourney,
   toggleVisited,
   setCurrent,
@@ -20,6 +19,7 @@ import {
   setEvidence,
   stats,
 } from '../../tools/career/application/usecases.js';
+import { getCareerMap } from '../../lib/careerMap.js';
 
 export class CareerApp extends LitElement {
   static properties = {
@@ -30,6 +30,7 @@ export class CareerApp extends LitElement {
     journey: { state: true },
     selected: { state: true },
     loading: { state: true },
+    map: { state: true },
   };
 
   static styles = css`
@@ -84,15 +85,32 @@ export class CareerApp extends LitElement {
     this.journey = { visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} };
     this.selected = null;
     this.loading = false;
+    /** @type {import('../../tools/career/domain/types.js').CareerMap|null} */
+    this.map = null;
     this._loadedPerson = null;
+    this._mapLoaded = false;
   }
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
     if (changed.has('personId')) this.selected = null;
+    if (this.store && !this._mapLoaded) {
+      this._mapLoaded = true;
+      this._loadMap();
+    }
     if (this.store && this.personId && this._loadedPerson !== this.personId) {
       this._loadedPerson = this.personId;
       this._load();
+    }
+  }
+
+  /** Carga el mapa (la isla) desde Firestore una sola vez; con fallback a la semilla. */
+  async _loadMap() {
+    try {
+      this.map = await getCareerMap();
+    } catch (err) {
+      this._mapLoaded = false;
+      this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa de carrera.';
     }
   }
 
@@ -109,7 +127,7 @@ export class CareerApp extends LitElement {
   }
 
   get _map() {
-    return getIslandMap();
+    return this.map;
   }
 
   _changePerson(event) {
@@ -172,7 +190,7 @@ export class CareerApp extends LitElement {
       `;
     }
 
-    if (this.loading) {
+    if (this.loading || !this.map) {
       return html`
         <div class="bar">${this._renderPersonSelect()}</div>
         <p class="empty">Cargando el mapa de esta persona…</p>

@@ -22,7 +22,12 @@ export function getMap(id) {
   return SAMPLE_MAPS.find((m) => m.id === id) ?? null;
 }
 
-/** La isla actual (modelo de un único mapa). @returns {CareerMap} */
+/**
+ * Isla SEMILLA en código (fallback). En runtime el mapa se carga desde Firestore
+ * con `getCareerMap()` (src/lib/careerMap.js); esta función expone la semilla para
+ * los tests de dominio y como respaldo si no hay documento persistido.
+ * @returns {CareerMap}
+ */
 export function getIslandMap() {
   return ISLAND;
 }

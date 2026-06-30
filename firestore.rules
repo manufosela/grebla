@@ -140,6 +140,14 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // Mapa de Carrera (la isla): documento único /careerMap/island con las
+    // comarcas, ciudades y puerto de inicio. Lo leen los autenticados (el tool);
+    // solo lo edita el superadmin desde el panel /admin.
+    match /careerMap/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
