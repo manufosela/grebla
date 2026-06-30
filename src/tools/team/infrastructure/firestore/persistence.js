@@ -1,16 +1,16 @@
 /**
  * Implementación Firestore del puerto de persistencia (PersistencePort).
- * Multi-tenant: personas, áreas y catálogos viven a NIVEL DE TENANT (no bajo el
- * líder), para poder compartir/transferir personas entre líderes. Cada persona
- * lleva ownerLeaderUid; el líder ve por defecto las suyas (filtro por owner).
+ * Multi-leader: personas, áreas y catálogos viven a NIVEL DE INSTANCIA (raíz, no
+ * bajo el líder), para poder compartir/transferir personas entre líderes. Cada
+ * persona lleva ownerLeaderUid; el líder ve por defecto las suyas (filtro por owner).
  *
- *   /tenants/{tenantId}/people/{personId}              (con ownerLeaderUid, sharedWith)
+ *   /people/{personId}              (con ownerLeaderUid, sharedWith)
  *       .../people/{personId}/{seniority|emotional|knowledge|contribution}/{readingId}
  *       .../people/{personId}/conversations/{convId}
  *       .../people/{personId}/supportNotes/{noteId}
- *   /tenants/{tenantId}/areas/{areaId}
- *   /tenants/{tenantId}/config/settings
- *   /tenants/{tenantId}/teamRoles/{roleId}            (catálogo del tenant)
+ *   /areas/{areaId}
+ *   /config/settings
+ *   /teamRoles/{roleId}            (catálogo de la instancia)
  *
  * `db` se inyecta (no se importa firebase.js aquí) para mantener el adapter
  * testeable y libre de efectos de inicialización. Mismas interfaces que el
@@ -38,8 +38,8 @@ import {
 } from 'firebase/firestore';
 import { DIMENSIONS, DEFAULT_SETTINGS } from '../../domain/types.js';
 
-// `base` = árbol del tenant: ['tenants', tenantId]. Las personas viven aquí
-// (no bajo el líder) y se distinguen por ownerLeaderUid.
+// `base` = raíz de la instancia: []. Las personas viven aquí (no bajo el líder)
+// y se distinguen por ownerLeaderUid.
 const peopleCol = (db, base) => collection(db, ...base, 'people');
 const personDoc = (db, base, id) => doc(db, ...base, 'people', id);
 const readingCol = (db, base, personId, dim) =>
@@ -211,14 +211,13 @@ function configRepo(db, base) {
 
 /**
  * @param {Firestore} db
- * @param {string} tenantId
  * @param {string} leaderUid
  * @returns {PersistencePort}
  */
-export function createFirestorePersistence(db, tenantId, leaderUid) {
+export function createFirestorePersistence(db, leaderUid) {
   if (!db) throw new Error('createFirestorePersistence requiere una instancia de Firestore (db)');
-  if (!tenantId || !leaderUid) throw new Error('createFirestorePersistence requiere tenantId y leaderUid');
-  const base = ['tenants', tenantId];
+  if (!leaderUid) throw new Error('createFirestorePersistence requiere leaderUid');
+  const base = [];
   const readings = /** @type {PersistencePort['readings']} */ (
     Object.fromEntries(DIMENSIONS.map((dim) => [dim, readingRepo(db, base, dim)]))
   );

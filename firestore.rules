@@ -1,175 +1,119 @@
 rules_version = '2';
 
-// Reglas de seguridad de GREBLA.
+// Reglas de seguridad de GREBLA (modelo multi-leader: una instancia = una
+// organización; ADR -OwN-T_4VB3Ut1Dbn-j8).
 //
-// Modelo:
-//   /admins/{uid}                     Lectura para autenticados; escritura SOLO para admins.
-//                                     El alta de administradores se hace server-side
-//                                     (Admin SDK / seed / Cloud Function grantAdmin):
-//                                     NO existe ningún bootstrap self-service desde el cliente.
-//   Los datos de Role Mirror (config, perfil y sesiones) viven por tenant en
-//   /tenants/{tid}/{config,rolemirror}/... (ver más abajo). No hay datos globales /users.
+//   /admins/{uid}    Superadmin de la instancia (ve todo; da de alta líderes).
+//   /leaders/{uid}   Líderes (gestionan sus personas). Alta solo por superadmin.
+//   Datos a nivel raíz: /people, /areas, /config, /teamRoles, /dora, /journeys.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() {
       return request.auth != null;
     }
-
-    function isAdmin() {
+    function isSuperAdmin() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
-
-    // Plataforma multi-tenant: /admins son los super-admins de plataforma.
-    function isSuperAdmin() {
-      return isAdmin();
-    }
-    function isTenantMember(tenantId) {
+    function isLeader() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid));
-    }
-    function tenantRole(tenantId) {
-      return get(/databases/$(database)/documents/tenants/$(tenantId)/members/$(request.auth.uid)).data.role;
-    }
-    function isTenantAdmin(tenantId) {
-      return isTenantMember(tenantId) && tenantRole(tenantId) == 'admin';
+        && exists(/databases/$(database)/documents/leaders/$(request.auth.uid));
     }
 
-    // Administradores: legible por autenticados; escritura SOLO por un admin
-    // existente. El primer admin se crea fuera de las reglas con el Admin SDK,
-    // que las omite. No hay forma de auto-concederse admin desde el cliente.
+    // Superadmins: legible por autenticados; escritura solo por un superadmin
+    // existente (el primero se crea con el Admin SDK, que omite las reglas).
     match /admins/{adminId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin();
     }
 
-    // Multi-leader (ADR -OwN-T_4VB3Ut1Dbn-j8): líderes de la instancia, a nivel
-    // raíz (una instancia = una organización). Los da de alta un superadmin.
-    // Legibles por cualquier autenticado (para los selectores de compartir).
+    // Líderes de la instancia: legibles por autenticados (para los selectores de
+    // compartir); alta/baja solo por superadmin.
     match /leaders/{uid} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
     }
 
-    // (Las colecciones globales /teamRoles, /doraRepos y /owners se han retirado:
-    //  ahora viven por tenant — ver /tenants más abajo.)
-
-    // ── SaaS multi-tenant ──────────────────────────────────────────────────
-    // Mapa host → tenantId: legible por todos (se consulta ANTES del login para
-    // resolver el tenant por dominio); escritura solo super-admin de plataforma.
-    match /tenantDomains/{host} {
-      allow read: if true;
-      allow write: if isSuperAdmin();
+    // Secretos (token GitHub de DORA): nunca accesibles desde el cliente; solo
+    // la Cloud Function vía Admin SDK (omite reglas).
+    match /private/{document=**} {
+      allow read, write: if false;
     }
 
-    // Árbol de cada tenant. La plataforma crea/gestiona el tenant; sus admins
-    // gestionan miembros y catálogos; cada líder gestiona SU propio subárbol.
-    match /tenants/{tenantId} {
-      allow read: if isTenantMember(tenantId) || isSuperAdmin();
-      allow write: if isSuperAdmin();
-
-      match /members/{uid} {
-        allow read: if isTenantMember(tenantId) || isSuperAdmin();
-        allow write: if isTenantAdmin(tenantId) || isSuperAdmin();
+    // Personas del equipo (tool Equipo + Role Mirror). Cada persona lleva
+    // ownerLeaderUid (dueño) y sharedWith (uid→'view'|'edit'); el superadmin ve
+    // todo. sharedWithUids es el espejo para consultas array-contains.
+    match /people/{personId} {
+      function isOwner() {
+        return isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid;
       }
-
-      // Secretos (p. ej. token GitHub de DORA): NUNCA accesibles desde el cliente;
-      // solo la Cloud Function vía Admin SDK (omite reglas).
-      match /private/{document=**} {
-        allow read, write: if false;
+      function sharedPerm(data) {
+        return isSignedIn() && 'sharedWith' in data ? data.sharedWith[request.auth.uid] : null;
       }
+      allow read: if isSuperAdmin() || isOwner() || sharedPerm(resource.data) in ['view', 'edit'];
+      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+      // Un editor compartido edita datos pero NO transfiere la propiedad.
+      allow update: if isSuperAdmin() || isOwner()
+        || (sharedPerm(resource.data) == 'edit'
+            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
+      allow delete: if isSuperAdmin() || isOwner();
 
-      // Personas del equipo (tool Equipo + Role Mirror), a nivel de tenant para
-      // poder compartirlas/transferirlas entre líderes (Fase 3). Cada persona
-      // lleva `ownerLeaderUid` (dueño) y `sharedWith` (mapa uid→'view'|'edit'):
-      // el dueño y el admin acceden siempre; un líder con permiso 'view' lee y
-      // con 'edit' también escribe. El espejo `sharedWithUids` solo es para query.
-      match /people/{personId} {
-        function isPersonOwner() {
-          return isTenantMember(tenantId)
-            && resource.data.ownerLeaderUid == request.auth.uid;
+      // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
+      // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
+      match /{document=**} {
+        function person() {
+          return get(/databases/$(database)/documents/people/$(personId)).data;
         }
-        // Permiso de compartición del usuario actual sobre `data` (null si ninguno).
-        function sharedPerm(data) {
-          return isTenantMember(tenantId) && 'sharedWith' in data
-            ? data.sharedWith[request.auth.uid]
-            : null;
+        function canView() {
+          return isSuperAdmin()
+            || (isSignedIn()
+                && (person().ownerLeaderUid == request.auth.uid
+                    || ('sharedWith' in person() && person().sharedWith[request.auth.uid] in ['view', 'edit'])));
         }
-        allow read: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin()
-          || sharedPerm(resource.data) in ['view', 'edit'];
-        allow create: if isTenantMember(tenantId)
-          && request.resource.data.ownerLeaderUid == request.auth.uid;
-        // Un editor compartido puede editar datos, pero NO transferir la propiedad
-        // (cambiar ownerLeaderUid es transferencia: dueño/admin, fase 3c).
-        allow update: if isTenantAdmin(tenantId) || isSuperAdmin() || isPersonOwner()
-          || (sharedPerm(resource.data) == 'edit'
-              && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
-        allow delete: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin();
-
-        // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
-        // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
-        match /{document=**} {
-          function person() {
-            return get(/databases/$(database)/documents/tenants/$(tenantId)/people/$(personId)).data;
-          }
-          function canView() {
-            return isTenantMember(tenantId)
-              && (person().ownerLeaderUid == request.auth.uid
-                  || ('sharedWith' in person() && person().sharedWith[request.auth.uid] in ['view', 'edit']));
-          }
-          function canEdit() {
-            return isTenantMember(tenantId)
-              && (person().ownerLeaderUid == request.auth.uid
-                  || ('sharedWith' in person() && person().sharedWith[request.auth.uid] == 'edit'));
-          }
-          allow read: if isTenantAdmin(tenantId) || isSuperAdmin() || canView();
-          allow write: if isTenantAdmin(tenantId) || isSuperAdmin() || canEdit();
+        function canEdit() {
+          return isSuperAdmin()
+            || (isSignedIn()
+                && (person().ownerLeaderUid == request.auth.uid
+                    || ('sharedWith' in person() && person().sharedWith[request.auth.uid] == 'edit')));
         }
-      }
-
-      // Áreas de conocimiento: catálogo del tenant compartido por sus líderes.
-      match /areas/{areaId} {
-        allow read, write: if isTenantMember(tenantId);
-      }
-
-      // Ajustes de la tool Equipo (features, etc.) del tenant.
-      match /config/settings {
-        allow read, write: if isTenantMember(tenantId);
-      }
-
-      match /teamRoles/{roleId} {
-        allow read: if isTenantMember(tenantId);
-        allow write: if isTenantAdmin(tenantId);
-      }
-      match /dora/{document=**} {
-        allow read: if isTenantMember(tenantId);
-        allow write: if isTenantAdmin(tenantId);
-      }
-
-      // Configuración de Role Mirror (fase/pesos) del tenant: la leen los
-      // miembros; la escribe el admin del tenant (o el super-admin de plataforma).
-      match /config/org {
-        allow read: if isTenantMember(tenantId) || isSuperAdmin();
-        allow write: if isTenantAdmin(tenantId) || isSuperAdmin();
-      }
-
-      // Role Mirror vive bajo la persona, a nivel de tenant
-      // (/tenants/{tid}/people/{personId}/rolemirror/...), cubierto por la regla
-      // del subárbol de /people/{personId} de arriba.
-
-      // Mapa de Carrera: el journey de cada ingeniero, solo suyo.
-      match /journeys/{uid} {
-        allow read, write: if isTenantMember(tenantId) && request.auth.uid == uid;
+        allow read: if canView();
+        allow write: if canEdit();
       }
     }
 
-    // Índice inverso usuario→tenants (para la landing "mis organizaciones").
-    // Lo lee solo el dueño; lo mantiene quien asigna members (tenant-admin del
-    // tid o super-admin de plataforma).
-    match /userTenants/{uid}/tenants/{tid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
-      allow write: if isTenantAdmin(tid) || isSuperAdmin();
+    // Áreas de conocimiento: catálogo de la instancia, gestionado por líderes.
+    match /areas/{areaId} {
+      allow read: if isSignedIn();
+      allow write: if isLeader() || isSuperAdmin();
+    }
+
+    // Catálogo de roles de equipo: lo gobierna el superadmin.
+    match /teamRoles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // Configuración: /config/org (Role Mirror, superadmin); /config/settings
+    // (ajustes de la tool Equipo, líderes).
+    match /config/org {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+    match /config/settings {
+      allow read: if isSignedIn();
+      allow write: if isLeader() || isSuperAdmin();
+    }
+
+    // DORA: config de entrega; la leen los autenticados, la escribe el superadmin.
+    match /dora/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // Mapa de Carrera: el journey de cada persona, solo suyo.
+    match /journeys/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
     // Resto: denegado por defecto.

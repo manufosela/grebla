@@ -5,7 +5,7 @@ import { DIMENSIONS } from '../../domain/types.js';
 describe('Firestore persistence (forma del puerto)', () => {
   it('expone el PersistencePort completo con db inyectado', () => {
     // db falso: la construcción no invoca a Firestore (closures perezosos).
-    const p = createFirestorePersistence({}, 'tenant1', 'leader1');
+    const p = createFirestorePersistence({}, 'leader1');
     expect(typeof p.people.list).toBe('function');
     expect(typeof p.people.deactivate).toBe('function');
     expect(typeof p.areas.create).toBe('function');
@@ -18,9 +18,8 @@ describe('Firestore persistence (forma del puerto)', () => {
     }
   });
 
-  it('exige db, tenantId y leaderUid (sin fallbacks silenciosos)', () => {
-    expect(() => createFirestorePersistence(null, 't1', 'l1')).toThrow();
-    expect(() => createFirestorePersistence({}, '', 'l1')).toThrow();
-    expect(() => createFirestorePersistence({}, 't1', '')).toThrow();
+  it('exige db y leaderUid (sin fallbacks silenciosos)', () => {
+    expect(() => createFirestorePersistence(null, 'l1')).toThrow();
+    expect(() => createFirestorePersistence({}, '')).toThrow();
   });
 });

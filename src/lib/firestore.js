@@ -1,12 +1,12 @@
 /**
  * Helpers de lectura/escritura en Firestore.
  *
- * Estructura de datos (la persona vive a nivel de tenant; su Role Mirror cuelga de ella):
- *   /tenants/{tid}/people/{personId}/rolemirror/summary            Resumen del perfil (listado admin).
- *   /tenants/{tid}/people/{personId}/rolemirror/summary/sessions/{sessionId}  Cada sesión.
- *   /tenants/{tid}/config/org                            Configuración del tenant (fase/pesos).
- *   /tenants/{tid}/members/{uid}                         Líderes/admins del tenant (identidad).
- *   /admins/{uid}                                        Marca de super-admin de plataforma.
+ * Estructura de datos (modelo multi-leader; la persona vive a nivel de instancia):
+ *   /people/{personId}/rolemirror/summary               Resumen del perfil (listado admin).
+ *   /people/{personId}/rolemirror/summary/sessions/{sessionId}  Cada sesión.
+ *   /config/org                                          Configuración de la organización (fase/pesos).
+ *   /leaders/{uid}                                       Líderes de la instancia (identidad).
+ *   /admins/{uid}                                        Superadmin de la instancia.
  *
  * @typedef {import('./scoring.js').OrgConfig} OrgConfig
  * @typedef {import('../data/items.js').Answers} Answers
@@ -26,23 +26,23 @@ import {
 import { db } from './firebase.js';
 
 // ── Role Mirror por PERSONA (heteroevaluación: el líder lo rellena) ──────────
-// La persona vive a nivel organización (RMR-TSK-0068); su Role Mirror cuelga de ella:
-//   /tenants/{tid}/people/{personId}/rolemirror/summary                 (perfil)
-//   /tenants/{tid}/people/{personId}/rolemirror/summary/sessions/{id}
+// La persona vive a nivel de instancia; su Role Mirror cuelga de ella:
+//   /people/{personId}/rolemirror/summary                 (perfil)
+//   /people/{personId}/rolemirror/summary/sessions/{id}
 /** Doc resumen Role Mirror de una persona. */
-const rmSummaryDoc = (tid, personId) =>
-  doc(db, 'tenants', tid, 'people', personId, 'rolemirror', 'summary');
+const rmSummaryDoc = (personId) =>
+  doc(db, 'people', personId, 'rolemirror', 'summary');
 /** Colección de sesiones Role Mirror de una persona. */
-const rmSessionsCol = (tid, personId) =>
-  collection(db, 'tenants', tid, 'people', personId, 'rolemirror', 'summary', 'sessions');
+const rmSessionsCol = (personId) =>
+  collection(db, 'people', personId, 'rolemirror', 'summary', 'sessions');
 
 /**
  * Borra una medición (sesión) de una persona.
  * @param {string} tenantId @param {string} personId @param {string} sessionId
  * @returns {Promise<void>}
  */
-export function deleteSession(tenantId, personId, sessionId) {
-  return deleteDoc(doc(rmSessionsCol(tenantId, personId), sessionId));
+export function deleteSession(personId, sessionId) {
+  return deleteDoc(doc(rmSessionsCol(personId), sessionId));
 }
 
 /**
@@ -50,10 +50,10 @@ export function deleteSession(tenantId, personId, sessionId) {
  * @param {string} tenantId @param {string} personId
  * @returns {Promise<void>}
  */
-export async function deleteUserData(tenantId, personId) {
-  const sessions = await getDocs(rmSessionsCol(tenantId, personId));
+export async function deleteUserData(personId) {
+  const sessions = await getDocs(rmSessionsCol(personId));
   await Promise.all(sessions.docs.map((d) => deleteDoc(d.ref)));
-  await deleteDoc(rmSummaryDoc(tenantId, personId));
+  await deleteDoc(rmSummaryDoc(personId));
 }
 
 /**
@@ -105,9 +105,9 @@ export function debounce(fn, delayMs) {
  * @param {Object} [summary] dominantRole, completion, affinities, lastSessionId…
  * @returns {Promise<void>}
  */
-export function upsertUserSummary(tenantId, personId, summary = {}) {
+export function upsertUserSummary(personId, summary = {}) {
   return setDoc(
-    rmSummaryDoc(tenantId, personId),
+    rmSummaryDoc(personId),
     { personId, updatedAt: serverTimestamp(), ...summary },
     { merge: true },
   );
@@ -118,8 +118,8 @@ export function upsertUserSummary(tenantId, personId, summary = {}) {
  * @param {string} tenantId @param {string} personId
  * @returns {Promise<Object|null>}
  */
-export async function getPersonProfile(tenantId, personId) {
-  const snap = await getDoc(rmSummaryDoc(tenantId, personId));
+export async function getPersonProfile(personId) {
+  const snap = await getDoc(rmSummaryDoc(personId));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
@@ -132,8 +132,8 @@ export async function getPersonProfile(tenantId, personId) {
  * @param {{ answers?: Answers, targetRole?: string|null, orgPhase?: string|null }} [initial]
  * @returns {Promise<string>}
  */
-export async function createSession(tenantId, personId, initial = {}) {
-  const ref = await addDoc(rmSessionsCol(tenantId, personId), {
+export async function createSession(personId, initial = {}) {
+  const ref = await addDoc(rmSessionsCol(personId), {
     answers: initial.answers ?? {},
     targetRole: initial.targetRole ?? null,
     orgPhase: initial.orgPhase ?? null,
@@ -151,9 +151,9 @@ export async function createSession(tenantId, personId, initial = {}) {
  * @param {{ answers?: Answers, targetRole?: string|null, dominantRole?: string|null, completion?: number, orgPhase?: string|null }} data
  * @returns {Promise<void>}
  */
-export function saveSession(tenantId, personId, sessionId, data) {
+export function saveSession(personId, sessionId, data) {
   return setDoc(
-    doc(rmSessionsCol(tenantId, personId), sessionId),
+    doc(rmSessionsCol(personId), sessionId),
     { ...data, updatedAt: serverTimestamp() },
     { merge: true },
   );
@@ -166,8 +166,8 @@ export function saveSession(tenantId, personId, sessionId, data) {
  * @param {string} sessionId
  * @returns {Promise<Object|null>}
  */
-export async function getSession(tenantId, personId, sessionId) {
-  const snapshot = await getDoc(doc(rmSessionsCol(tenantId, personId), sessionId));
+export async function getSession(personId, sessionId) {
+  const snapshot = await getDoc(doc(rmSessionsCol(personId), sessionId));
   return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
 }
 
@@ -177,58 +177,31 @@ export async function getSession(tenantId, personId, sessionId) {
  * @param {string} uid
  * @returns {Promise<Array<Object>>}
  */
-export async function listSessions(tenantId, personId) {
-  const snapshot = await getDocs(query(rmSessionsCol(tenantId, personId), orderBy('updatedAt', 'desc')));
+export async function listSessions(personId) {
+  const snapshot = await getDocs(query(rmSessionsCol(personId), orderBy('updatedAt', 'desc')));
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
 // ── Configuración de organización ──────────────────────────────────────────
 
 /**
- * Obtiene la configuración activa de la organización (tenant).
- * @param {string} tenantId
+ * Obtiene la configuración activa de la organización (instancia).
  * @returns {Promise<(OrgConfig & { updatedAt?: unknown })|null>}
  */
-export async function getOrgConfig(tenantId) {
-  const snapshot = await getDoc(doc(db, 'tenants', tenantId, 'config', 'org'));
+export async function getOrgConfig() {
+  const snapshot = await getDoc(doc(db, 'config', 'org'));
   return snapshot.exists() ? /** @type {any} */ (snapshot.data()) : null;
 }
 
 /**
- * Guarda/actualiza la configuración de la organización (tenant; solo tenant-admin).
- * @param {string} tenantId
+ * Guarda/actualiza la configuración de la organización (instancia; solo superadmin).
  * @param {OrgConfig} config
  * @returns {Promise<void>}
  */
-export function saveOrgConfig(tenantId, config) {
+export function saveOrgConfig(config) {
   return setDoc(
-    doc(db, 'tenants', tenantId, 'config', 'org'),
+    doc(db, 'config', 'org'),
     { ...config, updatedAt: serverTimestamp() },
     { merge: true },
   );
-}
-
-// ── Miembros del tenant (líderes/admins) ────────────────────────────────────
-
-/**
- * @typedef {{ uid: string, displayName: string|null, email: string|null, role: string|null }} TenantMember
- */
-
-/**
- * Lista los miembros (líderes/admins) del tenant con su identidad, para poblar
- * los selectores de compartir/transferir personas (Fase 3b/3c).
- * @param {string} tenantId
- * @returns {Promise<TenantMember[]>}
- */
-export async function listTenantMembers(tenantId) {
-  const snapshot = await getDocs(collection(db, 'tenants', tenantId, 'members'));
-  return snapshot.docs.map((d) => {
-    const data = d.data();
-    return {
-      uid: d.id,
-      displayName: data.displayName ?? null,
-      email: data.email ?? null,
-      role: data.role ?? null,
-    };
-  });
 }

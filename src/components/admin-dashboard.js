@@ -33,7 +33,6 @@ export class AdminDashboard extends LitElement {
     roles: { attribute: false },
     orgPhases: { attribute: false },
     currentPhase: { attribute: false },
-    tenantId: { attribute: false },
     leaderUid: { attribute: false },
     uid: { attribute: false },
     users: { state: true },
@@ -139,24 +138,24 @@ export class AdminDashboard extends LitElement {
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
-    // Carga los perfiles solo cuando hay sesión admin y tenant resueltos,
+    // Carga los perfiles solo cuando hay sesión y líder resueltos,
     // para no chocar con las reglas de seguridad antes de autenticarse.
-    if (this.uid && this.tenantId && this.leaderUid && !this._loaded) {
+    if (this.uid && this.leaderUid && !this._loaded) {
       this._loaded = true;
       this._loadUsers();
     }
   }
 
   async _loadUsers() {
-    if (!this.tenantId || !this.leaderUid) return;
+    if (!this.leaderUid) return;
     this.loading = true;
     this.error = '';
     try {
-      const { persistence } = await createTeamContainer({ mode: 'firestore', tenantId: this.tenantId, leaderUid: this.leaderUid });
+      const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: this.leaderUid });
       const people = await listActivePeople(persistence);
       this.users = await Promise.all(
         people.map(async (p) => {
-          const prof = await getPersonProfile(this.tenantId,p.id);
+          const prof = await getPersonProfile(p.id);
           return { id: p.id, name: p.name, ...(prof || {}) };
         }),
       );
@@ -182,7 +181,7 @@ export class AdminDashboard extends LitElement {
   async _openDetail(user) {
     this.detail = { user, sessions: [] };
     try {
-      const sessions = await listSessions(this.tenantId,user.id);
+      const sessions = await listSessions(user.id);
       // Solo mediciones con contenido: las sesiones vacías no son puntos del
       // histórico (evita la "evolución absurda" de cuestionarios sin rellenar).
       const measurements = sessions.filter(
@@ -211,7 +210,7 @@ export class AdminDashboard extends LitElement {
     this.error = '';
     const user = this.detail?.user;
     try {
-      await deleteSession(this.tenantId,userId, sessionId);
+      await deleteSession(userId, sessionId);
       await this._loadUsers();
       if (user) await this._openDetail(user);
     } catch (err) {
@@ -235,7 +234,7 @@ export class AdminDashboard extends LitElement {
     this._confirmDeleteUser = null;
     this.error = '';
     try {
-      await deleteUserData(this.tenantId,uid);
+      await deleteUserData(uid);
       if (this.detail?.user?.id === uid) this.detail = null;
       await this._loadUsers();
     } catch (err) {
@@ -255,12 +254,8 @@ export class AdminDashboard extends LitElement {
     const phase = this.orgPhases.find((p) => p.key === key);
     if (!phase) return;
     this.error = '';
-    if (!this.tenantId) {
-      this.error = 'No se ha resuelto la organización; recarga la página.';
-      return;
-    }
     try {
-      await saveOrgConfig(this.tenantId, { phase: phase.key, roleMultipliers: phase.roleMultipliers });
+      await saveOrgConfig({ phase: phase.key, roleMultipliers: phase.roleMultipliers });
       this.currentPhase = phase.key;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar la configuración.';

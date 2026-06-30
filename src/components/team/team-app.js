@@ -65,7 +65,7 @@ export class TeamApp extends LitElement {
     this.uid = null;
     /** @type {boolean} */
     this.isAdmin = false;
-    /** @type {import('../../lib/firestore.js').TenantMember[]} líderes del tenant (para compartir) */
+    /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (para compartir) */
     this.members = [];
     /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
     this.view = 'people';
