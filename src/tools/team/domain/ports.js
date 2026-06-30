@@ -37,6 +37,12 @@
  * @property {(name: string) => Promise<string>} create   Crea un rol PERSONAL del líder.
  * @property {(id: string) => Promise<void>} remove
  *
+ * @typedef {import('./types.js').Label} Label
+ * @typedef {Object} LabelRepository   Catálogo de labels con ámbito (mismo modelo que TeamRole).
+ * @property {() => Promise<Label[]>} list   Globales + los del líder que mira.
+ * @property {(name: string) => Promise<string>} create   Crea un label PERSONAL del líder.
+ * @property {(id: string) => Promise<void>} remove
+ *
  * @typedef {Object} ConversationRepository
  * @property {(personId: string) => Promise<Conversation[]>} listByPerson
  * @property {(personId: string, input: Omit<Conversation,'id'>) => Promise<string>} create
@@ -62,6 +68,7 @@
  * @property {Record<'seniority'|'emotional'|'knowledge'|'contribution', ReadingRepository>} readings
  * @property {AreaRepository} areas
  * @property {TeamRoleRepository} teamRoles
+ * @property {LabelRepository} labels
  * @property {ConversationRepository} conversations
  * @property {SupportNoteRepository} supportNotes
  * @property {ConfigRepository} config
