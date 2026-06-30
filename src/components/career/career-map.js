@@ -12,6 +12,7 @@
  *  - selected: string|null
  */
 import { LitElement, html, css, svg } from 'lit';
+import { cityStatus } from '../../tools/career/domain/progress.js';
 
 export class CareerMapView extends LitElement {
   static properties = {
@@ -28,9 +29,9 @@ export class CareerMapView extends LitElement {
     .edge { stroke: var(--rm-border, #d1d5db); stroke-width: 0.5; }
     .dot { stroke: rgba(0,0,0,0.12); stroke-width: 0.4; cursor: pointer; transition: r 0.1s ease; }
     .node .label { font-size: 3px; fill: var(--rm-text, #111827); pointer-events: none; }
-    .node.locked .dot { fill: var(--rm-track, #d7dee2); }
-    .node.locked .label { fill: var(--rm-muted, #9ca3af); }
-    .node.reachable .dot { fill: var(--rm-coral, #f2887a); }
+    .node.blocked .dot { fill: var(--rm-track, #d7dee2); }
+    .node.blocked .label { fill: var(--rm-muted, #9ca3af); }
+    .node.available .dot { fill: var(--rm-coral, #f2887a); }
     .node.visited .dot { fill: var(--rm-accent, #2a9d8f); }
     .node.deprecated .dot { fill: var(--rm-danger, #dc2626); opacity: 0.5; }
     .node.deprecated .label { fill: var(--rm-muted, #9ca3af); text-decoration: line-through; }
@@ -52,11 +53,8 @@ export class CareerMapView extends LitElement {
   }
 
   _state(cityId) {
-    const city = (this.map?.cities ?? []).find((c) => c.id === cityId);
-    if (city?.deprecated) return 'deprecated';
-    if ((this.journey.visitedCities ?? []).includes(cityId)) return 'visited';
-    if ((this.reachable ?? []).includes(cityId)) return 'reachable';
-    return 'locked';
+    const st = cityStatus(this.map, cityId, this.journey);
+    return st === 'unknown' ? 'blocked' : st;
   }
 
   /** Centro aproximado de una comarca (media de las posiciones de sus ciudades). */
