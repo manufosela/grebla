@@ -24,6 +24,7 @@ export class TeamApp extends LitElement {
     storage: { attribute: false },
     uid: { attribute: false },
     isAdmin: { attribute: false },
+    members: { attribute: false },
     view: { state: true },
     selected: { state: true },
     error: { state: true },
@@ -64,6 +65,8 @@ export class TeamApp extends LitElement {
     this.uid = null;
     /** @type {boolean} */
     this.isAdmin = false;
+    /** @type {import('../../lib/firestore.js').TenantMember[]} líderes del tenant (para compartir) */
+    this.members = [];
     /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
     this.view = 'people';
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
@@ -114,7 +117,12 @@ export class TeamApp extends LitElement {
       case 'person':
         return html`
           <button class="back" @click=${() => this._go('people')}>← Volver a personas</button>
-          <team-person-detail .persistence=${this.persistence} .person=${this.selected}></team-person-detail>
+          <team-person-detail
+            .persistence=${this.persistence}
+            .person=${this.selected}
+            .members=${this.members}
+            .currentUid=${this.uid}
+          ></team-person-detail>
         `;
       case 'map':
         return html`<team-map .persistence=${this.persistence}></team-map>`;
