@@ -51,6 +51,11 @@ const tools = [
     </p>
   </section>
 
+  <!-- Volver a gestión: solo para superadmin que usa la vista de líder. -->
+  <div id="back-to-admin" class="back-admin" hidden>
+    <button type="button">← Volver a gestión (superadmin)</button>
+  </div>
+
   <!-- Herramientas: ocultas por defecto. landing.js las muestra con sesión y acceso. -->
   <section id="tenant-tools" class="tools" hidden>
     {
@@ -104,4 +109,11 @@ const tools = [
   .tool-card .cta { margin-top: auto; color: var(--rm-accent); font-weight: 700; font-size: 0.9rem; }
   .tool-card.placeholder { opacity: 0.6; border-style: dashed; cursor: default; }
   .tool-card.placeholder:hover { border-color: var(--rm-border); transform: none; }
+
+  .back-admin { margin-bottom: 1rem; }
+  .back-admin button {
+    border: 1px solid var(--rm-border); background: var(--rm-surface); color: var(--rm-accent);
+    border-radius: 999px; padding: 0.4rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  }
+  .back-admin button:hover { border-color: var(--rm-accent); }
 </style>
