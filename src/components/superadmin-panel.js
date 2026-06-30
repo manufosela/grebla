@@ -15,6 +15,10 @@ import { listCatalog, createGlobal, promoteToGlobal, removeFromCatalog } from '.
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
+import { getCareerMap, saveCareerMap } from '../lib/careerMap.js';
+
+const CITY_KINDS = ['tech', 'skill', 'milestone'];
+const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
 
 const VIEW_FLAG = 'grebla-view';
 
@@ -31,6 +35,14 @@ export class SuperadminPanel extends LitElement {
     _teamRoles: { state: true },
     _labels: { state: true },
     _newCat: { state: true },
+    _careerMap: { state: true },
+    _newArea: { state: true },
+    _newCity: { state: true },
+    _confirmArea: { state: true },
+    _confirmCity: { state: true },
+    _mapError: { state: true },
+    _mapNotice: { state: true },
+    _mapSaving: { state: true },
   };
 
   static styles = css`
@@ -64,7 +76,29 @@ export class SuperadminPanel extends LitElement {
     .del-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
+    .notice { color: var(--rm-accent, #2a9d8f); font-size: 0.85rem; font-weight: 600; }
     .ro-note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
+    h3.sub { font-size: 0.95rem; margin: 1.25rem 0 0.6rem; color: var(--rm-text, #111827); }
+    .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
+    .confirm .yes { color: var(--rm-danger, #dc2626); }
+    select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
+    .cities { display: grid; gap: 0.9rem; }
+    .city { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.8rem 1rem; background: var(--rm-surface, #fff); }
+    .city-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .city-head .cid { font-weight: 700; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.6rem; }
+    .fields label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    .fields label.check { flex-direction: row; align-items: center; gap: 0.4rem; }
+    .fields label.full { grid-column: 1 / -1; }
+    .fields input, .fields select { min-width: 0; font-size: 0.85rem; }
+    .fields input[type="checkbox"] { width: auto; min-width: 0; }
+    .recs-edit { margin-top: 0.75rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.6rem; }
+    .recs-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
+    .recs-head button { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+    .rec-row { display: grid; grid-template-columns: 7rem 1fr 1fr auto; gap: 0.4rem; margin-bottom: 0.4rem; align-items: center; }
+    .rec-row input { min-width: 0; }
+    @media (max-width: 640px) { .rec-row { grid-template-columns: 1fr; } }
   `;
 
   constructor() {
@@ -85,6 +119,15 @@ export class SuperadminPanel extends LitElement {
     /** @type {import('../lib/catalog.js').CatalogItem[]} */
     this._labels = [];
     this._newCat = { teamRoles: '', labels: '' };
+    /** @type {import('../tools/career/domain/types.js').CareerMap|null} */
+    this._careerMap = null;
+    this._newArea = { id: '', name: '' };
+    this._newCity = { id: '', name: '' };
+    this._confirmArea = null;
+    this._confirmCity = null;
+    this._mapError = '';
+    this._mapNotice = '';
+    this._mapSaving = false;
     this._loaded = false;
   }
 
@@ -93,6 +136,7 @@ export class SuperadminPanel extends LitElement {
       this._loaded = true;
       this._loadLeaders();
       this._loadCatalogs();
+      this._loadCareerMap();
     }
   }
 
@@ -139,6 +183,136 @@ export class SuperadminPanel extends LitElement {
       await this._loadCatalogs();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo eliminar.';
+    }
+  }
+
+  // ── Mapa de carrera (editor) ───────────────────────────────────────────────
+
+  async _loadCareerMap() {
+    this._mapError = '';
+    try {
+      this._careerMap = await getCareerMap();
+    } catch (err) {
+      this._mapError = err instanceof Error ? err.message : 'No se pudo cargar el mapa de carrera.';
+    }
+  }
+
+  /** Reemplaza el mapa de trabajo (copia inmutable para refrescar Lit). @param {Partial<import('../tools/career/domain/types.js').CareerMap>} patch */
+  _patchMap(patch) {
+    this._careerMap = { ...this._careerMap, ...patch };
+    this._mapNotice = '';
+  }
+
+  /** @param {number} idx @param {Partial<import('../tools/career/domain/types.js').City>} patch */
+  _patchCity(idx, patch) {
+    const cities = this._careerMap.cities.map((c, i) => (i === idx ? { ...c, ...patch } : c));
+    this._patchMap({ cities });
+  }
+
+  _addArea() {
+    const id = this._newArea.id.trim();
+    const name = this._newArea.name.trim();
+    this._mapError = '';
+    if (!id || !name) { this._mapError = 'La comarca necesita id y nombre.'; return; }
+    if (this._careerMap.areas.some((a) => a.id === id)) { this._mapError = `Ya existe la comarca «${id}».`; return; }
+    this._patchMap({ areas: [...this._careerMap.areas, { id, name }] });
+    this._newArea = { id: '', name: '' };
+  }
+
+  /** @param {string} id @param {string} name */
+  _renameArea(id, name) {
+    this._patchMap({ areas: this._careerMap.areas.map((a) => (a.id === id ? { ...a, name } : a)) });
+  }
+
+  /** @param {string} id */
+  _deleteArea(id) {
+    this._mapError = '';
+    const inUse = this._careerMap.cities.filter((c) => c.area === id);
+    if (inUse.length) {
+      this._confirmArea = null;
+      this._mapError = `No se puede borrar «${id}»: ${inUse.length} ciudad(es) la usan. Reasígnalas antes.`;
+      return;
+    }
+    this._patchMap({ areas: this._careerMap.areas.filter((a) => a.id !== id) });
+    this._confirmArea = null;
+  }
+
+  _addCity() {
+    const id = this._newCity.id.trim();
+    const name = this._newCity.name.trim();
+    this._mapError = '';
+    if (!id || !name) { this._mapError = 'La ciudad necesita id y nombre.'; return; }
+    if (this._careerMap.cities.some((c) => c.id === id)) { this._mapError = `Ya existe la ciudad «${id}».`; return; }
+    const area = this._careerMap.areas[0]?.id ?? '';
+    /** @type {import('../tools/career/domain/types.js').City} */
+    const city = { id, name, kind: 'tech', area, x: 50, y: 50, weight: 1, prereqs: [] };
+    this._patchMap({ cities: [...this._careerMap.cities, city] });
+    this._newCity = { id: '', name: '' };
+  }
+
+  /** @param {string} id */
+  _deleteCity(id) {
+    // Quita la ciudad y la elimina de los prereqs de las demás.
+    const cities = this._careerMap.cities
+      .filter((c) => c.id !== id)
+      .map((c) => (c.prereqs.includes(id) ? { ...c, prereqs: c.prereqs.filter((p) => p !== id) } : c));
+    this._patchMap({ cities });
+    this._confirmCity = null;
+  }
+
+  /** @param {number} idx @param {HTMLSelectElement} select */
+  _setPrereqs(idx, select) {
+    const prereqs = [...select.selectedOptions].map((o) => o.value);
+    this._patchCity(idx, { prereqs });
+  }
+
+  /** @param {number} idx */
+  _addRecommendation(idx) {
+    const city = this._careerMap.cities[idx];
+    const recommendations = [...(city.recommendations ?? []), { kind: 'doc', label: '', url: '' }];
+    this._patchCity(idx, { recommendations });
+  }
+
+  /** @param {number} idx @param {number} recIdx @param {Partial<import('../tools/career/domain/types.js').Recommendation>} patch */
+  _patchRecommendation(idx, recIdx, patch) {
+    const recommendations = (this._careerMap.cities[idx].recommendations ?? []).map((r, i) => (i === recIdx ? { ...r, ...patch } : r));
+    this._patchCity(idx, { recommendations });
+  }
+
+  /** @param {number} idx @param {number} recIdx */
+  _removeRecommendation(idx, recIdx) {
+    const recommendations = (this._careerMap.cities[idx].recommendations ?? []).filter((_, i) => i !== recIdx);
+    this._patchCity(idx, { recommendations });
+  }
+
+  /** Valida el mapa antes de guardar. @returns {string|null} mensaje de error o null */
+  _validateMap() {
+    const { areas, cities } = this._careerMap;
+    const areaIds = new Set(areas.map((a) => a.id));
+    const cityIds = new Set();
+    for (const c of cities) {
+      if (!c.id.trim() || !c.name.trim()) return 'Hay ciudades sin id o sin nombre.';
+      if (cityIds.has(c.id)) return `Ciudad duplicada: «${c.id}».`;
+      cityIds.add(c.id);
+      if (c.area && !areaIds.has(c.area)) return `La ciudad «${c.id}» apunta a una comarca inexistente.`;
+      if (c.x < 0 || c.x > 100 || c.y < 0 || c.y > 100) return `La ciudad «${c.id}» tiene una posición fuera de 0..100.`;
+    }
+    return null;
+  }
+
+  async _saveCareerMap() {
+    this._mapError = '';
+    this._mapNotice = '';
+    const invalid = this._validateMap();
+    if (invalid) { this._mapError = invalid; return; }
+    this._mapSaving = true;
+    try {
+      await saveCareerMap(this._careerMap);
+      this._mapNotice = 'Mapa guardado.';
+    } catch (err) {
+      this._mapError = err instanceof Error ? err.message : 'No se pudo guardar el mapa.';
+    } finally {
+      this._mapSaving = false;
     }
   }
 
@@ -274,7 +448,157 @@ export class SuperadminPanel extends LitElement {
       ${this._renderLeaders()}
       ${this._renderCatalog('teamRoles', this._teamRoles, 'Roles de equipo (organización)', 'Nuevo rol global…')}
       ${this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…')}
+      ${this._renderCareerMap()}
       ${this.selected ? this._renderTeam() : null}
+    `;
+  }
+
+  _renderCareerMap() {
+    const map = this._careerMap;
+    return html`
+      <section>
+        <h2>Mapa de carrera</h2>
+        <p class="ro-note">Edita la isla de la organización: comarcas y ciudades (hitos, skills y tecnologías). Los cambios se aplican al guardar.</p>
+        ${this._mapError ? html`<p class="error">${this._mapError}</p>` : null}
+        ${this._mapNotice ? html`<p class="notice">${this._mapNotice}</p>` : null}
+        ${!map
+          ? html`<p class="empty">Cargando el mapa…</p>`
+          : html`
+              ${this._renderAreas(map)}
+              ${this._renderCities(map)}
+              <div class="toolbar" style="margin-top:1rem">
+                <button class="primary" ?disabled=${this._mapSaving} @click=${() => this._saveCareerMap()}>
+                  ${this._mapSaving ? 'Guardando…' : 'Guardar mapa'}
+                </button>
+              </div>
+            `}
+      </section>
+    `;
+  }
+
+  /** @param {import('../tools/career/domain/types.js').CareerMap} map */
+  _renderAreas(map) {
+    return html`
+      <h3 class="sub">Comarcas (${map.areas.length})</h3>
+      <div class="toolbar">
+        <input type="text" placeholder="id (p. ej. frontend)" .value=${this._newArea.id}
+          @input=${(e) => { this._newArea = { ...this._newArea, id: e.target.value }; }} />
+        <input type="text" placeholder="Nombre" .value=${this._newArea.name}
+          @input=${(e) => { this._newArea = { ...this._newArea, name: e.target.value }; }} />
+        <button class="primary" ?disabled=${!this._newArea.id.trim() || !this._newArea.name.trim()} @click=${() => this._addArea()}>Añadir comarca</button>
+      </div>
+      ${map.areas.length === 0
+        ? html`<p class="empty">Aún no hay comarcas.</p>`
+        : html`<table>
+            <thead><tr><th>Id</th><th>Nombre</th><th></th></tr></thead>
+            <tbody>
+              ${map.areas.map(
+                (a) => html`<tr>
+                  <td class="muted">${a.id}</td>
+                  <td><input type="text" .value=${a.name} @input=${(e) => this._renameArea(a.id, e.target.value)} /></td>
+                  <td>${this._confirmArea === a.id
+                    ? html`<span class="confirm">¿Borrar?
+                        <button class="yes" @click=${() => this._deleteArea(a.id)}>Sí</button>
+                        <button @click=${() => { this._confirmArea = null; }}>No</button>
+                      </span>`
+                    : html`<button class="del-btn" @click=${() => { this._confirmArea = a.id; this._mapError = ''; }}>Borrar</button>`}
+                  </td>
+                </tr>`,
+              )}
+            </tbody>
+          </table>`}
+    `;
+  }
+
+  /** @param {import('../tools/career/domain/types.js').CareerMap} map */
+  _renderCities(map) {
+    return html`
+      <h3 class="sub">Ciudades (${map.cities.length})</h3>
+      <div class="toolbar">
+        <input type="text" placeholder="id (p. ej. react)" .value=${this._newCity.id}
+          @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
+        <input type="text" placeholder="Nombre" .value=${this._newCity.name}
+          @input=${(e) => { this._newCity = { ...this._newCity, name: e.target.value }; }} />
+        <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity()}>Añadir ciudad</button>
+      </div>
+      ${map.cities.length === 0
+        ? html`<p class="empty">Aún no hay ciudades.</p>`
+        : html`<div class="cities">${map.cities.map((c, idx) => this._renderCity(map, c, idx))}</div>`}
+    `;
+  }
+
+  /**
+   * @param {import('../tools/career/domain/types.js').CareerMap} map
+   * @param {import('../tools/career/domain/types.js').City} c
+   * @param {number} idx
+   */
+  _renderCity(map, c, idx) {
+    return html`
+      <div class="city">
+        <div class="city-head">
+          <span class="cid">${c.id}</span>
+          ${this._confirmCity === c.id
+            ? html`<span class="confirm">¿Borrar ciudad?
+                <button class="yes" @click=${() => this._deleteCity(c.id)}>Sí</button>
+                <button @click=${() => { this._confirmCity = null; }}>No</button>
+              </span>`
+            : html`<button class="del-btn" @click=${() => { this._confirmCity = c.id; this._mapError = ''; }}>Borrar</button>`}
+        </div>
+        <div class="fields">
+          <label>Nombre
+            <input type="text" .value=${c.name} @input=${(e) => this._patchCity(idx, { name: e.target.value })} />
+          </label>
+          <label>Comarca
+            <select @change=${(e) => this._patchCity(idx, { area: e.target.value })}>
+              <option value="" ?selected=${!c.area}>— sin comarca —</option>
+              ${map.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === c.area}>${a.name}</option>`)}
+            </select>
+          </label>
+          <label>Tipo
+            <select @change=${(e) => this._patchCity(idx, { kind: e.target.value })}>
+              ${CITY_KINDS.map((k) => html`<option value=${k} ?selected=${k === c.kind}>${k}</option>`)}
+            </select>
+          </label>
+          <label>Peso
+            <input type="number" min="0" step="1" .value=${String(c.weight)} @input=${(e) => this._patchCity(idx, { weight: Number(e.target.value) })} />
+          </label>
+          <label>X (0..100)
+            <input type="number" min="0" max="100" step="1" .value=${String(c.x)} @input=${(e) => this._patchCity(idx, { x: Number(e.target.value) })} />
+          </label>
+          <label>Y (0..100)
+            <input type="number" min="0" max="100" step="1" .value=${String(c.y)} @input=${(e) => this._patchCity(idx, { y: Number(e.target.value) })} />
+          </label>
+          <label class="check">
+            <input type="checkbox" .checked=${c.deprecated === true} @change=${(e) => this._patchCity(idx, { deprecated: e.target.checked || undefined })} />
+            Deprecada
+          </label>
+          <label class="full">Prerequisitos
+            <select multiple size="4" @change=${(e) => this._setPrereqs(idx, e.target)}>
+              ${map.cities
+                .filter((other) => other.id !== c.id)
+                .map((other) => html`<option value=${other.id} ?selected=${c.prereqs.includes(other.id)}>${other.name} (${other.id})</option>`)}
+            </select>
+          </label>
+        </div>
+        <div class="recs-edit">
+          <div class="recs-head">
+            <span>Recomendaciones</span>
+            <button @click=${() => this._addRecommendation(idx)}>+ Añadir</button>
+          </div>
+          ${(c.recommendations ?? []).length === 0
+            ? html`<p class="empty">Sin recomendaciones.</p>`
+            : (c.recommendations ?? []).map(
+                (r, recIdx) => html`<div class="rec-row">
+                  <select @change=${(e) => this._patchRecommendation(idx, recIdx, { kind: e.target.value })}>
+                    ${REC_KINDS.map((k) => html`<option value=${k} ?selected=${k === r.kind}>${k}</option>`)}
+                  </select>
+                  <input type="text" placeholder="Etiqueta" .value=${r.label ?? ''} @input=${(e) => this._patchRecommendation(idx, recIdx, { label: e.target.value })} />
+                  <input type="url" placeholder="https://… (opcional)" .value=${r.url ?? ''} @input=${(e) => this._patchRecommendation(idx, recIdx, { url: e.target.value })} />
+                  <button class="del-btn" @click=${() => this._removeRecommendation(idx, recIdx)}>×</button>
+                </div>`,
+              )}
+        </div>
+      </div>
     `;
   }
 

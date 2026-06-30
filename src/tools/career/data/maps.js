@@ -78,3 +78,136 @@ export const ISLAND = {
  * @type {ReadonlyArray<CareerMap>}
  */
 export const SAMPLE_MAPS = [ISLAND];
+
+// ── Persistencia del mapa (MC-3) ────────────────────────────────────────────
+// El mapa se guarda en Firestore (/careerMap/island). Estas funciones PURAS
+// (sin Firebase) normalizan el documento leído y lo serializan para escribir;
+// así pueden testearse sin depender de Firestore. La IO vive en src/lib/careerMap.js.
+
+/**
+ * Semilla/fallback del mapa: copia profunda de la isla en código. Se usa cuando
+ * todavía no existe el documento /careerMap/island en Firestore.
+ * @returns {CareerMap}
+ */
+export function seedCareerMap() {
+  return structuredClone(ISLAND);
+}
+
+/** @param {unknown} value @param {number} fallback @returns {number} */
+function toFiniteNumber(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Normaliza una comarca cruda del documento.
+ * @param {{ id?: unknown, name?: unknown }} area
+ * @returns {import('../domain/types.js').Area}
+ */
+function normalizeArea(area) {
+  const id = String(area?.id ?? '').trim();
+  const name = String(area?.name ?? id).trim();
+  return { id, name: name || id };
+}
+
+/**
+ * Normaliza una recomendación cruda del documento (descarta las vacías el caller).
+ * @param {{ kind?: unknown, label?: unknown, url?: unknown }} rec
+ * @returns {import('../domain/types.js').Recommendation}
+ */
+function normalizeRecommendation(rec) {
+  /** @type {import('../domain/types.js').Recommendation} */
+  const out = { kind: /** @type {any} */ (String(rec?.kind ?? 'doc')), label: String(rec?.label ?? '').trim() };
+  const url = String(rec?.url ?? '').trim();
+  if (url) out.url = url;
+  return out;
+}
+
+/**
+ * Normaliza una ciudad cruda del documento al modelo City.
+ * @param {Record<string, unknown>} city
+ * @returns {import('../domain/types.js').City}
+ */
+function normalizeCity(city) {
+  /** @type {import('../domain/types.js').City} */
+  const out = {
+    id: String(city?.id ?? '').trim(),
+    name: String(city?.name ?? '').trim(),
+    kind: /** @type {any} */ (['skill', 'tech', 'milestone'].includes(/** @type {any} */ (city?.kind)) ? city.kind : 'tech'),
+    area: String(city?.area ?? '').trim(),
+    x: toFiniteNumber(city?.x, 0),
+    y: toFiniteNumber(city?.y, 0),
+    weight: toFiniteNumber(city?.weight, 1),
+    prereqs: Array.isArray(city?.prereqs) ? city.prereqs.map((p) => String(p)).filter(Boolean) : [],
+  };
+  if (city?.deprecated === true) out.deprecated = true;
+  const recs = Array.isArray(city?.recommendations)
+    ? city.recommendations.map(normalizeRecommendation).filter((r) => r.label)
+    : [];
+  if (recs.length) out.recommendations = recs;
+  return out;
+}
+
+/**
+ * Reconstruye un CareerMap completo a partir del documento de Firestore. Si no
+ * hay datos (documento inexistente) devuelve la semilla en código.
+ * @param {Record<string, unknown>|null|undefined} data  data() del documento /careerMap/island
+ * @returns {CareerMap}
+ */
+export function normalizeCareerMap(data) {
+  if (!data) return seedCareerMap();
+  const name = String(data.name ?? '').trim();
+  const startPort =
+    data.startPort && typeof data.startPort === 'object'
+      ? { x: toFiniteNumber(/** @type {any} */ (data.startPort).x, ISLAND.startPort.x), y: toFiniteNumber(/** @type {any} */ (data.startPort).y, ISLAND.startPort.y) }
+      : { ...ISLAND.startPort };
+  return {
+    id: 'island',
+    name: name || ISLAND.name,
+    areas: Array.isArray(data.areas) ? data.areas.map(normalizeArea).filter((a) => a.id) : [],
+    cities: Array.isArray(data.cities) ? data.cities.map(normalizeCity).filter((c) => c.id) : [],
+    startPort,
+  };
+}
+
+/**
+ * Serializa un CareerMap a un objeto plano apto para Firestore (sin `undefined`,
+ * que Firestore rechaza). Solo persiste areas/cities/startPort/name.
+ * @param {CareerMap} map
+ * @returns {{ name: string, areas: import('../domain/types.js').Area[], cities: object[], startPort: {x:number,y:number} }}
+ */
+export function serializeCareerMap(map) {
+  const cities = (map?.cities ?? []).map((c) => {
+    /** @type {Record<string, unknown>} */
+    const city = {
+      id: String(c.id ?? '').trim(),
+      name: String(c.name ?? '').trim(),
+      kind: c.kind,
+      area: String(c.area ?? '').trim(),
+      x: toFiniteNumber(c.x, 0),
+      y: toFiniteNumber(c.y, 0),
+      weight: toFiniteNumber(c.weight, 1),
+      prereqs: Array.isArray(c.prereqs) ? c.prereqs.map((p) => String(p)).filter(Boolean) : [],
+    };
+    if (c.deprecated) city.deprecated = true;
+    const recs = (c.recommendations ?? [])
+      .filter((r) => r && String(r.label ?? '').trim())
+      .map((r) => {
+        /** @type {Record<string, unknown>} */
+        const rec = { kind: r.kind, label: String(r.label).trim() };
+        const url = String(r.url ?? '').trim();
+        if (url) rec.url = url;
+        return rec;
+      });
+    if (recs.length) city.recommendations = recs;
+    return city;
+  });
+  return {
+    name: String(map?.name ?? '').trim() || ISLAND.name,
+    areas: (map?.areas ?? []).map((a) => ({ id: String(a.id ?? '').trim(), name: String(a.name ?? '').trim() || String(a.id ?? '').trim() })).filter((a) => a.id),
+    cities,
+    startPort: map?.startPort
+      ? { x: toFiniteNumber(map.startPort.x, ISLAND.startPort.x), y: toFiniteNumber(map.startPort.y, ISLAND.startPort.y) }
+      : { ...ISLAND.startPort },
+  };
+}
