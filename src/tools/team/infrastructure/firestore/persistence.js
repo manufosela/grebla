@@ -104,6 +104,14 @@ function peopleRepo(db, base, leaderUid) {
         sharedWithUids: arrayRemove(sharedLeaderUid),
       });
     },
+    async transfer(id, newLeaderUid) {
+      // Transferencia total: nuevo dueño y se le retira de sharedWith (ya es owner).
+      await updateDoc(personDoc(db, base, id), {
+        ownerLeaderUid: newLeaderUid,
+        [`sharedWith.${newLeaderUid}`]: deleteField(),
+        sharedWithUids: arrayRemove(newLeaderUid),
+      });
+    },
   };
 }
 

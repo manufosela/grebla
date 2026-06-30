@@ -65,5 +65,19 @@ export function createMemoryPeopleRepository(
       delete sharedWith[leaderUid];
       store.set(id, { ...person, sharedWith, sharedWithUids: Object.keys(sharedWith) });
     },
+    async transfer(id, newLeaderUid) {
+      const person = store.get(id);
+      if (!person) throw new Error(`Person ${id} no existe`);
+      // Transferencia total: el nuevo líder es el dueño; se le retira de sharedWith
+      // (ya no es "compartido", es propietario) y el anterior pierde el acceso.
+      const sharedWith = { ...(person.sharedWith ?? {}) };
+      delete sharedWith[newLeaderUid];
+      store.set(id, {
+        ...person,
+        ownerLeaderUid: newLeaderUid,
+        sharedWith,
+        sharedWithUids: Object.keys(sharedWith),
+      });
+    },
   };
 }

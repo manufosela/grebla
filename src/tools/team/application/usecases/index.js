@@ -10,6 +10,7 @@ export {
   updatePerson,
   sharePerson,
   unsharePerson,
+  transferOwnership,
   normalizePerson,
   getTurnover,
 } from './people.js';

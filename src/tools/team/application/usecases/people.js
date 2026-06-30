@@ -131,3 +131,16 @@ export async function unsharePerson(persistence, personId, leaderUid) {
   if (!leaderUid) throw new Error('unsharePerson requiere el uid del líder');
   return persistence.people.unshare(personId, leaderUid);
 }
+
+/**
+ * Transfiere la propiedad de una persona a otro líder (transferencia total: el
+ * dueño anterior pierde el acceso). Lo hace el dueño actual o un admin del tenant.
+ * @param {PersistencePort} persistence
+ * @param {string} personId
+ * @param {string} newLeaderUid   Nuevo líder dueño.
+ * @returns {Promise<void>}
+ */
+export async function transferOwnership(persistence, personId, newLeaderUid) {
+  if (!newLeaderUid) throw new Error('transferOwnership requiere el uid del nuevo líder');
+  return persistence.people.transfer(personId, newLeaderUid);
+}
