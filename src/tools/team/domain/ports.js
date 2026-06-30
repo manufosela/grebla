@@ -20,6 +20,7 @@
  * @property {(id: string) => Promise<void>} deactivate
  * @property {(id: string, leaderUid: string, permission: SharePermission) => Promise<void>} share   Comparte la persona con otro líder.
  * @property {(id: string, leaderUid: string) => Promise<void>} unshare   Deja de compartir la persona con un líder.
+ * @property {(id: string, newLeaderUid: string) => Promise<void>} transfer   Transfiere la propiedad a otro líder (total).
  *
  * @typedef {Object} ReadingRepository   // genérico por dimensión (R1: una instancia por dimensión)
  * @property {(personId: string, payload: object) => Promise<string>} add

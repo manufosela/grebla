@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryPersistence, createMemoryPeopleRepository } from '../../infrastructure/memory/index.js';
-import { addPerson, sharePerson, unsharePerson } from './index.js';
+import { addPerson, sharePerson, unsharePerson, transferOwnership } from './index.js';
 
 describe('Fase 3b — compartir personas entre líderes', () => {
   /** @type {ReturnType<typeof createMemoryPersistence>} */
@@ -54,5 +54,42 @@ describe('Fase 3b — compartir personas entre líderes', () => {
     );
     const list = await repo.list();
     expect(list.map((x) => x.name).sort()).toEqual(['Ana', 'Beto']);
+  });
+
+  it('transferOwnership cambia el dueño y retira al nuevo dueño de sharedWith', async () => {
+    const repo = createMemoryPeopleRepository(
+      [
+        {
+          id: 'a',
+          name: 'Ana',
+          active: true,
+          ownerLeaderUid: 'leader-1',
+          sharedWith: { 'leader-2': 'view' },
+          sharedWithUids: ['leader-2'],
+        },
+      ],
+      () => '',
+    );
+    await transferOwnership({ people: repo }, 'a', 'leader-2');
+    const person = await repo.getById('a');
+    expect(person.ownerLeaderUid).toBe('leader-2');
+    expect(person.sharedWith).toEqual({});
+    expect(person.sharedWithUids).toEqual([]);
+  });
+
+  it('tras transferir, el dueño anterior deja de ver la persona', async () => {
+    const repo = createMemoryPeopleRepository(
+      [{ id: 'a', name: 'Ana', active: true, ownerLeaderUid: 'leader-1' }],
+      () => '',
+      'leader-1',
+    );
+    expect((await repo.list()).map((x) => x.name)).toEqual(['Ana']);
+    await transferOwnership({ people: repo }, 'a', 'leader-2');
+    expect((await repo.list()).map((x) => x.name)).toEqual([]);
+  });
+
+  it('transferOwnership exige el uid del nuevo líder', async () => {
+    const repo = createMemoryPeopleRepository([{ id: 'a', name: 'Ana', active: true, ownerLeaderUid: 'l1' }], () => '');
+    await expect(transferOwnership({ people: repo }, 'a', '')).rejects.toThrow(/requiere/);
   });
 });
