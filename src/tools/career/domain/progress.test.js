@@ -4,11 +4,21 @@ import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, lev
 const map = {
   id: 'm',
   name: 'M',
-  tag: 't',
+  areas: [{ id: 'z', name: 'Z' }],
   cities: [
-    { id: 'a', name: 'A', kind: 'tech', x: 0, y: 0, weight: 1, prereqs: [] },
-    { id: 'b', name: 'B', kind: 'tech', x: 0, y: 0, weight: 2, prereqs: ['a'] },
-    { id: 'c', name: 'C', kind: 'tech', x: 0, y: 0, weight: 3, prereqs: ['a', 'b'] },
+    { id: 'a', name: 'A', kind: 'tech', area: 'z', x: 0, y: 0, weight: 1, prereqs: [] },
+    { id: 'b', name: 'B', kind: 'tech', area: 'z', x: 0, y: 0, weight: 2, prereqs: ['a'] },
+    { id: 'c', name: 'C', kind: 'tech', area: 'z', x: 0, y: 0, weight: 3, prereqs: ['a', 'b'] },
+  ],
+};
+
+const mapWithDeprecated = {
+  id: 'd',
+  name: 'D',
+  areas: [{ id: 'z', name: 'Z' }],
+  cities: [
+    { id: 'a', name: 'A', kind: 'tech', area: 'z', x: 0, y: 0, weight: 1, prereqs: [] },
+    { id: 'old', name: 'Old', kind: 'tech', area: 'z', x: 0, y: 0, weight: 2, prereqs: ['a'], deprecated: true },
   ],
 };
 
@@ -26,6 +36,13 @@ describe('career progress', () => {
     expect(isReachable(map, 'b', ['a'])).toBe(true);
     expect(isReachable(map, 'c', ['a'])).toBe(false);
     expect(isReachable(map, 'c', ['a', 'b'])).toBe(true);
+  });
+
+  it('las ciudades deprecadas no son alcanzables ni puntúan', () => {
+    expect(isReachable(mapWithDeprecated, 'old', ['a'])).toBe(false);
+    expect(reachableCityIds(mapWithDeprecated, ['a'])).toEqual([]);
+    expect(totalPoints(mapWithDeprecated)).toBe(1); // 'old' no cuenta
+    expect(mapPoints(mapWithDeprecated, ['a', 'old'])).toBe(1); // 'old' no puntúa
   });
 
   it('reachableCityIds = siguientes pasos posibles', () => {

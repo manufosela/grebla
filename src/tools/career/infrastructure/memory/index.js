@@ -10,14 +10,21 @@
 export function createMemoryCareerStore(seed = {}) {
   /** @type {Map<string, import('../../domain/types.js').Journey>} */
   const store = new Map(Object.entries(seed));
+  /** @param {import('../../domain/types.js').Journey} j */
+  const clone = (j) => ({
+    ...j,
+    visitedCities: [...(j.visitedCities ?? [])],
+    plannedRoute: [...(j.plannedRoute ?? [])],
+    evidences: structuredClone(j.evidences ?? {}),
+  });
   return {
     journeys: {
-      async get(uid) {
-        const j = store.get(uid);
-        return j ? { ...j, visited: [...(j.visited ?? [])] } : null;
+      async get(personId) {
+        const j = store.get(personId);
+        return j ? clone(j) : null;
       },
-      async save(uid, journey) {
-        store.set(uid, { ...journey, visited: [...(journey.visited ?? [])] });
+      async save(personId, journey) {
+        store.set(personId, clone(journey));
       },
     },
   };

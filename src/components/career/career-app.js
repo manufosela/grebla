@@ -1,32 +1,32 @@
 /**
  * <career-app>
- * Shell del Mapa de Carrera: selector de mapa, barra de progreso/nivel, el mapa
- * visual y un panel de acciones para la ciudad seleccionada. Persiste el journey
- * por usuario vía los casos de uso.
+ * Shell del Mapa de Carrera: selector de PERSONA del equipo, barra de progreso/
+ * nivel, el mapa de la isla y un panel de acciones/evidencias para la ciudad
+ * seleccionada. Igual que Role Mirror, el líder elige a quién edita y el journey
+ * se persiste en el subárbol de esa persona.
  *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
- *  - uid: string
+ *  - people: { id: string, name: string }[]   personas del equipo del líder
  */
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
 import {
-  getMaps,
-  getMap,
+  getIslandMap,
   getJourney,
-  startMap,
   toggleVisited,
   setCurrent,
-  setTarget,
+  toggleRoute,
+  setEvidence,
   stats,
 } from '../../tools/career/application/usecases.js';
 
 export class CareerApp extends LitElement {
   static properties = {
     store: { attribute: false },
-    uid: { attribute: false },
+    people: { attribute: false },
+    personId: { state: true },
     error: { state: true },
-    mapId: { state: true },
     journey: { state: true },
     selected: { state: true },
     loading: { state: true },
@@ -58,28 +58,40 @@ export class CareerApp extends LitElement {
     .legend .d.visited { background: var(--rm-accent, #2a9d8f); }
     .legend .d.reachable { background: var(--rm-coral, #f2887a); }
     .legend .d.locked { background: var(--rm-track, #d7dee2); }
+    .legend .d.deprecated { background: var(--rm-danger, #dc2626); opacity: 0.55; }
     .legend .r { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 2px solid; }
     .legend .r.current { border-color: var(--rm-coral-600, #e26d5e); }
     .legend .r.target { border-color: var(--rm-navy, #1e3a5f); }
     .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
     .error { color: var(--rm-danger, #dc2626); }
+    .ev { margin-top: 1rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.75rem; }
+    .ev h4 { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
+    .ev label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    .ev input { width: 100%; box-sizing: border-box; margin-top: 0.2rem; padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); font-size: 0.85rem; color: var(--rm-text, #111827); background: var(--rm-surface, #fff); }
+    .recs { margin: 0.75rem 0 0; padding: 0; list-style: none; font-size: 0.78rem; }
+    .recs li { margin: 0.2rem 0; color: var(--rm-muted, #6b7280); }
+    .recs a { color: var(--rm-accent, #2a9d8f); }
+    .dep { font-size: 0.78rem; color: var(--rm-danger, #dc2626); font-weight: 600; margin: 0 0 0.5rem; }
   `;
 
   constructor() {
     super();
     this.store = null;
-    this.uid = null;
+    /** @type {{ id: string, name: string }[]} */
+    this.people = [];
+    this.personId = null;
     this.error = '';
-    this.mapId = null;
-    this.journey = { mapId: null, visited: [], current: null, target: null };
+    this.journey = { visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} };
     this.selected = null;
-    this.loading = true;
-    this._loaded = false;
+    this.loading = false;
+    this._loadedPerson = null;
   }
 
-  updated() {
-    if (this.store && this.uid && !this._loaded) {
-      this._loaded = true;
+  /** @param {Map<string, unknown>} changed */
+  updated(changed) {
+    if (changed.has('personId')) this.selected = null;
+    if (this.store && this.personId && this._loadedPerson !== this.personId) {
+      this._loadedPerson = this.personId;
       this._load();
     }
   }
@@ -88,30 +100,21 @@ export class CareerApp extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const j = await getJourney(this.store, this.uid);
-      this.mapId = j.mapId || getMaps()[0].id;
-      this.journey = { mapId: this.mapId, visited: j.visited ?? [], current: j.current ?? null, target: j.target ?? null };
+      this.journey = await getJourney(this.store, this.personId);
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo cargar tu mapa.';
+      this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa de esta persona.';
     } finally {
       this.loading = false;
     }
   }
 
   get _map() {
-    return getMap(this.mapId);
+    return getIslandMap();
   }
 
-  async _changeMap(event) {
-    const id = event.target.value;
-    this.mapId = id;
-    this.selected = null;
+  _changePerson(event) {
+    this.personId = event.target.value || null;
     this.error = '';
-    try {
-      this.journey = await startMap(this.store, this.uid, id);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo cambiar de mapa.';
-    }
   }
 
   _onSelect(event) {
@@ -119,31 +122,72 @@ export class CareerApp extends LitElement {
   }
 
   async _act(action) {
+    if (!this.personId || !this.selected) return;
     const map = this._map;
     this.error = '';
     try {
-      if (action === 'toggle') this.journey = await toggleVisited(this.store, this.uid, map, this.journey, this.selected);
-      else if (action === 'current') this.journey = await setCurrent(this.store, this.uid, this.journey, this.selected);
-      else if (action === 'target') this.journey = await setTarget(this.store, this.uid, this.journey, this.selected);
+      if (action === 'toggle') this.journey = await toggleVisited(this.store, this.personId, map, this.journey, this.selected);
+      else if (action === 'current') this.journey = await setCurrent(this.store, this.personId, this.journey, this.selected);
+      else if (action === 'route') this.journey = await toggleRoute(this.store, this.personId, this.journey, this.selected);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo actualizar.';
     }
   }
 
+  async _saveEvidence(field, value) {
+    if (!this.personId || !this.selected) return;
+    const prev = this.journey.evidences?.[this.selected] ?? {};
+    const next =
+      field === 'priorExperienceYears'
+        ? { ...prev, priorExperienceYears: value === '' ? undefined : Number(value) }
+        : { ...prev, [field]: value.split(',').map((s) => s.trim()).filter(Boolean) };
+    this.error = '';
+    try {
+      this.journey = await setEvidence(this.store, this.personId, this.journey, this.selected, next);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudieron guardar las evidencias.';
+    }
+  }
+
+  _renderPersonSelect() {
+    return html`<label>Persona
+      <select @change=${this._changePerson}>
+        <option value="" ?selected=${!this.personId}>— Elige una persona —</option>
+        ${(this.people ?? []).map(
+          (p) => html`<option value=${p.id} ?selected=${p.id === this.personId}>${p.name}</option>`,
+        )}
+      </select>
+    </label>`;
+  }
+
   render() {
     if (this.error && !this.store) return html`<p class="error">${this.error}</p>`;
-    if (this.loading || !this.store) return html`<p class="empty">Cargando tu mapa…</p>`;
+    if (!this.store) return html`<p class="empty">Cargando…</p>`;
+
+    if (!this.personId) {
+      return html`
+        <div class="bar">${this._renderPersonSelect()}</div>
+        ${this.error ? html`<p class="error">${this.error}</p>` : null}
+        <p class="empty">Elige una persona de tu equipo para ver y editar su mapa de carrera en la isla.</p>
+      `;
+    }
+
+    if (this.loading) {
+      return html`
+        <div class="bar">${this._renderPersonSelect()}</div>
+        <p class="empty">Cargando el mapa de esta persona…</p>
+      `;
+    }
+
     const map = this._map;
     const s = stats(map, this.journey);
     const sel = this.selected ? map.cities.find((c) => c.id === this.selected) : null;
-    const visited = this.journey.visited ?? [];
+    const visited = this.journey.visitedCities ?? [];
+    const inRoute = (this.journey.plannedRoute ?? []).includes(this.selected);
+    const ev = sel ? this.journey.evidences?.[sel.id] ?? {} : {};
     return html`
       <div class="bar">
-        <label>Mapa
-          <select @change=${this._changeMap}>
-            ${getMaps().map((m) => html`<option value=${m.id} ?selected=${m.id === this.mapId}>${m.name}</option>`)}
-          </select>
-        </label>
+        ${this._renderPersonSelect()}
         <div class="stat"><span class="lvl">${s.level}</span><span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span></div>
       </div>
       <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
@@ -163,24 +207,70 @@ export class CareerApp extends LitElement {
             ? html`
                 <h3>${sel.name}</h3>
                 <p class="kind">${sel.kind} · ${sel.weight} pts</p>
-                <div class="actions">
-                  <button class="primary" @click=${() => this._act('toggle')}>
-                    ${visited.includes(sel.id) ? 'Quitar de visitadas' : 'Marcar como visitada'}
-                  </button>
-                  <button @click=${() => this._act('current')}>Marcar como ciudad actual</button>
-                  <button @click=${() => this._act('target')}>Marcar como objetivo</button>
-                </div>
+                ${sel.deprecated ? html`<p class="dep">Tecnología en desuso — no forma parte de la ruta.</p>` : null}
+                ${sel.deprecated
+                  ? null
+                  : html`<div class="actions">
+                      <button class="primary" @click=${() => this._act('toggle')}>
+                        ${visited.includes(sel.id) ? 'Quitar de visitadas' : 'Marcar como visitada'}
+                      </button>
+                      <button @click=${() => this._act('current')}>Marcar como ciudad actual</button>
+                      <button @click=${() => this._act('route')}>${inRoute ? 'Quitar de la ruta' : 'Añadir a la ruta'}</button>
+                    </div>`}
                 ${(sel.prereqs ?? []).length
                   ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => map.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
                   : null}
+                ${(sel.recommendations ?? []).length
+                  ? html`<ul class="recs">
+                      ${sel.recommendations.map(
+                        (r) => html`<li>${r.kind}: ${r.url ? html`<a href=${r.url} target="_blank" rel="noopener">${r.label}</a>` : r.label}</li>`,
+                      )}
+                    </ul>`
+                  : null}
+                ${sel.deprecated
+                  ? null
+                  : html`<div class="ev">
+                      <h4>Evidencias</h4>
+                      <label>Experiencia previa (años)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          .value=${ev.priorExperienceYears ?? ''}
+                          @change=${(e) => this._saveEvidence('priorExperienceYears', e.target.value)}
+                        />
+                      </label>
+                      <label>Formaciones (separadas por coma)
+                        <input
+                          type="text"
+                          .value=${(ev.formaciones ?? []).join(', ')}
+                          @change=${(e) => this._saveEvidence('formaciones', e.target.value)}
+                        />
+                      </label>
+                      <label>Cursos (separados por coma)
+                        <input
+                          type="text"
+                          .value=${(ev.cursos ?? []).join(', ')}
+                          @change=${(e) => this._saveEvidence('cursos', e.target.value)}
+                        />
+                      </label>
+                      <label>Títulos (separados por coma)
+                        <input
+                          type="text"
+                          .value=${(ev.titulos ?? []).join(', ')}
+                          @change=${(e) => this._saveEvidence('titulos', e.target.value)}
+                        />
+                      </label>
+                    </div>`}
               `
-            : html`<p class="hint">Haz clic en una ciudad del mapa para ver sus acciones.</p>`}
+            : html`<p class="hint">Haz clic en una ciudad de la isla para ver sus acciones y evidencias.</p>`}
           <div class="legend">
             <span><i class="d visited"></i>Visitada</span>
             <span><i class="d reachable"></i>Disponible</span>
             <span><i class="d locked"></i>Bloqueada</span>
+            <span><i class="d deprecated"></i>En desuso</span>
             <span><i class="r current"></i>Actual</span>
-            <span><i class="r target"></i>Objetivo</span>
+            <span><i class="r target"></i>En ruta</span>
           </div>
         </div>
       </div>
