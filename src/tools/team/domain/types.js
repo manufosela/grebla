@@ -15,6 +15,11 @@
  * @property {string|null} [deactivatedAt]  ISO date de la baja (null/ausente si activa)
  * @property {string|null} [githubLogin]    Usuario de GitHub, para mapear la contribución DORA a la persona.
  * @property {string|null} [uid]            Cuenta vinculada (acceso de solo lectura de la persona). Se vincula al dar acceso.
+ * @property {string} [ownerLeaderUid]      Líder dueño de la persona (la gestiona y comparte).
+ * @property {Record<string, SharePermission>} [sharedWith]   Compartición con otros líderes: uid → permiso.
+ * @property {string[]} [sharedWithUids]    Espejo de las claves de sharedWith (para consultas array-contains).
+ *
+ * @typedef {'view'|'edit'} SharePermission   Permiso de una persona compartida (ver / editar).
  *
  * @typedef {Object} SeniorityReading
  * @property {LevelValue} level

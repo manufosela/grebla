@@ -8,6 +8,8 @@ export {
   listDepartedPeople,
   deactivatePerson,
   updatePerson,
+  sharePerson,
+  unsharePerson,
   normalizePerson,
   getTurnover,
 } from './people.js';

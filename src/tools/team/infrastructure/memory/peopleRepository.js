@@ -10,15 +10,28 @@
 /**
  * @param {Person[]} [seed]
  * @param {() => string} [now] Inyectable para tests deterministas (ISO date de baja).
+ * @param {string|null} [viewerLeaderUid] Líder que mira: si se indica, list() devuelve
+ *   solo sus personas (ownerLeaderUid) + las compartidas con él (sharedWithUids).
+ *   Si es null, list() devuelve todas (paridad con el uso sin multi-líder).
  * @returns {PeopleRepository}
  */
-export function createMemoryPeopleRepository(seed = [], now = () => new Date().toISOString()) {
+export function createMemoryPeopleRepository(
+  seed = [],
+  now = () => new Date().toISOString(),
+  viewerLeaderUid = null,
+) {
   /** @type {Map<string, Person>} */
   const store = new Map(seed.map((p) => [p.id, { ...p }]));
 
+  /** @param {Person} p */
+  const isVisible = (p) =>
+    !viewerLeaderUid
+    || p.ownerLeaderUid === viewerLeaderUid
+    || (Array.isArray(p.sharedWithUids) && p.sharedWithUids.includes(viewerLeaderUid));
+
   return {
     async list() {
-      return [...store.values()].map((p) => ({ ...p }));
+      return [...store.values()].filter(isVisible).map((p) => ({ ...p }));
     },
     async getById(id) {
       const person = store.get(id);
@@ -38,6 +51,19 @@ export function createMemoryPeopleRepository(seed = [], now = () => new Date().t
       const person = store.get(id);
       if (!person) throw new Error(`Person ${id} no existe`);
       store.set(id, { ...person, active: false, deactivatedAt: now() });
+    },
+    async share(id, leaderUid, permission) {
+      const person = store.get(id);
+      if (!person) throw new Error(`Person ${id} no existe`);
+      const sharedWith = { ...(person.sharedWith ?? {}), [leaderUid]: permission };
+      store.set(id, { ...person, sharedWith, sharedWithUids: Object.keys(sharedWith) });
+    },
+    async unshare(id, leaderUid) {
+      const person = store.get(id);
+      if (!person) throw new Error(`Person ${id} no existe`);
+      const sharedWith = { ...(person.sharedWith ?? {}) };
+      delete sharedWith[leaderUid];
+      store.set(id, { ...person, sharedWith, sharedWithUids: Object.keys(sharedWith) });
     },
   };
 }

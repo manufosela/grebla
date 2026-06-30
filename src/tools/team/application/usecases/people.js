@@ -100,3 +100,34 @@ export function deactivatePerson(persistence, id) {
 export function updatePerson(persistence, id, patch) {
   return persistence.people.update(id, patch);
 }
+
+/** Permisos válidos al compartir una persona. */
+const SHARE_PERMISSIONS = Object.freeze(['view', 'edit']);
+
+/**
+ * Comparte una persona con otro líder (tipo Drive: ver o editar).
+ * @param {PersistencePort} persistence
+ * @param {string} personId
+ * @param {string} leaderUid   Líder con quien se comparte.
+ * @param {import('../../domain/types.js').SharePermission} permission
+ * @returns {Promise<void>}
+ */
+export async function sharePerson(persistence, personId, leaderUid, permission) {
+  if (!leaderUid) throw new Error('sharePerson requiere el uid del líder con quien compartir');
+  if (!SHARE_PERMISSIONS.includes(permission)) {
+    throw new Error(`Permiso de compartición inválido: ${permission} (usa 'view' o 'edit')`);
+  }
+  return persistence.people.share(personId, leaderUid, permission);
+}
+
+/**
+ * Deja de compartir una persona con un líder.
+ * @param {PersistencePort} persistence
+ * @param {string} personId
+ * @param {string} leaderUid
+ * @returns {Promise<void>}
+ */
+export async function unsharePerson(persistence, personId, leaderUid) {
+  if (!leaderUid) throw new Error('unsharePerson requiere el uid del líder');
+  return persistence.people.unshare(personId, leaderUid);
+}

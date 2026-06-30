@@ -32,6 +32,9 @@ import {
   where,
   orderBy,
   limit,
+  arrayUnion,
+  arrayRemove,
+  deleteField,
 } from 'firebase/firestore';
 import { DIMENSIONS, DEFAULT_SETTINGS } from '../../domain/types.js';
 
@@ -62,8 +65,16 @@ const mapDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 function peopleRepo(db, base, leaderUid) {
   return {
     async list() {
-      // Por defecto, las personas de las que este líder es dueño (sharing en 3b).
-      return mapDocs(await getDocs(query(peopleCol(db, base), where('ownerLeaderUid', '==', leaderUid))));
+      // Las personas visibles para este líder: las suyas (ownerLeaderUid) + las
+      // compartidas con él (sharedWithUids array-contains). Firestore no hace OR
+      // sobre campos distintos, así que son dos consultas + merge con dedup por id.
+      const [owned, shared] = await Promise.all([
+        getDocs(query(peopleCol(db, base), where('ownerLeaderUid', '==', leaderUid))),
+        getDocs(query(peopleCol(db, base), where('sharedWithUids', 'array-contains', leaderUid))),
+      ]);
+      const byId = new Map();
+      for (const d of [...owned.docs, ...shared.docs]) byId.set(d.id, { id: d.id, ...d.data() });
+      return [...byId.values()];
     },
     async getById(id) {
       const d = await getDoc(personDoc(db, base, id));
@@ -78,6 +89,20 @@ function peopleRepo(db, base, leaderUid) {
     },
     async deactivate(id) {
       await updateDoc(personDoc(db, base, id), { active: false, deactivatedAt: new Date().toISOString() });
+    },
+    async share(id, sharedLeaderUid, permission) {
+      // sharedWith (mapa) lleva el permiso; sharedWithUids (array) es su espejo
+      // para poder consultar con array-contains en list().
+      await updateDoc(personDoc(db, base, id), {
+        [`sharedWith.${sharedLeaderUid}`]: permission,
+        sharedWithUids: arrayUnion(sharedLeaderUid),
+      });
+    },
+    async unshare(id, sharedLeaderUid) {
+      await updateDoc(personDoc(db, base, id), {
+        [`sharedWith.${sharedLeaderUid}`]: deleteField(),
+        sharedWithUids: arrayRemove(sharedLeaderUid),
+      });
     },
   };
 }
