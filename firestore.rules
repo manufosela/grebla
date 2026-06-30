@@ -51,7 +51,11 @@ service cloud.firestore {
       function sharedPerm(data) {
         return isSignedIn() && 'sharedWith' in data ? data.sharedWith[request.auth.uid] : null;
       }
-      allow read: if isSuperAdmin() || isOwner() || sharedPerm(resource.data) in ['view', 'edit'];
+      // La lectura (incl. la query por sharedWithUids) se respalda con el MISMO
+      // campo que usa la consulta (el array), no con el mapa sharedWith; si no,
+      // Firestore rechaza la query del líder (rules are not filters).
+      allow read: if isSuperAdmin() || isOwner()
+        || ('sharedWithUids' in resource.data && request.auth.uid in resource.data.sharedWithUids);
       allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
       // Un editor compartido edita datos pero NO transfiere la propiedad.
       allow update: if isSuperAdmin() || isOwner()
