@@ -15,18 +15,25 @@ import {
   removeArea,
   getSettings,
   updateSettings,
+  listTeamRoles,
+  addTeamRole,
+  removeTeamRole,
 } from '../../tools/team/application/usecases/index.js';
 import { LEVELS } from '../../tools/team/domain/levels.js';
 
 export class TeamSettings extends LitElement {
   static properties = {
     persistence: { attribute: false },
+    currentUid: { attribute: false },
     areas: { state: true },
+    teamRoles: { state: true },
     settings: { state: true },
     loading: { state: true },
     error: { state: true },
     _newArea: { state: true },
     _confirmArea: { state: true },
+    _newRole: { state: true },
+    _confirmRole: { state: true },
   };
 
   static styles = css`
@@ -60,8 +67,12 @@ export class TeamSettings extends LitElement {
   constructor() {
     super();
     this.persistence = null;
+    /** @type {string|null} uid del líder en sesión (para distinguir sus roles personales) */
+    this.currentUid = null;
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
+    /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
+    this.teamRoles = [];
     /** @type {import('../../tools/team/domain/types.js').OrgSettings|null} */
     this.settings = null;
     this.loading = true;
@@ -69,6 +80,9 @@ export class TeamSettings extends LitElement {
     this._newArea = '';
     /** @type {string|null} */
     this._confirmArea = null;
+    this._newRole = '';
+    /** @type {string|null} */
+    this._confirmRole = null;
     this._loaded = false;
   }
 
@@ -83,11 +97,13 @@ export class TeamSettings extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [areas, settings] = await Promise.all([
+      const [areas, teamRoles, settings] = await Promise.all([
         listAreas(this.persistence),
+        listTeamRoles(this.persistence),
         getSettings(this.persistence),
       ]);
       this.areas = areas;
+      this.teamRoles = teamRoles;
       this.settings = settings;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la configuración.';
@@ -117,6 +133,31 @@ export class TeamSettings extends LitElement {
       this.areas = await listAreas(this.persistence);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo eliminar el área.';
+    }
+  }
+
+  async _addRole() {
+    const name = this._newRole.trim();
+    if (!name) return;
+    this.error = '';
+    try {
+      await addTeamRole(this.persistence, name);
+      this._newRole = '';
+      this.teamRoles = await listTeamRoles(this.persistence);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo añadir el rol.';
+    }
+  }
+
+  /** @param {string} id */
+  async _removeRole(id) {
+    this._confirmRole = null;
+    this.error = '';
+    try {
+      await removeTeamRole(this.persistence, id);
+      this.teamRoles = await listTeamRoles(this.persistence);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo eliminar el rol.';
     }
   }
 
@@ -166,6 +207,43 @@ export class TeamSettings extends LitElement {
             @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addArea(); } }}
           />
           <button class="primary" @click=${this._addArea}>Añadir área</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Roles de equipo</h2>
+        <p class="hint">Los roles <strong>globales</strong> los define la organización y los ve todo el mundo; los que crees aquí son <strong>tuyos</strong>.</p>
+        ${this.teamRoles.length === 0
+          ? html`<p class="empty">Aún no hay roles. Crea los roles funcionales de tu equipo.</p>`
+          : html`
+              <ul class="areas">
+                ${this.teamRoles.map((r) => {
+                  const isGlobal = !r.ownerLeaderUid;
+                  return html`
+                    <li>
+                      <span class="name">${r.name}</span>
+                      ${isGlobal
+                        ? html`<span class="badge">Global</span>`
+                        : this._confirmRole === r.id
+                          ? html`<span>¿Eliminar?
+                              <button class="link yes" @click=${() => this._removeRole(r.id)}>Sí</button>
+                              <button class="link" @click=${() => { this._confirmRole = null; }}>No</button>
+                            </span>`
+                          : html`<button class="link" @click=${() => { this._confirmRole = r.id; }}>Eliminar</button>`}
+                    </li>
+                  `;
+                })}
+              </ul>
+            `}
+        <div class="row">
+          <input
+            type="text"
+            placeholder="Nuevo rol (p. ej. Backend)"
+            .value=${this._newRole}
+            @input=${(e) => { this._newRole = e.target.value; }}
+            @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
+          />
+          <button class="primary" @click=${this._addRole}>Añadir rol</button>
         </div>
       </section>
 

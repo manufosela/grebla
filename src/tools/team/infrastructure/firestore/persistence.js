@@ -147,13 +147,17 @@ function areaRepo(db, base) {
   };
 }
 
-function teamRoleRepo(db, tbase) {
+function teamRoleRepo(db, tbase, leaderUid) {
   return {
     async list() {
-      return mapDocs(await getDocs(teamRoleCol(db, tbase)));
+      // Globales (sin ownerLeaderUid) + los personales de este líder. El catálogo
+      // es pequeño: se lee entero y se filtra en cliente (no hay OR en Firestore).
+      const all = mapDocs(await getDocs(teamRoleCol(db, tbase)));
+      return all.filter((r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid);
     },
     async create(name) {
-      const ref = await addDoc(teamRoleCol(db, tbase), { name });
+      // El líder crea roles PERSONALES (el superadmin gestiona los globales aparte).
+      const ref = await addDoc(teamRoleCol(db, tbase), { name, ownerLeaderUid: leaderUid });
       return ref.id;
     },
     async remove(id) {
@@ -225,7 +229,7 @@ export function createFirestorePersistence(db, leaderUid) {
     people: peopleRepo(db, base, leaderUid),
     readings,
     areas: areaRepo(db, base),
-    teamRoles: teamRoleRepo(db, base), // catálogo a nivel de tenant
+    teamRoles: teamRoleRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
     conversations: conversationRepo(db, base),
     supportNotes: supportNoteRepo(db, base),
     config: configRepo(db, base),

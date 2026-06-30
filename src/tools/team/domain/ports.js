@@ -32,9 +32,9 @@
  * @property {(name: string) => Promise<string>} create
  * @property {(id: string) => Promise<void>} remove
  *
- * @typedef {Object} TeamRoleRepository   Catálogo de roles funcionales del equipo (mismo patrón que Area).
- * @property {() => Promise<TeamRole[]>} list
- * @property {(name: string) => Promise<string>} create
+ * @typedef {Object} TeamRoleRepository   Catálogo de roles con ámbito (personal/global).
+ * @property {() => Promise<TeamRole[]>} list   Globales + los del líder que mira.
+ * @property {(name: string) => Promise<string>} create   Crea un rol PERSONAL del líder.
  * @property {(id: string) => Promise<void>} remove
  *
  * @typedef {Object} ConversationRepository
