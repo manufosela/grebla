@@ -88,10 +88,11 @@ service cloud.firestore {
       allow write: if isLeader() || isSuperAdmin();
     }
 
-    // Catálogo de roles de equipo: lo gobierna el superadmin.
+    // Catálogo de roles de equipo: compartido por la organización, lo gestionan
+    // los líderes (igual que /areas).
     match /teamRoles/{roleId} {
       allow read: if isSignedIn();
-      allow write: if isSuperAdmin();
+      allow write: if isLeader() || isSuperAdmin();
     }
 
     // Configuración: /config/org (Role Mirror, superadmin); /config/settings
