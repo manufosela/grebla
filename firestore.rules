@@ -74,24 +74,49 @@ service cloud.firestore {
 
       // Personas del equipo (tool Equipo + Role Mirror), a nivel de tenant para
       // poder compartirlas/transferirlas entre líderes (Fase 3). Cada persona
-      // lleva `ownerLeaderUid`; por defecto solo accede su dueño (o admin del
-      // tenant). El sharing por `sharedWith` llegará en 3b.
+      // lleva `ownerLeaderUid` (dueño) y `sharedWith` (mapa uid→'view'|'edit'):
+      // el dueño y el admin acceden siempre; un líder con permiso 'view' lee y
+      // con 'edit' también escribe. El espejo `sharedWithUids` solo es para query.
       match /people/{personId} {
         function isPersonOwner() {
           return isTenantMember(tenantId)
             && resource.data.ownerLeaderUid == request.auth.uid;
         }
-        allow read: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin();
+        // Permiso de compartición del usuario actual sobre `data` (null si ninguno).
+        function sharedPerm(data) {
+          return isTenantMember(tenantId) && 'sharedWith' in data
+            ? data.sharedWith[request.auth.uid]
+            : null;
+        }
+        allow read: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin()
+          || sharedPerm(resource.data) in ['view', 'edit'];
         allow create: if isTenantMember(tenantId)
           && request.resource.data.ownerLeaderUid == request.auth.uid;
-        allow update, delete: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin();
+        // Un editor compartido puede editar datos, pero NO transferir la propiedad
+        // (cambiar ownerLeaderUid es transferencia: dueño/admin, fase 3c).
+        allow update: if isTenantAdmin(tenantId) || isSuperAdmin() || isPersonOwner()
+          || (sharedPerm(resource.data) == 'edit'
+              && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
+        allow delete: if isPersonOwner() || isTenantAdmin(tenantId) || isSuperAdmin();
 
         // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
-        // resumen/sesiones de Role Mirror): mismo acceso que la persona dueña.
+        // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
         match /{document=**} {
-          allow read, write: if isTenantAdmin(tenantId) || isSuperAdmin()
-            || (isTenantMember(tenantId)
-                && get(/databases/$(database)/documents/tenants/$(tenantId)/people/$(personId)).data.ownerLeaderUid == request.auth.uid);
+          function person() {
+            return get(/databases/$(database)/documents/tenants/$(tenantId)/people/$(personId)).data;
+          }
+          function canView() {
+            return isTenantMember(tenantId)
+              && (person().ownerLeaderUid == request.auth.uid
+                  || ('sharedWith' in person() && person().sharedWith[request.auth.uid] in ['view', 'edit']));
+          }
+          function canEdit() {
+            return isTenantMember(tenantId)
+              && (person().ownerLeaderUid == request.auth.uid
+                  || ('sharedWith' in person() && person().sharedWith[request.auth.uid] == 'edit'));
+          }
+          allow read: if isTenantAdmin(tenantId) || isSuperAdmin() || canView();
+          allow write: if isTenantAdmin(tenantId) || isSuperAdmin() || canEdit();
         }
       }
 
