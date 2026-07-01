@@ -21,6 +21,12 @@ onUserChanged(async (user) => {
   try {
     const { role } = await resolveAccess(user);
     if (!role) return showLanding();
+    // El viewer siempre entra al panel de gestión en modo solo lectura: no
+    // gestiona personas propias, así que no hay "usar como líder" para él.
+    if (role === 'viewer') {
+      location.replace('/admin');
+      return;
+    }
     // El superadmin entra al panel de gestión, salvo que haya elegido "usar
     // como líder" en esta sesión (entonces ve las herramientas, con vuelta).
     if (role === 'superadmin' && sessionStorage.getItem(VIEW_FLAG) !== 'leader') {
