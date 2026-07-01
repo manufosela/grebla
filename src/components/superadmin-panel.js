@@ -38,6 +38,7 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
+const TABS = ['leaders', 'teamRoles', 'labels', 'careerMap', 'users'];
 
 export class SuperadminPanel extends LitElement {
   static properties = {
@@ -141,7 +142,11 @@ export class SuperadminPanel extends LitElement {
     this.isLeader = false;
     this.readOnly = false;
     /** @type {'leaders'|'teamRoles'|'labels'|'careerMap'|'users'} pestaña activa */
-    this._tab = 'leaders';
+    this._tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'leaders';
+    this._onHashChange = () => {
+      const t = location.hash.slice(1);
+      if (TABS.includes(t)) this._tab = t;
+    };
     /** @type {import('../lib/leaders.js').Leader[]} */
     this.leaders = [];
     /** @type {import('../lib/leaders.js').Leader|null} */
@@ -175,6 +180,24 @@ export class SuperadminPanel extends LitElement {
     this._usersError = '';
     this._usersNotice = '';
     this._loaded = false;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('hashchange', this._onHashChange);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('hashchange', this._onHashChange);
+    super.disconnectedCallback();
+  }
+
+  /** @param {typeof TABS[number]} tab */
+  _setTab(tab) {
+    // Escribe el hash (recarga y atrás/adelante conservan la pestaña); el
+    // listener de hashchange sincroniza _tab. Si el hash ya coincide, fija _tab.
+    if (location.hash.slice(1) !== tab) location.hash = tab;
+    else this._tab = tab;
   }
 
   updated() {
@@ -569,13 +592,13 @@ export class SuperadminPanel extends LitElement {
           : null}
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
-        <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => { this._tab = 'leaders'; }}>Líderes</button>
-        <button class="tab ${this._tab === 'teamRoles' ? 'active' : ''}" @click=${() => { this._tab = 'teamRoles'; }}>Roles de equipo</button>
-        <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => { this._tab = 'labels'; }}>Labels</button>
-        <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => { this._tab = 'careerMap'; }}>Mapa de carrera</button>
+        <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Líderes</button>
+        <button class="tab ${this._tab === 'teamRoles' ? 'active' : ''}" @click=${() => this._setTab('teamRoles')}>Roles de equipo</button>
+        <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
+        <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => this._setTab('careerMap')}>Mapa de carrera</button>
         ${this.readOnly
           ? null
-          : html`<button class="tab ${this._tab === 'users' ? 'active' : ''}" @click=${() => { this._tab = 'users'; }}>Usuarios</button>`}
+          : html`<button class="tab ${this._tab === 'users' ? 'active' : ''}" @click=${() => this._setTab('users')}>Usuarios</button>`}
       </nav>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderTabContent()}
