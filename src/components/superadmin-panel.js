@@ -68,7 +68,7 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'teamRoles', 'labels', 'careerMap', 'careerFramework', 'users'];
+const TABS = ['leaders', 'guilds', 'labels', 'careerMap', 'careerFramework', 'users'];
 
 export class SuperadminPanel extends LitElement {
   static properties = {
@@ -82,7 +82,7 @@ export class SuperadminPanel extends LitElement {
     teamLoading: { state: true },
     _email: { state: true },
     _error: { state: true },
-    _teamRoles: { state: true },
+    _guilds: { state: true },
     _labels: { state: true },
     _newCat: { state: true },
     _careerMap: { state: true },
@@ -192,7 +192,7 @@ export class SuperadminPanel extends LitElement {
     this.ready = false;
     this.isLeader = false;
     this.readOnly = false;
-    /** @type {'leaders'|'teamRoles'|'labels'|'careerMap'|'careerFramework'|'users'} pestaña activa */
+    /** @type {'leaders'|'guilds'|'labels'|'careerMap'|'careerFramework'|'users'} pestaña activa */
     this._tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'leaders';
     this._onHashChange = () => {
       const t = location.hash.slice(1);
@@ -208,10 +208,10 @@ export class SuperadminPanel extends LitElement {
     this._email = '';
     this._error = '';
     /** @type {import('../lib/catalog.js').CatalogItem[]} */
-    this._teamRoles = [];
+    this._guilds = [];
     /** @type {import('../lib/catalog.js').CatalogItem[]} */
     this._labels = [];
-    this._newCat = { teamRoles: '', labels: '' };
+    this._newCat = { guilds: '', labels: '' };
     /** @type {import('../tools/career/domain/types.js').CareerMap|null} */
     this._careerMap = null;
     this._newArea = { id: '', name: '' };
@@ -277,8 +277,8 @@ export class SuperadminPanel extends LitElement {
 
   async _loadCatalogs() {
     try {
-      const [teamRoles, labels] = await Promise.all([listCatalog('teamRoles'), listCatalog('labels')]);
-      this._teamRoles = teamRoles;
+      const [guilds, labels] = await Promise.all([listCatalog('guilds'), listCatalog('labels')]);
+      this._guilds = guilds;
       this._labels = labels;
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los catálogos.';
@@ -810,8 +810,8 @@ export class SuperadminPanel extends LitElement {
     switch (this._tab) {
       case 'leaders':
         return html`${this._renderLeaders()} ${this.selected ? this._renderTeam() : null}`;
-      case 'teamRoles':
-        return this._renderCatalog('teamRoles', this._teamRoles, 'Roles de equipo (organización)', 'Nuevo rol global…');
+      case 'guilds':
+        return this._renderCatalog('guilds', this._guilds, 'Gremios (organización)', 'Nuevo gremio global…');
       case 'labels':
         return this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…');
       case 'careerMap':
@@ -836,7 +836,7 @@ export class SuperadminPanel extends LitElement {
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
         <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Líderes</button>
-        <button class="tab ${this._tab === 'teamRoles' ? 'active' : ''}" @click=${() => this._setTab('teamRoles')}>Roles de equipo</button>
+        <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
         <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => this._setTab('careerMap')}>Mapa de carrera</button>
         <button class="tab ${this._tab === 'careerFramework' ? 'active' : ''}" @click=${() => this._setTab('careerFramework')}>Carrera</button>
@@ -1315,13 +1315,13 @@ export class SuperadminPanel extends LitElement {
           : this.team.length === 0
             ? html`<p class="empty">Este líder aún no tiene personas en su equipo.</p>`
             : html`<table>
-                <thead><tr><th>Persona</th><th>Roles</th><th>Rol dominante</th><th>Completitud</th></tr></thead>
+                <thead><tr><th>Persona</th><th>Gremios</th><th>Rol dominante</th><th>Completitud</th></tr></thead>
                 <tbody>
                   ${this.team.map(
                     (p) => html`
                       <tr>
                         <td>${p.name}</td>
-                        <td class="muted">${(p.teamRoles ?? []).join(', ') || '—'}</td>
+                        <td class="muted">${(p.guilds ?? []).join(', ') || '—'}</td>
                         <td>${p.profile?.dominantRole ?? html`<span class="muted">—</span>`}</td>
                         <td>${p.profile?.completion != null ? `${p.profile.completion}%` : '—'}</td>
                       </tr>

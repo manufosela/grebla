@@ -15,9 +15,9 @@ import {
   removeArea,
   getSettings,
   updateSettings,
-  listTeamRoles,
-  addTeamRole,
-  removeTeamRole,
+  listGuilds,
+  addGuild,
+  removeGuild,
   listLabels,
   addLabel,
   removeLabel,
@@ -29,14 +29,14 @@ export class TeamSettings extends LitElement {
     persistence: { attribute: false },
     currentUid: { attribute: false },
     areas: { state: true },
-    teamRoles: { state: true },
+    guilds: { state: true },
     settings: { state: true },
     loading: { state: true },
     error: { state: true },
     _newArea: { state: true },
     _confirmArea: { state: true },
-    _newRole: { state: true },
-    _confirmRole: { state: true },
+    _newGuild: { state: true },
+    _confirmGuild: { state: true },
     _newLabel: { state: true },
     _confirmLabel: { state: true },
   };
@@ -76,8 +76,8 @@ export class TeamSettings extends LitElement {
     this.currentUid = null;
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
-    /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
-    this.teamRoles = [];
+    /** @type {import('../../tools/team/domain/types.js').Guild[]} */
+    this.guilds = [];
     /** @type {import('../../tools/team/domain/types.js').Label[]} */
     this.labels = [];
     /** @type {import('../../tools/team/domain/types.js').OrgSettings|null} */
@@ -87,9 +87,9 @@ export class TeamSettings extends LitElement {
     this._newArea = '';
     /** @type {string|null} */
     this._confirmArea = null;
-    this._newRole = '';
+    this._newGuild = '';
     /** @type {string|null} */
-    this._confirmRole = null;
+    this._confirmGuild = null;
     this._newLabel = '';
     /** @type {string|null} */
     this._confirmLabel = null;
@@ -107,14 +107,14 @@ export class TeamSettings extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [areas, teamRoles, labels, settings] = await Promise.all([
+      const [areas, guilds, labels, settings] = await Promise.all([
         listAreas(this.persistence),
-        listTeamRoles(this.persistence),
+        listGuilds(this.persistence),
         listLabels(this.persistence),
         getSettings(this.persistence),
       ]);
       this.areas = areas;
-      this.teamRoles = teamRoles;
+      this.guilds = guilds;
       this.labels = labels;
       this.settings = settings;
     } catch (err) {
@@ -148,28 +148,28 @@ export class TeamSettings extends LitElement {
     }
   }
 
-  async _addRole() {
-    const name = this._newRole.trim();
+  async _addGuild() {
+    const name = this._newGuild.trim();
     if (!name) return;
     this.error = '';
     try {
-      await addTeamRole(this.persistence, name);
-      this._newRole = '';
-      this.teamRoles = await listTeamRoles(this.persistence);
+      await addGuild(this.persistence, name);
+      this._newGuild = '';
+      this.guilds = await listGuilds(this.persistence);
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo añadir el rol.';
+      this.error = err instanceof Error ? err.message : 'No se pudo añadir el gremio.';
     }
   }
 
   /** @param {string} id */
-  async _removeRole(id) {
-    this._confirmRole = null;
+  async _removeGuild(id) {
+    this._confirmGuild = null;
     this.error = '';
     try {
-      await removeTeamRole(this.persistence, id);
-      this.teamRoles = await listTeamRoles(this.persistence);
+      await removeGuild(this.persistence, id);
+      this.guilds = await listGuilds(this.persistence);
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo eliminar el rol.';
+      this.error = err instanceof Error ? err.message : 'No se pudo eliminar el gremio.';
     }
   }
 
@@ -248,25 +248,25 @@ export class TeamSettings extends LitElement {
       </section>
 
       <section>
-        <h2>Roles de equipo</h2>
-        <p class="hint">Los roles <strong>globales</strong> los define la organización y los ve todo el mundo; los que crees aquí son <strong>tuyos</strong>.</p>
-        ${this.teamRoles.length === 0
-          ? html`<p class="empty">Aún no hay roles. Crea los roles funcionales de tu equipo.</p>`
+        <h2>Gremios</h2>
+        <p class="hint">Gremios (tecnologías/stack, transversales a la disciplina). Los <strong>globales</strong> los define la organización y los ve todo el mundo; los que crees aquí son <strong>tuyos</strong>.</p>
+        ${this.guilds.length === 0
+          ? html`<p class="empty">Aún no hay gremios. Crea los gremios (PHP, Python, Android, iOS…) de tu equipo.</p>`
           : html`
               <ul class="areas">
-                ${this.teamRoles.map((r) => {
+                ${this.guilds.map((r) => {
                   const isGlobal = !r.ownerLeaderUid;
                   return html`
                     <li>
                       <span class="name">${r.name}</span>
                       ${isGlobal
                         ? html`<span class="badge">Global</span>`
-                        : this._confirmRole === r.id
+                        : this._confirmGuild === r.id
                           ? html`<span>¿Eliminar?
-                              <button class="link yes" @click=${() => this._removeRole(r.id)}>Sí</button>
-                              <button class="link" @click=${() => { this._confirmRole = null; }}>No</button>
+                              <button class="link yes" @click=${() => this._removeGuild(r.id)}>Sí</button>
+                              <button class="link" @click=${() => { this._confirmGuild = null; }}>No</button>
                             </span>`
-                          : html`<button class="link" @click=${() => { this._confirmRole = r.id; }}>Eliminar</button>`}
+                          : html`<button class="link" @click=${() => { this._confirmGuild = r.id; }}>Eliminar</button>`}
                     </li>
                   `;
                 })}
@@ -275,17 +275,17 @@ export class TeamSettings extends LitElement {
         <div class="row">
           <input
             type="text"
-            placeholder="Nuevo rol (p. ej. Backend)"
-            .value=${this._newRole}
-            @input=${(e) => { this._newRole = e.target.value; }}
-            @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
+            placeholder="Nuevo gremio (p. ej. Python)"
+            .value=${this._newGuild}
+            @input=${(e) => { this._newGuild = e.target.value; }}
+            @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addGuild(); } }}
           />
-          <button class="primary" @click=${this._addRole}>Añadir rol</button>
+          <button class="primary" @click=${this._addGuild}>Añadir gremio</button>
         </div>
       </section>
 
       <section>
-        <h2>Labels (gremios / equipos)</h2>
+        <h2>Labels</h2>
         <p class="hint">Etiquetas libres para agrupar personas. Las <strong>globales</strong> las define la organización; las que crees aquí son <strong>tuyas</strong>.</p>
         ${this.labels.length === 0
           ? html`<p class="empty">Aún no hay labels. Crea los que necesites para agrupar a tu equipo.</p>`

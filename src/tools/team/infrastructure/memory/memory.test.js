@@ -13,11 +13,11 @@ import {
 describe('memory PeopleRepository', () => {
   it('crea, lee, actualiza y desactiva sin borrar', async () => {
     const repo = createMemoryPeopleRepository();
-    const id = await repo.create({ name: 'Ana', teamRole: 'Backend', startDate: '2025-01-01', active: true });
+    const id = await repo.create({ name: 'Ana', guilds: ['Backend'], startDate: '2025-01-01', active: true });
     expect(await repo.getById(id)).toMatchObject({ id, name: 'Ana', active: true });
 
-    await repo.update(id, { teamRole: 'Fullstack' });
-    expect((await repo.getById(id)).teamRole).toBe('Fullstack');
+    await repo.update(id, { guilds: ['Fullstack'] });
+    expect((await repo.getById(id)).guilds).toEqual(['Fullstack']);
 
     await repo.deactivate(id);
     expect((await repo.getById(id)).active).toBe(false);
@@ -32,7 +32,7 @@ describe('memory PeopleRepository', () => {
 
   it('no expone referencias internas', async () => {
     const repo = createMemoryPeopleRepository();
-    const id = await repo.create({ name: 'Ana', teamRole: 'BE', startDate: '2025-01-01', active: true });
+    const id = await repo.create({ name: 'Ana', guilds: ['BE'], startDate: '2025-01-01', active: true });
     const a = await repo.getById(id);
     a.name = 'MUTADO';
     expect((await repo.getById(id)).name).toBe('Ana');
@@ -113,7 +113,7 @@ describe('memory ConfigRepository', () => {
 describe('createMemoryPersistence (PersistencePort)', () => {
   it('expone los repos y una lectura por cada dimensión', () => {
     const p = createMemoryPersistence();
-    for (const key of ['people', 'readings', 'areas', 'teamRoles', 'conversations', 'supportNotes', 'config']) {
+    for (const key of ['people', 'readings', 'areas', 'guilds', 'conversations', 'supportNotes', 'config']) {
       expect(p).toHaveProperty(key);
     }
     for (const dim of DIMENSIONS) {

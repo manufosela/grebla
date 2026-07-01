@@ -1,6 +1,6 @@
 /**
  * Implementación in-memory de LabelRepository (ver domain/ports.js). Catálogo de
- * labels (gremios/equipos) con ámbito personal/global, mismo modelo que TeamRole.
+ * labels con ámbito personal/global, mismo modelo que Guild.
  *
  * @typedef {import('../../domain/types.js').Label} Label
  * @typedef {import('../../domain/ports.js').LabelRepository} LabelRepository

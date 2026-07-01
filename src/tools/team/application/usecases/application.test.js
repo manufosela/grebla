@@ -7,9 +7,9 @@ import {
   deactivatePerson,
   getTurnover,
   normalizePerson,
-  addTeamRole,
-  listTeamRoles,
-  removeTeamRole,
+  addGuild,
+  listGuilds,
+  removeGuild,
   addArea,
   getSettings,
   updateSettings,
@@ -30,9 +30,9 @@ const NOW = '2026-06-07T00:00:00.000Z';
 
 /** Monta un equipo de prueba y devuelve ids. */
 async function seedTeam(p) {
-  const ana = await addPerson(p, { name: 'Ana', teamRole: 'Backend', startDate: '2025-01-01' });
-  const beto = await addPerson(p, { name: 'Beto', teamRole: 'Frontend', startDate: '2025-01-01' });
-  const caro = await addPerson(p, { name: 'Caro', teamRole: 'QA', startDate: '2025-01-01', active: false });
+  const ana = await addPerson(p, { name: 'Ana', guilds: ['Backend'], startDate: '2025-01-01' });
+  const beto = await addPerson(p, { name: 'Beto', guilds: ['Frontend'], startDate: '2025-01-01' });
+  const caro = await addPerson(p, { name: 'Caro', guilds: ['QA'], startDate: '2025-01-01', active: false });
   const pagos = await addArea(p, 'Pagos');
   const auth = await addArea(p, 'Auth');
 
@@ -67,38 +67,37 @@ describe('Fase 2b — casos de uso', () => {
     expect(active.map((x) => x.name).sort()).toEqual(['Ana', 'Beto']);
   });
 
-  it('addPerson guarda varios roles y se normalizan al listar', async () => {
-    await addPerson(p, { name: 'Zoe', teamRoles: ['Backend', 'Líder técnico'], startDate: '2025-02-01' });
+  it('addPerson guarda varios gremios y se normalizan al listar', async () => {
+    await addPerson(p, { name: 'Zoe', guilds: ['Backend', 'Android'], startDate: '2025-02-01' });
     const zoe = (await listActivePeople(p)).find((x) => x.name === 'Zoe');
-    expect(zoe.teamRoles).toEqual(['Backend', 'Líder técnico']);
+    expect(zoe.guilds).toEqual(['Backend', 'Android']);
   });
 
   it('addPerson normaliza el githubLogin (trim; vacío → null)', async () => {
-    await addPerson(p, { name: 'Gita', teamRoles: [], startDate: '2025-01-01', githubLogin: '  gita-dev  ' });
-    await addPerson(p, { name: 'NoGit', teamRoles: [], startDate: '2025-01-01', githubLogin: '   ' });
+    await addPerson(p, { name: 'Gita', guilds: [], startDate: '2025-01-01', githubLogin: '  gita-dev  ' });
+    await addPerson(p, { name: 'NoGit', guilds: [], startDate: '2025-01-01', githubLogin: '   ' });
     const people = await listActivePeople(p);
     expect(people.find((x) => x.name === 'Gita').githubLogin).toBe('gita-dev');
     expect(people.find((x) => x.name === 'NoGit').githubLogin).toBeNull();
   });
 
-  it('normalizePerson deriva teamRoles del legacy teamRole', () => {
-    expect(normalizePerson({ teamRole: 'QA' }).teamRoles).toEqual(['QA']);
-    expect(normalizePerson({ teamRoles: ['A', 'B'] }).teamRoles).toEqual(['A', 'B']);
-    expect(normalizePerson({}).teamRoles).toEqual([]);
+  it('normalizePerson garantiza guilds como array', () => {
+    expect(normalizePerson({ guilds: ['A', 'B'] }).guilds).toEqual(['A', 'B']);
+    expect(normalizePerson({}).guilds).toEqual([]);
   });
 
-  it('catálogo de roles de equipo: add / list / remove', async () => {
-    const id = await addTeamRole(p, 'Backend');
-    expect((await listTeamRoles(p)).map((r) => r.name)).toEqual(['Backend']);
-    await removeTeamRole(p, id);
-    expect(await listTeamRoles(p)).toEqual([]);
-    expect(() => addTeamRole(p, '   ')).toThrow();
+  it('catálogo de gremios: add / list / remove', async () => {
+    const id = await addGuild(p, 'Backend');
+    expect((await listGuilds(p)).map((r) => r.name)).toEqual(['Backend']);
+    await removeGuild(p, id);
+    expect(await listGuilds(p)).toEqual([]);
+    expect(() => addGuild(p, '   ')).toThrow();
   });
 
   it('deactivatePerson sella fecha, mueve a Bajas (no borra) y cuenta en rotación', async () => {
     const fresh = createMemoryPersistence();
-    await addPerson(fresh, { name: 'Keep', teamRoles: [], startDate: '2025-01-01' });
-    const gone = await addPerson(fresh, { name: 'Gone', teamRoles: [], startDate: '2025-01-01' });
+    await addPerson(fresh, { name: 'Keep', guilds: [], startDate: '2025-01-01' });
+    const gone = await addPerson(fresh, { name: 'Gone', guilds: [], startDate: '2025-01-01' });
     await deactivatePerson(fresh, gone);
 
     expect((await listActivePeople(fresh)).map((x) => x.name)).toEqual(['Keep']);
@@ -163,7 +162,7 @@ describe('Fase 2b — casos de uso', () => {
 
   it('getTeamMap reúne el estado actual de las 4 dimensiones por persona', async () => {
     const fresh = createMemoryPersistence();
-    const id = await addPerson(fresh, { name: 'Ana', teamRoles: ['Backend'], startDate: '2025-01-01' });
+    const id = await addPerson(fresh, { name: 'Ana', guilds: ['Backend'], startDate: '2025-01-01' });
     const pagos = await addArea(fresh, 'Pagos');
     await addReading(fresh, 'seniority', id, { level: 4, date: '2025-05-01' });
     await addReading(fresh, 'seniority', id, { level: 5, toNext: true, date: '2025-06-01' }); // más reciente

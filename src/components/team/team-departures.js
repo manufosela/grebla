@@ -114,7 +114,7 @@ export class TeamDepartures extends LitElement {
           : html`
               <table>
                 <thead>
-                  <tr><th>Nombre</th><th>Roles</th><th>Alta</th><th>Baja</th></tr>
+                  <tr><th>Nombre</th><th>Gremios</th><th>Alta</th><th>Baja</th></tr>
                 </thead>
                 <tbody>
                   ${this.departed.map(
@@ -122,9 +122,9 @@ export class TeamDepartures extends LitElement {
                       <tr>
                         <td>${p.name}</td>
                         <td>
-                          ${(p.teamRoles ?? []).length === 0
+                          ${(p.guilds ?? []).length === 0
                             ? html`<span class="muted">—</span>`
-                            : html`<span class="chips">${p.teamRoles.map((r) => html`<span class="chip">${r}</span>`)}</span>`}
+                            : html`<span class="chips">${p.guilds.map((r) => html`<span class="chip">${r}</span>`)}</span>`}
                         </td>
                         <td>${formatDate(p.startDate)}</td>
                         <td>${formatDate(p.deactivatedAt)}</td>

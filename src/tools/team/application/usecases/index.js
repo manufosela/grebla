@@ -16,7 +16,7 @@ export {
 } from './people.js';
 export { addArea, listAreas, removeArea } from './areas.js';
 export { getSettings, updateSettings } from './config.js';
-export { addTeamRole, listTeamRoles, removeTeamRole } from './teamRoles.js';
+export { addGuild, listGuilds, removeGuild } from './guilds.js';
 export { addLabel, listLabels, removeLabel } from './labels.js';
 export { addReading, getCurrentReading, getPersonTimeline } from './readings.js';
 export { registerConversation, listConversations, updateConversation } from './conversations.js';

@@ -8,8 +8,7 @@
  * @typedef {Object} Person
  * @property {string} id
  * @property {string} name
- * @property {string[]} teamRoles     LEGACY: roles funcionales del catálogo TeamRole. La ficha/alta ya no lo usa (retrocompat de datos); sustituido por disciplines + levelId.
- * @property {string} [teamRole]      LEGACY: rol único (string). Se deriva a teamRoles al leer (retrocompat).
+ * @property {string[]} [guilds]      Nombres de gremio (tecnologías/stack) asignados a la persona; catálogo Guild con ámbito personal/global.
  * @property {string[]} [disciplines] Ids de disciplina del framework de carrera (/careerFramework/engineering).
  * @property {string|null} [levelId]  Id de nivel del framework de carrera, o null si aún sin nivel.
  * @property {string} startDate       ISO date (alta)
@@ -74,12 +73,12 @@
  * @property {string} id
  * @property {string} name
  *
- * @typedef {Object} TeamRole   Rol funcional del equipo (catálogo con ámbito).
+ * @typedef {Object} Guild   Gremio (tecnología/stack, transversal a la disciplina) del catálogo con ámbito.
  * @property {string} id
  * @property {string} name
  * @property {string} [ownerLeaderUid]   Líder dueño si es personal; ausente si es global.
  *
- * @typedef {Object} Label   Etiqueta libre (gremio/equipo) con ámbito personal/global.
+ * @typedef {Object} Label   Etiqueta libre con ámbito personal/global.
  * @property {string} id
  * @property {string} name
  * @property {string} [ownerLeaderUid]   Líder dueño si es personal; ausente si es global.

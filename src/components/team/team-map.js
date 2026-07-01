@@ -136,7 +136,7 @@ export class TeamMap extends LitElement {
                     ${this.rows.map(
                       (r) => html`
                         <tr>
-                          <td class="person">${r.name}${(r.teamRoles ?? []).length ? html`<span class="roles">${r.teamRoles.join(' · ')}</span>` : null}</td>
+                          <td class="person">${r.name}${(r.guilds ?? []).length ? html`<span class="roles">${r.guilds.join(' · ')}</span>` : null}</td>
                           <td>${this._levelCell(r.seniority)}</td>
                           <td>${this._levelCell(r.emotional)}</td>
                           <td>${this._knowledgeCell(r.knowledge)}</td>

@@ -10,7 +10,7 @@
  *       .../people/{personId}/supportNotes/{noteId}
  *   /areas/{areaId}
  *   /config/settings
- *   /teamRoles/{roleId}            (catálogo de la instancia)
+ *   /guilds/{guildId}             (catálogo de la instancia)
  *
  * `db` se inyecta (no se importa firebase.js aquí) para mantener el adapter
  * testeable y libre de efectos de inicialización. Mismas interfaces que el
@@ -46,10 +46,10 @@ const readingCol = (db, base, personId, dim) =>
   collection(db, ...base, 'people', personId, dim);
 const areaCol = (db, base) => collection(db, ...base, 'areas');
 const areaDoc = (db, base, id) => doc(db, ...base, 'areas', id);
-// Catálogo de roles a nivel de tenant (compartido por sus líderes).
-const teamRoleCol = (db, tbase) => collection(db, ...tbase, 'teamRoles');
-const teamRoleDoc = (db, tbase, id) => doc(db, ...tbase, 'teamRoles', id);
-// Catálogo de labels (gremios/equipos) con ámbito, mismo modelo que teamRoles.
+// Catálogo de gremios a nivel de tenant (compartido por sus líderes).
+const guildCol = (db, tbase) => collection(db, ...tbase, 'guilds');
+const guildDoc = (db, tbase, id) => doc(db, ...tbase, 'guilds', id);
+// Catálogo de labels con ámbito, mismo modelo que guilds.
 const labelCol = (db, tbase) => collection(db, ...tbase, 'labels');
 const labelDoc = (db, tbase, id) => doc(db, ...tbase, 'labels', id);
 const convCol = (db, base, personId) =>
@@ -150,21 +150,21 @@ function areaRepo(db, base) {
   };
 }
 
-function teamRoleRepo(db, tbase, leaderUid) {
+function guildRepo(db, tbase, leaderUid) {
   return {
     async list() {
       // Globales (sin ownerLeaderUid) + los personales de este líder. El catálogo
       // es pequeño: se lee entero y se filtra en cliente (no hay OR en Firestore).
-      const all = mapDocs(await getDocs(teamRoleCol(db, tbase)));
+      const all = mapDocs(await getDocs(guildCol(db, tbase)));
       return all.filter((r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid);
     },
     async create(name) {
-      // El líder crea roles PERSONALES (el superadmin gestiona los globales aparte).
-      const ref = await addDoc(teamRoleCol(db, tbase), { name, ownerLeaderUid: leaderUid });
+      // El líder crea gremios PERSONALES (el superadmin gestiona los globales aparte).
+      const ref = await addDoc(guildCol(db, tbase), { name, ownerLeaderUid: leaderUid });
       return ref.id;
     },
     async remove(id) {
-      await deleteDoc(teamRoleDoc(db, tbase, id));
+      await deleteDoc(guildDoc(db, tbase, id));
     },
   };
 }
@@ -249,7 +249,7 @@ export function createFirestorePersistence(db, leaderUid) {
     people: peopleRepo(db, base, leaderUid),
     readings,
     areas: areaRepo(db, base),
-    teamRoles: teamRoleRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
+    guilds: guildRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
     labels: labelRepo(db, base, leaderUid),
     conversations: conversationRepo(db, base),
     supportNotes: supportNoteRepo(db, base),

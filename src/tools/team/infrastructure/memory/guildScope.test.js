@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { createMemoryTeamRoleRepository } from './teamRoleRepository.js';
+import { createMemoryGuildRepository } from './guildRepository.js';
 
-describe('TeamRole con ámbito personal/global (memory)', () => {
+describe('Guild con ámbito personal/global (memory)', () => {
   it('list de un líder devuelve globales + propios, no los de otros', async () => {
-    const repo = createMemoryTeamRoleRepository(
+    const repo = createMemoryGuildRepository(
       [
         { id: 'g', name: 'Global' },
         { id: 'a', name: 'Mío', ownerLeaderUid: 'l1' },
@@ -15,15 +15,15 @@ describe('TeamRole con ámbito personal/global (memory)', () => {
     expect(list.map((r) => r.name).sort()).toEqual(['Global', 'Mío']);
   });
 
-  it('create marca el rol como personal del líder que mira', async () => {
-    const repo = createMemoryTeamRoleRepository([], 'l1');
-    const id = await repo.create('Backend');
-    const role = (await repo.list()).find((r) => r.id === id);
-    expect(role.ownerLeaderUid).toBe('l1');
+  it('create marca el gremio como personal del líder que mira', async () => {
+    const repo = createMemoryGuildRepository([], 'l1');
+    const id = await repo.create('Python');
+    const guild = (await repo.list()).find((r) => r.id === id);
+    expect(guild.ownerLeaderUid).toBe('l1');
   });
 
   it('sin viewer, list devuelve todos y create crea global (sin owner)', async () => {
-    const repo = createMemoryTeamRoleRepository([{ id: 'a', name: 'A', ownerLeaderUid: 'l1' }]);
+    const repo = createMemoryGuildRepository([{ id: 'a', name: 'A', ownerLeaderUid: 'l1' }]);
     expect((await repo.list()).length).toBe(1);
     const id = await repo.create('Global');
     const g = (await repo.list()).find((r) => r.id === id);
