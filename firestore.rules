@@ -171,6 +171,14 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Framework de Carrera (catálogo global): documento único
+    // /careerFramework/engineering con tracks, niveles, disciplinas y
+    // dimensiones. Lo leen los autenticados; solo lo edita el superadmin.
+    match /careerFramework/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
