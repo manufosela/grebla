@@ -27,6 +27,7 @@ export class TeamApp extends LitElement {
     uid: { attribute: false },
     isAdmin: { attribute: false },
     members: { attribute: false },
+    framework: { attribute: false },
     view: { state: true },
     selected: { state: true },
     error: { state: true },
@@ -69,6 +70,8 @@ export class TeamApp extends LitElement {
     this.isAdmin = false;
     /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (para compartir) */
     this.members = [];
+    /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
+    this.framework = null;
     /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
     this.view = TEAM_TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'people';
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
@@ -139,6 +142,7 @@ export class TeamApp extends LitElement {
           .members=${this.members}
           .currentUid=${this.uid}
           .isAdmin=${this.isAdmin}
+          .framework=${this.framework}
           @open-person=${this._onOpenPerson}
         ></team-people>`;
       case 'person':
@@ -147,6 +151,7 @@ export class TeamApp extends LitElement {
           <team-person-detail
             .persistence=${this.persistence}
             .person=${this.selected}
+            .framework=${this.framework}
           ></team-person-detail>
         `;
       case 'map':

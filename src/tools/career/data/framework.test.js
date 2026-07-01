@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ENGINEERING_FRAMEWORK, seedFramework, normalizeFramework, serializeFramework } from './framework.js';
+import { ENGINEERING_FRAMEWORK, seedFramework, normalizeFramework, serializeFramework, composeTitle } from './framework.js';
 
 describe('career — framework de carrera (helpers puros)', () => {
   it('seedFramework devuelve una copia profunda del framework (fallback)', () => {
@@ -149,5 +149,31 @@ describe('career — framework de carrera (helpers puros)', () => {
     const base = normalizeFramework(serializeFramework(seedFramework()));
     const round = normalizeFramework(serializeFramework(base));
     expect(round).toEqual(base);
+  });
+
+  describe('composeTitle — título compuesto de una persona', () => {
+    const fw = seedFramework(); // usa l3 = "Senior Engineer II" y disciplinas backend/web
+
+    it('con nivel + disciplinas → "título · disciplinas" (en orden del framework)', () => {
+      // web (order 3) va después de backend (order 1) aunque se pase primero: orden del framework
+      expect(composeTitle(fw, 'l3', ['web', 'backend'])).toBe('Senior Engineer II · Backend, Web / Frontend');
+    });
+
+    it('solo nivel → título del nivel', () => {
+      expect(composeTitle(fw, 'l3', [])).toBe('Senior Engineer II');
+      expect(composeTitle(fw, 'l3', null)).toBe('Senior Engineer II');
+    });
+
+    it('solo disciplinas → nombres separados por coma', () => {
+      expect(composeTitle(fw, null, ['backend', 'web'])).toBe('Backend, Web / Frontend');
+      expect(composeTitle(fw, '', ['backend'])).toBe('Backend');
+    });
+
+    it('sin nada o ids desconocidos → cadena vacía', () => {
+      expect(composeTitle(fw, null, [])).toBe('');
+      expect(composeTitle(fw, undefined, undefined)).toBe('');
+      expect(composeTitle(fw, 'noexiste', ['tampoco'])).toBe('');
+      expect(composeTitle(null, 'l3', ['backend'])).toBe('');
+    });
   });
 });

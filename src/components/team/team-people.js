@@ -20,11 +20,10 @@ import {
   sharePerson,
   unsharePerson,
   transferOwnership,
-  listTeamRoles,
-  addTeamRole,
   listLabels,
   addLabel,
 } from '../../tools/team/application/usecases/index.js';
+import { composeTitle } from '../../tools/career/data/framework.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
@@ -41,15 +40,15 @@ export class TeamPeople extends LitElement {
     members: { attribute: false },
     currentUid: { attribute: false },
     isAdmin: { attribute: false },
+    framework: { attribute: false },
     people: { state: true },
-    roles: { state: true },
     labels: { state: true },
     loading: { state: true },
     error: { state: true },
     _name: { state: true },
-    _selected: { state: true },
+    _selectedDisciplines: { state: true },
+    _levelId: { state: true },
     _selectedLabels: { state: true },
-    _newRole: { state: true },
     _newLabel: { state: true },
     _startDate: { state: true },
     _github: { state: true },
@@ -61,7 +60,8 @@ export class TeamPeople extends LitElement {
     _transferSel: { state: true },
     _confirmTransfer: { state: true },
     _editFor: { state: true },
-    _editRoles: { state: true },
+    _editDisciplines: { state: true },
+    _editLevelId: { state: true },
     _editLabels: { state: true },
   };
 
@@ -88,8 +88,9 @@ export class TeamPeople extends LitElement {
     .role-hint { font-size: 0.78rem; margin: 0; }
     .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
     .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #111827); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
+    .title { font-weight: 600; color: var(--rm-text, #111827); }
     .muted { color: var(--rm-muted, #9ca3af); }
-    input {
+    input, select {
       padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem;
     }
@@ -190,20 +191,21 @@ export class TeamPeople extends LitElement {
     this.members = [];
     /** @type {string|null} uid del líder en sesión */
     this.currentUid = null;
+    /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
+    this.framework = null;
     /** @type {import('../../tools/team/domain/types.js').Person[]} */
     this.people = [];
-    /** @type {import('../../tools/team/domain/types.js').TeamRole[]} */
-    this.roles = [];
     /** @type {import('../../tools/team/domain/types.js').Label[]} */
     this.labels = [];
     this.loading = true;
     this.error = '';
     this._name = '';
-    /** @type {string[]} nombres de roles seleccionados para el alta */
-    this._selected = [];
+    /** @type {string[]} ids de disciplina seleccionadas para el alta */
+    this._selectedDisciplines = [];
+    /** @type {string} id de nivel seleccionado para el alta ('' = sin nivel) */
+    this._levelId = '';
     /** @type {string[]} nombres de labels seleccionados para el alta */
     this._selectedLabels = [];
-    this._newRole = '';
     this._newLabel = '';
     this._startDate = '';
     this._github = '';
@@ -223,8 +225,10 @@ export class TeamPeople extends LitElement {
     this._confirmTransfer = false;
     /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Editar */
     this._editFor = null;
-    /** @type {string[]} roles seleccionados en el modal Editar */
-    this._editRoles = [];
+    /** @type {string[]} ids de disciplina seleccionadas en el modal Editar */
+    this._editDisciplines = [];
+    /** @type {string} id de nivel seleccionado en el modal Editar ('' = sin nivel) */
+    this._editLevelId = '';
     /** @type {string[]} labels seleccionados en el modal Editar */
     this._editLabels = [];
     this._loaded = false;
@@ -241,13 +245,11 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [people, roles, labels] = await Promise.all([
+      const [people, labels] = await Promise.all([
         listActivePeople(this.persistence),
-        listTeamRoles(this.persistence),
         listLabels(this.persistence),
       ]);
       this.people = people;
-      this.roles = roles;
       this.labels = labels;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
@@ -256,26 +258,11 @@ export class TeamPeople extends LitElement {
     }
   }
 
-  _toggleRole(name, checked) {
-    this._selected = checked
-      ? [...this._selected, name]
-      : this._selected.filter((r) => r !== name);
-  }
-
-  async _addRole() {
-    const name = this._newRole.trim();
-    if (!name) return;
-    this.error = '';
-    try {
-      if (!this.roles.some((r) => r.name.toLowerCase() === name.toLowerCase())) {
-        await addTeamRole(this.persistence, name);
-        this.roles = await listTeamRoles(this.persistence);
-      }
-      if (!this._selected.includes(name)) this._selected = [...this._selected, name];
-      this._newRole = '';
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo añadir el rol.';
-    }
+  /** @param {string} id @param {boolean} checked */
+  _toggleDiscipline(id, checked) {
+    this._selectedDisciplines = checked
+      ? [...this._selectedDisciplines, id]
+      : this._selectedDisciplines.filter((d) => d !== id);
   }
 
   _toggleLabel(name, checked) {
@@ -311,15 +298,16 @@ export class TeamPeople extends LitElement {
     try {
       await addPerson(this.persistence, {
         name,
-        teamRoles: [...this._selected],
+        disciplines: [...this._selectedDisciplines],
+        levelId: this._levelId || null,
         labels: [...this._selectedLabels],
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
         githubLogin: this._github,
       });
       this._name = '';
-      this._selected = [];
+      this._selectedDisciplines = [];
+      this._levelId = '';
       this._selectedLabels = [];
-      this._newRole = '';
       this._newLabel = '';
       this._startDate = '';
       this._github = '';
@@ -466,10 +454,11 @@ export class TeamPeople extends LitElement {
     }
   }
 
-  // ---- Editar roles / labels ----
+  // ---- Editar disciplinas / nivel / labels ----
   _openEdit(person) {
     this._editFor = person;
-    this._editRoles = [...(person.teamRoles ?? [])];
+    this._editDisciplines = [...(person.disciplines ?? [])];
+    this._editLevelId = person.levelId ?? '';
     this._editLabels = [...(person.labels ?? [])];
     this.error = '';
   }
@@ -479,10 +468,11 @@ export class TeamPeople extends LitElement {
     this.error = '';
   }
 
-  _toggleEditRole(name, checked) {
-    this._editRoles = checked
-      ? [...this._editRoles, name]
-      : this._editRoles.filter((r) => r !== name);
+  /** @param {string} id @param {boolean} checked */
+  _toggleEditDiscipline(id, checked) {
+    this._editDisciplines = checked
+      ? [...this._editDisciplines, id]
+      : this._editDisciplines.filter((d) => d !== id);
   }
 
   _toggleEditLabel(name, checked) {
@@ -497,7 +487,8 @@ export class TeamPeople extends LitElement {
     this.error = '';
     try {
       await updatePerson(this.persistence, person.id, {
-        teamRoles: [...this._editRoles],
+        disciplines: [...this._editDisciplines],
+        levelId: this._editLevelId || null,
         labels: [...this._editLabels],
       });
       this._editFor = null;
@@ -505,6 +496,67 @@ export class TeamPeople extends LitElement {
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar los cambios.';
     }
+  }
+
+  // ---- Selectores del framework de carrera (reutilizados en alta y edición) ----
+
+  /**
+   * Fieldset «Disciplinas»: checkboxes de las disciplinas del framework (ya
+   * vienen ordenadas por `order`), guardando sus ids.
+   * @param {string[]} selectedIds  ids marcados
+   * @param {(id: string, checked: boolean) => void} onToggle
+   */
+  _renderDisciplineChecks(selectedIds, onToggle) {
+    const disciplines = this.framework?.disciplines ?? [];
+    return html`
+      <fieldset class="roles">
+        <legend>Disciplinas</legend>
+        <div class="role-checks">
+          ${disciplines.length === 0
+            ? html`<span class="muted">No hay disciplinas en el framework de carrera.</span>`
+            : disciplines.map(
+                (d) => html`
+                  <label class="role-check">
+                    <input
+                      type="checkbox"
+                      .checked=${selectedIds.includes(d.id)}
+                      @change=${(e) => onToggle(d.id, e.target.checked)}
+                    />
+                    <span>${d.name}</span>
+                  </label>
+                `,
+              )}
+        </div>
+      </fieldset>
+    `;
+  }
+
+  /**
+   * Selector «Nivel»: los niveles del framework agrupados por track (<optgroup>),
+   * mostrando `code · title`. Opción «— sin nivel —» para dejarlo sin asignar.
+   * @param {string} value  id de nivel seleccionado ('' = sin nivel)
+   * @param {(id: string) => void} onChange
+   */
+  _renderLevelSelect(value, onChange) {
+    const tracks = this.framework?.tracks ?? [];
+    const levels = this.framework?.levels ?? [];
+    const groups = tracks
+      .map((t) => ({ track: t, levels: levels.filter((l) => l.trackId === t.id) }))
+      .filter((g) => g.levels.length > 0);
+    return html`
+      <label>Nivel
+        <select .value=${value ?? ''} @change=${(e) => onChange(e.target.value)}>
+          <option value="">— sin nivel —</option>
+          ${groups.map(
+            (g) => html`
+              <optgroup label=${g.track.name}>
+                ${g.levels.map((l) => html`<option value=${l.id}>${l.code} · ${l.title}</option>`)}
+              </optgroup>
+            `,
+          )}
+        </select>
+      </label>
+    `;
   }
 
   _renderShareModal() {
@@ -608,26 +660,9 @@ export class TeamPeople extends LitElement {
         ${person
           ? html`
               <div class="modal-body">
-                <p>Roles y labels de esta persona.</p>
-                <fieldset class="roles">
-                  <legend>Roles en el equipo</legend>
-                  <div class="edit-checks">
-                    ${this.roles.length === 0
-                      ? html`<span class="muted">Aún no hay roles.</span>`
-                      : this.roles.map(
-                          (r) => html`
-                            <label class="role-check">
-                              <input
-                                type="checkbox"
-                                .checked=${this._editRoles.includes(r.name)}
-                                @change=${(e) => this._toggleEditRole(r.name, e.target.checked)}
-                              />
-                              <span>${r.name}</span>
-                            </label>
-                          `,
-                        )}
-                  </div>
-                </fieldset>
+                <p>Disciplinas, nivel y labels de esta persona.</p>
+                ${this._renderDisciplineChecks(this._editDisciplines, (id, checked) => this._toggleEditDiscipline(id, checked))}
+                ${this._renderLevelSelect(this._editLevelId, (id) => { this._editLevelId = id; })}
                 <fieldset class="roles">
                   <legend>Labels (gremios / equipos)</legend>
                   <div class="edit-checks">
@@ -677,36 +712,8 @@ export class TeamPeople extends LitElement {
               <input type="text" placeholder="usuario" .value=${this._github} @input=${(e) => { this._github = e.target.value; }} />
             </label>
           </div>
-          <fieldset class="roles">
-            <legend>Roles en el equipo</legend>
-            <div class="role-checks">
-              ${this.roles.length === 0
-                ? html`<span class="muted">Aún no hay roles. Añade el primero abajo.</span>`
-                : this.roles.map(
-                    (r) => html`
-                      <label class="role-check">
-                        <input
-                          type="checkbox"
-                          .checked=${this._selected.includes(r.name)}
-                          @change=${(e) => this._toggleRole(r.name, e.target.checked)}
-                        />
-                        <span>${r.name}</span>
-                      </label>
-                    `,
-                  )}
-            </div>
-            <div class="role-add">
-              <input
-                type="text"
-                placeholder="Añadir un rol nuevo (tuyo)…"
-                .value=${this._newRole}
-                @input=${(e) => { this._newRole = e.target.value; }}
-                @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addRole(); } }}
-              />
-              <button type="button" @click=${this._addRole}>Añadir rol</button>
-            </div>
-            <p class="role-hint muted">Los roles globales los ve todo el equipo; los que añadas aquí son tuyos (gestiónalos en Ajustes).</p>
-          </fieldset>
+          ${this._renderDisciplineChecks(this._selectedDisciplines, (id, checked) => this._toggleDiscipline(id, checked))}
+          ${this._renderLevelSelect(this._levelId, (id) => { this._levelId = id; })}
           <fieldset class="roles">
             <legend>Labels (gremios / equipos)</legend>
             <div class="role-checks">
@@ -753,18 +760,16 @@ export class TeamPeople extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Nombre</th><th>Roles</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
+                    <tr><th>Nombre</th><th>Título</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
                   </thead>
                   <tbody>
                     ${this.people.map(
-                      (p) => html`
+                      (p) => {
+                        const title = composeTitle(this.framework, p.levelId, p.disciplines);
+                        return html`
                         <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
                           <td>${p.name}</td>
-                          <td>
-                            ${(p.teamRoles ?? []).length === 0
-                              ? html`<span class="muted">—</span>`
-                              : html`<span class="chips">${p.teamRoles.map((r) => html`<span class="chip">${r}</span>`)}</span>`}
-                          </td>
+                          <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
                           <td>
                             ${(p.labels ?? []).length === 0
                               ? html`<span class="muted">—</span>`
@@ -773,7 +778,8 @@ export class TeamPeople extends LitElement {
                           <td>${formatDate(p.startDate)}</td>
                           <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
                         </tr>
-                      `,
+                      `;
+                      },
                     )}
                   </tbody>
                 </table>

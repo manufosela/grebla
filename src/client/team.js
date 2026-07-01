@@ -9,6 +9,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listLeaders } from '../lib/leaders.js';
 import { resolveAccess } from '../lib/access.js';
+import { getFramework } from '../lib/careerFramework.js';
 
 const app = document.querySelector('team-app');
 
@@ -27,8 +28,11 @@ onUserChanged(async (user) => {
     app.uid = user.uid;
     app.storage = storage;
     app.isAdmin = role === 'superadmin'; // el superadmin gobierna el catálogo de roles
-    // Líderes de la instancia, para el selector de compartir personas.
-    app.members = await listLeaders();
+    // Líderes de la instancia (compartir personas) y framework de carrera
+    // (disciplinas/niveles y composición del título), en paralelo.
+    const [members, framework] = await Promise.all([listLeaders(), getFramework()]);
+    app.members = members;
+    app.framework = framework;
     app.persistence = persistence; // dispara la carga inicial en el componente
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar la herramienta.';
