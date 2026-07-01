@@ -18,6 +18,8 @@ import './team-settings.js';
 import './team-overview.js';
 import './team-map.js';
 
+const TEAM_TABS = ['people', 'map', 'departures', 'team', 'settings'];
+
 export class TeamApp extends LitElement {
   static properties = {
     persistence: { attribute: false },
@@ -68,13 +70,36 @@ export class TeamApp extends LitElement {
     /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (para compartir) */
     this.members = [];
     /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
-    this.view = 'people';
+    this.view = TEAM_TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'people';
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.selected = null;
     this.error = '';
+    this._onHashChange = () => {
+      const t = location.hash.slice(1);
+      if (TEAM_TABS.includes(t)) {
+        this.view = t;
+        this.selected = null;
+      }
+    };
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('hashchange', this._onHashChange);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('hashchange', this._onHashChange);
+    super.disconnectedCallback();
   }
 
   _go(view) {
+    // Las secciones (no el detalle de persona) se reflejan en el hash para que la
+    // recarga y el botón atrás/adelante conserven la pestaña.
+    if (view !== 'person' && location.hash.slice(1) !== view) {
+      location.hash = view;
+      return; // el listener de hashchange fija this.view y limpia selected
+    }
     this.view = view;
     if (view !== 'person') this.selected = null;
   }
