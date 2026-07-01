@@ -251,3 +251,36 @@ export function serializeFramework(fw) {
     addendums,
   };
 }
+
+/**
+ * Compone el título visible de una persona a partir del framework: el título del
+ * nivel seguido de sus disciplinas separadas por coma. Función PURA (sin Firebase),
+ * para usarla en la tabla/ficha de personas sin acoplar a Firestore.
+ *
+ * Las disciplinas se muestran en el orden del framework (por `order`), no en el de
+ * selección, para que el título sea determinista. Ids desconocidos se ignoran.
+ *
+ *  - nivel + disciplinas → "Senior Engineer II · Backend, Web"
+ *  - solo nivel          → "Senior Engineer II"
+ *  - solo disciplinas    → "Backend, Web"
+ *  - nada / ids inválidos → ""
+ *
+ * @param {CareerFramework|null|undefined} framework
+ * @param {string|null|undefined} levelId          id del nivel del framework
+ * @param {string[]|null|undefined} disciplineIds   ids de disciplina del framework
+ * @returns {string}
+ */
+export function composeTitle(framework, levelId, disciplineIds) {
+  const levels = framework?.levels ?? [];
+  const disciplines = framework?.disciplines ?? [];
+  const level = levelId ? levels.find((l) => l.id === levelId) : null;
+  const levelTitle = String(level?.title ?? '').trim();
+  const ids = Array.isArray(disciplineIds) ? disciplineIds : [];
+  const names = disciplines
+    .filter((d) => ids.includes(d.id))
+    .map((d) => String(d.name ?? '').trim())
+    .filter(Boolean);
+  const disciplinesText = names.join(', ');
+  if (levelTitle && disciplinesText) return `${levelTitle} · ${disciplinesText}`;
+  return levelTitle || disciplinesText;
+}

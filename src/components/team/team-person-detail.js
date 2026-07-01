@@ -24,6 +24,7 @@ import {
 } from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
+import { composeTitle } from '../../tools/career/data/framework.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -62,6 +63,7 @@ export class TeamPersonDetail extends LitElement {
   static properties = {
     persistence: { attribute: false },
     person: { attribute: false },
+    framework: { attribute: false },
     timeline: { state: true },
     areas: { state: true },
     conversations: { state: true },
@@ -80,6 +82,7 @@ export class TeamPersonDetail extends LitElement {
     :host { display: block; }
     .head { margin-bottom: 1rem; }
     .head h2 { margin: 0; font-size: 1.3rem; }
+    .head .title { margin: 0.3rem 0 0; font-size: 0.95rem; font-weight: 600; color: var(--rm-text, #111827); }
     .head .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
     .chip { background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
     section {
@@ -128,6 +131,8 @@ export class TeamPersonDetail extends LitElement {
     this.persistence = null;
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.person = null;
+    /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (para el título compuesto) */
+    this.framework = null;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -558,11 +563,16 @@ export class TeamPersonDetail extends LitElement {
 
   render() {
     if (!this.person) return null;
+    const title = composeTitle(this.framework, this.person.levelId, this.person.disciplines);
+    const disciplineNames = (this.framework?.disciplines ?? [])
+      .filter((d) => (this.person.disciplines ?? []).includes(d.id))
+      .map((d) => d.name);
     return html`
       <div class="head">
         <h2>${this.person.name}</h2>
-        ${(this.person.teamRoles ?? []).length > 0
-          ? html`<span class="chips">${this.person.teamRoles.map((r) => html`<span class="chip">${r}</span>`)}</span>`
+        ${title ? html`<p class="title">${title}</p>` : null}
+        ${disciplineNames.length > 0
+          ? html`<span class="chips">${disciplineNames.map((n) => html`<span class="chip">${n}</span>`)}</span>`
           : null}
       </div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
