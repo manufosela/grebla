@@ -26,6 +26,7 @@ export class SuperadminPanel extends LitElement {
   static properties = {
     ready: { attribute: false },
     isLeader: { attribute: false },
+    _tab: { state: true },
     leaders: { state: true },
     selected: { state: true },
     team: { state: true },
@@ -49,6 +50,13 @@ export class SuperadminPanel extends LitElement {
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .bar h1 { font-size: 1.4rem; margin: 0; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .tab {
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border-radius: 999px; padding: 0.4rem 1rem; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    }
+    .tab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: #fff; }
+    .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     section {
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
@@ -78,7 +86,9 @@ export class SuperadminPanel extends LitElement {
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .notice { color: var(--rm-accent, #2a9d8f); font-size: 0.85rem; font-weight: 600; }
     .ro-note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
-    h3.sub { font-size: 0.95rem; margin: 1.25rem 0 0.6rem; color: var(--rm-text, #111827); }
+    .sub { font-size: 0.95rem; margin: 1.25rem 0 0.6rem; color: var(--rm-text, #111827); cursor: pointer; }
+    details { margin-bottom: 0.5rem; }
+    details.city .city-head { cursor: pointer; }
     .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
@@ -105,6 +115,8 @@ export class SuperadminPanel extends LitElement {
     super();
     this.ready = false;
     this.isLeader = false;
+    /** @type {'leaders'|'teamRoles'|'labels'|'careerMap'} pestaña activa */
+    this._tab = 'leaders';
     /** @type {import('../lib/leaders.js').Leader[]} */
     this.leaders = [];
     /** @type {import('../lib/leaders.js').Leader|null} */
@@ -436,6 +448,21 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
+  _renderTabContent() {
+    switch (this._tab) {
+      case 'leaders':
+        return html`${this._renderLeaders()} ${this.selected ? this._renderTeam() : null}`;
+      case 'teamRoles':
+        return this._renderCatalog('teamRoles', this._teamRoles, 'Roles de equipo (organización)', 'Nuevo rol global…');
+      case 'labels':
+        return this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…');
+      case 'careerMap':
+        return this._renderCareerMap();
+      default:
+        return null;
+    }
+  }
+
   render() {
     return html`
       <div class="bar">
@@ -444,12 +471,14 @@ export class SuperadminPanel extends LitElement {
           ? html`<button class="primary" @click=${this._useAsLeader}>Usar como líder →</button>`
           : null}
       </div>
+      <nav class="tabs" aria-label="Secciones de gestión">
+        <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => { this._tab = 'leaders'; }}>Líderes</button>
+        <button class="tab ${this._tab === 'teamRoles' ? 'active' : ''}" @click=${() => { this._tab = 'teamRoles'; }}>Roles de equipo</button>
+        <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => { this._tab = 'labels'; }}>Labels</button>
+        <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => { this._tab = 'careerMap'; }}>Mapa de carrera</button>
+      </nav>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
-      ${this._renderLeaders()}
-      ${this._renderCatalog('teamRoles', this._teamRoles, 'Roles de equipo (organización)', 'Nuevo rol global…')}
-      ${this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…')}
-      ${this._renderCareerMap()}
-      ${this.selected ? this._renderTeam() : null}
+      ${this._renderTabContent()}
     `;
   }
 
@@ -479,7 +508,8 @@ export class SuperadminPanel extends LitElement {
   /** @param {import('../tools/career/domain/types.js').CareerMap} map */
   _renderAreas(map) {
     return html`
-      <h3 class="sub">Comarcas (${map.areas.length})</h3>
+      <details open>
+      <summary class="sub">Comarcas (${map.areas.length})</summary>
       <div class="toolbar">
         <input type="text" placeholder="id (p. ej. frontend)" .value=${this._newArea.id}
           @input=${(e) => { this._newArea = { ...this._newArea, id: e.target.value }; }} />
@@ -507,13 +537,15 @@ export class SuperadminPanel extends LitElement {
               )}
             </tbody>
           </table>`}
+      </details>
     `;
   }
 
   /** @param {import('../tools/career/domain/types.js').CareerMap} map */
   _renderCities(map) {
     return html`
-      <h3 class="sub">Ciudades (${map.cities.length})</h3>
+      <details open>
+      <summary class="sub">Ciudades (${map.cities.length})</summary>
       <div class="toolbar">
         <input type="text" placeholder="id (p. ej. react)" .value=${this._newCity.id}
           @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
@@ -524,6 +556,7 @@ export class SuperadminPanel extends LitElement {
       ${map.cities.length === 0
         ? html`<p class="empty">Aún no hay ciudades.</p>`
         : html`<div class="cities">${map.cities.map((c, idx) => this._renderCity(map, c, idx))}</div>`}
+      </details>
     `;
   }
 
@@ -534,16 +567,18 @@ export class SuperadminPanel extends LitElement {
    */
   _renderCity(map, c, idx) {
     return html`
-      <div class="city">
-        <div class="city-head">
-          <span class="cid">${c.id}</span>
-          ${this._confirmCity === c.id
-            ? html`<span class="confirm">¿Borrar ciudad?
-                <button class="yes" @click=${() => this._deleteCity(c.id)}>Sí</button>
-                <button @click=${() => { this._confirmCity = null; }}>No</button>
-              </span>`
-            : html`<button class="del-btn" @click=${() => { this._confirmCity = c.id; this._mapError = ''; }}>Borrar</button>`}
-        </div>
+      <details class="city">
+        <summary class="city-head">
+          <span class="cid">${c.name || c.id} <span class="muted">(${c.id})</span>${c.deprecated ? html` · <span class="muted">deprecada</span>` : null}</span>
+          <span @click=${(e) => e.stopPropagation()}>
+            ${this._confirmCity === c.id
+              ? html`<span class="confirm">¿Borrar ciudad?
+                  <button class="yes" @click=${() => this._deleteCity(c.id)}>Sí</button>
+                  <button @click=${() => { this._confirmCity = null; }}>No</button>
+                </span>`
+              : html`<button class="del-btn" @click=${() => { this._confirmCity = c.id; this._mapError = ''; }}>Borrar</button>`}
+          </span>
+        </summary>
         <div class="fields">
           <label>Nombre
             <input type="text" .value=${c.name} @input=${(e) => this._patchCity(idx, { name: e.target.value })} />
@@ -598,7 +633,7 @@ export class SuperadminPanel extends LitElement {
                 </div>`,
               )}
         </div>
-      </div>
+      </details>
     `;
   }
 

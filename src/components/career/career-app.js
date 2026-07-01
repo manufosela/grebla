@@ -66,9 +66,11 @@ export class CareerApp extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
     .error { color: var(--rm-danger, #dc2626); }
     .ev { margin-top: 1rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.75rem; }
-    .ev h4 { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
+    .ev summary { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .ev label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
     .ev input { width: 100%; box-sizing: border-box; margin-top: 0.2rem; padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); font-size: 0.85rem; color: var(--rm-text, #111827); background: var(--rm-surface, #fff); }
+    .legend-wrap { margin-top: 1rem; }
+    .legend-wrap summary { font-size: 0.78rem; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .recs { margin: 0.75rem 0 0; padding: 0; list-style: none; font-size: 0.78rem; }
     .recs li { margin: 0.2rem 0; color: var(--rm-muted, #6b7280); }
     .recs a { color: var(--rm-accent, #2a9d8f); }
@@ -247,8 +249,8 @@ export class CareerApp extends LitElement {
                   : null}
                 ${sel.deprecated
                   ? null
-                  : html`<div class="ev">
-                      <h4>Evidencias</h4>
+                  : html`<details class="ev">
+                      <summary>Evidencias</summary>
                       <label>Experiencia previa (años)
                         <input
                           type="number"
@@ -279,17 +281,20 @@ export class CareerApp extends LitElement {
                           @change=${(e) => this._saveEvidence('titulos', e.target.value)}
                         />
                       </label>
-                    </div>`}
+                    </details>`}
               `
             : html`<p class="hint">Haz clic en una ciudad de la isla para ver sus acciones y evidencias.</p>`}
-          <div class="legend">
-            <span><i class="d visited"></i>Visitada</span>
-            <span><i class="d reachable"></i>Disponible</span>
-            <span><i class="d locked"></i>Bloqueada</span>
-            <span><i class="d deprecated"></i>En desuso</span>
-            <span><i class="r current"></i>Actual</span>
-            <span><i class="r target"></i>En ruta</span>
-          </div>
+          <details class="legend-wrap">
+            <summary>Leyenda</summary>
+            <div class="legend">
+              <span><i class="d visited"></i>Visitada</span>
+              <span><i class="d reachable"></i>Disponible</span>
+              <span><i class="d locked"></i>Bloqueada</span>
+              <span><i class="d deprecated"></i>En desuso</span>
+              <span><i class="r current"></i>Actual</span>
+              <span><i class="r target"></i>En ruta</span>
+            </div>
+          </details>
         </div>
       </div>
     `;
