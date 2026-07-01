@@ -21,9 +21,39 @@ import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
 import { getCareerMap, saveCareerMap } from '../lib/careerMap.js';
+import { getFramework, saveFramework } from '../lib/careerFramework.js';
 
 const CITY_KINDS = ['tech', 'skill', 'milestone'];
 const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
+
+/**
+ * Genera un id estable a partir de un texto (nombre/código): minúsculas, sin
+ * acentos, separadores → guiones. @param {string} text @returns {string}
+ */
+function slugify(text) {
+  return String(text ?? '')
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Devuelve un id único añadiendo sufijos -2, -3… si `base` ya existe.
+ * @param {string} base @param {Set<string>} existing @returns {string}
+ */
+function uniqueId(base, existing) {
+  const root = base || 'item';
+  let id = root;
+  let n = 2;
+  while (existing.has(id)) { id = `${root}-${n}`; n += 1; }
+  return id;
+}
+
+/** Siguiente `order` disponible (max + 1). @param {ReadonlyArray<{order:number}>} items @returns {number} */
+function nextOrder(items) {
+  return items.reduce((max, it) => Math.max(max, Number(it.order) || 0), 0) + 1;
+}
 
 /** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
 const ROLE_LABEL = { superadmin: 'Superadmin', viewer: 'Viewer', leader: 'Líder', none: 'Sin rol' };
@@ -38,7 +68,7 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'teamRoles', 'labels', 'careerMap', 'users'];
+const TABS = ['leaders', 'teamRoles', 'labels', 'careerMap', 'careerFramework', 'users'];
 
 export class SuperadminPanel extends LitElement {
   static properties = {
@@ -63,6 +93,12 @@ export class SuperadminPanel extends LitElement {
     _mapError: { state: true },
     _mapNotice: { state: true },
     _mapSaving: { state: true },
+    _framework: { state: true },
+    _fwNew: { state: true },
+    _fwConfirm: { state: true },
+    _fwError: { state: true },
+    _fwNotice: { state: true },
+    _fwSaving: { state: true },
     _users: { state: true },
     _newUserEmail: { state: true },
     _newUserRole: { state: true },
@@ -107,6 +143,8 @@ export class SuperadminPanel extends LitElement {
     .muted { color: var(--rm-muted, #9ca3af); }
     .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff; }
     .del-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+    .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
+    .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .notice { color: var(--rm-accent, #2a9d8f); font-size: 0.85rem; font-weight: 600; }
@@ -141,7 +179,7 @@ export class SuperadminPanel extends LitElement {
     this.ready = false;
     this.isLeader = false;
     this.readOnly = false;
-    /** @type {'leaders'|'teamRoles'|'labels'|'careerMap'|'users'} pestaña activa */
+    /** @type {'leaders'|'teamRoles'|'labels'|'careerMap'|'careerFramework'|'users'} pestaña activa */
     this._tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'leaders';
     this._onHashChange = () => {
       const t = location.hash.slice(1);
@@ -170,6 +208,14 @@ export class SuperadminPanel extends LitElement {
     this._mapError = '';
     this._mapNotice = '';
     this._mapSaving = false;
+    /** @type {import('../tools/career/data/framework.js').CareerFramework|null} */
+    this._framework = null;
+    this._fwNew = { track: '', discipline: '', dimension: '', levelCode: '', levelTitle: '' };
+    /** @type {{ kind: 'tracks'|'levels'|'disciplines'|'dimensions', id: string }|null} */
+    this._fwConfirm = null;
+    this._fwError = '';
+    this._fwNotice = '';
+    this._fwSaving = false;
     /** @type {import('../lib/accessRoles.js').AccessUser[]} */
     this._users = [];
     this._newUserEmail = '';
@@ -206,6 +252,7 @@ export class SuperadminPanel extends LitElement {
       this._loadLeaders();
       this._loadCatalogs();
       this._loadCareerMap();
+      this._loadFramework();
       // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
       if (!this.readOnly) this._loadUsers();
     }
@@ -384,6 +431,139 @@ export class SuperadminPanel extends LitElement {
       this._mapError = err instanceof Error ? err.message : 'No se pudo guardar el mapa.';
     } finally {
       this._mapSaving = false;
+    }
+  }
+
+  // ── Framework de carrera (editor) ──────────────────────────────────────────
+
+  async _loadFramework() {
+    this._fwError = '';
+    try {
+      this._framework = await getFramework();
+    } catch (err) {
+      this._fwError = err instanceof Error ? err.message : 'No se pudo cargar el framework de carrera.';
+    }
+  }
+
+  /** Reemplaza el framework de trabajo (copia inmutable para refrescar Lit). @param {Partial<import('../tools/career/data/framework.js').CareerFramework>} patch */
+  _patchFramework(patch) {
+    this._framework = { ...this._framework, ...patch };
+    this._fwNotice = '';
+  }
+
+  /** @param {'tracks'|'levels'|'disciplines'|'dimensions'} kind @param {string} id */
+  _isFwConfirm(kind, id) {
+    return this._fwConfirm?.kind === kind && this._fwConfirm?.id === id;
+  }
+
+  /** @param {'tracks'|'levels'|'disciplines'|'dimensions'} kind @param {string} id @param {Record<string, unknown>} patch */
+  _patchFwItem(kind, id, patch) {
+    const list = /** @type {Array<any>} */ (this._framework[kind]).map((it) => (it.id === id ? { ...it, ...patch } : it));
+    this._patchFramework({ [kind]: list });
+  }
+
+  /** Sube (-1) o baja (+1) un item intercambiando su `order` con el vecino. @param {'tracks'|'levels'|'disciplines'|'dimensions'} kind @param {string} id @param {-1|1} dir */
+  _moveFwItem(kind, id, dir) {
+    const sorted = /** @type {Array<any>} */ (this._framework[kind]).toSorted((a, b) => a.order - b.order);
+    const pos = sorted.findIndex((it) => it.id === id);
+    const swapPos = pos + dir;
+    if (pos < 0 || swapPos < 0 || swapPos >= sorted.length) return;
+    const a = sorted[pos];
+    const b = sorted[swapPos];
+    const list = /** @type {Array<any>} */ (this._framework[kind]).map((it) => {
+      if (it.id === a.id) return { ...it, order: b.order };
+      if (it.id === b.id) return { ...it, order: a.order };
+      return it;
+    });
+    this._patchFramework({ [kind]: list });
+  }
+
+  /** Añade un track/disciplina/dimensión con id autogenerado y único. @param {'tracks'|'disciplines'|'dimensions'} kind @param {'track'|'discipline'|'dimension'} field @param {string} singular */
+  _addNamed(kind, field, singular) {
+    const name = this._fwNew[field].trim();
+    this._fwError = '';
+    if (!name) { this._fwError = `El ${singular} necesita un nombre.`; return; }
+    const list = /** @type {Array<any>} */ (this._framework[kind]);
+    const id = uniqueId(slugify(name), new Set(list.map((it) => it.id)));
+    this._patchFramework({ [kind]: [...list, { id, name, order: nextOrder(list), description: '' }] });
+    this._fwNew = { ...this._fwNew, [field]: '' };
+  }
+
+  _addLevel() {
+    const code = this._fwNew.levelCode.trim();
+    const title = this._fwNew.levelTitle.trim();
+    this._fwError = '';
+    if (!code || !title) { this._fwError = 'El nivel necesita código y título.'; return; }
+    const levels = this._framework.levels;
+    const id = uniqueId(slugify(code) || slugify(title), new Set(levels.map((l) => l.id)));
+    const trackId = this._framework.tracks[0]?.id ?? '';
+    /** @type {import('../tools/career/data/framework.js').Level} */
+    const level = { id, code, title, trackId, order: nextOrder(levels), description: '', typicalProfile: '', branchesFrom: null };
+    this._patchFramework({ levels: [...levels, level] });
+    this._fwNew = { ...this._fwNew, levelCode: '', levelTitle: '' };
+  }
+
+  /** @param {'tracks'|'levels'|'disciplines'|'dimensions'} kind @param {string} id */
+  _deleteFwItem(kind, id) {
+    this._fwError = '';
+    // Un track en uso no se puede borrar: reasignar los niveles antes.
+    if (kind === 'tracks') {
+      const inUse = this._framework.levels.filter((l) => l.trackId === id);
+      if (inUse.length) {
+        this._fwConfirm = null;
+        this._fwError = `No se puede borrar el track «${id}»: ${inUse.length} nivel(es) lo usan. Reasígnalos antes.`;
+        return;
+      }
+    }
+    const list = /** @type {Array<any>} */ (this._framework[kind]).filter((it) => it.id !== id);
+    /** @type {Record<string, unknown>} */
+    const patch = { [kind]: list };
+    // Al borrar un nivel, limpia los branchesFrom que apuntaban a él.
+    if (kind === 'levels') {
+      patch.levels = list.map((l) => (l.branchesFrom === id ? { ...l, branchesFrom: null } : l));
+    }
+    this._patchFramework(patch);
+    this._fwConfirm = null;
+  }
+
+  /** Valida el framework antes de guardar. @returns {string|null} mensaje de error o null */
+  _validateFramework() {
+    const fw = this._framework;
+    for (const [kind, label] of /** @type {const} */ ([['tracks', 'track'], ['disciplines', 'disciplina'], ['dimensions', 'dimensión']])) {
+      const seen = new Set();
+      for (const it of fw[kind]) {
+        if (!it.id.trim() || !it.name.trim()) return `Hay ${label}s sin id o sin nombre.`;
+        if (seen.has(it.id)) return `${label} duplicad@: «${it.id}».`;
+        seen.add(it.id);
+      }
+    }
+    const trackIds = new Set(fw.tracks.map((t) => t.id));
+    const levelIds = new Set();
+    for (const l of fw.levels) {
+      if (!l.id.trim() || !l.title.trim()) return 'Hay niveles sin id o sin título.';
+      if (levelIds.has(l.id)) return `Nivel duplicado: «${l.id}».`;
+      levelIds.add(l.id);
+      if (!trackIds.has(l.trackId)) return `El nivel «${l.id}» apunta a un track inexistente.`;
+    }
+    for (const l of fw.levels) {
+      if (l.branchesFrom && !levelIds.has(l.branchesFrom)) return `El nivel «${l.id}» ramifica desde un nivel inexistente.`;
+    }
+    return null;
+  }
+
+  async _saveFramework() {
+    this._fwError = '';
+    this._fwNotice = '';
+    const invalid = this._validateFramework();
+    if (invalid) { this._fwError = invalid; return; }
+    this._fwSaving = true;
+    try {
+      await saveFramework(this._framework);
+      this._fwNotice = 'Framework guardado.';
+    } catch (err) {
+      this._fwError = err instanceof Error ? err.message : 'No se pudo guardar el framework.';
+    } finally {
+      this._fwSaving = false;
     }
   }
 
@@ -575,6 +755,8 @@ export class SuperadminPanel extends LitElement {
         return this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…');
       case 'careerMap':
         return this._renderCareerMap();
+      case 'careerFramework':
+        return this._renderFramework();
       case 'users':
         return this._renderUsers();
       default:
@@ -596,6 +778,7 @@ export class SuperadminPanel extends LitElement {
         <button class="tab ${this._tab === 'teamRoles' ? 'active' : ''}" @click=${() => this._setTab('teamRoles')}>Roles de equipo</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
         <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => this._setTab('careerMap')}>Mapa de carrera</button>
+        <button class="tab ${this._tab === 'careerFramework' ? 'active' : ''}" @click=${() => this._setTab('careerFramework')}>Carrera</button>
         ${this.readOnly
           ? null
           : html`<button class="tab ${this._tab === 'users' ? 'active' : ''}" @click=${() => this._setTab('users')}>Usuarios</button>`}
@@ -769,6 +952,179 @@ export class SuperadminPanel extends LitElement {
               )}
         </div>
       </details>
+    `;
+  }
+
+  // ── Framework de carrera (render) ──────────────────────────────────────────
+
+  _renderFramework() {
+    const fw = this._framework;
+    return html`
+      <section>
+        <h2>Framework de carrera</h2>
+        <p class="ro-note">Catálogo global de la organización: itinerarios (tracks), niveles, disciplinas y dimensiones. Los cambios se aplican al guardar.</p>
+        ${this._fwError ? html`<p class="error">${this._fwError}</p>` : null}
+        ${this._fwNotice ? html`<p class="notice">${this._fwNotice}</p>` : null}
+        ${!fw
+          ? html`<p class="empty">Cargando el framework…</p>`
+          : html`
+              ${this._renderNamedSection('tracks', 'Tracks', 'track', 'track', fw.tracks)}
+              ${this._renderFwLevels(fw)}
+              ${this._renderNamedSection('disciplines', 'Disciplinas', 'disciplina', 'discipline', fw.disciplines)}
+              ${this._renderNamedSection('dimensions', 'Dimensiones', 'dimensión', 'dimension', fw.dimensions)}
+              ${this.readOnly
+                ? null
+                : html`
+                    <div class="toolbar" style="margin-top:1rem">
+                      <button class="primary" ?disabled=${this._fwSaving} @click=${() => this._saveFramework()}>
+                        ${this._fwSaving ? 'Guardando…' : 'Guardar framework'}
+                      </button>
+                    </div>
+                  `}
+            `}
+      </section>
+    `;
+  }
+
+  /**
+   * Sección de items con nombre (tracks/disciplinas/dimensiones: misma forma).
+   * @param {'tracks'|'disciplines'|'dimensions'} kind
+   * @param {string} title @param {string} singular
+   * @param {'track'|'discipline'|'dimension'} field  clave en _fwNew
+   * @param {Array<import('../tools/career/data/framework.js').NamedItem>} items
+   */
+  _renderNamedSection(kind, title, singular, field, items) {
+    const sorted = [...items].toSorted((a, b) => a.order - b.order);
+    return html`
+      <details open>
+        <summary class="sub">${title} (${items.length})</summary>
+        ${this.readOnly
+          ? null
+          : html`<div class="toolbar">
+              <input type="text" placeholder=${`Nombre del ${singular}`} .value=${this._fwNew[field]}
+                @input=${(e) => { this._fwNew = { ...this._fwNew, [field]: e.target.value }; }} />
+              <button class="primary" ?disabled=${!this._fwNew[field].trim()} @click=${() => this._addNamed(kind, field, singular)}>Añadir ${singular}</button>
+            </div>`}
+        ${items.length === 0
+          ? html`<p class="empty">Aún no hay ${singular}s.</p>`
+          : html`<div class="cities">${sorted.map((it, i) => this._renderNamedCard(kind, it, i, sorted.length))}</div>`}
+      </details>
+    `;
+  }
+
+  /**
+   * @param {'tracks'|'disciplines'|'dimensions'} kind
+   * @param {import('../tools/career/data/framework.js').NamedItem} it
+   * @param {number} pos @param {number} total
+   */
+  _renderNamedCard(kind, it, pos, total) {
+    return html`
+      <div class="city">
+        <div class="city-head">
+          <span class="cid">${it.name || it.id} <span class="muted">(${it.id})</span></span>
+          <span>
+            ${this.readOnly
+              ? null
+              : html`
+                  <button class="ord-btn" ?disabled=${pos === 0} title="Subir" @click=${() => this._moveFwItem(kind, it.id, -1)}>↑</button>
+                  <button class="ord-btn" ?disabled=${pos === total - 1} title="Bajar" @click=${() => this._moveFwItem(kind, it.id, 1)}>↓</button>
+                  ${this._isFwConfirm(kind, it.id)
+                    ? html`<span class="confirm">¿Borrar?
+                        <button class="yes" @click=${() => this._deleteFwItem(kind, it.id)}>Sí</button>
+                        <button @click=${() => { this._fwConfirm = null; }}>No</button>
+                      </span>`
+                    : html`<button class="del-btn" @click=${() => { this._fwConfirm = { kind, id: it.id }; this._fwError = ''; }}>Borrar</button>`}
+                `}
+          </span>
+        </div>
+        <div class="fields">
+          <label>Nombre
+            <input type="text" .value=${it.name} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem(kind, it.id, { name: e.target.value })} />
+          </label>
+          <label class="full">Descripción
+            <input type="text" .value=${it.description ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem(kind, it.id, { description: e.target.value })} />
+          </label>
+        </div>
+      </div>
+    `;
+  }
+
+  /** @param {import('../tools/career/data/framework.js').CareerFramework} fw */
+  _renderFwLevels(fw) {
+    const sorted = [...fw.levels].toSorted((a, b) => a.order - b.order);
+    return html`
+      <details open>
+        <summary class="sub">Niveles (${fw.levels.length})</summary>
+        ${this.readOnly
+          ? null
+          : html`<div class="toolbar">
+                <input type="text" placeholder="Código (p. ej. L2)" .value=${this._fwNew.levelCode}
+                  @input=${(e) => { this._fwNew = { ...this._fwNew, levelCode: e.target.value }; }} />
+                <input type="text" placeholder="Título (p. ej. Senior Engineer)" .value=${this._fwNew.levelTitle}
+                  @input=${(e) => { this._fwNew = { ...this._fwNew, levelTitle: e.target.value }; }} />
+                <button class="primary" ?disabled=${!this._fwNew.levelCode.trim() || !this._fwNew.levelTitle.trim() || fw.tracks.length === 0} @click=${() => this._addLevel()}>Añadir nivel</button>
+              </div>
+              ${fw.tracks.length === 0 ? html`<p class="ro-note">Crea al menos un track antes de añadir niveles.</p>` : null}`}
+        ${fw.levels.length === 0
+          ? html`<p class="empty">Aún no hay niveles.</p>`
+          : html`<div class="cities">${sorted.map((l, i) => this._renderLevelCard(fw, l, i, sorted.length))}</div>`}
+      </details>
+    `;
+  }
+
+  /**
+   * @param {import('../tools/career/data/framework.js').CareerFramework} fw
+   * @param {import('../tools/career/data/framework.js').Level} l
+   * @param {number} pos @param {number} total
+   */
+  _renderLevelCard(fw, l, pos, total) {
+    return html`
+      <div class="city">
+        <div class="city-head">
+          <span class="cid">${l.code || l.title} <span class="muted">(${l.id})</span></span>
+          <span>
+            ${this.readOnly
+              ? null
+              : html`
+                  <button class="ord-btn" ?disabled=${pos === 0} title="Subir" @click=${() => this._moveFwItem('levels', l.id, -1)}>↑</button>
+                  <button class="ord-btn" ?disabled=${pos === total - 1} title="Bajar" @click=${() => this._moveFwItem('levels', l.id, 1)}>↓</button>
+                  ${this._isFwConfirm('levels', l.id)
+                    ? html`<span class="confirm">¿Borrar nivel?
+                        <button class="yes" @click=${() => this._deleteFwItem('levels', l.id)}>Sí</button>
+                        <button @click=${() => { this._fwConfirm = null; }}>No</button>
+                      </span>`
+                    : html`<button class="del-btn" @click=${() => { this._fwConfirm = { kind: 'levels', id: l.id }; this._fwError = ''; }}>Borrar</button>`}
+                `}
+          </span>
+        </div>
+        <div class="fields">
+          <label>Código
+            <input type="text" .value=${l.code} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('levels', l.id, { code: e.target.value })} />
+          </label>
+          <label>Título
+            <input type="text" .value=${l.title} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('levels', l.id, { title: e.target.value })} />
+          </label>
+          <label>Track
+            <select ?disabled=${this.readOnly} @change=${(e) => this._patchFwItem('levels', l.id, { trackId: e.target.value })}>
+              ${fw.tracks.map((t) => html`<option value=${t.id} ?selected=${t.id === l.trackId}>${t.name}</option>`)}
+            </select>
+          </label>
+          <label>Ramifica desde
+            <select ?disabled=${this.readOnly} @change=${(e) => this._patchFwItem('levels', l.id, { branchesFrom: e.target.value || null })}>
+              <option value="" ?selected=${!l.branchesFrom}>— ninguno —</option>
+              ${fw.levels
+                .filter((o) => o.id !== l.id)
+                .map((o) => html`<option value=${o.id} ?selected=${o.id === l.branchesFrom}>${o.code || o.title} (${o.id})</option>`)}
+            </select>
+          </label>
+          <label>Perfil típico
+            <input type="text" .value=${l.typicalProfile ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('levels', l.id, { typicalProfile: e.target.value })} />
+          </label>
+          <label class="full">Descripción
+            <input type="text" .value=${l.description ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('levels', l.id, { description: e.target.value })} />
+          </label>
+        </div>
+      </div>
     `;
   }
 
