@@ -31,6 +31,16 @@
  * @property {number} order
  * @property {string} description
  *
+ * @typedef {Object} Expectation    Celda «meeting expectations» de la matriz Nivel × Dimensión
+ * @property {string} levelId       id del Level
+ * @property {string} dimensionId   id de la dimensión
+ * @property {string} text          expectativa esperada en esa celda (no vacía)
+ *
+ * @typedef {Object} Addendum       Foco de una dimensión dentro de una disciplina (sección 10)
+ * @property {string} disciplineId  id de la disciplina
+ * @property {string} dimensionId   id de la dimensión
+ * @property {string} text          matiz/foco de esa dimensión en la disciplina (no vacío)
+ *
  * @typedef {Object} CareerFramework
  * @property {string} id
  * @property {string} name
@@ -38,6 +48,8 @@
  * @property {Level[]} levels
  * @property {NamedItem[]} disciplines
  * @property {NamedItem[]} dimensions
+ * @property {Expectation[]} expectations  matriz de expectativas Nivel × Dimensión (solo celdas con texto)
+ * @property {Addendum[]} addendums        addendums por disciplina Disciplina × Dimensión (solo con texto)
  */
 
 /**
@@ -78,6 +90,10 @@ export const ENGINEERING_FRAMEWORK = {
     { id: 'leadership', name: 'Leadership & Collaboration', order: 5, description: 'Mentoría, comunicación y hacer mejor al equipo que te rodea.' },
     { id: 'culture', name: 'Cultural Contribution', order: 6, description: 'Cómo contribuyes a la cultura (honestidad, ownership, respeto, cuidar el listón del equipo).' },
   ],
+  // La matriz de expectativas y los addendums se editan/cargan desde el panel;
+  // la semilla en código va vacía (no inventamos el contenido del documento).
+  expectations: [],
+  addendums: [],
 };
 
 /**
@@ -134,9 +150,36 @@ function normalizeLevel(level) {
 }
 
 /**
+ * Normaliza una celda de la matriz de expectativas (Nivel × Dimensión).
+ * @param {Record<string, unknown>} item
+ * @returns {Expectation}
+ */
+function normalizeExpectation(item) {
+  return {
+    levelId: String(item?.levelId ?? '').trim(),
+    dimensionId: String(item?.dimensionId ?? '').trim(),
+    text: String(item?.text ?? '').trim(),
+  };
+}
+
+/**
+ * Normaliza un addendum (Disciplina × Dimensión).
+ * @param {Record<string, unknown>} item
+ * @returns {Addendum}
+ */
+function normalizeAddendum(item) {
+  return {
+    disciplineId: String(item?.disciplineId ?? '').trim(),
+    dimensionId: String(item?.dimensionId ?? '').trim(),
+    text: String(item?.text ?? '').trim(),
+  };
+}
+
+/**
  * Reconstruye un CareerFramework completo a partir del documento de Firestore.
  * Si no hay datos (documento inexistente) devuelve la semilla en código. Cada
- * catálogo se ordena por su campo `order`.
+ * catálogo se ordena por su campo `order`. Expectations y addendums descartan
+ * las celdas incompletas (sin ids o con texto vacío tras trim).
  * @param {Record<string, unknown>|null|undefined} data  data() del documento
  * @returns {CareerFramework}
  */
@@ -151,6 +194,12 @@ export function normalizeFramework(data) {
     levels: Array.isArray(data.levels) ? data.levels.map(normalizeLevel).filter((l) => l.id).toSorted(byOrder) : [],
     disciplines: named(data.disciplines),
     dimensions: named(data.dimensions),
+    expectations: Array.isArray(data.expectations)
+      ? data.expectations.map(normalizeExpectation).filter((e) => e.levelId && e.dimensionId && e.text)
+      : [],
+    addendums: Array.isArray(data.addendums)
+      ? data.addendums.map(normalizeAddendum).filter((a) => a.disciplineId && a.dimensionId && a.text)
+      : [],
   };
 }
 
@@ -159,7 +208,7 @@ export function normalizeFramework(data) {
  * `undefined`, que Firestore rechaza; `branchesFrom` es null cuando no ramifica).
  * No incluye `id` (es el id del documento).
  * @param {CareerFramework} fw
- * @returns {{ name: string, tracks: NamedItem[], levels: Level[], disciplines: NamedItem[], dimensions: NamedItem[] }}
+ * @returns {{ name: string, tracks: NamedItem[], levels: Level[], disciplines: NamedItem[], dimensions: NamedItem[], expectations: Expectation[], addendums: Addendum[] }}
  */
 export function serializeFramework(fw) {
   /** @param {NamedItem[]|undefined} arr @returns {NamedItem[]} */
@@ -182,11 +231,23 @@ export function serializeFramework(fw) {
       branchesFrom: branchesFrom || null,
     };
   }).filter((l) => l.id);
+  const expectations = (fw?.expectations ?? []).map((e) => ({
+    levelId: String(e.levelId ?? '').trim(),
+    dimensionId: String(e.dimensionId ?? '').trim(),
+    text: String(e.text ?? '').trim(),
+  })).filter((e) => e.levelId && e.dimensionId && e.text);
+  const addendums = (fw?.addendums ?? []).map((a) => ({
+    disciplineId: String(a.disciplineId ?? '').trim(),
+    dimensionId: String(a.dimensionId ?? '').trim(),
+    text: String(a.text ?? '').trim(),
+  })).filter((a) => a.disciplineId && a.dimensionId && a.text);
   return {
     name: String(fw?.name ?? '').trim() || ENGINEERING_FRAMEWORK.name,
     tracks: named(fw?.tracks),
     levels,
     disciplines: named(fw?.disciplines),
     dimensions: named(fw?.dimensions),
+    expectations,
+    addendums,
   };
 }
