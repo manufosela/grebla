@@ -54,21 +54,27 @@ export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => 
   return { ok: true, uid: user.uid };
 });
 
-// ── Líderes (multi-leader) ───────────────────────────────────────────────────
+// ── Accesos (líderes y viewers) ──────────────────────────────────────────────
+const ACCESS_COLLECTION = { leader: 'leaders', viewer: 'viewers' };
+
 /**
- * Gestiona los líderes de la instancia. Solo un superadmin. Resuelve el email a
- * uid (el usuario debe haber iniciado sesión al menos una vez) y crea o borra
- * /leaders/{uid}. action: 'add' (por defecto) | 'remove'.
+ * Gestiona los accesos de la instancia: líderes (gestionan sus personas) y
+ * viewers (solo lectura, tipo C-level). Solo un superadmin. Resuelve el email
+ * a uid (el usuario debe haber iniciado sesión al menos una vez) y crea o
+ * borra /leaders/{uid} o /viewers/{uid} según `role`.
+ * action: 'add' (por defecto) | 'remove'. role: 'leader' (por defecto) | 'viewer'.
  */
-export const manageLeader = onCall({ region: 'europe-west1' }, async (request) => {
+export const manageAccess = onCall({ region: 'europe-west1' }, async (request) => {
   const caller = request.auth;
   if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
   if (!(await isAdmin(caller.uid))) {
-    throw new HttpsError('permission-denied', 'Solo un superadmin puede gestionar líderes.');
+    throw new HttpsError('permission-denied', 'Solo un superadmin puede gestionar accesos.');
   }
   const action = request.data?.action === 'remove' ? 'remove' : 'add';
+  const role = request.data?.role === 'viewer' ? 'viewer' : 'leader';
+  const collectionName = ACCESS_COLLECTION[role];
   const email = typeof request.data?.email === 'string' ? request.data.email.trim() : '';
-  if (!email) throw new HttpsError('invalid-argument', 'Falta el email del líder.');
+  if (!email) throw new HttpsError('invalid-argument', `Falta el email del ${role === 'viewer' ? 'viewer' : 'líder'}.`);
 
   let user;
   try {
@@ -77,10 +83,10 @@ export const manageLeader = onCall({ region: 'europe-west1' }, async (request) =
     throw new HttpsError('not-found', `No existe ningún usuario con el email ${email}. Debe iniciar sesión al menos una vez.`);
   }
 
-  const ref = getFirestore().doc(`leaders/${user.uid}`);
+  const ref = getFirestore().doc(`${collectionName}/${user.uid}`);
   if (action === 'remove') {
     await ref.delete();
-    return { ok: true, action, uid: user.uid };
+    return { ok: true, action, role, uid: user.uid };
   }
   await ref.set(
     {
@@ -91,7 +97,7 @@ export const manageLeader = onCall({ region: 'europe-west1' }, async (request) =
     },
     { merge: true },
   );
-  return { ok: true, action, uid: user.uid };
+  return { ok: true, action, role, uid: user.uid };
 });
 
 // ── DORA ───────────────────────────────────────────────────────────────────

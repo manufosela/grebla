@@ -4,14 +4,19 @@
  * líderes de la instancia (alta por email vía Cloud Function, baja) y permite
  * ver el equipo de cada líder (personas y su perfil Role Mirror) en LECTURA.
  * Si el superadmin es además líder, "Usar como líder" lo lleva a las herramientas.
+ * También gestiona el catálogo de accesos (pestaña Usuarios): quién tiene
+ * acceso (superadmin/viewer/líder) y permite cambiar el rol de cada uno.
  *
  * Propiedades:
- *  - ready: boolean  (lo activa el glue cuando hay sesión de superadmin)
+ *  - ready: boolean  (lo activa el glue cuando hay sesión de gestión)
  *  - isLeader: boolean  (si el superadmin también es líder → botón "Usar como líder")
+ *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
 import { LitElement, html, css } from 'lit';
 import { listLeaders, addLeaderByEmail, removeLeader } from '../lib/leaders.js';
+import { addViewerByEmail } from '../lib/viewers.js';
 import { listCatalog, createGlobal, promoteToGlobal, removeFromCatalog } from '../lib/catalog.js';
+import { listAllUsers, setUserRole } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -20,12 +25,18 @@ import { getCareerMap, saveCareerMap } from '../lib/careerMap.js';
 const CITY_KINDS = ['tech', 'skill', 'milestone'];
 const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
 
+/** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
+const ROLE_LABEL = { superadmin: 'Superadmin', viewer: 'Viewer', leader: 'Líder' };
+/** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
+const ROLE_COLOR = { superadmin: '#dc2626', viewer: '#6b7280', leader: '#3b82f6' };
+
 const VIEW_FLAG = 'grebla-view';
 
 export class SuperadminPanel extends LitElement {
   static properties = {
     ready: { attribute: false },
     isLeader: { attribute: false },
+    readOnly: { attribute: false },
     _tab: { state: true },
     leaders: { state: true },
     selected: { state: true },
@@ -44,6 +55,12 @@ export class SuperadminPanel extends LitElement {
     _mapError: { state: true },
     _mapNotice: { state: true },
     _mapSaving: { state: true },
+    _users: { state: true },
+    _newUserEmail: { state: true },
+    _newUserRole: { state: true },
+    _confirmRoleChange: { state: true },
+    _usersError: { state: true },
+    _usersNotice: { state: true },
   };
 
   static styles = css`
@@ -115,7 +132,8 @@ export class SuperadminPanel extends LitElement {
     super();
     this.ready = false;
     this.isLeader = false;
-    /** @type {'leaders'|'teamRoles'|'labels'|'careerMap'} pestaña activa */
+    this.readOnly = false;
+    /** @type {'leaders'|'teamRoles'|'labels'|'careerMap'|'users'} pestaña activa */
     this._tab = 'leaders';
     /** @type {import('../lib/leaders.js').Leader[]} */
     this.leaders = [];
@@ -140,6 +158,15 @@ export class SuperadminPanel extends LitElement {
     this._mapError = '';
     this._mapNotice = '';
     this._mapSaving = false;
+    /** @type {import('../lib/accessRoles.js').AccessUser[]} */
+    this._users = [];
+    this._newUserEmail = '';
+    /** @type {'viewer'|'leader'} rol inicial para el alta por email */
+    this._newUserRole = 'viewer';
+    /** @type {{ uid: string, role: import('../lib/accessRoles.js').AccessRole|'none' }|null} */
+    this._confirmRoleChange = null;
+    this._usersError = '';
+    this._usersNotice = '';
     this._loaded = false;
   }
 
@@ -149,6 +176,8 @@ export class SuperadminPanel extends LitElement {
       this._loadLeaders();
       this._loadCatalogs();
       this._loadCareerMap();
+      // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
+      if (!this.readOnly) this._loadUsers();
     }
   }
 
@@ -368,6 +397,58 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
+  // ── Usuarios (accesos: superadmin / viewer / líder) ─────────────────────────
+
+  async _loadUsers() {
+    this._usersError = '';
+    try {
+      this._users = await listAllUsers();
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudieron cargar los usuarios.';
+    }
+  }
+
+  async _addUser() {
+    const email = this._newUserEmail.trim();
+    if (!email) return;
+    this._usersError = '';
+    this._usersNotice = '';
+    try {
+      if (this._newUserRole === 'leader') {
+        await addLeaderByEmail(email);
+      } else {
+        await addViewerByEmail(email);
+      }
+      this._newUserEmail = '';
+      this._usersNotice = 'Usuario añadido.';
+      await Promise.all([this._loadUsers(), this._loadLeaders()]);
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo añadir el usuario.';
+    }
+  }
+
+  /**
+   * @param {import('../lib/accessRoles.js').AccessUser} user
+   * @param {import('../lib/accessRoles.js').AccessRole|'none'} role
+   */
+  async _changeUserRole(user, role) {
+    this._usersError = '';
+    this._usersNotice = '';
+    try {
+      await setUserRole(user.uid, role, { displayName: user.displayName, email: user.email });
+      this._confirmRoleChange = null;
+      this._usersNotice = 'Rol actualizado.';
+      await Promise.all([this._loadUsers(), this._loadLeaders()]);
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el rol.';
+    }
+  }
+
+  /** @param {import('../lib/accessRoles.js').AccessRole|'none'} role */
+  _roleChangeLabel(role) {
+    return role === 'none' ? 'Quitar acceso' : ROLE_LABEL[role];
+  }
+
   /** @param {import('../lib/leaders.js').Leader} leader */
   async _openTeam(leader) {
     this.selected = leader;
@@ -403,15 +484,17 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <h2>${title}</h2>
-        <div class="toolbar">
-          <input
-            type="text"
-            placeholder=${placeholder}
-            .value=${this._newCat[kind]}
-            @input=${(e) => { this._newCat = { ...this._newCat, [kind]: e.target.value }; }}
-          />
-          <button class="primary" ?disabled=${!this._newCat[kind].trim()} @click=${() => this._createGlobalItem(kind)}>Crear global</button>
-        </div>
+        ${this.readOnly
+          ? null
+          : html`<div class="toolbar">
+              <input
+                type="text"
+                placeholder=${placeholder}
+                .value=${this._newCat[kind]}
+                @input=${(e) => { this._newCat = { ...this._newCat, [kind]: e.target.value }; }}
+              />
+              <button class="primary" ?disabled=${!this._newCat[kind].trim()} @click=${() => this._createGlobalItem(kind)}>Crear global</button>
+            </div>`}
         ${globals.length === 0
           ? html`<p class="empty">Aún no hay globales.</p>`
           : html`<table>
@@ -420,7 +503,7 @@ export class SuperadminPanel extends LitElement {
                 ${globals.map(
                   (i) => html`<tr>
                     <td>${i.name}</td>
-                    <td><button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button></td>
+                    <td>${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button>`}</td>
                   </tr>`,
                 )}
               </tbody>
@@ -437,8 +520,12 @@ export class SuperadminPanel extends LitElement {
                       <td>${i.name}</td>
                       <td class="muted">${this._leaderLabel(i.ownerLeaderUid)}</td>
                       <td>
-                        <button @click=${() => this._promote(kind, i.id)}>Promover a global</button>
-                        <button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button>
+                        ${this.readOnly
+                          ? null
+                          : html`
+                              <button @click=${() => this._promote(kind, i.id)}>Promover a global</button>
+                              <button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button>
+                            `}
                       </td>
                     </tr>`,
                   )}
@@ -458,6 +545,8 @@ export class SuperadminPanel extends LitElement {
         return this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…');
       case 'careerMap':
         return this._renderCareerMap();
+      case 'users':
+        return this._renderUsers();
       default:
         return null;
     }
@@ -467,7 +556,8 @@ export class SuperadminPanel extends LitElement {
     return html`
       <div class="bar">
         <h1>Gestión de la organización</h1>
-        ${this.isLeader
+        ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #6b7280)">Modo solo lectura (viewer)</span>` : null}
+        ${this.isLeader && !this.readOnly
           ? html`<button class="primary" @click=${this._useAsLeader}>Usar como líder →</button>`
           : null}
       </div>
@@ -476,6 +566,9 @@ export class SuperadminPanel extends LitElement {
         <button class="tab ${this._tab === 'teamRoles' ? 'active' : ''}" @click=${() => { this._tab = 'teamRoles'; }}>Roles de equipo</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => { this._tab = 'labels'; }}>Labels</button>
         <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => { this._tab = 'careerMap'; }}>Mapa de carrera</button>
+        ${this.readOnly
+          ? null
+          : html`<button class="tab ${this._tab === 'users' ? 'active' : ''}" @click=${() => { this._tab = 'users'; }}>Usuarios</button>`}
       </nav>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderTabContent()}
@@ -495,11 +588,15 @@ export class SuperadminPanel extends LitElement {
           : html`
               ${this._renderAreas(map)}
               ${this._renderCities(map)}
-              <div class="toolbar" style="margin-top:1rem">
-                <button class="primary" ?disabled=${this._mapSaving} @click=${() => this._saveCareerMap()}>
-                  ${this._mapSaving ? 'Guardando…' : 'Guardar mapa'}
-                </button>
-              </div>
+              ${this.readOnly
+                ? null
+                : html`
+                    <div class="toolbar" style="margin-top:1rem">
+                      <button class="primary" ?disabled=${this._mapSaving} @click=${() => this._saveCareerMap()}>
+                        ${this._mapSaving ? 'Guardando…' : 'Guardar mapa'}
+                      </button>
+                    </div>
+                  `}
             `}
       </section>
     `;
@@ -510,13 +607,15 @@ export class SuperadminPanel extends LitElement {
     return html`
       <details open>
       <summary class="sub">Comarcas (${map.areas.length})</summary>
-      <div class="toolbar">
-        <input type="text" placeholder="id (p. ej. frontend)" .value=${this._newArea.id}
-          @input=${(e) => { this._newArea = { ...this._newArea, id: e.target.value }; }} />
-        <input type="text" placeholder="Nombre" .value=${this._newArea.name}
-          @input=${(e) => { this._newArea = { ...this._newArea, name: e.target.value }; }} />
-        <button class="primary" ?disabled=${!this._newArea.id.trim() || !this._newArea.name.trim()} @click=${() => this._addArea()}>Añadir comarca</button>
-      </div>
+      ${this.readOnly
+        ? null
+        : html`<div class="toolbar">
+            <input type="text" placeholder="id (p. ej. frontend)" .value=${this._newArea.id}
+              @input=${(e) => { this._newArea = { ...this._newArea, id: e.target.value }; }} />
+            <input type="text" placeholder="Nombre" .value=${this._newArea.name}
+              @input=${(e) => { this._newArea = { ...this._newArea, name: e.target.value }; }} />
+            <button class="primary" ?disabled=${!this._newArea.id.trim() || !this._newArea.name.trim()} @click=${() => this._addArea()}>Añadir comarca</button>
+          </div>`}
       ${map.areas.length === 0
         ? html`<p class="empty">Aún no hay comarcas.</p>`
         : html`<table>
@@ -525,13 +624,15 @@ export class SuperadminPanel extends LitElement {
               ${map.areas.map(
                 (a) => html`<tr>
                   <td class="muted">${a.id}</td>
-                  <td><input type="text" .value=${a.name} @input=${(e) => this._renameArea(a.id, e.target.value)} /></td>
-                  <td>${this._confirmArea === a.id
-                    ? html`<span class="confirm">¿Borrar?
-                        <button class="yes" @click=${() => this._deleteArea(a.id)}>Sí</button>
-                        <button @click=${() => { this._confirmArea = null; }}>No</button>
-                      </span>`
-                    : html`<button class="del-btn" @click=${() => { this._confirmArea = a.id; this._mapError = ''; }}>Borrar</button>`}
+                  <td><input type="text" .value=${a.name} ?disabled=${this.readOnly} @input=${(e) => this._renameArea(a.id, e.target.value)} /></td>
+                  <td>${this.readOnly
+                    ? null
+                    : this._confirmArea === a.id
+                      ? html`<span class="confirm">¿Borrar?
+                          <button class="yes" @click=${() => this._deleteArea(a.id)}>Sí</button>
+                          <button @click=${() => { this._confirmArea = null; }}>No</button>
+                        </span>`
+                      : html`<button class="del-btn" @click=${() => { this._confirmArea = a.id; this._mapError = ''; }}>Borrar</button>`}
                   </td>
                 </tr>`,
               )}
@@ -546,13 +647,15 @@ export class SuperadminPanel extends LitElement {
     return html`
       <details open>
       <summary class="sub">Ciudades (${map.cities.length})</summary>
-      <div class="toolbar">
-        <input type="text" placeholder="id (p. ej. react)" .value=${this._newCity.id}
-          @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
-        <input type="text" placeholder="Nombre" .value=${this._newCity.name}
-          @input=${(e) => { this._newCity = { ...this._newCity, name: e.target.value }; }} />
-        <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity()}>Añadir ciudad</button>
-      </div>
+      ${this.readOnly
+        ? null
+        : html`<div class="toolbar">
+            <input type="text" placeholder="id (p. ej. react)" .value=${this._newCity.id}
+              @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
+            <input type="text" placeholder="Nombre" .value=${this._newCity.name}
+              @input=${(e) => { this._newCity = { ...this._newCity, name: e.target.value }; }} />
+            <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity()}>Añadir ciudad</button>
+          </div>`}
       ${map.cities.length === 0
         ? html`<p class="empty">Aún no hay ciudades.</p>`
         : html`<div class="cities">${map.cities.map((c, idx) => this._renderCity(map, c, idx))}</div>`}
@@ -571,44 +674,46 @@ export class SuperadminPanel extends LitElement {
         <summary class="city-head">
           <span class="cid">${c.name || c.id} <span class="muted">(${c.id})</span>${c.deprecated ? html` · <span class="muted">deprecada</span>` : null}</span>
           <span @click=${(e) => e.stopPropagation()}>
-            ${this._confirmCity === c.id
-              ? html`<span class="confirm">¿Borrar ciudad?
-                  <button class="yes" @click=${() => this._deleteCity(c.id)}>Sí</button>
-                  <button @click=${() => { this._confirmCity = null; }}>No</button>
-                </span>`
-              : html`<button class="del-btn" @click=${() => { this._confirmCity = c.id; this._mapError = ''; }}>Borrar</button>`}
+            ${this.readOnly
+              ? null
+              : this._confirmCity === c.id
+                ? html`<span class="confirm">¿Borrar ciudad?
+                    <button class="yes" @click=${() => this._deleteCity(c.id)}>Sí</button>
+                    <button @click=${() => { this._confirmCity = null; }}>No</button>
+                  </span>`
+                : html`<button class="del-btn" @click=${() => { this._confirmCity = c.id; this._mapError = ''; }}>Borrar</button>`}
           </span>
         </summary>
         <div class="fields">
           <label>Nombre
-            <input type="text" .value=${c.name} @input=${(e) => this._patchCity(idx, { name: e.target.value })} />
+            <input type="text" .value=${c.name} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { name: e.target.value })} />
           </label>
           <label>Comarca
-            <select @change=${(e) => this._patchCity(idx, { area: e.target.value })}>
+            <select ?disabled=${this.readOnly} @change=${(e) => this._patchCity(idx, { area: e.target.value })}>
               <option value="" ?selected=${!c.area}>— sin comarca —</option>
               ${map.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === c.area}>${a.name}</option>`)}
             </select>
           </label>
           <label>Tipo
-            <select @change=${(e) => this._patchCity(idx, { kind: e.target.value })}>
+            <select ?disabled=${this.readOnly} @change=${(e) => this._patchCity(idx, { kind: e.target.value })}>
               ${CITY_KINDS.map((k) => html`<option value=${k} ?selected=${k === c.kind}>${k}</option>`)}
             </select>
           </label>
           <label>Peso
-            <input type="number" min="0" step="1" .value=${String(c.weight)} @input=${(e) => this._patchCity(idx, { weight: Number(e.target.value) })} />
+            <input type="number" min="0" step="1" .value=${String(c.weight)} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { weight: Number(e.target.value) })} />
           </label>
           <label>X (0..100)
-            <input type="number" min="0" max="100" step="1" .value=${String(c.x)} @input=${(e) => this._patchCity(idx, { x: Number(e.target.value) })} />
+            <input type="number" min="0" max="100" step="1" .value=${String(c.x)} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { x: Number(e.target.value) })} />
           </label>
           <label>Y (0..100)
-            <input type="number" min="0" max="100" step="1" .value=${String(c.y)} @input=${(e) => this._patchCity(idx, { y: Number(e.target.value) })} />
+            <input type="number" min="0" max="100" step="1" .value=${String(c.y)} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { y: Number(e.target.value) })} />
           </label>
           <label class="check">
-            <input type="checkbox" .checked=${c.deprecated === true} @change=${(e) => this._patchCity(idx, { deprecated: e.target.checked || undefined })} />
+            <input type="checkbox" .checked=${c.deprecated === true} ?disabled=${this.readOnly} @change=${(e) => this._patchCity(idx, { deprecated: e.target.checked || undefined })} />
             Deprecada
           </label>
           <label class="full">Prerequisitos
-            <select multiple size="4" @change=${(e) => this._setPrereqs(idx, e.target)}>
+            <select multiple size="4" ?disabled=${this.readOnly} @change=${(e) => this._setPrereqs(idx, e.target)}>
               ${map.cities
                 .filter((other) => other.id !== c.id)
                 .map((other) => html`<option value=${other.id} ?selected=${c.prereqs.includes(other.id)}>${other.name} (${other.id})</option>`)}
@@ -618,18 +723,18 @@ export class SuperadminPanel extends LitElement {
         <div class="recs-edit">
           <div class="recs-head">
             <span>Recomendaciones</span>
-            <button @click=${() => this._addRecommendation(idx)}>+ Añadir</button>
+            ${this.readOnly ? null : html`<button @click=${() => this._addRecommendation(idx)}>+ Añadir</button>`}
           </div>
           ${(c.recommendations ?? []).length === 0
             ? html`<p class="empty">Sin recomendaciones.</p>`
             : (c.recommendations ?? []).map(
                 (r, recIdx) => html`<div class="rec-row">
-                  <select @change=${(e) => this._patchRecommendation(idx, recIdx, { kind: e.target.value })}>
+                  <select ?disabled=${this.readOnly} @change=${(e) => this._patchRecommendation(idx, recIdx, { kind: e.target.value })}>
                     ${REC_KINDS.map((k) => html`<option value=${k} ?selected=${k === r.kind}>${k}</option>`)}
                   </select>
-                  <input type="text" placeholder="Etiqueta" .value=${r.label ?? ''} @input=${(e) => this._patchRecommendation(idx, recIdx, { label: e.target.value })} />
-                  <input type="url" placeholder="https://… (opcional)" .value=${r.url ?? ''} @input=${(e) => this._patchRecommendation(idx, recIdx, { url: e.target.value })} />
-                  <button class="del-btn" @click=${() => this._removeRecommendation(idx, recIdx)}>×</button>
+                  <input type="text" placeholder="Etiqueta" .value=${r.label ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchRecommendation(idx, recIdx, { label: e.target.value })} />
+                  <input type="url" placeholder="https://… (opcional)" .value=${r.url ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchRecommendation(idx, recIdx, { url: e.target.value })} />
+                  ${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeRecommendation(idx, recIdx)}>×</button>`}
                 </div>`,
               )}
         </div>
@@ -642,15 +747,17 @@ export class SuperadminPanel extends LitElement {
       <section>
         <h2>Líderes (${this.leaders.length})</h2>
         <p class="ro-note">Da de alta a los líderes por su email (deben haber iniciado sesión al menos una vez). Pincha un líder para ver su equipo.</p>
-        <div class="toolbar">
-          <input
-            type="email"
-            placeholder="email@dominio.com"
-            .value=${this._email}
-            @input=${(e) => { this._email = e.target.value; }}
-          />
-          <button class="primary" ?disabled=${!this._email.trim()} @click=${() => this._addLeader()}>Añadir líder</button>
-        </div>
+        ${this.readOnly
+          ? null
+          : html`<div class="toolbar">
+              <input
+                type="email"
+                placeholder="email@dominio.com"
+                .value=${this._email}
+                @input=${(e) => { this._email = e.target.value; }}
+              />
+              <button class="primary" ?disabled=${!this._email.trim()} @click=${() => this._addLeader()}>Añadir líder</button>
+            </div>`}
         ${this.leaders.length === 0
           ? html`<p class="empty">Aún no hay líderes dados de alta.</p>`
           : html`<table>
@@ -662,7 +769,7 @@ export class SuperadminPanel extends LitElement {
                       <td>${l.displayName ?? '—'}</td>
                       <td class="muted">${l.email ?? '—'}</td>
                       <td @click=${(e) => e.stopPropagation()}>
-                        <button class="del-btn" @click=${() => this._removeLeader(l.uid)}>Quitar</button>
+                        ${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeLeader(l.uid)}>Quitar</button>`}
                       </td>
                     </tr>
                   `,
@@ -699,6 +806,71 @@ export class SuperadminPanel extends LitElement {
                 </tbody>
               </table>`}
       </section>
+    `;
+  }
+
+  _renderUsers() {
+    // Defensa en profundidad: un viewer nunca gestiona usuarios, aunque no
+    // debería poder llegar a este tab (el botón de la pestaña está oculto).
+    if (this.readOnly) return null;
+    return html`
+      <section>
+        <h2>Usuarios (${this._users.length})</h2>
+        <p class="ro-note">
+          Da de alta un viewer o un líder por su email (deben haber iniciado sesión al menos una vez).
+          Para un superadmin nuevo usa <code>pnpm seed:leaders</code> o la función <code>grantAdmin</code> fuera de este panel;
+          aquí solo puedes promoverlo a superadmin si ya aparece en la lista.
+        </p>
+        <div class="toolbar">
+          <input
+            type="email"
+            placeholder="email@dominio.com"
+            .value=${this._newUserEmail}
+            @input=${(e) => { this._newUserEmail = e.target.value; }}
+          />
+          <select @change=${(e) => { this._newUserRole = e.target.value; }}>
+            <option value="viewer" ?selected=${this._newUserRole === 'viewer'}>Viewer</option>
+            <option value="leader" ?selected=${this._newUserRole === 'leader'}>Líder</option>
+          </select>
+          <button class="primary" ?disabled=${!this._newUserEmail.trim()} @click=${() => this._addUser()}>Añadir usuario</button>
+        </div>
+        ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
+        ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
+        ${this._users.length === 0
+          ? html`<p class="empty">Aún no hay usuarios con acceso.</p>`
+          : html`<table>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th></th></tr></thead>
+              <tbody>
+                ${this._users.map((u) => this._renderUserRow(u))}
+              </tbody>
+            </table>`}
+      </section>
+    `;
+  }
+
+  /** @param {import('../lib/accessRoles.js').AccessUser} user */
+  _renderUserRow(user) {
+    const pending = this._confirmRoleChange?.uid === user.uid ? this._confirmRoleChange : null;
+    return html`
+      <tr>
+        <td>${user.displayName ?? '—'}</td>
+        <td class="muted">${user.email ?? '—'}</td>
+        <td><span class="badge" style=${`background:${ROLE_COLOR[user.role]}`}>${ROLE_LABEL[user.role]}</span></td>
+        <td>
+          ${pending
+            ? html`<span class="confirm">¿Aplicar «${this._roleChangeLabel(pending.role)}»?
+                <button class="yes" @click=${() => this._changeUserRole(user, pending.role)}>Sí</button>
+                <button @click=${() => { this._confirmRoleChange = null; }}>No</button>
+              </span>`
+            : html`<select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
+                <option value="" disabled selected>Cambiar rol…</option>
+                <option value="superadmin">Superadmin</option>
+                <option value="viewer">Viewer</option>
+                <option value="leader">Líder</option>
+                <option value="none">Quitar acceso</option>
+              </select>`}
+        </td>
+      </tr>
     `;
   }
 }
