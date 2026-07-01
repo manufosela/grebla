@@ -13,15 +13,13 @@ import { auth, db, googleProvider } from './firebase.js';
 
 /**
  * Registra la presencia del usuario en /users/{uid} (directorio de quién ha
- * entrado y cuándo, para la pestaña Usuarios del panel). Se escribe como mucho
- * una vez por sesión de pestaña; no bloquea el uso de la app si falla.
+ * entrado y cuándo, para la pestaña Usuarios del panel). La escritura es
+ * idempotente (setDoc merge) y no bloquea el flujo de sesión si falla; se escribe
+ * en cada cambio de estado con sesión, lo que además refresca `lastLogin`.
  * @param {User} user
  */
 async function registerUserPresence(user) {
   try {
-    const key = `grebla-presence:${user.uid}`;
-    if (sessionStorage.getItem(key)) return;
-    sessionStorage.setItem(key, '1');
     await setDoc(
       doc(db, 'users', user.uid),
       {
@@ -32,8 +30,9 @@ async function registerUserPresence(user) {
       },
       { merge: true },
     );
-  } catch {
-    /* el registro es best-effort; nunca debe romper el flujo de sesión */
+  } catch (err) {
+    // Best-effort: no debe romper la sesión, pero lo dejamos visible para depurar.
+    console.warn('No se pudo registrar la presencia del usuario en /users:', err);
   }
 }
 
