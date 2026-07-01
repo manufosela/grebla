@@ -95,6 +95,8 @@ export class SuperadminPanel extends LitElement {
     _mapSaving: { state: true },
     _framework: { state: true },
     _fwNew: { state: true },
+    _fwExpLevel: { state: true },
+    _fwAddDiscipline: { state: true },
     _fwConfirm: { state: true },
     _fwError: { state: true },
     _fwNotice: { state: true },
@@ -172,6 +174,17 @@ export class SuperadminPanel extends LitElement {
     .rec-row { display: grid; grid-template-columns: 7rem 1fr 1fr auto; gap: 0.4rem; margin-bottom: 0.4rem; align-items: center; }
     .rec-row input { min-width: 0; }
     @media (max-width: 640px) { .rec-row { grid-template-columns: 1fr; } }
+    textarea {
+      font: inherit; font-size: 0.85rem; width: 100%; box-sizing: border-box;
+      padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px;
+      background: var(--rm-surface, #fff); color: var(--rm-text, #111827); resize: vertical;
+    }
+    textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+    .matrix { display: grid; gap: 0.7rem; }
+    .matrix-row { display: grid; grid-template-columns: 12rem 1fr; gap: 0.7rem; align-items: start; }
+    .matrix-dim { padding-top: 0.4rem; font-size: 0.8rem; font-weight: 600; color: var(--rm-text, #111827); }
+    .matrix-pick { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    @media (max-width: 640px) { .matrix-row { grid-template-columns: 1fr; } }
   `;
 
   constructor() {
@@ -211,6 +224,10 @@ export class SuperadminPanel extends LitElement {
     /** @type {import('../tools/career/data/framework.js').CareerFramework|null} */
     this._framework = null;
     this._fwNew = { track: '', discipline: '', dimension: '', levelCode: '', levelTitle: '' };
+    /** @type {string} nivel seleccionado en la matriz de expectativas ('' → primero por orden) */
+    this._fwExpLevel = '';
+    /** @type {string} disciplina seleccionada en los addendums ('' → primera por orden) */
+    this._fwAddDiscipline = '';
     /** @type {{ kind: 'tracks'|'levels'|'disciplines'|'dimensions', id: string }|null} */
     this._fwConfirm = null;
     this._fwError = '';
@@ -565,6 +582,50 @@ export class SuperadminPanel extends LitElement {
     } finally {
       this._fwSaving = false;
     }
+  }
+
+  // ── Matriz de expectativas (Nivel × Dimensión) ─────────────────────────────
+
+  /** Texto de la celda {levelId, dimensionId} o '' si no existe. @param {string} levelId @param {string} dimensionId @returns {string} */
+  _expectationText(levelId, dimensionId) {
+    return this._framework.expectations.find((e) => e.levelId === levelId && e.dimensionId === dimensionId)?.text ?? '';
+  }
+
+  /** Crea/actualiza (o elimina si queda vacío) la celda de expectativa. @param {string} levelId @param {string} dimensionId @param {string} value */
+  _setExpectation(levelId, dimensionId, value) {
+    const list = this._framework.expectations;
+    const idx = list.findIndex((e) => e.levelId === levelId && e.dimensionId === dimensionId);
+    let next;
+    if (!value.trim()) {
+      next = idx >= 0 ? list.filter((_, i) => i !== idx) : list;
+    } else if (idx >= 0) {
+      next = list.map((e, i) => (i === idx ? { ...e, text: value } : e));
+    } else {
+      next = [...list, { levelId, dimensionId, text: value }];
+    }
+    this._patchFramework({ expectations: next });
+  }
+
+  // ── Addendums por disciplina (Disciplina × Dimensión) ──────────────────────
+
+  /** Texto del addendum {disciplineId, dimensionId} o '' si no existe. @param {string} disciplineId @param {string} dimensionId @returns {string} */
+  _addendumText(disciplineId, dimensionId) {
+    return this._framework.addendums.find((a) => a.disciplineId === disciplineId && a.dimensionId === dimensionId)?.text ?? '';
+  }
+
+  /** Crea/actualiza (o elimina si queda vacío) el addendum. @param {string} disciplineId @param {string} dimensionId @param {string} value */
+  _setAddendum(disciplineId, dimensionId, value) {
+    const list = this._framework.addendums;
+    const idx = list.findIndex((a) => a.disciplineId === disciplineId && a.dimensionId === dimensionId);
+    let next;
+    if (!value.trim()) {
+      next = idx >= 0 ? list.filter((_, i) => i !== idx) : list;
+    } else if (idx >= 0) {
+      next = list.map((a, i) => (i === idx ? { ...a, text: value } : a));
+    } else {
+      next = [...list, { disciplineId, dimensionId, text: value }];
+    }
+    this._patchFramework({ addendums: next });
   }
 
   /** @param {string} uid */
@@ -972,6 +1033,8 @@ export class SuperadminPanel extends LitElement {
               ${this._renderFwLevels(fw)}
               ${this._renderNamedSection('disciplines', 'Disciplinas', 'disciplina', 'discipline', fw.disciplines)}
               ${this._renderNamedSection('dimensions', 'Dimensiones', 'dimensión', 'dimension', fw.dimensions)}
+              ${this._renderFwExpectations(fw)}
+              ${this._renderFwAddendums(fw)}
               ${this.readOnly
                 ? null
                 : html`
@@ -1125,6 +1188,81 @@ export class SuperadminPanel extends LitElement {
           </label>
         </div>
       </div>
+    `;
+  }
+
+  /**
+   * Matriz de expectativas: se elige un nivel y se edita, para ese nivel, la
+   * expectativa de cada dimensión (una fila = una celda Nivel × Dimensión).
+   * Editar por-nivel evita pintar toda la matriz (48 celdas) a la vez.
+   * @param {import('../tools/career/data/framework.js').CareerFramework} fw
+   */
+  _renderFwExpectations(fw) {
+    const levels = [...fw.levels].toSorted((a, b) => a.order - b.order);
+    const dims = [...fw.dimensions].toSorted((a, b) => a.order - b.order);
+    const levelId = levels.some((l) => l.id === this._fwExpLevel) ? this._fwExpLevel : (levels[0]?.id ?? '');
+    return html`
+      <details>
+        <summary class="sub">Matriz de expectativas (${fw.expectations.length})</summary>
+        ${levels.length === 0 || dims.length === 0
+          ? html`<p class="empty">Necesitas al menos un nivel y una dimensión para editar la matriz.</p>`
+          : html`
+              <div class="toolbar">
+                <label class="matrix-pick">Nivel
+                  <select ?disabled=${this.readOnly} @change=${(e) => { this._fwExpLevel = e.target.value; }}>
+                    ${levels.map((l) => html`<option value=${l.id} ?selected=${l.id === levelId}>${l.code} · ${l.title}</option>`)}
+                  </select>
+                </label>
+              </div>
+              <div class="matrix">
+                ${dims.map((d) => html`
+                  <label class="matrix-row">
+                    <span class="matrix-dim">${d.name}</span>
+                    <textarea rows="2" placeholder="Qué se espera en esta dimensión para el nivel elegido…"
+                      ?disabled=${this.readOnly}
+                      .value=${this._expectationText(levelId, d.id)}
+                      @input=${(e) => this._setExpectation(levelId, d.id, e.target.value)}></textarea>
+                  </label>
+                `)}
+              </div>`}
+      </details>
+    `;
+  }
+
+  /**
+   * Addendums por disciplina: se elige una disciplina y se edita, para esa
+   * disciplina, el foco de cada dimensión (sección 10 del documento).
+   * @param {import('../tools/career/data/framework.js').CareerFramework} fw
+   */
+  _renderFwAddendums(fw) {
+    const disciplines = [...fw.disciplines].toSorted((a, b) => a.order - b.order);
+    const dims = [...fw.dimensions].toSorted((a, b) => a.order - b.order);
+    const disciplineId = disciplines.some((d) => d.id === this._fwAddDiscipline) ? this._fwAddDiscipline : (disciplines[0]?.id ?? '');
+    return html`
+      <details>
+        <summary class="sub">Addendums por disciplina (${fw.addendums.length})</summary>
+        ${disciplines.length === 0 || dims.length === 0
+          ? html`<p class="empty">Necesitas al menos una disciplina y una dimensión para editar los addendums.</p>`
+          : html`
+              <div class="toolbar">
+                <label class="matrix-pick">Disciplina
+                  <select ?disabled=${this.readOnly} @change=${(e) => { this._fwAddDiscipline = e.target.value; }}>
+                    ${disciplines.map((d) => html`<option value=${d.id} ?selected=${d.id === disciplineId}>${d.name}</option>`)}
+                  </select>
+                </label>
+              </div>
+              <div class="matrix">
+                ${dims.map((dim) => html`
+                  <label class="matrix-row">
+                    <span class="matrix-dim">${dim.name}</span>
+                    <textarea rows="2" placeholder="Foco de esta dimensión en la disciplina elegida…"
+                      ?disabled=${this.readOnly}
+                      .value=${this._addendumText(disciplineId, dim.id)}
+                      @input=${(e) => this._setAddendum(disciplineId, dim.id, e.target.value)}></textarea>
+                  </label>
+                `)}
+              </div>`}
+      </details>
     `;
   }
 
