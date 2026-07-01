@@ -6,7 +6,7 @@
  *
  * @typedef {import('../../domain/types.js').Person} Person
  * @typedef {import('../../domain/types.js').Area} Area
- * @typedef {import('../../domain/types.js').TeamRole} TeamRole
+ * @typedef {import('../../domain/types.js').Guild} Guild
  * @typedef {import('../../domain/types.js').OrgSettings} OrgSettings
  * @typedef {import('../../domain/ports.js').PersistencePort} PersistencePort
  */
@@ -14,7 +14,7 @@ import { DIMENSIONS } from '../../domain/types.js';
 import { createMemoryPeopleRepository } from './peopleRepository.js';
 import { createMemoryReadingRepository } from './readingRepository.js';
 import { createMemoryAreaRepository } from './areaRepository.js';
-import { createMemoryTeamRoleRepository } from './teamRoleRepository.js';
+import { createMemoryGuildRepository } from './guildRepository.js';
 import { createMemoryLabelRepository } from './labelRepository.js';
 import { createMemoryConversationRepository } from './conversationRepository.js';
 import { createMemorySupportNoteRepository } from './supportNoteRepository.js';
@@ -23,14 +23,14 @@ import { createMemoryConfigRepository } from './configRepository.js';
 export { createMemoryPeopleRepository } from './peopleRepository.js';
 export { createMemoryReadingRepository } from './readingRepository.js';
 export { createMemoryAreaRepository } from './areaRepository.js';
-export { createMemoryTeamRoleRepository } from './teamRoleRepository.js';
+export { createMemoryGuildRepository } from './guildRepository.js';
 export { createMemoryLabelRepository } from './labelRepository.js';
 export { createMemoryConversationRepository } from './conversationRepository.js';
 export { createMemorySupportNoteRepository } from './supportNoteRepository.js';
 export { createMemoryConfigRepository } from './configRepository.js';
 
 /**
- * @param {{ people?: Person[], areas?: Area[], teamRoles?: TeamRole[], settings?: Partial<OrgSettings> }} [seed]
+ * @param {{ people?: Person[], areas?: Area[], guilds?: Guild[], settings?: Partial<OrgSettings> }} [seed]
  * @returns {PersistencePort}
  */
 export function createMemoryPersistence(seed = {}) {
@@ -42,7 +42,7 @@ export function createMemoryPersistence(seed = {}) {
     people: createMemoryPeopleRepository(seed.people),
     readings,
     areas: createMemoryAreaRepository(seed.areas),
-    teamRoles: createMemoryTeamRoleRepository(seed.teamRoles),
+    guilds: createMemoryGuildRepository(seed.guilds),
     labels: createMemoryLabelRepository(seed.labels),
     conversations: createMemoryConversationRepository(),
     supportNotes: createMemorySupportNoteRepository(),

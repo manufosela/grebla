@@ -5,7 +5,7 @@ describe('createTeamContainer', () => {
   it('mode memory devuelve persistencia in-memory funcional', async () => {
     const { mode, persistence } = await createTeamContainer({ mode: 'memory' });
     expect(mode).toBe('memory');
-    const id = await persistence.people.create({ name: 'X', teamRole: 'BE', startDate: '2025-01-01', active: true });
+    const id = await persistence.people.create({ name: 'X', guilds: ['BE'], startDate: '2025-01-01', active: true });
     expect((await persistence.people.getById(id)).name).toBe('X');
   });
 

@@ -22,6 +22,8 @@ import {
   transferOwnership,
   listLabels,
   addLabel,
+  listGuilds,
+  addGuild,
 } from '../../tools/team/application/usecases/index.js';
 import { composeTitle } from '../../tools/career/data/framework.js';
 
@@ -43,11 +45,14 @@ export class TeamPeople extends LitElement {
     framework: { attribute: false },
     people: { state: true },
     labels: { state: true },
+    guilds: { state: true },
     loading: { state: true },
     error: { state: true },
     _name: { state: true },
     _selectedDisciplines: { state: true },
     _levelId: { state: true },
+    _selectedGuilds: { state: true },
+    _newGuild: { state: true },
     _selectedLabels: { state: true },
     _newLabel: { state: true },
     _startDate: { state: true },
@@ -62,6 +67,7 @@ export class TeamPeople extends LitElement {
     _editFor: { state: true },
     _editDisciplines: { state: true },
     _editLevelId: { state: true },
+    _editGuilds: { state: true },
     _editLabels: { state: true },
   };
 
@@ -197,6 +203,8 @@ export class TeamPeople extends LitElement {
     this.people = [];
     /** @type {import('../../tools/team/domain/types.js').Label[]} */
     this.labels = [];
+    /** @type {import('../../tools/team/domain/types.js').Guild[]} */
+    this.guilds = [];
     this.loading = true;
     this.error = '';
     this._name = '';
@@ -204,6 +212,9 @@ export class TeamPeople extends LitElement {
     this._selectedDisciplines = [];
     /** @type {string} id de nivel seleccionado para el alta ('' = sin nivel) */
     this._levelId = '';
+    /** @type {string[]} nombres de gremios seleccionados para el alta */
+    this._selectedGuilds = [];
+    this._newGuild = '';
     /** @type {string[]} nombres de labels seleccionados para el alta */
     this._selectedLabels = [];
     this._newLabel = '';
@@ -229,6 +240,8 @@ export class TeamPeople extends LitElement {
     this._editDisciplines = [];
     /** @type {string} id de nivel seleccionado en el modal Editar ('' = sin nivel) */
     this._editLevelId = '';
+    /** @type {string[]} gremios seleccionados en el modal Editar */
+    this._editGuilds = [];
     /** @type {string[]} labels seleccionados en el modal Editar */
     this._editLabels = [];
     this._loaded = false;
@@ -245,12 +258,14 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [people, labels] = await Promise.all([
+      const [people, labels, guilds] = await Promise.all([
         listActivePeople(this.persistence),
         listLabels(this.persistence),
+        listGuilds(this.persistence),
       ]);
       this.people = people;
       this.labels = labels;
+      this.guilds = guilds;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
     } finally {
@@ -287,6 +302,28 @@ export class TeamPeople extends LitElement {
     }
   }
 
+  _toggleGuild(name, checked) {
+    this._selectedGuilds = checked
+      ? [...this._selectedGuilds, name]
+      : this._selectedGuilds.filter((g) => g !== name);
+  }
+
+  async _addGuild() {
+    const name = this._newGuild.trim();
+    if (!name) return;
+    this.error = '';
+    try {
+      if (!this.guilds.some((g) => g.name.toLowerCase() === name.toLowerCase())) {
+        await addGuild(this.persistence, name);
+        this.guilds = await listGuilds(this.persistence);
+      }
+      if (!this._selectedGuilds.includes(name)) this._selectedGuilds = [...this._selectedGuilds, name];
+      this._newGuild = '';
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo añadir el gremio.';
+    }
+  }
+
   async _add(event) {
     event.preventDefault();
     const name = this._name.trim();
@@ -300,6 +337,7 @@ export class TeamPeople extends LitElement {
         name,
         disciplines: [...this._selectedDisciplines],
         levelId: this._levelId || null,
+        guilds: [...this._selectedGuilds],
         labels: [...this._selectedLabels],
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
         githubLogin: this._github,
@@ -307,6 +345,8 @@ export class TeamPeople extends LitElement {
       this._name = '';
       this._selectedDisciplines = [];
       this._levelId = '';
+      this._selectedGuilds = [];
+      this._newGuild = '';
       this._selectedLabels = [];
       this._newLabel = '';
       this._startDate = '';
@@ -459,6 +499,7 @@ export class TeamPeople extends LitElement {
     this._editFor = person;
     this._editDisciplines = [...(person.disciplines ?? [])];
     this._editLevelId = person.levelId ?? '';
+    this._editGuilds = [...(person.guilds ?? [])];
     this._editLabels = [...(person.labels ?? [])];
     this.error = '';
   }
@@ -481,6 +522,12 @@ export class TeamPeople extends LitElement {
       : this._editLabels.filter((l) => l !== name);
   }
 
+  _toggleEditGuild(name, checked) {
+    this._editGuilds = checked
+      ? [...this._editGuilds, name]
+      : this._editGuilds.filter((g) => g !== name);
+  }
+
   async _saveEdit() {
     const person = this._editFor;
     if (!person) return;
@@ -489,6 +536,7 @@ export class TeamPeople extends LitElement {
       await updatePerson(this.persistence, person.id, {
         disciplines: [...this._editDisciplines],
         levelId: this._editLevelId || null,
+        guilds: [...this._editGuilds],
         labels: [...this._editLabels],
       });
       this._editFor = null;
@@ -660,11 +708,30 @@ export class TeamPeople extends LitElement {
         ${person
           ? html`
               <div class="modal-body">
-                <p>Disciplinas, nivel y labels de esta persona.</p>
+                <p>Disciplinas, nivel, gremios y labels de esta persona.</p>
                 ${this._renderDisciplineChecks(this._editDisciplines, (id, checked) => this._toggleEditDiscipline(id, checked))}
                 ${this._renderLevelSelect(this._editLevelId, (id) => { this._editLevelId = id; })}
                 <fieldset class="roles">
-                  <legend>Labels (gremios / equipos)</legend>
+                  <legend>Gremios</legend>
+                  <div class="edit-checks">
+                    ${this.guilds.length === 0
+                      ? html`<span class="muted">Aún no hay gremios.</span>`
+                      : this.guilds.map(
+                          (g) => html`
+                            <label class="role-check">
+                              <input
+                                type="checkbox"
+                                .checked=${this._editGuilds.includes(g.name)}
+                                @change=${(e) => this._toggleEditGuild(g.name, e.target.checked)}
+                              />
+                              <span>${g.name}</span>
+                            </label>
+                          `,
+                        )}
+                  </div>
+                </fieldset>
+                <fieldset class="roles">
+                  <legend>Labels</legend>
                   <div class="edit-checks">
                     ${this.labels.length === 0
                       ? html`<span class="muted">Aún no hay labels.</span>`
@@ -715,7 +782,36 @@ export class TeamPeople extends LitElement {
           ${this._renderDisciplineChecks(this._selectedDisciplines, (id, checked) => this._toggleDiscipline(id, checked))}
           ${this._renderLevelSelect(this._levelId, (id) => { this._levelId = id; })}
           <fieldset class="roles">
-            <legend>Labels (gremios / equipos)</legend>
+            <legend>Gremios</legend>
+            <div class="role-checks">
+              ${this.guilds.length === 0
+                ? html`<span class="muted">Aún no hay gremios. Añade el primero abajo.</span>`
+                : this.guilds.map(
+                    (g) => html`
+                      <label class="role-check">
+                        <input
+                          type="checkbox"
+                          .checked=${this._selectedGuilds.includes(g.name)}
+                          @change=${(e) => this._toggleGuild(g.name, e.target.checked)}
+                        />
+                        <span>${g.name}</span>
+                      </label>
+                    `,
+                  )}
+            </div>
+            <div class="role-add">
+              <input
+                type="text"
+                placeholder="Añadir un gremio nuevo (tuyo)…"
+                .value=${this._newGuild}
+                @input=${(e) => { this._newGuild = e.target.value; }}
+                @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addGuild(); } }}
+              />
+              <button type="button" @click=${this._addGuild}>Añadir gremio</button>
+            </div>
+          </fieldset>
+          <fieldset class="roles">
+            <legend>Labels</legend>
             <div class="role-checks">
               ${this.labels.length === 0
                 ? html`<span class="muted">Aún no hay labels. Añade el primero abajo.</span>`
@@ -760,7 +856,7 @@ export class TeamPeople extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Nombre</th><th>Título</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
+                    <tr><th>Nombre</th><th>Título</th><th>Gremios</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
                   </thead>
                   <tbody>
                     ${this.people.map(
@@ -770,6 +866,11 @@ export class TeamPeople extends LitElement {
                         <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
                           <td>${p.name}</td>
                           <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
+                          <td>
+                            ${(p.guilds ?? []).length === 0
+                              ? html`<span class="muted">—</span>`
+                              : html`<span class="chips">${p.guilds.map((g) => html`<span class="chip">${g}</span>`)}</span>`}
+                          </td>
                           <td>
                             ${(p.labels ?? []).length === 0
                               ? html`<span class="muted">—</span>`

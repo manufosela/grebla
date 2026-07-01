@@ -36,7 +36,7 @@ export async function getTeamMap(persistence) {
     rows.push({
       id: person.id,
       name: person.name,
-      teamRoles: person.teamRoles ?? [],
+      guilds: person.guilds ?? [],
       seniority: seniority ? { level: seniority.level, toNext: seniority.toNext ?? false } : null,
       emotional: emotional ? { level: emotional.level, toNext: emotional.toNext ?? false } : null,
       knowledge: { areas, profile: knowledgeProfileFromAreas(areas) },

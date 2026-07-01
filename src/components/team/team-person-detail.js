@@ -567,12 +567,16 @@ export class TeamPersonDetail extends LitElement {
     const disciplineNames = (this.framework?.disciplines ?? [])
       .filter((d) => (this.person.disciplines ?? []).includes(d.id))
       .map((d) => d.name);
+    const guilds = this.person.guilds ?? [];
     return html`
       <div class="head">
         <h2>${this.person.name}</h2>
         ${title ? html`<p class="title">${title}</p>` : null}
         ${disciplineNames.length > 0
           ? html`<span class="chips">${disciplineNames.map((n) => html`<span class="chip">${n}</span>`)}</span>`
+          : null}
+        ${guilds.length > 0
+          ? html`<span class="chips">${guilds.map((g) => html`<span class="chip">${g}</span>`)}</span>`
           : null}
       </div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}

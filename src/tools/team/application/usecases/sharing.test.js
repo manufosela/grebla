@@ -8,7 +8,7 @@ describe('Fase 3b — compartir personas entre líderes', () => {
   let id;
   beforeEach(async () => {
     p = createMemoryPersistence();
-    id = await addPerson(p, { name: 'Ana', teamRole: 'Backend', startDate: '2025-01-01' });
+    id = await addPerson(p, { name: 'Ana', guilds: ['Backend'], startDate: '2025-01-01' });
   });
 
   it('sharePerson registra el permiso en sharedWith y su espejo sharedWithUids', async () => {

@@ -8,18 +8,14 @@
 import { turnover } from '../../domain/services/turnover.js';
 
 /**
- * Normaliza una persona leída: deriva teamRoles[] del antiguo teamRole (string)
- * si solo existe el campo legacy. Garantiza siempre un array teamRoles.
- * @param {Person & { teamRole?: string }} person
+ * Normaliza una persona leída: garantiza siempre un array `guilds` (gremios
+ * asignados), aunque el documento no lo traiga.
+ * @param {Person} person
  * @returns {Person}
  */
 export function normalizePerson(person) {
-  const teamRoles = Array.isArray(person.teamRoles)
-    ? person.teamRoles
-    : person.teamRole
-      ? [person.teamRole]
-      : [];
-  return { ...person, teamRoles };
+  const guilds = Array.isArray(person.guilds) ? person.guilds : [];
+  return { ...person, guilds };
 }
 
 /**
@@ -32,17 +28,17 @@ export function normalizeGithubLogin(v) {
 }
 
 /**
- * Alta de una persona (activa por defecto). `teamRoles` es un array de roles del
- * catálogo (puede ir vacío). `githubLogin` es opcional (para DORA).
+ * Alta de una persona (activa por defecto). `guilds` es un array de nombres de
+ * gremio del catálogo (puede ir vacío). `githubLogin` es opcional (para DORA).
  * @param {PersistencePort} persistence
- * @param {{ name: string, teamRoles?: string[], startDate: string, active?: boolean, githubLogin?: string }} input
+ * @param {{ name: string, guilds?: string[], startDate: string, active?: boolean, githubLogin?: string }} input
  * @returns {Promise<string>}
  */
 export function addPerson(persistence, input) {
-  const { teamRoles = [], teamRole: _legacy, githubLogin, ...rest } = input;
+  const { guilds = [], githubLogin, ...rest } = input;
   return persistence.people.create({
     active: true,
-    teamRoles,
+    guilds,
     githubLogin: normalizeGithubLogin(githubLogin),
     ...rest,
   });

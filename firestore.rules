@@ -6,7 +6,7 @@ rules_version = '2';
 //   /admins/{uid}    Superadmin de la instancia (ve todo; da de alta líderes).
 //   /viewers/{uid}   Viewers (solo lectura, tipo C-level). Alta solo por superadmin.
 //   /leaders/{uid}   Líderes (gestionan sus personas). Alta solo por superadmin.
-//   Datos a nivel raíz: /people, /areas, /config, /teamRoles, /dora, /journeys.
+//   Datos a nivel raíz: /people, /areas, /config, /guilds, /dora, /journeys.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -115,10 +115,11 @@ service cloud.firestore {
       allow write: if isLeader() || isSuperAdmin();
     }
 
-    // Catálogo de roles de equipo con ámbito: globales (sin ownerLeaderUid, los
-    // gestiona el superadmin) y personales (ownerLeaderUid = líder). Cada líder
-    // crea/borra los suyos; el superadmin gestiona globales y promueve (quita owner).
-    match /teamRoles/{roleId} {
+    // Catálogo de gremios (tecnologías/stack) con ámbito: globales (sin
+    // ownerLeaderUid, los gestiona el superadmin) y personales (ownerLeaderUid =
+    // líder). Cada líder crea/borra los suyos; el superadmin gestiona globales y
+    // promueve (quita owner).
+    match /guilds/{guildId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()
         || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
@@ -129,7 +130,7 @@ service cloud.firestore {
         || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
     }
 
-    // Catálogo de labels (gremios/equipos): mismo modelo de ámbito que teamRoles.
+    // Catálogo de labels: mismo modelo de ámbito que guilds.
     match /labels/{labelId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()

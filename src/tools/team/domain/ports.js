@@ -5,7 +5,7 @@
  *
  * @typedef {import('./types.js').Person} Person
  * @typedef {import('./types.js').Area} Area
- * @typedef {import('./types.js').TeamRole} TeamRole
+ * @typedef {import('./types.js').Guild} Guild
  * @typedef {import('./types.js').Conversation} Conversation
  * @typedef {import('./types.js').SupportNote} SupportNote
  * @typedef {import('./types.js').OrgSettings} OrgSettings
@@ -32,13 +32,13 @@
  * @property {(name: string) => Promise<string>} create
  * @property {(id: string) => Promise<void>} remove
  *
- * @typedef {Object} TeamRoleRepository   Catálogo de roles con ámbito (personal/global).
- * @property {() => Promise<TeamRole[]>} list   Globales + los del líder que mira.
- * @property {(name: string) => Promise<string>} create   Crea un rol PERSONAL del líder.
+ * @typedef {Object} GuildRepository   Catálogo de gremios con ámbito (personal/global).
+ * @property {() => Promise<Guild[]>} list   Globales + los del líder que mira.
+ * @property {(name: string) => Promise<string>} create   Crea un gremio PERSONAL del líder.
  * @property {(id: string) => Promise<void>} remove
  *
  * @typedef {import('./types.js').Label} Label
- * @typedef {Object} LabelRepository   Catálogo de labels con ámbito (mismo modelo que TeamRole).
+ * @typedef {Object} LabelRepository   Catálogo de labels con ámbito (mismo modelo que Guild).
  * @property {() => Promise<Label[]>} list   Globales + los del líder que mira.
  * @property {(name: string) => Promise<string>} create   Crea un label PERSONAL del líder.
  * @property {(id: string) => Promise<void>} remove
@@ -67,7 +67,7 @@
  * @property {PeopleRepository} people
  * @property {Record<'seniority'|'emotional'|'knowledge'|'contribution', ReadingRepository>} readings
  * @property {AreaRepository} areas
- * @property {TeamRoleRepository} teamRoles
+ * @property {GuildRepository} guilds
  * @property {LabelRepository} labels
  * @property {ConversationRepository} conversations
  * @property {SupportNoteRepository} supportNotes
