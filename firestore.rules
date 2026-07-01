@@ -48,6 +48,15 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Directorio de usuarios que han iniciado sesión (nombre, email, última
+    // conexión). Cada usuario escribe SOLO su propio doc (registro de presencia);
+    // la lista la leen superadmin y viewer (pestaña Usuarios). No otorga acceso:
+    // el rol se decide en /admins, /viewers, /leaders.
+    match /users/{uid} {
+      allow read: if isSuperAdmin() || isViewer();
+      allow write: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // Secretos (token GitHub de DORA): nunca accesibles desde el cliente; solo
     // la Cloud Function vía Admin SDK (omite reglas).
     match /private/{document=**} {

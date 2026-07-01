@@ -19,13 +19,15 @@ export { mergeAccessUsers };
 
 /** @returns {Promise<AccessUser[]>} */
 export async function listAllUsers() {
-  const [adminsSnap, viewersSnap, leadersSnap] = await Promise.all([
+  const [usersSnap, adminsSnap, viewersSnap, leadersSnap] = await Promise.all([
+    getDocs(collection(db, 'users')),
     getDocs(collection(db, 'admins')),
     getDocs(collection(db, 'viewers')),
     getDocs(collection(db, 'leaders')),
   ]);
   const toItems = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   return mergeAccessUsers({
+    users: toItems(usersSnap),
     superadmin: toItems(adminsSnap),
     viewer: toItems(viewersSnap),
     leader: toItems(leadersSnap),

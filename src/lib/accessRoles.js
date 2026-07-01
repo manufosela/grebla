@@ -4,39 +4,59 @@
  * añade la capa de lectura/escritura contra /admins, /viewers, /leaders.
  *
  * @typedef {'superadmin'|'viewer'|'leader'} AccessRole
- * @typedef {{ uid: string, displayName: string|null, email: string|null, role: AccessRole }} AccessUser
+ * @typedef {AccessRole|'none'} UserRole
+ * @typedef {{ uid: string, displayName: string|null, email: string|null, role: UserRole, lastLogin: unknown }} AccessUser
  */
 
 /** @type {Record<AccessRole, string>} */
 export const ROLE_COLLECTION = { superadmin: 'admins', viewer: 'viewers', leader: 'leaders' };
 
-/** Orden de prioridad (mayor a menor) para el rol mostrado si un uid apareciera en más de una colección. */
-const ROLE_PRIORITY = /** @type {AccessRole[]} */ (['superadmin', 'viewer', 'leader']);
+/** Orden de prioridad (menor a mayor) para aplicar el rol si un uid apareciera en más de una colección. */
+const ROLE_ASC = /** @type {AccessRole[]} */ (['leader', 'viewer', 'superadmin']);
+
+/** Milisegundos de un valor lastLogin (Firestore Timestamp, número o null). */
+function toMs(v) {
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v.toMillis === 'function') return v.toMillis();
+  return 0;
+}
 
 /**
- * Fusiona los docs de las tres colecciones de acceso en una lista de usuarios
- * únicos por uid. Si un uid apareciera en más de una colección (no debería:
- * cada alta borra de las demás, ver setUserRole), prioriza
- * superadmin > viewer > leader para el rol mostrado, sin borrar nada por su
- * cuenta.
- * @param {Record<AccessRole, Array<{ id: string, displayName?: string|null, email?: string|null }>>} byRole
+ * Fusiona el directorio de usuarios (/users, todos los que han iniciado sesión)
+ * con las colecciones de rol (/admins, /viewers, /leaders) en una única lista.
+ * Cada usuario recibe su rol de mayor prioridad (superadmin > viewer > leader) o
+ * 'none' si no tiene ninguno. Ordena por última conexión descendente.
+ * @param {{ users?: Array<{id:string,displayName?:string|null,email?:string|null,lastLogin?:unknown}>,
+ *           superadmin?: Array<{id:string,displayName?:string|null,email?:string|null}>,
+ *           viewer?: Array<{id:string,displayName?:string|null,email?:string|null}>,
+ *           leader?: Array<{id:string,displayName?:string|null,email?:string|null}> }} groups
  * @returns {AccessUser[]}
  */
-export function mergeAccessUsers(byRole) {
+export function mergeAccessUsers(groups) {
   const byUid = new Map();
-  // Se recorre en orden inverso de prioridad para que, al final, la entrada de
-  // mayor prioridad (superadmin) sea la que quede en el Map si hay colisión.
-  for (const role of [...ROLE_PRIORITY].reverse()) {
-    for (const item of byRole[role] ?? []) {
+  // Base: todos los usuarios registrados (aún sin rol).
+  for (const u of groups.users ?? []) {
+    byUid.set(u.id, {
+      uid: u.id,
+      displayName: u.displayName ?? null,
+      email: u.email ?? null,
+      lastLogin: u.lastLogin ?? null,
+      role: /** @type {UserRole} */ ('none'),
+    });
+  }
+  // Aplica los roles de menor a mayor prioridad (gana el último = mayor).
+  for (const role of ROLE_ASC) {
+    for (const item of groups[role] ?? []) {
+      const existing = byUid.get(item.id);
       byUid.set(item.id, {
         uid: item.id,
-        displayName: item.displayName ?? null,
-        email: item.email ?? null,
+        displayName: existing?.displayName ?? item.displayName ?? null,
+        email: existing?.email ?? item.email ?? null,
+        lastLogin: existing?.lastLogin ?? null,
         role,
       });
     }
   }
-  return [...byUid.values()].sort((a, b) =>
-    (a.displayName ?? a.email ?? '').localeCompare(b.displayName ?? b.email ?? ''),
-  );
+  return [...byUid.values()].sort((a, b) => toMs(b.lastLogin) - toMs(a.lastLogin));
 }

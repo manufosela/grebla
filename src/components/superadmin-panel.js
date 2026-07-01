@@ -26,9 +26,16 @@ const CITY_KINDS = ['tech', 'skill', 'milestone'];
 const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
 
 /** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
-const ROLE_LABEL = { superadmin: 'Superadmin', viewer: 'Viewer', leader: 'Líder' };
-/** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
-const ROLE_COLOR = { superadmin: '#dc2626', viewer: '#6b7280', leader: '#3b82f6' };
+const ROLE_LABEL = { superadmin: 'Superadmin', viewer: 'Viewer', leader: 'Líder', none: 'Sin rol' };
+const ROLE_COLOR = { superadmin: '#dc2626', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af' };
+const loginFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+/** @param {unknown} ts Firestore Timestamp | number | null */
+function formatLogin(ts) {
+  const ms = ts && typeof (/** @type {any} */ (ts).toMillis) === 'function'
+    ? /** @type {any} */ (ts).toMillis()
+    : (typeof ts === 'number' ? ts : 0);
+  return ms ? loginFmt.format(new Date(ms)) : '—';
+}
 
 const VIEW_FLAG = 'grebla-view';
 
@@ -837,9 +844,9 @@ export class SuperadminPanel extends LitElement {
         ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
         ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
         ${this._users.length === 0
-          ? html`<p class="empty">Aún no hay usuarios con acceso.</p>`
+          ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
           : html`<table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th></th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Última conexión</th><th></th></tr></thead>
               <tbody>
                 ${this._users.map((u) => this._renderUserRow(u))}
               </tbody>
@@ -856,6 +863,7 @@ export class SuperadminPanel extends LitElement {
         <td>${user.displayName ?? '—'}</td>
         <td class="muted">${user.email ?? '—'}</td>
         <td><span class="badge" style=${`background:${ROLE_COLOR[user.role]}`}>${ROLE_LABEL[user.role]}</span></td>
+        <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>
           ${pending
             ? html`<span class="confirm">¿Aplicar «${this._roleChangeLabel(pending.role)}»?

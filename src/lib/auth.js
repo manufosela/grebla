@@ -8,8 +8,40 @@ import {
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase.js';
+
+/**
+ * Registra la presencia del usuario en /users/{uid} (directorio de quién ha
+ * entrado y cuándo, para la pestaña Usuarios del panel). Se escribe como mucho
+ * una vez por sesión de pestaña; no bloquea el uso de la app si falla.
+ * @param {User} user
+ */
+async function registerUserPresence(user) {
+  try {
+    const key = `grebla-presence:${user.uid}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+    await setDoc(
+      doc(db, 'users', user.uid),
+      {
+        displayName: user.displayName ?? null,
+        email: user.email ?? null,
+        photoURL: user.photoURL ?? null,
+        lastLogin: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch {
+    /* el registro es best-effort; nunca debe romper el flujo de sesión */
+  }
+}
+
+// Suscripción global (una por contexto de página): registra al usuario en cuanto
+// hay sesión, para que aparezca en el directorio /users aunque aún no tenga rol.
+onAuthStateChanged(auth, (user) => {
+  if (user) registerUserPresence(user);
+});
 
 /**
  * Suscribe a cambios de sesión. Devuelve la función para desuscribirse.
