@@ -6,14 +6,17 @@
  * lectura, sin ningún control de edición. El contenido de las secciones llega en
  * G3; la protección real de datos la dan además las reglas de Firestore.
  */
+import '../components/engineer-space.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
-import { getMyPerson } from '../lib/engineer.js';
+import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap } from '../lib/engineer.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { composeTitle } from '../tools/career/data/framework.js';
+import { ROLES } from '../data/roles.js';
 
 const identity = document.getElementById('engineer-identity');
 const errorBox = document.getElementById('engineer-error');
+const space = document.querySelector('engineer-space');
 
 onUserChanged(async (user) => {
   if (!user) {
@@ -26,16 +29,42 @@ onUserChanged(async (user) => {
       location.replace('/');
       return;
     }
-    const [person, framework] = await Promise.all([getMyPerson(user.uid), getFramework()]);
+    const person = await getMyPerson(user.uid);
     if (!person) {
       location.replace('/');
       return;
     }
+    // Carga en paralelo del contenido de las tres secciones (todo solo lectura).
+    const [framework, profile, career] = await Promise.all([
+      getFramework(),
+      getMyRoleMirrorProfile(person.id),
+      getMyCareerMap(person.id),
+    ]);
     renderIdentity(person, framework);
+    renderSpace(person, framework, profile, career);
   } catch {
     showError('No se pudo cargar tu espacio. Vuelve a intentarlo en unos minutos.');
   }
 });
+
+/**
+ * Inyecta los datos ya cargados en el componente <engineer-space>, que renderiza
+ * las tres secciones (Carrera / Role Mirror / Mapa) en solo lectura.
+ * @param {import('../lib/engineer.js').Person & { id: string }} person
+ * @param {import('../tools/career/data/framework.js').CareerFramework} framework
+ * @param {import('../lib/scoring.js').Profile|null} profile
+ * @param {{ island: import('../tools/career/domain/types.js').CareerMap, journey: import('../tools/career/domain/types.js').Journey }} career
+ * @returns {void}
+ */
+function renderSpace(person, framework, profile, career) {
+  if (!space) return;
+  space.person = person;
+  space.framework = framework;
+  space.profile = profile;
+  space.roles = ROLES;
+  space.island = career.island;
+  space.journey = career.journey;
+}
 
 /**
  * Pinta la cabecera de identidad: nombre de la persona y su título compuesto
