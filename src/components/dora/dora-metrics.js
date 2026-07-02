@@ -104,16 +104,35 @@ export class DoraMetrics extends LitElement {
       return html`<section><p class="empty">Aún no hay métricas. Ve a <strong>Repos</strong>, añade repos públicos y pulsa “Actualizar métricas”.</p></section>`;
     }
     const g = s.global;
+    // Lead time REAL (commit→deploy). Si no hay despliegues registrados es null:
+    // se muestra el proxy (PR→merge) y se invita a registrar despliegues.
+    const hasRealLead = g.leadTimeCommitDeployHoursAvg != null;
     return html`
       <section>
         <h2>Global (${g.measured}/${g.repos} repos medidos)</h2>
         <div class="cards">
           <div class="card"><span class="value">${g.deployments}</span><span class="label">Despliegues (merges)</span></div>
           <div class="card"><span class="value">${g.deployFrequencyPerWeek}${levelBadge(deployFrequencyLevel(g.deployFrequencyPerWeek))}</span><span class="label">Deploy / semana</span></div>
-          <div class="card"><span class="value">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</span><span class="label">Lead time medio</span></div>
+          <div class="card">
+            <span class="value">${lt(g.leadTimeCommitDeployHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeCommitDeployHoursAvg))}</span>
+            <span class="label">Lead time real (commit→deploy)</span>
+          </div>
+          <div class="card">
+            <span class="value">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</span>
+            <span class="label">Lead time proxy (PR→merge)</span>
+          </div>
           <div class="card"><span class="value">${g.people}</span><span class="label">Personas que participan</span></div>
         </div>
-        <p class="note">Lead time agregado = media ponderada por despliegues. Métricas de equipo, nunca por persona (R3).</p>
+        ${hasRealLead
+          ? html`<p class="note">Lead time real = primer commit → despliegue en producción (DORA). El proxy (PR→merge) se conserva como referencia.</p>`
+          : html`<p class="note">Aún no hay lead time real: registra despliegues para medir commit→deploy. Mientras tanto se muestra el proxy (PR→merge).</p>`}
+        ${g.changesPending > 0
+          ? html`<p class="note">${g.changesPending} ${g.changesPending === 1 ? 'cambio sin desplegar' : 'cambios sin desplegar'} (mergeados pero aún no en producción).</p>`
+          : null}
+        ${g.leadTimeApproxCount > 0
+          ? html`<p class="note">Algunos primeros commits son aproximados por el límite de la API pública de GitHub (60/h sin token); un token de acceso lo resuelve.</p>`
+          : null}
+        <p class="note">Lead time agregado = media ponderada. Métricas de equipo, nunca por persona (R3).</p>
       </section>
       ${this._table('Por equipo', s.byTeam)}
       ${this._table('Por gremio', s.byGuild)}
