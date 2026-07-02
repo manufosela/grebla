@@ -7,20 +7,27 @@
 
 /**
  * @param {DoraRepo[]} [seed]
+ * @param {{ leaderUid?: string, viewAll?: boolean }} [options]  Espeja el adapter
+ *   Firestore: `leaderUid` se estampa como ownerLeaderUid al crear y filtra la
+ *   lista salvo `viewAll`. Si no se pasa `leaderUid`, no hay estampado ni filtro
+ *   (comportamiento plano de los tests existentes).
  * @returns {DoraPersistence}
  */
-export function createMemoryDoraPersistence(seed = []) {
+export function createMemoryDoraPersistence(seed = [], options = {}) {
+  const { leaderUid = null, viewAll = false } = options;
   /** @type {Map<string, DoraRepo>} */
   const store = new Map(seed.map((r) => [r.id, { ...r }]));
 
   return {
     repos: {
       async list() {
-        return [...store.values()].map((r) => ({ ...r }));
+        const all = [...store.values()].map((r) => ({ ...r }));
+        if (viewAll || !leaderUid) return all;
+        return all.filter((r) => r.ownerLeaderUid === leaderUid);
       },
       async add(input) {
         const id = crypto.randomUUID();
-        store.set(id, { ...input, id });
+        store.set(id, { ...input, ...(leaderUid ? { ownerLeaderUid: leaderUid } : {}), id });
         return id;
       },
       async update(id, patch) {

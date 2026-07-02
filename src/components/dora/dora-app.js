@@ -2,7 +2,7 @@
  * <dora-app>
  * Shell de la herramienta DORA. En la Fase 1 solo muestra la configuración de
  * repos; las métricas y dashboards llegan en fases posteriores. Recibe
- * persistence e isAdmin inyectados desde client/dora.js.
+ * persistence y canEdit inyectados desde client/dora.js.
  */
 import { LitElement, html, css } from 'lit';
 import './dora-repos.js';
@@ -11,7 +11,7 @@ import './dora-metrics.js';
 export class DoraApp extends LitElement {
   static properties = {
     persistence: { attribute: false },
-    isAdmin: { attribute: false },
+    canEdit: { attribute: false },
     refresh: { attribute: false },
     view: { state: true },
     error: { state: true },
@@ -30,7 +30,7 @@ export class DoraApp extends LitElement {
   constructor() {
     super();
     this.persistence = null;
-    this.isAdmin = false;
+    this.canEdit = false;
     this.refresh = null;
     /** @type {'repos'|'metrics'} */
     this.view = 'repos';
@@ -46,7 +46,7 @@ export class DoraApp extends LitElement {
         <button class="tab ${this.view === 'metrics' ? 'active' : ''}" @click=${() => { this.view = 'metrics'; }}>Métricas</button>
       </nav>
       ${this.view === 'repos'
-        ? html`<dora-repos .persistence=${this.persistence} .isAdmin=${this.isAdmin} .refresh=${this.refresh}></dora-repos>`
+        ? html`<dora-repos .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh}></dora-repos>`
         : html`<dora-metrics .persistence=${this.persistence}></dora-metrics>`}
     `;
   }

@@ -1,30 +1,42 @@
 /**
  * Implementación Firestore de la persistencia DORA (modelo multi-leader): la
- * config de entrega vive en /dora a nivel de instancia (lectura: autenticados;
- * escritura: superadmin, ver firestore.rules). `db` se inyecta.
+ * config de entrega vive en /dora a nivel de instancia (raíz, no bajo el líder),
+ * para que un mismo repo pueda coincidir entre líderes. Cada repo lleva
+ * `ownerLeaderUid`; el líder ve por defecto los suyos (filtro por owner) y el
+ * superadmin (viewAll) ve todos. Escritura owner-scoped (ver firestore.rules).
+ * `db` se inyecta.
  *
  * @typedef {import('firebase/firestore').Firestore} Firestore
  * @typedef {import('../../domain/ports.js').DoraPersistence} DoraPersistence
  */
-import { doc, collection, addDoc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, collection, addDoc, getDocs, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 
 const reposCol = (db) => collection(db, 'dora');
 const repoDoc = (db, id) => doc(db, 'dora', id);
 
 /**
  * @param {Firestore} db
+ * @param {string} leaderUid  Líder que consulta; se estampa como ownerLeaderUid al crear.
+ * @param {{ viewAll?: boolean }} [options]  viewAll=true (superadmin): lista TODOS los repos de la organización.
  * @returns {DoraPersistence}
  */
-export function createFirestoreDoraPersistence(db) {
+export function createFirestoreDoraPersistence(db, leaderUid, options = {}) {
   if (!db) throw new Error('createFirestoreDoraPersistence requiere una instancia de Firestore (db)');
+  if (!leaderUid) throw new Error('createFirestoreDoraPersistence requiere leaderUid');
+  const { viewAll = false } = options;
   return {
     repos: {
       async list() {
-        const snap = await getDocs(reposCol(db));
+        // El superadmin (viewAll) ve TODOS los repos (las reglas se lo permiten),
+        // incluidos los legacy sin ownerLeaderUid. El líder solo ve los suyos: la
+        // query se respalda con el MISMO campo del where (rules are not filters).
+        const snap = viewAll
+          ? await getDocs(reposCol(db))
+          : await getDocs(query(reposCol(db), where('ownerLeaderUid', '==', leaderUid)));
         return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       },
       async add(input) {
-        const ref = await addDoc(reposCol(db), { ...input });
+        const ref = await addDoc(reposCol(db), { ...input, ownerLeaderUid: leaderUid });
         return ref.id;
       },
       async update(id, patch) {

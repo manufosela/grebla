@@ -9,15 +9,27 @@ import { createMemoryDoraPersistence } from '../infrastructure/memory/index.js';
 import { createFirestoreDoraPersistence } from '../infrastructure/firestore/persistence.js';
 
 /**
- * @param {{ mode?: 'memory'|'firestore', db?: import('firebase/firestore').Firestore|null, seed?: object }} [options]
+ * @param {Object} [options]
+ * @param {'memory'|'firestore'} [options.mode]
+ * @param {import('firebase/firestore').Firestore|null} [options.db]
+ * @param {string|null} [options.leaderUid]  Líder que consulta; se estampa como ownerLeaderUid al crear repos.
+ * @param {boolean} [options.viewAll]  true (superadmin): la lista de repos incluye TODA la organización.
+ * @param {object} [options.seed]  Solo para mode 'memory'.
  * @returns {Promise<{ mode: string, persistence: DoraPersistence }>}
  */
 export async function createDoraContainer(options = {}) {
-  const { mode = 'firestore', db = null, seed } = options;
+  const { mode = 'firestore', db = null, leaderUid = null, viewAll = false, seed } = options;
   if (mode === 'memory') {
-    return { mode, persistence: createMemoryDoraPersistence(seed), refresh: async () => ({ results: [] }) };
+    return {
+      mode,
+      persistence: createMemoryDoraPersistence(seed, { leaderUid, viewAll }),
+      refresh: async () => ({ results: [] }),
+    };
   }
   if (mode === 'firestore') {
+    if (!leaderUid) {
+      throw new Error('El modo Firestore requiere leaderUid (resuelto por el cliente)');
+    }
     let database = db;
     if (!database) {
       const firebase = await import('../../../lib/firebase.js');
@@ -31,7 +43,7 @@ export async function createDoraContainer(options = {}) {
       const res = await httpsCallable(fns, 'refreshDora')({});
       return res.data;
     };
-    return { mode, persistence: createFirestoreDoraPersistence(database), refresh };
+    return { mode, persistence: createFirestoreDoraPersistence(database, leaderUid, { viewAll }), refresh };
   }
   throw new Error(`Modo de container DORA desconocido: ${mode}`);
 }

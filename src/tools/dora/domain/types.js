@@ -6,6 +6,7 @@
  *
  * @typedef {Object} DoraRepo
  * @property {string} id
+ * @property {string} [ownerLeaderUid]  Líder dueño del repo (lo añadió). Ausente en repos legacy del superadmin.
  * @property {string} fullName   Identificador GitHub "owner/repo".
  * @property {string|null} [team] Equipo al que pertenece el repo.
  * @property {string[]} guilds    Gremios (cross-team) del repo.
