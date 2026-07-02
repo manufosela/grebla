@@ -61,6 +61,22 @@ export const EXPECTATIONS = [
   { levelId: 'l3', dimensionId: 'culture', text: 'Moldea activamente la cultura de su equipo.' },
   { levelId: 'l4', dimensionId: 'culture', text: 'Moldea la cultura entre equipos o en todo un dominio.' },
   { levelId: 'l5', dimensionId: 'culture', text: 'Protege y representa la cultura en toda la organización de ingeniería.' },
+
+  // ── Distinguished Architect (L5-TL): cima de la vía de liderazgo técnico ────
+  { levelId: 'l5tl', dimensionId: 'tech', text: 'Define la arquitectura de referencia de varios dominios y los principios técnicos que adopta toda la ingeniería. Su criterio se busca para los problemas más difíciles y ambiguos de la empresa.' },
+  { levelId: 'l5tl', dimensionId: 'reliability', text: 'Fija los estándares de fiabilidad y rendimiento a nivel de empresa e institucionaliza la cultura operativa; interviene solo en cuestiones sistémicas o estratégicas.' },
+  { levelId: 'l5tl', dimensionId: 'product', text: 'Partner estratégico del liderazgo de producto e ingeniería: traduce entre realidad técnica y estrategia y detecta oportunidades de plataforma que requieren contexto técnico profundo.' },
+  { levelId: 'l5tl', dimensionId: 'execution', text: 'Crea las condiciones para que varios dominios entreguen sobre bases arquitectónicas sólidas; elimina bloqueos técnicos sistémicos entre equipos.' },
+  { levelId: 'l5tl', dimensionId: 'leadership', text: 'Desarrolla a Architects y Staff Engineers y representa la ingeniería de la empresa externamente; reta y eleva el criterio técnico de toda la función.' },
+  { levelId: 'l5tl', dimensionId: 'culture', text: 'Protege y representa la cultura técnica en toda la organización de ingeniería.' },
+
+  // ── Director de Ingeniería (L5-EM): cima de la vía de gestión ───────────────
+  { levelId: 'l5em', dimensionId: 'tech', text: 'Mantiene criterio técnico suficiente para guiar decisiones de inversión y arquitectura de su área, apoyándose en sus Architects y Staff; su foco es organizativo, no de implementación.' },
+  { levelId: 'l5em', dimensionId: 'reliability', text: 'Responde de la fiabilidad y el rendimiento de su área a nivel organizativo: presupuestos, prioridades y cultura operativa entre equipos.' },
+  { levelId: 'l5em', dimensionId: 'product', text: 'Alinea el roadmap técnico de varios equipos con la estrategia de negocio; equilibra inversión, entrega y salud del equipo.' },
+  { levelId: 'l5em', dimensionId: 'execution', text: 'Garantiza la entrega fiable de varios equipos: estructura, dependencias y procesos; elimina bloqueos organizativos antes de que afecten.' },
+  { levelId: 'l5em', dimensionId: 'leadership', text: 'Desarrolla Engineering Managers y hace crecer líderes; responde del desempeño, la contratación y el bienestar de su área.' },
+  { levelId: 'l5em', dimensionId: 'culture', text: 'Protege y representa la cultura en toda su organización; contrata y desarrolla para reforzarla.' },
 ];
 
 /** @type {Addendum[]} — foco técnico por disciplina (sección 10), sobre la dimensión Technical Excellence. */

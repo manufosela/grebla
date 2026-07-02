@@ -77,6 +77,8 @@ export const ENGINEERING_FRAMEWORK = {
     { id: 'l4tl', code: 'L4-TL', title: 'Architect', trackId: 'tl', order: 4, description: 'Dirección técnica a largo plazo de un dominio; define principios y estándares de arquitectura.', typicalProfile: '', branchesFrom: 'l3' },
     { id: 'l3em', code: 'L3-EM', title: 'Engineering Manager', trackId: 'em', order: 3, description: 'Responsable de un equipo (4–8 personas): crecimiento, desempeño, contratación y dinámica.', typicalProfile: '', branchesFrom: 'l3' },
     { id: 'l4em', code: 'L4-EM', title: 'Senior Engineering Manager', trackId: 'em', order: 4, description: 'Salud organizativa de varios equipos o un dominio; desarrolla Engineering Managers.', typicalProfile: '', branchesFrom: null },
+    { id: 'l5tl', code: 'L5-TL', title: 'Distinguished Architect', trackId: 'tl', order: 5, description: 'Autoridad técnica de referencia en varios dominios: define la arquitectura y los principios que adopta toda la ingeniería e influye más allá de ella. Equivalente en la vía técnica a un Principal Engineer.', typicalProfile: '', branchesFrom: null },
+    { id: 'l5em', code: 'L5-EM', title: 'Director de Ingeniería', trackId: 'em', order: 5, description: 'Responsable de la salud organizativa de varios equipos o un dominio amplio: desarrolla managers, alinea la ejecución con la estrategia y responde de los resultados del área.', typicalProfile: '', branchesFrom: null },
   ],
   disciplines: [
     { id: 'backend', name: 'Backend', order: 1, description: 'Diseño de APIs, modelado de datos, sistemas distribuidos, observabilidad, fiabilidad y seguridad.' },
@@ -375,11 +377,15 @@ export function addendumsForDisciplines(framework, disciplineIds) {
 }
 
 /**
- * Niveles «a los que aspirar» desde el nivel actual. Combina:
- *  (a) el resto del propio track (niveles con `order` mayor que el actual), y
- *  (b) las ramas: niveles cuyo `branchesFrom` apunta al nivel actual.
- * Devuelve primero el resto del track (por `order`) y luego las ramas (por
- * `order`), sin duplicados. Función PURA.
+ * Niveles «a los que aspirar» desde el nivel actual. Modelo de doble escalera:
+ * combina, sin duplicados,
+ *  (a) PROGRESIÓN: subir en el propio track (niveles con `order` mayor), y
+ *  (b) LATERAL POR NIVEL: pivotar al rol equivalente de OTRO track al MISMO
+ *      `order` (p. ej. Staff L4 → Architect L4-TL / Senior EM L4-EM), y
+ *  (c) ARISTAS EXPLÍCITAS: niveles cuyo `branchesFrom` apunta al actual
+ *      (retrocompatibilidad; permite bifurcaciones fuera de la equivalencia).
+ * Devuelve primero la progresión (por `order`), luego los laterales (por `order`)
+ * y por último las ramas explícitas. Función PURA.
  * @param {CareerFramework|null|undefined} framework
  * @param {string|null|undefined} levelId
  * @returns {AspirationalLevel[]}
@@ -391,11 +397,15 @@ export function aspirationalLevels(framework, levelId) {
   const sameTrack = levels
     .filter((l) => l.trackId === current.trackId && l.order > current.order)
     .toSorted(byOrder);
-  const seen = new Set(sameTrack.map((l) => l.id));
+  const seen = new Set([current.id, ...sameTrack.map((l) => l.id)]);
+  const lateral = levels
+    .filter((l) => l.trackId !== current.trackId && l.order === current.order && !seen.has(l.id))
+    .toSorted(byOrder);
+  for (const l of lateral) seen.add(l.id);
   const branches = levels
     .filter((l) => l.branchesFrom === current.id && !seen.has(l.id))
     .toSorted(byOrder);
-  return [...sameTrack, ...branches].map((l) => ({
+  return [...sameTrack, ...lateral, ...branches].map((l) => ({
     id: l.id,
     code: l.code,
     title: l.title,

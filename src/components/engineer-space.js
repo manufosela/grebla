@@ -95,6 +95,7 @@ export class EngineerSpace extends LitElement {
     section.rolemirror { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; margin: 0; }
+    .topmost { color: var(--rm-accent, #2a9d8f); font-size: 0.9rem; font-weight: 600; margin: 0.2rem 0 0; }
 
     /* ── Sección Carrera (marcado espejo de <team-person-detail>) ── */
     .sub { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); margin: 1.1rem 0 0.35rem; }
@@ -349,7 +350,7 @@ export class EngineerSpace extends LitElement {
     return html`
       <p class="sub">Evolución / Próximos pasos</p>
       ${options.length === 0
-        ? html`<p class="empty">No hay siguientes niveles definidos desde tu nivel actual.</p>`
+        ? html`<p class="topmost">🎯 Estás en el nivel más alto de tu itinerario: no hay más niveles por escalar ni vías a las que saltar.</p>`
         : this._renderTargetChooser(fw, options, targetId)}
       ${this._targetError ? html`<p class="target-error" role="alert">${this._targetError}</p>` : null}
       ${targetLevel
@@ -447,11 +448,9 @@ export class EngineerSpace extends LitElement {
       return html`<p class="empty">Aún no tienes un nivel de carrera asignado.</p>`;
     }
 
-    const trackName = (trackId) => (fw?.tracks ?? []).find((t) => t.id === trackId)?.name ?? '';
     const expectations = level ? expectationsForLevel(fw, person.levelId) : [];
     const addendums = addendumsForDisciplines(fw, disciplineIds);
     const addendumsByDiscipline = Object.groupBy(addendums, (a) => a.discipline.id);
-    const aspirations = level ? aspirationalLevels(fw, person.levelId) : [];
 
     return html`
       <p class="sub">Nivel actual</p>
@@ -487,31 +486,6 @@ export class EngineerSpace extends LitElement {
                 `,
               )}
             </div>
-          `
-        : null}
-
-      ${level
-        ? html`
-            <p class="sub">A qué aspirar</p>
-            ${aspirations.length === 0
-              ? html`<p class="empty">No hay siguientes niveles definidos desde aquí.</p>`
-              : html`
-                  <ul class="aspire">
-                    ${aspirations.map(
-                      (l) => html`
-                        <li>
-                          <details>
-                            <summary>
-                              <span><span class="code">${l.code}</span> · ${l.title}</span>
-                              ${trackName(l.trackId) ? html`<span class="track">${trackName(l.trackId)}</span>` : null}
-                            </summary>
-                            ${l.description ? html`<p class="desc">${l.description}</p>` : null}
-                          </details>
-                        </li>
-                      `,
-                    )}
-                  </ul>
-                `}
           `
         : null}
 

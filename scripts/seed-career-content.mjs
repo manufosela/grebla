@@ -39,10 +39,11 @@ const levels = Array.isArray(current.levels) && current.levels.length
   ? [...current.levels]
   : [...ENGINEERING_FRAMEWORK.levels];
 
-// Añade el nivel Tech Lead (l3tl) si no está ya.
-if (!levels.some((l) => l.id === 'l3tl')) {
-  const l3tl = ENGINEERING_FRAMEWORK.levels.find((l) => l.id === 'l3tl');
-  if (l3tl) levels.push(l3tl);
+// Añade cualquier nivel del framework en código que falte en el doc (Tech Lead
+// l3tl y los peldaños L5 de las vías TL/EM: Distinguished Architect l5tl y
+// Director de Ingeniería l5em). No pisa los niveles ya existentes ni su orden.
+for (const lvl of ENGINEERING_FRAMEWORK.levels) {
+  if (!levels.some((l) => l.id === lvl.id)) levels.push(lvl);
 }
 
 await ref.set(
