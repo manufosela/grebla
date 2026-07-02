@@ -9,7 +9,7 @@
 /**
  * @param {PersistencePort} persistence
  * @param {string} personId
- * @param {Omit<Conversation,'id'>} input
+ * @param {Omit<Conversation,'id'>} input   Puede incluir `createdBy` ({uid, name}) con el autor del login; se persiste tal cual.
  * @returns {Promise<string>}
  */
 export function registerConversation(persistence, personId, input) {

@@ -24,7 +24,10 @@ export function createMemoryConversationRepository() {
     async create(personId, input) {
       const id = crypto.randomUUID();
       const list = byPerson.get(personId) ?? [];
-      list.push({ ...input, id });
+      // Coherente con Firestore: no persistimos createdBy si viene undefined.
+      const conv = { ...input, id };
+      if (conv.createdBy === undefined) delete conv.createdBy;
+      list.push(conv);
       byPerson.set(personId, list);
       return id;
     },

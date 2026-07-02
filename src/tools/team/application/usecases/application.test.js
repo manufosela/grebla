@@ -17,6 +17,8 @@ import {
   getPersonTimeline,
   registerConversation,
   addSupportNote,
+  listSupportNotes,
+  listConversations,
   getTeamCoverage,
   getBusFactor,
   getSilenceAlerts,
@@ -199,5 +201,21 @@ describe('Fase 2b — casos de uso', () => {
     const json = JSON.stringify(out);
     expect(json).not.toContain(ids.ana); // sin personIds
     expect(json).not.toContain('tema personal sensible'); // R5 nunca se exporta
+  });
+
+  it('registra la autoría del login en notas y conversaciones (RMR-TSK-0109)', async () => {
+    const author = { uid: 'u1', name: 'Ada Lovelace' };
+    await addSupportNote(p, ids.ana, 'con autor', author);
+    const notes = await listSupportNotes(p, ids.ana);
+    expect(notes.at(-1).createdBy).toEqual(author);
+
+    await registerConversation(p, ids.ana, {
+      type: 'o2o',
+      date: '2026-07-01',
+      notes: 'con autor',
+      createdBy: author,
+    });
+    const convs = await listConversations(p, ids.ana);
+    expect(convs.at(-1).createdBy).toEqual(author);
   });
 });
