@@ -24,6 +24,19 @@ import {
 } from '../../tools/team/application/usecases/index.js';
 import { LEVELS } from '../../tools/team/domain/levels.js';
 
+/**
+ * Sub-pestañas de la sección Ajustes. El orden define el recorrido con las
+ * flechas del teclado y el primer elemento (`areas`) es el activo por defecto.
+ * @type {ReadonlyArray<{ id: string, label: string }>}
+ */
+const SUBTABS = [
+  { id: 'areas', label: 'Áreas de conocimiento' },
+  { id: 'gremios', label: 'Gremios' },
+  { id: 'labels', label: 'Labels' },
+  { id: 'cadencia', label: 'Cadencia y riesgo' },
+  { id: 'ficheros', label: 'Ficheros' },
+];
+
 export class TeamSettings extends LitElement {
   static properties = {
     persistence: { attribute: false },
@@ -39,6 +52,7 @@ export class TeamSettings extends LitElement {
     _confirmGuild: { state: true },
     _newLabel: { state: true },
     _confirmLabel: { state: true },
+    _subtab: { state: true },
   };
 
   static styles = css`
@@ -67,6 +81,31 @@ export class TeamSettings extends LitElement {
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .feat { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     .badge { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: var(--rm-track, #e9f0f2); }
+
+    /* ── Barra de sub-pestañas (patrón ARIA tablist, coherente con otros tools) ── */
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .tab {
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    }
+    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .tab:hover:not(.active) { color: var(--rm-text, #111827); }
+    .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .subpanel:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: var(--rm-radius, 12px); }
+
+    /* ── Interruptor accesible (checkbox nativo oculto + pista visual) ── */
+    .switch { display: inline-flex; align-items: center; gap: 0.6rem; cursor: pointer; font-size: 0.9rem; color: var(--rm-text, #111827); }
+    .switch input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .switch-track { position: relative; flex: none; width: 42px; height: 24px; border-radius: 999px; background: var(--rm-border, #d1d5db); transition: background 0.15s ease; }
+    .switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 0.15s ease; }
+    .switch input:checked + .switch-track { background: var(--rm-accent, #2a9d8f); }
+    .switch input:checked + .switch-track .switch-thumb { transform: translateX(18px); }
+    .switch input:focus-visible + .switch-track { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) {
+      .switch-track, .switch-thumb { transition: none; }
+    }
+    .warn { font-size: 0.8rem; color: var(--rm-coral, #c2410c); background: var(--rm-track, #fdf2f0); border: 1px solid var(--rm-coral, #f2887a); border-radius: 8px; padding: 0.55rem 0.7rem; margin: 0.7rem 0 0; }
+    .warn strong { color: inherit; }
   `;
 
   constructor() {
@@ -93,6 +132,8 @@ export class TeamSettings extends LitElement {
     this._newLabel = '';
     /** @type {string|null} */
     this._confirmLabel = null;
+    /** @type {string} sub-pestaña activa (estado local, no usa el hash de la URL) */
+    this._subtab = 'areas';
     this._loaded = false;
   }
 
@@ -208,12 +249,99 @@ export class TeamSettings extends LitElement {
     }
   }
 
+  /**
+   * Activa/desactiva el almacenamiento de ficheros propagando el mapa `features`
+   * completo, para no pisar otras claves que pudieran existir en él.
+   * @param {boolean} enabled  nuevo valor del flag `features.fileStorage`
+   * @returns {Promise<void>}
+   */
+  async _toggleFileStorage(enabled) {
+    const s = this.settings ?? {};
+    await this._saveSetting({ features: { ...(s.features ?? {}), fileStorage: enabled } });
+  }
+
+  /**
+   * Navegación por teclado de la barra de sub-pestañas (patrón ARIA tablist con
+   * activación automática): ←/→ recorren las pestañas de forma circular y
+   * Home/End saltan a la primera/última, moviendo el foco a la nueva pestaña.
+   * @param {KeyboardEvent} e
+   * @returns {void}
+   */
+  _onSubtabsKeydown(e) {
+    const ids = SUBTABS.map((t) => t.id);
+    const i = ids.indexOf(this._subtab);
+    let next = i;
+    if (e.key === 'ArrowLeft') next = (i - 1 + ids.length) % ids.length;
+    else if (e.key === 'ArrowRight') next = (i + 1) % ids.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = ids.length - 1;
+    else return;
+    e.preventDefault();
+    this._subtab = ids[next];
+    // Tras el re-render, mueve el foco a la sub-pestaña recién activada.
+    this.updateComplete.then(() => {
+      /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#subtab-${this._subtab}`))?.focus();
+    });
+  }
+
+  /**
+   * Barra de sub-pestañas accesible (tablist con roving tabindex): solo la
+   * pestaña activa es tabulable; las flechas mueven el foco y la selección.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderSubtabs() {
+    return html`
+      <div class="tabs" role="tablist" aria-label="Secciones de ajustes" @keydown=${this._onSubtabsKeydown}>
+        ${SUBTABS.map((t) => {
+          const selected = this._subtab === t.id;
+          return html`
+            <button
+              id="subtab-${t.id}"
+              class="tab ${selected ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected=${selected ? 'true' : 'false'}
+              aria-controls="subpanel-${t.id}"
+              tabindex=${selected ? '0' : '-1'}
+              @click=${() => { this._subtab = t.id; }}
+            >${t.label}</button>
+          `;
+        })}
+      </div>
+    `;
+  }
+
   render() {
     if (this.loading) return html`<p class="empty">Cargando…</p>`;
-    const s = this.settings ?? {};
+    const active = this._subtab;
+    const panel = {
+      areas: () => this._renderAreas(),
+      gremios: () => this._renderGuilds(),
+      labels: () => this._renderLabels(),
+      cadencia: () => this._renderCadencia(),
+      ficheros: () => this._renderFicheros(),
+    }[active] ?? (() => this._renderAreas());
     return html`
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
+      ${this._renderSubtabs()}
+      <div
+        id="subpanel-${active}"
+        class="subpanel"
+        role="tabpanel"
+        aria-labelledby="subtab-${active}"
+        tabindex="0"
+      >
+        ${panel()}
+      </div>
+    `;
+  }
 
+  /**
+   * Sub-pestaña «Áreas de conocimiento»: catálogo de áreas técnicas (CRUD).
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderAreas() {
+    return html`
       <section>
         <h2>Áreas de conocimiento</h2>
         ${this.areas.length === 0
@@ -246,7 +374,15 @@ export class TeamSettings extends LitElement {
           <button class="primary" @click=${this._addArea}>Añadir área</button>
         </div>
       </section>
+    `;
+  }
 
+  /**
+   * Sub-pestaña «Gremios»: gremios de la organización y los propios del líder.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderGuilds() {
+    return html`
       <section>
         <h2>Gremios</h2>
         <p class="hint">Gremios (tecnologías/stack, transversales a la disciplina). Los <strong>globales</strong> los define la organización y los ve todo el mundo; los que crees aquí son <strong>tuyos</strong>.</p>
@@ -283,7 +419,15 @@ export class TeamSettings extends LitElement {
           <button class="primary" @click=${this._addGuild}>Añadir gremio</button>
         </div>
       </section>
+    `;
+  }
 
+  /**
+   * Sub-pestaña «Labels»: etiquetas libres (globales y propias del líder).
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderLabels() {
+    return html`
       <section>
         <h2>Labels</h2>
         <p class="hint">Etiquetas libres para agrupar personas. Las <strong>globales</strong> las define la organización; las que crees aquí son <strong>tuyas</strong>.</p>
@@ -320,7 +464,16 @@ export class TeamSettings extends LitElement {
           <button class="primary" @click=${this._addLabel}>Añadir label</button>
         </div>
       </section>
+    `;
+  }
 
+  /**
+   * Sub-pestaña «Cadencia y riesgo»: cadencia de avisos y umbral de bus factor.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderCadencia() {
+    const s = this.settings ?? {};
+    return html`
       <section>
         <h2>Cadencia y riesgo</h2>
         <div class="grid">
@@ -345,13 +498,35 @@ export class TeamSettings extends LitElement {
           mínimo para considerar que alguien “cubre” un área en el cálculo de bus factor.
         </p>
       </section>
+    `;
+  }
 
+  /**
+   * Sub-pestaña «Ficheros»: interruptor real del flag `features.fileStorage`.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderFicheros() {
+    const s = this.settings ?? {};
+    const enabled = !!s.features?.fileStorage;
+    return html`
       <section>
         <h2>Almacenamiento de ficheros</h2>
-        <p class="feat">
-          Estado: <span class="badge">${s.features?.fileStorage ? 'Activado' : 'Desactivado'}</span>
+        <label class="switch">
+          <input
+            type="checkbox"
+            role="switch"
+            .checked=${enabled}
+            aria-describedby="fs-warn"
+            @change=${(e) => this._toggleFileStorage(e.target.checked)}
+          />
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span>Almacenamiento de audio: <strong>${enabled ? 'Activado' : 'Desactivado'}</strong></span>
+        </label>
+        <p class="hint">Permite adjuntar audios a las notas de seguimiento. Puedes activarlo o desactivarlo en cualquier momento.</p>
+        <p id="fs-warn" class="warn">
+          <strong>Aviso:</strong> activar esta opción requiere tener <strong>Firebase Storage configurado</strong>
+          (bucket creado y reglas de seguridad publicadas). Si no lo está, las subidas de audio fallarán.
         </p>
-        <p class="hint">En el MVP el almacenamiento de audio está desactivado por defecto. Se activará por configuración cuando esté disponible.</p>
       </section>
     `;
   }
