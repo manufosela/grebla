@@ -69,7 +69,7 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'guilds', 'labels', 'careerMap', 'careerFramework', 'users'];
+const TABS = ['leaders', 'areas', 'guilds', 'labels', 'careerMap', 'careerFramework', 'users'];
 
 export class SuperadminPanel extends LitElement {
   static properties = {
@@ -83,6 +83,7 @@ export class SuperadminPanel extends LitElement {
     teamLoading: { state: true },
     _email: { state: true },
     _error: { state: true },
+    _areas: { state: true },
     _guilds: { state: true },
     _labels: { state: true },
     _newCat: { state: true },
@@ -203,7 +204,7 @@ export class SuperadminPanel extends LitElement {
     this.ready = false;
     this.isLeader = false;
     this.readOnly = false;
-    /** @type {'leaders'|'guilds'|'labels'|'careerMap'|'careerFramework'|'users'} pestaña activa */
+    /** @type {'leaders'|'areas'|'guilds'|'labels'|'careerMap'|'careerFramework'|'users'} pestaña activa */
     this._tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'leaders';
     this._onHashChange = () => {
       const t = location.hash.slice(1);
@@ -219,10 +220,12 @@ export class SuperadminPanel extends LitElement {
     this._email = '';
     this._error = '';
     /** @type {import('../lib/catalog.js').CatalogItem[]} */
+    this._areas = [];
+    /** @type {import('../lib/catalog.js').CatalogItem[]} */
     this._guilds = [];
     /** @type {import('../lib/catalog.js').CatalogItem[]} */
     this._labels = [];
-    this._newCat = { guilds: '', labels: '' };
+    this._newCat = { areas: '', guilds: '', labels: '' };
     /** @type {import('../tools/career/domain/types.js').CareerMap|null} */
     this._careerMap = null;
     this._newArea = { id: '', name: '' };
@@ -294,7 +297,12 @@ export class SuperadminPanel extends LitElement {
 
   async _loadCatalogs() {
     try {
-      const [guilds, labels] = await Promise.all([listCatalog('guilds'), listCatalog('labels')]);
+      const [areas, guilds, labels] = await Promise.all([
+        listCatalog('areas'),
+        listCatalog('guilds'),
+        listCatalog('labels'),
+      ]);
+      this._areas = areas;
       this._guilds = guilds;
       this._labels = labels;
     } catch (err) {
@@ -872,6 +880,8 @@ export class SuperadminPanel extends LitElement {
     switch (this._tab) {
       case 'leaders':
         return html`${this._renderLeaders()} ${this.selected ? this._renderTeam() : null}`;
+      case 'areas':
+        return this._renderCatalog('areas', this._areas, 'Áreas de conocimiento (organización)', 'Nueva área global…');
       case 'guilds':
         return this._renderCatalog('guilds', this._guilds, 'Gremios (organización)', 'Nuevo gremio global…');
       case 'labels':
@@ -898,6 +908,7 @@ export class SuperadminPanel extends LitElement {
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
         <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Líderes</button>
+        <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
         <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => this._setTab('careerMap')}>Mapa de carrera</button>

@@ -72,9 +72,10 @@
  * @property {string[]} [linkedDimensions]
  * @property {{ uid: string, name: string }} [createdBy]  Autor de la entrada (del login); ausente en registros antiguos.
  *
- * @typedef {Object} Area
+ * @typedef {Object} Area   Área de conocimiento del catálogo con ámbito personal/global.
  * @property {string} id
  * @property {string} name
+ * @property {string} [ownerLeaderUid]   Líder dueño si es personal; ausente si es global.
  *
  * @typedef {Object} Guild   Gremio (tecnología/stack, transversal a la disciplina) del catálogo con ámbito.
  * @property {string} id

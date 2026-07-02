@@ -27,9 +27,9 @@
  * @property {(personId: string) => Promise<object[]>} listByPerson   // histórico asc por fecha (R2)
  * @property {(personId: string) => Promise<object|null>} latest      // estado actual = última lectura
  *
- * @typedef {Object} AreaRepository
- * @property {() => Promise<Area[]>} list
- * @property {(name: string) => Promise<string>} create
+ * @typedef {Object} AreaRepository   Catálogo de áreas de conocimiento con ámbito (personal/global).
+ * @property {() => Promise<Area[]>} list   Globales + las del líder que mira.
+ * @property {(name: string) => Promise<string>} create   Crea un área PERSONAL del líder.
  * @property {(id: string) => Promise<void>} remove
  *
  * @typedef {Object} GuildRepository   Catálogo de gremios con ámbito (personal/global).

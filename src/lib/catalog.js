@@ -1,11 +1,12 @@
 /**
- * Gestión de los catálogos con ámbito (gremios y labels) por el SUPERADMIN: ve
- * todos los registros (globales y personales de los líderes), crea globales,
+ * Gestión de los catálogos con ámbito (áreas, gremios y labels) por el SUPERADMIN:
+ * ve todos los registros (globales y personales de los líderes), crea globales,
  * promueve un personal a global (quita su ownerLeaderUid) y borra. El líder
  * gestiona los suyos a través del adapter de la tool Equipo; esta lib es la vista
- * global del superadmin (reglas: write solo superadmin).
+ * global del superadmin (reglas: write solo superadmin). El `kind` coincide con el
+ * nombre de la colección raíz (`areas`, `guilds`, `labels`).
  *
- * @typedef {'guilds'|'labels'} CatalogKind
+ * @typedef {'areas'|'guilds'|'labels'} CatalogKind
  * @typedef {{ id: string, name: string, ownerLeaderUid?: string }} CatalogItem
  */
 import { doc, collection, addDoc, getDocs, deleteDoc, updateDoc, deleteField } from 'firebase/firestore';
