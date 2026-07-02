@@ -23,7 +23,8 @@ import {
   removeSupportNote,
   updatePerson,
 } from '../../tools/team/application/usecases/index.js';
-import { levelLabel } from '../../tools/team/domain/levels.js';
+import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
+import { sparkline, sparklineTrend, SPARK_MAX } from '../../tools/team/domain/services/sparkline.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import {
@@ -153,10 +154,7 @@ export class TeamPersonDetail extends LitElement {
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
     }
-    .dim-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
-    h3 { font-size: 1rem; margin: 0; }
-    .current { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
-    .current strong { color: var(--rm-text, #111827); }
+    h3 { font-size: 1rem; margin: 0 0 0.75rem; }
     .form { display: grid; gap: 0.6rem; margin: 0.5rem 0 1rem; }
     textarea, input[type='date'] {
       border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem;
@@ -238,6 +236,55 @@ export class TeamPersonDetail extends LitElement {
     .career .improve .dim { font-weight: 700; color: var(--rm-danger, #dc2626); }
     .career .improve .note { margin: 0.2rem 0 0; color: var(--rm-muted, #6b7280); font-size: 0.83rem; }
     .career .suggest { margin: 0.2rem 0 0; font-size: 0.9rem; color: var(--rm-text, #111827); }
+
+    /* ── Rediseño de dimensiones: Actual destacado + alta plegable + tabla + gráfico ── */
+    .actual {
+      display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.4rem 0.9rem;
+      border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f);
+      border-radius: 10px; padding: 0.7rem 1rem; margin: 0 0 0.9rem; background: var(--rm-track, #e9f0f2);
+    }
+    .actual .tag { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--rm-accent, #2a9d8f); }
+    .actual .val { font-size: 1.15rem; font-weight: 800; line-height: 1.1; color: var(--rm-text, #111827); }
+    .actual .at { font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    .actual.none { border-left-color: var(--rm-border, #d1d5db); background: transparent; }
+    .actual .void { font-size: 0.92rem; color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .actual .areas { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+    details.add { margin: 0 0 1rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; }
+    details.add > summary { cursor: pointer; padding: 0.6rem 0.9rem; font-size: 0.88rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); list-style: none; }
+    details.add > summary::-webkit-details-marker { display: none; }
+    details.add > summary:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: -2px; border-radius: 10px; }
+    details.add[open] > summary { border-bottom: 1px solid var(--rm-border, #eef0f2); }
+    details.add .form { margin: 0.8rem 0.9rem; }
+
+    .evo { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 1.25rem; align-items: start; }
+    @media (max-width: 640px) { .evo { grid-template-columns: 1fr; } }
+    .evo-chart { min-width: 0; }
+    .evo-table { min-width: 0; overflow-x: auto; }
+
+    svg.spark { display: block; width: 100%; height: auto; }
+    svg.spark .spark-line { stroke: var(--rm-accent, #2a9d8f); stroke-width: 2; fill: none; }
+    svg.spark .spark-dot { fill: var(--rm-accent, #2a9d8f); }
+    svg.spark .spark-axis { stroke: var(--rm-border, #e5e7eb); stroke-width: 1; }
+    .chart-empty { font-size: 0.83rem; color: var(--rm-muted, #9ca3af); font-style: italic; margin: 0.25rem 0; }
+
+    table.htable { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    table.htable caption { text-align: left; font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #6b7280); padding: 0 0 0.4rem; }
+    table.htable th, table.htable td { text-align: left; padding: 0.4rem 0.6rem 0.4rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); vertical-align: top; }
+    table.htable thead th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #9ca3af); font-weight: 700; }
+    table.htable td.when { color: var(--rm-muted, #9ca3af); white-space: nowrap; }
+    table.htable td.lvl { font-weight: 600; color: var(--rm-text, #111827); }
+    table.htable td.note { color: var(--rm-muted, #6b7280); }
+
+    ul.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+    ul.bars .bar-row { display: grid; grid-template-columns: minmax(5rem, 8rem) 1fr auto; align-items: center; gap: 0.5rem; }
+    ul.bars .bar-name { font-size: 0.82rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ul.bars .bar-track { height: 0.55rem; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; }
+    ul.bars .bar-fill { display: block; height: 100%; background: var(--rm-accent, #2a9d8f); border-radius: 999px; }
+    ul.bars .bar-val { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+
+    .freq { font-size: 0.83rem; color: var(--rm-muted, #6b7280); margin: 0.85rem 0 0; }
+    .freq strong { color: var(--rm-text, #111827); }
 
     /* ── Barra de sub-pestañas (patrón ARIA tablist, coherente con Ajustes) ── */
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
@@ -652,59 +699,145 @@ export class TeamPersonDetail extends LitElement {
     }
   }
 
+  /**
+   * Line chart SVG de la evolución del `value` (nivel 1..7.5) en el tiempo.
+   * Requiere al menos 2 lecturas; con menos muestra un aviso sobrio. El SVG es
+   * accesible (`role="img"` + `aria-label` con inicio, fin y tendencia). La
+   * geometría se calcula con el helper puro `sparkline` (fuera del componente).
+   * @param {Array<{ level: number, toNext?: boolean, value: number, date: string }>} history  Ascendente por fecha.
+   * @param {string} label  Nombre de la dimensión, para el aria-label.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderLineChart(history, label) {
+    if (history.length < 2) {
+      return html`<p class="chart-empty">Necesita al menos 2 lecturas para el gráfico.</p>`;
+    }
+    const geo = sparkline(
+      history.map((r) => ({ value: r.value })),
+      { width: 300, height: 120, padding: 12 },
+    );
+    const first = history.at(0);
+    const last = history.at(-1);
+    const trend = sparklineTrend(history);
+    const aria = `Evolución de ${label}: de ${levelLabel(first.level, first.toNext)} (${formatDate(first.date)}) a ${levelLabel(last.level, last.toNext)} (${formatDate(last.date)}). Tendencia ${trend}.`;
+    return html`
+      <svg class="spark" viewBox="0 0 ${geo.width} ${geo.height}" role="img" aria-label=${aria}>
+        <line
+          class="spark-axis"
+          x1="12"
+          y1=${geo.height - 12}
+          x2=${geo.width - 12}
+          y2=${geo.height - 12}
+        ></line>
+        <polyline class="spark-line" points=${geo.polyline} vector-effect="non-scaling-stroke"></polyline>
+        ${geo.points.map((p) => html`<circle class="spark-dot" cx=${p.x} cy=${p.y} r="3.5"></circle>`)}
+      </svg>
+    `;
+  }
+
   _renderDimension({ key, label, bias }) {
     const history = this.timeline[key] ?? [];
     const current = history.at(-1);
     const f = this._form[key];
     return html`
       <section>
-        <div class="dim-head">
-          <h3>${label}</h3>
-          <span class="current">
-            ${current
-              ? html`Actual: <strong>${levelLabel(current.level, current.toNext)}</strong> · ${formatDate(current.date)}`
-              : 'Sin lecturas todavía'}
-          </span>
-        </div>
+        <h3>${label}</h3>
         ${bias ? html`<p class="bias">⚠ ${bias}</p>` : null}
 
-        <div class="form">
-          <team-level-input
-            .level=${f.level}
-            .toNext=${f.toNext}
-            @level-change=${(e) => this._patchForm(key, { level: e.detail.level, toNext: e.detail.toNext })}
-          ></team-level-input>
-          <label class="fld">Nota (opcional)
-            <textarea
-              .value=${f.note}
-              @input=${(e) => this._patchForm(key, { note: e.target.value })}
-              placeholder="Contexto de esta lectura…"
-            ></textarea>
-          </label>
-          <div class="row">
-            <label class="fld">Fecha
-              <input type="date" .value=${f.date} @input=${(e) => this._patchForm(key, { date: e.target.value })} />
+        ${current
+          ? html`<div class="actual">
+              <span class="tag">Actual</span>
+              <span class="val">${levelLabel(current.level, current.toNext)}</span>
+              <span class="at">${formatDate(current.date)}</span>
+            </div>`
+          : html`<div class="actual none"><span class="void">Sin lecturas todavía</span></div>`}
+
+        <details class="add">
+          <summary>➕ Añadir lectura</summary>
+          <div class="form">
+            <team-level-input
+              .level=${f.level}
+              .toNext=${f.toNext}
+              @level-change=${(e) => this._patchForm(key, { level: e.detail.level, toNext: e.detail.toNext })}
+            ></team-level-input>
+            <label class="fld">Nota (opcional)
+              <textarea
+                .value=${f.note}
+                @input=${(e) => this._patchForm(key, { note: e.target.value })}
+                placeholder="Contexto de esta lectura…"
+              ></textarea>
             </label>
-            <button class="primary" ?disabled=${!f.level} @click=${() => this._save(key)}>Registrar lectura</button>
+            <div class="row">
+              <label class="fld">Fecha
+                <input type="date" .value=${f.date} @input=${(e) => this._patchForm(key, { date: e.target.value })} />
+              </label>
+              <button class="primary" ?disabled=${!f.level} @click=${() => this._save(key)}>Registrar lectura</button>
+            </div>
           </div>
-        </div>
+        </details>
 
         ${history.length === 0
           ? html`<p class="empty">Aún no hay histórico.</p>`
           : html`
-              <ul class="hist">
-                ${history.map(
-                  (r) => html`
-                    <li>
-                      <span class="when">${formatDate(r.date)}</span>
-                      <span class="lvl">${levelLabel(r.level, r.toNext)}</span>
-                      ${r.note ? html`<span class="note">${r.note}</span>` : null}
-                    </li>
-                  `,
-                )}
-              </ul>
+              <div class="evo">
+                <div class="evo-chart">${this._renderLineChart(history, label)}</div>
+                <div class="evo-table">
+                  <table class="htable">
+                    <caption>Histórico de lecturas</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Fecha</th>
+                        <th scope="col">Nivel</th>
+                        <th scope="col">Nota</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${history.toReversed().map(
+                        (r) => html`
+                          <tr>
+                            <td class="when">${formatDate(r.date)}</td>
+                            <td class="lvl">${levelLabel(r.level, r.toNext)}</td>
+                            <td class="note">${r.note ?? ''}</td>
+                          </tr>
+                        `,
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             `}
       </section>
+    `;
+  }
+
+  /**
+   * Barras horizontales con el nivel ACTUAL por área (conocimiento es por área,
+   * no una serie temporal única, así que un line chart no aplica limpio). Cada
+   * barra mapea el `value` (1..7.5) a un porcentaje del ancho. Accesible como
+   * imagen con `aria-label`. Función de presentación pura sobre datos ya derivados.
+   * @param {Map<string, { level: number, toNext?: boolean }>} currentByArea
+   * @param {(id: string) => string} areaName
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderKnowledgeBars(currentByArea, areaName) {
+    const rows = [...currentByArea.entries()];
+    if (rows.length === 0) {
+      return html`<p class="chart-empty">Sin lecturas para graficar.</p>`;
+    }
+    return html`
+      <ul class="bars" role="img" aria-label="Nivel actual de conocimiento por área">
+        ${rows.map(([id, r]) => {
+          const value = levelToNumber(r.level, r.toNext);
+          const pct = Math.round((value / SPARK_MAX) * 100);
+          return html`
+            <li class="bar-row">
+              <span class="bar-name" title=${areaName(id)}>${areaName(id)}</span>
+              <span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>
+              <span class="bar-val">${levelLabel(r.level, r.toNext)}</span>
+            </li>
+          `;
+        })}
+      </ul>
     `;
   }
 
@@ -723,48 +856,98 @@ export class TeamPersonDetail extends LitElement {
               para registrar conocimiento.</p>`
           : html`
               ${currentByArea.size > 0
-                ? html`<div class="chips">
-                    ${[...currentByArea.entries()].map(
-                      ([id, r]) => html`<span class="chip">${areaName(id)}: ${levelLabel(r.level, r.toNext)}</span>`,
-                    )}
+                ? html`<div class="actual">
+                    <span class="tag">Actual</span>
+                    <span class="areas">
+                      ${[...currentByArea.entries()].map(
+                        ([id, r]) => html`<span class="chip">${areaName(id)}: ${levelLabel(r.level, r.toNext)}</span>`,
+                      )}
+                    </span>
                   </div>`
-                : null}
-              <div class="form">
-                <label class="fld">Área
-                  <select .value=${k.areaId} @change=${(e) => { this._know = { ...this._know, areaId: e.target.value }; }}>
-                    <option value="">— Elige un área —</option>
-                    ${this.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === k.areaId}>${a.name}</option>`)}
-                  </select>
-                </label>
-                <team-level-input
-                  .level=${k.level}
-                  .toNext=${k.toNext}
-                  @level-change=${(e) => { this._know = { ...this._know, level: e.detail.level, toNext: e.detail.toNext }; }}
-                ></team-level-input>
-                <label class="fld">Nota (opcional)
-                  <textarea .value=${k.note} @input=${(e) => { this._know = { ...this._know, note: e.target.value }; }}></textarea>
-                </label>
-                <div class="row">
-                  <label class="fld">Fecha
-                    <input type="date" .value=${k.date} @input=${(e) => { this._know = { ...this._know, date: e.target.value }; }} />
+                : html`<div class="actual none"><span class="void">Sin lecturas todavía</span></div>`}
+
+              <details class="add">
+                <summary>➕ Registrar conocimiento</summary>
+                <div class="form">
+                  <label class="fld">Área
+                    <select .value=${k.areaId} @change=${(e) => { this._know = { ...this._know, areaId: e.target.value }; }}>
+                      <option value="">— Elige un área —</option>
+                      ${this.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === k.areaId}>${a.name}</option>`)}
+                    </select>
                   </label>
-                  <button class="primary" ?disabled=${!k.areaId || !k.level} @click=${this._saveKnowledge}>Registrar conocimiento</button>
+                  <team-level-input
+                    .level=${k.level}
+                    .toNext=${k.toNext}
+                    @level-change=${(e) => { this._know = { ...this._know, level: e.detail.level, toNext: e.detail.toNext }; }}
+                  ></team-level-input>
+                  <label class="fld">Nota (opcional)
+                    <textarea .value=${k.note} @input=${(e) => { this._know = { ...this._know, note: e.target.value }; }}></textarea>
+                  </label>
+                  <div class="row">
+                    <label class="fld">Fecha
+                      <input type="date" .value=${k.date} @input=${(e) => { this._know = { ...this._know, date: e.target.value }; }} />
+                    </label>
+                    <button class="primary" ?disabled=${!k.areaId || !k.level} @click=${this._saveKnowledge}>Registrar conocimiento</button>
+                  </div>
                 </div>
-              </div>
+              </details>
+
               ${history.length === 0
                 ? html`<p class="empty">Sin histórico.</p>`
-                : html`<ul class="hist">
-                    ${history.map(
-                      (r) => html`<li>
-                        <span class="when">${formatDate(r.date)}</span>
-                        <span class="lvl">${areaName(r.areaId)}: ${levelLabel(r.level, r.toNext)}</span>
-                        ${r.note ? html`<span class="note">${r.note}</span>` : null}
-                      </li>`,
-                    )}
-                  </ul>`}
+                : html`
+                    <div class="evo">
+                      <div class="evo-chart">${this._renderKnowledgeBars(currentByArea, areaName)}</div>
+                      <div class="evo-table">
+                        <table class="htable">
+                          <caption>Histórico por área</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col">Fecha</th>
+                              <th scope="col">Área</th>
+                              <th scope="col">Nivel</th>
+                              <th scope="col">Nota</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${history.toReversed().map(
+                              (r) => html`<tr>
+                                <td class="when">${formatDate(r.date)}</td>
+                                <td>${areaName(r.areaId)}</td>
+                                <td class="lvl">${levelLabel(r.level, r.toNext)}</td>
+                                <td class="note">${r.note ?? ''}</td>
+                              </tr>`,
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  `}
             `}
       </section>
     `;
+  }
+
+  /**
+   * Roles primarios más frecuentes a lo largo del histórico de contribución.
+   * Belbin no tiene valor numérico, así que en lugar de un gráfico de línea se
+   * ofrece esta lectura agregada (los que empatan en máximo se listan juntos).
+   * @param {Array<{ roles?: Record<string, 'primary'|'secondary'> }>} history
+   * @returns {string}  Cadena vacía si no hay ningún rol primario registrado.
+   */
+  _topPrimaryRoles(history) {
+    /** @type {Map<string, number>} */
+    const counts = new Map();
+    for (const entry of history) {
+      for (const [sigla, kind] of Object.entries(entry.roles ?? {})) {
+        if (kind === 'primary') counts.set(sigla, (counts.get(sigla) ?? 0) + 1);
+      }
+    }
+    if (counts.size === 0) return '';
+    const max = Math.max(...counts.values());
+    return [...counts.entries()]
+      .filter(([, n]) => n === max)
+      .map(([sigla, n]) => `${sigla} (×${n})`)
+      .join(' · ');
   }
 
   _renderContribution() {
@@ -775,50 +958,74 @@ export class TeamPersonDetail extends LitElement {
       Object.entries(roles || {})
         .map(([s, kind]) => `${s} ${kind === 'primary' ? '(P)' : '(S)'}`)
         .join(' · ') || '—';
+    const topPrimary = this._topPrimaryRoles(history);
     return html`
       <section>
         <h3>Contribución (Belbin)</h3>
-        <p class="current">
-          ${current
-            ? html`Actual: <strong>${summary(current.roles)}</strong> · ${formatDate(current.date)}`
-            : 'Sin perfil todavía'}
-        </p>
-        <div class="form">
-          <div class="belbin">
-            ${BELBIN_ROLES.map(
-              (role) => html`
-                <div class="belbin-row">
-                  <span class="b-name" title=${role.name}>${role.sigla} · ${role.name}</span>
-                  <select @change=${(e) => this._setContribRole(role.sigla, e.target.value)}>
-                    ${CONTRIB_STATES.map(
-                      (st) => html`<option value=${st.value} ?selected=${(c.roles[role.sigla] ?? '') === st.value}>${st.label}</option>`,
-                    )}
-                  </select>
-                </div>
-              `,
-            )}
-          </div>
-          <label class="fld">Nota (opcional)
-            <textarea .value=${c.note} @input=${(e) => { this._contrib = { ...this._contrib, note: e.target.value }; }}></textarea>
-          </label>
-          <div class="row">
-            <label class="fld">Fecha
-              <input type="date" .value=${c.date} @input=${(e) => { this._contrib = { ...this._contrib, date: e.target.value }; }} />
-            </label>
-            <button class="primary" ?disabled=${Object.keys(c.roles).length === 0} @click=${this._saveContribution}>Registrar contribución</button>
-          </div>
-        </div>
-        ${history.length === 0
-          ? null
-          : html`<ul class="hist">
-              ${history.map(
-                (r) => html`<li>
-                  <span class="when">${formatDate(r.date)}</span>
-                  <span class="lvl">${summary(r.roles)}</span>
-                  ${r.note ? html`<span class="note">${r.note}</span>` : null}
-                </li>`,
+
+        ${current
+          ? html`<div class="actual">
+              <span class="tag">Actual</span>
+              <span class="val">${summary(current.roles)}</span>
+              <span class="at">${formatDate(current.date)}</span>
+            </div>`
+          : html`<div class="actual none"><span class="void">Sin perfil todavía</span></div>`}
+
+        <details class="add">
+          <summary>➕ Registrar contribución</summary>
+          <div class="form">
+            <div class="belbin">
+              ${BELBIN_ROLES.map(
+                (role) => html`
+                  <div class="belbin-row">
+                    <span class="b-name" title=${role.name}>${role.sigla} · ${role.name}</span>
+                    <select @change=${(e) => this._setContribRole(role.sigla, e.target.value)}>
+                      ${CONTRIB_STATES.map(
+                        (st) => html`<option value=${st.value} ?selected=${(c.roles[role.sigla] ?? '') === st.value}>${st.label}</option>`,
+                      )}
+                    </select>
+                  </div>
+                `,
               )}
-            </ul>`}
+            </div>
+            <label class="fld">Nota (opcional)
+              <textarea .value=${c.note} @input=${(e) => { this._contrib = { ...this._contrib, note: e.target.value }; }}></textarea>
+            </label>
+            <div class="row">
+              <label class="fld">Fecha
+                <input type="date" .value=${c.date} @input=${(e) => { this._contrib = { ...this._contrib, date: e.target.value }; }} />
+              </label>
+              <button class="primary" ?disabled=${Object.keys(c.roles).length === 0} @click=${this._saveContribution}>Registrar contribución</button>
+            </div>
+          </div>
+        </details>
+
+        ${history.length === 0
+          ? html`<p class="empty">Aún no hay histórico.</p>`
+          : html`
+              <table class="htable">
+                <caption>Histórico de roles</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Fecha</th>
+                    <th scope="col">Roles (P/S)</th>
+                    <th scope="col">Nota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${history.toReversed().map(
+                    (r) => html`<tr>
+                      <td class="when">${formatDate(r.date)}</td>
+                      <td class="lvl">${summary(r.roles)}</td>
+                      <td class="note">${r.note ?? ''}</td>
+                    </tr>`,
+                  )}
+                </tbody>
+              </table>
+              ${topPrimary
+                ? html`<p class="freq">Roles primarios más frecuentes: <strong>${topPrimary}</strong></p>`
+                : null}
+            `}
       </section>
     `;
   }
