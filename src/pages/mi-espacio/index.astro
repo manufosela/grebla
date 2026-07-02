@@ -1,0 +1,72 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * «Mi espacio»: página personal del ingeniero (persona con cuenta vinculada).
+ * Layout neutro (Base), SIN la navegación de herramientas de líder. La cabecera
+ * de identidad y el guard de acceso los pinta/aplica el glue de cliente
+ * (client/engineer.js). El contenido de las secciones llega en G3 (RMR-TSK-0095);
+ * aquí solo quedan los encabezados con un aviso de «disponible próximamente».
+ */
+---
+
+<Base title="GREBLA — Mi espacio">
+  <section class="me-header">
+    <h1 class="page-title">Mi espacio</h1>
+
+    <!-- Cabecera de identidad: la rellena engineer.js en solo lectura. -->
+    <div id="engineer-identity" class="identity" hidden>
+      <p class="identity-name" data-name></p>
+      <p class="identity-title" data-title hidden></p>
+    </div>
+
+    <!-- Mensaje de error sobrio si algo falla al cargar. -->
+    <p id="engineer-error" class="me-error" role="alert" hidden></p>
+  </section>
+
+  <section class="me-sections">
+    <article class="me-section">
+      <h2>Mi carrera</h2>
+      <p class="muted">Disponible próximamente.</p>
+    </article>
+    <article class="me-section">
+      <h2>Mi Role Mirror</h2>
+      <p class="muted">Disponible próximamente.</p>
+    </article>
+    <article class="me-section">
+      <h2>Mi mapa de carrera</h2>
+      <p class="muted">Disponible próximamente.</p>
+    </article>
+  </section>
+
+  <script>
+    import '../../client/engineer.js';
+  </script>
+</Base>
+
+<style>
+  .me-header { margin-bottom: 2rem; }
+  .identity {
+    margin-top: 0.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--rm-surface);
+    border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius);
+  }
+  .identity-name { margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--rm-text); }
+  .identity-title { margin: 0.25rem 0 0; color: var(--rm-accent); font-weight: 600; }
+  .me-error { color: var(--rm-danger); font-size: 0.9rem; margin: 0.75rem 0 0; }
+  .me-sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+  .me-section {
+    background: var(--rm-surface);
+    border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius);
+    padding: 1.25rem 1.4rem;
+  }
+  .me-section h2 { margin: 0 0 0.4rem; font-size: 1.1rem; }
+  .muted { margin: 0; color: var(--rm-muted); font-size: 0.9rem; }
+</style>

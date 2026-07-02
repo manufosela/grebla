@@ -21,6 +21,12 @@ onUserChanged(async (user) => {
   try {
     const { role } = await resolveAccess(user);
     if (!role) return showLanding();
+    // El ingeniero (persona vinculada) tiene su propio espacio personal: ni
+    // landing pública ni herramientas de líder.
+    if (role === 'engineer') {
+      location.replace('/mi-espacio');
+      return;
+    }
     // El viewer siempre entra al panel de gestión en modo solo lectura: no
     // gestiona personas propias, así que no hay "usar como líder" para él.
     if (role === 'viewer') {
