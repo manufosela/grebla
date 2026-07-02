@@ -1,0 +1,22 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * Página «Glosario»: herramienta estática de referencia accesible a CUALQUIER
+ * usuario logado (sin requerir rol). El guard de sesión lo aplica Base con
+ * requireAuth={true} (client-side, igual que /tools/dora o /tools/team): sin
+ * sesión redirige a /login. El contenido lo pinta el web component <glossary-app>,
+ * que importa los datos estáticos de src/data/glossary.js (no toca Firestore).
+ */
+---
+
+<Base title="GREBLA — Glosario" requireAuth={true}>
+  <h1 class="page-title">Glosario</h1>
+  <p class="page-lead">Términos y leyes útiles de desarrollo, equipos y liderazgo.</p>
+
+  <glossary-app></glossary-app>
+
+  <script>
+    import '../../components/glossary-app.js';
+  </script>
+</Base>
