@@ -11,9 +11,12 @@
  *   3. Mi mapa        — resumen del journey: isla, ciudad actual, ciudades
  *                       dominadas por comarca y ruta marcada. Sin acciones.
  *
- * El componente es PRESENTACIONAL: recibe todos los datos ya cargados por el glue
- * (client/engineer.js) y NO hace ninguna IO ni escritura a Firestore. La cabecera
- * de identidad la pinta la página/glue de G2, aquí no se duplica.
+ * El componente recibe todos los datos ya cargados por el glue (client/engineer.js)
+ * y es de SOLO LECTURA salvo por una ÚNICA escritura muy acotada: en «Mi carrera»,
+ * el ingeniero puede declarar su nivel objetivo de carrera (`careerTargetLevelId`)
+ * vía `setCareerTarget`. Las reglas de Firestore limitan esa escritura a ese único
+ * campo. Ninguna otra sección escribe. La cabecera de identidad la pinta la
+ * página/glue de G2, aquí no se duplica.
  *
  * @typedef {import('../tools/team/domain/types.js').Person} Person
  * @typedef {import('../tools/career/data/framework.js').CareerFramework} CareerFramework
@@ -32,6 +35,7 @@ import {
   aspirationalLevels,
 } from '../tools/career/data/framework.js';
 import { stats } from '../tools/career/application/usecases.js';
+import { setCareerTarget } from '../lib/engineer.js';
 
 /**
  * Pestañas de «Mi espacio». El id (clave) sincroniza con `location.hash`
@@ -61,6 +65,8 @@ export class EngineerSpace extends LitElement {
     island: { attribute: false },
     journey: { attribute: false },
     _tab: { state: true },
+    _targetError: { state: true },
+    _targetSaving: { state: true },
   };
 
   static styles = css`
@@ -129,6 +135,32 @@ export class EngineerSpace extends LitElement {
     .aspire .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; }
     .aspire .desc { font-size: 0.82rem; color: var(--rm-muted, #4b5563); margin: 0 0 0.5rem; padding-left: 1.1rem; }
 
+    /* ── Evolución / Próximos pasos (única escritura del ingeniero) ── */
+    .next-single { border-top: 1px solid var(--rm-border, #eef0f2); padding: 0.5rem 0 0.2rem; }
+    .next-single .lvl { margin: 0; font-size: 0.9rem; }
+    .next-single .code { font-weight: 700; }
+    .next-single .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; margin-left: 0.4rem; }
+    .next-single .desc { font-size: 0.82rem; color: var(--rm-muted, #4b5563); margin: 0.2rem 0 0.5rem; }
+    .target-picker { border: 0; margin: 0; padding: 0; }
+    .target-legend { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); padding: 0; margin: 0 0 0.3rem; }
+    .target-opt { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.4rem 0; border-top: 1px solid var(--rm-border, #eef0f2); font-size: 0.88rem; cursor: pointer; }
+    .target-opt input { margin: 0; accent-color: var(--rm-accent, #2a9d8f); cursor: pointer; }
+    .target-opt input:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .target-opt .code { font-weight: 700; }
+    .target-opt .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; }
+    .target-btn {
+      font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
+      color: var(--rm-text, #111827); border-radius: 999px; padding: 0.3rem 0.9rem; margin-top: 0.5rem;
+    }
+    .target-btn.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .target-btn:hover:not(:disabled) { filter: brightness(0.97); }
+    .target-btn:disabled { opacity: 0.6; cursor: default; }
+    .target-btn:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .target-current { margin: 0.6rem 0 0; font-size: 0.9rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); }
+    .target-current .code { font-weight: 800; }
+    .target-error { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--rm-coral, #c2410c); }
+
     /* ── Sección Mapa de carrera (resumen read-only) ── */
     .map-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.4rem; }
     .map-head .lvl { font-weight: 800; color: var(--rm-accent, #2a9d8f); }
@@ -158,6 +190,10 @@ export class EngineerSpace extends LitElement {
     this.island = null;
     /** @type {Journey|null} */
     this.journey = null;
+    /** @type {string|null} aviso in-place si falla la escritura del objetivo */
+    this._targetError = null;
+    /** @type {boolean} true mientras se persiste el objetivo (deshabilita controles) */
+    this._targetSaving = false;
     /** @type {typeof TABS[number]} pestaña activa (inicializada desde el hash) */
     this._tab = TABS.includes(/** @type {any} */ (location.hash.slice(1)))
       ? /** @type {typeof TABS[number]} */ (location.hash.slice(1))
@@ -267,6 +303,134 @@ export class EngineerSpace extends LitElement {
   }
 
   /**
+   * Declara el nivel objetivo de carrera del propio ingeniero (o lo retira con
+   * `null`). Persiste con `setCareerTarget` —la ÚNICA escritura del ingeniero— y,
+   * si tiene éxito, refleja el nuevo estado reemplazando `this.person` por un
+   * objeto nuevo (identidad distinta, para que Lit vuelva a renderizar). Ante
+   * error deja un aviso in-place y NO altera el estado local: la UI se mantiene
+   * coherente con lo realmente persistido (el radio/botón vuelve a su valor).
+   * @param {string|null} levelId  id del nivel objetivo, o null para quitarlo
+   * @returns {Promise<void>}
+   */
+  async _selectTarget(levelId) {
+    const person = this.person;
+    if (!person) return;
+    // Sin cambios: evita una escritura redundante (y el rechazo de las reglas por
+    // un diff vacío al re-seleccionar el objetivo ya vigente).
+    if ((person.careerTargetLevelId ?? null) === levelId) return;
+    this._targetError = null;
+    this._targetSaving = true;
+    try {
+      await setCareerTarget(person.id, levelId);
+      this.person = { ...person, careerTargetLevelId: levelId };
+    } catch {
+      this._targetError = 'No se pudo guardar tu objetivo. Vuelve a intentarlo en unos minutos.';
+    } finally {
+      this._targetSaving = false;
+    }
+  }
+
+  /**
+   * Sección «Evolución / Próximos pasos»: los niveles a los que el ingeniero puede
+   * aspirar desde su nivel actual y la declaración de su objetivo de carrera (única
+   * escritura permitida). Debajo, las metas (expectativas) del nivel objetivo.
+   * @param {CareerFramework|null} fw
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderNextSteps(fw) {
+    const person = this.person;
+    const options = aspirationalLevels(fw, person.levelId);
+    const targetId = person.careerTargetLevelId ?? null;
+    const targetLevel = targetId ? getLevel(fw, targetId) : null;
+    // Nivel cuyas metas se muestran: el objetivo declarado o, si solo hay un
+    // siguiente nivel, ese único siguiente (aún sin fijar).
+    const metaLevelId = targetId ?? (options.length === 1 ? options.at(0).id : null);
+
+    return html`
+      <p class="sub">Evolución / Próximos pasos</p>
+      ${options.length === 0
+        ? html`<p class="empty">No hay siguientes niveles definidos desde tu nivel actual.</p>`
+        : this._renderTargetChooser(fw, options, targetId)}
+      ${this._targetError ? html`<p class="target-error" role="alert">${this._targetError}</p>` : null}
+      ${targetLevel
+        ? html`<p class="target-current">Tu objetivo: <span class="code">${targetLevel.code}</span> · ${targetLevel.title}</p>`
+        : null}
+      ${metaLevelId ? this._renderTargetGoals(fw, metaLevelId) : null}
+    `;
+  }
+
+  /**
+   * Selector del objetivo de carrera. Con un único siguiente nivel se presenta como
+   * «tu siguiente paso» con un botón para fijarlo/quitarlo; con varios, un grupo de
+   * radios accesible (fieldset+legend, navegable por teclado) que persiste al marcar.
+   * @param {CareerFramework|null} fw
+   * @param {import('../tools/career/data/framework.js').AspirationalLevel[]} options
+   * @param {string|null} targetId  objetivo declarado actualmente (o null)
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderTargetChooser(fw, options, targetId) {
+    const trackName = (trackId) => (fw?.tracks ?? []).find((t) => t.id === trackId)?.name ?? '';
+    if (options.length === 1) {
+      const opt = options.at(0);
+      const isTarget = targetId === opt.id;
+      return html`
+        <div class="next-single">
+          <p class="lvl">
+            <span class="code">${opt.code}</span> · ${opt.title}
+            ${trackName(opt.trackId) ? html`<span class="track">${trackName(opt.trackId)}</span>` : null}
+          </p>
+          ${opt.description ? html`<p class="desc">${opt.description}</p>` : null}
+          ${isTarget
+            ? html`<button type="button" class="target-btn" ?disabled=${this._targetSaving} @click=${() => this._selectTarget(null)}>Quitar objetivo</button>`
+            : html`<button type="button" class="target-btn primary" ?disabled=${this._targetSaving} @click=${() => this._selectTarget(opt.id)}>Fijar como objetivo</button>`}
+        </div>
+      `;
+    }
+    return html`
+      <fieldset class="target-picker">
+        <legend class="target-legend">Marca tu objetivo de carrera</legend>
+        ${options.map(
+          (opt) => html`
+            <label class="target-opt">
+              <input
+                type="radio"
+                name="career-target"
+                .checked=${targetId === opt.id}
+                ?disabled=${this._targetSaving}
+                @change=${() => this._selectTarget(opt.id)}
+              />
+              <span>
+                <span class="code">${opt.code}</span> · ${opt.title}
+                ${trackName(opt.trackId) ? html`<span class="track">${trackName(opt.trackId)}</span>` : null}
+              </span>
+            </label>
+          `,
+        )}
+      </fieldset>
+      ${targetId
+        ? html`<button type="button" class="target-btn" ?disabled=${this._targetSaving} @click=${() => this._selectTarget(null)}>Quitar objetivo</button>`
+        : null}
+    `;
+  }
+
+  /**
+   * Metas del nivel objetivo: sus expectativas por dimensión, plegadas como
+   * `<details>` (mismo patrón summary/detalle que «Lo que se te reconoce»).
+   * @param {CareerFramework|null} fw
+   * @param {string} levelId  id del nivel objetivo
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderTargetGoals(fw, levelId) {
+    const goals = expectationsForLevel(fw, levelId);
+    return html`
+      <p class="sub">Lo que tendrás que demostrar</p>
+      <div class="expect">
+        ${goals.map((row) => this._fold(row.dimension.name, row.text))}
+      </div>
+    `;
+  }
+
+  /**
    * Sección «Mi carrera»: nivel actual, lo que se te reconoce (expectativas),
    * enfoque por disciplina (addendums) y a qué aspirar. Espejo del marcado de la
    * sección «Carrera» de <team-person-detail>, con los mismos helpers puros.
@@ -350,6 +514,8 @@ export class EngineerSpace extends LitElement {
                 `}
           `
         : null}
+
+      ${level ? this._renderNextSteps(fw) : null}
     `;
   }
 

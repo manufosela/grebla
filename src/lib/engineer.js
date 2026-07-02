@@ -8,7 +8,7 @@
  *
  * @typedef {import('../tools/team/domain/types.js').Person} Person
  */
-import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { getPersonProfile, getSession, getOrgConfig } from './firestore.js';
 import { getCareerMap } from './careerMap.js';
@@ -76,4 +76,24 @@ export async function getMyCareerMap(personId) {
   ]);
   const journey = await getJourney(store, personId);
   return { island, journey };
+}
+
+/**
+ * Declara (o retira) el nivel objetivo de carrera de la persona vinculada. Es la
+ * ÚNICA escritura permitida al propio ingeniero sobre su ficha: las reglas de
+ * Firestore solo le dejan modificar el campo `careerTargetLevelId` de su propia
+ * persona (rama `hasOnly(['careerTargetLevelId'])`), nada más. Pasar `null`
+ * retira el objetivo declarado.
+ * @param {string} personId  id de la persona (/people/{personId})
+ * @param {string|null} levelId  id del nivel objetivo, o null para quitarlo
+ * @returns {Promise<void>}
+ */
+export async function setCareerTarget(personId, levelId) {
+  if (typeof personId !== 'string' || personId.trim() === '') {
+    throw new TypeError('setCareerTarget: personId es obligatorio (string no vacío).');
+  }
+  if (levelId !== null && (typeof levelId !== 'string' || levelId.trim() === '')) {
+    throw new TypeError('setCareerTarget: levelId debe ser un string no vacío o null.');
+  }
+  await updateDoc(doc(db, 'people', personId), { careerTargetLevelId: levelId });
 }
