@@ -9,6 +9,9 @@ import {
   listGuilds,
   getDoraSummary,
   updateRepoConfig,
+  registerDeployment,
+  listDeployments,
+  removeDeployment,
 } from './usecases.js';
 
 describe('DORA — configuración de repos', () => {
@@ -102,6 +105,65 @@ describe('DORA — configuración de repos', () => {
     expect((await listRepos(p))[0].deploySignal).toBe('release');
     await updateRepoConfig(p, id, { deploySignal: 'loquesea' });
     expect((await listRepos(p))[0].deploySignal).toBe('branch');
+  });
+});
+
+describe('DORA — eventos de despliegue real', () => {
+  /** @type {ReturnType<typeof createMemoryDoraPersistence>} */
+  let p;
+  /** @type {string} */
+  let repoId;
+  beforeEach(async () => {
+    p = createMemoryDoraPersistence();
+    repoId = await addRepo(p, { fullName: 'org/web', startDate: '2025-01-01' });
+  });
+
+  it('registra un evento normalizado (at ISO, environment y sha por defecto)', async () => {
+    const id = await registerDeployment(p, repoId, { at: '2025-01-10T09:30', status: 'success' });
+    const events = await listDeployments(p, repoId);
+    expect(events).toHaveLength(1);
+    const e = events[0];
+    expect(e.id).toBe(id);
+    expect(e.environment).toBe('production');
+    expect(e.status).toBe('success');
+    expect(e.sha).toBeNull();
+    expect(e.at).toBe(new Date('2025-01-10T09:30').toISOString());
+    expect(e.createdAt).toBeTruthy();
+  });
+
+  it('guarda createdBy solo si viene completo (uid + name)', async () => {
+    const conAutor = await registerDeployment(p, repoId, {
+      at: '2025-01-11T10:00:00Z', status: 'success', createdBy: { uid: 'u1', name: 'Ana' },
+    });
+    const sinAutor = await registerDeployment(p, repoId, {
+      at: '2025-01-12T10:00:00Z', status: 'failed', createdBy: { uid: 'u1' },
+    });
+    const events = await listDeployments(p, repoId);
+    expect(events.find((e) => e.id === conAutor).createdBy).toEqual({ uid: 'u1', name: 'Ana' });
+    expect(events.find((e) => e.id === sinAutor).createdBy).toBeUndefined();
+  });
+
+  it('rechaza estados y fechas inválidos', () => {
+    // La validación lanza de forma síncrona (igual que addRepo), antes de tocar
+    // la persistencia; el try/catch de la UI la recoge igual bajo await.
+    expect(() => registerDeployment(p, repoId, { at: '2025-01-10T09:00:00Z', status: 'ok' }))
+      .toThrow(/success.*failed/i);
+    expect(() => registerDeployment(p, repoId, { at: 'no-fecha', status: 'success' }))
+      .toThrow(/fecha/i);
+  });
+
+  it('lista ordenada por at desc y permite borrar', async () => {
+    await registerDeployment(p, repoId, { at: '2025-01-05T10:00:00Z', status: 'success' });
+    const nuevo = await registerDeployment(p, repoId, { at: '2025-01-20T10:00:00Z', status: 'success' });
+    let events = await listDeployments(p, repoId);
+    expect(events.map((e) => e.at)).toEqual([
+      new Date('2025-01-20T10:00:00Z').toISOString(),
+      new Date('2025-01-05T10:00:00Z').toISOString(),
+    ]);
+    await removeDeployment(p, repoId, nuevo);
+    events = await listDeployments(p, repoId);
+    expect(events).toHaveLength(1);
+    expect(events[0].at).toBe(new Date('2025-01-05T10:00:00Z').toISOString());
   });
 });
 

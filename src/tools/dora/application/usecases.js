@@ -125,6 +125,70 @@ export async function listGuilds(persistence) {
   return [...new Set(repos.flatMap((r) => r.guilds ?? []).filter(Boolean))].sort();
 }
 
+/** Estados válidos de un evento de despliegue. */
+export const DEPLOYMENT_STATUSES = Object.freeze(['success', 'failed']);
+
+/**
+ * Registra un evento de despliegue REAL de un repo. Valida el estado
+ * (success|failed) y la marca de tiempo `at` (ISO parseable); el entorno es
+ * 'production' por defecto. `createdBy` solo se incluye si se aporta un autor
+ * completo (uid + name). Sin fallbacks silenciosos: si `at` o `status` no son
+ * válidos, lanza en vez de registrar un evento corrupto.
+ * @param {DoraPersistence} persistence
+ * @param {string} repoId
+ * @param {{ at: string, sha?: string|null, environment?: string, status: string, note?: string, createdBy?: { uid: string, name: string } }} input
+ * @returns {Promise<string>}  id del evento creado
+ */
+export function registerDeployment(persistence, repoId, input) {
+  if (!repoId) throw new Error('registerDeployment requiere el id del repo');
+  const status = String(input?.status ?? '').trim();
+  if (!DEPLOYMENT_STATUSES.includes(status)) {
+    throw new Error("El estado del despliegue debe ser 'success' o 'failed'");
+  }
+  const at = String(input?.at ?? '').trim();
+  if (!at || Number.isNaN(new Date(at).getTime())) {
+    throw new Error('La fecha del despliegue (at) debe ser una fecha ISO válida');
+  }
+  const environment = String(input?.environment ?? '').trim() || 'production';
+  const sha = (input?.sha ?? '').trim() || null;
+  const note = (input?.note ?? '').trim();
+  /** @type {Omit<import('../domain/types.js').Deployment,'id'>} */
+  const event = {
+    at: new Date(at).toISOString(),
+    sha,
+    environment,
+    status,
+    createdAt: new Date().toISOString(),
+  };
+  if (note) event.note = note;
+  // createdBy solo si viene completo (uid + name); no se estampa a medias.
+  if (input?.createdBy?.uid && input?.createdBy?.name) {
+    event.createdBy = { uid: input.createdBy.uid, name: input.createdBy.name };
+  }
+  return persistence.deployments.add(repoId, event);
+}
+
+/**
+ * Lista los eventos de despliegue de un repo (ordenados por `at` desc).
+ * @param {DoraPersistence} persistence
+ * @param {string} repoId
+ * @returns {Promise<import('../domain/types.js').Deployment[]>}
+ */
+export function listDeployments(persistence, repoId) {
+  return persistence.deployments.listByRepo(repoId);
+}
+
+/**
+ * Elimina un evento de despliegue de un repo.
+ * @param {DoraPersistence} persistence
+ * @param {string} repoId
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export function removeDeployment(persistence, repoId, id) {
+  return persistence.deployments.remove(repoId, id);
+}
+
 /**
  * Resumen DORA agregado: global, por equipo y por gremio (sobre el campo metrics
  * ya calculado en cada repo). Siempre a nivel de equipo, nunca por persona.

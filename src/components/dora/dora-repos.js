@@ -18,8 +18,13 @@ import {
   updateRepoConfig,
   listTeams,
   listGuilds,
+  registerDeployment,
+  listDeployments,
+  removeDeployment,
 } from '../../tools/dora/application/usecases.js';
 import { leadTimeLevel, deployFrequencyLevel } from '../../tools/dora/domain/levels.js';
+import { deploymentFrequencyPerWeek } from '../../tools/dora/domain/deployments.js';
+import { getCurrentUser } from '../../lib/auth.js';
 import { levelBadge, levelStyles } from './level-badge.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
@@ -28,6 +33,23 @@ const fmtDate = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : dateFmt.format(d);
 };
+
+const dateTimeFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+const fmtDateTime = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : dateTimeFmt.format(d);
+};
+
+/** Valor por defecto para un <input type="datetime-local"> = ahora, hora local. */
+const nowForInput = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+/** Abreviatura de un sha de commit (primeros 7 caracteres). */
+const shortSha = (sha) => (typeof sha === 'string' && sha ? sha.slice(0, 7) : '');
 
 export class DoraRepos extends LitElement {
   static properties = {
@@ -48,6 +70,16 @@ export class DoraRepos extends LitElement {
     _editGuilds: { state: true },
     _editBranch: { state: true },
     _editSignal: { state: true },
+    _deployOpen: { state: true },
+    _deployEvents: { state: true },
+    _deployLoading: { state: true },
+    _depAt: { state: true },
+    _depSha: { state: true },
+    _depStatus: { state: true },
+    _depNote: { state: true },
+    _depSaving: { state: true },
+    _depError: { state: true },
+    _depConfirm: { state: true },
   };
 
   static styles = [css`
@@ -81,6 +113,28 @@ export class DoraRepos extends LitElement {
     input.edit-in { width: 100%; min-width: 8rem; font-size: 0.82rem; padding: 0.3rem 0.4rem; }
     .del-btn.edit { color: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); margin-right: 0.4rem; }
     .tag { display: inline-block; background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.76rem; margin: 0 0.2rem 0.2rem 0; }
+    .deploy-toggle { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; border: 0; background: none; padding: 0; color: var(--rm-accent, #2a9d8f); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
+    tr.detail > td { background: var(--rm-track, #f7fafb); padding: 1rem 1.1rem; }
+    .deploy-panel { display: flex; flex-direction: column; gap: 0.9rem; }
+    .deploy-freq { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; font-size: 0.85rem; }
+    .deploy-freq .real { font-weight: 700; color: var(--rm-text, #111827); }
+    .deploy-freq .real .value { font-size: 1.15rem; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
+    .deploy-freq .kind { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    .deploy-freq .proxy { color: var(--rm-muted, #6b7280); }
+    .deploy-form { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 0.6rem; align-items: end; }
+    @media (max-width: 720px) { .deploy-form { grid-template-columns: 1fr; } }
+    .deploy-form label { font-size: 0.72rem; }
+    .deploy-form input, .deploy-form select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.82rem; }
+    .deploy-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .deploy-list li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; padding: 0.35rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); }
+    .deploy-list .when { font-variant-numeric: tabular-nums; }
+    .deploy-list .by { color: var(--rm-muted, #6b7280); }
+    .deploy-list code { font-size: 0.8rem; }
+    .pill { display: inline-block; border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 0.72rem; font-weight: 700; }
+    .pill.success { background: #dcfce7; color: #15803d; }
+    .pill.failed { background: #fee2e2; color: #b91c1c; }
+    .spacer { flex: 1; }
+    .deploy-empty { color: var(--rm-muted, #9ca3af); font-size: 0.82rem; }
   `, levelStyles];
 
   constructor() {
@@ -107,6 +161,19 @@ export class DoraRepos extends LitElement {
     this._editGuilds = '';
     this._editBranch = '';
     this._editSignal = 'branch';
+    /** @type {string|null} id del repo con el panel de despliegues abierto */
+    this._deployOpen = null;
+    /** @type {import('../../tools/dora/domain/types.js').Deployment[]} */
+    this._deployEvents = [];
+    this._deployLoading = false;
+    this._depAt = '';
+    this._depSha = '';
+    this._depStatus = 'success';
+    this._depNote = '';
+    this._depSaving = false;
+    this._depError = '';
+    /** @type {string|null} id del despliegue pendiente de confirmar borrado */
+    this._depConfirm = null;
   }
 
   async _refreshMetrics() {
@@ -206,6 +273,85 @@ export class DoraRepos extends LitElement {
     }
   }
 
+  /** Abre/cierra el panel de despliegues reales de un repo y carga sus eventos. */
+  async _toggleDeploys(repo) {
+    if (this._deployOpen === repo.id) {
+      this._deployOpen = null;
+      this._deployEvents = [];
+      return;
+    }
+    this._deployOpen = repo.id;
+    this._deployEvents = [];
+    this._depError = '';
+    this._depConfirm = null;
+    this._depAt = nowForInput();
+    this._depSha = '';
+    this._depStatus = 'success';
+    this._depNote = '';
+    await this._loadDeployments(repo.id);
+  }
+
+  async _loadDeployments(repoId) {
+    this._deployLoading = true;
+    this._depError = '';
+    try {
+      this._deployEvents = await listDeployments(this.persistence, repoId);
+    } catch (err) {
+      this._depError = err instanceof Error ? err.message : 'No se pudieron cargar los despliegues.';
+    } finally {
+      this._deployLoading = false;
+    }
+  }
+
+  /** Registra un despliegue del repo con el autor de la sesión actual. */
+  async _registerDeploy(event, repo) {
+    event.preventDefault();
+    this._depError = '';
+    this._depSaving = true;
+    try {
+      const user = getCurrentUser();
+      const createdBy = user ? { uid: user.uid, name: user.displayName ?? user.email ?? user.uid } : undefined;
+      await registerDeployment(this.persistence, repo.id, {
+        at: this._depAt,
+        sha: this._depSha,
+        status: this._depStatus,
+        note: this._depNote,
+        createdBy,
+      });
+      // Reset del formulario a un nuevo "ahora" para el siguiente registro.
+      this._depAt = nowForInput();
+      this._depSha = '';
+      this._depNote = '';
+      this._depStatus = 'success';
+      await this._loadDeployments(repo.id);
+    } catch (err) {
+      this._depError = err instanceof Error ? err.message : 'No se pudo registrar el despliegue.';
+    } finally {
+      this._depSaving = false;
+    }
+  }
+
+  async _removeDeploy(repoId, id) {
+    this._depConfirm = null;
+    this._depError = '';
+    try {
+      await removeDeployment(this.persistence, repoId, id);
+      await this._loadDeployments(repoId);
+    } catch (err) {
+      this._depError = err instanceof Error ? err.message : 'No se pudo eliminar el despliegue.';
+    }
+  }
+
+  /**
+   * Ventana para la frecuencia real: desde la fecha de inicio del repo (o, si no
+   * hay, el inicio del periodo ya medido, o su creación) hasta ahora. Sin `||`
+   * sobre datos críticos: se encadena con `??` respetando null como "sin valor".
+   */
+  _deployPeriod(repo) {
+    const from = repo.startDate ?? repo.metrics?.periodFrom ?? repo.createdAt ?? new Date().toISOString();
+    return { from, to: new Date().toISOString() };
+  }
+
   _renderForm() {
     if (!this.canEdit) {
       return html`<p class="muted">Solo puedes consultar la lista de repositorios.</p>`;
@@ -255,6 +401,83 @@ export class DoraRepos extends LitElement {
       <button class="del-btn edit" @click=${() => this._startEdit(repo)}>Configurar</button>
       <button class="del-btn" @click=${() => { this._confirm = repo.id; }}>Quitar</button>
     `;
+  }
+
+  /** Panel de despliegues reales de un repo: frecuencia real, alta y lista. */
+  _renderDeployPanel(repo) {
+    const events = this._deployEvents;
+    const realFreq = deploymentFrequencyPerWeek(events, this._deployPeriod(repo));
+    const proxyFreq = repo.metrics?.deployFrequencyPerWeek;
+    const hasEvents = events.length > 0;
+    return html`
+      <div class="deploy-panel">
+        <div class="deploy-freq">
+          ${hasEvents
+            ? html`<span class="real"><span class="value">${realFreq}</span> /sem ${levelBadge(deployFrequencyLevel(realFreq))} <span class="kind">real (eventos)</span></span>`
+            : html`<span class="deploy-empty">Sin despliegues registrados: la frecuencia real aún no se puede calcular.</span>`}
+          <span class="proxy">proxy: merges/releases → ${proxyFreq != null ? `${proxyFreq} /sem` : '—'}${hasEvents ? '' : ' (estimación)'}</span>
+        </div>
+        ${this.canEdit ? this._renderDeployForm(repo) : null}
+        ${this._depError ? html`<p class="error">${this._depError}</p>` : null}
+        ${this._deployLoading
+          ? html`<p class="deploy-empty">Cargando despliegues…</p>`
+          : this._renderDeployList(repo)}
+      </div>
+    `;
+  }
+
+  _renderDeployForm(repo) {
+    return html`
+      <form class="deploy-form" @submit=${(e) => this._registerDeploy(e, repo)}>
+        <label>Fecha y hora
+          <input type="datetime-local" required .value=${this._depAt} @input=${(e) => { this._depAt = e.target.value; }} />
+        </label>
+        <label>Estado
+          <select @change=${(e) => { this._depStatus = e.target.value; }}>
+            <option value="success" ?selected=${this._depStatus === 'success'}>success</option>
+            <option value="failed" ?selected=${this._depStatus === 'failed'}>failed</option>
+          </select>
+        </label>
+        <label>Commit (sha, opcional)
+          <input type="text" placeholder="a1b2c3d" .value=${this._depSha} @input=${(e) => { this._depSha = e.target.value; }} />
+        </label>
+        <label>Nota (opcional)
+          <input type="text" placeholder="contexto del despliegue" .value=${this._depNote} @input=${(e) => { this._depNote = e.target.value; }} />
+        </label>
+        <button class="primary" type="submit" ?disabled=${this._depSaving}>${this._depSaving ? 'Registrando…' : 'Registrar despliegue'}</button>
+      </form>
+    `;
+  }
+
+  _renderDeployList(repo) {
+    if (this._deployEvents.length === 0) {
+      return html`<p class="deploy-empty">Aún no hay despliegues registrados para este repo.</p>`;
+    }
+    return html`
+      <ul class="deploy-list">
+        ${this._deployEvents.map((e) => html`
+          <li>
+            <span class="pill ${e.status === 'failed' ? 'failed' : 'success'}">${e.status}</span>
+            <span class="when">${fmtDateTime(e.at)}</span>
+            ${e.sha ? html`<code>${shortSha(e.sha)}</code>` : null}
+            ${e.createdBy?.name ? html`<span class="by">por ${e.createdBy.name}</span>` : null}
+            ${e.note ? html`<span class="by" title=${e.note}>· ${e.note}</span>` : null}
+            <span class="spacer"></span>
+            ${this.canEdit ? this._renderDeployActions(repo, e) : null}
+          </li>
+        `)}
+      </ul>
+    `;
+  }
+
+  _renderDeployActions(repo, e) {
+    if (this._depConfirm === e.id) {
+      return html`<span class="confirm">¿Quitar?
+        <button class="yes" @click=${() => this._removeDeploy(repo.id, e.id)}>Sí</button>
+        <button @click=${() => { this._depConfirm = null; }}>No</button>
+      </span>`;
+    }
+    return html`<button class="del-btn" @click=${() => { this._depConfirm = e.id; }}>Quitar</button>`;
   }
 
   /** Celdas de equipo, gremios y rama base: en edición (admin) muestran inputs. */
@@ -310,19 +533,28 @@ export class DoraRepos extends LitElement {
                     ${this.repos.map(
                       (r) => html`
                         <tr>
-                          <td><code>${r.fullName}</code></td>
+                          <td>
+                            <code>${r.fullName}</code>
+                            <button class="deploy-toggle" aria-expanded=${this._deployOpen === r.id}
+                              @click=${() => this._toggleDeploys(r)}>
+                              ${this._deployOpen === r.id ? '▾' : '▸'} Despliegues reales
+                            </button>
+                          </td>
                           ${this._renderConfigCells(r)}
                           <td>${fmtDate(r.startDate)}</td>
                           ${this._metricCells(r)}
                           ${this.canEdit ? html`<td class="num">${this._renderActions(r)}</td>` : null}
                         </tr>
+                        ${this._deployOpen === r.id
+                          ? html`<tr class="detail"><td colspan=${this.canEdit ? 9 : 8}>${this._renderDeployPanel(r)}</td></tr>`
+                          : null}
                       `,
                     )}
                   </tbody>
                 </table>
                 <datalist id="dora-teams">${this._teams.map((t) => html`<option value=${t}></option>`)}</datalist>
                 <datalist id="dora-guilds">${this._guilds.map((g) => html`<option value=${g}></option>`)}</datalist>
-                <p class="muted note">Equipo, gremios y rama base (señal de despliegue, por defecto <code>main</code>) se configuran aquí, a posteriori. Solo cuentan los merges a esa rama. Métricas desde la API pública de GitHub (repos públicos). Siempre a nivel de equipo, nunca por persona.</p>
+                <p class="muted note">Equipo, gremios y rama base (señal de despliegue, por defecto <code>main</code>) se configuran aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>
 
