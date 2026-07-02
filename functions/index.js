@@ -154,8 +154,77 @@ async function fetchMergedPrs(fullName, sinceMs, baseBranch) {
   const arr = await res.json();
   return (Array.isArray(arr) ? arr : [])
     .filter((p) => p.merged_at && toMs(p.merged_at) >= sinceMs)
-    .map((p) => ({ createdAt: p.created_at, mergedAt: p.merged_at, author: p.user?.login || '' }));
+    // `number` se conserva para poder pedir después el primer commit del PR (lead time real).
+    .map((p) => ({ number: p.number, createdAt: p.created_at, mergedAt: p.merged_at, author: p.user?.login || '' }));
 }
+
+/**
+ * Fecha del PRIMER commit de un PR (el más antiguo). La API pública devuelve los
+ * commits en orden ascendente, así que el primero del listado es el más antiguo.
+ * Pedimos solo 1 (`per_page=1`) para gastar la mínima cuota. Prioriza la fecha
+ * del committer y cae a la del author si falta. 1 llamada por PR.
+ * @param {string} fullName  owner/repo
+ * @param {number} prNumber
+ * @returns {Promise<string>}  fecha ISO del primer commit ('' si no se obtiene)
+ */
+async function fetchFirstCommitDate(fullName, prNumber) {
+  const res = await fetch(
+    `https://api.github.com/repos/${fullName}/pulls/${prNumber}/commits?per_page=1`,
+    { headers: GH_HEADERS },
+  );
+  if (!res.ok) throw githubError(res.status, fullName);
+  const arr = await res.json();
+  const commit = (Array.isArray(arr) ? arr[0] : null)?.commit;
+  return commit?.committer?.date ?? commit?.author?.date ?? '';
+}
+
+/**
+ * Lead time DORA REAL (primer commit → despliegue en producción). Duplica la
+ * lógica pura de src/tools/dora/domain/leadTime.js (functions/ no importa de
+ * src/, igual que computeRepoMetrics es espejo de metrics.js). Casa cada cambio
+ * con el PRIMER despliegue 'success' cuyo `at >= mergedAt`; sin despliegue
+ * posterior el cambio queda PENDIENTE. Descarta lead times negativos/no finitos.
+ * @param {{ firstCommitAt: string, mergedAt: string }[]} changes
+ * @param {{ at: string, status: string }[]} deployments
+ * @returns {{ leadTimeHoursAvg: number|null, leadTimeHoursMedian: number|null, deployedCount: number, pendingCount: number }}
+ */
+function computeLeadTimeCommitDeploy(changes, deployments) {
+  const successAtMs = (Array.isArray(deployments) ? deployments : [])
+    .filter((d) => d?.status === 'success')
+    .map((d) => toMs(d.at))
+    .filter((t) => Number.isFinite(t))
+    .sort((a, b) => a - b);
+
+  const leadHours = [];
+  let pendingCount = 0;
+  for (const change of Array.isArray(changes) ? changes : []) {
+    const mergedMs = toMs(change?.mergedAt);
+    const firstCommitMs = toMs(change?.firstCommitAt);
+    if (!Number.isFinite(mergedMs) || !Number.isFinite(firstCommitMs)) {
+      pendingCount += 1;
+      continue;
+    }
+    const deployAtMs = successAtMs.find((t) => t >= mergedMs);
+    if (deployAtMs === undefined) {
+      pendingCount += 1;
+      continue;
+    }
+    const hours = (deployAtMs - firstCommitMs) / MS_HOUR;
+    if (Number.isFinite(hours) && hours >= 0) leadHours.push(hours);
+  }
+
+  leadHours.sort((a, b) => a - b);
+  const deployedCount = leadHours.length;
+  return {
+    leadTimeHoursAvg: deployedCount ? round1(leadHours.reduce((s, h) => s + h, 0) / deployedCount) : null,
+    leadTimeHoursMedian: deployedCount ? round1(leadHours[Math.floor((deployedCount - 1) / 2)]) : null,
+    deployedCount,
+    pendingCount,
+  };
+}
+
+/** Tope de PRs por repo a los que pedimos el primer commit (mitiga el rate-limit 60/h sin token). */
+const MAX_COMMIT_LOOKUPS = 50;
 
 /** Nº de releases publicados de un repo público en [sinceMs, toMs2] (despliegue real). */
 async function fetchReleaseCount(fullName, sinceMs, toMs2) {
@@ -210,6 +279,45 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
         metrics.deployFrequencyPerWeek = round1(releases / weeks);
       }
       metrics.deploySignal = signal;
+
+      // ── Lead time REAL (primer commit → despliegue en producción, DORA D2) ──
+      // El "inicio" es el primer commit de cada PR; el "fin" es el despliegue real
+      // registrado (D1). Se conserva el proxy PR→merge (leadTimeHoursAvg) intacto.
+      //
+      // Rate-limit (CRÍTICO): la API pública permite 60 req/h por IP sin token y
+      // cada PR consume 1 llamada. Por eso: (1) solo pedimos el primer commit de
+      // los MAX_COMMIT_LOOKUPS PRs más recientes (prs viene ordenado por
+      // updated desc); el resto aproxima con `createdAt`. (2) Cada llamada va en
+      // try/catch: si falla (403/límite u otro), se aproxima con `createdAt`.
+      // `leadTimeApproxCount` cuenta cuántos primeros commits son aproximados.
+      let leadTimeApproxCount = 0;
+      const changes = [];
+      for (const [i, pr] of prs.entries()) {
+        let firstCommitAt = pr.createdAt; // aproximación por defecto
+        if (i < MAX_COMMIT_LOOKUPS) {
+          try {
+            const commitDate = await fetchFirstCommitDate(repo.fullName, pr.number);
+            if (commitDate) firstCommitAt = commitDate;
+            else leadTimeApproxCount += 1; // respuesta sin fecha → aproximado
+          } catch {
+            leadTimeApproxCount += 1; // rate-limit u otro error → aproximado
+          }
+        } else {
+          leadTimeApproxCount += 1; // por encima del tope → aproximado
+        }
+        changes.push({ firstCommitAt, mergedAt: pr.mergedAt });
+      }
+
+      // Eventos de despliegue reales del repo (Admin SDK). El helper filtra success.
+      const deploySnap = await docSnap.ref.collection('deployments').get();
+      const deployEvents = deploySnap.docs.map((d) => d.data());
+      const realLead = computeLeadTimeCommitDeploy(changes, deployEvents);
+      metrics.leadTimeCommitDeployHoursAvg = realLead.leadTimeHoursAvg;
+      metrics.leadTimeCommitDeployHoursMedian = realLead.leadTimeHoursMedian;
+      metrics.changesDeployed = realLead.deployedCount;
+      metrics.changesPending = realLead.pendingCount;
+      metrics.leadTimeApproxCount = leadTimeApproxCount;
+
       await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: now, computedAt: now } }, { merge: true });
       results.push({ repo: repo.fullName, ok: true, ...metrics });
     } catch (err) {

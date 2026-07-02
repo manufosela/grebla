@@ -10,7 +10,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
  * @param {DoraRepoDoc[]} repos
- * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null, people: number }}
+ * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null, leadTimeCommitDeployHoursAvg: number|null, changesPending: number, leadTimeApproxCount: number, people: number }}
  */
 export function aggregateMetrics(repos) {
   const list = Array.isArray(repos) ? repos : [];
@@ -19,6 +19,11 @@ export function aggregateMetrics(repos) {
   let freq = 0;
   let leadWeighted = 0;
   let leadWeight = 0;
+  // Lead time REAL (commit→deploy): media ponderada por nº de cambios desplegados.
+  let realLeadWeighted = 0;
+  let realLeadWeight = 0;
+  let changesPending = 0;
+  let leadTimeApproxCount = 0;
   // Personas únicas del grupo: unión de logins, no suma (una persona en dos repos
   // del mismo equipo cuenta una vez).
   const people = new Set();
@@ -30,6 +35,12 @@ export function aggregateMetrics(repos) {
       leadWeighted += m.leadTimeHoursAvg * m.deployments;
       leadWeight += m.deployments;
     }
+    if (m.leadTimeCommitDeployHoursAvg != null && (m.changesDeployed ?? 0) > 0) {
+      realLeadWeighted += m.leadTimeCommitDeployHoursAvg * m.changesDeployed;
+      realLeadWeight += m.changesDeployed;
+    }
+    changesPending += m.changesPending ?? 0;
+    leadTimeApproxCount += m.leadTimeApproxCount ?? 0;
     for (const login of m.contributorLogins ?? []) people.add(login);
   }
   return {
@@ -38,6 +49,9 @@ export function aggregateMetrics(repos) {
     deployments,
     deployFrequencyPerWeek: round1(freq),
     leadTimeHoursAvg: leadWeight > 0 ? round1(leadWeighted / leadWeight) : null,
+    leadTimeCommitDeployHoursAvg: realLeadWeight > 0 ? round1(realLeadWeighted / realLeadWeight) : null,
+    changesPending,
+    leadTimeApproxCount,
     people: people.size,
   };
 }
