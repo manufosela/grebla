@@ -33,6 +33,25 @@ import {
 } from '../tools/career/data/framework.js';
 import { stats } from '../tools/career/application/usecases.js';
 
+/**
+ * Pestañas de «Mi espacio». El id (clave) sincroniza con `location.hash`
+ * (#carrera / #rolemirror / #mapa) para conservar la pestaña activa al recargar
+ * o navegar atrás/adelante, igual que el patrón de <superadmin-panel>.
+ * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'>}
+ */
+const TABS = ['carrera', 'rolemirror', 'mapa'];
+
+/**
+ * Metadatos de cada pestaña: etiqueta de la barra, encabezado del panel y clase
+ * CSS del panel (conserva los bordes de acento originales por sección).
+ * @type {Record<typeof TABS[number], { label: string, heading: string, cls: string }>}
+ */
+const TAB_META = {
+  carrera: { label: 'Mi carrera', heading: 'Mi carrera', cls: 'career' },
+  rolemirror: { label: 'Mi Role Mirror', heading: 'Mi Role Mirror', cls: 'rolemirror' },
+  mapa: { label: 'Mi mapa', heading: 'Mi mapa de carrera', cls: 'map' },
+};
+
 export class EngineerSpace extends LitElement {
   static properties = {
     person: { attribute: false },
@@ -41,10 +60,23 @@ export class EngineerSpace extends LitElement {
     roles: { attribute: false },
     island: { attribute: false },
     journey: { attribute: false },
+    _tab: { state: true },
   };
 
   static styles = css`
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
+
+    /* ── Barra de pestañas (patrón ARIA tablist) ── */
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .tab {
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    }
+    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .tab:hover:not(.active) { color: var(--rm-text, #111827); }
+    .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    section:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+
     section {
       background: var(--rm-surface, #fff);
       border: 1px solid var(--rm-border, #e5e7eb);
@@ -54,6 +86,7 @@ export class EngineerSpace extends LitElement {
     }
     section > h2 { margin: 0 0 0.75rem; font-size: 1.2rem; }
     section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
+    section.rolemirror { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; margin: 0; }
 
@@ -72,6 +105,22 @@ export class EngineerSpace extends LitElement {
     .addn ul { list-style: none; margin: 0; padding: 0; font-size: 0.83rem; }
     .addn li { padding: 0.25rem 0; }
     .addn .dim { font-weight: 600; }
+    .addn .folds { margin: 0.2rem 0 0; }
+
+    /* ── Ítems plegables (expectativas y addendums) ── */
+    .fold { border-top: 1px solid var(--rm-border, #eef0f2); }
+    .fold summary { cursor: pointer; padding: 0.45rem 0; font-size: 0.85rem; }
+    .fold summary::-webkit-details-marker { color: var(--rm-muted, #9ca3af); }
+    .fold summary:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
+    .fold .dim { font-weight: 700; }
+    .fold-body { font-size: 0.83rem; color: var(--rm-text, #111827); margin: 0.1rem 0 0.5rem; padding-left: 1.1rem; }
+    .fold-empty { display: flex; gap: 0.4rem; align-items: baseline; padding: 0.45rem 0; font-size: 0.85rem; }
+    .fold-empty .todo { color: var(--rm-muted, #9ca3af); font-style: italic; }
+    @media (prefers-reduced-motion: no-preference) {
+      .fold[open] .fold-body { animation: fold-in 0.16s ease-out; }
+      @keyframes fold-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+    }
+
     .aspire { list-style: none; margin: 0; padding: 0; }
     .aspire > li { border-top: 1px solid var(--rm-border, #eef0f2); }
     .aspire summary { cursor: pointer; padding: 0.45rem 0; font-size: 0.88rem; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
@@ -109,6 +158,112 @@ export class EngineerSpace extends LitElement {
     this.island = null;
     /** @type {Journey|null} */
     this.journey = null;
+    /** @type {typeof TABS[number]} pestaña activa (inicializada desde el hash) */
+    this._tab = TABS.includes(/** @type {any} */ (location.hash.slice(1)))
+      ? /** @type {typeof TABS[number]} */ (location.hash.slice(1))
+      : 'carrera';
+    // Mantiene la pestaña activa sincronizada con el hash (recarga / atrás-adelante).
+    this._onHashChange = () => {
+      const t = location.hash.slice(1);
+      if (TABS.includes(/** @type {any} */ (t))) this._tab = /** @type {typeof TABS[number]} */ (t);
+    };
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('hashchange', this._onHashChange);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('hashchange', this._onHashChange);
+    super.disconnectedCallback();
+  }
+
+  /**
+   * Cambia de pestaña escribiendo el hash (para conservar la selección al
+   * recargar y en el historial). El listener de `hashchange` actualiza `_tab`;
+   * si el hash ya coincide, se fija directamente.
+   * @param {typeof TABS[number]} tab
+   * @returns {void}
+   */
+  _setTab(tab) {
+    if (location.hash.slice(1) !== tab) location.hash = tab;
+    else this._tab = tab;
+  }
+
+  /**
+   * Navegación por teclado de la barra de pestañas (patrón ARIA tablist con
+   * activación automática): ←/→ recorren las pestañas de forma circular y
+   * Home/End saltan a la primera/última, moviendo el foco a la nueva pestaña.
+   * @param {KeyboardEvent} e
+   * @returns {void}
+   */
+  _onTabsKeydown(e) {
+    const i = TABS.indexOf(this._tab);
+    let next = i;
+    if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    else return;
+    e.preventDefault();
+    const tab = TABS[next];
+    this._setTab(tab);
+    // Tras el re-render, mueve el foco a la pestaña recién activada.
+    this.updateComplete.then(() => {
+      /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#tab-${tab}`))?.focus();
+    });
+  }
+
+  /**
+   * Ítem plegable (dimensión → texto) como `<details>` nativo. Si no hay texto
+   * (pendiente de definir), devuelve una fila estática sin desplegable: el
+   * titular ya comunica el estado y no hay cuerpo que revelar.
+   * @param {string} name Titular (nombre de la dimensión) mostrado en el summary.
+   * @param {string} [text] Texto completo revelado al desplegar.
+   * @returns {import('lit').TemplateResult}
+   */
+  _fold(name, text) {
+    return text
+      ? html`
+          <details class="fold">
+            <summary><span class="dim">${name}</span></summary>
+            <p class="fold-body">${text}</p>
+          </details>
+        `
+      : html`
+          <div class="fold fold-empty">
+            <span class="dim">${name}</span>
+            <span class="todo">pendiente de definir</span>
+          </div>
+        `;
+  }
+
+  /**
+   * Barra de pestañas accesible (tablist con roving tabindex): solo la pestaña
+   * activa es tabulable; las flechas mueven el foco y la selección.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderTabs() {
+    return html`
+      <div class="tabs" role="tablist" aria-label="Secciones de mi espacio" @keydown=${this._onTabsKeydown}>
+        ${TABS.map((tab) => {
+          const selected = this._tab === tab;
+          return html`
+            <button
+              id="tab-${tab}"
+              class="tab ${selected ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected=${selected ? 'true' : 'false'}
+              aria-controls="panel-${tab}"
+              tabindex=${selected ? '0' : '-1'}
+              @click=${() => this._setTab(tab)}
+            >${TAB_META[tab].label}</button>
+          `;
+        })}
+      </div>
+    `;
   }
 
   /**
@@ -149,18 +304,9 @@ export class EngineerSpace extends LitElement {
       ${level
         ? html`
             <p class="sub">Lo que se te reconoce</p>
-            <ul class="expect">
-              ${expectations.map(
-                (row) => html`
-                  <li>
-                    <span class="dim">${row.dimension.name}</span>:
-                    ${row.text
-                      ? html`<span class="txt">${row.text}</span>`
-                      : html`<span class="todo">pendiente de definir</span>`}
-                  </li>
-                `,
-              )}
-            </ul>
+            <div class="expect">
+              ${expectations.map((row) => this._fold(row.dimension.name, row.text))}
+            </div>
           `
         : null}
 
@@ -171,11 +317,9 @@ export class EngineerSpace extends LitElement {
               ${Object.values(addendumsByDiscipline).map(
                 (rows) => html`
                   <p class="disc">${rows.at(0).discipline.name}</p>
-                  <ul>
-                    ${rows.map(
-                      (a) => html`<li><span class="dim">${a.dimension.name}:</span> ${a.text}</li>`,
-                    )}
-                  </ul>
+                  <div class="folds">
+                    ${rows.map((a) => this._fold(a.dimension.name, a.text))}
+                  </div>
                 `,
               )}
             </div>
@@ -311,18 +455,25 @@ export class EngineerSpace extends LitElement {
   }
 
   render() {
+    const meta = TAB_META[this._tab];
+    // Cada pestaña reutiliza su método de render existente (sin duplicar lógica).
+    const panel = {
+      carrera: () => this._renderCareer(),
+      rolemirror: () => this._renderRoleMirror(),
+      mapa: () => this._renderMap(),
+    }[this._tab];
+
     return html`
-      <section class="career">
-        <h2>Mi carrera</h2>
-        ${this._renderCareer()}
-      </section>
-      <section class="rolemirror">
-        <h2>Mi Role Mirror</h2>
-        ${this._renderRoleMirror()}
-      </section>
-      <section class="map">
-        <h2>Mi mapa de carrera</h2>
-        ${this._renderMap()}
+      ${this._renderTabs()}
+      <section
+        id="panel-${this._tab}"
+        class="${meta.cls}"
+        role="tabpanel"
+        aria-labelledby="tab-${this._tab}"
+        tabindex="0"
+      >
+        <h2>${meta.heading}</h2>
+        ${panel()}
       </section>
     `;
   }
