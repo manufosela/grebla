@@ -50,7 +50,7 @@
  *
  * @typedef {Object} SupportNoteRepository   // R5: espacio separado, sin nivel
  * @property {(personId: string) => Promise<SupportNote[]>} listByPerson
- * @property {(personId: string, text: string) => Promise<string>} create
+ * @property {(personId: string, text: string, author?: { uid: string, name: string }) => Promise<string>} create
  * @property {(personId: string, id: string) => Promise<void>} remove
  *
  * @typedef {Object} ConfigRepository

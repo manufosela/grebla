@@ -53,6 +53,7 @@
  * @property {string} id
  * @property {string} text
  * @property {string} date
+ * @property {{ uid: string, name: string }} [createdBy]  Autor de la entrada (del login); ausente en registros antiguos.
  *
  * @typedef {'o2o'|'catchup'} ConversationType
  * @typedef {Object} FileRef
@@ -69,6 +70,7 @@
  * @property {string|null} [transcription]   // enganche IA (fase 2): se rellena a mano en MVP
  * @property {string|null} [summary]         // enganche IA (fase 2)
  * @property {string[]} [linkedDimensions]
+ * @property {{ uid: string, name: string }} [createdBy]  Autor de la entrada (del login); ausente en registros antiguos.
  *
  * @typedef {Object} Area
  * @property {string} id

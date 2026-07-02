@@ -83,6 +83,16 @@ describe('memory ConversationRepository', () => {
     expect((await repo.listByPerson('p1')).find((c) => c.id === id).notes).toBe('editado');
     await expect(repo.update('p1', 'noid', { notes: 'x' })).rejects.toThrow();
   });
+
+  it('persiste createdBy cuando viene en input y lo omite si es undefined', async () => {
+    const repo = createMemoryConversationRepository();
+    const author = { uid: 'u1', name: 'Ada' };
+    await repo.create('p1', { type: 'o2o', date: '2026-06-01', notes: 'a', createdBy: author });
+    await repo.create('p1', { type: 'o2o', date: '2026-06-02', notes: 'b', createdBy: undefined });
+    const list = await repo.listByPerson('p1');
+    expect(list.find((c) => c.notes === 'a').createdBy).toEqual(author);
+    expect(list.find((c) => c.notes === 'b')).not.toHaveProperty('createdBy');
+  });
 });
 
 describe('memory SupportNoteRepository (R5)', () => {
@@ -95,6 +105,18 @@ describe('memory SupportNoteRepository (R5)', () => {
     expect(notes[0]).not.toHaveProperty('level'); // R5: sin nivel
     await repo.remove('p1', id);
     expect(await repo.listByPerson('p1')).toEqual([]);
+  });
+
+  it('persiste createdBy cuando se pasa autor y lo omite si no', async () => {
+    const repo = createMemorySupportNoteRepository(() => '');
+    const author = { uid: 'u1', name: 'Ada' };
+    await repo.create('p1', 'con autor', author);
+    await repo.create('p1', 'sin autor');
+    const notes = await repo.listByPerson('p1');
+    const withAuthor = notes.find((n) => n.text === 'con autor');
+    const without = notes.find((n) => n.text === 'sin autor');
+    expect(withAuthor.createdBy).toEqual(author);
+    expect(without).not.toHaveProperty('createdBy'); // no se escribe undefined
   });
 });
 

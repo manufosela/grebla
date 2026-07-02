@@ -11,12 +11,13 @@
  * @param {PersistencePort} persistence
  * @param {string} personId
  * @param {string} text
+ * @param {{ uid: string, name: string }} [author]  Autor de la nota (del login). Opcional para no romper registros/llamadas antiguas.
  * @returns {Promise<string>}
  */
-export function addSupportNote(persistence, personId, text) {
+export function addSupportNote(persistence, personId, text, author) {
   const trimmed = String(text ?? '').trim();
   if (!trimmed) throw new Error('La nota de acompañamiento no puede estar vacía');
-  return persistence.supportNotes.create(personId, trimmed);
+  return persistence.supportNotes.create(personId, trimmed, author);
 }
 
 /**

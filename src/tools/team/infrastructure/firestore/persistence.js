@@ -192,7 +192,10 @@ function conversationRepo(db, base) {
       return mapDocs(await getDocs(query(convCol(db, base, personId), orderBy('date', 'asc'))));
     },
     async create(personId, input) {
-      const ref = await addDoc(convCol(db, base, personId), { ...input });
+      // Firestore rechaza `undefined`: no propagamos createdBy si no viene definido.
+      const data = { ...input };
+      if (data.createdBy === undefined) delete data.createdBy;
+      const ref = await addDoc(convCol(db, base, personId), data);
       return ref.id;
     },
     async update(personId, id, patch) {
@@ -206,8 +209,11 @@ function supportNoteRepo(db, base, now = () => new Date().toISOString()) {
     async listByPerson(personId) {
       return mapDocs(await getDocs(query(noteCol(db, base, personId), orderBy('date', 'asc'))));
     },
-    async create(personId, text) {
-      const ref = await addDoc(noteCol(db, base, personId), { text, date: now() });
+    async create(personId, text, author) {
+      // Firestore rechaza `undefined`: solo incluimos createdBy si hay autor.
+      const data = { text, date: now() };
+      if (author) data.createdBy = author;
+      const ref = await addDoc(noteCol(db, base, personId), data);
       return ref.id;
     },
     async remove(personId, id) {

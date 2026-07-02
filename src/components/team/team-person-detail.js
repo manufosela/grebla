@@ -25,6 +25,7 @@ import {
 } from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
+import { getCurrentUser } from '../../lib/auth.js';
 import {
   composeTitle,
   getLevel,
@@ -51,6 +52,30 @@ function formatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : dateFmt.format(d);
+}
+
+/**
+ * Autor de una entrada tomado del usuario logueado. Sin fallback silencioso para
+ * el uid: si no hay usuario con uid, devuelve undefined y no se registra autoría
+ * (degradación con gracia). El nombre visible sí admite ?? (displayName → email).
+ * @returns {{ uid: string, name: string }|undefined}
+ */
+function currentAuthor() {
+  const user = getCurrentUser();
+  if (!user?.uid) return undefined;
+  return { uid: user.uid, name: user.displayName ?? user.email ?? 'Usuario' };
+}
+
+/**
+ * Línea de autoría/fecha de una entrada (nota o conversación). Con autor muestra
+ * «por {nombre} · {fecha}»; sin autor (registros antiguos) solo la fecha.
+ * @param {{ date: string, createdBy?: { name: string } }} entry
+ * @returns {string}
+ */
+function authorLine(entry) {
+  const date = formatDate(entry.date);
+  const name = entry.createdBy?.name;
+  return name ? `por ${name} · ${date}` : date;
 }
 
 const DIMENSIONS = [
@@ -454,6 +479,7 @@ export class TeamPersonDetail extends LitElement {
         type: c.type,
         date: c.date || new Date().toISOString(),
         notes: c.notes.trim(),
+        createdBy: currentAuthor(),
       });
       this._conv = { type: 'o2o', date: '', notes: '' };
       await this._reload();
@@ -466,7 +492,7 @@ export class TeamPersonDetail extends LitElement {
     if (!this._noteText.trim()) return;
     this.error = '';
     try {
-      await addSupportNote(this.persistence, this.person.id, this._noteText.trim());
+      await addSupportNote(this.persistence, this.person.id, this._noteText.trim(), currentAuthor());
       this._noteText = '';
       await this._reload();
     } catch (err) {
@@ -715,7 +741,7 @@ export class TeamPersonDetail extends LitElement {
                 ${this.conversations.map(
                   (cv) => html`
                     <li>
-                      <span class="when">${formatDate(cv.date)}</span>
+                      <span class="when">${authorLine(cv)}</span>
                       <span class="lvl">${typeLabel(cv.type)}</span>
                       <span class="note">${cv.notes}</span>
                     </li>
@@ -754,7 +780,7 @@ export class TeamPersonDetail extends LitElement {
                 ${this.notes.map(
                   (n) => html`
                     <li>
-                      <span class="when">${formatDate(n.date)}</span>
+                      <span class="when">${authorLine(n)}</span>
                       <span class="note">${n.text}</span>
                       <span class="del">
                         ${this._confirmNote === n.id

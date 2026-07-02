@@ -23,10 +23,13 @@ export function createMemorySupportNoteRepository(now = () => new Date().toISOSt
       const list = byPerson.get(personId) ?? [];
       return [...list].sort(byDateAsc).map((n) => ({ ...n }));
     },
-    async create(personId, text) {
+    async create(personId, text, author) {
       const id = crypto.randomUUID();
       const list = byPerson.get(personId) ?? [];
-      list.push({ id, text, date: now() });
+      // Coherente con Firestore: solo añadimos createdBy si hay autor.
+      const note = { id, text, date: now() };
+      if (author) note.createdBy = author;
+      list.push(note);
       byPerson.set(personId, list);
       return id;
     },
