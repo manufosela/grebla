@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Reglas de Firebase Storage de GREBLA (modelo multi-leader, ADR
+// -OwN-T_4VB3Ut1Dbn-j8). Los ficheros de una persona (p. ej. audio de O2O) son
+// SENSIBLES: su acceso ESPEJA el de la persona en Firestore (/people/{personId}).
+// Convención de ruta OBLIGATORIA para las subidas: people/{personId}/...
+// Cualquier otra ruta queda denegada por defecto.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSuperAdmin() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    function isViewer() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/viewers/$(request.auth.uid));
+    }
+    // Datos de la persona en Firestore (para replicar su control de acceso).
+    function person(personId) {
+      return firestore.get(/databases/(default)/documents/people/$(personId)).data;
+    }
+    // Puede acceder a los ficheros de una persona quien puede acceder a la persona:
+    // superadmin, viewer (solo lectura, tipo C-level), el líder dueño o un líder
+    // con quien esté compartida (sharedWithUids, el espejo array de sharedWith).
+    // El ingeniero vinculado (person.uid) NO accede: el audio de O2O es material
+    // del líder, no del propio evaluado.
+    function canAccessPerson(personId) {
+      return isSuperAdmin() || isViewer()
+        || (isSignedIn()
+            && (person(personId).ownerLeaderUid == request.auth.uid
+                || ('sharedWithUids' in person(personId)
+                    && request.auth.uid in person(personId).sharedWithUids)));
+    }
+
+    // Ficheros de una persona: mismo acceso que la persona. Escritura limitada a
+    // 25 MB por objeto (audio de una conversación).
+    match /people/{personId}/{allPaths=**} {
+      allow read: if canAccessPerson(personId);
+      allow write: if canAccessPerson(personId)
+        && request.resource.size < 25 * 1024 * 1024;
+    }
+
+    // Resto: denegado por defecto.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
