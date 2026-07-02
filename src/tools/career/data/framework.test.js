@@ -80,10 +80,12 @@ describe('career — framework de carrera (helpers puros)', () => {
     expect(JSON.stringify(serialized)).not.toContain('undefined');
   });
 
-  it('la semilla incluye expectations y addendums vacíos (se cargan después)', () => {
+  it('la semilla incluye la matriz de expectativas y los addendums del documento', () => {
     const seed = seedFramework();
-    expect(seed.expectations).toEqual([]);
-    expect(seed.addendums).toEqual([]);
+    expect(seed.expectations.length).toBeGreaterThan(0);
+    expect(seed.addendums.length).toBeGreaterThan(0);
+    // cada expectativa referencia un nivel y una dimensión con texto
+    expect(seed.expectations.every((e) => e.levelId && e.dimensionId && e.text)).toBe(true);
   });
 
   it('normalizeFramework normaliza expectations y descarta celdas incompletas', () => {
@@ -283,9 +285,10 @@ describe('career — framework de carrera (helpers puros)', () => {
       const rows = aspirationalLevels(fw, 'l3');
       const ids = rows.map((r) => r.id);
       // primero el resto del propio track por order, luego las ramas por order
-      expect(ids).toEqual(['l4', 'l5', 'l3em', 'l4tl']);
+      // (l3tl y l3em ramifican en l3; l4tl también). L4-EM no (branchesFrom null).
+      expect(ids).toEqual(['l4', 'l5', 'l3tl', 'l3em', 'l4tl']);
       expect(ids).not.toContain('l4em'); // branchesFrom null → no es rama de l3
-      expect(rows.map((r) => r.code)).toEqual(['L4', 'L5', 'L3-EM', 'L4-TL']);
+      expect(rows.map((r) => r.code)).toEqual(['L4', 'L5', 'L3-TL', 'L3-EM', 'L4-TL']);
     });
 
     it('devuelve el subconjunto de campos esperado', () => {

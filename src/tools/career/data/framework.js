@@ -57,6 +57,8 @@
  * cuando todavía no existe el documento /careerFramework/engineering.
  * @type {CareerFramework}
  */
+import { EXPECTATIONS, ADDENDUMS } from './frameworkContent.js';
+
 export const ENGINEERING_FRAMEWORK = {
   id: 'engineering',
   name: 'Engineering',
@@ -71,6 +73,7 @@ export const ENGINEERING_FRAMEWORK = {
     { id: 'l3', code: 'L3', title: 'Senior Engineer II', trackId: 'ic', order: 3, description: 'Mejora consistentemente el trabajo de quienes le rodean; su criterio técnico moldea cómo construye el equipo.', typicalProfile: '6+ años', branchesFrom: null },
     { id: 'l4', code: 'L4', title: 'Staff Engineer', trackId: 'ic', order: 4, description: 'Impacto más allá de su equipo; multiplicador de la calidad y dirección de la organización.', typicalProfile: '7+ años', branchesFrom: null },
     { id: 'l5', code: 'L5', title: 'Principal Engineer', trackId: 'ic', order: 5, description: 'Una de las voces técnicas más senior de la empresa; su influencia va más allá de su disciplina.', typicalProfile: '10+ años', branchesFrom: null },
+    { id: 'l3tl', code: 'L3-TL', title: 'Tech Lead', trackId: 'tl', order: 3, description: 'Liderazgo técnico de un equipo: calidad y arquitectura del trabajo del equipo, design reviews y desarrollo de los ingenieros. No es people manager.', typicalProfile: '', branchesFrom: 'l3' },
     { id: 'l4tl', code: 'L4-TL', title: 'Architect', trackId: 'tl', order: 4, description: 'Dirección técnica a largo plazo de un dominio; define principios y estándares de arquitectura.', typicalProfile: '', branchesFrom: 'l3' },
     { id: 'l3em', code: 'L3-EM', title: 'Engineering Manager', trackId: 'em', order: 3, description: 'Responsable de un equipo (4–8 personas): crecimiento, desempeño, contratación y dinámica.', typicalProfile: '', branchesFrom: 'l3' },
     { id: 'l4em', code: 'L4-EM', title: 'Senior Engineering Manager', trackId: 'em', order: 4, description: 'Salud organizativa de varios equipos o un dominio; desarrolla Engineering Managers.', typicalProfile: '', branchesFrom: null },
@@ -90,10 +93,10 @@ export const ENGINEERING_FRAMEWORK = {
     { id: 'leadership', name: 'Leadership & Collaboration', order: 5, description: 'Mentoría, comunicación y hacer mejor al equipo que te rodea.' },
     { id: 'culture', name: 'Cultural Contribution', order: 6, description: 'Cómo contribuyes a la cultura (honestidad, ownership, respeto, cuidar el listón del equipo).' },
   ],
-  // La matriz de expectativas y los addendums se editan/cargan desde el panel;
-  // la semilla en código va vacía (no inventamos el contenido del documento).
-  expectations: [],
-  addendums: [],
+  // Matriz de expectativas (Nivel × Dimensión) y addendums por disciplina:
+  // contenido del documento de carrera de TRIBBU (ver frameworkContent.js).
+  expectations: EXPECTATIONS,
+  addendums: ADDENDUMS,
 };
 
 /**
