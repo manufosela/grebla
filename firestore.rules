@@ -181,6 +181,17 @@ service cloud.firestore {
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
       allow delete: if isSuperAdmin()
         || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
+
+      // Eventos de despliegue real de un repo (registro manual; base de la
+      // frecuencia real, y luego de Lead Time/CFR/MTTR). Los gestiona el líder
+      // dueño del repo (comprobando el ownerLeaderUid del doc padre) o el superadmin.
+      match /deployments/{deployId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isSuperAdmin()
+          || (isLeader()
+              && 'ownerLeaderUid' in get(/databases/$(database)/documents/dora/$(repoId)).data
+              && get(/databases/$(database)/documents/dora/$(repoId)).data.ownerLeaderUid == request.auth.uid);
+      }
     }
 
     // Mapa de Carrera: el journey de cada persona, solo suyo.

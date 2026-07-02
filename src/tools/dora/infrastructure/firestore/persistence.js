@@ -13,6 +13,8 @@ import { doc, collection, addDoc, getDocs, setDoc, deleteDoc, query, where } fro
 
 const reposCol = (db) => collection(db, 'dora');
 const repoDoc = (db, id) => doc(db, 'dora', id);
+const deploymentsCol = (db, repoId) => collection(db, 'dora', repoId, 'deployments');
+const deploymentDoc = (db, repoId, id) => doc(db, 'dora', repoId, 'deployments', id);
 
 /**
  * @param {Firestore} db
@@ -44,6 +46,26 @@ export function createFirestoreDoraPersistence(db, leaderUid, options = {}) {
       },
       async remove(id) {
         await deleteDoc(repoDoc(db, id));
+      },
+    },
+    deployments: {
+      async add(repoId, event) {
+        // `createdBy` solo se guarda si viene (no se estampa vacío). Sin
+        // fallbacks silenciosos sobre datos críticos: el evento se persiste tal
+        // cual lo normaliza el caso de uso.
+        const ref = await addDoc(deploymentsCol(db, repoId), { ...event });
+        return ref.id;
+      },
+      async listByRepo(repoId) {
+        // Se ordena en cliente por `at` desc para no exigir un índice compuesto
+        // ni depender del formato guardado; `at` es siempre ISO 8601 (ordenable).
+        const snap = await getDocs(deploymentsCol(db, repoId));
+        return snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      },
+      async remove(repoId, id) {
+        await deleteDoc(deploymentDoc(db, repoId, id));
       },
     },
   };

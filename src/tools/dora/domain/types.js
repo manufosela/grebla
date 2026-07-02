@@ -16,6 +16,25 @@
  * @property {string} [createdAt]
  */
 
+/**
+ * Evento de despliegue REAL de un repo (subcolección /dora/{repoId}/deployments).
+ * Es la base de la Frecuencia de despliegue real (y, más adelante, del Lead Time
+ * a producción, CFR y MTTR). El modelo es AGNÓSTICO a la fuente: hoy se registra
+ * a mano desde la tool DORA; en el futuro lo poblará una ingesta automática
+ * (GitHub Deployments API / hook de CI). Las métricas son de equipo, nunca por
+ * persona; `createdBy` solo identifica quién registró el evento en la app.
+ *
+ * @typedef {Object} Deployment
+ * @property {string} id
+ * @property {string} at            Marca de tiempo del despliegue (ISO 8601).
+ * @property {string|null} [sha]    Commit desplegado (opcional).
+ * @property {'production'} environment  Entorno; por ahora siempre 'production'.
+ * @property {'success'|'failed'} status  Resultado del despliegue.
+ * @property {string} [note]        Nota libre opcional.
+ * @property {{ uid: string, name: string }} [createdBy]  Quién lo registró en la app.
+ * @property {string} [createdAt]   Cuándo se registró (ISO 8601).
+ */
+
 /** Formato "owner/repo" (caracteres válidos de GitHub). */
 const FULL_NAME_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 
