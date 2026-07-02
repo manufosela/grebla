@@ -284,3 +284,120 @@ export function composeTitle(framework, levelId, disciplineIds) {
   if (levelTitle && disciplinesText) return `${levelTitle} · ${disciplinesText}`;
   return levelTitle || disciplinesText;
 }
+
+/**
+ * Expectativa de un nivel para una dimensión concreta.
+ * @typedef {Object} LevelExpectation
+ * @property {{ id: string, name: string, order: number }} dimension  dimensión (subconjunto)
+ * @property {string} text  expectativa del nivel en esa dimensión ('' si no está definida)
+ *
+ * Addendum «resuelto» (con disciplina y dimensión ya expandidas a nombre).
+ * @typedef {Object} ResolvedAddendum
+ * @property {{ id: string, name: string }} discipline
+ * @property {{ id: string, name: string }} dimension
+ * @property {string} text
+ *
+ * Nivel al que aspirar desde el nivel actual (subconjunto de {@link Level}).
+ * @typedef {Object} AspirationalLevel
+ * @property {string} id
+ * @property {string} code
+ * @property {string} title
+ * @property {string} trackId
+ * @property {string} description
+ * @property {string} typicalProfile
+ */
+
+/**
+ * Devuelve el objeto nivel del framework por su id, o null si no existe. Función
+ * PURA (sin Firebase).
+ * @param {CareerFramework|null|undefined} framework
+ * @param {string|null|undefined} levelId
+ * @returns {Level|null}
+ */
+export function getLevel(framework, levelId) {
+  if (!levelId) return null;
+  const levels = framework?.levels ?? [];
+  return levels.find((l) => l.id === levelId) ?? null;
+}
+
+/**
+ * Expectativas de un nivel, UNA por cada dimensión existente (ordenadas por
+ * `dimension.order`). Une la matriz de expectations con el catálogo de
+ * dimensions: si no hay texto para una dimensión, `text` es ''. Función PURA.
+ * @param {CareerFramework|null|undefined} framework
+ * @param {string|null|undefined} levelId
+ * @returns {LevelExpectation[]}
+ */
+export function expectationsForLevel(framework, levelId) {
+  const dimensions = (framework?.dimensions ?? []).toSorted(byOrder);
+  const expectations = framework?.expectations ?? [];
+  return dimensions.map((dim) => {
+    const cell = levelId
+      ? expectations.find((e) => e.levelId === levelId && e.dimensionId === dim.id)
+      : null;
+    return {
+      dimension: { id: dim.id, name: dim.name, order: dim.order },
+      text: String(cell?.text ?? '').trim(),
+    };
+  });
+}
+
+/**
+ * Addendums (sección 10) de las disciplinas indicadas que tengan texto, con
+ * disciplina y dimensión ya resueltas a {id,name}. Ordenados por
+ * `discipline.order` y luego `dimension.order`. Función PURA.
+ * @param {CareerFramework|null|undefined} framework
+ * @param {string[]|null|undefined} disciplineIds
+ * @returns {ResolvedAddendum[]}
+ */
+export function addendumsForDisciplines(framework, disciplineIds) {
+  const ids = Array.isArray(disciplineIds) ? disciplineIds : [];
+  if (ids.length === 0) return [];
+  const byId = (arr) => new Map((arr ?? []).map((x) => [x.id, x]));
+  const disciplines = byId(framework?.disciplines);
+  const dimensions = byId(framework?.dimensions);
+  return (framework?.addendums ?? [])
+    .map((a) => ({
+      discipline: disciplines.get(a.disciplineId),
+      dimension: dimensions.get(a.dimensionId),
+      text: String(a.text ?? '').trim(),
+    }))
+    .filter((r) => r.text && r.discipline && r.dimension && ids.includes(r.discipline.id))
+    .toSorted((a, b) => a.discipline.order - b.discipline.order || a.dimension.order - b.dimension.order)
+    .map((r) => ({
+      discipline: { id: r.discipline.id, name: r.discipline.name },
+      dimension: { id: r.dimension.id, name: r.dimension.name },
+      text: r.text,
+    }));
+}
+
+/**
+ * Niveles «a los que aspirar» desde el nivel actual. Combina:
+ *  (a) el resto del propio track (niveles con `order` mayor que el actual), y
+ *  (b) las ramas: niveles cuyo `branchesFrom` apunta al nivel actual.
+ * Devuelve primero el resto del track (por `order`) y luego las ramas (por
+ * `order`), sin duplicados. Función PURA.
+ * @param {CareerFramework|null|undefined} framework
+ * @param {string|null|undefined} levelId
+ * @returns {AspirationalLevel[]}
+ */
+export function aspirationalLevels(framework, levelId) {
+  const current = getLevel(framework, levelId);
+  if (!current) return [];
+  const levels = framework?.levels ?? [];
+  const sameTrack = levels
+    .filter((l) => l.trackId === current.trackId && l.order > current.order)
+    .toSorted(byOrder);
+  const seen = new Set(sameTrack.map((l) => l.id));
+  const branches = levels
+    .filter((l) => l.branchesFrom === current.id && !seen.has(l.id))
+    .toSorted(byOrder);
+  return [...sameTrack, ...branches].map((l) => ({
+    id: l.id,
+    code: l.code,
+    title: l.title,
+    trackId: l.trackId,
+    description: l.description,
+    typicalProfile: l.typicalProfile,
+  }));
+}
