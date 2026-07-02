@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { ENGINEERING_FRAMEWORK, seedFramework, normalizeFramework, serializeFramework, composeTitle } from './framework.js';
+import {
+  ENGINEERING_FRAMEWORK,
+  seedFramework,
+  normalizeFramework,
+  serializeFramework,
+  composeTitle,
+  getLevel,
+  expectationsForLevel,
+  addendumsForDisciplines,
+  aspirationalLevels,
+} from './framework.js';
 
 describe('career — framework de carrera (helpers puros)', () => {
   it('seedFramework devuelve una copia profunda del framework (fallback)', () => {
@@ -174,6 +184,123 @@ describe('career — framework de carrera (helpers puros)', () => {
       expect(composeTitle(fw, undefined, undefined)).toBe('');
       expect(composeTitle(fw, 'noexiste', ['tampoco'])).toBe('');
       expect(composeTitle(null, 'l3', ['backend'])).toBe('');
+    });
+  });
+
+  describe('getLevel — nivel por id', () => {
+    const fw = seedFramework();
+
+    it('devuelve el objeto nivel cuando existe', () => {
+      expect(getLevel(fw, 'l3')).toMatchObject({ id: 'l3', code: 'L3', title: 'Senior Engineer II', trackId: 'ic' });
+    });
+
+    it('devuelve null para id inexistente, vacío o framework nulo', () => {
+      expect(getLevel(fw, 'noexiste')).toBeNull();
+      expect(getLevel(fw, null)).toBeNull();
+      expect(getLevel(fw, '')).toBeNull();
+      expect(getLevel(null, 'l3')).toBeNull();
+    });
+  });
+
+  describe('expectationsForLevel — una expectativa por dimensión', () => {
+    const fw = {
+      ...seedFramework(),
+      expectations: [
+        { levelId: 'l2', dimensionId: 'reliability', text: 'Vela por la fiabilidad de su área' },
+        { levelId: 'l2', dimensionId: 'tech', text: 'Escribe código sólido y mantenible' },
+        { levelId: 'l3', dimensionId: 'tech', text: 'otro nivel, se ignora' },
+      ],
+    };
+
+    it('devuelve una entrada por dimensión, ordenadas por dimension.order', () => {
+      const rows = expectationsForLevel(fw, 'l2');
+      expect(rows).toHaveLength(fw.dimensions.length); // 6 dimensiones
+      expect(rows.map((r) => r.dimension.id)).toEqual(['tech', 'reliability', 'product', 'execution', 'leadership', 'culture']);
+    });
+
+    it('rellena el texto de la expectativa del nivel y deja "" donde no hay', () => {
+      const rows = expectationsForLevel(fw, 'l2');
+      const byDim = Object.fromEntries(rows.map((r) => [r.dimension.id, r.text]));
+      expect(byDim.tech).toBe('Escribe código sólido y mantenible');
+      expect(byDim.reliability).toBe('Vela por la fiabilidad de su área');
+      expect(byDim.product).toBe(''); // sin expectativa definida
+    });
+
+    it('sin levelId → todas las dimensiones con texto vacío', () => {
+      const rows = expectationsForLevel(fw, null);
+      expect(rows).toHaveLength(fw.dimensions.length);
+      expect(rows.every((r) => r.text === '')).toBe(true);
+    });
+  });
+
+  describe('addendumsForDisciplines — foco por disciplina (sección 10)', () => {
+    const fw = {
+      ...seedFramework(),
+      addendums: [
+        { disciplineId: 'web', dimensionId: 'reliability', text: 'Core Web Vitals y presupuesto de rendimiento' },
+        { disciplineId: 'web', dimensionId: 'tech', text: 'Arquitectura frontend y design systems' },
+        { disciplineId: 'backend', dimensionId: 'tech', text: 'Diseño de APIs y modelado de datos' },
+        { disciplineId: 'backend', dimensionId: 'tech', text: '   ' }, // sin texto → fuera
+        { disciplineId: 'data', dimensionId: 'tech', text: 'Pipelines (no seleccionada)' },
+      ],
+    };
+
+    it('solo los addendums de las disciplinas indicadas y con texto', () => {
+      const rows = addendumsForDisciplines(fw, ['backend', 'web']);
+      expect(rows.map((r) => r.text)).not.toContain('Pipelines (no seleccionada)');
+      expect(rows).toHaveLength(3);
+    });
+
+    it('ordena por discipline.order y luego dimension.order, resolviendo nombres', () => {
+      const rows = addendumsForDisciplines(fw, ['web', 'backend']);
+      // backend (order 1) antes que web (order 3); dentro de web, tech (1) antes que reliability (2)
+      expect(rows.map((r) => [r.discipline.id, r.dimension.id])).toEqual([
+        ['backend', 'tech'],
+        ['web', 'tech'],
+        ['web', 'reliability'],
+      ]);
+      expect(rows[0]).toMatchObject({ discipline: { id: 'backend', name: 'Backend' }, dimension: { id: 'tech', name: 'Technical Excellence' } });
+    });
+
+    it('sin disciplinas o framework nulo → []', () => {
+      expect(addendumsForDisciplines(fw, [])).toEqual([]);
+      expect(addendumsForDisciplines(fw, null)).toEqual([]);
+      expect(addendumsForDisciplines(null, ['web'])).toEqual([]);
+    });
+  });
+
+  describe('aspirationalLevels — a qué aspirar desde el nivel actual', () => {
+    const fw = seedFramework();
+
+    it('desde L2 (IC) salen L3/L4/L5 del mismo track (sin ramas)', () => {
+      const rows = aspirationalLevels(fw, 'l2');
+      expect(rows.map((r) => r.id)).toEqual(['l3', 'l4', 'l5']);
+      expect(rows.every((r) => r.trackId === 'ic')).toBe(true);
+      expect(rows[0]).toMatchObject({ code: 'L3', title: 'Senior Engineer II' });
+    });
+
+    it('desde L3 (IC) salen L4/L5 IC y las ramas con branchesFrom l3 (L4-TL, L3-EM), no L4-EM', () => {
+      const rows = aspirationalLevels(fw, 'l3');
+      const ids = rows.map((r) => r.id);
+      // primero el resto del propio track por order, luego las ramas por order
+      expect(ids).toEqual(['l4', 'l5', 'l3em', 'l4tl']);
+      expect(ids).not.toContain('l4em'); // branchesFrom null → no es rama de l3
+      expect(rows.map((r) => r.code)).toEqual(['L4', 'L5', 'L3-EM', 'L4-TL']);
+    });
+
+    it('devuelve el subconjunto de campos esperado', () => {
+      const [first] = aspirationalLevels(fw, 'l3');
+      expect(Object.keys(first).toSorted()).toEqual(['code', 'description', 'id', 'title', 'trackId', 'typicalProfile']);
+    });
+
+    it('nivel inexistente o sin nivel → []', () => {
+      expect(aspirationalLevels(fw, 'noexiste')).toEqual([]);
+      expect(aspirationalLevels(fw, null)).toEqual([]);
+      expect(aspirationalLevels(null, 'l3')).toEqual([]);
+    });
+
+    it('desde el último nivel del track sin ramas → []', () => {
+      expect(aspirationalLevels(fw, 'l5')).toEqual([]);
     });
   });
 });

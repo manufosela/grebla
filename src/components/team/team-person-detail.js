@@ -24,7 +24,13 @@ import {
 } from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
-import { composeTitle } from '../../tools/career/data/framework.js';
+import {
+  composeTitle,
+  getLevel,
+  expectationsForLevel,
+  addendumsForDisciplines,
+  aspirationalLevels,
+} from '../../tools/career/data/framework.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -124,6 +130,33 @@ export class TeamPersonDetail extends LitElement {
     .belbin-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
     .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .bias { font-size: 0.78rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 0 0.75rem; }
+    section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
+    section.career > details > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; }
+    section.career > details > summary::-webkit-details-marker { display: none; }
+    section.career > details > summary h3 { display: inline; }
+    section.career > details > summary::before { content: '▸'; color: var(--rm-muted, #9ca3af); font-size: 0.8rem; transition: transform 0.15s ease; }
+    section.career > details[open] > summary::before { transform: rotate(90deg); }
+    .career .sub { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); margin: 1.1rem 0 0.35rem; }
+    .career .now .code { font-weight: 700; }
+    .career .now .desc { font-size: 0.85rem; color: var(--rm-text, #111827); margin: 0.2rem 0 0; }
+    .career .now .profile { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0.2rem 0 0; }
+    .career .expect { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
+    .career .expect li { padding: 0.4rem 0; border-top: 1px solid var(--rm-border, #eef0f2); }
+    .career .expect .dim { font-weight: 700; }
+    .career .expect .txt { color: var(--rm-text, #111827); }
+    .career .expect .todo { color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .career .addn { margin: 0.3rem 0 0; }
+    .career .addn .disc { font-weight: 700; font-size: 0.85rem; margin: 0.6rem 0 0.2rem; }
+    .career .addn ul { list-style: none; margin: 0; padding: 0; font-size: 0.83rem; }
+    .career .addn li { padding: 0.25rem 0; }
+    .career .addn .dim { font-weight: 600; }
+    .career .aspire { list-style: none; margin: 0; padding: 0; }
+    .career .aspire > li { border-top: 1px solid var(--rm-border, #eef0f2); }
+    .career .aspire summary { cursor: pointer; padding: 0.45rem 0; font-size: 0.88rem; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+    .career .aspire summary::-webkit-details-marker { color: var(--rm-muted, #9ca3af); }
+    .career .aspire .code { font-weight: 700; }
+    .career .aspire .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; }
+    .career .aspire .desc { font-size: 0.82rem; color: var(--rm-muted, #4b5563); margin: 0 0 0.5rem; padding-left: 1.1rem; }
   `;
 
   constructor() {
@@ -561,6 +594,104 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
+  /**
+   * Sección «Carrera» (F4): solo lectura. Muestra el nivel actual y sus
+   * expectativas, el foco por disciplina (addendums) y los niveles a los que
+   * aspirar. Se omite si la persona no tiene ni nivel ni disciplinas.
+   */
+  _renderCareer() {
+    const fw = this.framework;
+    const disciplineIds = this.person.disciplines ?? [];
+    const level = getLevel(fw, this.person.levelId);
+    if (!level && disciplineIds.length === 0) return null;
+
+    const trackName = (trackId) => (fw?.tracks ?? []).find((t) => t.id === trackId)?.name ?? '';
+    const expectations = level ? expectationsForLevel(fw, this.person.levelId) : [];
+    const addendums = addendumsForDisciplines(fw, disciplineIds);
+    const addendumsByDiscipline = Object.groupBy(addendums, (a) => a.discipline.id);
+    const aspirations = level ? aspirationalLevels(fw, this.person.levelId) : [];
+
+    return html`
+      <section class="career">
+        <details open>
+        <summary><h3>Carrera</h3></summary>
+
+        <p class="sub">Nivel actual</p>
+        ${level
+          ? html`
+              <div class="now">
+                <p><span class="code">${level.code}</span> · ${level.title}</p>
+                ${level.description ? html`<p class="desc">${level.description}</p>` : null}
+                ${level.typicalProfile ? html`<p class="profile">Perfil típico: ${level.typicalProfile}</p>` : null}
+              </div>
+            `
+          : html`<p class="empty">Sin nivel asignado.</p>`}
+
+        ${level
+          ? html`
+              <p class="sub">Lo que se te reconoce</p>
+              <ul class="expect">
+                ${expectations.map(
+                  (row) => html`
+                    <li>
+                      <span class="dim">${row.dimension.name}</span>:
+                      ${row.text
+                        ? html`<span class="txt">${row.text}</span>`
+                        : html`<span class="todo">pendiente de definir</span>`}
+                    </li>
+                  `,
+                )}
+              </ul>
+            `
+          : null}
+
+        ${addendums.length > 0
+          ? html`
+              <p class="sub">Enfoque por disciplina</p>
+              <div class="addn">
+                ${Object.values(addendumsByDiscipline).map(
+                  (rows) => html`
+                    <p class="disc">${rows[0].discipline.name}</p>
+                    <ul>
+                      ${rows.map(
+                        (a) => html`<li><span class="dim">${a.dimension.name}:</span> ${a.text}</li>`,
+                      )}
+                    </ul>
+                  `,
+                )}
+              </div>
+            `
+          : null}
+
+        ${level
+          ? html`
+              <p class="sub">A qué aspirar</p>
+              ${aspirations.length === 0
+                ? html`<p class="empty">No hay siguientes niveles definidos desde aquí.</p>`
+                : html`
+                    <ul class="aspire">
+                      ${aspirations.map(
+                        (l) => html`
+                          <li>
+                            <details>
+                              <summary>
+                                <span><span class="code">${l.code}</span> · ${l.title}</span>
+                                ${trackName(l.trackId) ? html`<span class="track">${trackName(l.trackId)}</span>` : null}
+                              </summary>
+                              ${l.description ? html`<p class="desc">${l.description}</p>` : null}
+                            </details>
+                          </li>
+                        `,
+                      )}
+                    </ul>
+                  `}
+            `
+          : null}
+        </details>
+      </section>
+    `;
+  }
+
   render() {
     if (!this.person) return null;
     const title = composeTitle(this.framework, this.person.levelId, this.person.disciplines);
@@ -583,6 +714,7 @@ export class TeamPersonDetail extends LitElement {
       ${this.loading
         ? html`<p class="empty">Cargando…</p>`
         : html`
+            ${this._renderCareer()}
             ${DIMENSIONS.map((d) => this._renderDimension(d))}
             ${this._renderKnowledge()}
             ${this._renderContribution()}
