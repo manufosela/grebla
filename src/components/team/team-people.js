@@ -100,6 +100,12 @@ export class TeamPeople extends LitElement {
     .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #111827); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
     .title { font-weight: 600; color: var(--rm-text, #111827); }
     .muted { color: var(--rm-muted, #9ca3af); }
+    .link-inline {
+      border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
+    }
+    .link-inline:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
+    .fw-hint a { color: var(--rm-accent, #2a9d8f); font-weight: 700; }
     input, select {
       padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem;
@@ -447,6 +453,33 @@ export class TeamPeople extends LitElement {
     );
   }
 
+  /**
+   * Pide a `<team-app>` que cambie de sección principal (p. ej. «Ajustes» para
+   * gestionar gremios/labels) mediante el evento burbujeante `goto-tab`.
+   * @param {string} tab
+   * @returns {void}
+   */
+  _gotoTab(tab) {
+    this.dispatchEvent(
+      new CustomEvent('goto-tab', { detail: { tab }, bubbles: true, composed: true }),
+    );
+  }
+
+  /**
+   * Mensaje de salida cuando falta configuración del framework de carrera
+   * (disciplinas o niveles). El framework lo gestiona el superadministrador en
+   * `/admin#careerFramework`; si el usuario no lo es, solo se informa (sin
+   * dead-end silencioso).
+   * @param {string} what  qué falta ("disciplinas" | "niveles")
+   * @returns {import('lit').TemplateResult}
+   */
+  _frameworkHint(what) {
+    return this.isAdmin
+      ? html`<span class="muted fw-hint">No hay ${what} en el framework de carrera.
+          <a href="/admin#careerFramework">Configúralo en el panel de administración</a>.</span>`
+      : html`<span class="muted">No hay ${what} en el framework de carrera. Los gestiona el superadministrador.</span>`;
+  }
+
   async _deactivate(id) {
     this._confirmOff = null;
     this.error = '';
@@ -647,7 +680,7 @@ export class TeamPeople extends LitElement {
         <legend>Disciplinas</legend>
         <div class="role-checks">
           ${disciplines.length === 0
-            ? html`<span class="muted">No hay disciplinas en el framework de carrera.</span>`
+            ? this._frameworkHint('disciplinas')
             : disciplines.map(
                 (d) => html`
                   <label class="role-check">
@@ -677,6 +710,11 @@ export class TeamPeople extends LitElement {
     const groups = tracks
       .map((t) => ({ track: t, levels: levels.filter((l) => l.trackId === t.id) }))
       .filter((g) => g.levels.length > 0);
+    // Sin niveles no hay nada que elegir: en vez de un desplegable vacío (dead-end),
+    // se informa de dónde se configuran (o se enlaza si el usuario es superadmin).
+    if (groups.length === 0) {
+      return html`<label>Nivel ${this._frameworkHint('niveles')}</label>`;
+    }
     return html`
       <label>Nivel
         <select .value=${value ?? ''} @change=${(e) => onChange(e.target.value)}>
@@ -802,7 +840,8 @@ export class TeamPeople extends LitElement {
                   <legend>Gremios</legend>
                   <div class="edit-checks">
                     ${this.guilds.length === 0
-                      ? html`<span class="muted">Aún no hay gremios.</span>`
+                      ? html`<span class="muted">Aún no hay gremios.
+                          <button type="button" class="link-inline" @click=${() => this._gotoTab('settings')}>Gestiónalos en Ajustes</button>.</span>`
                       : this.guilds.map(
                           (g) => html`
                             <label class="role-check">
@@ -821,7 +860,8 @@ export class TeamPeople extends LitElement {
                   <legend>Labels</legend>
                   <div class="edit-checks">
                     ${this.labels.length === 0
-                      ? html`<span class="muted">Aún no hay labels.</span>`
+                      ? html`<span class="muted">Aún no hay labels.
+                          <button type="button" class="link-inline" @click=${() => this._gotoTab('settings')}>Gestiónalos en Ajustes</button>.</span>`
                       : this.labels.map(
                           (l) => html`
                             <label class="role-check">
@@ -944,7 +984,7 @@ export class TeamPeople extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Nombre</th><th>Título</th><th>Gremios</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
+                    <tr><th>Nombre</th><th>Carrera</th><th>Gremios</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
                   </thead>
                   <tbody>
                     ${this.people.map(

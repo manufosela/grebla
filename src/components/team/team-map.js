@@ -47,6 +47,23 @@ export class TeamMap extends LitElement {
     .legend .lvl { gap: 0.3rem; }
     .empty { color: var(--rm-muted, #9ca3af); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
+    tbody tr:hover td { background: var(--rm-surface-hover, #f9fafb); }
+    /* Nombre de persona como enlace: abre su ficha (sub-pestaña por defecto). */
+    .link {
+      border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; font-weight: 600; text-align: left; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
+    }
+    /* Celda de dimensión clicable: abre la ficha en esa sub-pestaña sin alterar el aspecto. */
+    .cell-link {
+      display: block; width: 100%; border: 0; background: none; padding: 0; margin: 0;
+      font: inherit; color: inherit; text-align: left; cursor: pointer;
+    }
+    .link:focus-visible, .cell-link:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
+    .link-inline {
+      border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
+    }
+    .link-inline:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
   `;
 
   constructor() {
@@ -112,6 +129,54 @@ export class TeamMap extends LitElement {
     </span>`;
   }
 
+  /**
+   * Pide a `<team-app>` que abra la ficha de una persona. Reutiliza el mismo
+   * evento burbujeante que emite `<team-people>`, pero con `personId` (el Mapa
+   * no dispone del objeto completo; `<team-app>` lo resuelve por id). `subtab`
+   * es opcional y abre la ficha directamente en esa dimensión.
+   * @param {string} personId
+   * @param {string} [subtab]
+   * @returns {void}
+   */
+  _open(personId, subtab) {
+    this.dispatchEvent(
+      new CustomEvent('open-person', {
+        detail: subtab ? { personId, subtab } : { personId },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /**
+   * Pide a `<team-app>` que cambie de sección principal (p. ej. «Personas»).
+   * @param {string} tab
+   * @returns {void}
+   */
+  _gotoTab(tab) {
+    this.dispatchEvent(
+      new CustomEvent('goto-tab', { detail: { tab }, bubbles: true, composed: true }),
+    );
+  }
+
+  /**
+   * Envuelve el contenido de una celda de dimensión en un botón que abre la ficha
+   * en la sub-pestaña correspondiente (accesible: enfocable y activable por teclado).
+   * @param {{ id: string, name: string }} row
+   * @param {string} subtab  id de la dimensión (seniority/emotional/knowledge/contribution)
+   * @param {string} label   nombre visible de la dimensión (para el aria-label)
+   * @param {import('lit').TemplateResult} content
+   * @returns {import('lit').TemplateResult}
+   */
+  _dimButton(row, subtab, label, content) {
+    return html`<button
+      type="button"
+      class="cell-link"
+      @click=${() => this._open(row.id, subtab)}
+      aria-label=${`Abrir ${label} de ${row.name}`}
+    >${content}</button>`;
+  }
+
   render() {
     if (this.loading) return html`<p class="empty">Cargando mapa…</p>`;
     if (this.error) return html`<p class="error">${this.error}</p>`;
@@ -123,7 +188,9 @@ export class TeamMap extends LitElement {
           la mezcla indica diversidad sana. Es una lectura privada de quien lidera, no una comparación entre personas.
         </p>
         ${this.rows.length === 0
-          ? html`<p class="empty">Aún no hay personas con lecturas.</p>`
+          ? html`<p class="empty">Aún no hay personas con lecturas.
+              <button type="button" class="link-inline" @click=${() => this._gotoTab('people')}>Ve a Personas</button>
+              para elegir a quién registrarle la primera lectura.</p>`
           : html`
               <div class="wrap">
                 <table>
@@ -136,11 +203,14 @@ export class TeamMap extends LitElement {
                     ${this.rows.map(
                       (r) => html`
                         <tr>
-                          <td class="person">${r.name}${(r.guilds ?? []).length ? html`<span class="roles">${r.guilds.join(' · ')}</span>` : null}</td>
-                          <td>${this._levelCell(r.seniority)}</td>
-                          <td>${this._levelCell(r.emotional)}</td>
-                          <td>${this._knowledgeCell(r.knowledge)}</td>
-                          <td>${this._contributionCell(r.contribution)}</td>
+                          <td class="person">
+                            <button type="button" class="link" @click=${() => this._open(r.id)} aria-label=${`Abrir ficha de ${r.name}`}>${r.name}</button>
+                            ${(r.guilds ?? []).length ? html`<span class="roles">${r.guilds.join(' · ')}</span>` : null}
+                          </td>
+                          <td>${this._dimButton(r, 'seniority', 'Seniority', this._levelCell(r.seniority))}</td>
+                          <td>${this._dimButton(r, 'emotional', 'Emocional', this._levelCell(r.emotional))}</td>
+                          <td>${this._dimButton(r, 'knowledge', 'Conocimiento', this._knowledgeCell(r.knowledge))}</td>
+                          <td>${this._dimButton(r, 'contribution', 'Contribución', this._contributionCell(r.contribution))}</td>
                         </tr>
                       `,
                     )}
