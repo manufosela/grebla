@@ -9,6 +9,9 @@
  *  - roles:   import('../data/roles.js').Role[]
  *  - targetRole: string|null
  *  - gap: import('../lib/scoring.js').DimensionGap[]|null
+ *  - hideTarget: boolean  Oculta el comparador what-if (selector de rol objetivo).
+ *                         Útil en vistas de solo lectura (p.ej. «Mi espacio» del
+ *                         ingeniero). Por defecto false: comportamiento original.
  */
 import { LitElement, html, css, svg } from 'lit';
 
@@ -18,6 +21,7 @@ export class RoleResult extends LitElement {
     roles: { attribute: false },
     targetRole: { attribute: false },
     gap: { attribute: false },
+    hideTarget: { attribute: false },
   };
 
   static styles = css`
@@ -152,6 +156,8 @@ export class RoleResult extends LitElement {
     this.targetRole = null;
     /** @type {import('../lib/scoring.js').DimensionGap[]|null} */
     this.gap = null;
+    /** @type {boolean} */
+    this.hideTarget = false;
   }
 
   _onTargetChange(event) {
@@ -196,7 +202,7 @@ export class RoleResult extends LitElement {
         ${this._renderDimensionBars(profile.byDimension)}
       </div>
 
-      ${this._renderTarget()}
+      ${this.hideTarget ? null : this._renderTarget()}
     `;
   }
 
