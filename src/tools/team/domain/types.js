@@ -11,6 +11,7 @@
  * @property {string[]} [guilds]      Nombres de gremio (tecnologías/stack) asignados a la persona; catálogo Guild con ámbito personal/global.
  * @property {string[]} [disciplines] Ids de disciplina del framework de carrera (/careerFramework/engineering).
  * @property {string|null} [levelId]  Id de nivel del framework de carrera, o null si aún sin nivel.
+ * @property {string|null} [careerTargetLevelId]  Nivel objetivo de carrera declarado por el propio ingeniero (o null).
  * @property {string} startDate       ISO date (alta)
  * @property {boolean} active
  * @property {string|null} [deactivatedAt]  ISO date de la baja (null/ausente si activa)

@@ -157,6 +157,9 @@ export class TeamPersonDetail extends LitElement {
     .career .aspire .code { font-weight: 700; }
     .career .aspire .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; }
     .career .aspire .desc { font-size: 0.82rem; color: var(--rm-muted, #4b5563); margin: 0 0 0.5rem; padding-left: 1.1rem; }
+    .career .target-declared { margin: 0.2rem 0 0; font-size: 0.9rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); }
+    .career .target-declared .code { font-weight: 800; }
+    .career .target-none { margin: 0.2rem 0 0; font-size: 0.83rem; color: var(--rm-muted, #9ca3af); font-style: italic; }
   `;
 
   constructor() {
@@ -687,8 +690,27 @@ export class TeamPersonDetail extends LitElement {
                   `}
             `
           : null}
+
+        ${this._renderDeclaredTarget(fw)}
         </details>
       </section>
+    `;
+  }
+
+  /**
+   * Objetivo de carrera declarado por la propia persona (`careerTargetLevelId`),
+   * en SOLO LECTURA para el líder (informativo). Si no hay objetivo, muestra un
+   * texto discreto.
+   * @param {import('../../tools/career/data/framework.js').CareerFramework|null} fw
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderDeclaredTarget(fw) {
+    const target = getLevel(fw, this.person.careerTargetLevelId);
+    return html`
+      <p class="sub">Objetivo de carrera</p>
+      ${target
+        ? html`<p class="target-declared">Declarado por la persona: <span class="code">${target.code}</span> · ${target.title}</p>`
+        : html`<p class="target-none">Sin objetivo de carrera declarado.</p>`}
     `;
   }
 

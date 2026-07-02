@@ -87,10 +87,15 @@ service cloud.firestore {
       // cualquier líder (asignar un usuario a un equipo desde el panel).
       allow create: if isSuperAdmin()
         || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
-      // Un editor compartido edita datos pero NO transfiere la propiedad.
+      // Un editor compartido edita datos pero NO transfiere la propiedad. El
+      // ingeniero vinculado (Person.uid == su uid) SOLO puede declarar su objetivo
+      // de carrera: la última rama restringe el cambio al único campo
+      // `careerTargetLevelId` (hasOnly), sin poder tocar ningún otro dato de su ficha.
       allow update: if isSuperAdmin() || isOwner()
         || (sharedPerm(resource.data) == 'edit'
-            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
+            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
+        || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['careerTargetLevelId']));
       allow delete: if isSuperAdmin() || isOwner();
 
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
