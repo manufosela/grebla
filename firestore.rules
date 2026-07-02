@@ -122,10 +122,19 @@ service cloud.firestore {
       }
     }
 
-    // Áreas de conocimiento: catálogo de la instancia, gestionado por líderes.
+    // Áreas de conocimiento: catálogo con ámbito, mismo modelo que guilds/labels.
+    // Globales (sin ownerLeaderUid, los gestiona el superadmin) y personales
+    // (ownerLeaderUid = líder). Cada líder crea/borra las suyas; el superadmin
+    // gestiona globales y promueve (quita owner).
     match /areas/{areaId} {
       allow read: if isSignedIn();
-      allow write: if isLeader() || isSuperAdmin();
+      allow create: if isSuperAdmin()
+        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
+      allow update: if isSuperAdmin()
+        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid
+            && request.resource.data.ownerLeaderUid == request.auth.uid);
+      allow delete: if isSuperAdmin()
+        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
     }
 
     // Catálogo de gremios (tecnologías/stack) con ámbito: globales (sin

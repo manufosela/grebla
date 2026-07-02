@@ -346,27 +346,30 @@ export class TeamSettings extends LitElement {
         <h2>Áreas de conocimiento</h2>
         <p class="hint">
           Unidad de dominio sobre la que mides el nivel (1–7) de cada persona y calculas el
-          <em>bus factor</em> (el riesgo si el experto se va). Es el catálogo global de la
-          organización, compartido por todos los líderes. Ejemplos: Arquitectura, Frontend,
-          Infra/Cloud, Backend de pagos, Base de datos.
+          <em>bus factor</em> (el riesgo si el experto se va). Ejemplos: Arquitectura, Frontend,
+          Infra/Cloud, Backend de pagos, Base de datos. Las <strong>globales</strong> las define
+          la organización y las ve todo el mundo; las que crees aquí son <strong>tuyas</strong>.
         </p>
         ${this.areas.length === 0
           ? html`<p class="empty">Aún no hay áreas. Crea las áreas técnicas de tu equipo.</p>`
           : html`
               <ul class="areas">
-                ${this.areas.map(
-                  (a) => html`
+                ${this.areas.map((a) => {
+                  const isGlobal = !a.ownerLeaderUid;
+                  return html`
                     <li>
                       <span class="name">${a.name}</span>
-                      ${this._confirmArea === a.id
-                        ? html`<span>¿Eliminar?
-                            <button class="link yes" @click=${() => this._removeArea(a.id)}>Sí</button>
-                            <button class="link" @click=${() => { this._confirmArea = null; }}>No</button>
-                          </span>`
-                        : html`<button class="link" @click=${() => { this._confirmArea = a.id; }}>Eliminar</button>`}
+                      ${isGlobal
+                        ? html`<span class="badge">Global</span>`
+                        : this._confirmArea === a.id
+                          ? html`<span>¿Eliminar?
+                              <button class="link yes" @click=${() => this._removeArea(a.id)}>Sí</button>
+                              <button class="link" @click=${() => { this._confirmArea = null; }}>No</button>
+                            </span>`
+                          : html`<button class="link" @click=${() => { this._confirmArea = a.id; }}>Eliminar</button>`}
                     </li>
-                  `,
-                )}
+                  `;
+                })}
               </ul>
             `}
         <div class="row">

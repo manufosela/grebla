@@ -141,13 +141,17 @@ function readingRepo(db, base, dim) {
   };
 }
 
-function areaRepo(db, base) {
+function areaRepo(db, base, leaderUid) {
   return {
     async list() {
-      return mapDocs(await getDocs(areaCol(db, base)));
+      // Globales (sin ownerLeaderUid) + las personales de este líder. El catálogo
+      // es pequeño: se lee entero y se filtra en cliente (no hay OR en Firestore).
+      const all = mapDocs(await getDocs(areaCol(db, base)));
+      return all.filter((a) => !a.ownerLeaderUid || a.ownerLeaderUid === leaderUid);
     },
     async create(name) {
-      const ref = await addDoc(areaCol(db, base), { name });
+      // El líder crea áreas PERSONALES (el superadmin gestiona las globales aparte).
+      const ref = await addDoc(areaCol(db, base), { name, ownerLeaderUid: leaderUid });
       return ref.id;
     },
     async remove(id) {
@@ -262,7 +266,7 @@ export function createFirestorePersistence(db, leaderUid, options = {}) {
   return {
     people: peopleRepo(db, base, leaderUid, viewAll),
     readings,
-    areas: areaRepo(db, base),
+    areas: areaRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
     guilds: guildRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
     labels: labelRepo(db, base, leaderUid),
     conversations: conversationRepo(db, base),
