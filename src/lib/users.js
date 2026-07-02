@@ -11,11 +11,72 @@
  * @typedef {import('./accessRoles.js').AccessRole} AccessRole
  * @typedef {import('./accessRoles.js').AccessUser} AccessUser
  */
-import { doc, collection, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, addDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { ROLE_COLLECTION, mergeAccessUsers } from './accessRoles.js';
+import { ROLE_COLLECTION, mergeAccessUsers, unlinkedUsers } from './accessRoles.js';
 
-export { mergeAccessUsers };
+export { mergeAccessUsers, unlinkedUsers };
+
+/**
+ * Lista el directorio /users (todos los que han iniciado sesión). Lo usa el
+ * líder para ofrecer las cuentas "sin asignar" al vincular una persona (las
+ * reglas permiten a superadmin, viewer y líder leer /users).
+ * @returns {Promise<Array<{ uid: string, displayName: string|null, email: string|null, lastLogin: unknown }>>}
+ */
+export async function listUsers() {
+  const snap = await getDocs(collection(db, 'users'));
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      uid: d.id,
+      displayName: data.displayName ?? null,
+      email: data.email ?? null,
+      lastLogin: data.lastLogin ?? null,
+    };
+  });
+}
+
+/**
+ * uids de cuentas ya vinculadas a una persona (Person.uid no nulo). Solo lo
+ * invoca el superadmin, que puede leer todas las personas; el líder deriva sus
+ * uids vinculados de las personas que ya tiene cargadas en la tabla.
+ * @returns {Promise<string[]>}
+ */
+export async function listLinkedUids() {
+  const snap = await getDocs(collection(db, 'people'));
+  return snap.docs
+    .map((d) => d.data().uid)
+    .filter((uid) => typeof uid === 'string' && uid.length > 0);
+}
+
+/**
+ * Crea una persona vinculada a un usuario dentro del equipo de un líder. Lo
+ * invoca el superadmin desde el panel (las reglas permiten a un superadmin crear
+ * personas para cualquier líder). No usa el adapter del líder porque el
+ * superadmin no es un líder del container.
+ * @param {{ uid: string, displayName?: string|null, email?: string|null }} user  Cuenta a vincular.
+ * @param {string} leaderUid  Líder dueño de la persona creada.
+ * @returns {Promise<string>}  id de la persona creada.
+ */
+export async function assignUserToLeader(user, leaderUid) {
+  if (!user?.uid) throw new Error('assignUserToLeader requiere el uid del usuario a vincular');
+  if (!leaderUid) throw new Error('assignUserToLeader requiere el uid del líder dueño');
+  // El nombre visible es lo único que admite un fallback (displayName → email →
+  // literal); los datos de vínculo (uid, ownerLeaderUid) nunca son opcionales.
+  const name = user.displayName ?? user.email ?? 'Sin nombre';
+  const ref = await addDoc(collection(db, 'people'), {
+    name,
+    uid: user.uid,
+    ownerLeaderUid: leaderUid,
+    active: true,
+    startDate: new Date().toISOString().slice(0, 10),
+    guilds: [],
+    disciplines: [],
+    labels: [],
+    githubLogin: null,
+  });
+  return ref.id;
+}
 
 /** @returns {Promise<AccessUser[]>} */
 export async function listAllUsers() {

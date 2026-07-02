@@ -13,10 +13,11 @@
  *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
 import { LitElement, html, css } from 'lit';
+import './app-modal.js';
 import { listLeaders, addLeaderByEmail, removeLeader } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import { listCatalog, createGlobal, promoteToGlobal, removeFromCatalog } from '../lib/catalog.js';
-import { listAllUsers, setUserRole } from '../lib/users.js';
+import { listAllUsers, setUserRole, listLinkedUids, assignUserToLeader } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -107,6 +108,9 @@ export class SuperadminPanel extends LitElement {
     _confirmRoleChange: { state: true },
     _usersError: { state: true },
     _usersNotice: { state: true },
+    _linkedUids: { state: true },
+    _assignFor: { state: true },
+    _assignLeader: { state: true },
   };
 
   static styles = css`
@@ -157,6 +161,13 @@ export class SuperadminPanel extends LitElement {
     .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
+    .row-actions { display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+    .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+    .act:hover { border-color: var(--rm-accent, #3b82f6); color: var(--rm-accent, #3b82f6); }
+    .badge.linked { background: #0d9488; margin-left: 0.35rem; }
+    .assign-body { display: flex; flex-direction: column; gap: 0.9rem; }
+    .assign-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
+    .assign-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
     select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
     .cities { display: grid; gap: 0.9rem; }
     .city { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.8rem 1rem; background: var(--rm-surface, #fff); }
@@ -242,6 +253,12 @@ export class SuperadminPanel extends LitElement {
     this._confirmRoleChange = null;
     this._usersError = '';
     this._usersNotice = '';
+    /** @type {string[]} uids ya vinculados a una persona (para no ofrecer "Asignar") */
+    this._linkedUids = [];
+    /** @type {import('../lib/accessRoles.js').AccessUser|null} usuario del modal "Asignar a equipo" */
+    this._assignFor = null;
+    /** @type {string} líder seleccionado en el modal "Asignar a equipo" */
+    this._assignLeader = '';
     this._loaded = false;
   }
 
@@ -673,9 +690,54 @@ export class SuperadminPanel extends LitElement {
   async _loadUsers() {
     this._usersError = '';
     try {
-      this._users = await listAllUsers();
+      const [users, linkedUids] = await Promise.all([listAllUsers(), listLinkedUids()]);
+      this._users = users;
+      this._linkedUids = linkedUids;
     } catch (err) {
       this._usersError = err instanceof Error ? err.message : 'No se pudieron cargar los usuarios.';
+    }
+  }
+
+  /**
+   * ¿Está la cuenta ya vinculada a una persona? Si lo está, no se ofrece
+   * "Asignar a equipo" (se muestra un chip informativo).
+   * @param {import('../lib/accessRoles.js').AccessUser} user
+   * @returns {boolean}
+   */
+  _isLinked(user) {
+    return this._linkedUids.includes(user.uid);
+  }
+
+  /** @param {import('../lib/accessRoles.js').AccessUser} user */
+  _openAssign(user) {
+    this._assignFor = user;
+    this._assignLeader = '';
+    this._usersError = '';
+    this._usersNotice = '';
+  }
+
+  _closeAssign() {
+    this._assignFor = null;
+    this._assignLeader = '';
+  }
+
+  /**
+   * Crea una persona vinculada al usuario dentro del equipo del líder elegido y
+   * refresca la lista (el usuario pasará a estar vinculado).
+   */
+  async _assign() {
+    const user = this._assignFor;
+    const leaderUid = this._assignLeader;
+    if (!user || !leaderUid) return;
+    this._usersError = '';
+    try {
+      await assignUserToLeader(user, leaderUid);
+      this._assignFor = null;
+      this._assignLeader = '';
+      this._usersNotice = 'Usuario asignado a un equipo.';
+      await this._loadUsers();
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo asignar el usuario.';
     }
   }
 
@@ -1369,17 +1431,22 @@ export class SuperadminPanel extends LitElement {
               </tbody>
             </table>`}
       </section>
+      ${this._renderAssignModal()}
     `;
   }
 
   /** @param {import('../lib/accessRoles.js').AccessUser} user */
   _renderUserRow(user) {
     const pending = this._confirmRoleChange?.uid === user.uid ? this._confirmRoleChange : null;
+    const linked = this._isLinked(user);
     return html`
       <tr>
         <td>${user.displayName ?? '—'}</td>
         <td class="muted">${user.email ?? '—'}</td>
-        <td><span class="badge" style=${`background:${ROLE_COLOR[user.role]}`}>${ROLE_LABEL[user.role]}</span></td>
+        <td>
+          <span class="badge" style=${`background:${ROLE_COLOR[user.role]}`}>${ROLE_LABEL[user.role]}</span>
+          ${linked ? html`<span class="badge linked" title="Vinculado a una persona">Vinculado</span>` : null}
+        </td>
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>
           ${pending
@@ -1387,15 +1454,51 @@ export class SuperadminPanel extends LitElement {
                 <button class="yes" @click=${() => this._changeUserRole(user, pending.role)}>Sí</button>
                 <button @click=${() => { this._confirmRoleChange = null; }}>No</button>
               </span>`
-            : html`<select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
-                <option value="" disabled selected>Cambiar rol…</option>
-                <option value="superadmin">Superadmin</option>
-                <option value="viewer">Viewer</option>
-                <option value="leader">Líder</option>
-                <option value="none">Quitar acceso</option>
-              </select>`}
+            : html`<div class="row-actions">
+                <select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
+                  <option value="" disabled selected>Cambiar rol…</option>
+                  <option value="superadmin">Superadmin</option>
+                  <option value="viewer">Viewer</option>
+                  <option value="leader">Líder</option>
+                  <option value="none">Quitar acceso</option>
+                </select>
+                ${user.role === 'none' && !linked
+                  ? html`<button class="act" type="button" @click=${() => this._openAssign(user)}>Asignar a equipo</button>`
+                  : null}
+              </div>`}
         </td>
       </tr>
+    `;
+  }
+
+  _renderAssignModal() {
+    const user = this._assignFor;
+    const who = user ? (user.displayName ?? user.email ?? user.uid) : '';
+    const heading = user ? `Asignar a equipo · ${who}` : 'Asignar a equipo';
+    return html`
+      <app-modal .open=${!!user} heading=${heading} @close=${() => this._closeAssign()}>
+        ${user
+          ? html`
+              <div class="assign-body">
+                <p class="ro-note">
+                  Se creará una persona vinculada a esta cuenta en el equipo del líder elegido. La
+                  cuenta podrá ver su propia ficha en solo lectura.
+                </p>
+                <label class="assign-field">Líder
+                  <select .value=${this._assignLeader} @change=${(e) => { this._assignLeader = e.target.value; }}>
+                    <option value="">— Elige un líder —</option>
+                    ${this.leaders.map((l) => html`<option value=${l.uid}>${l.displayName ?? l.email ?? l.uid}</option>`)}
+                  </select>
+                </label>
+                ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
+                <div class="assign-actions">
+                  <button type="button" @click=${() => this._closeAssign()}>Cancelar</button>
+                  <button class="primary" type="button" ?disabled=${!this._assignLeader} @click=${() => this._assign()}>Asignar</button>
+                </div>
+              </div>
+            `
+          : null}
+      </app-modal>
     `;
   }
 }

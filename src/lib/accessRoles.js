@@ -60,3 +60,21 @@ export function mergeAccessUsers(groups) {
   }
   return [...byUid.values()].sort((a, b) => toMs(b.lastLogin) - toMs(a.lastLogin));
 }
+
+/**
+ * Filtra los usuarios que aún NO están vinculados a ninguna persona. Puro (sin
+ * Firestore): recibe la lista de usuarios (forma AccessUser con `uid`, o docs de
+ * /users con `id`) y el conjunto de uids ya vinculados, y devuelve los que no
+ * aparecen en ese conjunto. Alimenta el selector "Vincular cuenta" (líder) y la
+ * acción "Asignar a equipo" (superadmin).
+ * @param {ReadonlyArray<{ uid?: string, id?: string }>} users
+ * @param {Iterable<string>} linkedUids  uids ya vinculados (Set o array).
+ * @returns {Array<{ uid?: string, id?: string }>}
+ */
+export function unlinkedUsers(users, linkedUids) {
+  const linked = linkedUids instanceof Set ? linkedUids : new Set(linkedUids);
+  return (users ?? []).filter((u) => {
+    const uid = u.uid ?? u.id;
+    return uid != null && !linked.has(uid);
+  });
+}

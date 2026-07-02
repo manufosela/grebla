@@ -30,8 +30,11 @@ export function normalizeGithubLogin(v) {
 /**
  * Alta de una persona (activa por defecto). `guilds` es un array de nombres de
  * gremio del catálogo (puede ir vacío). `githubLogin` es opcional (para DORA).
+ * `uid` vincula la cuenta que accederá a su ficha en solo lectura (o null).
  * @param {PersistencePort} persistence
- * @param {{ name: string, guilds?: string[], startDate: string, active?: boolean, githubLogin?: string }} input
+ * @param {{ name: string, guilds?: string[], disciplines?: string[], levelId?: string|null,
+ *           labels?: string[], startDate: string, active?: boolean, githubLogin?: string,
+ *           uid?: string|null }} input
  * @returns {Promise<string>}
  */
 export function addPerson(persistence, input) {

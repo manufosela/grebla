@@ -50,10 +50,11 @@ service cloud.firestore {
 
     // Directorio de usuarios que han iniciado sesión (nombre, email, última
     // conexión). Cada usuario escribe SOLO su propio doc (registro de presencia);
-    // la lista la leen superadmin y viewer (pestaña Usuarios). No otorga acceso:
-    // el rol se decide en /admins, /viewers, /leaders.
+    // la lista la leen superadmin y viewer (pestaña Usuarios) y el líder (para
+    // ofrecer las cuentas "sin asignar" al vincular una persona). No otorga
+    // acceso: el rol se decide en /admins, /viewers, /leaders.
     match /users/{uid} {
-      allow read: if isSuperAdmin() || isViewer();
+      allow read: if isSuperAdmin() || isViewer() || isLeader();
       allow write: if isSignedIn() && request.auth.uid == uid;
     }
 
@@ -76,10 +77,16 @@ service cloud.firestore {
       // La lectura (incl. la query por sharedWithUids) se respalda con el MISMO
       // campo que usa la consulta (el array), no con el mapa sharedWith; si no,
       // Firestore rechaza la query del líder (rules are not filters). El viewer
-      // (solo lectura, tipo C-level) ve todo, igual que el superadmin.
+      // (solo lectura, tipo C-level) ve todo, igual que el superadmin. El usuario
+      // vinculado (Person.uid == su uid) lee su propia ficha en solo lectura; el
+      // guard 'uid' in resource.data evita romper la regla en personas sin campo.
       allow read: if isSuperAdmin() || isViewer() || isOwner()
-        || ('sharedWithUids' in resource.data && request.auth.uid in resource.data.sharedWithUids);
-      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+        || ('sharedWithUids' in resource.data && request.auth.uid in resource.data.sharedWithUids)
+        || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid);
+      // El líder crea sus personas; el superadmin puede crear una persona para
+      // cualquier líder (asignar un usuario a un equipo desde el panel).
+      allow create: if isSuperAdmin()
+        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
       // Un editor compartido edita datos pero NO transfiere la propiedad.
       allow update: if isSuperAdmin() || isOwner()
         || (sharedPerm(resource.data) == 'edit'
@@ -96,6 +103,7 @@ service cloud.firestore {
           return isSuperAdmin() || isViewer()
             || (isSignedIn()
                 && (person().ownerLeaderUid == request.auth.uid
+                    || ('uid' in person() && person().uid == request.auth.uid)
                     || ('sharedWith' in person() && person().sharedWith[request.auth.uid] in ['view', 'edit'])));
         }
         function canEdit() {
