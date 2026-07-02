@@ -33,6 +33,12 @@ import {
   addendumsForDisciplines,
   aspirationalLevels,
 } from '../../tools/career/data/framework.js';
+import {
+  assessmentRows,
+  improvementPoints,
+  careerSuggestion,
+} from '../../tools/career/data/assessment.js';
+import { getCareerAssessment, saveCareerAssessment } from '../../lib/careerAssessment.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -129,6 +135,11 @@ export class TeamPersonDetail extends LitElement {
     _career: { state: true },
     _careerSaving: { state: true },
     _careerError: { state: true },
+    _assessment: { state: true },
+    _assessmentDraft: { state: true },
+    _assessmentSaving: { state: true },
+    _assessmentError: { state: true },
+    _assessmentSaved: { state: true },
   };
 
   static styles = css`
@@ -203,6 +214,31 @@ export class TeamPersonDetail extends LitElement {
     .career .target-declared .code { font-weight: 800; }
     .career .target-none { margin: 0.2rem 0 0; font-size: 0.83rem; color: var(--rm-muted, #9ca3af); font-style: italic; }
 
+    /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
+    .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
+    .career .assess-row { border: 1px solid var(--rm-border, #e5e7eb); border-left-width: 4px; border-radius: 8px; padding: 0.6rem 0.8rem; }
+    .career .assess-row.ok { border-left-color: var(--rm-accent, #2a9d8f); }
+    .career .assess-row.bad { border-left-color: var(--rm-danger, #dc2626); }
+    .career .assess-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+    .career .assess-head .dim { font-weight: 700; font-size: 0.9rem; }
+    .career .seg { display: inline-flex; border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; overflow: hidden; }
+    .career .seg-btn { border: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.35rem 0.9rem; cursor: pointer; }
+    .career .seg-btn + .seg-btn { border-left: 1px solid var(--rm-border, #d1d5db); }
+    .career .seg-btn:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: -2px; }
+    .career .seg-btn.ok.on { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .career .seg-btn.bad.on { background: var(--rm-danger, #dc2626); color: #fff; }
+    .career .assess-row .exp { margin: 0.5rem 0 0; }
+    .career .assess-row .exp summary { cursor: pointer; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    .career .assess-row .exp p { margin: 0.3rem 0 0; font-size: 0.85rem; color: var(--rm-text, #111827); }
+    .career .assess-row .todo { margin: 0.5rem 0 0; font-size: 0.82rem; color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .career .note-fld { margin: 0.5rem 0 0; }
+    .career .saved { color: var(--rm-accent, #2a9d8f); font-size: 0.83rem; font-weight: 600; }
+    .career .improve { list-style: none; margin: 0.3rem 0 0; padding: 0; font-size: 0.85rem; }
+    .career .improve li { padding: 0.4rem 0; border-top: 1px solid var(--rm-border, #eef0f2); }
+    .career .improve .dim { font-weight: 700; color: var(--rm-danger, #dc2626); }
+    .career .improve .note { margin: 0.2rem 0 0; color: var(--rm-muted, #6b7280); font-size: 0.83rem; }
+    .career .suggest { margin: 0.2rem 0 0; font-size: 0.9rem; color: var(--rm-text, #111827); }
+
     /* ── Barra de sub-pestañas (patrón ARIA tablist, coherente con Ajustes) ── */
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .tab {
@@ -250,6 +286,16 @@ export class TeamPersonDetail extends LitElement {
     this._careerSaving = false;
     /** @type {string} error in-place del formulario de carrera */
     this._careerError = '';
+    /** @type {import('../../tools/career/data/assessment.js').CareerAssessment} valoración frente al nivel (persistida) */
+    this._assessment = { byDimension: {} };
+    /** @type {Record<string, { meets: boolean, note: string }>} borrador editable de la valoración */
+    this._assessmentDraft = {};
+    /** @type {boolean} guardado de la valoración en curso */
+    this._assessmentSaving = false;
+    /** @type {string} error in-place de la valoración */
+    this._assessmentError = '';
+    /** @type {boolean} feedback tras guardar la valoración */
+    this._assessmentSaved = false;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -357,6 +403,74 @@ export class TeamPersonDetail extends LitElement {
   }
 
   /**
+   * Precarga el borrador editable de la valoración con las marcas persistidas.
+   * Se llama tras cargar (`_load`) o guardar la valoración de la persona.
+   * @returns {void}
+   */
+  _seedAssessmentDraft() {
+    const byDimension = this._assessment?.byDimension ?? {};
+    /** @type {Record<string, { meets: boolean, note: string }>} */
+    const draft = {};
+    for (const [id, mark] of Object.entries(byDimension)) {
+      draft[id] = { meets: mark?.meets ?? true, note: String(mark?.note ?? '') };
+    }
+    this._assessmentDraft = draft;
+    this._assessmentError = '';
+    this._assessmentSaved = false;
+  }
+
+  /**
+   * Marca una dimensión como «cumple» (true) o «no llega» (false) en el borrador.
+   * @param {string} dimensionId
+   * @param {boolean} meets
+   * @returns {void}
+   */
+  _setAssessmentMeets(dimensionId, meets) {
+    const prev = this._assessmentDraft[dimensionId] ?? { meets: true, note: '' };
+    this._assessmentDraft = { ...this._assessmentDraft, [dimensionId]: { ...prev, meets } };
+    this._assessmentSaved = false;
+  }
+
+  /**
+   * Actualiza la nota de una dimensión en el borrador de valoración.
+   * @param {string} dimensionId
+   * @param {string} note
+   * @returns {void}
+   */
+  _setAssessmentNote(dimensionId, note) {
+    const prev = this._assessmentDraft[dimensionId] ?? { meets: true, note: '' };
+    this._assessmentDraft = { ...this._assessmentDraft, [dimensionId]: { ...prev, note } };
+    this._assessmentSaved = false;
+  }
+
+  /**
+   * Guarda la valoración frente al nivel: construye una marca explícita por cada
+   * dimensión del nivel (a partir de las filas resueltas) y la persiste con el
+   * autor del login. Refresca la valoración y muestra feedback in-place.
+   * @returns {Promise<void>}
+   */
+  async _saveAssessment() {
+    this._assessmentError = '';
+    this._assessmentSaving = true;
+    try {
+      const rows = assessmentRows(this.framework, this.person.levelId, { byDimension: this._assessmentDraft });
+      /** @type {Record<string, { meets: boolean, note: string }>} */
+      const byDimension = {};
+      for (const row of rows) {
+        byDimension[row.dimension.id] = { meets: row.meets, note: row.note };
+      }
+      await saveCareerAssessment(this.person.id, byDimension, currentAuthor());
+      this._assessment = { byDimension };
+      this._seedAssessmentDraft();
+      this._assessmentSaved = true;
+    } catch (err) {
+      this._assessmentError = err instanceof Error ? err.message : 'No se pudo guardar la valoración.';
+    } finally {
+      this._assessmentSaving = false;
+    }
+  }
+
+  /**
    * Pide a `<team-app>` que abra la sección Ajustes (sub-pestaña «Áreas» por
    * defecto) mediante un evento; no navega con `location` dentro de la SPA.
    * @returns {void}
@@ -400,16 +514,19 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes] = await Promise.all([
+      const [timeline, areas, conversations, notes, assessment] = await Promise.all([
         getPersonTimeline(this.persistence, this.person.id),
         listAreas(this.persistence),
         listConversations(this.persistence, this.person.id),
         listSupportNotes(this.persistence, this.person.id),
+        getCareerAssessment(this.person.id),
       ]);
       this.timeline = timeline;
       this.areas = areas;
       this.conversations = conversations;
       this.notes = notes;
+      this._assessment = assessment;
+      this._seedAssessmentDraft();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
     } finally {
@@ -820,6 +937,8 @@ export class TeamPersonDetail extends LitElement {
 
         ${this._renderCareerEditor()}
 
+        ${level ? this._renderAssessment(fw, level) : null}
+
         ${level
           ? html`
               <p class="sub">Nivel actual</p>
@@ -901,6 +1020,103 @@ export class TeamPersonDetail extends LitElement {
             </p>`
           : null}
       </section>
+    `;
+  }
+
+  /**
+   * Bloque de valoración de la persona frente a las expectativas de su nivel:
+   * una fila por dimensión (verde «cumple» / rojo «no llega») con nota opcional,
+   * la lista de puntos de mejora (los rojos) y una sugerencia de rol. Solo se
+   * invoca cuando la persona tiene nivel asignado.
+   * @param {import('../../tools/career/data/framework.js').CareerFramework|null} fw
+   * @param {import('../../tools/career/data/framework.js').Level} level
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderAssessment(fw, level) {
+    const rows = assessmentRows(fw, this.person.levelId, { byDimension: this._assessmentDraft });
+    const reds = improvementPoints(rows);
+    const aspirationalCodes = aspirationalLevels(fw, this.person.levelId).map((l) => l.code);
+    const suggestion = careerSuggestion({ reds: reds.length, total: rows.length, aspirationalCodes });
+    return html`
+      <p class="sub">Valoración frente al nivel <span class="code">${level.code}</span> · ${level.title}</p>
+      <ul class="assess">
+        ${rows.map((row) => this._renderAssessmentRow(row))}
+      </ul>
+      ${this._assessmentError ? html`<p class="error">${this._assessmentError}</p>` : null}
+      <div class="row">
+        <button class="primary" ?disabled=${this._assessmentSaving} @click=${this._saveAssessment}>
+          ${this._assessmentSaving ? 'Guardando…' : 'Guardar valoración'}
+        </button>
+        ${this._assessmentSaved
+          ? html`<span class="saved" role="status">Valoración guardada.</span>`
+          : null}
+      </div>
+
+      ${reds.length > 0
+        ? html`
+            <p class="sub">Puntos de mejora</p>
+            <ul class="improve">
+              ${reds.map(
+                (row) => html`
+                  <li>
+                    <span class="dim">${row.dimension.name}</span>${row.text
+                      ? html`: <span class="txt">${row.text}</span>`
+                      : null}
+                    ${row.note ? html`<p class="note">${row.note}</p>` : null}
+                  </li>
+                `,
+              )}
+            </ul>
+          `
+        : null}
+
+      ${suggestion
+        ? html`<p class="sub">Sugerencia de rol</p><p class="suggest">${suggestion}</p>`
+        : null}
+    `;
+  }
+
+  /**
+   * Fila de valoración de una dimensión: nombre, control segmentado accesible
+   * «Cumple / No llega», la expectativa (plegable) y una nota opcional.
+   * @param {import('../../tools/career/data/assessment.js').AssessmentRow} row
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderAssessmentRow(row) {
+    const dimId = row.dimension.id;
+    const draft = this._assessmentDraft[dimId];
+    const meets = draft?.meets ?? true;
+    const note = draft?.note ?? '';
+    return html`
+      <li class="assess-row ${meets ? 'ok' : 'bad'}">
+        <div class="assess-head">
+          <span class="dim">${row.dimension.name}</span>
+          <div class="seg" role="group" aria-label=${`Valoración de ${row.dimension.name}`}>
+            <button
+              type="button"
+              class="seg-btn ok ${meets ? 'on' : ''}"
+              aria-pressed=${meets ? 'true' : 'false'}
+              @click=${() => this._setAssessmentMeets(dimId, true)}
+            >Cumple</button>
+            <button
+              type="button"
+              class="seg-btn bad ${meets ? '' : 'on'}"
+              aria-pressed=${meets ? 'false' : 'true'}
+              @click=${() => this._setAssessmentMeets(dimId, false)}
+            >No llega</button>
+          </div>
+        </div>
+        ${row.hasExpectation
+          ? html`<details class="exp"><summary>Expectativa</summary><p>${row.text}</p></details>`
+          : html`<p class="todo">Expectativa pendiente de definir</p>`}
+        <label class="fld note-fld">Nota (opcional)
+          <textarea
+            rows="2"
+            .value=${note}
+            @input=${(e) => this._setAssessmentNote(dimId, e.target.value)}
+          ></textarea>
+        </label>
+      </li>
     `;
   }
 
