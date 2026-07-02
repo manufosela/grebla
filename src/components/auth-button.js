@@ -7,6 +7,17 @@ import { LitElement, html, css } from 'lit';
 import { onUserChanged, signInWithGoogle, signOutUser } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 
+/**
+ * Etiqueta legible por rol para el badge del botón de sesión.
+ * @type {Record<Exclude<import('../lib/access.js').AccessRole, null>, string>}
+ */
+const ROLE_LABELS = {
+  superadmin: 'Superadmin',
+  viewer: 'Viewer',
+  leader: 'Líder',
+  engineer: 'Ingeniero',
+};
+
 export class AuthButton extends LitElement {
   static properties = {
     user: { state: true },
@@ -151,7 +162,7 @@ export class AuthButton extends LitElement {
             ? html`<img class="avatar" src=${this.user.photoURL} alt="" referrerpolicy="no-referrer" />`
             : null}
           <span class="name">${this.user.displayName ?? this.user.email}</span>
-          ${this.role ? html`<span class="role">${this.role === 'superadmin' ? 'Superadmin' : 'Líder'}</span>` : null}
+          ${this.role ? html`<span class="role">${ROLE_LABELS[this.role] ?? this.role}</span>` : null}
         </span>
         <button ?disabled=${this.busy} @click=${this._signOut}>Salir</button>
         ${this.error ? html`<span class="error">${this.error}</span>` : null}
