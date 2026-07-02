@@ -65,9 +65,15 @@ const settingsDoc = (db, base) => doc(db, ...base, 'config', 'settings');
 /** @param {import('firebase/firestore').QuerySnapshot} snap */
 const mapDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-function peopleRepo(db, base, leaderUid) {
+function peopleRepo(db, base, leaderUid, viewAll = false) {
   return {
     async list() {
+      // El superadmin (viewAll) ve TODAS las personas de la organización (las
+      // reglas ya se lo permiten), para poder gestionarlas y hacerles notas/O2O.
+      if (viewAll) {
+        const all = await getDocs(peopleCol(db, base));
+        return all.docs.map((d) => ({ id: d.id, ...d.data() }));
+      }
       // Las personas visibles para este líder: las suyas (ownerLeaderUid) + las
       // compartidas con él (sharedWithUids array-contains). Firestore no hace OR
       // sobre campos distintos, así que son dos consultas + merge con dedup por id.
@@ -242,17 +248,19 @@ function configRepo(db, base) {
 /**
  * @param {Firestore} db
  * @param {string} leaderUid
+ * @param {{ viewAll?: boolean }} [options]  viewAll=true (superadmin): lista TODAS las personas.
  * @returns {PersistencePort}
  */
-export function createFirestorePersistence(db, leaderUid) {
+export function createFirestorePersistence(db, leaderUid, options = {}) {
   if (!db) throw new Error('createFirestorePersistence requiere una instancia de Firestore (db)');
   if (!leaderUid) throw new Error('createFirestorePersistence requiere leaderUid');
+  const { viewAll = false } = options;
   const base = [];
   const readings = /** @type {PersistencePort['readings']} */ (
     Object.fromEntries(DIMENSIONS.map((dim) => [dim, readingRepo(db, base, dim)]))
   );
   return {
-    people: peopleRepo(db, base, leaderUid),
+    people: peopleRepo(db, base, leaderUid, viewAll),
     readings,
     areas: areaRepo(db, base),
     guilds: guildRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)

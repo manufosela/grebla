@@ -43,11 +43,12 @@ async function resolveStorage(persistence, storage) {
  * @param {import('firebase/firestore').Firestore|null} [options.db]
  * @param {string|null} [options.leaderUid]
  * @param {import('firebase/storage').FirebaseStorage|null} [options.storage]
+ * @param {boolean} [options.viewAll]  true (superadmin): la lista de personas incluye a TODA la organización.
  * @param {object} [options.seed]  Solo para mode 'memory'.
  * @returns {Promise<{ mode: string, persistence: PersistencePort, storage: import('../domain/ports.js').FileStoragePort }>}
  */
 export async function createTeamContainer(options = {}) {
-  const { mode = 'firestore', db = null, leaderUid = null, storage = null, seed } = options;
+  const { mode = 'firestore', db = null, leaderUid = null, storage = null, viewAll = false, seed } = options;
 
   if (mode === 'memory') {
     const persistence = createMemoryPersistence(seed);
@@ -63,7 +64,7 @@ export async function createTeamContainer(options = {}) {
       const firebase = await import('../../../lib/firebase.js');
       database = firebase.db;
     }
-    const persistence = createFirestorePersistence(database, leaderUid);
+    const persistence = createFirestorePersistence(database, leaderUid, { viewAll });
     return { mode, persistence, storage: await resolveStorage(persistence, storage) };
   }
 

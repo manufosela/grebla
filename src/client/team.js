@@ -24,6 +24,7 @@ onUserChanged(async (user) => {
     const { persistence, storage } = await createTeamContainer({
       mode: 'firestore',
       leaderUid: user.uid,
+      viewAll: role === 'superadmin', // el superadmin ve y gestiona a toda la organización
     });
     app.uid = user.uid;
     app.storage = storage;
