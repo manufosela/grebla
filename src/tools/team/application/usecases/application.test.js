@@ -116,6 +116,13 @@ describe('Fase 2b — casos de uso', () => {
     expect(() => addReading(p, 'nope', ids.ana, {})).toThrow(/Dimensión desconocida/);
   });
 
+  it('addReading omite las claves undefined (Firestore rechaza undefined)', async () => {
+    await addReading(p, 'seniority', ids.ana, { level: 4, toNext: false, note: undefined, date: '2026-06-02' });
+    const latest = await p.readings.seniority.latest(ids.ana);
+    expect(latest).not.toHaveProperty('note');
+    expect(latest.level).toBe(4);
+  });
+
   it('getPersonTimeline añade valor numérico en seniority (tránsito = N+0.5)', async () => {
     await addReading(p, 'seniority', ids.ana, { level: 5, toNext: true, date: '2026-06-01' });
     const t = await getPersonTimeline(p, ids.ana);

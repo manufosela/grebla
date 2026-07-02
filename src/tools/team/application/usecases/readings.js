@@ -21,7 +21,12 @@ export function addReading(persistence, dimension, personId, payload) {
   if (!DIMENSIONS.includes(dimension)) {
     throw new Error(`Dimensión desconocida: ${dimension}`);
   }
-  return persistence.readings[dimension].add(personId, payload);
+  // Firestore rechaza `undefined`: omite las claves sin valor (p. ej. una nota
+  // vacía llega como undefined) para no romper la escritura de la lectura.
+  const clean = Object.fromEntries(
+    Object.entries(payload ?? {}).filter(([, value]) => value !== undefined),
+  );
+  return persistence.readings[dimension].add(personId, clean);
 }
 
 /**
