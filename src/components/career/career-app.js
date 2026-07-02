@@ -11,6 +11,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
+import './career-island.js';
 import {
   getJourney,
   toggleVisited,
@@ -31,13 +32,22 @@ export class CareerApp extends LitElement {
     selected: { state: true },
     loading: { state: true },
     map: { state: true },
+    viewMode: { state: true },
   };
+
+  /** Clave de persistencia sencilla para el modo de vista. */
+  static VIEW_MODE_KEY = 'grebla:career:viewMode';
 
   static styles = css`
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
     label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
+    .viewswitch { display: inline-flex; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; overflow: hidden; }
+    .viewswitch button { border: none; border-radius: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); font-size: 0.8rem; font-weight: 700; padding: 0.4rem 0.7rem; cursor: pointer; }
+    .viewswitch button + button { border-left: 1px solid var(--rm-border, #d1d5db); }
+    .viewswitch button.active { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .viewswitch button:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: -2px; }
     .stat { display: flex; align-items: baseline; gap: 0.6rem; }
     .lvl { font-weight: 800; color: var(--rm-accent, #2a9d8f); }
     .pts { font-size: 0.85rem; color: var(--rm-muted, #6b7280); font-variant-numeric: tabular-nums; }
@@ -91,6 +101,20 @@ export class CareerApp extends LitElement {
     this.map = null;
     this._loadedPerson = null;
     this._mapLoaded = false;
+    // Modo de vista: 'island' (2.5D isométrica, por defecto) o 'flat' (plano, fallback).
+    this.viewMode = this._readViewMode();
+  }
+
+  /** Lee la preferencia de modo de vista sin romper SSR/estático. */
+  _readViewMode() {
+    if (typeof localStorage === 'undefined') return 'island';
+    return localStorage.getItem(CareerApp.VIEW_MODE_KEY) === 'flat' ? 'flat' : 'island';
+  }
+
+  /** @param {'island'|'flat'} mode */
+  _setViewMode(mode) {
+    this.viewMode = mode;
+    if (typeof localStorage !== 'undefined') localStorage.setItem(CareerApp.VIEW_MODE_KEY, mode);
   }
 
   /** @param {Map<string, unknown>} changed */
@@ -169,6 +193,25 @@ export class CareerApp extends LitElement {
     }
   }
 
+  /** Conmutador de vista Isla 2.5D / Plano. El plano queda como fallback. */
+  _renderViewSwitch() {
+    const isIsland = this.viewMode !== 'flat';
+    return html`<div class="viewswitch" role="group" aria-label="Modo de vista del mapa">
+      <button
+        type="button"
+        class=${isIsland ? 'active' : ''}
+        aria-pressed=${isIsland}
+        @click=${() => this._setViewMode('island')}
+      >Isla 2.5D</button>
+      <button
+        type="button"
+        class=${!isIsland ? 'active' : ''}
+        aria-pressed=${!isIsland}
+        @click=${() => this._setViewMode('flat')}
+      >Plano</button>
+    </div>`;
+  }
+
   _renderPersonSelect() {
     return html`<label>Persona
       <select @change=${this._changePerson}>
@@ -208,19 +251,28 @@ export class CareerApp extends LitElement {
     return html`
       <div class="bar">
         ${this._renderPersonSelect()}
+        ${this._renderViewSwitch()}
         <div class="stat"><span class="lvl">${s.level}</span><span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span></div>
       </div>
       <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
 
       <div class="grid">
-        <career-map
-          .map=${map}
-          .journey=${this.journey}
-          .reachable=${s.reachable}
-          .selected=${this.selected}
-          @select-city=${this._onSelect}
-        ></career-map>
+        ${this.viewMode === 'flat'
+          ? html`<career-map
+              .map=${map}
+              .journey=${this.journey}
+              .reachable=${s.reachable}
+              .selected=${this.selected}
+              @select-city=${this._onSelect}
+            ></career-map>`
+          : html`<career-island
+              .map=${map}
+              .journey=${this.journey}
+              .reachable=${s.reachable}
+              .selected=${this.selected}
+              @select-city=${this._onSelect}
+            ></career-island>`}
 
         <div class="panel">
           ${sel
