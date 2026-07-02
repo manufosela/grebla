@@ -1091,10 +1091,10 @@ export class SuperadminPanel extends LitElement {
         ${!fw
           ? html`<p class="empty">Cargando el framework…</p>`
           : html`
-              ${this._renderNamedSection('tracks', 'Tracks', 'track', 'track', fw.tracks)}
+              ${this._renderNamedSection('tracks', 'Tracks', 'track', 'track', fw.tracks, 'Itinerarios de carrera dentro de la organización. Ejemplos: Individual Contributor, Management.')}
               ${this._renderFwLevels(fw)}
-              ${this._renderNamedSection('disciplines', 'Disciplinas', 'disciplina', 'discipline', fw.disciplines)}
-              ${this._renderNamedSection('dimensions', 'Dimensiones', 'dimensión', 'dimension', fw.dimensions)}
+              ${this._renderNamedSection('disciplines', 'Disciplinas', 'disciplina', 'discipline', fw.disciplines, 'Disciplina = familia de carrera que matiza las expectativas de cada nivel; la gestiona el superadmin. Ejemplos: Backend, Web/Frontend, Infra/Platform, Data/ML, Mobile.')}
+              ${this._renderNamedSection('dimensions', 'Dimensiones', 'dimensión', 'dimension', fw.dimensions, 'Ejes de evaluación de cada nivel. Ejemplos: Technical Excellence, Reliability, Product.')}
               ${this._renderFwExpectations(fw)}
               ${this._renderFwAddendums(fw)}
               ${this.readOnly
@@ -1117,12 +1117,14 @@ export class SuperadminPanel extends LitElement {
    * @param {string} title @param {string} singular
    * @param {'track'|'discipline'|'dimension'} field  clave en _fwNew
    * @param {Array<import('../tools/career/data/framework.js').NamedItem>} items
+   * @param {string} [hint]  explicación breve del eje (qué es + ejemplos)
    */
-  _renderNamedSection(kind, title, singular, field, items) {
+  _renderNamedSection(kind, title, singular, field, items, hint = '') {
     const sorted = [...items].toSorted((a, b) => a.order - b.order);
     return html`
       <details open>
         <summary class="sub">${title} (${items.length})</summary>
+        ${hint ? html`<p class="ro-note">${hint}</p>` : null}
         ${this.readOnly
           ? null
           : html`<div class="toolbar">
@@ -1180,6 +1182,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <details open>
         <summary class="sub">Niveles (${fw.levels.length})</summary>
+        <p class="ro-note">Escalones de cada track (p. ej. L1…L7); a cada persona se le asigna uno.</p>
         ${this.readOnly
           ? null
           : html`<div class="toolbar">
