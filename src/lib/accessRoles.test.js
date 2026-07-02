@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeAccessUsers } from './accessRoles.js';
+import { mergeAccessUsers, unlinkedUsers } from './accessRoles.js';
 
 describe('mergeAccessUsers', () => {
   it('fusiona el directorio /users con los roles y ordena por última conexión', () => {
@@ -58,5 +58,38 @@ describe('mergeAccessUsers', () => {
 
   it('grupos vacíos o ausentes devuelven lista vacía', () => {
     expect(mergeAccessUsers({})).toEqual([]);
+  });
+});
+
+describe('unlinkedUsers', () => {
+  it('excluye los usuarios cuyo uid ya está vinculado a una persona', () => {
+    const users = [{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }];
+    const result = unlinkedUsers(users, ['u2']);
+    expect(result.map((u) => u.uid)).toEqual(['u1', 'u3']);
+  });
+
+  it('sin vínculos, devuelve todos los usuarios', () => {
+    const users = [{ uid: 'u1' }, { uid: 'u2' }];
+    expect(unlinkedUsers(users, [])).toEqual(users);
+  });
+
+  it('acepta docs de /users (campo id) además de AccessUser (uid)', () => {
+    const users = [{ id: 'u1' }, { id: 'u2' }];
+    expect(unlinkedUsers(users, new Set(['u1'])).map((u) => u.id)).toEqual(['u2']);
+  });
+
+  it('acepta un Set de uids vinculados', () => {
+    const users = [{ uid: 'a' }, { uid: 'b' }];
+    expect(unlinkedUsers(users, new Set(['b'])).map((u) => u.uid)).toEqual(['a']);
+  });
+
+  it('descarta usuarios sin uid ni id (no puede vincularse una cuenta sin identificador)', () => {
+    const users = [{ uid: 'a' }, { displayName: 'anónimo' }];
+    expect(unlinkedUsers(users, []).map((u) => u.uid)).toEqual(['a']);
+  });
+
+  it('lista de usuarios vacía o ausente devuelve lista vacía', () => {
+    expect(unlinkedUsers([], ['x'])).toEqual([]);
+    expect(unlinkedUsers(undefined, ['x'])).toEqual([]);
   });
 });

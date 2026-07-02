@@ -26,6 +26,7 @@ import {
   addGuild,
 } from '../../tools/team/application/usecases/index.js';
 import { composeTitle } from '../../tools/career/data/framework.js';
+import { listUsers, unlinkedUsers } from '../../lib/users.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
@@ -46,9 +47,11 @@ export class TeamPeople extends LitElement {
     people: { state: true },
     labels: { state: true },
     guilds: { state: true },
+    users: { state: true },
     loading: { state: true },
     error: { state: true },
     _name: { state: true },
+    _selectedUid: { state: true },
     _selectedDisciplines: { state: true },
     _levelId: { state: true },
     _selectedGuilds: { state: true },
@@ -69,6 +72,7 @@ export class TeamPeople extends LitElement {
     _editLevelId: { state: true },
     _editGuilds: { state: true },
     _editLabels: { state: true },
+    _editUid: { state: true },
   };
 
   static styles = css`
@@ -205,9 +209,13 @@ export class TeamPeople extends LitElement {
     this.labels = [];
     /** @type {import('../../tools/team/domain/types.js').Guild[]} */
     this.guilds = [];
+    /** @type {Array<{ uid: string, displayName: string|null, email: string|null }>} directorio /users (para vincular cuenta) */
+    this.users = [];
     this.loading = true;
     this.error = '';
     this._name = '';
+    /** @type {string} uid de la cuenta a vincular en el alta ('' = sin vincular) */
+    this._selectedUid = '';
     /** @type {string[]} ids de disciplina seleccionadas para el alta */
     this._selectedDisciplines = [];
     /** @type {string} id de nivel seleccionado para el alta ('' = sin nivel) */
@@ -244,6 +252,8 @@ export class TeamPeople extends LitElement {
     this._editGuilds = [];
     /** @type {string[]} labels seleccionados en el modal Editar */
     this._editLabels = [];
+    /** @type {string} uid vinculado en el modal Editar ('' = sin vincular) */
+    this._editUid = '';
     this._loaded = false;
   }
 
@@ -258,19 +268,91 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [people, labels, guilds] = await Promise.all([
+      const [people, labels, guilds, users] = await Promise.all([
         listActivePeople(this.persistence),
         listLabels(this.persistence),
         listGuilds(this.persistence),
+        listUsers(),
       ]);
       this.people = people;
       this.labels = labels;
       this.guilds = guilds;
+      this.users = users;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
     } finally {
       this.loading = false;
     }
+  }
+
+  /**
+   * uids de cuentas ya vinculadas a las personas cargadas del líder. `exceptUid`
+   * (p. ej. la cuenta de la persona en edición) se excluye para que siga siendo
+   * una opción seleccionable del selector.
+   * @param {string} [exceptUid]
+   * @returns {Set<string>}
+   */
+  _linkedUids(exceptUid) {
+    const set = new Set();
+    for (const p of this.people) {
+      if (typeof p.uid === 'string' && p.uid && p.uid !== exceptUid) set.add(p.uid);
+    }
+    return set;
+  }
+
+  /**
+   * Cuentas "sin asignar" para vincular (directorio /users menos las ya
+   * vinculadas), conservando opcionalmente `exceptUid` como opción disponible.
+   * @param {string} [exceptUid]
+   * @returns {Array<{ uid: string, displayName: string|null, email: string|null }>}
+   */
+  _unlinkedAccounts(exceptUid) {
+    return /** @type {Array<{ uid: string, displayName: string|null, email: string|null }>} */ (
+      unlinkedUsers(this.users, this._linkedUids(exceptUid))
+    );
+  }
+
+  /**
+   * Etiqueta legible de una cuenta (displayName y email si los hay).
+   * @param {{ uid: string, displayName: string|null, email: string|null }} user
+   * @returns {string}
+   */
+  _accountLabel(user) {
+    const name = user.displayName ?? user.email ?? user.uid;
+    return user.displayName && user.email ? `${name} · ${user.email}` : name;
+  }
+
+  /**
+   * Elige una cuenta a vincular en el alta: fija el uid y, si la cuenta trae
+   * displayName, precarga el nombre de la persona con él.
+   * @param {string} uid
+   */
+  _onSelectAltaAccount(uid) {
+    this._selectedUid = uid;
+    if (uid) {
+      const user = this.users.find((u) => u.uid === uid);
+      if (user?.displayName) this._name = user.displayName;
+    }
+  }
+
+  /**
+   * Selector opcional "Vincular cuenta": ofrece las cuentas sin asignar (más la
+   * ya vinculada a la persona en edición, vía `exceptUid`). La opción
+   * "— sin vincular —" desvincula (uid → null).
+   * @param {string} value  uid seleccionado ('' = sin vincular)
+   * @param {(uid: string) => void} onChange
+   * @param {string} [exceptUid]
+   */
+  _renderAccountSelect(value, onChange, exceptUid) {
+    const accounts = this._unlinkedAccounts(exceptUid);
+    return html`
+      <label>Vincular cuenta (opcional)
+        <select .value=${value ?? ''} @change=${(e) => onChange(e.target.value)}>
+          <option value="">— sin vincular —</option>
+          ${accounts.map((u) => html`<option value=${u.uid}>${this._accountLabel(u)}</option>`)}
+        </select>
+      </label>
+    `;
   }
 
   /** @param {string} id @param {boolean} checked */
@@ -341,6 +423,7 @@ export class TeamPeople extends LitElement {
         labels: [...this._selectedLabels],
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
         githubLogin: this._github,
+        uid: this._selectedUid || null,
       });
       this._name = '';
       this._selectedDisciplines = [];
@@ -351,6 +434,7 @@ export class TeamPeople extends LitElement {
       this._newLabel = '';
       this._startDate = '';
       this._github = '';
+      this._selectedUid = '';
       await this._load();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo crear la persona.';
@@ -501,6 +585,7 @@ export class TeamPeople extends LitElement {
     this._editLevelId = person.levelId ?? '';
     this._editGuilds = [...(person.guilds ?? [])];
     this._editLabels = [...(person.labels ?? [])];
+    this._editUid = person.uid ?? '';
     this.error = '';
   }
 
@@ -538,6 +623,7 @@ export class TeamPeople extends LitElement {
         levelId: this._editLevelId || null,
         guilds: [...this._editGuilds],
         labels: [...this._editLabels],
+        uid: this._editUid || null,
       });
       this._editFor = null;
       await this._load();
@@ -708,9 +794,10 @@ export class TeamPeople extends LitElement {
         ${person
           ? html`
               <div class="modal-body">
-                <p>Disciplinas, nivel, gremios y labels de esta persona.</p>
+                <p>Disciplinas, nivel, gremios, labels y cuenta vinculada de esta persona.</p>
                 ${this._renderDisciplineChecks(this._editDisciplines, (id, checked) => this._toggleEditDiscipline(id, checked))}
                 ${this._renderLevelSelect(this._editLevelId, (id) => { this._editLevelId = id; })}
+                ${this._renderAccountSelect(this._editUid, (uid) => { this._editUid = uid; }, person.uid ?? undefined)}
                 <fieldset class="roles">
                   <legend>Gremios</legend>
                   <div class="edit-checks">
@@ -779,6 +866,7 @@ export class TeamPeople extends LitElement {
               <input type="text" placeholder="usuario" .value=${this._github} @input=${(e) => { this._github = e.target.value; }} />
             </label>
           </div>
+          ${this._renderAccountSelect(this._selectedUid, (uid) => this._onSelectAltaAccount(uid))}
           ${this._renderDisciplineChecks(this._selectedDisciplines, (id, checked) => this._toggleDiscipline(id, checked))}
           ${this._renderLevelSelect(this._levelId, (id) => { this._levelId = id; })}
           <fieldset class="roles">
