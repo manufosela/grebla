@@ -344,6 +344,12 @@ export class TeamSettings extends LitElement {
     return html`
       <section>
         <h2>Áreas de conocimiento</h2>
+        <p class="hint">
+          Unidad de dominio sobre la que mides el nivel (1–7) de cada persona y calculas el
+          <em>bus factor</em> (el riesgo si el experto se va). Es el catálogo global de la
+          organización, compartido por todos los líderes. Ejemplos: Arquitectura, Frontend,
+          Infra/Cloud, Backend de pagos, Base de datos.
+        </p>
         ${this.areas.length === 0
           ? html`<p class="empty">Aún no hay áreas. Crea las áreas técnicas de tu equipo.</p>`
           : html`
@@ -385,7 +391,11 @@ export class TeamSettings extends LitElement {
     return html`
       <section>
         <h2>Gremios</h2>
-        <p class="hint">Gremios (tecnologías/stack, transversales a la disciplina). Los <strong>globales</strong> los define la organización y los ve todo el mundo; los que crees aquí son <strong>tuyos</strong>.</p>
+        <p class="hint">
+          Tecnología o stack como etiqueta transversal: no se mide nivel, solo se asigna a la
+          persona. Ejemplos: JavaScript, PHP, Python, Kubernetes, React. Los <strong>globales</strong>
+          los define la organización y los ve todo el mundo; los que crees aquí son <strong>tuyos</strong>.
+        </p>
         ${this.guilds.length === 0
           ? html`<p class="empty">Aún no hay gremios. Crea los gremios (PHP, Python, Android, iOS…) de tu equipo.</p>`
           : html`
@@ -430,7 +440,11 @@ export class TeamSettings extends LitElement {
     return html`
       <section>
         <h2>Labels</h2>
-        <p class="hint">Etiquetas libres para agrupar personas. Las <strong>globales</strong> las define la organización; las que crees aquí son <strong>tuyas</strong>.</p>
+        <p class="hint">
+          Etiqueta libre para agrupar personas, por ejemplo por equipo o squad. Ejemplos:
+          Equipo Web, Squad Pagos, Guardia. Las <strong>globales</strong> las define la
+          organización; las que crees aquí son <strong>tuyas</strong>.
+        </p>
         ${this.labels.length === 0
           ? html`<p class="empty">Aún no hay labels. Crea los que necesites para agrupar a tu equipo.</p>`
           : html`

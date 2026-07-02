@@ -96,6 +96,8 @@ export class TeamPeople extends LitElement {
     .role-add { display: flex; gap: 0.5rem; align-items: center; }
     .role-add input { flex: 1; }
     .role-hint { font-size: 0.78rem; margin: 0; }
+    /* Micro-aclaración por eje (Disciplinas/Gremios/Labels) dentro del alta/edición. */
+    .eje-hint { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0 0 0.6rem; }
     .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
     .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #111827); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
     .title { font-weight: 600; color: var(--rm-text, #111827); }
@@ -678,6 +680,7 @@ export class TeamPeople extends LitElement {
     return html`
       <fieldset class="roles">
         <legend>Disciplinas</legend>
+        <p class="eje-hint">Familia de carrera (Backend, Web, Infra…) que ajusta las expectativas del nivel.</p>
         <div class="role-checks">
           ${disciplines.length === 0
             ? this._frameworkHint('disciplinas')
@@ -838,6 +841,7 @@ export class TeamPeople extends LitElement {
                 ${this._renderAccountSelect(this._editUid, (uid) => { this._editUid = uid; }, person.uid ?? undefined)}
                 <fieldset class="roles">
                   <legend>Gremios</legend>
+                  <p class="eje-hint">Tecnología o stack que domina la persona (JavaScript, Python, Kubernetes…); no mide nivel.</p>
                   <div class="edit-checks">
                     ${this.guilds.length === 0
                       ? html`<span class="muted">Aún no hay gremios.
@@ -858,6 +862,7 @@ export class TeamPeople extends LitElement {
                 </fieldset>
                 <fieldset class="roles">
                   <legend>Labels</legend>
+                  <p class="eje-hint">Agrupación libre por equipo, squad o guardia.</p>
                   <div class="edit-checks">
                     ${this.labels.length === 0
                       ? html`<span class="muted">Aún no hay labels.
@@ -911,6 +916,7 @@ export class TeamPeople extends LitElement {
           ${this._renderLevelSelect(this._levelId, (id) => { this._levelId = id; })}
           <fieldset class="roles">
             <legend>Gremios</legend>
+            <p class="eje-hint">Tecnología o stack que domina la persona (JavaScript, Python, Kubernetes…); no mide nivel.</p>
             <div class="role-checks">
               ${this.guilds.length === 0
                 ? html`<span class="muted">Aún no hay gremios. Añade el primero abajo.</span>`
@@ -940,6 +946,7 @@ export class TeamPeople extends LitElement {
           </fieldset>
           <fieldset class="roles">
             <legend>Labels</legend>
+            <p class="eje-hint">Agrupación libre por equipo, squad o guardia.</p>
             <div class="role-checks">
               ${this.labels.length === 0
                 ? html`<span class="muted">Aún no hay labels. Añade el primero abajo.</span>`
