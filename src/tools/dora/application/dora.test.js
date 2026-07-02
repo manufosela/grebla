@@ -104,3 +104,37 @@ describe('DORA — configuración de repos', () => {
     expect((await listRepos(p))[0].deploySignal).toBe('branch');
   });
 });
+
+describe('DORA — repos owner-scoped (multi-leader)', () => {
+  it('add estampa ownerLeaderUid con el líder que crea el repo', async () => {
+    const leader = createMemoryDoraPersistence([], { leaderUid: 'uid-ana' });
+    const id = await addRepo(leader, { fullName: 'org/web', startDate: '2025-01-01' });
+    const repo = (await leader.repos.list()).find((r) => r.id === id);
+    expect(repo.ownerLeaderUid).toBe('uid-ana');
+  });
+
+  it('list del líder filtra por owner; viewAll (superadmin) los ve todos', async () => {
+    // Cada líder tiene su propia vista (mismo store no aplica: son instancias
+    // distintas); aquí simulamos un store compartido con el seed.
+    const seed = [
+      { id: 'r1', fullName: 'org/web', ownerLeaderUid: 'uid-ana', guilds: [], baseBranch: 'main', deploySignal: 'branch', startDate: null },
+      { id: 'r2', fullName: 'org/api', ownerLeaderUid: 'uid-luis', guilds: [], baseBranch: 'main', deploySignal: 'branch', startDate: null },
+      { id: 'r3', fullName: 'org/legacy', guilds: [], baseBranch: 'main', deploySignal: 'branch', startDate: null },
+    ];
+    const ana = createMemoryDoraPersistence(seed, { leaderUid: 'uid-ana' });
+    const superadmin = createMemoryDoraPersistence(seed, { leaderUid: 'uid-ana', viewAll: true });
+
+    // El líder solo ve los suyos (no los de otro líder ni los legacy sin owner).
+    expect((await listRepos(ana)).map((r) => r.fullName)).toEqual(['org/web']);
+    // El superadmin (viewAll) ve todos, incluidos los legacy sin ownerLeaderUid.
+    expect((await listRepos(superadmin)).map((r) => r.fullName)).toEqual(['org/api', 'org/legacy', 'org/web']);
+  });
+
+  it('sin leaderUid la lista es plana (compatibilidad con los tests existentes)', async () => {
+    const flat = createMemoryDoraPersistence();
+    await addRepo(flat, { fullName: 'org/web', startDate: '2025-01-01' });
+    const repo = (await flat.repos.list())[0];
+    expect(repo.ownerLeaderUid).toBeUndefined();
+    expect((await listRepos(flat)).map((r) => r.fullName)).toEqual(['org/web']);
+  });
+});

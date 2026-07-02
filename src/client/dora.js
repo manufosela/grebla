@@ -18,8 +18,14 @@ onUserChanged(async (user) => {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como líder.';
       return;
     }
-    const { persistence, refresh } = await createDoraContainer({ mode: 'firestore' });
-    app.isAdmin = role === 'superadmin'; // solo el superadmin configura repos
+    const { persistence, refresh } = await createDoraContainer({
+      mode: 'firestore',
+      leaderUid: user.uid,
+      viewAll: role === 'superadmin', // el superadmin ve y gestiona los repos de toda la organización
+    });
+    // El líder gestiona SUS repos; el superadmin, todos. El viewer (solo lectura,
+    // tipo C-level) nunca edita: solo ve la lista.
+    app.canEdit = role === 'superadmin' || role === 'leader';
     app.refresh = refresh;
     app.persistence = persistence;
   } catch (err) {

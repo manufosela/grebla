@@ -1,13 +1,14 @@
 /**
  * <dora-repos>
- * Configuración de repositorios DORA: alta (admin) con solo el repo (owner/repo) y
- * una fecha de inicio opcional (si se omite, se mide desde la creación del repo);
- * lista, métricas y baja. Quien no es admin solo ve la lista. La agrupación por
- * equipos/gremios se hará más adelante, a posteriori, una vez haya métricas.
+ * Configuración de repositorios DORA: alta (superadmin y líderes) con solo el
+ * repo (owner/repo) y una fecha de inicio opcional (si se omite, se mide desde la
+ * creación del repo); lista, métricas y baja. Cada líder gestiona SUS repos; el
+ * superadmin, todos. El viewer solo ve la lista. La agrupación por equipos/gremios
+ * se hará más adelante, a posteriori, una vez haya métricas.
  *
  * Propiedades:
  *  - persistence: DoraPersistence (inyectada por <dora-app>)
- *  - isAdmin: boolean
+ *  - canEdit: boolean  (superadmin o líder pueden añadir/editar/borrar sus repos)
  */
 import { LitElement, html, css } from 'lit';
 import {
@@ -31,7 +32,7 @@ const fmtDate = (iso) => {
 export class DoraRepos extends LitElement {
   static properties = {
     persistence: { attribute: false },
-    isAdmin: { attribute: false },
+    canEdit: { attribute: false },
     repos: { state: true },
     loading: { state: true },
     error: { state: true },
@@ -85,7 +86,7 @@ export class DoraRepos extends LitElement {
   constructor() {
     super();
     this.persistence = null;
-    this.isAdmin = false;
+    this.canEdit = false;
     /** @type {import('../../tools/dora/domain/types.js').DoraRepo[]} */
     this.repos = [];
     this.loading = true;
@@ -206,8 +207,8 @@ export class DoraRepos extends LitElement {
   }
 
   _renderForm() {
-    if (!this.isAdmin) {
-      return html`<p class="muted">Solo un administrador puede añadir o quitar repositorios.</p>`;
+    if (!this.canEdit) {
+      return html`<p class="muted">Solo puedes consultar la lista de repositorios.</p>`;
     }
     return html`
       <form @submit=${this._add}>
@@ -237,7 +238,7 @@ export class DoraRepos extends LitElement {
   }
 
   _renderActions(repo) {
-    if (!this.isAdmin) return null;
+    if (!this.canEdit) return null;
     if (this._editing === repo.id) {
       return html`<span class="confirm">
         <button class="yes" @click=${() => this._saveEdit(repo.id)}>Guardar</button>
@@ -258,7 +259,7 @@ export class DoraRepos extends LitElement {
 
   /** Celdas de equipo, gremios y rama base: en edición (admin) muestran inputs. */
   _renderConfigCells(repo) {
-    if (this.isAdmin && this._editing === repo.id) {
+    if (this.canEdit && this._editing === repo.id) {
       return html`
         <td><input class="edit-in" list="dora-teams" placeholder="(sin equipo)"
           .value=${this._editTeam} @input=${(e) => { this._editTeam = e.target.value; }} /></td>
@@ -303,7 +304,7 @@ export class DoraRepos extends LitElement {
             : html`
                 <table>
                   <thead>
-                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Despliegue</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.isAdmin ? html`<th></th>` : null}</tr>
+                    <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Despliegue</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.canEdit ? html`<th></th>` : null}</tr>
                   </thead>
                   <tbody>
                     ${this.repos.map(
@@ -313,7 +314,7 @@ export class DoraRepos extends LitElement {
                           ${this._renderConfigCells(r)}
                           <td>${fmtDate(r.startDate)}</td>
                           ${this._metricCells(r)}
-                          ${this.isAdmin ? html`<td class="num">${this._renderActions(r)}</td>` : null}
+                          ${this.canEdit ? html`<td class="num">${this._renderActions(r)}</td>` : null}
                         </tr>
                       `,
                     )}
