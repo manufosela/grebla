@@ -87,6 +87,7 @@ export class TeamPersonDetail extends LitElement {
     person: { attribute: false },
     framework: { attribute: false },
     isAdmin: { attribute: false },
+    initialSubtab: { attribute: false },
     timeline: { state: true },
     areas: { state: true },
     conversations: { state: true },
@@ -214,6 +215,8 @@ export class TeamPersonDetail extends LitElement {
     this.framework = null;
     /** @type {boolean} el enlace al panel de admin del framework solo se muestra al superadmin */
     this.isAdmin = false;
+    /** @type {string|null} sub-pestaña con la que abrir la ficha (p. ej. al saltar desde una dimensión del Mapa) */
+    this.initialSubtab = null;
     /** @type {string} sub-pestaña activa de la ficha */
     this._subtab = 'carrera';
     /** @type {{ levelId: string, disciplines: string[] }} edición inline de carrera (nivel + disciplinas) */
@@ -247,6 +250,11 @@ export class TeamPersonDetail extends LitElement {
   updated() {
     if (this.persistence && this.person && this._loadedFor !== this.person.id) {
       this._loadedFor = this.person.id;
+      // Al abrir una persona nueva, respeta la sub-pestaña inicial solicitada
+      // (p. ej. la dimensión pulsada en el Mapa); si no, arranca en «Carrera».
+      if (this.initialSubtab && SUBTABS.some((t) => t.id === this.initialSubtab)) {
+        this._subtab = this.initialSubtab;
+      }
       this._seedCareer();
       this._load();
     }

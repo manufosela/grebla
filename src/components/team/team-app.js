@@ -34,6 +34,7 @@ export class TeamApp extends LitElement {
     framework: { attribute: false },
     view: { state: true },
     selected: { state: true },
+    selectedSubtab: { state: true },
     error: { state: true },
   };
 
@@ -79,6 +80,8 @@ export class TeamApp extends LitElement {
     const rawHash = location.hash.slice(1);
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.selected = null;
+    /** @type {string|null} sub-pestaña inicial con la que abrir la ficha (p. ej. al saltar desde una dimensión del Mapa) */
+    this.selectedSubtab = null;
     /** @type {string|null} id de persona pendiente de abrir cuando llegue `persistence` (deep-link) */
     this._pendingPersonId = null;
     if (rawHash.startsWith(PERSON_HASH)) {
@@ -133,7 +136,7 @@ export class TeamApp extends LitElement {
       return; // el listener de hashchange fija this.view y limpia selected
     }
     this.view = view;
-    if (view !== 'person') this.selected = null;
+    if (view !== 'person') { this.selected = null; this.selectedSubtab = null; }
   }
 
   /**
@@ -151,6 +154,7 @@ export class TeamApp extends LitElement {
     if (TEAM_TABS.includes(raw)) {
       this.view = raw;
       this.selected = null;
+      this.selectedSubtab = null;
     }
   }
 
@@ -178,13 +182,35 @@ export class TeamApp extends LitElement {
     }
   }
 
+  /**
+   * Abre la ficha de una persona en respuesta a `open-person`. Acepta dos formas
+   * de detalle: `{ person }` (objeto completo, desde la sección Personas) o
+   * `{ personId, subtab }` (solo id, desde el Mapa; la persona se resuelve por id).
+   * `subtab` es opcional y fija la sub-pestaña inicial de la ficha (dimensión).
+   * @param {CustomEvent<{ person?: import('../../tools/team/domain/types.js').Person, personId?: string, subtab?: string }>} event
+   * @returns {void}
+   */
   _onOpenPerson(event) {
-    const person = event.detail.person;
-    this.selected = person;
-    this.view = 'person';
-    // Refleja la ficha en el hash para que la recarga la conserve.
-    const target = `${PERSON_HASH}${encodeURIComponent(person.id)}`;
-    if (location.hash.slice(1) !== target) location.hash = target;
+    const detail = event.detail ?? {};
+    const person = detail.person ?? null;
+    const personId = person?.id ?? detail.personId ?? null;
+    if (!personId) return;
+    // Sub-pestaña inicial opcional (al pulsar una dimensión concreta en el Mapa).
+    this.selectedSubtab = detail.subtab ?? null;
+    if (person) {
+      this.selected = person;
+      this.view = 'person';
+    }
+    // Refleja la ficha en el hash para que la recarga la conserve. Si no teníamos
+    // el objeto (solo id), el hashchange dispara la resolución (_openPersonById);
+    // si el hash ya coincidía, la resolvemos aquí de forma explícita.
+    const target = `${PERSON_HASH}${encodeURIComponent(personId)}`;
+    if (location.hash.slice(1) !== target) {
+      location.hash = target;
+      if (!person) return;
+    } else if (!person) {
+      this._openPersonById(personId);
+    }
   }
 
   _tab(key, label) {
@@ -228,6 +254,7 @@ export class TeamApp extends LitElement {
             .person=${this.selected}
             .framework=${this.framework}
             .isAdmin=${this.isAdmin}
+            .initialSubtab=${this.selectedSubtab}
           ></team-person-detail>
         `;
       case 'map':

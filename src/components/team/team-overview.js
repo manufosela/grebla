@@ -56,6 +56,11 @@ export class TeamOverview extends LitElement {
     .muted { color: var(--rm-muted, #9ca3af); }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
+    .link-inline {
+      border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
+    }
+    .link-inline:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
     button {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
@@ -131,6 +136,18 @@ export class TeamOverview extends LitElement {
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo exportar.';
     }
+  }
+
+  /**
+   * Pide a `<team-app>` que cambie de sección principal (p. ej. «Personas» o
+   * «Ajustes») mediante el evento burbujeante `goto-tab`.
+   * @param {string} tab
+   * @returns {void}
+   */
+  _gotoTab(tab) {
+    this.dispatchEvent(
+      new CustomEvent('goto-tab', { detail: { tab }, bubbles: true, composed: true }),
+    );
   }
 
   _renderRadar(coverage) {
@@ -269,7 +286,11 @@ export class TeamOverview extends LitElement {
       <section>
         <h2>Bus factor por área</h2>
         ${h.busFactor.length === 0
-          ? html`<p class="empty">Sin datos de conocimiento. Registra niveles por área en las fichas.</p>`
+          ? html`<p class="empty">Sin datos de conocimiento. Registra niveles por área en las fichas de
+              <button type="button" class="link-inline" @click=${() => this._gotoTab('people')}>Personas</button>.${this._areaName.size === 0
+                ? html` Antes, crea áreas de conocimiento en
+                    <button type="button" class="link-inline" @click=${() => this._gotoTab('settings')}>Ajustes</button>.`
+                : ''}</p>`
           : html`
               <table>
                 <thead><tr><th>Área</th><th class="num">Personas que cubren</th><th>Estado</th></tr></thead>
