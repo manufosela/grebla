@@ -17,8 +17,12 @@ import './team-person-detail.js';
 import './team-settings.js';
 import './team-overview.js';
 import './team-map.js';
+import { listActivePeople } from '../../tools/team/application/usecases/index.js';
 
 const TEAM_TABS = ['people', 'map', 'departures', 'team', 'settings'];
+
+/** Prefijo del hash que enlaza directamente a la ficha de una persona. */
+const PERSON_HASH = 'person=';
 
 export class TeamApp extends LitElement {
   static properties = {
@@ -72,28 +76,53 @@ export class TeamApp extends LitElement {
     this.members = [];
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
     this.framework = null;
-    /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
-    this.view = TEAM_TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'people';
+    const rawHash = location.hash.slice(1);
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.selected = null;
+    /** @type {string|null} id de persona pendiente de abrir cuando llegue `persistence` (deep-link) */
+    this._pendingPersonId = null;
+    if (rawHash.startsWith(PERSON_HASH)) {
+      // Deep-link a una ficha: se resuelve cuando `persistence` esté disponible.
+      /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
+      this.view = 'people';
+      this._pendingPersonId = decodeURIComponent(rawHash.slice(PERSON_HASH.length)) || null;
+    } else {
+      this.view = TEAM_TABS.includes(rawHash) ? rawHash : 'people';
+    }
     this.error = '';
-    this._onHashChange = () => {
-      const t = location.hash.slice(1);
-      if (TEAM_TABS.includes(t)) {
-        this.view = t;
-        this.selected = null;
-      }
+    this._onHashChange = () => this._applyHash();
+    /** @param {CustomEvent<{ tab: string }>} e */
+    this._onGotoTab = (e) => {
+      const tab = e.detail?.tab;
+      if (tab) this._go(tab);
     };
   }
 
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener('hashchange', this._onHashChange);
+    // Evento burbujeante desde componentes hijos (p. ej. la ficha) para saltar a
+    // una sección; compuesto, cruza el shadow DOM hasta este host.
+    this.addEventListener('goto-tab', this._onGotoTab);
   }
 
   disconnectedCallback() {
     window.removeEventListener('hashchange', this._onHashChange);
+    this.removeEventListener('goto-tab', this._onGotoTab);
     super.disconnectedCallback();
+  }
+
+  /**
+   * Resuelve el deep-link de ficha en cuanto `persistence` está disponible (el
+   * contenedor se inyecta de forma asíncrona tras resolver el acceso).
+   * @param {Map<string, unknown>} changed
+   */
+  updated(changed) {
+    if (changed.has('persistence') && this.persistence && this._pendingPersonId) {
+      const id = this._pendingPersonId;
+      this._pendingPersonId = null;
+      this._openPersonById(id);
+    }
   }
 
   _go(view) {
@@ -107,9 +136,55 @@ export class TeamApp extends LitElement {
     if (view !== 'person') this.selected = null;
   }
 
+  /**
+   * Sincroniza el estado con el hash actual: `person=<id>` abre la ficha
+   * correspondiente; cualquiera de las 5 secciones conocidas cambia de pestaña.
+   * @returns {void}
+   */
+  _applyHash() {
+    const raw = location.hash.slice(1);
+    if (raw.startsWith(PERSON_HASH)) {
+      const id = decodeURIComponent(raw.slice(PERSON_HASH.length));
+      if (id) this._openPersonById(id);
+      return;
+    }
+    if (TEAM_TABS.includes(raw)) {
+      this.view = raw;
+      this.selected = null;
+    }
+  }
+
+  /**
+   * Abre la ficha de una persona a partir de su id (deep-link / recarga). Reutiliza
+   * `listActivePeople` (mismo origen que la sección Personas) para localizarla; si
+   * no existe o falla, vuelve a la lista de personas.
+   * @param {string} id
+   * @returns {Promise<void>}
+   */
+  async _openPersonById(id) {
+    if (this.selected?.id === id && this.view === 'person') return;
+    if (!this.persistence) { this._pendingPersonId = id; return; }
+    try {
+      const people = await listActivePeople(this.persistence);
+      const person = people.find((p) => p.id === id);
+      if (person) {
+        this.selected = person;
+        this.view = 'person';
+      } else {
+        this._go('people');
+      }
+    } catch {
+      this._go('people');
+    }
+  }
+
   _onOpenPerson(event) {
-    this.selected = event.detail.person;
+    const person = event.detail.person;
+    this.selected = person;
     this.view = 'person';
+    // Refleja la ficha en el hash para que la recarga la conserve.
+    const target = `${PERSON_HASH}${encodeURIComponent(person.id)}`;
+    if (location.hash.slice(1) !== target) location.hash = target;
   }
 
   _tab(key, label) {
@@ -152,6 +227,7 @@ export class TeamApp extends LitElement {
             .persistence=${this.persistence}
             .person=${this.selected}
             .framework=${this.framework}
+            .isAdmin=${this.isAdmin}
           ></team-person-detail>
         `;
       case 'map':

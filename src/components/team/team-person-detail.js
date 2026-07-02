@@ -21,6 +21,7 @@ import {
   addSupportNote,
   listSupportNotes,
   removeSupportNote,
+  updatePerson,
 } from '../../tools/team/application/usecases/index.js';
 import { levelLabel } from '../../tools/team/domain/levels.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
@@ -65,23 +66,43 @@ const DIMENSIONS = [
   },
 ];
 
+/**
+ * Sub-pestañas de la ficha de persona. El orden define el recorrido con las
+ * flechas del teclado y el primer elemento (`carrera`) es el activo por defecto.
+ * @type {ReadonlyArray<{ id: string, label: string }>}
+ */
+const SUBTABS = [
+  { id: 'carrera', label: 'Carrera' },
+  { id: 'seniority', label: 'Seniority' },
+  { id: 'emotional', label: 'Emocional' },
+  { id: 'knowledge', label: 'Conocimiento' },
+  { id: 'contribution', label: 'Contribución' },
+  { id: 'conversations', label: 'Conversaciones' },
+  { id: 'notes', label: 'Notas' },
+];
+
 export class TeamPersonDetail extends LitElement {
   static properties = {
     persistence: { attribute: false },
     person: { attribute: false },
     framework: { attribute: false },
+    isAdmin: { attribute: false },
     timeline: { state: true },
     areas: { state: true },
     conversations: { state: true },
     notes: { state: true },
     loading: { state: true },
     error: { state: true },
+    _subtab: { state: true },
     _form: { state: true },
     _know: { state: true },
     _contrib: { state: true },
     _conv: { state: true },
     _noteText: { state: true },
     _confirmNote: { state: true },
+    _career: { state: true },
+    _careerSaving: { state: true },
+    _careerError: { state: true },
   };
 
   static styles = css`
@@ -131,11 +152,6 @@ export class TeamPersonDetail extends LitElement {
     .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .bias { font-size: 0.78rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 0 0.75rem; }
     section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
-    section.career > details > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; }
-    section.career > details > summary::-webkit-details-marker { display: none; }
-    section.career > details > summary h3 { display: inline; }
-    section.career > details > summary::before { content: '▸'; color: var(--rm-muted, #9ca3af); font-size: 0.8rem; transition: transform 0.15s ease; }
-    section.career > details[open] > summary::before { transform: rotate(90deg); }
     .career .sub { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); margin: 1.1rem 0 0.35rem; }
     .career .now .code { font-weight: 700; }
     .career .now .desc { font-size: 0.85rem; color: var(--rm-text, #111827); margin: 0.2rem 0 0; }
@@ -160,6 +176,33 @@ export class TeamPersonDetail extends LitElement {
     .career .target-declared { margin: 0.2rem 0 0; font-size: 0.9rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); }
     .career .target-declared .code { font-weight: 800; }
     .career .target-none { margin: 0.2rem 0 0; font-size: 0.83rem; color: var(--rm-muted, #9ca3af); font-style: italic; }
+
+    /* ── Barra de sub-pestañas (patrón ARIA tablist, coherente con Ajustes) ── */
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .tab {
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    }
+    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .tab:hover:not(.active) { color: var(--rm-text, #111827); }
+    .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .subpanel:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: var(--rm-radius, 12px); }
+
+    /* ── Editor inline de carrera (nivel + disciplinas) ── */
+    .career-editor { display: grid; gap: 0.75rem; margin: 0.25rem 0 1.25rem; }
+    .career-editor .edit-hint { margin: 0; font-size: 0.83rem; color: var(--rm-muted, #6b7280); }
+    .career-editor .fld { max-width: 28rem; }
+    fieldset.disc { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 8px; padding: 0.6rem 0.9rem; margin: 0; }
+    fieldset.disc legend { font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; padding: 0 0.35rem; }
+    .disc-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.35rem 1rem; }
+    .disc-check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; }
+    .fw-admin { margin: 1rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .fw-admin a { color: var(--rm-accent, #2a9d8f); font-weight: 600; }
+    .link-inline {
+      border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
+    }
+    .link-inline:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
   `;
 
   constructor() {
@@ -169,6 +212,16 @@ export class TeamPersonDetail extends LitElement {
     this.person = null;
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (para el título compuesto) */
     this.framework = null;
+    /** @type {boolean} el enlace al panel de admin del framework solo se muestra al superadmin */
+    this.isAdmin = false;
+    /** @type {string} sub-pestaña activa de la ficha */
+    this._subtab = 'carrera';
+    /** @type {{ levelId: string, disciplines: string[] }} edición inline de carrera (nivel + disciplinas) */
+    this._career = { levelId: '', disciplines: [] };
+    /** @type {boolean} guardado de carrera en curso */
+    this._careerSaving = false;
+    /** @type {string} error in-place del formulario de carrera */
+    this._careerError = '';
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -194,8 +247,120 @@ export class TeamPersonDetail extends LitElement {
   updated() {
     if (this.persistence && this.person && this._loadedFor !== this.person.id) {
       this._loadedFor = this.person.id;
+      this._seedCareer();
       this._load();
     }
+  }
+
+  /**
+   * Precarga el formulario inline de carrera con el nivel y disciplinas actuales
+   * de la persona. Se llama al cambiar de persona (no en cada render).
+   * @returns {void}
+   */
+  _seedCareer() {
+    this._career = {
+      levelId: this.person.levelId ?? '',
+      disciplines: [...(this.person.disciplines ?? [])],
+    };
+    this._careerError = '';
+  }
+
+  /**
+   * Navegación por teclado de la barra de sub-pestañas (patrón ARIA tablist con
+   * activación automática): ←/→ recorren de forma circular y Home/End saltan a la
+   * primera/última, moviendo el foco a la nueva pestaña.
+   * @param {KeyboardEvent} e
+   * @returns {void}
+   */
+  _onSubtabsKeydown(e) {
+    const ids = SUBTABS.map((t) => t.id);
+    const i = ids.indexOf(this._subtab);
+    let next = i;
+    if (e.key === 'ArrowLeft') next = (i - 1 + ids.length) % ids.length;
+    else if (e.key === 'ArrowRight') next = (i + 1) % ids.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = ids.length - 1;
+    else return;
+    e.preventDefault();
+    this._subtab = ids[next];
+    // Tras el re-render, mueve el foco a la sub-pestaña recién activada.
+    this.updateComplete.then(() => {
+      /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#psub-${this._subtab}`))?.focus();
+    });
+  }
+
+  /**
+   * Marca/desmarca una disciplina en el formulario inline de carrera.
+   * @param {string} id  id de la disciplina
+   * @param {boolean} checked
+   * @returns {void}
+   */
+  _toggleCareerDiscipline(id, checked) {
+    const disciplines = checked
+      ? [...this._career.disciplines, id]
+      : this._career.disciplines.filter((d) => d !== id);
+    this._career = { ...this._career, disciplines };
+  }
+
+  /**
+   * Guarda el nivel y las disciplinas de la persona (la asignación que hace el
+   * líder). Reutiliza `updatePerson`, el mismo caso de uso que la sección Personas,
+   * y refresca `this.person` reasignando un objeto nuevo para re-renderizar.
+   * @returns {Promise<void>}
+   */
+  async _saveCareer() {
+    this._careerError = '';
+    this._careerSaving = true;
+    const levelId = this._career.levelId || null;
+    const disciplines = [...this._career.disciplines];
+    try {
+      await updatePerson(this.persistence, this.person.id, { levelId, disciplines });
+      this.person = { ...this.person, levelId, disciplines };
+    } catch (err) {
+      this._careerError = err instanceof Error ? err.message : 'No se pudo guardar la carrera.';
+    } finally {
+      this._careerSaving = false;
+    }
+  }
+
+  /**
+   * Pide a `<team-app>` que abra la sección Ajustes (sub-pestaña «Áreas» por
+   * defecto) mediante un evento; no navega con `location` dentro de la SPA.
+   * @returns {void}
+   */
+  _gotoAreas() {
+    this.dispatchEvent(new CustomEvent('goto-tab', {
+      detail: { tab: 'settings' },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  /**
+   * Barra de sub-pestañas accesible (tablist con roving tabindex): solo la
+   * pestaña activa es tabulable; las flechas mueven el foco y la selección.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderSubtabs() {
+    return html`
+      <div class="tabs" role="tablist" aria-label="Secciones de la ficha" @keydown=${this._onSubtabsKeydown}>
+        ${SUBTABS.map((t) => {
+          const selected = this._subtab === t.id;
+          return html`
+            <button
+              id="psub-${t.id}"
+              class="tab ${selected ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected=${selected ? 'true' : 'false'}
+              aria-controls="ppanel-${t.id}"
+              tabindex=${selected ? '0' : '-1'}
+              @click=${() => { this._subtab = t.id; }}
+            >${t.label}</button>
+          `;
+        })}
+      </div>
+    `;
   }
 
   async _load() {
@@ -402,7 +567,9 @@ export class TeamPersonDetail extends LitElement {
       <section>
         <h3>Conocimiento por área</h3>
         ${this.areas.length === 0
-          ? html`<p class="empty">No hay áreas. Créalas en <strong>Ajustes</strong> para registrar conocimiento.</p>`
+          ? html`<p class="empty">No hay áreas.
+              <button type="button" class="link-inline" @click=${this._gotoAreas}>Créalas en Ajustes</button>
+              para registrar conocimiento.</p>`
           : html`
               ${currentByArea.size > 0
                 ? html`<div class="chips">
@@ -606,7 +773,6 @@ export class TeamPersonDetail extends LitElement {
     const fw = this.framework;
     const disciplineIds = this.person.disciplines ?? [];
     const level = getLevel(fw, this.person.levelId);
-    if (!level && disciplineIds.length === 0) return null;
 
     const trackName = (trackId) => (fw?.tracks ?? []).find((t) => t.id === trackId)?.name ?? '';
     const expectations = level ? expectationsForLevel(fw, this.person.levelId) : [];
@@ -616,19 +782,20 @@ export class TeamPersonDetail extends LitElement {
 
     return html`
       <section class="career">
-        <details open>
-        <summary><h3>Carrera</h3></summary>
+        <h3>Carrera</h3>
 
-        <p class="sub">Nivel actual</p>
+        ${this._renderCareerEditor()}
+
         ${level
           ? html`
+              <p class="sub">Nivel actual</p>
               <div class="now">
                 <p><span class="code">${level.code}</span> · ${level.title}</p>
                 ${level.description ? html`<p class="desc">${level.description}</p>` : null}
                 ${level.typicalProfile ? html`<p class="profile">Perfil típico: ${level.typicalProfile}</p>` : null}
               </div>
             `
-          : html`<p class="empty">Sin nivel asignado.</p>`}
+          : null}
 
         ${level
           ? html`
@@ -692,8 +859,79 @@ export class TeamPersonDetail extends LitElement {
           : null}
 
         ${this._renderDeclaredTarget(fw)}
-        </details>
+
+        ${this.isAdmin
+          ? html`<p class="fw-admin">
+              El framework de carrera (niveles, expectativas…) se edita en el
+              <a href="/admin#careerFramework">panel de administración</a>.
+            </p>`
+          : null}
       </section>
+    `;
+  }
+
+  /**
+   * Editor inline de carrera: nivel (agrupado por track) y disciplinas (checkboxes)
+   * de la persona. Es la asignación que hace el líder; la escala y expectativas del
+   * framework siguen siendo de solo lectura. Precargado con `person.levelId` y
+   * `person.disciplines` y guardado con `updatePerson`.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderCareerEditor() {
+    const fw = this.framework;
+    const tracks = fw?.tracks ?? [];
+    const levels = fw?.levels ?? [];
+    const disciplines = fw?.disciplines ?? [];
+    const groups = tracks
+      .map((t) => ({ track: t, levels: levels.filter((l) => l.trackId === t.id) }))
+      .filter((g) => g.levels.length > 0);
+    const selected = this._career;
+    return html`
+      <div class="career-editor">
+        <p class="edit-hint">Asigna el nivel y las disciplinas de esta persona.</p>
+        <label class="fld">Nivel
+          <select
+            .value=${selected.levelId}
+            @change=${(e) => { this._career = { ...this._career, levelId: e.target.value }; }}
+          >
+            <option value="">— sin nivel —</option>
+            ${groups.map(
+              (g) => html`
+                <optgroup label=${g.track.name}>
+                  ${g.levels.map(
+                    (l) => html`<option value=${l.id} ?selected=${l.id === selected.levelId}>${l.code} · ${l.title}</option>`,
+                  )}
+                </optgroup>
+              `,
+            )}
+          </select>
+        </label>
+        <fieldset class="disc">
+          <legend>Disciplinas</legend>
+          ${disciplines.length === 0
+            ? html`<span class="empty">No hay disciplinas en el framework de carrera.</span>`
+            : html`<div class="disc-checks">
+                ${disciplines.map(
+                  (d) => html`
+                    <label class="disc-check">
+                      <input
+                        type="checkbox"
+                        .checked=${selected.disciplines.includes(d.id)}
+                        @change=${(e) => this._toggleCareerDiscipline(d.id, e.target.checked)}
+                      />
+                      <span>${d.name}</span>
+                    </label>
+                  `,
+                )}
+              </div>`}
+        </fieldset>
+        ${this._careerError ? html`<p class="error">${this._careerError}</p>` : null}
+        <div class="row">
+          <button class="primary" ?disabled=${this._careerSaving} @click=${this._saveCareer}>
+            ${this._careerSaving ? 'Guardando…' : 'Guardar carrera'}
+          </button>
+        </div>
+      </div>
     `;
   }
 
@@ -736,14 +974,36 @@ export class TeamPersonDetail extends LitElement {
       ${this.loading
         ? html`<p class="empty">Cargando…</p>`
         : html`
-            ${this._renderCareer()}
-            ${DIMENSIONS.map((d) => this._renderDimension(d))}
-            ${this._renderKnowledge()}
-            ${this._renderContribution()}
-            ${this._renderConversations()}
-            ${this._renderNotes()}
+            ${this._renderSubtabs()}
+            <div
+              id="ppanel-${this._subtab}"
+              class="subpanel"
+              role="tabpanel"
+              aria-labelledby="psub-${this._subtab}"
+              tabindex="0"
+            >
+              ${this._renderActivePanel()}
+            </div>
           `}
     `;
+  }
+
+  /**
+   * Renderiza solo la sección de la sub-pestaña activa, reutilizando los
+   * `_render*` existentes sin alterar su lógica.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderActivePanel() {
+    const panel = {
+      carrera: () => this._renderCareer(),
+      seniority: () => this._renderDimension(DIMENSIONS[0]),
+      emotional: () => this._renderDimension(DIMENSIONS[1]),
+      knowledge: () => this._renderKnowledge(),
+      contribution: () => this._renderContribution(),
+      conversations: () => this._renderConversations(),
+      notes: () => this._renderNotes(),
+    }[this._subtab] ?? (() => this._renderCareer());
+    return panel();
   }
 }
 
