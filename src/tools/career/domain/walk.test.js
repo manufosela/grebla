@@ -13,6 +13,8 @@ import {
   stepPosition,
   turnYaw,
   nearestCityWithin,
+  collideWithCities,
+  CITY_ENTER_ALIGNMENT,
 } from './walk.js';
 
 /** Radio de isla de pruebas (del orden del que produce islandRadius). */
@@ -219,5 +221,102 @@ describe('nearestCityWithin', () => {
 
   it('el radio máximo es inclusivo', () => {
     expect(nearestCityWithin({ x: 18, z: 0 }, CITIES, 8)?.id).toBe('css');
+  });
+});
+
+describe('collideWithCities', () => {
+  /** Casa única en el origen; radio de colisión de pruebas. */
+  const HOUSES = [{ id: 'html', wx: 0, wz: 0 }];
+  const RADIUS = 2.5;
+
+  it('sin casas cerca, el paso pasa intacto y sin hit', () => {
+    const out = collideWithCities({ x: 10, z: 10 }, { x: 9, z: 9 }, HOUSES, RADIUS);
+    expect(out).toEqual({ x: 9, z: 9, hitCityId: null });
+    const empty = collideWithCities({ x: 0, z: -3 }, { x: 0, z: -1 }, [], RADIUS);
+    expect(empty).toEqual({ x: 0, z: -1, hitCityId: null });
+  });
+
+  it('empuje frontal: detiene en el borde (la puerta) y devuelve hitCityId', () => {
+    // Avanza en línea recta hacia el centro de la casa desde -z.
+    const out = collideWithCities({ x: 0, z: -5 }, { x: 0, z: -2 }, HOUSES, RADIUS);
+    expect(out.x).toBeCloseTo(0);
+    expect(out.z).toBeCloseTo(-RADIUS); // proyectado al borde, no dentro
+    expect(out.hitCityId).toBe('html');
+  });
+
+  it('roce tangencial: desliza por el borde SIN hit (no se entra sin querer)', () => {
+    // Camina paralelo a la pared invadiendo un poco el círculo: la posición se
+    // proyecta al borde (conservando el avance tangencial) pero el empuje es
+    // casi paralelo a la pared → no se «entra».
+    const out = collideWithCities({ x: -3, z: -2.3 }, { x: -0.5, z: -2.3 }, HOUSES, RADIUS);
+    expect(Math.hypot(out.x, out.z)).toBeCloseTo(RADIUS); // sobre el borde
+    expect(out.x).toBeGreaterThan(-0.7); // la componente tangencial avanza de verdad
+    expect(out.z).toBeLessThan(0); // sigue en el lado por el que caminaba
+    expect(out.hitCityId).toBeNull();
+  });
+
+  it('el deslizamiento nunca deja la posición dentro del círculo', () => {
+    // Barrido determinista de aproximaciones oblicuas.
+    for (let i = 0; i < 12; i += 1) {
+      const angle = (i / 12) * 2 * Math.PI;
+      const pos = { x: Math.cos(angle) * 4, z: Math.sin(angle) * 4 };
+      const next = { x: pos.x * 0.3, z: pos.z * 0.3 + 0.4 };
+      const out = collideWithCities(pos, next, HOUSES, RADIUS);
+      expect(Math.hypot(out.x, out.z)).toBeGreaterThanOrEqual(RADIUS - 1e-9);
+    }
+  });
+
+  it('retroceder desde la puerta se aleja sin colisión (salir de la casa)', () => {
+    // Parado en el borde (la puerta), un paso hacia atrás sale limpio.
+    const out = collideWithCities({ x: 0, z: -RADIUS }, { x: 0, z: -RADIUS - 3 }, HOUSES, RADIUS);
+    expect(out).toEqual({ x: 0, z: -RADIUS - 3, hitCityId: null });
+  });
+
+  it('umbral de frontalidad: un contacto a ~55° de la normal corrige sin hit', () => {
+    expect(CITY_ENTER_ALIGNMENT).toBeGreaterThan(0.5);
+    expect(CITY_ENTER_ALIGNMENT).toBeLessThan(1);
+    // Avance +x que toca la pared en un punto oblicuo (normal a ~55° del
+    // movimiento, coseno ≈ 0.57 < 0.75): desliza sin «entrar».
+    const out = collideWithCities({ x: -4, z: -2 }, { x: -1.4, z: -2 }, HOUSES, RADIUS);
+    expect(out.hitCityId).toBeNull();
+    expect(Math.hypot(out.x, out.z)).toBeCloseTo(RADIUS);
+  });
+
+  it('empuje oblicuo pero contra la pared sí es hit (frontal respecto a la cara)', () => {
+    // Avance +x que acaba clavado en la cara oeste de la casa: la normal del
+    // contacto es casi opuesta al movimiento → se entra.
+    const out = collideWithCities({ x: -4, z: -0.5 }, { x: -2, z: -0.5 }, HOUSES, RADIUS);
+    expect(out.hitCityId).toBe('html');
+    expect(Math.hypot(out.x, out.z)).toBeCloseTo(RADIUS);
+  });
+
+  it('caso degenerado: sobre el eje de la casa se expulsa al borde, determinista', () => {
+    // nextPos exactamente en el centro: se expulsa hacia la posición previa, y
+    // atravesar el centro es el empuje más frontal posible → hit.
+    const back = collideWithCities({ x: 0, z: -4 }, { x: 0, z: 0 }, HOUSES, RADIUS);
+    expect(back.x).toBeCloseTo(0);
+    expect(back.z).toBeCloseTo(-RADIUS);
+    expect(back.hitCityId).toBe('html');
+    // pos y nextPos ambos en el centro: expulsión estable hacia +x.
+    const stuck = collideWithCities({ x: 0, z: 0 }, { x: 0, z: 0 }, HOUSES, RADIUS);
+    expect(stuck.x).toBeCloseTo(RADIUS);
+    expect(stuck.z).toBeCloseTo(0);
+    expect(stuck.hitCityId).toBeNull(); // sin movimiento no hay empuje
+  });
+
+  it('con varias casas corrige contra la que se invade', () => {
+    const houses = [
+      { id: 'html', wx: 0, wz: 0 },
+      { id: 'css', wx: 20, wz: 0 },
+    ];
+    const out = collideWithCities({ x: 20, z: -5 }, { x: 20, z: -1 }, houses, RADIUS);
+    expect(out.hitCityId).toBe('css');
+    expect(out.x).toBeCloseTo(20);
+    expect(out.z).toBeCloseTo(-RADIUS);
+  });
+
+  it('falla en alto con un radio inválido', () => {
+    expect(() => collideWithCities({ x: 0, z: 0 }, { x: 1, z: 0 }, HOUSES, 0)).toThrow();
+    expect(() => collideWithCities({ x: 0, z: 0 }, { x: 1, z: 0 }, HOUSES, Number.NaN)).toThrow();
   });
 });

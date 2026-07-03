@@ -1,7 +1,8 @@
 /**
  * <career-island-3d>
  * Render 3D REAL de la isla de carrera con Three.js (MC-5: fundación;
- * MC-6: zoom animado a ciudad/comarca; MC-7: primera persona; MC-8: pulido).
+ * MC-6: zoom animado a ciudad/comarca; MC-7: primera persona; MC-8: pulido;
+ * MC-9: puerto reconocible, fachadas hacia el puerto y entrar en las casas).
  *
  * Es intercambiable con <career-map> (vista plana): mismas propiedades y el
  * mismo evento `select-city`. La escena se GENERA del modelo (/careerMap/island)
@@ -10,9 +11,13 @@
  *  - una plataforma sutil por comarca con su etiqueta flotante
  *  - una casa por ciudad, coloreada por estado, con puerta, placa con el
  *    nombre sobre la puerta, ventanas emisivas y variación determinista por id
- *    (altura/rotación/tono vía cityVariant: nada de Math.random())
+ *    (altura/rotación/tono vía cityVariant: nada de Math.random()); la fachada
+ *    mira HACIA el puerto (facadeYawToward, MC-9): llegando desde el mar las
+ *    puertas y placas se ven de frente
  *  - senda del camino recorrido (cinta) y ruta planificada (línea discontinua)
- *  - puerto de inicio (muelle + faro)
+ *  - puerto de inicio reconocible (MC-9): muelle de tablones de madera clara
+ *    sobre postes que se adentra en el agua, faro blanco con franjas rojas
+ *    (galería, linterna cálida emisiva y cúpula) y barca low-poly amarrada
  *
  * Three.js se carga por IMPORT DINÁMICO al montar el componente: el resto de la
  * app no paga el bundle. Si WebGL no está disponible se emite `webgl-unavailable`
@@ -49,6 +54,14 @@
  * se muestrea la ciudad cercana: se resalta (emisivo, como selected) y un
  * prompt ofrece [E]/clic → `select-city` soltando el lock a propósito para
  * poder usar el panel; al cerrarse, un clic en el canvas re-engancha el lock.
+ *
+ * Entrar en las casas (MC-9): las casas NO se atraviesan (collideWithCities,
+ * puro: deslizamiento por el contorno). Un empuje FRONTAL contra una casa
+ * «entra»: se abre su panel de ciudadanía (mismo flujo que la tecla E) con el
+ * jugador detenido en la puerta y `_insideCityId` recordando la casa. Con ese
+ * panel abierto, ↓ o S (si el foco no está en un campo del panel) cierran el
+ * panel, retroceden unos pasos y re-enganchan el pointer lock; el ✕/Escape del
+ * panel también limpian `_insideCityId` (vía la propiedad `selected` a null).
  * Escape (nativo del lock) o `exitFirstPerson()` vuelven, con transición, a la
  * vista aérea. `mode-change {mode:'fps'|'aerial'}` avisa a <career-app>.
  * Pensado para escritorio: en táctil el HUD no ofrece el botón de entrada.
@@ -65,6 +78,7 @@ import {
   cityFocusFrame,
   areaFocusFrame,
   cityVariant,
+  facadeYawToward,
   journeyPathPoints,
   ribbonStrip,
   ACCENT_COLORS,
@@ -78,6 +92,7 @@ import {
   stepPosition,
   turnYaw,
   nearestCityWithin,
+  collideWithCities,
   WALK_SPEED,
   RUN_MULTIPLIER,
   TURN_SPEED,
@@ -122,14 +137,33 @@ const PROXIMITY_CHECK_MS = 100;
 const CITY_SPAWN_OFFSET = 12;
 /** Distancia del punto de mira usado como origen del giro de cámara al salir del modo fps. */
 const EXIT_LOOK_AHEAD = 30;
-/** Colores del entorno (cielo, agua, arena, hierba, madera, faro, puertas y ventanas). */
+/**
+ * Radio de colisión de una casa a pie (MC-9): semidiagonal de la planta de la
+ * casa (cubre las esquinas gire como gire la fachada) más una holgura para el
+ * cuerpo del caminante. La planta es constante (solo varía la altura por
+ * cityVariant), así que un único radio vale para todas.
+ */
+const CITY_COLLIDER_RADIUS = Math.hypot(CITY_BODY.w, CITY_BODY.w) / 2 + 0.65;
+/**
+ * Escala del yaw extra determinista de cityVariant (±0.3 rad) al orientar las
+ * fachadas hacia el puerto (MC-9): la variación queda en ±0.15 rad — las casas
+ * no son clónicas pero la puerta se sigue viendo llegando desde el puerto.
+ */
+const FACADE_JITTER = 0.5;
+/** Paso atrás (unidades) al salir de una casa dando hacia atrás (↓/S, MC-9). */
+const CITY_EXIT_BACKSTEP = 3;
+/** Colores del entorno (cielo, agua, arena, hierba, maderas, faro, barca, puertas y ventanas). */
 const ENV_COLORS = {
   sky: 0xdceff5,
   water: 0x4d90c4,
   sand: 0xe9dcae,
   grass: 0x9fce8f,
   wood: 0x9a7b4f,
+  plank: 0xd9b877,
+  post: 0x7c5f3a,
   lighthouse: 0xf5f2ea,
+  lighthouseRed: 0xc94f3f,
+  boat: 0xf4f0e4,
   door: 0x6b4a26,
   window: 0xfff2c0,
   windowGlow: 0xf4c96b,
@@ -145,6 +179,7 @@ export class CareerIsland3D extends LitElement {
     _mode: { state: true },
     _fpsLocked: { state: true },
     _nearCityId: { state: true },
+    _insideCityId: { state: true },
   };
 
   static styles = css`
@@ -285,6 +320,10 @@ export class CareerIsland3D extends LitElement {
     this._keys = new Set();
     /** Ciudad dentro del radio de proximidad al caminar (o null). */
     this._nearCityId = null;
+    /** Casa en la que se ha «entrado» al chocar de frente (MC-9), o null. */
+    this._insideCityId = null;
+    /** Posiciones de mundo de las ciudades para la marcha (colisión y proximidad). */
+    this._walkCities = [];
     /** Radio caminable (walkableRadius) de la isla actual. */
     this._walkRadius = 0;
     this._lastWalkTs = 0;
@@ -328,6 +367,9 @@ export class CareerIsland3D extends LitElement {
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
     if (this._phase !== 'ready') return;
+    // El panel de ciudadanía se cerró desde el contenedor (✕ o Escape): ya no
+    // se está «dentro» de ninguna casa (MC-9).
+    if (changed.has('selected') && this.selected === null) this._insideCityId = null;
     if (changed.has('map')) {
       this._rebuildAll();
     } else if (changed.has('journey') || changed.has('reachable') || changed.has('selected')) {
@@ -691,6 +733,7 @@ export class CareerIsland3D extends LitElement {
     this._mode = 'to-aerial';
     this._keys.clear();
     this._expectUnlock = false;
+    this._insideCityId = null;
     this._setLabelsVisible(true); // de vuelta a la vista aérea, con sus nombres
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
     if (this._plc) this._plc.enabled = false;
@@ -827,10 +870,23 @@ export class CareerIsland3D extends LitElement {
   _onKeyDown(event) {
     if (this._mode !== 'fps') return;
     if (!this._fpsLocked) {
-      // Con el lock suelto (overlay «haz clic» o panel abierto) solo se
-      // atiende Escape → salir. El Escape DENTRO del panel no llega aquí:
-      // el panel lo consume (stopPropagation) para cerrarse.
-      if (event.code === 'Escape') this.exitFirstPerson();
+      // Con el lock suelto (overlay «haz clic» o panel abierto) se atiende
+      // Escape → salir, y, con el panel abierto por CHOQUE contra una casa
+      // (MC-9), ↓/S → salir de la casa (salvo que se esté escribiendo en un
+      // campo del panel). El Escape DENTRO del panel no llega aquí: el panel
+      // lo consume (stopPropagation) para cerrarse.
+      if (event.code === 'Escape') {
+        this.exitFirstPerson();
+        return;
+      }
+      if (
+        this._insideCityId !== null &&
+        (event.code === 'ArrowDown' || event.code === 'KeyS') &&
+        !CareerIsland3D._isTypingTarget(event)
+      ) {
+        event.preventDefault();
+        this._exitCity();
+      }
       return;
     }
     if (CareerIsland3D.MOVE_CODES.has(event.code)) {
@@ -894,8 +950,18 @@ export class CareerIsland3D extends LitElement {
           WALK_SPEED * (running ? RUN_MULTIPLIER : 1),
           { radius: this._walkRadius },
         );
-        cam.x = next.x;
-        cam.z = next.z;
+        // Colisión con las casas (MC-9, collideWithCities puro): no se
+        // atraviesan — se desliza por su contorno — y un empuje FRONTAL
+        // contra una casa «entra» (abre su panel de ciudadanía).
+        const col = collideWithCities(
+          { x: cam.x, z: cam.z },
+          next,
+          this._walkCities,
+          CITY_COLLIDER_RADIUS,
+        );
+        cam.x = col.x;
+        cam.z = col.z;
+        if (col.hitCityId !== null && this._insideCityId === null) this._enterCity(col.hitCityId);
       }
     }
     cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR }) + EYE_HEIGHT;
@@ -908,23 +974,26 @@ export class CareerIsland3D extends LitElement {
   /** Ciudad cercana al caminante, para el resalte emisivo y el prompt «[E] Ver ciudadanía». */
   _updateProximity() {
     const cam = this._camera.position;
-    const cities = (this.map?.cities ?? []).map((c) => ({ id: c.id, ...worldFromMap(c.x, c.y) }));
-    const near = nearestCityWithin({ x: cam.x, z: cam.z }, cities, PROXIMITY_RADIUS);
+    const near = nearestCityWithin({ x: cam.x, z: cam.z }, this._walkCities, PROXIMITY_RADIUS);
     const id = near?.id ?? null;
     if (id === this._nearCityId) return;
     this._nearCityId = id;
     this._rebuildCities(); // aplica/retira el resalte emisivo de proximidad
   }
 
-  /**
-   * Abre el panel de ciudadanía de la ciudad cercana ([E] o clic): suelta el
-   * pointer lock A PROPÓSITO (marcándolo con _expectUnlock) para que el ratón
-   * pueda usar el panel, SIN salir del modo primera persona. Tras cerrar el
-   * panel, un clic en el canvas re-engancha el lock (_onPick).
-   */
+  /** Abre el panel de ciudadanía de la ciudad cercana ([E] o clic). */
   _openNearCity() {
-    const cityId = this._nearCityId;
-    if (!cityId) return;
+    if (this._nearCityId) this._openCityPanel(this._nearCityId);
+  }
+
+  /**
+   * Abre el panel de ciudadanía de una ciudad a pie: suelta el pointer lock
+   * A PROPÓSITO (marcándolo con _expectUnlock) para que el ratón pueda usar el
+   * panel, SIN salir del modo primera persona. Tras cerrar el panel, un clic
+   * en el canvas re-engancha el lock (_onPick).
+   * @param {string} cityId
+   */
+  _openCityPanel(cityId) {
     if (this._fpsLocked) {
       this._expectUnlock = true;
       document.exitPointerLock();
@@ -932,6 +1001,60 @@ export class CareerIsland3D extends LitElement {
     this.dispatchEvent(
       new CustomEvent('select-city', { detail: { cityId }, bubbles: true, composed: true }),
     );
+  }
+
+  /**
+   * Entrada en una casa por choque frontal (MC-9): el jugador queda detenido
+   * en la puerta (la colisión ya lo dejó en el borde), se abre su panel de
+   * ciudadanía (mismo flujo que la tecla E) y `_insideCityId` recuerda la casa
+   * para poder «salir dando hacia atrás» (↓/S).
+   * @param {string} cityId
+   */
+  _enterCity(cityId) {
+    this._insideCityId = cityId;
+    this._openCityPanel(cityId);
+  }
+
+  /**
+   * Salida de la casa dando hacia atrás (↓/S con el panel abierto por choque,
+   * MC-9): cierra el panel (select-city con cityId null: el contenedor
+   * deselecciona), retrocede al jugador unos pasos alejándose de la puerta
+   * (stepPosition: acotado a la isla) y re-engancha el pointer lock — el
+   * keydown cuenta como activación de usuario; si el navegador lo rechaza,
+   * queda el overlay «haz clic en la isla…» como vía manual.
+   */
+  _exitCity() {
+    const city = this._walkCities.find((c) => c.id === this._insideCityId) ?? null;
+    this._insideCityId = null;
+    this.dispatchEvent(
+      new CustomEvent('select-city', { detail: { cityId: null }, bubbles: true, composed: true }),
+    );
+    if (city) {
+      const cam = this._camera.position;
+      const away = { x: cam.x - city.wx, z: cam.z - city.wz };
+      if (Math.hypot(away.x, away.z) > 1e-6) {
+        const next = stepPosition({ x: cam.x, z: cam.z }, away, 1, CITY_EXIT_BACKSTEP, {
+          radius: this._walkRadius,
+        });
+        cam.x = next.x;
+        cam.z = next.z;
+        cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR }) + EYE_HEIGHT;
+      }
+    }
+    this._requestLock();
+  }
+
+  /**
+   * true si la tecla se está escribiendo en un campo editable (input, textarea,
+   * select o contenteditable) — p. ej. las evidencias del panel de ciudadanía.
+   * Con shadow DOM `event.target` se RETARGETEA al host en el documento, así
+   * que se mira el origen real con composedPath().
+   * @param {KeyboardEvent} event
+   */
+  static _isTypingTarget(event) {
+    const origin = event.composedPath()[0];
+    if (!(origin instanceof HTMLElement)) return false;
+    return origin.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(origin.tagName);
   }
 
   /** Notifica el cambio de modo de cámara a <career-app> (adapta su HUD). @param {'aerial'|'fps'} mode */
@@ -950,6 +1073,7 @@ export class CareerIsland3D extends LitElement {
     this._keys.clear();
     this._expectUnlock = false;
     this._nearCityId = null;
+    this._insideCityId = null;
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
     if (this._plc) this._plc.enabled = false;
     this._controls.enabled = true;
@@ -968,6 +1092,10 @@ export class CareerIsland3D extends LitElement {
   _renderFpsHint() {
     if (this._mode !== 'fps') return null;
     if (!this._fpsLocked) {
+      // Dentro de una casa por choque (MC-9): la salida natural es dar atrás.
+      if (this._insideCityId !== null) {
+        return html`<div class="fps-hint"><kbd>↓</kbd>/<kbd>S</kbd> da hacia atrás para salir a la isla</div>`;
+      }
       return html`<div class="fps-hint">Haz clic en la isla para tomar el control · Esc para salir</div>`;
     }
     const city = this._nearCityId
@@ -995,6 +1123,9 @@ export class CareerIsland3D extends LitElement {
     if (!this.map) return;
     this._islandR = islandRadius(this.map);
     this._walkRadius = walkableRadius(this._islandR);
+    // Posiciones de mundo de las ciudades para la marcha: colisión por frame y
+    // muestreo de proximidad comparten esta lista (se rehace con el mapa).
+    this._walkCities = (this.map.cities ?? []).map((c) => ({ id: c.id, ...worldFromMap(c.x, c.y) }));
     if (this.map.id !== this._lastMapId) this._clearPlateCache(); // otra isla, otras placas
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
@@ -1144,7 +1275,13 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Puerto de inicio: muelle de madera + faro (torre blanca con techo navy).
+   * Puerto de inicio RECONOCIBLE (MC-9), no una torre: muelle de tablones de
+   * madera clara sobre postes que sale de la costa y se adentra en el agua
+   * (la longitud se deriva del MISMO perfil de terreno de walk.js — coastFactor
+   * y TERRAIN — así que el final del muelle siempre pisa agua, determinista),
+   * faro blanco con franjas rojas (galería con barandilla, linterna cálida
+   * emisiva y cúpula roja) y una barca low-poly amarrada al costado. Todo
+   * generado por código, con materiales cacheados por color.
    * @param {{x: number, y: number}} port
    * @param {boolean} labelVisible La etiqueta flotante se oculta a pie.
    */
@@ -1154,29 +1291,136 @@ export class CareerIsland3D extends LitElement {
     const group = new THREE.Group();
     group.position.set(wx, GROUND_Y, wz);
 
-    // Muelle: tablón alargado apuntando hacia el mar (radialmente hacia fuera).
-    const dock = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 0.7, 12),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.wood }),
-    );
-    dock.position.set(0, -0.6, 6);
-    dock.rotation.y = Math.atan2(wx, wz); // orientado desde el centro de la isla
-    group.add(dock);
+    /** Materiales del puerto cacheados por color (mismo color → mismo material). */
+    const materials = new Map();
+    const materialFor = (color) => {
+      let m = materials.get(color);
+      if (!m) {
+        m = new THREE.MeshLambertMaterial({ color, flatShading: true });
+        materials.set(color, m);
+      }
+      return m;
+    };
 
-    // Faro: torre troncocónica + techo cónico navy.
-    const tower = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.1, 1.6, 7, 10),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.lighthouse, flatShading: true }),
-    );
-    tower.position.y = 3.5;
-    group.add(tower);
-    const cap = new THREE.Mesh(
-      new THREE.ConeGeometry(1.5, 2, 10),
-      new THREE.MeshLambertMaterial({ color: ACCENT_COLORS.route, flatShading: true }),
-    );
-    cap.position.y = 8;
-    group.add(cap);
+    // Todo el puerto se construye en coordenadas locales con +z hacia el MAR
+    // (radialmente hacia fuera del centro de la isla): un único giro lo orienta.
+    const d = Math.hypot(wx, wz);
+    const seaYaw = d > 0.001 ? Math.atan2(wx, wz) : 0;
+    const harbor = new THREE.Group();
+    harbor.rotation.y = seaYaw;
+    group.add(harbor);
 
+    // Longitud del muelle: desde el puerto hasta pasada la línea de agua (la
+    // falda de la playa muere en (R + bottomPad)·coastFactor, ver walk.js).
+    const R = this._islandR;
+    const polar = Math.atan2(wz, wx);
+    const waterEdge = (R + TERRAIN.beach.bottomPad) * coastFactor(polar, TERRAIN.beach.amount);
+    const dockLen = Math.max(waterEdge - d + 3, 10);
+
+    // Tablones: planos de madera clara con separación entre ellos (pasarela
+    // elevada sobre el terreno, como un embarcadero).
+    const DECK_Y = 0.5; // altura local del tablero del muelle
+    const PLANK = { w: 3.2, t: 0.16, d: 0.92, pitch: 1.24 };
+    const plankGeo = new THREE.BoxGeometry(PLANK.w, PLANK.t, PLANK.d);
+    const planks = Math.max(Math.floor(dockLen / PLANK.pitch), 2);
+    for (let i = 0; i < planks; i += 1) {
+      const plank = new THREE.Mesh(plankGeo, materialFor(ENV_COLORS.plank));
+      plank.position.set(0, DECK_Y, 0.9 + i * PLANK.pitch);
+      harbor.add(plank);
+    }
+
+    // Postes: pares bajo el muelle cada tres tablones, hundidos en el terreno
+    // (o en el agua al final): groundHeightAt es el MISMO suelo del caminante.
+    const cosYaw = Math.cos(seaYaw);
+    const sinYaw = Math.sin(seaYaw);
+    for (let i = 0; i < planks; i += 3) {
+      const lz = 0.9 + i * PLANK.pitch;
+      for (const lx of [-1.35, 1.35]) {
+        // Posición de mundo del poste (rotación manual del offset local).
+        const px = wx + lx * cosYaw + lz * sinYaw;
+        const pz = wz - lx * sinYaw + lz * cosYaw;
+        const bottom = groundHeightAt(px, pz, { radius: R }) - 0.45 - GROUND_Y;
+        const len = DECK_Y - bottom;
+        const post = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.16, len, 6),
+          materialFor(ENV_COLORS.post),
+        );
+        post.position.set(lx, bottom + len / 2, lz);
+        harbor.add(post);
+      }
+    }
+
+    // Barca low-poly amarrada al costado del muelle, flotando en el agua:
+    // casco blanco con borda de madera, banco y proa apuntada.
+    const boat = new THREE.Group();
+    boat.position.set(2.7, TERRAIN.waterY - GROUND_Y, dockLen - 1.6);
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.5, 2.6), materialFor(ENV_COLORS.boat));
+    hull.position.y = 0.1;
+    boat.add(hull);
+    const bowGeo = new THREE.ConeGeometry(0.58, 0.9, 4);
+    bowGeo.rotateY(Math.PI / 4); // sección cuadrada alineada con el casco
+    bowGeo.rotateX(Math.PI / 2); // vértice hacia +z (proa)
+    const bow = new THREE.Mesh(bowGeo, materialFor(ENV_COLORS.boat));
+    bow.scale.set(1.4, 0.6, 1);
+    bow.position.set(0, 0.1, 1.72);
+    boat.add(bow);
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.31, 0.14, 2.72), materialFor(ENV_COLORS.wood));
+    rim.position.y = 0.4;
+    boat.add(rim);
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.1, 0.4), materialFor(ENV_COLORS.plank));
+    bench.position.y = 0.52;
+    boat.add(bench);
+    harbor.add(boat);
+
+    // Faro a pie de muelle: torre BLANCA troncocónica con dos franjas rojas,
+    // galería con barandilla, linterna cálida (emisiva) y cúpula roja.
+    const lighthouse = new THREE.Group();
+    lighthouse.position.set(-3.1, 0, 1.2);
+    harbor.add(lighthouse);
+    const SEG = { h: 1.3, baseR: 1.5, topR: 0.95, count: 5 };
+    for (let i = 0; i < SEG.count; i += 1) {
+      const r0 = SEG.baseR + ((SEG.topR - SEG.baseR) * i) / SEG.count;
+      const r1 = SEG.baseR + ((SEG.topR - SEG.baseR) * (i + 1)) / SEG.count;
+      const stripe = new THREE.Mesh(
+        new THREE.CylinderGeometry(r1, r0, SEG.h, 12),
+        materialFor(i % 2 === 1 ? ENV_COLORS.lighthouseRed : ENV_COLORS.lighthouse),
+      );
+      stripe.position.y = SEG.h * (i + 0.5);
+      lighthouse.add(stripe);
+    }
+    const towerTop = SEG.h * SEG.count;
+    const gallery = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.32, 1.32, 0.22, 12),
+      materialFor(ENV_COLORS.post),
+    );
+    gallery.position.y = towerTop + 0.11;
+    lighthouse.add(gallery);
+    const rail = new THREE.Mesh(
+      new THREE.TorusGeometry(1.18, 0.05, 6, 16),
+      materialFor(ENV_COLORS.lighthouse),
+    );
+    rail.rotation.x = Math.PI / 2;
+    rail.position.y = towerTop + 0.85;
+    lighthouse.add(rail);
+    // Linterna: pequeña luz cálida arriba (material emisivo, como las ventanas).
+    const lantern = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.55, 0.85, 10),
+      new THREE.MeshLambertMaterial({
+        color: ENV_COLORS.window,
+        emissive: ENV_COLORS.windowGlow,
+        emissiveIntensity: 0.9,
+      }),
+    );
+    lantern.position.y = towerTop + 0.65;
+    lighthouse.add(lantern);
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.72, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+      materialFor(ENV_COLORS.lighthouseRed),
+    );
+    dome.position.y = towerTop + 1.07;
+    lighthouse.add(dome);
+
+    // Cartel «Puerto» discreto (la etiqueta flotante existente).
     const label = this._makeLabel('Puerto', { x: 0, y: 11, z: 0, scale: 6, color: '#5b6b7d' });
     label.visible = labelVisible;
     this._areaLabels.push(label);
@@ -1189,7 +1433,8 @@ export class CareerIsland3D extends LitElement {
    * (cityStatus del dominio) y enriquecida (MC-8) con puerta de madera, placa
    * con el nombre sobre la puerta (legible de cerca), ventanas emisivas y
    * variación determinista por id (altura/rotación/tono, cityVariant — sin
-   * Math.random()). La fachada mira hacia el interior de la isla. Además:
+   * Math.random()). La fachada mira HACIA el puerto (MC-9): llegando desde el
+   * mar, puertas y placas se ven de frente. Además:
    * acento navy en la ruta planificada, haz de luz en la ciudad actual,
    * etiqueta flotante con el nombre (oculta a pie), la senda del camino
    * recorrido y la ruta planificada discontinua. Geometrías y materiales se
@@ -1229,6 +1474,10 @@ export class CareerIsland3D extends LitElement {
       emissiveIntensity: 0.75,
     });
     const half = CITY_BODY.w / 2;
+    // Punto de llegada al que miran todas las fachadas (MC-9): el puerto.
+    const portW = this.map.startPort
+      ? worldFromMap(this.map.startPort.x, this.map.startPort.y)
+      : null;
 
     for (const city of this.map.cities ?? []) {
       const st = cityStatus(this.map, city.id, this.journey);
@@ -1242,11 +1491,17 @@ export class CareerIsland3D extends LitElement {
 
       const node = new THREE.Group();
       node.position.set(wx, GROUND_Y, wz);
-      // La fachada (+z local) mira al interior de la isla, con un yaw extra
+      // La fachada (+z local) mira HACIA el puerto — el punto de llegada
+      // (facadeYawToward, puro) — con un yaw extra pequeño (±0.15 rad)
       // determinista por ciudad para que el pueblo no parezca un cuartel.
+      // En un mapa sin puerto, hacia el centro de la isla (como hasta MC-8).
       const d = Math.hypot(wx, wz);
-      const baseYaw = d > 0.001 ? Math.atan2(-wx, -wz) : 0;
-      node.rotation.y = baseYaw + v.rotation;
+      const baseYaw = portW
+        ? facadeYawToward({ wx, wz }, portW)
+        : d > 0.001
+          ? Math.atan2(-wx, -wz)
+          : 0;
+      node.rotation.y = baseYaw + v.rotation * FACADE_JITTER;
       node.userData.cityId = city.id;
 
       const body = new THREE.Mesh(bodyGeo, materialFor(color));
@@ -1594,6 +1849,7 @@ export class CareerIsland3D extends LitElement {
     this._expectUnlock = false;
     this._keys.clear();
     this._nearCityId = null;
+    this._insideCityId = null;
     this._abort?.abort();
     this._abort = null;
     this._resizeObserver?.disconnect();
@@ -1618,7 +1874,7 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}

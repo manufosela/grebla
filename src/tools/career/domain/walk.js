@@ -33,6 +33,13 @@ export const TURN_SPEED = 2.5;
 export const EYE_HEIGHT = 1.7;
 /** Radio (unidades de mundo) para considerar «cerca» una ciudad al caminar. */
 export const PROXIMITY_RADIUS = 8;
+/**
+ * Alineación mínima para considerar que una casa se empuja DE FRENTE al
+ * chocar: coseno entre el avance y la normal ENTRANTE de la superficie en el
+ * punto de contacto (0.75 ≈ ±41° respecto a la perpendicular de la «pared»).
+ * Un roce tangencial desliza sin «entrar»; un empuje frontal abre la puerta.
+ */
+export const CITY_ENTER_ALIGNMENT = 0.75;
 /** Margen de seguridad respecto al borde llano de la playa (no pisar el talud). */
 export const WALK_EDGE_MARGIN = 1;
 
@@ -174,6 +181,70 @@ export function turnYaw(yaw, dir, dt, speed) {
   if (raw > Math.PI) return raw - 2 * Math.PI;
   if (raw <= -Math.PI) return raw + 2 * Math.PI;
   return raw;
+}
+
+/**
+ * Colisión del caminante con las casas de la isla (MC-9): las casas no se
+ * atraviesan. Cada ciudad es un cilindro de colisión de radio `radius`; si el
+ * paso pos→nextPos acaba dentro de una casa, la posición se proyecta
+ * radialmente sobre su borde: la componente tangencial se conserva, así que se
+ * DESLIZA por el contorno en vez de clavarse (misma estrategia que el borde de
+ * la costa en stepPosition, pero hacia FUERA del círculo).
+ *
+ * Además detecta el empuje FRONTAL: si el avance empuja CONTRA la pared en el
+ * punto de contacto (coseno con la normal entrante ≥ CITY_ENTER_ALIGNMENT),
+ * `hitCityId` lleva su id — es la señal de «entrar» (abrir la ciudadanía). Un
+ * roce lateral desliza con `hitCityId` null.
+ *
+ * @template {{ id: string, wx: number, wz: number }} T
+ * @param {WalkPoint} pos Posición actual (antes del paso).
+ * @param {WalkPoint} nextPos Posición deseada (después del paso).
+ * @param {T[]} cities Ciudades con su posición de mundo (wx, wz).
+ * @param {number} radius Radio de colisión de una casa (unidades de mundo).
+ * @returns {{ x: number, z: number, hitCityId: string|null }} Posición corregida
+ *   y, si el avance empuja de frente contra una casa, su id.
+ */
+export function collideWithCities(pos, nextPos, cities, radius) {
+  if (!Number.isFinite(radius) || radius <= 0) {
+    throw new Error(`Radio de colisión inválido para collideWithCities: "${radius}"`);
+  }
+  let x = nextPos.x;
+  let z = nextPos.z;
+  let hitCityId = null;
+  const moveX = nextPos.x - pos.x;
+  const moveZ = nextPos.z - pos.z;
+  const moveLen = Math.hypot(moveX, moveZ);
+  for (const city of cities) {
+    const dx = x - city.wx;
+    const dz = z - city.wz;
+    const dist = Math.hypot(dx, dz);
+    if (dist >= radius) continue;
+    if (dist < 1e-9) {
+      // Degenerado (justo en el eje de la casa): se expulsa hacia la posición
+      // previa o, sin dirección posible, hacia +x (determinista).
+      const backX = pos.x - city.wx;
+      const backZ = pos.z - city.wz;
+      const backLen = Math.hypot(backX, backZ);
+      x = city.wx + (backLen > 1e-9 ? backX / backLen : 1) * radius;
+      z = city.wz + (backLen > 1e-9 ? backZ / backLen : 0) * radius;
+    } else {
+      // Proyección radial al borde del círculo → deslizamiento por el contorno.
+      const s = radius / dist;
+      x = city.wx + dx * s;
+      z = city.wz + dz * s;
+    }
+    // ¿Empuje frontal? El avance empuja contra la pared: coseno entre la
+    // dirección del movimiento y la normal ENTRANTE de la superficie en el
+    // punto de contacto (independiente de lo lejos que estuviera pos).
+    if (moveLen > 1e-9) {
+      const normalX = (x - city.wx) / radius;
+      const normalZ = (z - city.wz) / radius;
+      if (-(moveX * normalX + moveZ * normalZ) / moveLen >= CITY_ENTER_ALIGNMENT) {
+        hitCityId = city.id;
+      }
+    }
+  }
+  return { x, z, hitCityId };
 }
 
 /**
