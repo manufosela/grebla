@@ -8,7 +8,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { getDoraSummary } from '../../tools/dora/application/usecases.js';
-import { leadTimeLevel, deployFrequencyLevel } from '../../tools/dora/domain/levels.js';
+import { leadTimeLevel, deployFrequencyLevel, changeFailureRateLevel, mttrLevel } from '../../tools/dora/domain/levels.js';
 import { levelBadge, levelStyles } from './level-badge.js';
 import { formatHours } from './format.js';
 
@@ -101,8 +101,8 @@ export class DoraMetrics extends LitElement {
                       <td class="num">${g.deployments}</td>
                       <td class="num">${g.deployFrequencyPerWeek}${levelBadge(deployFrequencyLevel(g.deployFrequencyPerWeek))}</td>
                       <td class="num">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</td>
-                      <td class="num">${cfr(g)}</td>
-                      <td class="num">${mttr(g)}</td>
+                      <td class="num">${cfr(g)}${levelBadge(changeFailureRateLevel(g.changeFailureRatePct))}</td>
+                      <td class="num">${mttr(g)}${levelBadge(mttrLevel(g.mttrHoursAvg))}</td>
                       <td class="num">${g.people}</td>
                     </tr>`,
                   )}
@@ -147,13 +147,13 @@ export class DoraMetrics extends LitElement {
             <span class="label">Lead time proxy (PR→merge)</span>
           </div>
           <div class="card">
-            <span class="value">${hasDeploys ? `${g.changeFailureRatePct}%` : '—'}</span>
+            <span class="value">${hasDeploys ? `${g.changeFailureRatePct}%` : '—'}${hasDeploys ? levelBadge(changeFailureRateLevel(g.changeFailureRatePct)) : ''}</span>
             <span class="label">${hasDeploys
               ? `Change Failure Rate · ${g.deploymentsFailed} de ${g.deploymentsTotal} despliegues fallaron`
               : 'Change Failure Rate · sin despliegues registrados'}</span>
           </div>
           <div class="card">
-            <span class="value">${hasResolved ? mttrLabel : '—'}</span>
+            <span class="value">${hasResolved ? mttrLabel : '—'}${hasResolved ? levelBadge(mttrLevel(g.mttrHoursAvg)) : ''}</span>
             <span class="label">${hasResolved
               ? `MTTR · ${g.incidentsResolved} ${g.incidentsResolved === 1 ? 'incidente resuelto' : 'incidentes resueltos'}${g.incidentsOpen > 0 ? `, ${g.incidentsOpen} abierto${g.incidentsOpen === 1 ? '' : 's'}` : ''}`
               : g.incidentsOpen > 0
