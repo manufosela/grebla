@@ -12,6 +12,10 @@ import {
   areaColor,
   areaLayout,
   islandRadius,
+  CITY_FOCUS,
+  AREA_FOCUS,
+  cityFocusFrame,
+  areaFocusFrame,
 } from './islandLayout.js';
 
 /** Mapa mínimo de pruebas: dos comarcas, una vacía, y puerto de inicio. */
@@ -123,6 +127,53 @@ describe('areaLayout', () => {
   it('tolera mapa nulo o vacío', () => {
     expect(areaLayout(null)).toEqual([]);
     expect(areaLayout({ areas: [], cities: [] })).toEqual([]);
+  });
+});
+
+describe('cityFocusFrame', () => {
+  it('apunta a la posición de mundo de la ciudad con distancia y elevación fijas', () => {
+    // c3 (80,80) → mundo (30,30).
+    const frame = cityFocusFrame(MAP, 'c3');
+    expect(frame).toEqual({
+      wx: 30,
+      wz: 30,
+      distance: CITY_FOCUS.distance,
+      elevation: CITY_FOCUS.elevation,
+    });
+  });
+
+  it('respeta opts.size en la proyección', () => {
+    const frame = cityFocusFrame(MAP, 'c3', { size: 200 });
+    expect(frame.wx).toBe(60);
+    expect(frame.wz).toBe(60);
+  });
+
+  it('devuelve null para ciudades desconocidas o mapa nulo', () => {
+    expect(cityFocusFrame(MAP, 'no-existe')).toBeNull();
+    expect(cityFocusFrame(null, 'c1')).toBeNull();
+  });
+});
+
+describe('areaFocusFrame', () => {
+  it('apunta al centroide de la comarca con distancia proporcional a su radio', () => {
+    // a1: centroide (0,0), radio 10 + AREA_PAD = 18 → distancia 18 * factor.
+    const frame = areaFocusFrame(MAP, 'a1');
+    expect(frame.wx).toBe(0);
+    expect(frame.wz).toBe(0);
+    expect(frame.distance).toBeCloseTo((10 + AREA_PAD) * AREA_FOCUS.factor, 5);
+    expect(frame.elevation).toBe(AREA_FOCUS.elevation);
+  });
+
+  it('aplica la distancia mínima en comarcas pequeñas (una sola ciudad)', () => {
+    // a2: radio AREA_PAD (8) → 8 * 2.4 = 19.2 < minDistance.
+    const frame = areaFocusFrame(MAP, 'a2');
+    expect(frame.distance).toBe(AREA_FOCUS.minDistance);
+  });
+
+  it('devuelve null para comarcas sin ciudades o inexistentes', () => {
+    expect(areaFocusFrame(MAP, 'vacia')).toBeNull();
+    expect(areaFocusFrame(MAP, 'no-existe')).toBeNull();
+    expect(areaFocusFrame(null, 'a1')).toBeNull();
   });
 });
 

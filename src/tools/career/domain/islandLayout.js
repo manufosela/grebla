@@ -15,6 +15,9 @@
  * @typedef {{ wx: number, wz: number }} WorldPoint  Punto de mundo en el plano XZ.
  * @typedef {{ size?: number }} WorldOptions
  * @typedef {{ area: Area, center: WorldPoint, radius: number, color: number }} AreaLayout
+ * @typedef {{ wx: number, wz: number, distance: number, elevation: number }} FocusFrame
+ *   Encuadre de foco de cámara: punto del suelo a mirar, distancia de cámara y
+ *   elevación (radianes sobre el plano del suelo).
  */
 
 /** Lado del mundo: el rango lógico 0..100 se proyecta a -WORLD_SIZE/2..WORLD_SIZE/2. */
@@ -140,6 +143,56 @@ export function areaLayout(map, opts = {}) {
       };
     })
     .filter((a) => a !== null);
+}
+
+/**
+ * Encuadre de foco de CIUDAD (MC-6): las casas tienen tamaño constante, así que
+ * la distancia es fija y la elevación (~38°) muestra fachada y tejado sin
+ * aplastar la perspectiva.
+ */
+export const CITY_FOCUS = Object.freeze({ distance: 34, elevation: (38 * Math.PI) / 180 });
+
+/**
+ * Encuadre de foco de COMARCA (MC-6): la distancia escala con el radio de la
+ * plataforma (factor ~2.4 ≈ radio/tan(fov/2) para fov vertical de 45°), con un
+ * mínimo para comarcas de una sola ciudad, y elevación más aérea (~48°).
+ */
+export const AREA_FOCUS = Object.freeze({ factor: 2.4, minDistance: 30, elevation: (48 * Math.PI) / 180 });
+
+/**
+ * Encuadre de cámara para enfocar una ciudad. Devuelve null si la ciudad no
+ * existe en el mapa (el componente decide no animar; no es un error de datos).
+ *
+ * @param {CareerMap} map
+ * @param {string} cityId
+ * @param {WorldOptions} [opts]
+ * @returns {FocusFrame|null}
+ */
+export function cityFocusFrame(map, cityId, opts = {}) {
+  const city = (map?.cities ?? []).find((c) => c.id === cityId);
+  if (!city) return null;
+  const { wx, wz } = worldFromMap(city.x, city.y, opts);
+  return { wx, wz, distance: CITY_FOCUS.distance, elevation: CITY_FOCUS.elevation };
+}
+
+/**
+ * Encuadre de cámara para enfocar una comarca (su plataforma completa).
+ * Devuelve null si la comarca no existe o no tiene ciudades (areaLayout la omite).
+ *
+ * @param {CareerMap} map
+ * @param {string} areaId
+ * @param {WorldOptions} [opts]
+ * @returns {FocusFrame|null}
+ */
+export function areaFocusFrame(map, areaId, opts = {}) {
+  const layout = areaLayout(map, opts).find((l) => l.area.id === areaId);
+  if (!layout) return null;
+  return {
+    wx: layout.center.wx,
+    wz: layout.center.wz,
+    distance: Math.max(layout.radius * AREA_FOCUS.factor, AREA_FOCUS.minDistance),
+    elevation: AREA_FOCUS.elevation,
+  };
 }
 
 /**

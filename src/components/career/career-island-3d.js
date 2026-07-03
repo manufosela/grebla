@@ -1,6 +1,7 @@
 /**
  * <career-island-3d>
- * Render 3D REAL de la isla de carrera con Three.js (MC-5: fundación).
+ * Render 3D REAL de la isla de carrera con Three.js (MC-5: fundación;
+ * MC-6: zoom animado a ciudad/comarca).
  *
  * Es intercambiable con <career-map> y <career-island>: mismas propiedades y el
  * mismo evento `select-city`. La escena se GENERA del modelo (/careerMap/island)
@@ -23,8 +24,15 @@
  * Se eligió rebuild simple del grupo frente a mutar materiales in situ por
  * claridad: el estado visual siempre es función pura del modelo.
  *
- * El picking fino y el panel de ciudad llegan en MC-6; aquí queda el hook: un
- * raycast básico en click (sin arrastre) que emite `select-city`.
+ * Picking (MC-6): clic (sin arrastre) sobre una ciudad → emite `select-city` Y
+ * anima la cámara hasta ella (el zoom lo hace ESTE componente, no el contenedor,
+ * para evitar dobles animaciones); clic sobre la plataforma de una comarca →
+ * zoom a la comarca (sin evento); clic en agua/vacío → nada (no se deselecciona).
+ *
+ * Zoom animado: `focusCity(id)`, `focusArea(id)` y `focusOverview()` interpolan
+ * posición de cámara y `controls.target` (easeInOutCubic, FOCUS_ANIM_MS) dentro
+ * del loop rAF existente. Cualquier input del usuario sobre los OrbitControls
+ * (evento 'start': arrastre, rueda, touch) cancela la animación en curso.
  *
  * Es un componente presentacional: no escribe en Firestore.
  */
@@ -35,6 +43,8 @@ import {
   cityStatusColor,
   areaLayout,
   islandRadius,
+  cityFocusFrame,
+  areaFocusFrame,
   ACCENT_COLORS,
 } from '../../tools/career/domain/islandLayout.js';
 
@@ -47,6 +57,8 @@ const CITY_ROOF = { r: 2.3, h: 2.2 };
 const DRAG_THRESHOLD = 5;
 /** Límite del paneo del target respecto al radio de la isla. */
 const PAN_LIMIT_FACTOR = 1.2;
+/** Duración (ms) de las animaciones de foco de cámara (zoom a ciudad/comarca/vista general). */
+const FOCUS_ANIM_MS = 700;
 /** Colores del entorno (cielo, agua, arena, hierba, madera, faro). */
 const ENV_COLORS = {
   sky: 0xdceff5,
@@ -116,6 +128,14 @@ export class CareerIsland3D extends LitElement {
     this._lastMapId = null;
     this._islandR = 0;
     this._pointerDownAt = null;
+    /**
+     * Animación de foco de cámara en curso (o null). Se interpola en el loop
+     * rAF y se cancela con cualquier input del usuario sobre los controles.
+     * @type {{fromPos: object, toPos: object, fromTarget: object, toTarget: object, start: number}|null}
+     */
+    this._camAnim = null;
+    /** Plataformas de comarca raycasteables (userData.areaId); se rehacen con el grupo estático. */
+    this._areaPatches = [];
     /** Aborta de golpe todos los listeners (documento y canvas) en el teardown. */
     this._abort = null;
     this._onVisibility = () => {
@@ -204,6 +224,10 @@ export class CareerIsland3D extends LitElement {
     this._controls.screenSpacePanning = false; // panear sobre el plano del suelo
     this._controls.maxPolarAngle = Math.PI * 0.46; // nunca bajo el horizonte/agua
     this._controls.target.set(0, GROUND_Y, 0);
+    // Cualquier input del usuario (arrastre, rueda, touch) cancela el zoom animado.
+    this._controls.addEventListener('start', () => {
+      this._camAnim = null;
+    });
 
     // Luz: sol direccional + hemisférica suave. Sin sombras en MC-5 (fluidez).
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
@@ -244,12 +268,20 @@ export class CareerIsland3D extends LitElement {
 
   // ---- Bucle de render / tamaño ---------------------------------------------
 
-  /** Bucle rAF: damping de los controles + render. Se pausa con document.hidden. */
+  /**
+   * Bucle rAF: damping de los controles + animación de foco + render. La
+   * animación se aplica DESPUÉS de controls.update() para que tenga la última
+   * palabra sobre cámara y target mientras dura (el damping residual no la
+   * pelea; el input del usuario la cancela vía el evento 'start').
+   * Se pausa con document.hidden.
+   */
   _startLoop() {
     if (this._raf || !this._renderer) return;
-    const step = () => {
+    /** @param {DOMHighResTimeStamp} now */
+    const step = (now) => {
       this._raf = requestAnimationFrame(step);
       this._controls.update();
+      this._tickCameraAnim(now);
       this._clampTarget();
       this._renderer.render(this._scene, this._camera);
     };
@@ -268,6 +300,94 @@ export class CareerIsland3D extends LitElement {
     t.x = Math.min(Math.max(t.x, -limit), limit);
     t.z = Math.min(Math.max(t.z, -limit), limit);
     t.y = GROUND_Y;
+  }
+
+  // ---- Zoom animado de cámara (MC-6) ------------------------------------------
+
+  /**
+   * Enfoca una ciudad con zoom animado: la cámara llega cerca de su casa, con
+   * un ángulo agradable (~38°) y conservando el azimut actual (llega "desde
+   * donde está", sin giros bruscos). API pública para <career-app>.
+   * @param {string} cityId
+   */
+  focusCity(cityId) {
+    if (this._phase !== 'ready') return;
+    const frame = cityFocusFrame(this.map, cityId);
+    if (frame) this._animateTo(this._poseFromFrame(frame));
+  }
+
+  /**
+   * Enfoca una comarca completa: encuadra su plataforma (distancia proporcional
+   * a su radio) con vista más aérea. API pública para <career-app>.
+   * @param {string} areaId
+   */
+  focusArea(areaId) {
+    if (this._phase !== 'ready') return;
+    const frame = areaFocusFrame(this.map, areaId);
+    if (frame) this._animateTo(this._poseFromFrame(frame));
+  }
+
+  /** Vuelve, con animación, al encuadre aéreo inicial de toda la isla. */
+  focusOverview() {
+    if (this._phase !== 'ready') return;
+    this._animateTo(this._overviewPose());
+  }
+
+  /**
+   * Pose de cámara (posición + target) para un encuadre de foco del dominio.
+   * Conserva el azimut actual de la cámara respecto al NUEVO target y respeta
+   * la distancia mínima de los controles.
+   * @param {import('../../tools/career/domain/islandLayout.js').FocusFrame} frame
+   */
+  _poseFromFrame(frame) {
+    const THREE = this._THREE;
+    const target = new THREE.Vector3(frame.wx, GROUND_Y, frame.wz);
+    const distance = Math.max(frame.distance, this._controls.minDistance);
+    const cam = this._camera.position;
+    const azimuth = Math.atan2(cam.x - target.x, cam.z - target.z);
+    const horizontal = distance * Math.cos(frame.elevation);
+    const position = new THREE.Vector3(
+      target.x + Math.sin(azimuth) * horizontal,
+      GROUND_Y + distance * Math.sin(frame.elevation),
+      target.z + Math.cos(azimuth) * horizontal,
+    );
+    return { position, target };
+  }
+
+  /** Pose del encuadre aéreo de toda la isla (la misma del arranque). */
+  _overviewPose() {
+    const THREE = this._THREE;
+    const R = this._islandR;
+    return {
+      position: new THREE.Vector3(R * 1.1, R * 1.5, R * 1.1),
+      target: new THREE.Vector3(0, GROUND_Y, 0),
+    };
+  }
+
+  /** Arranca una animación de foco desde la pose actual hacia la indicada. */
+  _animateTo({ position, target }) {
+    this._camAnim = {
+      fromPos: this._camera.position.clone(),
+      toPos: position,
+      fromTarget: this._controls.target.clone(),
+      toTarget: target,
+      start: performance.now(),
+    };
+  }
+
+  /**
+   * Avanza la animación de foco en curso (easeInOutCubic). Al completarse se
+   * limpia sola; el input del usuario la cancela antes (evento 'start').
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickCameraAnim(now) {
+    const anim = this._camAnim;
+    if (!anim) return;
+    const t = Math.min((now - anim.start) / FOCUS_ANIM_MS, 1);
+    const k = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+    this._camera.position.lerpVectors(anim.fromPos, anim.toPos, k);
+    this._controls.target.lerpVectors(anim.fromTarget, anim.toTarget, k);
+    if (t >= 1) this._camAnim = null;
   }
 
   /** @param {ResizeObserverEntry[]} entries */
@@ -312,10 +432,11 @@ export class CareerIsland3D extends LitElement {
   /** Encuadre aéreo inicial + límites de zoom proporcionales al radio de la isla. */
   _frameIsland() {
     const R = this._islandR;
+    const { position, target } = this._overviewPose();
     this._camera.far = R * 20;
-    this._camera.position.set(R * 1.1, R * 1.5, R * 1.1);
+    this._camera.position.copy(position);
     this._camera.updateProjectionMatrix();
-    this._controls.target.set(0, GROUND_Y, 0);
+    this._controls.target.copy(target);
     this._controls.minDistance = R * 0.3;
     this._controls.maxDistance = R * 4;
     this._controls.update();
@@ -355,6 +476,8 @@ export class CareerIsland3D extends LitElement {
     group.add(grass);
 
     // Comarcas: parche circular sutil + etiqueta flotante con el nombre.
+    // Los parches son raycasteables (MC-6): clic en la plataforma → zoom a la comarca.
+    this._areaPatches = [];
     for (const { area, center, radius, color } of areaLayout(this.map)) {
       const patch = new THREE.Mesh(
         new THREE.CircleGeometry(radius, 24),
@@ -362,6 +485,8 @@ export class CareerIsland3D extends LitElement {
       );
       patch.rotation.x = -Math.PI / 2;
       patch.position.set(center.wx, GROUND_Y + 0.06, center.wz);
+      patch.userData.areaId = area.id;
+      this._areaPatches.push(patch);
       group.add(patch);
       group.add(this._makeLabel(area.name, {
         x: center.wx,
@@ -575,9 +700,15 @@ export class CareerIsland3D extends LitElement {
     return sprite;
   }
 
-  // ---- Picking básico (hook MC-6) --------------------------------------------
+  // ---- Picking (MC-6) ---------------------------------------------------------
 
-  /** Clic (no arrastre de órbita) → raycast sobre las ciudades → select-city. */
+  /**
+   * Clic (no arrastre de órbita) → raycast en dos pasadas:
+   *  1. Ciudades: emite `select-city` Y anima el zoom hasta la ciudad (el zoom
+   *     lo hace este componente; el contenedor NO debe volver a animar).
+   *  2. Plataformas de comarca: zoom a la comarca (sin evento de selección).
+   * Agua/vacío: nada — no se deselecciona de forma agresiva.
+   */
   _onPick(event) {
     if (!this._pointerDownAt || !this._citiesGroup) return;
     const moved = Math.hypot(
@@ -600,6 +731,7 @@ export class CareerIsland3D extends LitElement {
       let obj = hit.object;
       while (obj && !obj.userData.cityId) obj = obj.parent;
       if (obj?.userData.cityId) {
+        this.focusCity(obj.userData.cityId);
         this.dispatchEvent(
           new CustomEvent('select-city', {
             detail: { cityId: obj.userData.cityId },
@@ -610,6 +742,11 @@ export class CareerIsland3D extends LitElement {
         return;
       }
     }
+
+    // Sin ciudad bajo el cursor: ¿plataforma de comarca? (raycast barato: solo
+    // los parches circulares, sin descender por el grupo estático completo).
+    const areaHit = raycaster.intersectObjects(this._areaPatches, false)[0];
+    if (areaHit) this.focusArea(areaHit.object.userData.areaId);
   }
 
   // ---- Limpieza ---------------------------------------------------------------
@@ -643,12 +780,14 @@ export class CareerIsland3D extends LitElement {
     this._staticGroup = null;
     this._citiesGroup = null;
     this._lastMapId = null;
+    this._camAnim = null;
+    this._areaPatches = [];
   }
 
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía."></canvas>
         ${this._phase === 'loading' ? html`<div class="overlay">Cargando isla 3D…</div>` : null}
         ${this._phase === 'unsupported'
           ? html`<div class="overlay">Tu navegador no soporta WebGL. Usa la vista plana.</div>`

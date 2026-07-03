@@ -5,6 +5,13 @@
  * seleccionada. Igual que Role Mirror, el líder elige a quién edita y el journey
  * se persiste en el subárbol de esa persona.
  *
+ * En el modo 3D (MC-6) el detalle es un PANEL DE CIUDADANÍA overlay sobre el
+ * canvas (lateral en escritorio, hoja inferior en móvil): estado como insignia
+ * de juego, prerequisitos que faltan, y las MISMAS acciones/evidencias/
+ * recomendaciones que las vistas plana/2.5D (métodos de render compartidos,
+ * sin duplicar lógica). El zoom al hacer clic lo anima <career-island-3d> por
+ * sí solo; aquí solo se invoca `focusOverview()` desde el botón «Isla completa».
+ *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
  *  - people: { id: string, name: string }[]   personas del equipo del líder
@@ -22,6 +29,7 @@ import {
   stats,
 } from '../../tools/career/application/usecases.js';
 import { getCareerMap } from '../../lib/careerMap.js';
+import { cityStatus, missingPrereqs } from '../../tools/career/domain/progress.js';
 
 export class CareerApp extends LitElement {
   static properties = {
@@ -41,8 +49,47 @@ export class CareerApp extends LitElement {
 
   static styles = css`
     :host { display: flex; flex-direction: column; min-height: 0; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
-    /* En modo 3D el canvas es el protagonista: ocupa todo el alto disponible. */
+    /* En modo 3D el canvas es el protagonista: ocupa todo el alto disponible y
+       el panel de ciudadanía y el HUD flotan SOBRE él (overlay). */
+    .stage3d { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
     career-island-3d.stage { flex: 1 1 auto; min-height: 0; }
+    .hud-overview { position: absolute; top: 0.75rem; left: 0.75rem; z-index: 2; box-shadow: 0 2px 8px rgba(17, 24, 39, 0.12); }
+    .citypanel {
+      position: absolute;
+      z-index: 3;
+      top: 0.75rem;
+      right: 0.75rem;
+      bottom: 0.75rem;
+      width: min(360px, calc(100% - 1.5rem));
+      box-sizing: border-box;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: color-mix(in srgb, var(--rm-surface, #fff) 90%, transparent);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: var(--rm-radius, 12px);
+      padding: 1rem 1.25rem;
+      box-shadow: 0 10px 30px rgba(17, 24, 39, 0.18);
+      outline: none;
+    }
+    /* En móvil el panel pasa a hoja inferior: el mapa sigue visible encima. */
+    @media (max-width: 760px) {
+      .citypanel { top: auto; left: 0.5rem; right: 0.5rem; bottom: 0.5rem; width: auto; max-height: 60%; }
+    }
+    .citypanel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+    .citypanel h3 { margin: 0; font-size: 1.05rem; }
+    .citypanel .kind { margin-bottom: 0; }
+    .close { border: none; background: transparent; font-size: 1.05rem; line-height: 1; padding: 0.25rem 0.45rem; color: var(--rm-muted, #6b7280); }
+    .close:hover { color: var(--rm-text, #111827); background: var(--rm-track, #e9f0f2); }
+    .badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0 0.75rem; }
+    .badge { font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 999px; border: 1px solid transparent; }
+    .badge.visited { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .badge.available { background: var(--rm-coral, #f2887a); color: #fff; }
+    .badge.blocked { background: var(--rm-track, #d7dee2); color: var(--rm-text, #374151); }
+    .badge.deprecated { background: var(--rm-danger, #dc2626); color: #fff; }
+    .badge.route { border-color: var(--rm-navy, #1e3a5f); color: var(--rm-navy, #1e3a5f); }
+    .badge.current { border-color: var(--rm-coral-600, #e26d5e); color: var(--rm-coral-600, #e26d5e); }
+    .blockedby { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
     label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
@@ -133,6 +180,11 @@ export class CareerApp extends LitElement {
       this._loadedPerson = this.personId;
       this._load();
     }
+    // Accesibilidad del panel de ciudadanía (3D): al abrirse recibe el foco
+    // (tabindex="-1"), de modo que Escape lo cierra sin pasos intermedios.
+    if (changed.has('selected') && this.selected && this.viewMode === '3d') {
+      this.renderRoot.querySelector('.citypanel')?.focus();
+    }
   }
 
   /** Carga el mapa (la isla) desde Firestore una sola vez; con fallback a la semilla. */
@@ -199,6 +251,27 @@ export class CareerApp extends LitElement {
   }
 
   /**
+   * Cierra el panel de ciudadanía: deselecciona SIN mover la cámara (el usuario
+   * sigue donde estaba) y devuelve el foco al HUD para no perder el teclado.
+   */
+  _closeCityPanel() {
+    this.selected = null;
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud-overview')?.focus());
+  }
+
+  /** Escape dentro del panel de ciudadanía lo cierra. @param {KeyboardEvent} event */
+  _onPanelKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeCityPanel();
+  }
+
+  /** Botón HUD «Isla completa»: vuelta animada al encuadre aéreo de la isla. */
+  _focusOverview() {
+    this.renderRoot.querySelector('career-island-3d')?.focusOverview();
+  }
+
+  /**
    * Conmutador de vista Isla 3D / 2.5D / Plano. La 2.5D se retirará en MC-8;
    * el plano queda como fallback (también automático si no hay WebGL).
    */
@@ -223,6 +296,129 @@ export class CareerApp extends LitElement {
   /** WebGL no disponible: cae a la vista plana SIN persistir (permite reintentar). */
   _onWebglUnavailable() {
     this.viewMode = 'flat';
+  }
+
+  // ---- Detalle de ciudad COMPARTIDO entre vistas (grid y panel 3D) -----------
+
+  /**
+   * Acciones de journey sobre la ciudad (visitada/actual/ruta). Si la ciudad
+   * está en desuso solo se muestra la nota (no es visitable), como hasta ahora.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderCityActions(sel) {
+    if (sel.deprecated) {
+      return html`<p class="dep">Tecnología en desuso — no forma parte de la ruta.</p>`;
+    }
+    const visited = this.journey.visitedCities ?? [];
+    const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
+    return html`<div class="actions">
+      <button class="primary" @click=${() => this._act('toggle')}>
+        ${visited.includes(sel.id) ? 'Quitar de visitadas' : 'Marcar como visitada'}
+      </button>
+      <button @click=${() => this._act('current')}>Marcar como ciudad actual</button>
+      <button @click=${() => this._act('route')}>${inRoute ? 'Quitar de la ruta' : 'Añadir a la ruta'}</button>
+    </div>`;
+  }
+
+  /** Recomendaciones formativas de la ciudad (enlaces cuando tienen url). */
+  _renderCityRecs(sel) {
+    if (!(sel.recommendations ?? []).length) return null;
+    return html`<ul class="recs">
+      ${sel.recommendations.map(
+        (r) => html`<li>${r.kind}: ${r.url ? html`<a href=${r.url} target="_blank" rel="noopener">${r.label}</a>` : r.label}</li>`,
+      )}
+    </ul>`;
+  }
+
+  /** Evidencias de ciudadanía de la ciudad (editables; ocultas si está en desuso). */
+  _renderCityEvidences(sel) {
+    if (sel.deprecated) return null;
+    const ev = this.journey.evidences?.[sel.id] ?? {};
+    return html`<details class="ev">
+      <summary>Evidencias</summary>
+      <label>Experiencia previa (años)
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          .value=${ev.priorExperienceYears ?? ''}
+          @change=${(e) => this._saveEvidence('priorExperienceYears', e.target.value)}
+        />
+      </label>
+      <label>Formaciones (separadas por coma)
+        <input
+          type="text"
+          .value=${(ev.formaciones ?? []).join(', ')}
+          @change=${(e) => this._saveEvidence('formaciones', e.target.value)}
+        />
+      </label>
+      <label>Cursos (separados por coma)
+        <input
+          type="text"
+          .value=${(ev.cursos ?? []).join(', ')}
+          @change=${(e) => this._saveEvidence('cursos', e.target.value)}
+        />
+      </label>
+      <label>Títulos (separados por coma)
+        <input
+          type="text"
+          .value=${(ev.titulos ?? []).join(', ')}
+          @change=${(e) => this._saveEvidence('titulos', e.target.value)}
+        />
+      </label>
+    </details>`;
+  }
+
+  /** Insignias de juego del estado de ciudadanía (panel del modo 3D). */
+  static STATUS_BADGES = Object.freeze({
+    visited: 'Ciudadano',
+    available: 'Visado disponible',
+    blocked: 'Bloqueada',
+    deprecated: 'En desuso',
+  });
+
+  /**
+   * Panel de ciudadanía overlay del modo 3D: título de juego, insignias de
+   * estado, explicación del bloqueo (prereqs que faltan, con sus nombres) y el
+   * mismo detalle (acciones/recomendaciones/evidencias) que las otras vistas.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderCityPanel(sel) {
+    const map = this._map;
+    const st = cityStatus(map, sel.id, this.journey);
+    const status = st === 'unknown' ? 'blocked' : st;
+    const areaName = map.areas.find((a) => a.id === sel.area)?.name;
+    const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
+    const isCurrent = this.journey.currentCity === sel.id;
+    const missing = missingPrereqs(map, sel.id, this.journey.visitedCities ?? []).map(
+      (id) => map.cities.find((c) => c.id === id)?.name ?? id,
+    );
+    return html`<aside
+      class="citypanel"
+      role="dialog"
+      aria-label="Ciudadanía de ${sel.name}"
+      tabindex="-1"
+      @keydown=${this._onPanelKeydown}
+    >
+      <header>
+        <div>
+          <h3>Ciudadanía de ${sel.name}</h3>
+          <p class="kind">${areaName ? html`${areaName} · ` : null}${sel.kind} · ${sel.weight} pts</p>
+        </div>
+        <button class="close" aria-label="Cerrar panel" title="Cerrar (Esc)" @click=${this._closeCityPanel}>✕</button>
+      </header>
+      <div class="badges">
+        <span class="badge ${status}">${CareerApp.STATUS_BADGES[status]}</span>
+        ${isCurrent ? html`<span class="badge current">Actual</span>` : null}
+        ${inRoute ? html`<span class="badge route">En ruta</span>` : null}
+      </div>
+      ${status === 'blocked' && missing.length
+        ? html`<p class="blockedby">Para conseguir el visado te falta: ${missing.join(', ')}.</p>`
+        : null}
+      ${this._renderCityActions(sel)}
+      ${this._renderCityRecs(sel)}
+      ${this._renderCityEvidences(sel)}
+    </aside>`;
   }
 
   _renderPersonSelect() {
@@ -258,9 +454,6 @@ export class CareerApp extends LitElement {
     const map = this._map;
     const s = stats(map, this.journey);
     const sel = this.selected ? map.cities.find((c) => c.id === this.selected) : null;
-    const visited = this.journey.visitedCities ?? [];
-    const inRoute = (this.journey.plannedRoute ?? []).includes(this.selected);
-    const ev = sel ? this.journey.evidences?.[sel.id] ?? {} : {};
     return html`
       <div class="bar">
         ${this._renderPersonSelect()}
@@ -271,15 +464,23 @@ export class CareerApp extends LitElement {
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
 
       ${this.viewMode === '3d'
-        ? html`<career-island-3d
-            class="stage"
-            .map=${map}
-            .journey=${this.journey}
-            .reachable=${s.reachable}
-            .selected=${this.selected}
-            @select-city=${this._onSelect}
-            @webgl-unavailable=${this._onWebglUnavailable}
-          ></career-island-3d>`
+        ? html`<div class="stage3d">
+            <career-island-3d
+              class="stage"
+              .map=${map}
+              .journey=${this.journey}
+              .reachable=${s.reachable}
+              .selected=${this.selected}
+              @select-city=${this._onSelect}
+              @webgl-unavailable=${this._onWebglUnavailable}
+            ></career-island-3d>
+            <button
+              class="hud-overview"
+              @click=${this._focusOverview}
+              title="Volver a la vista aérea de toda la isla"
+            >Isla completa</button>
+            ${sel ? this._renderCityPanel(sel) : null}
+          </div>`
         : html`<div class="grid">
         ${this.viewMode === 'flat'
           ? html`<career-map
@@ -302,61 +503,12 @@ export class CareerApp extends LitElement {
             ? html`
                 <h3>${sel.name}</h3>
                 <p class="kind">${sel.kind} · ${sel.weight} pts</p>
-                ${sel.deprecated ? html`<p class="dep">Tecnología en desuso — no forma parte de la ruta.</p>` : null}
-                ${sel.deprecated
-                  ? null
-                  : html`<div class="actions">
-                      <button class="primary" @click=${() => this._act('toggle')}>
-                        ${visited.includes(sel.id) ? 'Quitar de visitadas' : 'Marcar como visitada'}
-                      </button>
-                      <button @click=${() => this._act('current')}>Marcar como ciudad actual</button>
-                      <button @click=${() => this._act('route')}>${inRoute ? 'Quitar de la ruta' : 'Añadir a la ruta'}</button>
-                    </div>`}
+                ${this._renderCityActions(sel)}
                 ${(sel.prereqs ?? []).length
                   ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => map.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
                   : null}
-                ${(sel.recommendations ?? []).length
-                  ? html`<ul class="recs">
-                      ${sel.recommendations.map(
-                        (r) => html`<li>${r.kind}: ${r.url ? html`<a href=${r.url} target="_blank" rel="noopener">${r.label}</a>` : r.label}</li>`,
-                      )}
-                    </ul>`
-                  : null}
-                ${sel.deprecated
-                  ? null
-                  : html`<details class="ev">
-                      <summary>Evidencias</summary>
-                      <label>Experiencia previa (años)
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.5"
-                          .value=${ev.priorExperienceYears ?? ''}
-                          @change=${(e) => this._saveEvidence('priorExperienceYears', e.target.value)}
-                        />
-                      </label>
-                      <label>Formaciones (separadas por coma)
-                        <input
-                          type="text"
-                          .value=${(ev.formaciones ?? []).join(', ')}
-                          @change=${(e) => this._saveEvidence('formaciones', e.target.value)}
-                        />
-                      </label>
-                      <label>Cursos (separados por coma)
-                        <input
-                          type="text"
-                          .value=${(ev.cursos ?? []).join(', ')}
-                          @change=${(e) => this._saveEvidence('cursos', e.target.value)}
-                        />
-                      </label>
-                      <label>Títulos (separados por coma)
-                        <input
-                          type="text"
-                          .value=${(ev.titulos ?? []).join(', ')}
-                          @change=${(e) => this._saveEvidence('titulos', e.target.value)}
-                        />
-                      </label>
-                    </details>`}
+                ${this._renderCityRecs(sel)}
+                ${this._renderCityEvidences(sel)}
               `
             : html`<p class="hint">Haz clic en una ciudad de la isla para ver sus acciones y evidencias.</p>`}
           <details class="legend-wrap">

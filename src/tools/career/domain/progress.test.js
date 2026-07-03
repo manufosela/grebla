@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor, cityStatus } from './progress.js';
+import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor, cityStatus, missingPrereqs } from './progress.js';
 
 const map = {
   id: 'm',
@@ -65,5 +65,14 @@ describe('career progress', () => {
     expect(cityStatus(map, 'a', j(['a']))).toBe('visited');
     expect(cityStatus(mapWithDeprecated, 'old', j(['a']))).toBe('deprecated');
     expect(cityStatus(map, 'nope', j([]))).toBe('unknown');
+  });
+
+  it('missingPrereqs: explica el bloqueo con los prereqs pendientes', () => {
+    expect(missingPrereqs(map, 'c', [])).toEqual(['a', 'b']);
+    expect(missingPrereqs(map, 'c', ['a'])).toEqual(['b']);
+    expect(missingPrereqs(map, 'c', ['a', 'b'])).toEqual([]);
+    expect(missingPrereqs(map, 'a', [])).toEqual([]); // sin prereqs
+    expect(missingPrereqs(map, 'nope', [])).toEqual([]); // ciudad desconocida
+    expect(missingPrereqs(null, 'a', [])).toEqual([]); // mapa nulo
   });
 });
