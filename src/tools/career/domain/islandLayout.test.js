@@ -14,6 +14,7 @@ import {
   islandRadius,
   hashId,
   cityVariant,
+  facadeYawToward,
   journeyPathPoints,
   ribbonStrip,
   CITY_FOCUS,
@@ -327,5 +328,49 @@ describe('islandRadius', () => {
   it('nunca es menor que MIN_ISLAND_RADIUS (mapa vacío)', () => {
     expect(islandRadius({ areas: [], cities: [] })).toBe(MIN_ISLAND_RADIUS);
     expect(islandRadius(null)).toBe(MIN_ISLAND_RADIUS);
+  });
+});
+
+describe('facadeYawToward', () => {
+  /**
+   * Dirección de mundo a la que apunta la fachada (+z local) con un yaw dado:
+   * (sin(yaw), cos(yaw)) — la convención de rotation.y de <career-island-3d>.
+   * @param {number} yaw
+   */
+  const facadeDir = (yaw) => ({ x: Math.sin(yaw), z: Math.cos(yaw) });
+
+  it('la fachada apunta exactamente hacia el puerto', () => {
+    const house = { wx: 10, wz: -5 };
+    const port = { wx: -20, wz: 25 };
+    const yaw = facadeYawToward(house, port);
+    const dir = facadeDir(yaw);
+    const toPort = { x: port.wx - house.wx, z: port.wz - house.wz };
+    const len = Math.hypot(toPort.x, toPort.z);
+    expect(dir.x).toBeCloseTo(toPort.x / len);
+    expect(dir.z).toBeCloseTo(toPort.z / len);
+  });
+
+  it('casos cardinales: puerto al este → π/2, al norte (+z) → 0, al oeste → -π/2, al sur → π', () => {
+    const house = { wx: 0, wz: 0 };
+    expect(facadeYawToward(house, { wx: 10, wz: 0 })).toBeCloseTo(Math.PI / 2);
+    expect(facadeYawToward(house, { wx: 0, wz: 10 })).toBeCloseTo(0);
+    expect(facadeYawToward(house, { wx: -10, wz: 0 })).toBeCloseTo(-Math.PI / 2);
+    expect(Math.abs(facadeYawToward(house, { wx: 0, wz: -10 }))).toBeCloseTo(Math.PI);
+  });
+
+  it('es determinista y simétrico respecto a trasladar ambos puntos', () => {
+    const a = facadeYawToward({ wx: 3, wz: 4 }, { wx: -7, wz: 9 });
+    expect(facadeYawToward({ wx: 3, wz: 4 }, { wx: -7, wz: 9 })).toBe(a);
+    expect(facadeYawToward({ wx: 13, wz: 14 }, { wx: 3, wz: 19 })).toBeCloseTo(a);
+  });
+
+  it('casa sobre el puerto: sin dirección definida devuelve 0 (determinista)', () => {
+    expect(facadeYawToward({ wx: 5, wz: 5 }, { wx: 5, wz: 5 })).toBe(0);
+  });
+
+  it('falla en alto con posiciones inválidas (sin fallbacks silenciosos)', () => {
+    expect(() => facadeYawToward({ wx: 0, wz: 0 }, undefined)).toThrow();
+    expect(() => facadeYawToward(undefined, { wx: 0, wz: 0 })).toThrow();
+    expect(() => facadeYawToward({ wx: Number.NaN, wz: 0 }, { wx: 1, wz: 1 })).toThrow();
   });
 });

@@ -189,6 +189,30 @@ export function cityVariant(cityId) {
 }
 
 /**
+ * Yaw de fachada de una casa para que su puerta y placa miren HACIA el puerto
+ * (el punto de llegada del caminante, MC-9). Convención de <career-island-3d>:
+ * la fachada es la cara +z local del nodo, y con rotation.y = yaw esa cara
+ * apunta a la dirección de mundo (sin(yaw), cos(yaw)) — de ahí atan2(dx, dz).
+ * Si la casa está exactamente sobre el puerto no hay dirección definida y se
+ * devuelve 0 (determinista, no es un error de datos).
+ *
+ * @param {WorldPoint} housePos Posición de mundo de la casa.
+ * @param {WorldPoint} portPos Posición de mundo del puerto (o del extremo del muelle).
+ * @returns {number} Yaw (radianes) para que la fachada mire al puerto.
+ */
+export function facadeYawToward(housePos, portPos) {
+  const dx = portPos?.wx - housePos?.wx;
+  const dz = portPos?.wz - housePos?.wz;
+  if (!Number.isFinite(dx) || !Number.isFinite(dz)) {
+    throw new Error(
+      `Posiciones inválidas para facadeYawToward: casa (${housePos?.wx}, ${housePos?.wz}), puerto (${portPos?.wx}, ${portPos?.wz})`,
+    );
+  }
+  if (Math.hypot(dx, dz) < 1e-9) return 0;
+  return Math.atan2(dx, dz);
+}
+
+/**
  * Puntos de mundo (en orden) de una secuencia de ids de ciudad. Los ids que no
  * existen en el mapa se omiten (journeys antiguos pueden referenciar ciudades
  * retiradas del mapa; no es un error de datos). Para dibujar la senda del
