@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   WALK_SPEED,
   RUN_MULTIPLIER,
+  TURN_SPEED,
   EYE_HEIGHT,
   PROXIMITY_RADIUS,
   WALK_EDGE_MARGIN,
@@ -10,6 +11,7 @@ import {
   groundHeightAt,
   walkableRadius,
   stepPosition,
+  turnYaw,
   nearestCityWithin,
 } from './walk.js';
 
@@ -160,6 +162,41 @@ describe('stepPosition', () => {
   it('falla en alto con un límite inválido', () => {
     expect(() => stepPosition({ x: 0, z: 0 }, { x: 1, z: 0 }, 0.016, 8, { radius: 0 })).toThrow();
     expect(() => stepPosition({ x: 0, z: 0 }, { x: 1, z: 0 }, 0.016, 8, undefined)).toThrow();
+  });
+});
+
+describe('turnYaw', () => {
+  it('gira a velocidad angular constante (+1 izquierda, -1 derecha)', () => {
+    expect(turnYaw(0, 1, 0.5, 2)).toBeCloseTo(1);
+    expect(turnYaw(0, -1, 0.5, 2)).toBeCloseTo(-1);
+    expect(TURN_SPEED).toBeGreaterThan(0);
+  });
+
+  it('sin dirección no gira', () => {
+    expect(turnYaw(0.8, 0, 0.016, TURN_SPEED)).toBe(0.8);
+  });
+
+  it('normaliza el resultado a (-π, π] (no crece sin límite)', () => {
+    // Un giro largo hacia la izquierda cruza π y reaparece por -π.
+    const yaw = turnYaw(Math.PI - 0.1, 1, 0.2, 1);
+    expect(yaw).toBeCloseTo(Math.PI - 0.1 + 0.2 - 2 * Math.PI);
+    expect(yaw).toBeGreaterThan(-Math.PI);
+    expect(yaw).toBeLessThanOrEqual(Math.PI);
+    // Y lo mismo hacia la derecha cruzando -π.
+    const back = turnYaw(-Math.PI + 0.1, -1, 0.2, 1);
+    expect(back).toBeCloseTo(-Math.PI + 0.1 - 0.2 + 2 * Math.PI);
+  });
+
+  it('muchos pasos seguidos siguen acotados', () => {
+    let yaw = 0;
+    for (let i = 0; i < 1000; i += 1) yaw = turnYaw(yaw, 1, 0.016, TURN_SPEED);
+    expect(yaw).toBeGreaterThan(-Math.PI);
+    expect(yaw).toBeLessThanOrEqual(Math.PI);
+  });
+
+  it('falla en alto con una velocidad inválida', () => {
+    expect(() => turnYaw(0, 1, 0.016, 0)).toThrow();
+    expect(() => turnYaw(0, 1, 0.016, Number.NaN)).toThrow();
   });
 });
 

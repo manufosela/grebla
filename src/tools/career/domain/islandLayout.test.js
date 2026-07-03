@@ -12,6 +12,10 @@ import {
   areaColor,
   areaLayout,
   islandRadius,
+  hashId,
+  cityVariant,
+  journeyPathPoints,
+  ribbonStrip,
   CITY_FOCUS,
   AREA_FOCUS,
   cityFocusFrame,
@@ -174,6 +178,137 @@ describe('areaFocusFrame', () => {
     expect(areaFocusFrame(MAP, 'vacia')).toBeNull();
     expect(areaFocusFrame(MAP, 'no-existe')).toBeNull();
     expect(areaFocusFrame(null, 'a1')).toBeNull();
+  });
+});
+
+describe('hashId / cityVariant', () => {
+  it('hashId es determinista y distingue ids distintos', () => {
+    expect(hashId('react')).toBe(hashId('react'));
+    expect(hashId('react')).not.toBe(hashId('vue'));
+    expect(hashId('a')).not.toBe(hashId('b'));
+    expect(Number.isInteger(hashId('react'))).toBe(true);
+    expect(hashId('react')).toBeGreaterThanOrEqual(0);
+  });
+
+  it('hashId falla en alto con un id inválido', () => {
+    expect(() => hashId('')).toThrow(/inválido/i);
+    expect(() => hashId(undefined)).toThrow(/inválido/i);
+  });
+
+  it('cityVariant es determinista por id (misma ciudad → misma casa)', () => {
+    expect(cityVariant('node')).toEqual(cityVariant('node'));
+  });
+
+  it('cityVariant produce valores acotados a los rangos documentados', () => {
+    for (const id of ['html', 'css', 'js', 'node', 'react', 'docker', 'k8s', 'sql']) {
+      const v = cityVariant(id);
+      expect(v.height).toBeGreaterThanOrEqual(0.9);
+      expect(v.height).toBeLessThanOrEqual(1.2);
+      expect(v.rotation).toBeGreaterThanOrEqual(-0.3);
+      expect(v.rotation).toBeLessThanOrEqual(0.3);
+      expect(v.tone).toBeGreaterThanOrEqual(0.92);
+      expect(v.tone).toBeLessThanOrEqual(1.08);
+    }
+  });
+
+  it('el tono está cuantizado en 5 pasos (caché de materiales pequeña)', () => {
+    const tones = new Set(
+      ['html', 'css', 'js', 'node', 'react', 'docker', 'k8s', 'sql', 'aws', 'git'].map(
+        (id) => cityVariant(id).tone,
+      ),
+    );
+    expect(tones.size).toBeLessThanOrEqual(5);
+  });
+
+  it('ciudades distintas varían de verdad (no todas la misma casa)', () => {
+    const ids = ['html', 'css', 'js', 'node', 'react', 'docker'];
+    expect(new Set(ids.map((id) => cityVariant(id).height)).size).toBeGreaterThan(1);
+    expect(new Set(ids.map((id) => cityVariant(id).rotation)).size).toBeGreaterThan(1);
+  });
+});
+
+describe('journeyPathPoints', () => {
+  it('proyecta las ciudades EN ORDEN al mundo', () => {
+    expect(journeyPathPoints(MAP, ['c1', 'c3', 'c2'])).toEqual([
+      { wx: -10, wz: 0 },
+      { wx: 30, wz: 30 },
+      { wx: 10, wz: 0 },
+    ]);
+  });
+
+  it('omite ids que ya no existen en el mapa (journeys antiguos)', () => {
+    expect(journeyPathPoints(MAP, ['c1', 'retirada', 'c2'])).toEqual([
+      { wx: -10, wz: 0 },
+      { wx: 10, wz: 0 },
+    ]);
+  });
+
+  it('tolera listas vacías y mapa nulo', () => {
+    expect(journeyPathPoints(MAP, [])).toEqual([]);
+    expect(journeyPathPoints(MAP, undefined)).toEqual([]);
+    expect(journeyPathPoints(null, ['c1'])).toEqual([]);
+  });
+});
+
+describe('ribbonStrip', () => {
+  it('en un tramo recto desplaza media anchura en la perpendicular', () => {
+    const pts = [
+      { wx: 0, wz: 0 },
+      { wx: 10, wz: 0 },
+      { wx: 20, wz: 0 },
+    ];
+    const strip = ribbonStrip(pts, 2);
+    // Dirección (1,0) → perpendicular (0,1): izquierda a z+1, derecha a z-1.
+    expect(strip).toHaveLength(3);
+    for (const [i, p] of pts.entries()) {
+      expect(strip[i].lx).toBeCloseTo(p.wx);
+      expect(strip[i].lz).toBeCloseTo(p.wz + 1);
+      expect(strip[i].rx).toBeCloseTo(p.wx);
+      expect(strip[i].rz).toBeCloseTo(p.wz - 1);
+    }
+  });
+
+  it('en las esquinas usa la media de los segmentos adyacentes (no se pellizca)', () => {
+    // Codo a 90°: en el vértice la dirección media es la diagonal.
+    const strip = ribbonStrip(
+      [
+        { wx: 0, wz: 0 },
+        { wx: 10, wz: 0 },
+        { wx: 10, wz: 10 },
+      ],
+      2,
+    );
+    const corner = strip[1];
+    const diag = Math.SQRT1_2; // dirección media (1,1)/√2
+    expect(corner.lx).toBeCloseTo(10 - diag);
+    expect(corner.lz).toBeCloseTo(0 + diag);
+    expect(corner.rx).toBeCloseTo(10 + diag);
+    expect(corner.rz).toBeCloseTo(0 - diag);
+  });
+
+  it('con menos de 2 puntos no hay cinta', () => {
+    expect(ribbonStrip([], 2)).toEqual([]);
+    expect(ribbonStrip([{ wx: 0, wz: 0 }], 2)).toEqual([]);
+  });
+
+  it('puntos coincidentes no rompen la cinta (dirección estable)', () => {
+    const strip = ribbonStrip(
+      [
+        { wx: 5, wz: 5 },
+        { wx: 5, wz: 5 },
+      ],
+      2,
+    );
+    expect(strip).toHaveLength(2);
+    for (const p of strip) {
+      expect(Number.isFinite(p.lx)).toBe(true);
+      expect(Number.isFinite(p.rz)).toBe(true);
+    }
+  });
+
+  it('falla en alto con una anchura inválida', () => {
+    expect(() => ribbonStrip([{ wx: 0, wz: 0 }, { wx: 1, wz: 0 }], 0)).toThrow();
+    expect(() => ribbonStrip([{ wx: 0, wz: 0 }, { wx: 1, wz: 0 }], Number.NaN)).toThrow();
   });
 });
 

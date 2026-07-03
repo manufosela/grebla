@@ -27,6 +27,8 @@
 export const WALK_SPEED = 8;
 /** Multiplicador de velocidad al correr (Shift). */
 export const RUN_MULTIPLIER = 1.8;
+/** Velocidad angular del giro sobre uno mismo con ←/→ (radianes por segundo). */
+export const TURN_SPEED = 2.5;
 /** Altura de los ojos sobre el suelo (unidades de mundo, escala humana). */
 export const EYE_HEIGHT = 1.7;
 /** Radio (unidades de mundo) para considerar «cerca» una ciudad al caminar. */
@@ -150,6 +152,28 @@ export function stepPosition(pos, dir, dt, speed, bounds) {
   if (r <= radius) return { x: nx, z: nz };
   const s = radius / r; // proyección radial al borde → deslizamiento tangencial
   return { x: nx * s, z: nz * s };
+}
+
+/**
+ * Un paso de giro sobre uno mismo (controles tipo DOOM): avanza el yaw según
+ * la dirección (+1 gira a la izquierda, -1 a la derecha) a velocidad angular
+ * constante y normaliza el resultado a (-π, π] para que el ángulo no crezca
+ * sin límite en paseos largos.
+ *
+ * @param {number} yaw Yaw actual (radianes).
+ * @param {number} dir Sentido del giro: +1 izquierda, -1 derecha (0 = quieto).
+ * @param {number} dt Delta de tiempo en segundos.
+ * @param {number} speed Velocidad angular (radianes por segundo).
+ * @returns {number} Nuevo yaw en (-π, π].
+ */
+export function turnYaw(yaw, dir, dt, speed) {
+  if (!Number.isFinite(speed) || speed <= 0) {
+    throw new Error(`Velocidad de giro inválida para turnYaw: "${speed}"`);
+  }
+  const raw = (yaw + dir * speed * dt) % (2 * Math.PI);
+  if (raw > Math.PI) return raw - 2 * Math.PI;
+  if (raw <= -Math.PI) return raw + 2 * Math.PI;
+  return raw;
 }
 
 /**

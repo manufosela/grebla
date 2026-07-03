@@ -8,9 +8,16 @@
  * En el modo 3D (MC-6) el detalle es un PANEL DE CIUDADANÍA overlay sobre el
  * canvas (lateral en escritorio, hoja inferior en móvil): estado como insignia
  * de juego, prerequisitos que faltan, y las MISMAS acciones/evidencias/
- * recomendaciones que las vistas plana/2.5D (métodos de render compartidos,
- * sin duplicar lógica). El zoom al hacer clic lo anima <career-island-3d> por
+ * recomendaciones que la vista plana (métodos de render compartidos, sin
+ * duplicar lógica). El zoom al hacer clic lo anima <career-island-3d> por
  * sí solo; aquí solo se invoca `focusOverview()` desde el botón «Isla completa».
+ *
+ * Evidencias (MC-8): las listas (formaciones, cursos) se editan como CHIPS con
+ * ✕ para quitar y un input con botón «+» (o Enter) para añadir de una en una —
+ * nada de texto separado por comas. El campo `titulos` desaparece de la UI:
+ * los títulos existentes se muestran fusionados dentro de cursos y, al editar
+ * cursos, se escriben en `cursos` vaciando `titulos` (migración suave; el
+ * modelo CityEvidence no cambia).
  *
  * Primera persona (MC-7): el botón «Explorar a pie» del HUD 3D llama a
  * `enterFirstPerson()` del componente de la isla; con puntero grueso (táctil)
@@ -26,7 +33,6 @@
  */
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
-import './career-island.js';
 import './career-island-3d.js';
 import {
   getJourney,
@@ -140,6 +146,16 @@ export class CareerApp extends LitElement {
     .ev summary { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .ev label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
     .ev input { width: 100%; box-sizing: border-box; margin-top: 0.2rem; padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); font-size: 0.85rem; color: var(--rm-text, #111827); background: var(--rm-surface, #fff); }
+    /* Listas de evidencias como chips (MC-8): ✕ para quitar, «+» para añadir. */
+    .evlist { margin-bottom: 0.6rem; }
+    .evtitle { display: block; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #6b7280); margin-bottom: 0.25rem; }
+    .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.35rem; padding: 0; }
+    .chip { display: inline-flex; align-items: center; gap: 0.25rem; background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.15rem 0.3rem 0.15rem 0.6rem; font-size: 0.78rem; color: var(--rm-text, #111827); }
+    .chip-x { border: none; background: transparent; cursor: pointer; padding: 0.05rem 0.3rem; font-size: 0.7rem; line-height: 1; color: var(--rm-muted, #6b7280); border-radius: 999px; }
+    .chip-x:hover { color: var(--rm-danger, #dc2626); background: rgba(220, 38, 38, 0.1); }
+    .evadd { display: flex; gap: 0.35rem; }
+    .evadd input { width: auto; flex: 1 1 auto; min-width: 0; margin-top: 0; }
+    .evadd .plus { flex: 0 0 auto; padding: 0.3rem 0.75rem; font-weight: 700; font-size: 0.9rem; line-height: 1; }
     .legend-wrap { margin-top: 1rem; }
     .legend-wrap summary { font-size: 0.78rem; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .recs { margin: 0.75rem 0 0; padding: 0; list-style: none; font-size: 0.78rem; }
@@ -162,8 +178,8 @@ export class CareerApp extends LitElement {
     this.map = null;
     this._loadedPerson = null;
     this._mapLoaded = false;
-    // Modo de vista: '3d' (isla Three.js, por defecto), 'island' (2.5D, se
-    // retirará en MC-8) o 'flat' (plano, fallback).
+    // Modo de vista: '3d' (isla Three.js, por defecto) o 'flat' (plano,
+    // fallback). La 2.5D se retiró en MC-8.
     this.viewMode = this._readViewMode();
     // Modo de cámara del 3D (MC-7): 'aerial' | 'fps'; lo comunica la isla.
     this.mode3d = 'aerial';
@@ -174,14 +190,15 @@ export class CareerApp extends LitElement {
       typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   }
 
-  /** Lee la preferencia de modo de vista sin romper SSR/estático. */
+  /** Lee la preferencia de modo de vista sin romper SSR/estático. El valor
+   * legado 'island' (2.5D, retirada en MC-8) cae al 3D. */
   _readViewMode() {
     if (typeof localStorage === 'undefined') return '3d';
     const stored = localStorage.getItem(CareerApp.VIEW_MODE_KEY);
-    return stored === 'island' || stored === 'flat' ? stored : '3d';
+    return stored === 'flat' ? 'flat' : '3d';
   }
 
-  /** @param {'3d'|'island'|'flat'} mode */
+  /** @param {'3d'|'flat'} mode */
   _setViewMode(mode) {
     if (mode !== '3d') this.mode3d = 'aerial'; // el modo a pie no sobrevive al cambio de vista
     this.viewMode = mode;
@@ -254,19 +271,65 @@ export class CareerApp extends LitElement {
     }
   }
 
-  async _saveEvidence(field, value) {
-    if (!this.personId || !this.selected) return;
-    const prev = this.journey.evidences?.[this.selected] ?? {};
-    const next =
-      field === 'priorExperienceYears'
-        ? { ...prev, priorExperienceYears: value === '' ? undefined : Number(value) }
-        : { ...prev, [field]: value.split(',').map((s) => s.trim()).filter(Boolean) };
+  /** Persiste el objeto de evidencias completo de la ciudad seleccionada. */
+  async _persistEvidence(next) {
     this.error = '';
     try {
       this.journey = await setEvidence(this.store, this.personId, this.journey, this.selected, next);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron guardar las evidencias.';
     }
+  }
+
+  /** Guarda la experiencia previa (años) de la ciudad seleccionada. @param {string} value */
+  async _saveExperience(value) {
+    if (!this.personId || !this.selected) return;
+    const prev = this.journey.evidences?.[this.selected] ?? {};
+    await this._persistEvidence({
+      ...prev,
+      priorExperienceYears: value === '' ? undefined : Number(value),
+    });
+  }
+
+  /**
+   * Guarda una LISTA de evidencias (chips). Al editar cursos, los títulos
+   * antiguos ya vienen fusionados en `values` (los muestra la UI dentro de
+   * cursos), así que el campo legado `titulos` se vacía: migración suave al
+   * editar, sin tocar journeys que nadie edita.
+   * @param {'formaciones'|'cursos'} field
+   * @param {string[]} values
+   */
+  async _saveEvidenceList(field, values) {
+    if (!this.personId || !this.selected) return;
+    const prev = this.journey.evidences?.[this.selected] ?? {};
+    const next = { ...prev, [field]: values };
+    if (field === 'cursos' && (prev.titulos ?? []).length > 0) next.titulos = [];
+    await this._persistEvidence(next);
+  }
+
+  /**
+   * Añade el valor del input de una lista de chips (botón «+» o Enter) y lo
+   * limpia. Los duplicados exactos se ignoran sin error.
+   * @param {'formaciones'|'cursos'} field
+   * @param {string[]} values Lista actual mostrada.
+   * @param {HTMLInputElement} input
+   */
+  _addEvidenceItem(field, values, input) {
+    const value = input.value.trim();
+    if (!value) return;
+    input.value = '';
+    if (values.includes(value)) return;
+    this._saveEvidenceList(field, [...values, value]);
+  }
+
+  /**
+   * Quita un chip de una lista de evidencias.
+   * @param {'formaciones'|'cursos'} field
+   * @param {string[]} values Lista actual mostrada.
+   * @param {number} index
+   */
+  _removeEvidenceItem(field, values, index) {
+    this._saveEvidenceList(field, values.toSpliced(index, 1));
   }
 
   /**
@@ -308,13 +371,12 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Conmutador de vista Isla 3D / 2.5D / Plano. La 2.5D se retirará en MC-8;
-   * el plano queda como fallback (también automático si no hay WebGL).
+   * Conmutador de vista Isla 3D / Plano. El plano queda como fallback
+   * (también automático si no hay WebGL); la 2.5D se retiró en MC-8.
    */
   _renderViewSwitch() {
     const modes = [
       { id: '3d', label: 'Isla 3D' },
-      { id: 'island', label: '2.5D' },
       { id: 'flat', label: 'Plano' },
     ];
     return html`<div class="viewswitch" role="group" aria-label="Modo de vista del mapa">
@@ -366,10 +428,15 @@ export class CareerApp extends LitElement {
     </ul>`;
   }
 
-  /** Evidencias de ciudadanía de la ciudad (editables; ocultas si está en desuso). */
+  /**
+   * Evidencias de ciudadanía de la ciudad (editables; ocultas si está en
+   * desuso). Las listas se editan como chips (MC-8); los títulos legados se
+   * muestran fusionados dentro de cursos (ver _saveEvidenceList).
+   */
   _renderCityEvidences(sel) {
     if (sel.deprecated) return null;
     const ev = this.journey.evidences?.[sel.id] ?? {};
+    const cursos = [...(ev.cursos ?? []), ...(ev.titulos ?? [])];
     return html`<details class="ev">
       <summary>Evidencias</summary>
       <label>Experiencia previa (años)
@@ -378,31 +445,61 @@ export class CareerApp extends LitElement {
           min="0"
           step="0.5"
           .value=${ev.priorExperienceYears ?? ''}
-          @change=${(e) => this._saveEvidence('priorExperienceYears', e.target.value)}
+          @change=${(e) => this._saveExperience(e.target.value)}
         />
       </label>
-      <label>Formaciones (separadas por coma)
-        <input
-          type="text"
-          .value=${(ev.formaciones ?? []).join(', ')}
-          @change=${(e) => this._saveEvidence('formaciones', e.target.value)}
-        />
-      </label>
-      <label>Cursos (separados por coma)
-        <input
-          type="text"
-          .value=${(ev.cursos ?? []).join(', ')}
-          @change=${(e) => this._saveEvidence('cursos', e.target.value)}
-        />
-      </label>
-      <label>Títulos (separados por coma)
-        <input
-          type="text"
-          .value=${(ev.titulos ?? []).join(', ')}
-          @change=${(e) => this._saveEvidence('titulos', e.target.value)}
-        />
-      </label>
+      ${this._renderEvidenceList('formaciones', 'Formaciones', ev.formaciones ?? [])}
+      ${this._renderEvidenceList('cursos', 'Cursos y títulos', cursos)}
     </details>`;
+  }
+
+  /**
+   * Lista de evidencias editable como chips: cada valor con su ✕ para quitar,
+   * y un input con botón «+» (o Enter) para añadir de una en una.
+   * @param {'formaciones'|'cursos'} field
+   * @param {string} label
+   * @param {string[]} values
+   */
+  _renderEvidenceList(field, label, values) {
+    const add = (input) => this._addEvidenceItem(field, values, input);
+    return html`<div class="evlist">
+      <span class="evtitle">${label}</span>
+      ${values.length
+        ? html`<ul class="chips">
+            ${values.map(
+              (value, i) => html`<li class="chip">
+                <span>${value}</span>
+                <button
+                  type="button"
+                  class="chip-x"
+                  aria-label="Quitar ${value} de ${label}"
+                  title="Quitar"
+                  @click=${() => this._removeEvidenceItem(field, values, i)}
+                >✕</button>
+              </li>`,
+            )}
+          </ul>`
+        : null}
+      <div class="evadd">
+        <input
+          type="text"
+          placeholder="Añadir…"
+          aria-label="Añadir a ${label}"
+          @keydown=${(e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            add(e.target);
+          }}
+        />
+        <button
+          type="button"
+          class="plus"
+          aria-label="Añadir a ${label}"
+          title="Añadir"
+          @click=${(e) => add(e.target.closest('.evadd').querySelector('input'))}
+        >+</button>
+      </div>
+    </div>`;
   }
 
   /** Insignias de juego del estado de ciudadanía (panel del modo 3D). */
@@ -539,21 +636,13 @@ export class CareerApp extends LitElement {
             ${sel ? this._renderCityPanel(sel) : null}
           </div>`
         : html`<div class="grid">
-        ${this.viewMode === 'flat'
-          ? html`<career-map
-              .map=${map}
-              .journey=${this.journey}
-              .reachable=${s.reachable}
-              .selected=${this.selected}
-              @select-city=${this._onSelect}
-            ></career-map>`
-          : html`<career-island
-              .map=${map}
-              .journey=${this.journey}
-              .reachable=${s.reachable}
-              .selected=${this.selected}
-              @select-city=${this._onSelect}
-            ></career-island>`}
+        <career-map
+          .map=${map}
+          .journey=${this.journey}
+          .reachable=${s.reachable}
+          .selected=${this.selected}
+          @select-city=${this._onSelect}
+        ></career-map>
 
         <div class="panel">
           ${sel

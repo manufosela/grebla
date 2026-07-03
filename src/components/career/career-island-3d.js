@@ -1,14 +1,17 @@
 /**
  * <career-island-3d>
  * Render 3D REAL de la isla de carrera con Three.js (MC-5: fundación;
- * MC-6: zoom animado a ciudad/comarca; MC-7: primera persona).
+ * MC-6: zoom animado a ciudad/comarca; MC-7: primera persona; MC-8: pulido).
  *
- * Es intercambiable con <career-map> y <career-island>: mismas propiedades y el
+ * Es intercambiable con <career-map> (vista plana): mismas propiedades y el
  * mismo evento `select-city`. La escena se GENERA del modelo (/careerMap/island)
  * con geometrías low-poly de código, sin assets externos:
  *  - isla (playa + hierba), agua y cielo/niebla
  *  - una plataforma sutil por comarca con su etiqueta flotante
- *  - un hito (casa: caja + tejado piramidal) por ciudad, coloreado por estado
+ *  - una casa por ciudad, coloreada por estado, con puerta, placa con el
+ *    nombre sobre la puerta, ventanas emisivas y variación determinista por id
+ *    (altura/rotación/tono vía cityVariant: nada de Math.random())
+ *  - senda del camino recorrido (cinta) y ruta planificada (línea discontinua)
  *  - puerto de inicio (muelle + faro)
  *
  * Three.js se carga por IMPORT DINÁMICO al montar el componente: el resto de la
@@ -36,8 +39,11 @@
  *
  * Primera persona (MC-7): `enterFirstPerson()` baja la cámara con transición
  * hasta la altura de ojos (puerto o ciudad actual del journey) y cambia
- * OrbitControls por PointerLockControls (ratón) + WASD/flechas (con Shift se
- * corre). La lógica de marcha es pura y compartida con el terreno (walk.js):
+ * OrbitControls por PointerLockControls (ratón) + controles tipo DOOM (MC-8):
+ * ←/→ GIRAN sobre uno mismo (turnYaw, puro), ↑/↓ y W/S avanzan/retroceden,
+ * A/D hacen strafe y con Shift se corre. A pie las etiquetas flotantes se
+ * ocultan (el nombre se lee en la placa de la puerta y en el prompt de
+ * proximidad). La lógica de marcha es pura y compartida con el terreno (walk.js):
  * groundHeightAt pega la cámara al MISMO suelo que pintan las mallas y
  * stepPosition acota el paso a la isla deslizando por la costa. Cada ~100 ms
  * se muestrea la ciudad cercana: se resalta (emisivo, como selected) y un
@@ -58,7 +64,11 @@ import {
   islandRadius,
   cityFocusFrame,
   areaFocusFrame,
+  cityVariant,
+  journeyPathPoints,
+  ribbonStrip,
   ACCENT_COLORS,
+  STATUS_COLORS,
 } from '../../tools/career/domain/islandLayout.js';
 import {
   TERRAIN,
@@ -66,9 +76,11 @@ import {
   groundHeightAt,
   walkableRadius,
   stepPosition,
+  turnYaw,
   nearestCityWithin,
   WALK_SPEED,
   RUN_MULTIPLIER,
+  TURN_SPEED,
   EYE_HEIGHT,
   PROXIMITY_RADIUS,
 } from '../../tools/career/domain/walk.js';
@@ -81,6 +93,21 @@ const GROUND_Y = TERRAIN.baseY + TERRAIN.grass.height / 2;
 /** Dimensiones del hito de ciudad (casa low-poly). */
 const CITY_BODY = { w: 2.6, h: 3.2 };
 const CITY_ROOF = { r: 2.3, h: 2.2 };
+/** Puerta de madera de la fachada y placa con el nombre sobre ella (MC-8). */
+const CITY_DOOR = { w: 0.95, h: 1.5, d: 0.12 };
+const CITY_PLATE = { w: 1.5, h: 0.5 };
+/** Ventanas: planos emisivos suaves en fachada y costados. */
+const CITY_WINDOW = { w: 0.55, h: 0.62 };
+/** Elevación de los overlays del suelo (plataformas, senda, ruta) contra el z-fighting. */
+const PATCH_LIFT = 0.1;
+const PATH_LIFT = 0.18;
+const ROUTE_LIFT = 0.24;
+/** Anchura de la cinta del camino recorrido. */
+const PATH_WIDTH = 1.2;
+/** Fundido por distancia de las etiquetas de ciudad en vista aérea (× radio de isla). */
+const LABEL_FADE = { near: 1.1, far: 2.0 };
+/** Cadencia (ms) del fundido de etiquetas (no hace falta por-frame). */
+const LABEL_FADE_MS = 150;
 /** Umbral (px de cliente) para distinguir un arrastre de órbita de un clic. */
 const DRAG_THRESHOLD = 5;
 /** Límite del paneo del target respecto al radio de la isla. */
@@ -95,7 +122,7 @@ const PROXIMITY_CHECK_MS = 100;
 const CITY_SPAWN_OFFSET = 12;
 /** Distancia del punto de mira usado como origen del giro de cámara al salir del modo fps. */
 const EXIT_LOOK_AHEAD = 30;
-/** Colores del entorno (cielo, agua, arena, hierba, madera, faro). */
+/** Colores del entorno (cielo, agua, arena, hierba, madera, faro, puertas y ventanas). */
 const ENV_COLORS = {
   sky: 0xdceff5,
   water: 0x4d90c4,
@@ -103,6 +130,9 @@ const ENV_COLORS = {
   grass: 0x9fce8f,
   wood: 0x9a7b4f,
   lighthouse: 0xf5f2ea,
+  door: 0x6b4a26,
+  window: 0xfff2c0,
+  windowGlow: 0xf4c96b,
 };
 
 export class CareerIsland3D extends LitElement {
@@ -188,6 +218,26 @@ export class CareerIsland3D extends LitElement {
       background: rgba(255, 255, 255, 0.14);
       font-family: inherit;
     }
+    /* El prompt de ciudad cercana sube para dejar sitio a la ayuda de controles. */
+    .fps-hint.near { bottom: 3.1rem; }
+    .fps-help {
+      position: absolute;
+      left: 50%;
+      bottom: 1.1rem;
+      transform: translateX(-50%);
+      max-width: calc(100% - 2rem);
+      padding: 0.3rem 0.8rem;
+      border-radius: 999px;
+      background: rgba(17, 24, 39, 0.55);
+      color: rgba(255, 255, 255, 0.92);
+      font-family: var(--rm-font, system-ui, sans-serif);
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
   `;
 
   constructor() {
@@ -239,9 +289,25 @@ export class CareerIsland3D extends LitElement {
     this._walkRadius = 0;
     this._lastWalkTs = 0;
     this._lastProxTs = 0;
+    this._lastLabelTs = 0;
     /** Vectores scratch para la marcha (se crean al cargar three). */
     this._walkDirScratch = null;
     this._lookScratch = null;
+    /** Euler scratch (orden YXZ, el del pointer lock) para el giro con ←/→. */
+    this._eulerScratch = null;
+    /** Etiquetas flotantes de ciudad (fundido por distancia; ocultas a pie). */
+    this._cityLabels = [];
+    /** Etiquetas flotantes de comarca y puerto (ocultas a pie). */
+    this._areaLabels = [];
+    /**
+     * Caché de texturas de placa de puerta por nombre de ciudad: el grupo de
+     * ciudades se rehace a menudo (journey/selección/proximidad) y pintar el
+     * canvas de cada placa cada vez sería un despilfarro. Marcadas con
+     * userData.shared para que _disposeSubtree NO las libere; se liberan en
+     * _clearPlateCache (cambio de mapa) y en el teardown.
+     * @type {Map<string, object>}
+     */
+    this._plateTextures = new Map();
     /** Aborta de golpe todos los listeners (documento y canvas) en el teardown. */
     this._abort = null;
     this._onVisibility = () => {
@@ -305,6 +371,7 @@ export class CareerIsland3D extends LitElement {
     this._PointerLockControls = PointerLockControls;
     this._walkDirScratch = new THREE.Vector3();
     this._lookScratch = new THREE.Vector3();
+    this._eulerScratch = new THREE.Euler(0, 0, 0, 'YXZ');
 
     // Detección de WebGL en un canvas desechable (no bloquea el canvas real).
     const probe = document.createElement('canvas');
@@ -340,11 +407,16 @@ export class CareerIsland3D extends LitElement {
       this._camAnim = null;
     });
 
-    // Luz: sol direccional + hemisférica suave. Sin sombras en MC-5 (fluidez).
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Luz (MC-8): sol direccional CÁLIDO + contraluz frío muy suave (las caras
+    // en sombra no quedan planas) + hemisférica cielo/hierba. Sin sombras
+    // proyectadas (fluidez); el volumen lo dan el flatShading y las dos luces.
+    const sun = new THREE.DirectionalLight(0xffe9c4, 1.5);
     sun.position.set(60, 120, 40);
     this._scene.add(sun);
-    this._scene.add(new THREE.HemisphereLight(0xf1f8fb, 0xcfe3d4, 0.9));
+    const fill = new THREE.DirectionalLight(0xbcd7e8, 0.35);
+    fill.position.set(-70, 60, -50);
+    this._scene.add(fill);
+    this._scene.add(new THREE.HemisphereLight(0xeaf7fc, 0xc7dcc2, 0.85));
 
     // Tamaño real del contenedor (dispara una primera medición al observar).
     this._resizeObserver = new ResizeObserver((entries) => this._onResize(entries));
@@ -402,6 +474,11 @@ export class CareerIsland3D extends LitElement {
         this._controls.update();
         this._tickCameraAnim(now);
         this._clampTarget();
+        // Etiquetas de ciudad: fundido por distancia (menos solape alejado).
+        if (now - this._lastLabelTs >= LABEL_FADE_MS) {
+          this._lastLabelTs = now;
+          this._fadeCityLabels();
+        }
       } else if (this._mode === 'fps') {
         this._tickWalk(now);
       } else {
@@ -424,6 +501,42 @@ export class CareerIsland3D extends LitElement {
     t.x = Math.min(Math.max(t.x, -limit), limit);
     t.z = Math.min(Math.max(t.z, -limit), limit);
     t.y = GROUND_Y;
+  }
+
+  // ---- Etiquetas flotantes (MC-8) ----------------------------------------------
+
+  /**
+   * Fundido por distancia de las etiquetas de ciudad en vista aérea: a menos
+   * de LABEL_FADE.near×R son totalmente opacas y a partir de LABEL_FADE.far×R
+   * desaparecen. Así en el encuadre general (zonas densas) no se solapan unas
+   * con otras; las de comarca sí permanecen. Barato: decenas de sprites cada
+   * LABEL_FADE_MS.
+   */
+  _fadeCityLabels() {
+    if (this._cityLabels.length === 0) return;
+    const R = this._islandR || 50;
+    const near = R * LABEL_FADE.near;
+    const far = R * LABEL_FADE.far;
+    const cam = this._camera.position;
+    for (const sprite of this._cityLabels) {
+      const d = sprite.getWorldPosition(this._lookScratch).distanceTo(cam);
+      const k = 1 - Math.min(Math.max((d - near) / (far - near), 0), 1);
+      sprite.material.opacity = k;
+      sprite.visible = k > 0.02;
+    }
+  }
+
+  /**
+   * Muestra/oculta TODAS las etiquetas flotantes (ciudades, comarcas y puerto).
+   * A pie ensucian (nombres gigantes sobre la cabeza): el nombre se lee en la
+   * placa de la puerta y en el prompt de proximidad.
+   * @param {boolean} visible
+   */
+  _setLabelsVisible(visible) {
+    for (const sprite of [...this._cityLabels, ...this._areaLabels]) {
+      sprite.visible = visible;
+      if (visible) sprite.material.opacity = 1;
+    }
   }
 
   // ---- Zoom animado de cámara (MC-6) ------------------------------------------
@@ -554,6 +667,7 @@ export class CareerIsland3D extends LitElement {
     const eyeY = groundHeightAt(spawn.x, spawn.z, { radius: this._islandR }) + EYE_HEIGHT;
     this._mode = 'to-fps';
     this._controls.enabled = false; // el damping no pelea con la transición
+    this._setLabelsVisible(false); // a pie los nombres gigantes ensucian
     this._animateTo(
       {
         position: new THREE.Vector3(spawn.x, eyeY, spawn.z),
@@ -577,6 +691,7 @@ export class CareerIsland3D extends LitElement {
     this._mode = 'to-aerial';
     this._keys.clear();
     this._expectUnlock = false;
+    this._setLabelsVisible(true); // de vuelta a la vista aérea, con sus nombres
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
     if (this._plc) this._plc.enabled = false;
     if (this._nearCityId) {
@@ -735,11 +850,14 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Un frame de marcha: teclas → dirección en el plano del suelo relativa a la
-   * cámara, paso acotado a la isla (stepPosition de walk.js, desliza por la
-   * costa) y cámara pegada al suelo a altura de ojos con groundHeightAt (el
-   * MISMO perfil que pintan las mallas: ni se atraviesa el suelo ni se pisa el
-   * agua). Cada PROXIMITY_CHECK_MS se refresca la ciudad cercana.
+   * Un frame de marcha con controles tipo DOOM (MC-8): ←/→ GIRAN sobre uno
+   * mismo (yaw suave con turnYaw, compatible con el ratón del pointer lock),
+   * ↑/↓ y W/S avanzan/retroceden, A/D hacen strafe. La dirección se proyecta
+   * al plano del suelo relativa a la cámara, el paso se acota a la isla
+   * (stepPosition de walk.js, desliza por la costa) y la cámara va pegada al
+   * suelo a altura de ojos con groundHeightAt (el MISMO perfil que pintan las
+   * mallas: ni se atraviesa el suelo ni se pisa el agua). Cada
+   * PROXIMITY_CHECK_MS se refresca la ciudad cercana.
    * @param {DOMHighResTimeStamp} now
    */
   _tickWalk(now) {
@@ -748,8 +866,17 @@ export class CareerIsland3D extends LitElement {
     const cam = this._camera.position;
     if (this._fpsLocked) {
       const key = (code) => (this._keys.has(code) ? 1 : 0);
+      // Giro sobre uno mismo: se edita SOLO el yaw del euler YXZ de la cámara
+      // (mismo orden que usa PointerLockControls, que relee el quaternion en
+      // cada movimiento de ratón: ambos giros conviven sin pelearse).
+      const turn = key('ArrowLeft') - key('ArrowRight');
+      if (turn !== 0) {
+        this._eulerScratch.setFromQuaternion(this._camera.quaternion);
+        this._eulerScratch.y = turnYaw(this._eulerScratch.y, turn, dt, TURN_SPEED);
+        this._camera.quaternion.setFromEuler(this._eulerScratch);
+      }
       const fwd = key('KeyW') + key('ArrowUp') - key('KeyS') - key('ArrowDown');
-      const strafe = key('KeyD') + key('ArrowRight') - key('KeyA') - key('ArrowLeft');
+      const strafe = key('KeyD') - key('KeyA');
       if (fwd !== 0 || strafe !== 0) {
         // Forward de la cámara proyectado al plano XZ (los límites polares del
         // PointerLockControls garantizan que nunca degenera).
@@ -826,22 +953,30 @@ export class CareerIsland3D extends LitElement {
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
     if (this._plc) this._plc.enabled = false;
     this._controls.enabled = true;
+    this._setLabelsVisible(true);
     if (this._mode !== 'aerial') {
       this._mode = 'aerial';
       this._emitMode('aerial');
     }
   }
 
-  /** Prompt inferior del modo fps: ciudad cercana o cómo retomar el control. */
+  /**
+   * HUD inferior del modo fps: ayuda compacta de controles siempre visible con
+   * el lock tomado, y encima el prompt de ciudad cercana cuando la hay. Sin
+   * lock, cómo retomar el control.
+   */
   _renderFpsHint() {
     if (this._mode !== 'fps') return null;
     if (!this._fpsLocked) {
       return html`<div class="fps-hint">Haz clic en la isla para tomar el control · Esc para salir</div>`;
     }
-    if (!this._nearCityId) return null;
-    const city = (this.map?.cities ?? []).find((c) => c.id === this._nearCityId);
-    if (!city) return null;
-    return html`<div class="fps-hint"><kbd>E</kbd> Ver ciudadanía de ${city.name}</div>`;
+    const city = this._nearCityId
+      ? (this.map?.cities ?? []).find((c) => c.id === this._nearCityId)
+      : null;
+    return html`
+      ${city ? html`<div class="fps-hint near"><kbd>E</kbd> Ver ciudadanía de ${city.name}</div>` : null}
+      <div class="fps-help">←→ girar · ↑↓ avanzar · A/D lateral · Shift correr · E ciudadanía · Esc salir</div>
+    `;
   }
 
   /** @param {ResizeObserverEntry[]} entries */
@@ -860,6 +995,7 @@ export class CareerIsland3D extends LitElement {
     if (!this.map) return;
     this._islandR = islandRadius(this.map);
     this._walkRadius = walkableRadius(this._islandR);
+    if (this.map.id !== this._lastMapId) this._clearPlateCache(); // otra isla, otras placas
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
     if (this.map.id !== this._lastMapId) {
@@ -945,28 +1081,40 @@ export class CareerIsland3D extends LitElement {
     group.add(grass);
 
     // Comarcas: parche circular sutil + etiqueta flotante con el nombre.
-    // Los parches son raycasteables (MC-6): clic en la plataforma → zoom a la comarca.
+    // Los parches son raycasteables (MC-6): clic en la plataforma → zoom a la
+    // comarca. Contra el z-fighting con la hierba (parpadeo al caminar, MC-8):
+    // elevados PATCH_LIFT y con polygonOffset que sesga su profundidad.
     this._areaPatches = [];
+    this._areaLabels = [];
+    const labelsVisible = this._mode === 'aerial' || this._mode === 'to-aerial';
     for (const { area, center, radius, color } of areaLayout(this.map)) {
       const patch = new THREE.Mesh(
         new THREE.CircleGeometry(radius, 24),
-        new THREE.MeshLambertMaterial({ color }),
+        new THREE.MeshLambertMaterial({
+          color,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1,
+        }),
       );
       patch.rotation.x = -Math.PI / 2;
-      patch.position.set(center.wx, GROUND_Y + 0.06, center.wz);
+      patch.position.set(center.wx, GROUND_Y + PATCH_LIFT, center.wz);
       patch.userData.areaId = area.id;
       this._areaPatches.push(patch);
       group.add(patch);
-      group.add(this._makeLabel(area.name, {
+      const label = this._makeLabel(area.name, {
         x: center.wx,
         y: GROUND_Y + 10.5,
         z: center.wz,
         scale: 6.5,
         color: '#5b6b7d',
-      }));
+      });
+      label.visible = labelsVisible;
+      this._areaLabels.push(label);
+      group.add(label);
     }
 
-    if (this.map.startPort) group.add(this._buildPort(this.map.startPort));
+    if (this.map.startPort) group.add(this._buildPort(this.map.startPort, labelsVisible));
     return group;
   }
 
@@ -995,8 +1143,12 @@ export class CareerIsland3D extends LitElement {
     return geo;
   }
 
-  /** Puerto de inicio: muelle de madera + faro (torre blanca con techo navy). */
-  _buildPort(port) {
+  /**
+   * Puerto de inicio: muelle de madera + faro (torre blanca con techo navy).
+   * @param {{x: number, y: number}} port
+   * @param {boolean} labelVisible La etiqueta flotante se oculta a pie.
+   */
+  _buildPort(port, labelVisible) {
     const THREE = this._THREE;
     const { wx, wz } = worldFromMap(port.x, port.y);
     const group = new THREE.Group();
@@ -1025,27 +1177,41 @@ export class CareerIsland3D extends LitElement {
     cap.position.y = 8;
     group.add(cap);
 
-    group.add(this._makeLabel('Puerto', { x: 0, y: 11, z: 0, scale: 6, color: '#5b6b7d' }));
+    const label = this._makeLabel('Puerto', { x: 0, y: 11, z: 0, scale: 6, color: '#5b6b7d' });
+    label.visible = labelVisible;
+    this._areaLabels.push(label);
+    group.add(label);
     return group;
   }
 
   /**
    * Grupo de ciudades: una casa low-poly por ciudad coloreada por estado
-   * (cityStatus del dominio), acento navy en la ruta planificada, haz de luz
-   * en la ciudad actual y etiqueta con el nombre. Geometrías y materiales se
-   * comparten dentro de cada build (mismo estado → mismo material).
+   * (cityStatus del dominio) y enriquecida (MC-8) con puerta de madera, placa
+   * con el nombre sobre la puerta (legible de cerca), ventanas emisivas y
+   * variación determinista por id (altura/rotación/tono, cityVariant — sin
+   * Math.random()). La fachada mira hacia el interior de la isla. Además:
+   * acento navy en la ruta planificada, haz de luz en la ciudad actual,
+   * etiqueta flotante con el nombre (oculta a pie), la senda del camino
+   * recorrido y la ruta planificada discontinua. Geometrías y materiales se
+   * comparten dentro de cada build (mismo color → mismo material) y las
+   * texturas de placa se cachean entre builds.
    */
   _buildCities() {
     const THREE = this._THREE;
     const group = new THREE.Group();
     const route = new Set(this.journey?.plannedRoute ?? []);
     const current = this.journey?.currentCity ?? null;
+    this._cityLabels = [];
+    const labelsVisible = this._mode === 'aerial' || this._mode === 'to-aerial';
 
     // Geometrías compartidas por todas las ciudades de este build.
     const bodyGeo = new THREE.BoxGeometry(CITY_BODY.w, CITY_BODY.h, CITY_BODY.w);
     const roofGeo = new THREE.ConeGeometry(CITY_ROOF.r, CITY_ROOF.h, 4);
     roofGeo.rotateY(Math.PI / 4); // tejado alineado con la caja
     const ringGeo = new THREE.TorusGeometry(2.9, 0.28, 8, 28);
+    const doorGeo = new THREE.BoxGeometry(CITY_DOOR.w, CITY_DOOR.h, CITY_DOOR.d);
+    const plateGeo = new THREE.PlaneGeometry(CITY_PLATE.w, CITY_PLATE.h);
+    const windowGeo = new THREE.PlaneGeometry(CITY_WINDOW.w, CITY_WINDOW.h);
     /** Cache de materiales por color: mismas ciudades → mismo material. */
     const materials = new Map();
     const materialFor = (color) => {
@@ -1056,26 +1222,69 @@ export class CareerIsland3D extends LitElement {
       }
       return m;
     };
+    // Ventanas: un ÚNICO material emisivo suave compartido por todas las casas.
+    const windowMat = new THREE.MeshLambertMaterial({
+      color: ENV_COLORS.window,
+      emissive: ENV_COLORS.windowGlow,
+      emissiveIntensity: 0.75,
+    });
+    const half = CITY_BODY.w / 2;
 
     for (const city of this.map.cities ?? []) {
       const st = cityStatus(this.map, city.id, this.journey);
       const status = st === 'unknown' ? 'blocked' : st;
-      const color = cityStatusColor(status);
+      const v = cityVariant(city.id);
+      // Tono determinista por ciudad sobre el color de estado (cuantizado en
+      // cityVariant: la caché de materiales sigue siendo pequeña).
+      const color = new THREE.Color(cityStatusColor(status)).multiplyScalar(v.tone).getHex();
       const { wx, wz } = worldFromMap(city.x, city.y);
+      const bodyH = CITY_BODY.h * v.height;
 
       const node = new THREE.Group();
       node.position.set(wx, GROUND_Y, wz);
+      // La fachada (+z local) mira al interior de la isla, con un yaw extra
+      // determinista por ciudad para que el pueblo no parezca un cuartel.
+      const d = Math.hypot(wx, wz);
+      const baseYaw = d > 0.001 ? Math.atan2(-wx, -wz) : 0;
+      node.rotation.y = baseYaw + v.rotation;
       node.userData.cityId = city.id;
 
       const body = new THREE.Mesh(bodyGeo, materialFor(color));
-      body.position.y = CITY_BODY.h / 2;
+      body.scale.y = v.height;
+      body.position.y = bodyH / 2;
       node.add(body);
 
       // Tejado: mismo tono oscurecido (determinista) para dar volumen.
       const roofColor = new THREE.Color(color).multiplyScalar(0.72).getHex();
       const roof = new THREE.Mesh(roofGeo, materialFor(roofColor));
-      roof.position.y = CITY_BODY.h + CITY_ROOF.h / 2;
+      roof.position.y = bodyH + CITY_ROOF.h / 2;
       node.add(roof);
+
+      // Puerta de madera en la fachada, ligeramente saliente.
+      const door = new THREE.Mesh(doorGeo, materialFor(ENV_COLORS.door));
+      door.position.set(0, CITY_DOOR.h / 2, half + CITY_DOOR.d / 2 - 0.02);
+      node.add(door);
+
+      // Placa con el nombre de la ciudad sobre la puerta (textura cacheada).
+      const plate = new THREE.Mesh(
+        plateGeo,
+        new THREE.MeshBasicMaterial({ map: this._plateTexture(city.name) }),
+      );
+      plate.position.set(0, CITY_DOOR.h + 0.42, half + 0.03);
+      node.add(plate);
+
+      // Ventanas emisivas: dos en la fachada y una por costado.
+      for (const [x, y, z, ry] of [
+        [-0.9, 2.5, half + 0.02, 0],
+        [0.9, 2.5, half + 0.02, 0],
+        [half + 0.02, 1.95, 0, Math.PI / 2],
+        [-(half + 0.02), 1.95, 0, -Math.PI / 2],
+      ]) {
+        const win = new THREE.Mesh(windowGeo, windowMat);
+        win.position.set(x, y, z);
+        win.rotation.y = ry;
+        node.add(win);
+      }
 
       // Acento de ruta planificada: anillo navy en la base.
       if (route.has(city.id)) {
@@ -1113,23 +1322,147 @@ export class CareerIsland3D extends LitElement {
       }
 
       const strike = status === 'deprecated';
-      node.add(this._makeLabel(city.name, {
+      const label = this._makeLabel(city.name, {
         x: 0,
-        y: CITY_BODY.h + CITY_ROOF.h + 2.2,
+        y: bodyH + CITY_ROOF.h + 2.2,
         z: 0,
         scale: 4,
         color: strike ? '#9ca3af' : '#1e3a5f',
         strike,
-      }));
+      });
+      label.visible = labelsVisible;
+      this._cityLabels.push(label);
+      node.add(label);
 
       group.add(node);
     }
+
+    // Camino recorrido (MC-8): senda teal sobre la hierba uniendo las ciudades
+    // visitadas EN ORDEN; y la ruta planificada como línea discontinua
+    // atenuada desde la ciudad actual (o la última visitada).
+    const visited = this.journey?.visitedCities ?? [];
+    const visitedPts = journeyPathPoints(this.map, visited);
+    if (visitedPts.length >= 2) group.add(this._buildVisitedPath(visitedPts));
+    const routeStart = current ?? visited.at(-1) ?? null;
+    const routePts = journeyPathPoints(this.map, [
+      ...(routeStart === null ? [] : [routeStart]),
+      ...(this.journey?.plannedRoute ?? []),
+    ]);
+    if (routePts.length >= 2) group.add(this._buildPlannedRoute(routePts));
+
     return group;
   }
 
   /**
+   * Senda del camino recorrido: cinta plana (ribbonStrip, puro) apoyada sobre
+   * la hierba con elevación + polygonOffset anti z-fighting. Color teal de
+   * «visitada»; sin escribir profundidad (es un decal del suelo).
+   * @param {{wx: number, wz: number}[]} points Ciudades visitadas, en orden.
+   */
+  _buildVisitedPath(points) {
+    const THREE = this._THREE;
+    const strip = ribbonStrip(points, PATH_WIDTH);
+    const y = GROUND_Y + PATH_LIFT;
+    const positions = new Float32Array(strip.length * 2 * 3);
+    for (const [i, p] of strip.entries()) {
+      positions.set([p.lx, y, p.lz, p.rx, y, p.rz], i * 6);
+    }
+    const indices = [];
+    for (let i = 0; i < strip.length - 1; i += 1) {
+      const a = i * 2;
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        color: STATUS_COLORS.visited,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      }),
+    );
+    return mesh;
+  }
+
+  /**
+   * Ruta planificada: línea discontinua navy atenuada, un poco por encima de
+   * la senda para que ambas convivan sin pelearse.
+   * @param {{wx: number, wz: number}[]} points Ciudad de partida + ruta, en orden.
+   */
+  _buildPlannedRoute(points) {
+    const THREE = this._THREE;
+    const y = GROUND_Y + ROUTE_LIFT;
+    const geo = new THREE.BufferGeometry().setFromPoints(
+      points.map((p) => new THREE.Vector3(p.wx, y, p.wz)),
+    );
+    const line = new THREE.Line(
+      geo,
+      new THREE.LineDashedMaterial({
+        color: ACCENT_COLORS.route,
+        transparent: true,
+        opacity: 0.55,
+        dashSize: 1.6,
+        gapSize: 1.1,
+      }),
+    );
+    line.computeLineDistances(); // sin esto el dash no se pinta
+    return line;
+  }
+
+  /**
+   * Textura de la placa de puerta con el nombre de la ciudad, cacheada por
+   * nombre (userData.shared: _disposeSubtree no la libera; ver constructor).
+   * Placa clara con borde de madera y texto navy, con la fuente adaptada para
+   * que quepan también los nombres largos.
+   * @param {string} name
+   */
+  _plateTexture(name) {
+    let texture = this._plateTextures.get(name);
+    if (texture) return texture;
+    const THREE = this._THREE;
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f6ead2';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.strokeStyle = '#7a5a33';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, 250, 58);
+    let fontSize = 34;
+    ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
+    while (fontSize > 14 && ctx.measureText(name).width > 228) {
+      fontSize -= 2;
+      ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1e3a5f';
+    ctx.fillText(name, 128, 34);
+    texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.userData.shared = true;
+    this._plateTextures.set(name, texture);
+    return texture;
+  }
+
+  /** Libera y vacía la caché de texturas de placa (cambio de isla, teardown). */
+  _clearPlateCache() {
+    for (const texture of this._plateTextures.values()) texture.dispose();
+    this._plateTextures.clear();
+  }
+
+  /**
    * Etiqueta flotante: sprite con el texto pintado en un CanvasTexture (siempre
-   * de cara a la cámara). El halo blanco imita el paint-order de la vista 2.5D.
+   * de cara a la cámara). El halo blanco garantiza el contraste sobre la escena.
    * @param {string} text
    * @param {{x:number,y:number,z:number,scale:number,color:string,strike?:boolean}} opts
    */
@@ -1232,13 +1565,17 @@ export class CareerIsland3D extends LitElement {
 
   // ---- Limpieza ---------------------------------------------------------------
 
-  /** Libera geometrías, materiales y texturas de un subárbol de la escena. */
+  /**
+   * Libera geometrías, materiales y texturas de un subárbol de la escena.
+   * Las texturas marcadas como compartidas (userData.shared: las placas de
+   * puerta cacheadas) NO se liberan aquí: su ciclo de vida lo lleva la caché.
+   */
   static _disposeSubtree(root) {
     root.traverse((obj) => {
       obj.geometry?.dispose?.();
       const mats = Array.isArray(obj.material) ? obj.material : obj.material ? [obj.material] : [];
       for (const m of mats) {
-        m.map?.dispose?.();
+        if (m.map && m.map.userData?.shared !== true) m.map.dispose?.();
         m.dispose();
       }
     });
@@ -1262,6 +1599,9 @@ export class CareerIsland3D extends LitElement {
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;
     if (this._scene) CareerIsland3D._disposeSubtree(this._scene);
+    this._clearPlateCache();
+    this._cityLabels = [];
+    this._areaLabels = [];
     this._controls?.dispose();
     this._renderer?.dispose();
     this._scene = null;
@@ -1278,7 +1618,7 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En modo a pie: WASD o flechas para caminar, ratón para mirar y E para la ciudad cercana."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}
