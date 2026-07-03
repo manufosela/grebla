@@ -146,6 +146,108 @@ export function areaLayout(map, opts = {}) {
 }
 
 /**
+ * Hash determinista (FNV-1a de 32 bits) de un id de ciudad. Es la ÚNICA fuente
+ * de aleatoriedad aparente de la escena: nada de Math.random(), el mismo id
+ * produce siempre la misma variación entre sesiones y re-renders.
+ *
+ * @param {string} id
+ * @returns {number} Entero sin signo de 32 bits.
+ */
+export function hashId(id) {
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new Error(`Id inválido para hashId: "${id}"`);
+  }
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i += 1) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Variación visual determinista de la casa de una ciudad (MC-8): cada ciudad
+ * tiene una altura, una rotación extra y un tono ligeramente distintos, en
+ * función únicamente de su id (bytes independientes del hash).
+ *
+ *  - height: factor de altura del cuerpo, 0.9..1.2
+ *  - rotation: yaw extra sobre la orientación base, ±0.3 rad
+ *  - tone: multiplicador de color en 5 pasos, 0.92..1.08 (cuantizado para que
+ *    la caché de materiales por color siga siendo pequeña)
+ *
+ * @param {string} cityId
+ * @returns {{ height: number, rotation: number, tone: number }}
+ */
+export function cityVariant(cityId) {
+  const h = hashId(cityId);
+  const byte = (shift) => (h >>> shift) & 0xff;
+  return {
+    height: 0.9 + (byte(0) / 255) * 0.3,
+    rotation: (byte(8) / 255 - 0.5) * 0.6,
+    tone: 0.92 + (Math.round((byte(16) / 255) * 4) / 4) * 0.16,
+  };
+}
+
+/**
+ * Puntos de mundo (en orden) de una secuencia de ids de ciudad. Los ids que no
+ * existen en el mapa se omiten (journeys antiguos pueden referenciar ciudades
+ * retiradas del mapa; no es un error de datos). Para dibujar la senda del
+ * camino recorrido y la ruta planificada (MC-8).
+ *
+ * @param {CareerMap} map
+ * @param {string[]} cityIds
+ * @param {WorldOptions} [opts]
+ * @returns {WorldPoint[]}
+ */
+export function journeyPathPoints(map, cityIds, opts = {}) {
+  const byId = new Map((map?.cities ?? []).map((c) => [c.id, c]));
+  return (cityIds ?? [])
+    .map((id) => byId.get(id))
+    .filter((c) => c !== undefined)
+    .map((c) => worldFromMap(c.x, c.y, opts));
+}
+
+/**
+ * Cinta (ribbon) de una polilínea en el plano XZ: para cada punto, sus dos
+ * vértices laterales desplazados media anchura en la perpendicular de la
+ * dirección local (media de los segmentos adyacentes, así las esquinas no se
+ * pellizcan). Con menos de 2 puntos no hay cinta ([]).
+ *
+ * @param {WorldPoint[]} points
+ * @param {number} width Anchura total de la cinta.
+ * @returns {{ lx: number, lz: number, rx: number, rz: number }[]}
+ */
+export function ribbonStrip(points, width) {
+  if (!Number.isFinite(width) || width <= 0) {
+    throw new Error(`Anchura de cinta inválida para ribbonStrip: "${width}"`);
+  }
+  if ((points?.length ?? 0) < 2) return [];
+  const half = width / 2;
+  return points.map((p, i) => {
+    const prev = points[Math.max(i - 1, 0)];
+    const next = points[Math.min(i + 1, points.length - 1)];
+    let dx = next.wx - prev.wx;
+    let dz = next.wz - prev.wz;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) {
+      // Puntos coincidentes: dirección arbitraria pero estable.
+      dx = 1;
+      dz = 0;
+    } else {
+      dx /= len;
+      dz /= len;
+    }
+    // Perpendicular en el plano XZ (giro de 90°): (-dz, dx).
+    return {
+      lx: p.wx - dz * half,
+      lz: p.wz + dx * half,
+      rx: p.wx + dz * half,
+      rz: p.wz - dx * half,
+    };
+  });
+}
+
+/**
  * Encuadre de foco de CIUDAD (MC-6): las casas tienen tamaño constante, así que
  * la distancia es fija y la elevación (~38°) muestra fachada y tejado sin
  * aplastar la perspectiva.
