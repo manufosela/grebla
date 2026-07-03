@@ -12,6 +12,14 @@
  * sin duplicar lógica). El zoom al hacer clic lo anima <career-island-3d> por
  * sí solo; aquí solo se invoca `focusOverview()` desde el botón «Isla completa».
  *
+ * Primera persona (MC-7): el botón «Explorar a pie» del HUD 3D llama a
+ * `enterFirstPerson()` del componente de la isla; con puntero grueso (táctil)
+ * queda deshabilitado como «modo de escritorio». El evento `mode-change`
+ * reduce el HUD en fps: se ocultan la barra superior (persona/vistas/progreso)
+ * y solo queda el botón «Salir (Esc)». El panel de ciudadanía funciona igual
+ * (se abre con E/clic desde la isla, que suelta el pointer lock; al cerrarlo,
+ * un clic en el canvas lo re-engancha).
+ *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
  *  - people: { id: string, name: string }[]   personas del equipo del líder
@@ -42,6 +50,7 @@ export class CareerApp extends LitElement {
     loading: { state: true },
     map: { state: true },
     viewMode: { state: true },
+    mode3d: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -53,7 +62,9 @@ export class CareerApp extends LitElement {
        el panel de ciudadanía y el HUD flotan SOBRE él (overlay). */
     .stage3d { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
     career-island-3d.stage { flex: 1 1 auto; min-height: 0; }
-    .hud-overview { position: absolute; top: 0.75rem; left: 0.75rem; z-index: 2; box-shadow: 0 2px 8px rgba(17, 24, 39, 0.12); }
+    .hud { position: absolute; top: 0.75rem; left: 0.75rem; z-index: 2; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .hud button { box-shadow: 0 2px 8px rgba(17, 24, 39, 0.12); }
+    .hud button:disabled { opacity: 0.6; cursor: not-allowed; }
     .citypanel {
       position: absolute;
       z-index: 3;
@@ -154,6 +165,13 @@ export class CareerApp extends LitElement {
     // Modo de vista: '3d' (isla Three.js, por defecto), 'island' (2.5D, se
     // retirará en MC-8) o 'flat' (plano, fallback).
     this.viewMode = this._readViewMode();
+    // Modo de cámara del 3D (MC-7): 'aerial' | 'fps'; lo comunica la isla.
+    this.mode3d = 'aerial';
+    // Puntero grueso (táctil): la primera persona necesita ratón y teclado; el
+    // botón queda deshabilitado como «modo de escritorio» (controles táctiles,
+    // futura mejora). Guardado con typeof por el render estático de Astro.
+    this._coarsePointer =
+      typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   }
 
   /** Lee la preferencia de modo de vista sin romper SSR/estático. */
@@ -165,6 +183,7 @@ export class CareerApp extends LitElement {
 
   /** @param {'3d'|'island'|'flat'} mode */
   _setViewMode(mode) {
+    if (mode !== '3d') this.mode3d = 'aerial'; // el modo a pie no sobrevive al cambio de vista
     this.viewMode = mode;
     if (typeof localStorage !== 'undefined') localStorage.setItem(CareerApp.VIEW_MODE_KEY, mode);
   }
@@ -253,10 +272,11 @@ export class CareerApp extends LitElement {
   /**
    * Cierra el panel de ciudadanía: deselecciona SIN mover la cámara (el usuario
    * sigue donde estaba) y devuelve el foco al HUD para no perder el teclado.
+   * En fps el foco cae en «Salir (Esc)»; un clic en el canvas retoma el lock.
    */
   _closeCityPanel() {
     this.selected = null;
-    this.updateComplete.then(() => this.renderRoot.querySelector('.hud-overview')?.focus());
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
   /** Escape dentro del panel de ciudadanía lo cierra. @param {KeyboardEvent} event */
@@ -269,6 +289,22 @@ export class CareerApp extends LitElement {
   /** Botón HUD «Isla completa»: vuelta animada al encuadre aéreo de la isla. */
   _focusOverview() {
     this.renderRoot.querySelector('career-island-3d')?.focusOverview();
+  }
+
+  /** La isla comunica su modo de cámara ('aerial'|'fps'): el HUD se adapta. */
+  _onModeChange(event) {
+    this.mode3d = event.detail.mode;
+  }
+
+  /** Botón HUD «Explorar a pie»: entra en primera persona (solo escritorio). */
+  _enterFps() {
+    if (this._coarsePointer) return;
+    this.renderRoot.querySelector('career-island-3d')?.enterFirstPerson();
+  }
+
+  /** Botón HUD «Salir (Esc)»: vuelta a la vista aérea con transición. */
+  _exitFps() {
+    this.renderRoot.querySelector('career-island-3d')?.exitFirstPerson();
   }
 
   /**
@@ -454,13 +490,18 @@ export class CareerApp extends LitElement {
     const map = this._map;
     const s = stats(map, this.journey);
     const sel = this.selected ? map.cities.find((c) => c.id === this.selected) : null;
+    const fps = this.viewMode === '3d' && this.mode3d === 'fps';
     return html`
-      <div class="bar">
-        ${this._renderPersonSelect()}
-        ${this._renderViewSwitch()}
-        <div class="stat"><span class="lvl">${s.level}</span><span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span></div>
-      </div>
-      <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
+      ${fps
+        ? null
+        : html`
+            <div class="bar">
+              ${this._renderPersonSelect()}
+              ${this._renderViewSwitch()}
+              <div class="stat"><span class="lvl">${s.level}</span><span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span></div>
+            </div>
+            <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
+          `}
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
 
       ${this.viewMode === '3d'
@@ -473,12 +514,28 @@ export class CareerApp extends LitElement {
               .selected=${this.selected}
               @select-city=${this._onSelect}
               @webgl-unavailable=${this._onWebglUnavailable}
+              @mode-change=${this._onModeChange}
             ></career-island-3d>
-            <button
-              class="hud-overview"
-              @click=${this._focusOverview}
-              title="Volver a la vista aérea de toda la isla"
-            >Isla completa</button>
+            <div class="hud">
+              ${fps
+                ? html`<button
+                    @click=${this._exitFps}
+                    title="Volver a la vista aérea de la isla"
+                  >Salir (Esc)</button>`
+                : html`
+                    <button
+                      @click=${this._focusOverview}
+                      title="Volver a la vista aérea de toda la isla"
+                    >Isla completa</button>
+                    <button
+                      @click=${this._enterFps}
+                      ?disabled=${this._coarsePointer}
+                      title=${this._coarsePointer
+                        ? 'Modo de escritorio: requiere ratón y teclado'
+                        : 'Recorre la isla a pie en primera persona (WASD + ratón)'}
+                    >🚶 Explorar a pie${this._coarsePointer ? ' (modo de escritorio)' : ''}</button>
+                  `}
+            </div>
             ${sel ? this._renderCityPanel(sel) : null}
           </div>`
         : html`<div class="grid">
