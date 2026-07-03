@@ -10,7 +10,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
  * @param {DoraRepoDoc[]} repos
- * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null, leadTimeCommitDeployHoursAvg: number|null, changesPending: number, leadTimeApproxCount: number, people: number }}
+ * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null, leadTimeCommitDeployHoursAvg: number|null, changesPending: number, leadTimeApproxCount: number, changeFailureRatePct: number|null, deploymentsFailed: number, deploymentsTotal: number, people: number }}
  */
 export function aggregateMetrics(repos) {
   const list = Array.isArray(repos) ? repos : [];
@@ -24,6 +24,10 @@ export function aggregateMetrics(repos) {
   let realLeadWeight = 0;
   let changesPending = 0;
   let leadTimeApproxCount = 0;
+  // Change Failure Rate (D3): media PONDERADA por nº de despliegues, no media de
+  // porcentajes. Se acumulan fallidos y total y se combinan al final.
+  let deploymentsFailed = 0;
+  let deploymentsTotal = 0;
   // Personas únicas del grupo: unión de logins, no suma (una persona en dos repos
   // del mismo equipo cuenta una vez).
   const people = new Set();
@@ -41,6 +45,8 @@ export function aggregateMetrics(repos) {
     }
     changesPending += m.changesPending ?? 0;
     leadTimeApproxCount += m.leadTimeApproxCount ?? 0;
+    deploymentsFailed += m.deploymentsFailed ?? 0;
+    deploymentsTotal += m.deploymentsTotal ?? 0;
     for (const login of m.contributorLogins ?? []) people.add(login);
   }
   return {
@@ -52,6 +58,11 @@ export function aggregateMetrics(repos) {
     leadTimeCommitDeployHoursAvg: realLeadWeight > 0 ? round1(realLeadWeighted / realLeadWeight) : null,
     changesPending,
     leadTimeApproxCount,
+    // CFR agregado = Σ fallidos / Σ total × 100 (media ponderada por despliegues).
+    // Sin despliegues en el grupo → null (no medible), nunca 0.
+    changeFailureRatePct: deploymentsTotal > 0 ? round1((deploymentsFailed / deploymentsTotal) * 100) : null,
+    deploymentsFailed,
+    deploymentsTotal,
     people: people.size,
   };
 }

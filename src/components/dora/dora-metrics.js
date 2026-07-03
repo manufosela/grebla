@@ -12,6 +12,14 @@ import { leadTimeLevel, deployFrequencyLevel } from '../../tools/dora/domain/lev
 import { levelBadge, levelStyles } from './level-badge.js';
 
 const lt = (v) => (v != null ? `${v} h` : '—');
+/**
+ * Change Failure Rate para tablas de grupo. Muestra el porcentaje si hay
+ * despliegues registrados; si no, '—' (no medible, mismo criterio que el lead
+ * time real de D2). Sin badge de nivel: los umbrales son de D5.
+ * @param {{ changeFailureRatePct: number|null, deploymentsTotal: number }} g
+ * @returns {string}
+ */
+const cfr = (g) => (g.deploymentsTotal > 0 ? `${g.changeFailureRatePct}%` : '—');
 
 export class DoraMetrics extends LitElement {
   static properties = {
@@ -75,7 +83,7 @@ export class DoraMetrics extends LitElement {
           : html`
               <table>
                 <thead>
-                  <tr><th>${title.includes('equipo') ? 'Equipo' : 'Gremio'}</th><th class="num">Repos</th><th class="num">Despliegues</th><th class="num">Deploy/sem</th><th class="num">Lead time</th><th class="num">Personas</th></tr>
+                  <tr><th>${title.includes('equipo') ? 'Equipo' : 'Gremio'}</th><th class="num">Repos</th><th class="num">Despliegues</th><th class="num">Deploy/sem</th><th class="num">Lead time</th><th class="num">CFR</th><th class="num">Personas</th></tr>
                 </thead>
                 <tbody>
                   ${rows.map(
@@ -85,6 +93,7 @@ export class DoraMetrics extends LitElement {
                       <td class="num">${g.deployments}</td>
                       <td class="num">${g.deployFrequencyPerWeek}${levelBadge(deployFrequencyLevel(g.deployFrequencyPerWeek))}</td>
                       <td class="num">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</td>
+                      <td class="num">${cfr(g)}</td>
                       <td class="num">${g.people}</td>
                     </tr>`,
                   )}
@@ -107,6 +116,9 @@ export class DoraMetrics extends LitElement {
     // Lead time REAL (commit→deploy). Si no hay despliegues registrados es null:
     // se muestra el proxy (PR→merge) y se invita a registrar despliegues.
     const hasRealLead = g.leadTimeCommitDeployHoursAvg != null;
+    // Change Failure Rate (D3): métrica REAL sobre los despliegues registrados
+    // manualmente (D1). Si no hay despliegues registrados, no es medible.
+    const hasDeploys = g.deploymentsTotal > 0;
     return html`
       <section>
         <h2>Global (${g.measured}/${g.repos} repos medidos)</h2>
@@ -121,6 +133,12 @@ export class DoraMetrics extends LitElement {
             <span class="value">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</span>
             <span class="label">Lead time proxy (PR→merge)</span>
           </div>
+          <div class="card">
+            <span class="value">${hasDeploys ? `${g.changeFailureRatePct}%` : '—'}</span>
+            <span class="label">${hasDeploys
+              ? `Change Failure Rate · ${g.deploymentsFailed} de ${g.deploymentsTotal} despliegues fallaron`
+              : 'Change Failure Rate · sin despliegues registrados'}</span>
+          </div>
           <div class="card"><span class="value">${g.people}</span><span class="label">Personas que participan</span></div>
         </div>
         ${hasRealLead
@@ -132,6 +150,9 @@ export class DoraMetrics extends LitElement {
         ${g.leadTimeApproxCount > 0
           ? html`<p class="note">Algunos primeros commits son aproximados por el límite de la API pública de GitHub (60/h sin token); un token de acceso lo resuelve.</p>`
           : null}
+        ${hasDeploys
+          ? html`<p class="note">Change Failure Rate = % de despliegues en producción que fallaron (${g.deploymentsFailed}/${g.deploymentsTotal}), sobre los despliegues registrados manualmente (D1). Métrica real, no proxy.</p>`
+          : html`<p class="note">Change Failure Rate: sin despliegues registrados. Registra despliegues (con su resultado) para poder medirlo.</p>`}
         <p class="note">Lead time agregado = media ponderada. Métricas de equipo, nunca por persona (R3).</p>
       </section>
       ${this._table('Por equipo', s.byTeam)}

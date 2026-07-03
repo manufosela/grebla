@@ -223,6 +223,28 @@ function computeLeadTimeCommitDeploy(changes, deployments) {
   };
 }
 
+/**
+ * Change Failure Rate DORA D3 (espejo de src/tools/dora/domain/changeFailureRate.js;
+ * functions/ no importa de src/). Sobre los eventos de despliegue cuyo `at` cae
+ * en [from, to] (inclusivo): CFR = fallidos / total × 100. Todos son de
+ * 'production'. Sin despliegues en la ventana → cfrPct null (no medible; nunca 0).
+ * @param {{ at: string, status: string }[]} deployments
+ * @param {string} from  inicio del periodo (ISO)
+ * @param {string} to    fin del periodo (ISO)
+ * @returns {{ cfrPct: number|null, failed: number, total: number }}
+ */
+function computeChangeFailureRate(deployments, from, to) {
+  const fromMs = toMs(from);
+  const toMs2 = toMs(to);
+  const inWindow = (Array.isArray(deployments) ? deployments : []).filter((e) => {
+    const atMs = toMs(e?.at);
+    return Number.isFinite(atMs) && atMs >= fromMs && atMs <= toMs2;
+  });
+  const total = inWindow.length;
+  const failed = inWindow.filter((e) => e?.status === 'failed').length;
+  return { cfrPct: total > 0 ? round1((failed / total) * 100) : null, failed, total };
+}
+
 /** Tope de PRs por repo a los que pedimos el primer commit (mitiga el rate-limit 60/h sin token). */
 const MAX_COMMIT_LOOKUPS = 50;
 
@@ -316,6 +338,15 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
       metrics.leadTimeCommitDeployHoursMedian = realLead.leadTimeHoursMedian;
       metrics.changesDeployed = realLead.deployedCount;
       metrics.changesPending = realLead.pendingCount;
+
+      // ── Change Failure Rate (DORA D3) ──────────────────────────────────────
+      // % de despliegues a producción que fallan (requieren remediación).
+      // Reutiliza `deployEvents` YA cargado (no se relee la subcolección). Si no
+      // hay despliegues registrados, cfrPct = null y los contadores quedan en 0.
+      const cfr = computeChangeFailureRate(deployEvents, from, now);
+      metrics.changeFailureRatePct = cfr.cfrPct;
+      metrics.deploymentsFailed = cfr.failed;
+      metrics.deploymentsTotal = cfr.total;
       metrics.leadTimeApproxCount = leadTimeApproxCount;
 
       await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: now, computedAt: now } }, { merge: true });
