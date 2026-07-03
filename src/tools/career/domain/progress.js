@@ -65,6 +65,20 @@ export function cityStatus(map, cityId, journey) {
   return isReachable(map, cityId, visited) ? 'available' : 'blocked';
 }
 
+/**
+ * Prerequisitos PENDIENTES de una ciudad: ids de prereqs aún no visitados.
+ * Es la explicación del estado 'blocked' para el panel de ciudadanía (MC-6).
+ * Ciudad desconocida → [] (no hay nada que explicar).
+ * @param {CareerMap} map @param {string} cityId @param {string[]} visited
+ * @returns {string[]}
+ */
+export function missingPrereqs(map, cityId, visited) {
+  const city = (map?.cities ?? []).find((c) => c.id === cityId);
+  if (!city) return [];
+  const v = new Set(visited ?? []);
+  return (city.prereqs ?? []).filter((p) => !v.has(p));
+}
+
 /** Niveles de viaje por porcentaje de progreso (gamificación, no es la escala GREBLA). */
 export const TRAVEL_LEVELS = [
   { min: 0, name: 'Aprendiz' },
