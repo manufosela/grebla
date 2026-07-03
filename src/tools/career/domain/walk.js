@@ -162,6 +162,19 @@ export function stepPosition(pos, dir, dt, speed, bounds) {
 }
 
 /**
+ * Normaliza un ángulo a (-π, π]: mismo dominio que atan2, para que los yaws no
+ * crezcan sin límite en paseos o giros largos.
+ * @param {number} angle Ángulo en radianes.
+ * @returns {number} Ángulo equivalente en (-π, π].
+ */
+function normalizeYaw(angle) {
+  const raw = angle % (2 * Math.PI);
+  if (raw > Math.PI) return raw - 2 * Math.PI;
+  if (raw <= -Math.PI) return raw + 2 * Math.PI;
+  return raw;
+}
+
+/**
  * Un paso de giro sobre uno mismo (controles tipo DOOM): avanza el yaw según
  * la dirección (+1 gira a la izquierda, -1 a la derecha) a velocidad angular
  * constante y normaliza el resultado a (-π, π] para que el ángulo no crezca
@@ -177,10 +190,29 @@ export function turnYaw(yaw, dir, dt, speed) {
   if (!Number.isFinite(speed) || speed <= 0) {
     throw new Error(`Velocidad de giro inválida para turnYaw: "${speed}"`);
   }
-  const raw = (yaw + dir * speed * dt) % (2 * Math.PI);
-  if (raw > Math.PI) return raw - 2 * Math.PI;
-  if (raw <= -Math.PI) return raw + 2 * Math.PI;
-  return raw;
+  return normalizeYaw(yaw + dir * speed * dt);
+}
+
+/**
+ * Un paso de giro HACIA un yaw objetivo por el arco más corto (MC-10): el
+ * avatar de la vista aérea rota suavemente hacia su dirección de marcha. El
+ * giro avanza a velocidad angular constante y NUNCA se pasa del objetivo (si
+ * el paso llega, se clava en él): sin oscilaciones alrededor del destino.
+ *
+ * @param {number} yaw Yaw actual (radianes).
+ * @param {number} targetYaw Yaw objetivo (radianes, cualquier vuelta).
+ * @param {number} dt Delta de tiempo en segundos.
+ * @param {number} speed Velocidad angular (radianes por segundo).
+ * @returns {number} Nuevo yaw en (-π, π].
+ */
+export function yawToward(yaw, targetYaw, dt, speed) {
+  if (!Number.isFinite(speed) || speed <= 0) {
+    throw new Error(`Velocidad de giro inválida para yawToward: "${speed}"`);
+  }
+  const delta = normalizeYaw(targetYaw - yaw);
+  const step = speed * Math.max(dt, 0);
+  if (Math.abs(delta) <= step) return normalizeYaw(targetYaw);
+  return normalizeYaw(yaw + Math.sign(delta) * step);
 }
 
 /**
@@ -269,4 +301,85 @@ export function nearestCityWithin(pos, cities, maxDist) {
     }
   }
   return best;
+}
+
+/** Ángulo áureo (radianes): reparte puntos en espiral sin patrones visibles. */
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+/**
+ * Valor pseudoaleatorio DETERMINISTA en [0, 1) a partir de una semilla y un
+ * índice (mezcla de enteros estilo splitmix/murmur, sin estado). Es la fuente
+ * de «aleatoriedad» del scatter de vegetación: nada de Math.random(), la misma
+ * pareja (seed, i) produce siempre el mismo valor entre sesiones y renders.
+ *
+ * @param {number} seed Semilla (entero de 32 bits; hashId de layout vale).
+ * @param {number} i Índice del elemento.
+ * @returns {number} Valor en [0, 1).
+ */
+export function hashUnit(seed, i) {
+  let h = (seed ^ 0x9e3779b9) >>> 0;
+  h = Math.imul(h ^ i, 2654435761);
+  h ^= h >>> 13;
+  h = Math.imul(h, 2246822519);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+/**
+ * Posiciones dispersas DETERMINISTAS para vegetación y props (MC-10): espiral
+ * de girasol (radio ∝ √i, ángulo áureo) con jitter por hash, que reparte los
+ * puntos de forma natural por el disco sin patrones visibles ni RNG. Los
+ * candidatos que caen dentro de alguna exclusión (casas, puerto, senda) se
+ * descartan; si las exclusiones se comen demasiados candidatos se devuelven
+ * menos de `count` posiciones (no es un error: la isla está llena).
+ *
+ * @param {number} count Posiciones deseadas (entero ≥ 0).
+ * @param {number} maxRadius Radio máximo del disco (p. ej. el borde de la hierba).
+ * @param {{ x: number, z: number, r: number }[]} exclusions Círculos vetados.
+ * @param {number} seed Semilla determinista (misma semilla → mismo scatter).
+ * @returns {WalkPoint[]} Posiciones en el plano del suelo (≤ count).
+ */
+export function scatterPositions(count, maxRadius, exclusions, seed) {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error(`Cantidad inválida para scatterPositions: "${count}"`);
+  }
+  if (!Number.isFinite(maxRadius) || maxRadius <= 0) {
+    throw new Error(`Radio inválido para scatterPositions: "${maxRadius}"`);
+  }
+  if (!Number.isFinite(seed)) {
+    throw new Error(`Semilla inválida para scatterPositions: "${seed}"`);
+  }
+  const list = exclusions ?? [];
+  /** @type {WalkPoint[]} */
+  const positions = [];
+  if (count === 0) return positions;
+  const excluded = (x, z) => list.some((ex) => Math.hypot(x - ex.x, z - ex.z) < ex.r);
+  // La semilla también rota la espiral completa: dos scatters con semillas
+  // distintas no comparten ninguna dirección.
+  const spin = hashUnit(seed, 0) * 2 * Math.PI;
+  // Jitter radial acotado a ~medio paso de la espiral (no rompe el reparto).
+  const jitterR = (maxRadius / Math.sqrt(count)) * 0.5;
+  // Pasada 1 — espiral de girasol sobre el disco COMPLETO (radio ∝ √i cubre
+  // de centro a borde con densidad uniforme): reparto natural y sin patrones.
+  for (let i = 0; i < count; i += 1) {
+    const r =
+      maxRadius * Math.sqrt((i + 0.5) / count) + (hashUnit(seed, i * 2 + 1) - 0.5) * 2 * jitterR;
+    const angle = spin + i * GOLDEN_ANGLE + (hashUnit(seed, i * 2 + 2) - 0.5) * 0.5;
+    const x = Math.cos(angle) * Math.min(Math.max(r, 0), maxRadius);
+    const z = Math.sin(angle) * Math.min(Math.max(r, 0), maxRadius);
+    if (excluded(x, z)) continue;
+    positions.push({ x, z });
+  }
+  // Pasada 2 — repone los candidatos comidos por las exclusiones con puntos
+  // uniformes en el disco (r ∝ √u), también por hash: sigue siendo determinista.
+  for (let i = 0; i < count * 3 && positions.length < count; i += 1) {
+    const base = (count + i) * 2;
+    const r = maxRadius * Math.sqrt(hashUnit(seed, base + 1));
+    const angle = hashUnit(seed, base + 2) * 2 * Math.PI;
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    if (excluded(x, z)) continue;
+    positions.push({ x, z });
+  }
+  return positions;
 }

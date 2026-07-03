@@ -12,9 +12,12 @@ import {
   walkableRadius,
   stepPosition,
   turnYaw,
+  yawToward,
   nearestCityWithin,
   collideWithCities,
   CITY_ENTER_ALIGNMENT,
+  hashUnit,
+  scatterPositions,
 } from './walk.js';
 
 /** Radio de isla de pruebas (del orden del que produce islandRadius). */
@@ -199,6 +202,112 @@ describe('turnYaw', () => {
   it('falla en alto con una velocidad inválida', () => {
     expect(() => turnYaw(0, 1, 0.016, 0)).toThrow();
     expect(() => turnYaw(0, 1, 0.016, Number.NaN)).toThrow();
+  });
+});
+
+describe('yawToward', () => {
+  it('gira hacia el objetivo por el arco más corto', () => {
+    // De 0 a +1 rad: gira en positivo; de 0 a -1 rad: en negativo.
+    expect(yawToward(0, 1, 0.1, 2)).toBeCloseTo(0.2);
+    expect(yawToward(0, -1, 0.1, 2)).toBeCloseTo(-0.2);
+    // Cruzando ±π: de 3 rad a -3 rad el arco corto pasa por π (sube), no por 0.
+    const next = yawToward(3, -3, 0.05, 2);
+    expect(next).toBeCloseTo(3.1);
+  });
+
+  it('no se pasa del objetivo: si el paso llega, se clava en él', () => {
+    expect(yawToward(0.5, 0.6, 1, 2)).toBeCloseTo(0.6);
+    expect(yawToward(0.5, 0.5, 0.016, 2)).toBeCloseTo(0.5);
+  });
+
+  it('el resultado queda normalizado a (-π, π]', () => {
+    // Girando desde cerca de π hacia un objetivo pasado π reaparece por -π.
+    const yaw = yawToward(Math.PI - 0.05, -(Math.PI - 0.05), 0.1, 2);
+    expect(yaw).toBeGreaterThan(-Math.PI);
+    expect(yaw).toBeLessThanOrEqual(Math.PI);
+    // Muchos pasos convergen exactamente al objetivo normalizado.
+    let y = -2.5;
+    for (let i = 0; i < 200; i += 1) y = yawToward(y, 2.5, 0.016, 3);
+    expect(y).toBeCloseTo(2.5);
+  });
+
+  it('falla en alto con una velocidad inválida', () => {
+    expect(() => yawToward(0, 1, 0.016, 0)).toThrow();
+    expect(() => yawToward(0, 1, 0.016, Number.NaN)).toThrow();
+  });
+});
+
+describe('hashUnit', () => {
+  it('es determinista y queda en [0, 1)', () => {
+    for (let i = 0; i < 100; i += 1) {
+      const v = hashUnit(1234, i);
+      expect(v).toBe(hashUnit(1234, i)); // sin RNG
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    }
+  });
+
+  it('semillas o índices distintos producen valores distintos (no constante)', () => {
+    const values = new Set([...Array(50).keys()].map((i) => hashUnit(7, i)));
+    expect(values.size).toBeGreaterThan(45);
+    expect(hashUnit(1, 3)).not.toBe(hashUnit(2, 3));
+  });
+});
+
+describe('scatterPositions', () => {
+  const SEED = 305419896; // entero arbitrario fijo (determinista en el test)
+
+  it('es determinista: misma semilla → mismo scatter, otra semilla → otro', () => {
+    const a = scatterPositions(30, 40, [], SEED);
+    const b = scatterPositions(30, 40, [], SEED);
+    expect(a).toEqual(b);
+    const c = scatterPositions(30, 40, [], SEED + 1);
+    expect(c).not.toEqual(a);
+  });
+
+  it('devuelve count posiciones dentro del radio cuando no hay exclusiones', () => {
+    const pts = scatterPositions(40, 35, [], SEED);
+    expect(pts).toHaveLength(40);
+    for (const p of pts) {
+      expect(Math.hypot(p.x, p.z)).toBeLessThanOrEqual(35 + 1e-9);
+    }
+  });
+
+  it('ninguna posición cae dentro de una exclusión (casas, puerto, senda)', () => {
+    const exclusions = [
+      { x: 0, z: 0, r: 12 },
+      { x: 20, z: 10, r: 6 },
+      { x: -15, z: -18, r: 8 },
+    ];
+    const pts = scatterPositions(50, 40, exclusions, SEED);
+    expect(pts.length).toBeGreaterThan(0);
+    for (const p of pts) {
+      for (const ex of exclusions) {
+        expect(Math.hypot(p.x - ex.x, p.z - ex.z)).toBeGreaterThanOrEqual(ex.r);
+      }
+    }
+  });
+
+  it('si las exclusiones se comen la isla devuelve menos posiciones, sin error', () => {
+    const pts = scatterPositions(20, 30, [{ x: 0, z: 0, r: 100 }], SEED);
+    expect(pts).toEqual([]);
+  });
+
+  it('reparte de verdad: sin puntos duplicados y usando el disco entero', () => {
+    const pts = scatterPositions(40, 40, [], SEED);
+    const keys = new Set(pts.map((p) => `${p.x.toFixed(6)},${p.z.toFixed(6)}`));
+    expect(keys.size).toBe(pts.length);
+    const radii = pts.map((p) => Math.hypot(p.x, p.z));
+    expect(Math.min(...radii)).toBeLessThan(15); // hay puntos interiores
+    expect(Math.max(...radii)).toBeGreaterThan(30); // y puntos periféricos
+  });
+
+  it('count 0 devuelve vacío y valida sus entradas', () => {
+    expect(scatterPositions(0, 40, [], SEED)).toEqual([]);
+    expect(() => scatterPositions(-1, 40, [], SEED)).toThrow();
+    expect(() => scatterPositions(2.5, 40, [], SEED)).toThrow();
+    expect(() => scatterPositions(10, 0, [], SEED)).toThrow();
+    expect(() => scatterPositions(10, 40, [], Number.NaN)).toThrow();
   });
 });
 
