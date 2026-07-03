@@ -26,6 +26,9 @@ importers:
       lit:
         specifier: ^3.3.3
         version: 3.3.3
+      three:
+        specifier: ^0.185.1
+        version: 0.185.1
     devDependencies:
       '@astrojs/check':
         specifier: ^0.9.9
@@ -2185,6 +2188,9 @@ packages:
   teeny-request@9.0.0:
     resolution: {integrity: sha512-resvxdc6Mgb7YEThw6G6bExlXKkv6+YbuzGg9xuXxSgxJF7Ozs+o8Y9+2R3sArdWdW8nOokoQb1yrpFB0pQK2g==}
     engines: {node: '>=14'}
+
+  three@0.185.1:
+    resolution: {integrity: sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg==}
 
   tiny-inflate@1.0.3:
     resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
@@ -5420,6 +5426,8 @@ snapshots:
       - encoding
       - supports-color
     optional: true
+
+  three@0.185.1: {}
 
   tiny-inflate@1.0.3: {}
 

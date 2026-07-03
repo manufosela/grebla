@@ -12,6 +12,7 @@
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
 import './career-island.js';
+import './career-island-3d.js';
 import {
   getJourney,
   toggleVisited,
@@ -39,7 +40,9 @@ export class CareerApp extends LitElement {
   static VIEW_MODE_KEY = 'grebla:career:viewMode';
 
   static styles = css`
-    :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
+    :host { display: flex; flex-direction: column; min-height: 0; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
+    /* En modo 3D el canvas es el protagonista: ocupa todo el alto disponible. */
+    career-island-3d.stage { flex: 1 1 auto; min-height: 0; }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
     label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
@@ -101,17 +104,19 @@ export class CareerApp extends LitElement {
     this.map = null;
     this._loadedPerson = null;
     this._mapLoaded = false;
-    // Modo de vista: 'island' (2.5D isométrica, por defecto) o 'flat' (plano, fallback).
+    // Modo de vista: '3d' (isla Three.js, por defecto), 'island' (2.5D, se
+    // retirará en MC-8) o 'flat' (plano, fallback).
     this.viewMode = this._readViewMode();
   }
 
   /** Lee la preferencia de modo de vista sin romper SSR/estático. */
   _readViewMode() {
-    if (typeof localStorage === 'undefined') return 'island';
-    return localStorage.getItem(CareerApp.VIEW_MODE_KEY) === 'flat' ? 'flat' : 'island';
+    if (typeof localStorage === 'undefined') return '3d';
+    const stored = localStorage.getItem(CareerApp.VIEW_MODE_KEY);
+    return stored === 'island' || stored === 'flat' ? stored : '3d';
   }
 
-  /** @param {'island'|'flat'} mode */
+  /** @param {'3d'|'island'|'flat'} mode */
   _setViewMode(mode) {
     this.viewMode = mode;
     if (typeof localStorage !== 'undefined') localStorage.setItem(CareerApp.VIEW_MODE_KEY, mode);
@@ -193,23 +198,31 @@ export class CareerApp extends LitElement {
     }
   }
 
-  /** Conmutador de vista Isla 2.5D / Plano. El plano queda como fallback. */
+  /**
+   * Conmutador de vista Isla 3D / 2.5D / Plano. La 2.5D se retirará en MC-8;
+   * el plano queda como fallback (también automático si no hay WebGL).
+   */
   _renderViewSwitch() {
-    const isIsland = this.viewMode !== 'flat';
+    const modes = [
+      { id: '3d', label: 'Isla 3D' },
+      { id: 'island', label: '2.5D' },
+      { id: 'flat', label: 'Plano' },
+    ];
     return html`<div class="viewswitch" role="group" aria-label="Modo de vista del mapa">
-      <button
-        type="button"
-        class=${isIsland ? 'active' : ''}
-        aria-pressed=${isIsland}
-        @click=${() => this._setViewMode('island')}
-      >Isla 2.5D</button>
-      <button
-        type="button"
-        class=${!isIsland ? 'active' : ''}
-        aria-pressed=${!isIsland}
-        @click=${() => this._setViewMode('flat')}
-      >Plano</button>
+      ${modes.map(
+        (m) => html`<button
+          type="button"
+          class=${this.viewMode === m.id ? 'active' : ''}
+          aria-pressed=${this.viewMode === m.id}
+          @click=${() => this._setViewMode(m.id)}
+        >${m.label}</button>`,
+      )}
     </div>`;
+  }
+
+  /** WebGL no disponible: cae a la vista plana SIN persistir (permite reintentar). */
+  _onWebglUnavailable() {
+    this.viewMode = 'flat';
   }
 
   _renderPersonSelect() {
@@ -257,7 +270,17 @@ export class CareerApp extends LitElement {
       <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
 
-      <div class="grid">
+      ${this.viewMode === '3d'
+        ? html`<career-island-3d
+            class="stage"
+            .map=${map}
+            .journey=${this.journey}
+            .reachable=${s.reachable}
+            .selected=${this.selected}
+            @select-city=${this._onSelect}
+            @webgl-unavailable=${this._onWebglUnavailable}
+          ></career-island-3d>`
+        : html`<div class="grid">
         ${this.viewMode === 'flat'
           ? html`<career-map
               .map=${map}
@@ -348,7 +371,7 @@ export class CareerApp extends LitElement {
             </div>
           </details>
         </div>
-      </div>
+      </div>`}
     `;
   }
 }
