@@ -66,6 +66,39 @@
  * vista aérea. `mode-change {mode:'fps'|'aerial'}` avisa a <career-app>.
  * Pensado para escritorio: en táctil el HUD no ofrece el botón de entrada.
  *
+ * Avatar en vista aérea (MC-10): un personajillo low-poly (piernas navy,
+ * cuerpo teal, gorra coral: colores GREBLA) SIEMPRE visible en la vista aérea
+ * que se mueve con WASD/flechas usando LA MISMA lógica pura del modo a pie
+ * (stepPosition, groundHeightAt, collideWithCities, walkableRadius): rota
+ * hacia su dirección de marcha (yawToward, puro) con animación procedural de
+ * zancada (balanceo de piernas/brazos + rebote, en función de la distancia
+ * recorrida — nada de rigs ni RNG). Mientras camina, el target de los
+ * OrbitControls (y la cámara con él) lo SIGUE con un lerp suave; el usuario
+ * puede orbitar/zoomear a la vez, y cualquier focusCity/focusArea/focusOverview
+ * manda: el follow se pausa hasta que el avatar vuelva a moverse. El choque
+ * FRONTAL contra una casa abre su ciudadanía (mismo `_insideCityId` de MC-9,
+ * sin pointer lock: el teclado ya está libre) y ↓/S retrocede y cierra. Al
+ * entrar en primera persona el avatar se OCULTA (la cámara ES el avatar y
+ * parte de su posición); al salir reaparece donde estaba la cámara.
+ *
+ * Salto gráfico (MC-10), todo procedural y determinista (sin Math.random ni
+ * assets externos):
+ *  - texturas CanvasTexture cacheadas (userData.shared): hierba y arena
+ *    moteadas, tablones de pared (base clara que TINTA el color de estado),
+ *    tejas del tejado, veta de madera para puertas y muelle
+ *  - vegetación y props con InstancedMesh: coníferas (conos apilados),
+ *    frondosos (copa achatada), rocas (icosaedros a escala no uniforme) y
+ *    flores junto a las casas — posiciones de scatterPositions (walk.js, puro)
+ *    con exclusiones de casas, puerto y senda del journey vigente
+ *  - agua VIVA: plano subdividido con ondulación senoidal de vértices en el
+ *    loop y cinta de espuma clara siguiendo la línea de costa (coastFactor)
+ *  - cielo: cúpula con gradiente por vertex colors + nubes sprite con deriva
+ *    lentísima; la niebla funde el horizonte con el color del propio cielo
+ *  - sombras suaves: shadow map PCF de 1024 con borde difuminado (radius)
+ *    SOLO en el sol direccional — PCFSoftShadowMap está deprecado en three
+ *    0.185 — (casas, árboles, rocas y avatar proyectan; terreno y plataformas
+ *    reciben). El flag SHADOWS.enabled permite apagarlas si algún hardware sufre.
+ *
  * Es un componente presentacional: no escribe en Firestore.
  */
 import { LitElement, html, css } from 'lit';
@@ -81,6 +114,7 @@ import {
   facadeYawToward,
   journeyPathPoints,
   ribbonStrip,
+  hashId,
   ACCENT_COLORS,
   STATUS_COLORS,
 } from '../../tools/career/domain/islandLayout.js';
@@ -91,8 +125,11 @@ import {
   walkableRadius,
   stepPosition,
   turnYaw,
+  yawToward,
   nearestCityWithin,
   collideWithCities,
+  hashUnit,
+  scatterPositions,
   WALK_SPEED,
   RUN_MULTIPLIER,
   TURN_SPEED,
@@ -167,7 +204,60 @@ const ENV_COLORS = {
   door: 0x6b4a26,
   window: 0xfff2c0,
   windowGlow: 0xf4c96b,
+  // Vegetación y props (MC-10).
+  conifer: 0x3f7d4f,
+  leafy: 0x6da95d,
+  rock: 0x9aa1a6,
+  stem: 0x59915b,
+  flowerCoral: 0xf2887a,
+  flowerWarm: 0xf4c96b,
 };
+/** Gradiente de la cúpula de cielo (MC-10); el horizonte es también el color de la niebla. */
+const SKY_COLORS = Object.freeze({ zenith: 0x8fcdea, horizon: 0xf1f8fb });
+/**
+ * Sombras suaves (MC-10): shadow map PCF SOLO en el sol direccional, con
+ * resolución contenida y borde difuminado vía shadow.radius (PCFSoftShadowMap
+ * está deprecado en three 0.185). Si algún hardware sufre, poner `enabled` a
+ * false apaga todo el sistema (luz, casters y receivers) sin tocar nada más.
+ */
+const SHADOWS = Object.freeze({ enabled: true, mapSize: 1024, radius: 4 });
+/**
+ * Agua viva (MC-10): plano subdividido (lado sizeFactor·R) cuyos vértices
+ * ondulan con un seno en el loop. La frecuencia es baja (olas largas) porque
+ * la malla es gruesa: segmentos mucho menores que la longitud de onda.
+ */
+const WATER = Object.freeze({ sizeFactor: 22, segments: 40, amp: 0.12, freq: 0.045, speed: 0.5 });
+/** Nubes billboard (MC-10): pocas, blancas y con deriva lentísima (unidades/s). */
+const CLOUDS = Object.freeze({ count: 5, drift: 0.5 });
+/** Avatar de la vista aérea (MC-10): dimensiones (unidades de mundo) y marcha. */
+const AVATAR = Object.freeze({
+  legH: 0.78,
+  legW: 0.26,
+  hipGap: 0.17,
+  bodyW: 0.72,
+  bodyH: 0.82,
+  bodyD: 0.4,
+  armH: 0.62,
+  armW: 0.18,
+  headS: 0.44,
+  /** Velocidad (rad/s) del giro hacia la dirección de marcha (yawToward). */
+  turnSpeed: 9,
+  /** Fase de zancada acumulada por unidad de distancia recorrida. */
+  stepFreq: 1.7,
+  /** Amplitud (rad) del balanceo de piernas; los brazos van a contrapié. */
+  swingAmp: 0.55,
+  /** Rebote vertical del cuerpo por zancada (unidades). */
+  bobAmp: 0.07,
+  /** Constante (1/s) del lerp con el que la cámara sigue al avatar. */
+  followRate: 3.5,
+});
+/** Colores del avatar: paleta GREBLA (teal/navy/coral) + piel cálida. */
+const AVATAR_COLORS = Object.freeze({
+  body: 0x2a9d8f,
+  legs: 0x1e3a5f,
+  skin: 0xf1c9a5,
+  cap: 0xe26d5e,
+});
 
 export class CareerIsland3D extends LitElement {
   static properties = {
@@ -347,6 +437,34 @@ export class CareerIsland3D extends LitElement {
      * @type {Map<string, object>}
      */
     this._plateTextures = new Map();
+    /**
+     * Caché de texturas procedurales del entorno (hierba, arena, tablones,
+     * tejas, veta de madera, nube), por clave (MC-10). Independientes del mapa:
+     * viven hasta el teardown (_clearEnvTextures). userData.shared, como las placas.
+     * @type {Map<string, object>}
+     */
+    this._envTextures = new Map();
+    /** Avatar low-poly de la vista aérea (MC-10), o null hasta tener mapa. */
+    this._avatar = null;
+    /** Posición del avatar en el plano del suelo (misma lógica que el fps). */
+    this._avatarPos = { x: 0, z: 0 };
+    /** Yaw del avatar (rota hacia su dirección de marcha con yawToward). */
+    this._avatarYaw = 0;
+    /** Fase de zancada acumulada (∝ distancia recorrida): anima piernas/brazos. */
+    this._avatarPhase = 0;
+    /** Peso 0..1 del balanceo (sube al andar, baja al parar: sin cortes secos). */
+    this._avatarSwing = 0;
+    this._lastAvatarTs = 0;
+    /** Sol direccional (guardado para configurar su shadow camera por isla). */
+    this._sun = null;
+    /** Malla de agua animada (vértices ondulados en el loop) del mapa actual. */
+    this._waterMesh = null;
+    /** Sprites de nube con deriva (userData.drift) del mapa actual. */
+    this._clouds = [];
+    this._lastEnvTs = 0;
+    /** Puntero grueso (táctil): el hint de teclado del avatar no aplica. */
+    this._coarsePointer =
+      typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
     /** Aborta de golpe todos los listeners (documento y canvas) en el teardown. */
     this._abort = null;
     this._onVisibility = () => {
@@ -431,6 +549,12 @@ export class CareerIsland3D extends LitElement {
       return;
     }
     this._renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 2));
+    // Sombras suaves (MC-10): shadow map PCF del sol direccional. OJO:
+    // PCFSoftShadowMap está DEPRECADO en three 0.185 (el propio renderer lo
+    // degrada a PCF con un warning por frame); el suavizado del borde lo da
+    // shadow.radius sobre el PCF estándar.
+    this._renderer.shadowMap.enabled = SHADOWS.enabled;
+    this._renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this._scene = new THREE.Scene();
     this._scene.background = new THREE.Color(ENV_COLORS.sky);
@@ -454,6 +578,15 @@ export class CareerIsland3D extends LitElement {
     // proyectadas (fluidez); el volumen lo dan el flatShading y las dos luces.
     const sun = new THREE.DirectionalLight(0xffe9c4, 1.5);
     sun.position.set(60, 120, 40);
+    if (SHADOWS.enabled) {
+      // Solo el sol proyecta sombras; el encuadre ortográfico de su shadow
+      // camera se ajusta al radio de la isla en _frameIsland.
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(SHADOWS.mapSize, SHADOWS.mapSize);
+      sun.shadow.bias = -0.0005; // contra el acné en el terreno plano
+      sun.shadow.radius = SHADOWS.radius; // borde suave con el PCF estándar
+    }
+    this._sun = sun;
     this._scene.add(sun);
     const fill = new THREE.DirectionalLight(0xbcd7e8, 0.35);
     fill.position.set(-70, 60, -50);
@@ -514,6 +647,9 @@ export class CareerIsland3D extends LitElement {
       this._raf = requestAnimationFrame(step);
       if (this._mode === 'aerial') {
         this._controls.update();
+        // El avatar camina ANTES de la animación de foco: si hay una en curso,
+        // ella manda sobre cámara y target (el follow se salta solo, MC-10).
+        this._tickAvatar(now);
         this._tickCameraAnim(now);
         this._clampTarget();
         // Etiquetas de ciudad: fundido por distancia (menos solape alejado).
@@ -526,6 +662,7 @@ export class CareerIsland3D extends LitElement {
       } else {
         this._tickCameraAnim(now);
       }
+      this._tickEnvironment(now); // agua ondulada y deriva de nubes (MC-10)
       this._renderer.render(this._scene, this._camera);
     };
     this._raf = requestAnimationFrame(step);
@@ -705,9 +842,20 @@ export class CareerIsland3D extends LitElement {
   enterFirstPerson() {
     if (this._phase !== 'ready' || this._mode !== 'aerial' || !this.map) return;
     const THREE = this._THREE;
-    const spawn = this._fpsSpawn();
+    // La cámara ES el avatar (MC-10): a pie se parte de donde está el avatar,
+    // mirando hacia donde él mira, y el personajillo se oculta mientras tanto.
+    const spawn = this._avatar
+      ? {
+          x: this._avatarPos.x,
+          z: this._avatarPos.z,
+          lookX: this._avatarPos.x + Math.sin(this._avatarYaw) * 10,
+          lookZ: this._avatarPos.z + Math.cos(this._avatarYaw) * 10,
+        }
+      : this._fpsSpawn();
     const eyeY = groundHeightAt(spawn.x, spawn.z, { radius: this._islandR }) + EYE_HEIGHT;
     this._mode = 'to-fps';
+    this._keys.clear(); // las teclas de la marcha aérea no arrastran al fps
+    this._setAvatarVisible(false);
     this._controls.enabled = false; // el damping no pelea con la transición
     this._setLabelsVisible(false); // a pie los nombres gigantes ensucian
     this._animateTo(
@@ -745,6 +893,14 @@ export class CareerIsland3D extends LitElement {
     // El giro parte del punto que se está mirando ahora mismo (continuidad).
     const lookNow = new THREE.Vector3();
     this._camera.getWorldDirection(lookNow);
+    // El avatar reaparece DONDE ESTABA la cámara, mirando hacia donde miraba
+    // el caminante (MC-10): la vuelta a la vista aérea lo muestra en el sitio.
+    if (this._avatar) {
+      this._avatarPos = { x: this._camera.position.x, z: this._camera.position.z };
+      this._avatarYaw = Math.atan2(lookNow.x, lookNow.z);
+      this._placeAvatar();
+      this._setAvatarVisible(true);
+    }
     lookNow.multiplyScalar(EXIT_LOOK_AHEAD).add(this._camera.position);
     const pose = this._overviewPose();
     this._animateTo(pose, {
@@ -868,6 +1024,28 @@ export class CareerIsland3D extends LitElement {
 
   /** @param {KeyboardEvent} event */
   _onKeyDown(event) {
+    if (this._mode === 'aerial') {
+      // Marcha del avatar en vista aérea (MC-10): el teclado está libre (sin
+      // pointer lock), así que se ignoran las teclas escritas en campos
+      // editables (panel de ciudadanía, formularios) mirando el origen REAL
+      // del evento (el shadow DOM retargetea, ver _isTypingTarget).
+      if (this._phase !== 'ready' || !this.map || !this._avatar) return;
+      if (CareerIsland3D._isTypingTarget(event)) return;
+      if (this._insideCityId !== null) {
+        // «Dentro» de una casa por choque: solo ↓/S actúan — dar hacia atrás
+        // cierra el panel y despega al avatar (mismo patrón que MC-9 a pie).
+        if (event.code === 'ArrowDown' || event.code === 'KeyS') {
+          event.preventDefault();
+          this._exitCity();
+        }
+        return;
+      }
+      if (CareerIsland3D.MOVE_CODES.has(event.code)) {
+        this._keys.add(event.code);
+        event.preventDefault(); // las flechas no deben hacer scroll de la página
+      }
+      return;
+    }
     if (this._mode !== 'fps') return;
     if (!this._fpsLocked) {
       // Con el lock suelto (overlay «haz clic» o panel abierto) se atiende
@@ -1004,24 +1182,27 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Entrada en una casa por choque frontal (MC-9): el jugador queda detenido
-   * en la puerta (la colisión ya lo dejó en el borde), se abre su panel de
-   * ciudadanía (mismo flujo que la tecla E) y `_insideCityId` recuerda la casa
-   * para poder «salir dando hacia atrás» (↓/S).
+   * Entrada en una casa por choque frontal (MC-9 a pie, MC-10 con el avatar en
+   * vista aérea): el caminante queda detenido en la puerta (la colisión ya lo
+   * dejó en el borde), se abre su panel de ciudadanía (mismo flujo que la
+   * tecla E) y `_insideCityId` recuerda la casa para poder «salir dando hacia
+   * atrás» (↓/S). Las teclas de marcha se sueltan: dentro no se camina.
    * @param {string} cityId
    */
   _enterCity(cityId) {
     this._insideCityId = cityId;
+    this._keys.clear();
     this._openCityPanel(cityId);
   }
 
   /**
    * Salida de la casa dando hacia atrás (↓/S con el panel abierto por choque,
-   * MC-9): cierra el panel (select-city con cityId null: el contenedor
-   * deselecciona), retrocede al jugador unos pasos alejándose de la puerta
-   * (stepPosition: acotado a la isla) y re-engancha el pointer lock — el
-   * keydown cuenta como activación de usuario; si el navegador lo rechaza,
-   * queda el overlay «haz clic en la isla…» como vía manual.
+   * MC-9/10): cierra el panel (select-city con cityId null: el contenedor
+   * deselecciona) y retrocede al caminante unos pasos alejándose de la puerta
+   * (stepPosition: acotado a la isla). En vista aérea el que retrocede es el
+   * AVATAR y no hay pointer lock que re-enganchar; a pie retrocede la cámara y
+   * se vuelve a pedir el lock — el keydown cuenta como activación de usuario;
+   * si el navegador lo rechaza, queda el overlay «haz clic en la isla…».
    */
   _exitCity() {
     const city = this._walkCities.find((c) => c.id === this._insideCityId) ?? null;
@@ -1029,6 +1210,18 @@ export class CareerIsland3D extends LitElement {
     this.dispatchEvent(
       new CustomEvent('select-city', { detail: { cityId: null }, bubbles: true, composed: true }),
     );
+    if (this._mode === 'aerial') {
+      if (city && this._avatar) {
+        const away = { x: this._avatarPos.x - city.wx, z: this._avatarPos.z - city.wz };
+        if (Math.hypot(away.x, away.z) > 1e-6) {
+          this._avatarPos = stepPosition(this._avatarPos, away, 1, CITY_EXIT_BACKSTEP, {
+            radius: this._walkRadius,
+          });
+          this._placeAvatar();
+        }
+      }
+      return;
+    }
     if (city) {
       const cam = this._camera.position;
       const away = { x: cam.x - city.wx, z: cam.z - city.wz };
@@ -1078,6 +1271,7 @@ export class CareerIsland3D extends LitElement {
     if (this._plc) this._plc.enabled = false;
     this._controls.enabled = true;
     this._setLabelsVisible(true);
+    this._setAvatarVisible(true); // el avatar de la vista aérea vuelve a verse
     if (this._mode !== 'aerial') {
       this._mode = 'aerial';
       this._emitMode('aerial');
@@ -1107,6 +1301,21 @@ export class CareerIsland3D extends LitElement {
     `;
   }
 
+  /**
+   * Hint del avatar en vista aérea (MC-10): ayuda compacta de teclado (no
+   * aplica en táctil: sin teclado no hay marcha) y, «dentro» de una casa por
+   * choque, cómo salir dando hacia atrás.
+   */
+  _renderAerialHint() {
+    if (this._mode !== 'aerial' || this._phase !== 'ready' || !this.map || this._coarsePointer) {
+      return null;
+    }
+    if (this._insideCityId !== null) {
+      return html`<div class="fps-hint"><kbd>↓</kbd>/<kbd>S</kbd> da hacia atrás para salir a la isla</div>`;
+    }
+    return html`<div class="fps-help">WASD / flechas mueven tu avatar · Shift corre · chocar de frente con una casa abre su ciudadanía</div>`;
+  }
+
   /** @param {ResizeObserverEntry[]} entries */
   _onResize(entries) {
     const { width, height } = entries[0].contentRect;
@@ -1129,10 +1338,17 @@ export class CareerIsland3D extends LitElement {
     if (this.map.id !== this._lastMapId) this._clearPlateCache(); // otra isla, otras placas
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
+    // Avatar de la vista aérea (MC-10): se construye UNA vez (vive en la
+    // escena, fuera de los grupos que se rehacen) y se recoloca por isla.
+    if (!this._avatar) {
+      this._avatar = this._buildAvatar();
+      this._scene.add(this._avatar);
+    }
     if (this.map.id !== this._lastMapId) {
       this._lastMapId = this.map.id;
       // Si cambia la ISLA con el caminante dentro, el modo a pie no sobrevive.
       if (this._mode !== 'aerial') this._resetToAerial();
+      this._resetAvatar(); // nueva isla: el avatar aparece en su spawn
       this._frameIsland();
     }
   }
@@ -1164,8 +1380,20 @@ export class CareerIsland3D extends LitElement {
     this._controls.minDistance = R * 0.3;
     this._controls.maxDistance = R * 4;
     this._controls.update();
-    // Niebla suave para fundir el horizonte con el cielo.
-    this._scene.fog = new this._THREE.Fog(ENV_COLORS.sky, R * 4, R * 10);
+    // Niebla suave para fundir el horizonte con el color de la propia cúpula
+    // de cielo (MC-10): lo lejano se disuelve sin costura.
+    this._scene.fog = new this._THREE.Fog(SKY_COLORS.horizon, R * 4, R * 10);
+    // El encuadre ortográfico de la shadow camera del sol cubre toda la isla.
+    if (SHADOWS.enabled && this._sun) {
+      const cam = this._sun.shadow.camera;
+      cam.left = -R * 1.4;
+      cam.right = R * 1.4;
+      cam.top = R * 1.4;
+      cam.bottom = -R * 1.4;
+      cam.near = 20;
+      cam.far = 420;
+      cam.updateProjectionMatrix();
+    }
   }
 
   /** Grupo estático: agua, isla (playa + hierba), plataformas de comarca y puerto. */
@@ -1174,18 +1402,30 @@ export class CareerIsland3D extends LitElement {
     const R = this._islandR;
     const group = new THREE.Group();
 
-    // Agua: gran disco semitransparente alrededor de la isla.
+    // Agua VIVA (MC-10): plano subdividido alrededor de la isla cuyos vértices
+    // ondulan con un seno en el loop (_tickEnvironment). El plano llega más
+    // allá de la niebla: el borde nunca se ve.
     const water = new THREE.Mesh(
-      new THREE.CircleGeometry(R * 8, 48),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.water, transparent: true, opacity: 0.88 }),
+      new THREE.PlaneGeometry(
+        R * WATER.sizeFactor,
+        R * WATER.sizeFactor,
+        WATER.segments,
+        WATER.segments,
+      ),
+      new THREE.MeshLambertMaterial({ color: ENV_COLORS.water, transparent: true, opacity: 0.9 }),
     );
     water.rotation.x = -Math.PI / 2;
-    water.position.y = 0.6;
+    water.position.y = TERRAIN.waterY;
+    this._waterMesh = water;
     group.add(water);
+
+    // Espuma: cinta clara siguiendo la línea de costa (mismo coastFactor).
+    group.add(this._buildFoam());
 
     // Playa: anillo de arena en pendiente con costa irregular (low-poly).
     // El perfil (radios, alto, irregularidad) viene de walk.js: es el MISMO
-    // suelo que pisa el modo primera persona (groundHeightAt).
+    // suelo que pisa el modo primera persona (groundHeightAt). Con textura
+    // procedural de granulado (MC-10) para que de cerca no sea color plano.
     const beach = new THREE.Mesh(
       this._coastGeometry(
         R + TERRAIN.beach.topPad,
@@ -1193,12 +1433,14 @@ export class CareerIsland3D extends LitElement {
         TERRAIN.beach.height,
         TERRAIN.beach.amount,
       ),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.sand, flatShading: true }),
+      new THREE.MeshLambertMaterial({ map: this._envTexture('sand'), flatShading: true }),
     );
     beach.position.y = TERRAIN.baseY;
+    beach.receiveShadow = SHADOWS.enabled;
     group.add(beach);
 
-    // Interior: meseta de hierba donde viven comarcas y ciudades.
+    // Interior: meseta de hierba donde viven comarcas y ciudades, con textura
+    // procedural moteada (MC-10). Recibe las sombras de casas y árboles.
     const grass = new THREE.Mesh(
       this._coastGeometry(
         R + TERRAIN.grass.topPad,
@@ -1206,10 +1448,18 @@ export class CareerIsland3D extends LitElement {
         TERRAIN.grass.height,
         TERRAIN.grass.amount,
       ),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.grass, flatShading: true }),
+      new THREE.MeshLambertMaterial({ map: this._envTexture('grass'), flatShading: true }),
     );
     grass.position.y = TERRAIN.baseY;
+    grass.receiveShadow = SHADOWS.enabled;
     group.add(grass);
+
+    // Ambiente (MC-10): cúpula de cielo con gradiente, nubes con deriva y
+    // vegetación/rocas instanciadas y deterministas.
+    group.add(this._buildSky());
+    this._clouds = this._buildClouds();
+    for (const cloud of this._clouds) group.add(cloud);
+    group.add(this._buildVegetation());
 
     // Comarcas: parche circular sutil + etiqueta flotante con el nombre.
     // Los parches son raycasteables (MC-6): clic en la plataforma → zoom a la
@@ -1230,6 +1480,7 @@ export class CareerIsland3D extends LitElement {
       );
       patch.rotation.x = -Math.PI / 2;
       patch.position.set(center.wx, GROUND_Y + PATCH_LIFT, center.wz);
+      patch.receiveShadow = SHADOWS.enabled; // si no, taparían las sombras de la hierba
       patch.userData.areaId = area.id;
       this._areaPatches.push(patch);
       group.add(patch);
@@ -1291,13 +1542,23 @@ export class CareerIsland3D extends LitElement {
     const group = new THREE.Group();
     group.position.set(wx, GROUND_Y, wz);
 
-    /** Materiales del puerto cacheados por color (mismo color → mismo material). */
+    /**
+     * Materiales del puerto cacheados por color y textura opcional (misma
+     * pareja → mismo material). La veta de madera (MC-10) es una textura casi
+     * blanca compartida: el color del material la tinta (map × color).
+     * @param {number} color @param {string|null} [texKey]
+     */
     const materials = new Map();
-    const materialFor = (color) => {
-      let m = materials.get(color);
+    const materialFor = (color, texKey = null) => {
+      const key = `${color}:${texKey ?? ''}`;
+      let m = materials.get(key);
       if (!m) {
-        m = new THREE.MeshLambertMaterial({ color, flatShading: true });
-        materials.set(color, m);
+        m = new THREE.MeshLambertMaterial({
+          color,
+          flatShading: true,
+          map: texKey ? this._envTexture(texKey) : null,
+        });
+        materials.set(key, m);
       }
       return m;
     };
@@ -1324,7 +1585,8 @@ export class CareerIsland3D extends LitElement {
     const plankGeo = new THREE.BoxGeometry(PLANK.w, PLANK.t, PLANK.d);
     const planks = Math.max(Math.floor(dockLen / PLANK.pitch), 2);
     for (let i = 0; i < planks; i += 1) {
-      const plank = new THREE.Mesh(plankGeo, materialFor(ENV_COLORS.plank));
+      // Veta de madera (MC-10): textura procedural tintada por el color claro.
+      const plank = new THREE.Mesh(plankGeo, materialFor(ENV_COLORS.plank, 'wood'));
       plank.position.set(0, DECK_Y, 0.9 + i * PLANK.pitch);
       harbor.add(plank);
     }
@@ -1364,10 +1626,16 @@ export class CareerIsland3D extends LitElement {
     bow.scale.set(1.4, 0.6, 1);
     bow.position.set(0, 0.1, 1.72);
     boat.add(bow);
-    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.31, 0.14, 2.72), materialFor(ENV_COLORS.wood));
+    const rim = new THREE.Mesh(
+      new THREE.BoxGeometry(1.31, 0.14, 2.72),
+      materialFor(ENV_COLORS.wood, 'wood'),
+    );
     rim.position.y = 0.4;
     boat.add(rim);
-    const bench = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.1, 0.4), materialFor(ENV_COLORS.plank));
+    const bench = new THREE.Mesh(
+      new THREE.BoxGeometry(1.05, 0.1, 0.4),
+      materialFor(ENV_COLORS.plank, 'wood'),
+    );
     bench.position.y = 0.52;
     boat.add(bench);
     harbor.add(boat);
@@ -1457,13 +1725,23 @@ export class CareerIsland3D extends LitElement {
     const doorGeo = new THREE.BoxGeometry(CITY_DOOR.w, CITY_DOOR.h, CITY_DOOR.d);
     const plateGeo = new THREE.PlaneGeometry(CITY_PLATE.w, CITY_PLATE.h);
     const windowGeo = new THREE.PlaneGeometry(CITY_WINDOW.w, CITY_WINDOW.h);
-    /** Cache de materiales por color: mismas ciudades → mismo material. */
+    /**
+     * Cache de materiales por color y textura opcional: mismas ciudades →
+     * mismo material. Las texturas (tablones, tejas, veta — MC-10) son casi
+     * blancas y compartidas: el color de estado las TINTA (map × color), así
+     * una única textura de pared sirve para todos los estados.
+     * @param {number} color @param {string|null} [texKey]
+     */
     const materials = new Map();
-    const materialFor = (color) => {
-      let m = materials.get(color);
+    const materialFor = (color, texKey = null) => {
+      const key = `${color}:${texKey ?? ''}`;
+      let m = materials.get(key);
       if (!m) {
-        m = new THREE.MeshLambertMaterial({ color });
-        materials.set(color, m);
+        m = new THREE.MeshLambertMaterial({
+          color,
+          map: texKey ? this._envTexture(texKey) : null,
+        });
+        materials.set(key, m);
       }
       return m;
     };
@@ -1504,19 +1782,23 @@ export class CareerIsland3D extends LitElement {
       node.rotation.y = baseYaw + v.rotation * FACADE_JITTER;
       node.userData.cityId = city.id;
 
-      const body = new THREE.Mesh(bodyGeo, materialFor(color));
+      // Paredes con tablones (textura procedural tintada por el estado, MC-10).
+      const body = new THREE.Mesh(bodyGeo, materialFor(color, 'wall'));
       body.scale.y = v.height;
       body.position.y = bodyH / 2;
+      body.castShadow = SHADOWS.enabled;
       node.add(body);
 
-      // Tejado: mismo tono oscurecido (determinista) para dar volumen.
+      // Tejado: mismo tono oscurecido (determinista) para dar volumen, con
+      // textura de tejas escalonadas (MC-10).
       const roofColor = new THREE.Color(color).multiplyScalar(0.72).getHex();
-      const roof = new THREE.Mesh(roofGeo, materialFor(roofColor));
+      const roof = new THREE.Mesh(roofGeo, materialFor(roofColor, 'roof'));
       roof.position.y = bodyH + CITY_ROOF.h / 2;
+      roof.castShadow = SHADOWS.enabled;
       node.add(roof);
 
-      // Puerta de madera en la fachada, ligeramente saliente.
-      const door = new THREE.Mesh(doorGeo, materialFor(ENV_COLORS.door));
+      // Puerta de madera en la fachada, ligeramente saliente (veta, MC-10).
+      const door = new THREE.Mesh(doorGeo, materialFor(ENV_COLORS.door, 'wood'));
       door.position.set(0, CITY_DOOR.h / 2, half + CITY_DOOR.d / 2 - 0.02);
       node.add(door);
 
@@ -1565,10 +1847,12 @@ export class CareerIsland3D extends LitElement {
         node.add(beam);
       }
 
-      // Selección (MC-6) o proximidad a pie (MC-7): resalte emisivo sutil.
+      // Selección (MC-6) o proximidad a pie (MC-7): resalte emisivo sutil
+      // (conserva la textura de tablones para no «despintar» la casa).
       if (this.selected === city.id || (this._mode === 'fps' && this._nearCityId === city.id)) {
         const selMat = new THREE.MeshLambertMaterial({
           color,
+          map: this._envTexture('wall'),
           emissive: ACCENT_COLORS.route,
           emissiveIntensity: 0.35,
         });
@@ -1715,6 +1999,665 @@ export class CareerIsland3D extends LitElement {
     this._plateTextures.clear();
   }
 
+  // ---- Texturas procedurales del entorno (MC-10) --------------------------------
+
+  /**
+   * Configuración de las texturas procedurales: lado del canvas y repetición.
+   * Las de terreno repiten a escala fina (RepeatWrapping) para que de cerca no
+   * sean color plano; las de casa/madera van una vez por cara (UV 0..1).
+   */
+  static ENV_TEXTURE_CONF = Object.freeze({
+    grass: Object.freeze({ size: 128, repeat: [20, 20] }),
+    sand: Object.freeze({ size: 128, repeat: [24, 24] }),
+    wall: Object.freeze({ size: 128, repeat: [1, 1] }),
+    roof: Object.freeze({ size: 128, repeat: [4, 1] }),
+    wood: Object.freeze({ size: 128, repeat: [1, 1] }),
+    cloud: Object.freeze({ size: 128, repeat: [1, 1] }),
+  });
+
+  /**
+   * Textura procedural del entorno, cacheada por clave (MC-10): se pinta UNA
+   * vez en un canvas (determinista: hashUnit, sin Math.random) y se comparte
+   * entre todos los materiales que la usan. userData.shared: _disposeSubtree
+   * no la libera; su ciclo de vida lo lleva _clearEnvTextures (teardown).
+   * @param {'grass'|'sand'|'wall'|'roof'|'wood'|'cloud'} key
+   */
+  _envTexture(key) {
+    let texture = this._envTextures.get(key);
+    if (texture) return texture;
+    const conf = CareerIsland3D.ENV_TEXTURE_CONF[key];
+    if (!conf) throw new Error(`Textura de entorno desconocida: "${key}"`);
+    const THREE = this._THREE;
+    const canvas = document.createElement('canvas');
+    canvas.width = conf.size;
+    canvas.height = conf.size;
+    CareerIsland3D._paintEnvCanvas(key, canvas.getContext('2d'), conf.size);
+    texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(conf.repeat[0], conf.repeat[1]);
+    texture.userData.shared = true;
+    this._envTextures.set(key, texture);
+    return texture;
+  }
+
+  /**
+   * Pinta el canvas de una textura procedural. Determinista: la «aleatoriedad»
+   * sale de hashUnit con semilla derivada de la clave. Las texturas de casa y
+   * madera son casi BLANCAS con juntas/vetas oscuras: el color del material
+   * las tinta (map × color en Lambert), así una única textura de pared sirve
+   * para todos los estados de ciudad.
+   * @param {string} key
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} size
+   */
+  static _paintEnvCanvas(key, ctx, size) {
+    const seed = hashId(`env:${key}`);
+    const rnd = (i) => hashUnit(seed, i);
+    if (key === 'grass' || key === 'sand') {
+      // Moteado/granulado en 3 tonos sobre el color base del terreno.
+      const base = key === 'grass' ? '#9cc98c' : '#e9dcae';
+      const tones =
+        key === 'grass'
+          ? ['#8fbf7f', '#a9d699', '#85b275']
+          : ['#dfcf9c', '#f2e8c4', '#d6c48e'];
+      const dots = key === 'grass' ? 900 : 1300;
+      const maxDot = key === 'grass' ? 2.4 : 1.4;
+      ctx.fillStyle = base;
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < dots; i += 1) {
+        ctx.fillStyle = tones[i % tones.length];
+        const s = 1 + rnd(i * 3 + 2) * maxDot;
+        ctx.fillRect(rnd(i * 3) * size, rnd(i * 3 + 1) * size, s, s);
+      }
+      return;
+    }
+    if (key === 'wall') {
+      // Tablones horizontales: junta oscura + sombra y vetas sutiles por tablón.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      const rows = 6;
+      const rowH = size / rows;
+      for (let r = 0; r < rows; r += 1) {
+        ctx.fillStyle = `rgba(70, 45, 20, ${(0.03 + rnd(r * 5) * 0.05).toFixed(3)})`;
+        ctx.fillRect(0, r * rowH, size, rowH);
+        ctx.fillStyle = 'rgba(60, 40, 20, 0.32)';
+        ctx.fillRect(0, r * rowH, size, 2);
+        ctx.strokeStyle = 'rgba(80, 55, 25, 0.10)';
+        ctx.lineWidth = 1;
+        for (let v = 0; v < 3; v += 1) {
+          const y = r * rowH + 3 + rnd(r * 17 + v * 3 + 1) * (rowH - 6);
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.bezierCurveTo(
+            size * 0.33,
+            y + rnd(r * 17 + v * 3 + 2) * 4 - 2,
+            size * 0.66,
+            y - (rnd(r * 17 + v * 3 + 3) * 4 - 2),
+            size,
+            y,
+          );
+          ctx.stroke();
+        }
+      }
+      return;
+    }
+    if (key === 'roof') {
+      // Tejas: filas con junta horizontal, sombra del borde inferior y
+      // separadores verticales escalonados (alternos por fila).
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      const rows = 8;
+      const rowH = size / rows;
+      const cols = 6;
+      const colW = size / cols;
+      for (let r = 0; r < rows; r += 1) {
+        ctx.fillStyle = 'rgba(60, 30, 20, 0.30)';
+        ctx.fillRect(0, r * rowH, size, 2.5);
+        ctx.fillStyle = 'rgba(60, 30, 20, 0.09)';
+        ctx.fillRect(0, r * rowH + rowH * 0.55, size, rowH * 0.45);
+        ctx.fillStyle = 'rgba(60, 30, 20, 0.22)';
+        const off = (r % 2) * (colW / 2);
+        for (let c = 0; c <= cols; c += 1) {
+          ctx.fillRect((off + c * colW) % size, r * rowH, 1.5, rowH);
+        }
+      }
+      return;
+    }
+    if (key === 'wood') {
+      // Veta: trazos horizontales ondulados de opacidad y grosor variables.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 14; i += 1) {
+        const y = rnd(i * 5) * size;
+        ctx.strokeStyle = `rgba(70, 45, 15, ${(0.08 + rnd(i * 5 + 1) * 0.12).toFixed(3)})`;
+        ctx.lineWidth = 1 + rnd(i * 5 + 2) * 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(
+          size * 0.33,
+          y + rnd(i * 5 + 3) * 6 - 3,
+          size * 0.66,
+          y - (rnd(i * 5 + 4) * 6 - 3),
+          size,
+          y,
+        );
+        ctx.stroke();
+      }
+      return;
+    }
+    if (key === 'cloud') {
+      // Nube: blobs radiales blancos superpuestos sobre fondo transparente.
+      for (let i = 0; i < 6; i += 1) {
+        const cx = size * (0.25 + rnd(i * 4) * 0.5);
+        const cy = size * (0.4 + rnd(i * 4 + 1) * 0.25);
+        const cr = size * (0.14 + rnd(i * 4 + 2) * 0.16);
+        const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(cx - cr, cy - cr, cr * 2, cr * 2);
+      }
+      return;
+    }
+    throw new Error(`Textura de entorno desconocida: "${key}"`);
+  }
+
+  /** Libera y vacía la caché de texturas del entorno (solo en el teardown). */
+  _clearEnvTextures() {
+    for (const texture of this._envTextures.values()) texture.dispose();
+    this._envTextures.clear();
+  }
+
+  // ---- Ambiente: cielo, nubes, espuma y vegetación (MC-10) ----------------------
+
+  /**
+   * Cúpula de cielo: esfera grande vista desde dentro con gradiente por vertex
+   * colors, del horizonte cálido claro al cenit azul. Sin niebla ni escritura
+   * de profundidad: siempre queda detrás de todo lo demás.
+   */
+  _buildSky() {
+    const THREE = this._THREE;
+    const R = this._islandR;
+    const geo = new THREE.SphereGeometry(R * 11, 24, 12);
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const zenith = new THREE.Color(SKY_COLORS.zenith);
+    const horizon = new THREE.Color(SKY_COLORS.horizon);
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i += 1) {
+      // Altura normalizada 0..1 (bajo el horizonte se queda el color cálido);
+      // el exponente concentra el degradado cerca del horizonte.
+      const t = Math.min(Math.max(pos.getY(i) / (R * 11), 0), 1) ** 0.65;
+      c.copy(horizon).lerp(zenith, t);
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        side: THREE.BackSide,
+        fog: false,
+        depthWrite: false,
+      }),
+    );
+  }
+
+  /**
+   * Espuma de costa: cinta clara siguiendo el radio donde la falda de la playa
+   * cruza el nivel del agua (el MISMO perfil de walk.js: coastFactor + TERRAIN),
+   * ligeramente por encima de la cresta de las olas para no parpadear con ellas.
+   */
+  _buildFoam() {
+    const THREE = this._THREE;
+    const R = this._islandR;
+    const SEGS = 96;
+    const HALF_W = 0.9;
+    const y = TERRAIN.waterY + WATER.amp + 0.05;
+    const top = TERRAIN.baseY + TERRAIN.beach.height / 2;
+    const bottom = TERRAIN.baseY - TERRAIN.beach.height / 2;
+    const waterFrac = (TERRAIN.waterY - top) / (bottom - top);
+    const positions = new Float32Array((SEGS + 1) * 2 * 3);
+    for (let i = 0; i <= SEGS; i += 1) {
+      const angle = (i / SEGS) * Math.PI * 2 - Math.PI;
+      const k = coastFactor(angle, TERRAIN.beach.amount);
+      const topR = (R + TERRAIN.beach.topPad) * k;
+      const bottomR = (R + TERRAIN.beach.bottomPad) * k;
+      const waterR = topR + waterFrac * (bottomR - topR);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      positions.set(
+        [cos * (waterR - HALF_W), y, sin * (waterR - HALF_W), cos * (waterR + HALF_W), y, sin * (waterR + HALF_W)],
+        i * 6,
+      );
+    }
+    const indices = [];
+    for (let i = 0; i < SEGS; i += 1) {
+      const a = i * 2;
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.4,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+  }
+
+  /**
+   * Nubes billboard: pocos sprites blancos suaves (textura radial cacheada) a
+   * gran altura, con posiciones deterministas por hash y deriva lentísima en
+   * el loop (_tickEnvironment). Sin niebla: son parte del cielo.
+   * @returns {object[]} Sprites (con userData.drift) para añadir al grupo estático.
+   */
+  _buildClouds() {
+    const THREE = this._THREE;
+    const R = this._islandR;
+    const seed = hashId(`clouds:${this.map?.id ?? 'seed'}`);
+    const texture = this._envTexture('cloud');
+    const clouds = [];
+    for (let i = 0; i < CLOUDS.count; i += 1) {
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.7 + hashUnit(seed, i * 7 + 5) * 0.2,
+        depthWrite: false,
+        fog: false,
+      });
+      const sprite = new THREE.Sprite(material);
+      const angle = hashUnit(seed, i * 7 + 1) * Math.PI * 2;
+      const r = R * (0.5 + hashUnit(seed, i * 7 + 2) * 2);
+      sprite.position.set(
+        Math.cos(angle) * r,
+        R * (0.95 + hashUnit(seed, i * 7 + 3) * 0.4),
+        Math.sin(angle) * r,
+      );
+      const w = R * (0.55 + hashUnit(seed, i * 7 + 4) * 0.5);
+      sprite.scale.set(w, w * 0.42, 1);
+      sprite.userData.drift = CLOUDS.drift * (0.5 + hashUnit(seed, i * 7 + 6));
+      clouds.push(sprite);
+    }
+    return clouds;
+  }
+
+  /**
+   * Vegetación y props DETERMINISTAS (MC-10): árboles (coníferas de conos
+   * apilados y frondosos de copa achatada), rocas (icosaedros a escala no
+   * uniforme) y flores junto a las casas. Posiciones de scatterPositions
+   * (walk.js, puro) sobre la meseta de hierba, con exclusiones de casas,
+   * puerto y senda/ruta del journey VIGENTE al construir (si el journey cambia
+   * en la sesión la vegetación no se recoloca: coste cero, deriva asumida).
+   * Todo con InstancedMesh: decenas de instancias por geometría en una sola
+   * draw call cada una.
+   */
+  _buildVegetation() {
+    const THREE = this._THREE;
+    const R = this._islandR;
+    const group = new THREE.Group();
+    const seed = hashId(`veg:${this.map?.id ?? 'seed'}`);
+
+    // Exclusiones: casas (+respiro), puerto y senda/ruta muestreadas a círculos.
+    const exclusions = this._walkCities.map((c) => ({
+      x: c.wx,
+      z: c.wz,
+      r: CITY_COLLIDER_RADIUS + 2.4,
+    }));
+    if (this.map.startPort) {
+      const p = worldFromMap(this.map.startPort.x, this.map.startPort.y);
+      exclusions.push({ x: p.wx, z: p.wz, r: 15 });
+    }
+    const pathIds = [
+      ...(this.journey?.visitedCities ?? []),
+      ...(this.journey?.plannedRoute ?? []),
+    ];
+    const path = journeyPathPoints(this.map, pathIds);
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const a = path[i];
+      const b = path[i + 1];
+      const steps = Math.max(Math.ceil(Math.hypot(b.wx - a.wx, b.wz - a.wz) / 3), 1);
+      for (let s = 0; s <= steps; s += 1) {
+        exclusions.push({
+          x: a.wx + ((b.wx - a.wx) * s) / steps,
+          z: a.wz + ((b.wz - a.wz) * s) / steps,
+          r: PATH_WIDTH + 1,
+        });
+      }
+    }
+
+    // Siempre sobre la meseta de hierba, pese a la costa irregular.
+    const maxR = R * (1 - 1.6 * TERRAIN.grass.amount) - 1.5;
+    const treeCount = Math.min(Math.max(Math.round(R * 0.9), 24), 90);
+    const rockCount = Math.min(Math.max(Math.round(R * 0.35), 8), 30);
+    const spots = scatterPositions(treeCount + rockCount, maxR, exclusions, seed);
+    /** @type {{x: number, z: number}[]} */
+    const conifers = [];
+    const leafies = [];
+    const rocks = [];
+    spots.forEach((p, i) => {
+      if (i >= treeCount) rocks.push(p);
+      else if (hashUnit(seed, 5000 + i) < 0.55) conifers.push(p);
+      else leafies.push(p);
+    });
+
+    /** Materiales planos de la vegetación (uno por color). */
+    const mat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const dummy = new THREE.Object3D();
+    /**
+     * InstancedMesh con una matriz por elemento; `place` configura el dummy
+     * (posición/rotación/escala) para el elemento i — DEBE ser determinista.
+     */
+    const instanced = (geo, material, items, place, castShadow = true) => {
+      if (items.length === 0) return;
+      const mesh = new THREE.InstancedMesh(geo, material, items.length);
+      items.forEach((p, i) => {
+        dummy.position.set(0, 0, 0);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        place(dummy, p, i);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = SHADOWS.enabled && castShadow;
+      group.add(mesh);
+    };
+    const groundY = (p) => groundHeightAt(p.x, p.z, { radius: R });
+
+    // Conífera: tronco + dos conos apilados (offsets horneados en la geometría:
+    // las tres mallas instanciadas comparten la MISMA transformación).
+    const coniferPlace = (d, p, i) => {
+      d.position.set(p.x, groundY(p) - 0.05, p.z);
+      d.rotation.y = hashUnit(seed, 6000 + i * 3) * Math.PI * 2;
+      d.scale.setScalar(0.8 + hashUnit(seed, 6001 + i * 3) * 0.6);
+    };
+    const coniferTrunk = new THREE.CylinderGeometry(0.16, 0.24, 1.1, 5);
+    coniferTrunk.translate(0, 0.55, 0);
+    const coniferCone1 = new THREE.ConeGeometry(1.15, 1.7, 6);
+    coniferCone1.translate(0, 1.75, 0);
+    const coniferCone2 = new THREE.ConeGeometry(0.75, 1.3, 6);
+    coniferCone2.translate(0, 2.9, 0);
+    const trunkMat = mat(ENV_COLORS.post);
+    const coniferMat = mat(ENV_COLORS.conifer);
+    instanced(coniferTrunk, trunkMat, conifers, coniferPlace);
+    instanced(coniferCone1, coniferMat, conifers, coniferPlace);
+    instanced(coniferCone2, coniferMat, conifers, coniferPlace);
+
+    // Frondoso: tronco más alto + copa esférica achatada.
+    const leafyPlace = (d, p, i) => {
+      d.position.set(p.x, groundY(p) - 0.05, p.z);
+      d.rotation.y = hashUnit(seed, 7000 + i * 3) * Math.PI * 2;
+      d.scale.setScalar(0.85 + hashUnit(seed, 7001 + i * 3) * 0.5);
+    };
+    const leafyTrunk = new THREE.CylinderGeometry(0.14, 0.2, 1.5, 5);
+    leafyTrunk.translate(0, 0.75, 0);
+    const leafyCrown = new THREE.SphereGeometry(1.05, 7, 5);
+    leafyCrown.scale(1, 0.75, 1);
+    leafyCrown.translate(0, 2.05, 0);
+    instanced(leafyTrunk, trunkMat, leafies, leafyPlace);
+    instanced(leafyCrown, mat(ENV_COLORS.leafy), leafies, leafyPlace);
+
+    // Rocas: icosaedros a escala NO uniforme (cada roca es distinta sin
+    // deformar vértices: barato y determinista).
+    instanced(new THREE.IcosahedronGeometry(0.65, 0), mat(ENV_COLORS.rock), rocks, (d, p, i) => {
+      d.position.set(p.x, groundY(p) - 0.1, p.z);
+      d.rotation.y = hashUnit(seed, 8000 + i * 4) * Math.PI * 2;
+      d.scale.set(
+        0.6 + hashUnit(seed, 8001 + i * 4),
+        0.45 + hashUnit(seed, 8002 + i * 4) * 0.8,
+        0.6 + hashUnit(seed, 8003 + i * 4),
+      );
+    });
+
+    // Flores/matas junto a las casas: 2-3 por ciudad en un anillo fuera del
+    // radio de colisión (no estorban la marcha), mitad coral, mitad cálidas.
+    /** @type {{x: number, z: number}[]} */
+    const flowers = [];
+    this._walkCities.forEach((c, ci) => {
+      const n = 2 + (hashId(c.id) & 1);
+      for (let f = 0; f < n; f += 1) {
+        const angle = hashUnit(seed, 9000 + ci * 16 + f * 3) * Math.PI * 2;
+        const rr = CITY_COLLIDER_RADIUS + 0.5 + hashUnit(seed, 9001 + ci * 16 + f * 3) * 1.6;
+        const x = c.wx + Math.cos(angle) * rr;
+        const z = c.wz + Math.sin(angle) * rr;
+        if (Math.hypot(x, z) > maxR) continue;
+        flowers.push({ x, z });
+      }
+    });
+    const flowerPlace = (d, p, i) => {
+      d.position.set(p.x, groundY(p), p.z);
+      d.scale.setScalar(0.8 + hashUnit(seed, 9500 + i) * 0.5);
+    };
+    const stemGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.32, 4);
+    stemGeo.translate(0, 0.16, 0);
+    const headGeo = new THREE.SphereGeometry(0.12, 6, 4);
+    headGeo.translate(0, 0.36, 0);
+    const coralFlowers = flowers.filter((_, i) => i % 2 === 0);
+    const warmFlowers = flowers.filter((_, i) => i % 2 === 1);
+    instanced(stemGeo, mat(ENV_COLORS.stem), flowers, flowerPlace, false);
+    instanced(headGeo, mat(ENV_COLORS.flowerCoral), coralFlowers, flowerPlace, false);
+    instanced(headGeo, mat(ENV_COLORS.flowerWarm), warmFlowers, flowerPlace, false);
+
+    return group;
+  }
+
+  // ---- Avatar en vista aérea (MC-10) --------------------------------------------
+
+  /**
+   * Personajillo low-poly (estilo noventero, colores GREBLA): piernas navy con
+   * pivote en la cadera, cuerpo teal, brazos con pivote en el hombro, cabeza y
+   * gorra coral. Los pivotes van horneados en las geometrías (translate) para
+   * que la animación procedural sea un simple rotation.x. userData.limbs guarda
+   * las referencias que anima _tickAvatar. La fachada del avatar es +z local
+   * (la misma convención que las casas): rotation.y = yaw de marcha.
+   */
+  _buildAvatar() {
+    const THREE = this._THREE;
+    const group = new THREE.Group();
+    const mat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const add = (mesh) => {
+      mesh.castShadow = SHADOWS.enabled;
+      group.add(mesh);
+      return mesh;
+    };
+    const legGeo = new THREE.BoxGeometry(AVATAR.legW, AVATAR.legH, AVATAR.legW);
+    legGeo.translate(0, -AVATAR.legH / 2, 0); // pivote en la cadera
+    const legMat = mat(AVATAR_COLORS.legs);
+    const legL = add(new THREE.Mesh(legGeo, legMat));
+    legL.position.set(-AVATAR.hipGap, AVATAR.legH, 0);
+    const legR = add(new THREE.Mesh(legGeo, legMat));
+    legR.position.set(AVATAR.hipGap, AVATAR.legH, 0);
+    const bodyMat = mat(AVATAR_COLORS.body);
+    const body = add(
+      new THREE.Mesh(new THREE.BoxGeometry(AVATAR.bodyW, AVATAR.bodyH, AVATAR.bodyD), bodyMat),
+    );
+    body.position.y = AVATAR.legH + AVATAR.bodyH / 2;
+    const armGeo = new THREE.BoxGeometry(AVATAR.armW, AVATAR.armH, AVATAR.armW);
+    armGeo.translate(0, -AVATAR.armH / 2 + 0.06, 0); // pivote en el hombro
+    const shoulderY = AVATAR.legH + AVATAR.bodyH - 0.06;
+    const armX = AVATAR.bodyW / 2 + AVATAR.armW / 2 + 0.02;
+    const armL = add(new THREE.Mesh(armGeo, bodyMat));
+    armL.position.set(-armX, shoulderY, 0);
+    const armR = add(new THREE.Mesh(armGeo, bodyMat));
+    armR.position.set(armX, shoulderY, 0);
+    const head = add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(AVATAR.headS, AVATAR.headS, AVATAR.headS),
+        mat(AVATAR_COLORS.skin),
+      ),
+    );
+    head.position.y = AVATAR.legH + AVATAR.bodyH + AVATAR.headS / 2 + 0.04;
+    const cap = add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(AVATAR.headS + 0.08, 0.16, AVATAR.headS + 0.08),
+        mat(AVATAR_COLORS.cap),
+      ),
+    );
+    cap.position.y = head.position.y + AVATAR.headS / 2 + 0.06;
+    group.userData.limbs = { legL, legR, armL, armR };
+    return group;
+  }
+
+  /**
+   * Recoloca el avatar en su spawn (la ciudad actual del journey o el puerto,
+   * el MISMO criterio que el modo a pie: _fpsSpawn) mirando a su objetivo.
+   * Se usa al cambiar de isla; en el resto de casos el avatar conserva su sitio.
+   */
+  _resetAvatar() {
+    if (!this._avatar || !this.map) return;
+    const spawn = this._fpsSpawn();
+    this._avatarPos = { x: spawn.x, z: spawn.z };
+    this._avatarYaw = Math.atan2(spawn.lookX - spawn.x, spawn.lookZ - spawn.z);
+    this._avatarPhase = 0;
+    this._avatarSwing = 0;
+    this._placeAvatar();
+  }
+
+  /**
+   * Aplica la posición (pegada al MISMO suelo del fps: groundHeightAt, más el
+   * rebote de zancada) y el yaw al grupo del avatar.
+   * @param {number} [bob] Rebote vertical (unidades).
+   */
+  _placeAvatar(bob = 0) {
+    const avatar = this._avatar;
+    if (!avatar) return;
+    avatar.position.set(
+      this._avatarPos.x,
+      groundHeightAt(this._avatarPos.x, this._avatarPos.z, { radius: this._islandR }) + bob,
+      this._avatarPos.z,
+    );
+    avatar.rotation.y = this._avatarYaw;
+  }
+
+  /** Muestra/oculta el avatar (a pie se oculta: la cámara ES el avatar). @param {boolean} visible */
+  _setAvatarVisible(visible) {
+    if (this._avatar) this._avatar.visible = visible;
+  }
+
+  /**
+   * Un frame del avatar en vista aérea (MC-10): dirección relativa a la CÁMARA
+   * proyectada al suelo (W aleja de la vista, A/D lateral — lo natural en
+   * tercera persona), paso acotado a la isla (stepPosition: desliza por la
+   * costa) y colisión con las casas (collideWithCities: desliza por el
+   * contorno; el empuje FRONTAL «entra», mismo flujo que a pie). El avatar
+   * rota hacia su dirección de marcha (yawToward) y la zancada se anima por
+   * fase ∝ distancia (piernas/brazos a contrapié + rebote), con un peso que
+   * sube/baja suavemente al arrancar y parar. Mientras se mueve, el target de
+   * los OrbitControls y la cámara lo siguen con un lerp — salvo que haya una
+   * animación de foco en curso (ella manda; el follow vuelve al mover de nuevo).
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickAvatar(now) {
+    const avatar = this._avatar;
+    const dt = Math.min((now - (this._lastAvatarTs || now)) / 1000, 0.05);
+    this._lastAvatarTs = now;
+    if (!avatar || !avatar.visible) return;
+    let moved = 0;
+    if (this._insideCityId === null && this._keys.size > 0) {
+      const key = (code) => (this._keys.has(code) ? 1 : 0);
+      const fwd = key('KeyW') + key('ArrowUp') - key('KeyS') - key('ArrowDown');
+      const strafe = key('KeyD') + key('ArrowRight') - key('KeyA') - key('ArrowLeft');
+      if (fwd !== 0 || strafe !== 0) {
+        // Forward de la cámara proyectado al plano del suelo; si la cámara
+        // mira en picado puro (proyección degenerada), vale el yaw del avatar.
+        const look = this._camera.getWorldDirection(this._walkDirScratch);
+        const flen = Math.hypot(look.x, look.z);
+        const fx = flen > 1e-6 ? look.x / flen : Math.sin(this._avatarYaw);
+        const fz = flen > 1e-6 ? look.z / flen : Math.cos(this._avatarYaw);
+        // right = forward × up (mundo y-arriba) = (-fz, fx).
+        const dir = { x: fx * fwd - fz * strafe, z: fz * fwd + fx * strafe };
+        const running = this._keys.has('ShiftLeft') || this._keys.has('ShiftRight');
+        const next = stepPosition(
+          this._avatarPos,
+          dir,
+          dt,
+          WALK_SPEED * (running ? RUN_MULTIPLIER : 1),
+          { radius: this._walkRadius },
+        );
+        const col = collideWithCities(this._avatarPos, next, this._walkCities, CITY_COLLIDER_RADIUS);
+        moved = Math.hypot(col.x - this._avatarPos.x, col.z - this._avatarPos.z);
+        this._avatarPos = { x: col.x, z: col.z };
+        // Rota hacia la dirección de marcha DESEADA (aunque esté deslizando
+        // por un borde): el personaje siempre encara hacia donde empuja.
+        this._avatarYaw = yawToward(
+          this._avatarYaw,
+          Math.atan2(dir.x, dir.z),
+          dt,
+          AVATAR.turnSpeed,
+        );
+        if (col.hitCityId !== null) this._enterCity(col.hitCityId);
+      }
+    }
+    // Zancada procedural: fase ∝ distancia recorrida, peso con fundido al
+    // arrancar/parar (sin cortes secos de brazos y piernas).
+    if (moved > 1e-6) {
+      this._avatarPhase += moved * AVATAR.stepFreq;
+      this._avatarSwing = Math.min(this._avatarSwing + dt * 6, 1);
+    } else {
+      this._avatarSwing = Math.max(this._avatarSwing - dt * 6, 0);
+    }
+    const swing = Math.sin(this._avatarPhase) * AVATAR.swingAmp * this._avatarSwing;
+    const { legL, legR, armL, armR } = avatar.userData.limbs;
+    legL.rotation.x = swing;
+    legR.rotation.x = -swing;
+    armL.rotation.x = -swing * 0.8;
+    armR.rotation.x = swing * 0.8;
+    const bob = Math.abs(Math.sin(this._avatarPhase)) * AVATAR.bobAmp * this._avatarSwing;
+    this._placeAvatar(bob);
+    // Follow de cámara: solo mientras el avatar se mueve y no hay una
+    // animación de foco en curso (focusCity/focusArea/focusOverview mandan).
+    if (moved > 1e-6 && this._camAnim === null) {
+      const target = this._controls.target;
+      const k = Math.min(dt * AVATAR.followRate, 1);
+      const dx = (this._avatarPos.x - target.x) * k;
+      const dz = (this._avatarPos.z - target.z) * k;
+      target.x += dx;
+      target.z += dz;
+      this._camera.position.x += dx;
+      this._camera.position.z += dz;
+    }
+  }
+
+  /**
+   * Ambiente animado (MC-10), en TODOS los modos: ondulación senoidal de los
+   * vértices del agua (con renormalizado barato: la malla es gruesa) y deriva
+   * lentísima de las nubes con envoltura en los bordes del mundo.
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickEnvironment(now) {
+    const dt = Math.min((now - (this._lastEnvTs || now)) / 1000, 0.1);
+    this._lastEnvTs = now;
+    const water = this._waterMesh;
+    if (water) {
+      const t = (now / 1000) * WATER.speed;
+      const pos = water.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 1) {
+        // El plano es XY local (rotado -90° a suelo): z local = altura de mundo.
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        pos.setZ(i, Math.sin(x * WATER.freq + t) * Math.cos(y * WATER.freq * 0.85 + t * 0.8) * WATER.amp);
+      }
+      pos.needsUpdate = true;
+      water.geometry.computeVertexNormals();
+    }
+    const wrap = (this._islandR || 50) * 3.5;
+    for (const cloud of this._clouds) {
+      cloud.position.x += cloud.userData.drift * dt;
+      if (cloud.position.x > wrap) cloud.position.x = -wrap;
+    }
+  }
+
   /**
    * Etiqueta flotante: sprite con el texto pintado en un CanvasTexture (siempre
    * de cara a la cámara). El halo blanco garantiza el contraste sobre la escena.
@@ -1827,6 +2770,7 @@ export class CareerIsland3D extends LitElement {
    */
   static _disposeSubtree(root) {
     root.traverse((obj) => {
+      if (obj.isInstancedMesh) obj.dispose(); // libera los atributos de instancia
       obj.geometry?.dispose?.();
       const mats = Array.isArray(obj.material) ? obj.material : obj.material ? [obj.material] : [];
       for (const m of mats) {
@@ -1856,6 +2800,7 @@ export class CareerIsland3D extends LitElement {
     this._resizeObserver = null;
     if (this._scene) CareerIsland3D._disposeSubtree(this._scene);
     this._clearPlateCache();
+    this._clearEnvTextures();
     this._cityLabels = [];
     this._areaLabels = [];
     this._controls?.dispose();
@@ -1869,16 +2814,22 @@ export class CareerIsland3D extends LitElement {
     this._lastMapId = null;
     this._camAnim = null;
     this._areaPatches = [];
+    // El avatar y el ambiente viven en la escena (ya liberados con ella).
+    this._avatar = null;
+    this._sun = null;
+    this._waterMesh = null;
+    this._clouds = [];
   }
 
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}
         ${this._renderFpsHint()}
+        ${this._renderAerialHint()}
         ${this._phase === 'loading' ? html`<div class="overlay">Cargando isla 3D…</div>` : null}
         ${this._phase === 'unsupported'
           ? html`<div class="overlay">Tu navegador no soporta WebGL. Usa la vista plana.</div>`
