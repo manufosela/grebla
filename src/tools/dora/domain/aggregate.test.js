@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { aggregateMetrics, aggregateByKey, teamKeyOf, guildKeyOf } from './aggregate.js';
 
 const repos = [
-  { fullName: 'o/a', team: 'Plataforma', guilds: ['Frontend'], metrics: { deployments: 10, deployFrequencyPerWeek: 2.5, leadTimeHoursAvg: 10, contributorLogins: ['ana', 'bea'] } },
-  { fullName: 'o/b', team: 'Plataforma', guilds: ['Backend'], metrics: { deployments: 30, deployFrequencyPerWeek: 7.5, leadTimeHoursAvg: 20, contributorLogins: ['bea', 'caro'] } },
+  { fullName: 'o/a', team: 'Plataforma', guilds: ['Frontend'], metrics: { deployments: 10, deployFrequencyPerWeek: 2.5, leadTimeHoursAvg: 10, contributorLogins: ['ana', 'bea'], deploymentsFailed: 1, deploymentsTotal: 10 } },
+  { fullName: 'o/b', team: 'Plataforma', guilds: ['Backend'], metrics: { deployments: 30, deployFrequencyPerWeek: 7.5, leadTimeHoursAvg: 20, contributorLogins: ['bea', 'caro'], deploymentsFailed: 3, deploymentsTotal: 30 } },
   { fullName: 'o/c', team: 'Pagos', guilds: ['Backend', 'Frontend'], metrics: { error: 'GitHub 404' } },
   { fullName: 'o/d', team: null, guilds: [] }, // sin métricas
 ];
@@ -24,6 +24,19 @@ describe('aggregateMetrics', () => {
 
   it('personas = unión única de logins (bea está en o/a y o/b → cuenta una vez)', () => {
     expect(aggregateMetrics(repos).people).toBe(3); // ana, bea, caro
+  });
+
+  it('CFR agregado = Σfallidos/Σtotal (media ponderada, no media de porcentajes)', () => {
+    const a = aggregateMetrics(repos);
+    expect(a.deploymentsFailed).toBe(4); // 1 + 3
+    expect(a.deploymentsTotal).toBe(40); // 10 + 30
+    expect(a.changeFailureRatePct).toBe(10); // 4/40 × 100 (no (10%+10%)/2 casual)
+  });
+
+  it('sin despliegues en el grupo → CFR null (no medible)', () => {
+    const a = aggregateMetrics([{ metrics: { deployments: 5, deploymentsFailed: 0, deploymentsTotal: 0 } }]);
+    expect(a.changeFailureRatePct).toBeNull();
+    expect(a.deploymentsTotal).toBe(0);
   });
 });
 
