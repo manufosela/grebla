@@ -1,5 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import { leadTimeLevel, deployFrequencyLevel, levelLabel } from './levels.js';
+import { leadTimeLevel, deployFrequencyLevel, changeFailureRateLevel, mttrLevel, levelLabel } from './levels.js';
+
+describe('changeFailureRateLevel', () => {
+  it('clasifica por porcentaje (menos es mejor)', () => {
+    expect(changeFailureRateLevel(0)).toBe('elite');
+    expect(changeFailureRateLevel(5)).toBe('elite');
+    expect(changeFailureRateLevel(15)).toBe('high');
+    expect(changeFailureRateLevel(30)).toBe('medium');
+    expect(changeFailureRateLevel(31)).toBe('low');
+  });
+  it('sin dato o inválido → null', () => {
+    expect(changeFailureRateLevel(null)).toBeNull();
+    expect(changeFailureRateLevel(undefined)).toBeNull();
+    expect(changeFailureRateLevel(-1)).toBeNull();
+  });
+});
+
+describe('mttrLevel', () => {
+  it('clasifica por horas de restauración', () => {
+    expect(mttrLevel(0.5)).toBe('elite');
+    expect(mttrLevel(1)).toBe('high');
+    expect(mttrLevel(23)).toBe('high');
+    expect(mttrLevel(24)).toBe('medium');
+    expect(mttrLevel(24 * 7)).toBe('low');
+  });
+  it('sin dato o inválido → null', () => {
+    expect(mttrLevel(null)).toBeNull();
+    expect(mttrLevel(-1)).toBeNull();
+  });
+});
 
 describe('leadTimeLevel', () => {
   it('clasifica por horas en los límites de cada nivel', () => {
