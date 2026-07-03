@@ -1,7 +1,7 @@
 /**
  * <career-island-3d>
  * Render 3D REAL de la isla de carrera con Three.js (MC-5: fundación;
- * MC-6: zoom animado a ciudad/comarca).
+ * MC-6: zoom animado a ciudad/comarca; MC-7: primera persona).
  *
  * Es intercambiable con <career-map> y <career-island>: mismas propiedades y el
  * mismo evento `select-city`. La escena se GENERA del modelo (/careerMap/island)
@@ -34,6 +34,19 @@
  * del loop rAF existente. Cualquier input del usuario sobre los OrbitControls
  * (evento 'start': arrastre, rueda, touch) cancela la animación en curso.
  *
+ * Primera persona (MC-7): `enterFirstPerson()` baja la cámara con transición
+ * hasta la altura de ojos (puerto o ciudad actual del journey) y cambia
+ * OrbitControls por PointerLockControls (ratón) + WASD/flechas (con Shift se
+ * corre). La lógica de marcha es pura y compartida con el terreno (walk.js):
+ * groundHeightAt pega la cámara al MISMO suelo que pintan las mallas y
+ * stepPosition acota el paso a la isla deslizando por la costa. Cada ~100 ms
+ * se muestrea la ciudad cercana: se resalta (emisivo, como selected) y un
+ * prompt ofrece [E]/clic → `select-city` soltando el lock a propósito para
+ * poder usar el panel; al cerrarse, un clic en el canvas re-engancha el lock.
+ * Escape (nativo del lock) o `exitFirstPerson()` vuelven, con transición, a la
+ * vista aérea. `mode-change {mode:'fps'|'aerial'}` avisa a <career-app>.
+ * Pensado para escritorio: en táctil el HUD no ofrece el botón de entrada.
+ *
  * Es un componente presentacional: no escribe en Firestore.
  */
 import { LitElement, html, css } from 'lit';
@@ -47,9 +60,24 @@ import {
   areaFocusFrame,
   ACCENT_COLORS,
 } from '../../tools/career/domain/islandLayout.js';
+import {
+  TERRAIN,
+  coastFactor,
+  groundHeightAt,
+  walkableRadius,
+  stepPosition,
+  nearestCityWithin,
+  WALK_SPEED,
+  RUN_MULTIPLIER,
+  EYE_HEIGHT,
+  PROXIMITY_RADIUS,
+} from '../../tools/career/domain/walk.js';
 
-/** Altura (y de mundo) de la superficie de hierba donde se asientan las ciudades. */
-const GROUND_Y = 2.2;
+/**
+ * Altura (y de mundo) de la superficie de hierba donde se asientan las
+ * ciudades. Derivada del perfil compartido del terreno (walk.js).
+ */
+const GROUND_Y = TERRAIN.baseY + TERRAIN.grass.height / 2;
 /** Dimensiones del hito de ciudad (casa low-poly). */
 const CITY_BODY = { w: 2.6, h: 3.2 };
 const CITY_ROOF = { r: 2.3, h: 2.2 };
@@ -59,6 +87,14 @@ const DRAG_THRESHOLD = 5;
 const PAN_LIMIT_FACTOR = 1.2;
 /** Duración (ms) de las animaciones de foco de cámara (zoom a ciudad/comarca/vista general). */
 const FOCUS_ANIM_MS = 700;
+/** Duración (ms) de las transiciones de entrada/salida del modo primera persona. */
+const FPS_ANIM_MS = 1200;
+/** Cadencia (ms) del muestreo de proximidad a ciudades al caminar. */
+const PROXIMITY_CHECK_MS = 100;
+/** Distancia (unidades) a la que se aparece frente a la ciudad actual del journey. */
+const CITY_SPAWN_OFFSET = 12;
+/** Distancia del punto de mira usado como origen del giro de cámara al salir del modo fps. */
+const EXIT_LOOK_AHEAD = 30;
 /** Colores del entorno (cielo, agua, arena, hierba, madera, faro). */
 const ENV_COLORS = {
   sky: 0xdceff5,
@@ -76,6 +112,9 @@ export class CareerIsland3D extends LitElement {
     reachable: { attribute: false },
     selected: { attribute: false },
     _phase: { state: true },
+    _mode: { state: true },
+    _fpsLocked: { state: true },
+    _nearCityId: { state: true },
   };
 
   static styles = css`
@@ -102,6 +141,53 @@ export class CareerIsland3D extends LitElement {
       background: rgba(220, 239, 245, 0.75);
     }
     .overlay.error { color: var(--rm-danger, #dc2626); }
+    /* --- Modo primera persona (MC-7) --- */
+    .crosshair {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0.75;
+    }
+    .crosshair::before,
+    .crosshair::after {
+      content: '';
+      position: absolute;
+      background: #fff;
+      box-shadow: 0 0 3px rgba(17, 24, 39, 0.65);
+    }
+    .crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
+    .crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
+    .fps-hint {
+      position: absolute;
+      left: 50%;
+      bottom: 1.1rem;
+      transform: translateX(-50%);
+      max-width: calc(100% - 2rem);
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(30, 58, 95, 0.82);
+      color: #fff;
+      font-family: var(--rm-font, system-ui, sans-serif);
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+    .fps-hint kbd {
+      display: inline-block;
+      padding: 0 0.4rem;
+      margin-right: 0.15rem;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      background: rgba(255, 255, 255, 0.14);
+      font-family: inherit;
+    }
   `;
 
   constructor() {
@@ -136,6 +222,26 @@ export class CareerIsland3D extends LitElement {
     this._camAnim = null;
     /** Plataformas de comarca raycasteables (userData.areaId); se rehacen con el grupo estático. */
     this._areaPatches = [];
+    /** Modo de cámara (MC-7): 'aerial' | 'to-fps' | 'fps' | 'to-aerial'. */
+    this._mode = 'aerial';
+    /** Clase PointerLockControls (import dinámico) e instancia perezosa. */
+    this._PointerLockControls = null;
+    this._plc = null;
+    /** true mientras el puntero está capturado por el canvas (modo fps). */
+    this._fpsLocked = false;
+    /** Liberación de lock ESPERADA (se abre el panel de ciudadanía): no salir del modo. */
+    this._expectUnlock = false;
+    /** Teclas de marcha actualmente pulsadas (por event.code). */
+    this._keys = new Set();
+    /** Ciudad dentro del radio de proximidad al caminar (o null). */
+    this._nearCityId = null;
+    /** Radio caminable (walkableRadius) de la isla actual. */
+    this._walkRadius = 0;
+    this._lastWalkTs = 0;
+    this._lastProxTs = 0;
+    /** Vectores scratch para la marcha (se crean al cargar three). */
+    this._walkDirScratch = null;
+    this._lookScratch = null;
     /** Aborta de golpe todos los listeners (documento y canvas) en el teardown. */
     this._abort = null;
     this._onVisibility = () => {
@@ -182,11 +288,13 @@ export class CareerIsland3D extends LitElement {
     this._phase = 'loading';
     let THREE;
     let OrbitControls;
+    let PointerLockControls;
     try {
       // Import dinámico: three solo se descarga al montar la vista 3D.
-      [THREE, { OrbitControls }] = await Promise.all([
+      [THREE, { OrbitControls }, { PointerLockControls }] = await Promise.all([
         import('three'),
         import('three/addons/controls/OrbitControls.js'),
+        import('three/addons/controls/PointerLockControls.js'),
       ]);
     } catch (err) {
       this._phase = 'error';
@@ -194,6 +302,9 @@ export class CareerIsland3D extends LitElement {
     }
     if (!this.isConnected || this._renderer) return;
     this._THREE = THREE;
+    this._PointerLockControls = PointerLockControls;
+    this._walkDirScratch = new THREE.Vector3();
+    this._lookScratch = new THREE.Vector3();
 
     // Detección de WebGL en un canvas desechable (no bloquea el canvas real).
     const probe = document.createElement('canvas');
@@ -253,6 +364,11 @@ export class CareerIsland3D extends LitElement {
     );
     canvas.addEventListener('pointerup', (e) => this._onPick(e), { signal });
 
+    // Marcha en primera persona (MC-7): las teclas se escuchan en el documento
+    // (con el pointer lock el foco es global) y solo actúan en modo fps.
+    document.addEventListener('keydown', (e) => this._onKeyDown(e), { signal });
+    document.addEventListener('keyup', (e) => this._onKeyUp(e), { signal });
+
     this._phase = 'ready';
     this._rebuildAll();
     if (!document.hidden) this._startLoop();
@@ -269,10 +385,12 @@ export class CareerIsland3D extends LitElement {
   // ---- Bucle de render / tamaño ---------------------------------------------
 
   /**
-   * Bucle rAF: damping de los controles + animación de foco + render. La
-   * animación se aplica DESPUÉS de controls.update() para que tenga la última
-   * palabra sobre cámara y target mientras dura (el damping residual no la
-   * pelea; el input del usuario la cancela vía el evento 'start').
+   * Bucle rAF por modo. En vista aérea: damping de los controles + animación
+   * de foco + render; la animación se aplica DESPUÉS de controls.update() para
+   * que tenga la última palabra sobre cámara y target mientras dura (el
+   * damping residual no la pelea; el input del usuario la cancela vía el
+   * evento 'start'). En fps: un paso de marcha por frame. En las transiciones
+   * de entrada/salida del fps (OrbitControls apagado) solo manda la animación.
    * Se pausa con document.hidden.
    */
   _startLoop() {
@@ -280,9 +398,15 @@ export class CareerIsland3D extends LitElement {
     /** @param {DOMHighResTimeStamp} now */
     const step = (now) => {
       this._raf = requestAnimationFrame(step);
-      this._controls.update();
-      this._tickCameraAnim(now);
-      this._clampTarget();
+      if (this._mode === 'aerial') {
+        this._controls.update();
+        this._tickCameraAnim(now);
+        this._clampTarget();
+      } else if (this._mode === 'fps') {
+        this._tickWalk(now);
+      } else {
+        this._tickCameraAnim(now);
+      }
       this._renderer.render(this._scene, this._camera);
     };
     this._raf = requestAnimationFrame(step);
@@ -311,7 +435,7 @@ export class CareerIsland3D extends LitElement {
    * @param {string} cityId
    */
   focusCity(cityId) {
-    if (this._phase !== 'ready') return;
+    if (this._phase !== 'ready' || this._mode !== 'aerial') return;
     const frame = cityFocusFrame(this.map, cityId);
     if (frame) this._animateTo(this._poseFromFrame(frame));
   }
@@ -322,14 +446,14 @@ export class CareerIsland3D extends LitElement {
    * @param {string} areaId
    */
   focusArea(areaId) {
-    if (this._phase !== 'ready') return;
+    if (this._phase !== 'ready' || this._mode !== 'aerial') return;
     const frame = areaFocusFrame(this.map, areaId);
     if (frame) this._animateTo(this._poseFromFrame(frame));
   }
 
   /** Vuelve, con animación, al encuadre aéreo inicial de toda la isla. */
   focusOverview() {
-    if (this._phase !== 'ready') return;
+    if (this._phase !== 'ready' || this._mode !== 'aerial') return;
     this._animateTo(this._overviewPose());
   }
 
@@ -364,30 +488,360 @@ export class CareerIsland3D extends LitElement {
     };
   }
 
-  /** Arranca una animación de foco desde la pose actual hacia la indicada. */
-  _animateTo({ position, target }) {
+  /**
+   * Arranca una animación de cámara desde la pose actual hacia la indicada.
+   * @param {{ position: object, target: object }} pose
+   * @param {{ duration?: number, onDone?: () => void, fromTarget?: object }} [opts]
+   *   duration: ms (por defecto FOCUS_ANIM_MS); onDone: callback al completar;
+   *   fromTarget: punto de mira inicial (por defecto el target de los controles).
+   */
+  _animateTo({ position, target }, opts = {}) {
     this._camAnim = {
       fromPos: this._camera.position.clone(),
       toPos: position,
-      fromTarget: this._controls.target.clone(),
+      fromTarget: (opts.fromTarget ?? this._controls.target).clone(),
       toTarget: target,
       start: performance.now(),
+      duration: opts.duration ?? FOCUS_ANIM_MS,
+      onDone: opts.onDone ?? null,
     };
   }
 
   /**
-   * Avanza la animación de foco en curso (easeInOutCubic). Al completarse se
-   * limpia sola; el input del usuario la cancela antes (evento 'start').
+   * Avanza la animación de cámara en curso (easeInOutCubic). En vista aérea
+   * interpola el target de los OrbitControls; en las transiciones del modo fps
+   * (controles apagados) orienta la cámara directamente con lookAt. Al
+   * completarse se limpia sola y dispara su onDone; el input del usuario la
+   * cancela antes (evento 'start' de los controles, solo en vista aérea).
    * @param {DOMHighResTimeStamp} now
    */
   _tickCameraAnim(now) {
     const anim = this._camAnim;
     if (!anim) return;
-    const t = Math.min((now - anim.start) / FOCUS_ANIM_MS, 1);
+    const t = Math.min((now - anim.start) / anim.duration, 1);
     const k = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
     this._camera.position.lerpVectors(anim.fromPos, anim.toPos, k);
-    this._controls.target.lerpVectors(anim.fromTarget, anim.toTarget, k);
-    if (t >= 1) this._camAnim = null;
+    if (this._mode === 'aerial') {
+      this._controls.target.lerpVectors(anim.fromTarget, anim.toTarget, k);
+    } else {
+      this._lookScratch.lerpVectors(anim.fromTarget, anim.toTarget, k);
+      this._camera.lookAt(this._lookScratch);
+    }
+    if (t >= 1) {
+      this._camAnim = null;
+      anim.onDone?.();
+    }
+  }
+
+  // ---- Modo primera persona (MC-7) --------------------------------------------
+
+  /** Modo de cámara público: las transiciones cuentan como su modo de destino. */
+  get mode() {
+    return this._mode === 'fps' || this._mode === 'to-fps' ? 'fps' : 'aerial';
+  }
+
+  /**
+   * Entra en primera persona: transición animada desde la vista aérea hasta la
+   * altura de ojos frente a la ciudad actual del journey (o junto al puerto), y
+   * al llegar activa PointerLockControls (ratón) y la marcha WASD/flechas.
+   * API pública para <career-app>. Pensado para escritorio (puntero fino): en
+   * táctil el HUD ni siquiera ofrece el botón de entrada.
+   */
+  enterFirstPerson() {
+    if (this._phase !== 'ready' || this._mode !== 'aerial' || !this.map) return;
+    const THREE = this._THREE;
+    const spawn = this._fpsSpawn();
+    const eyeY = groundHeightAt(spawn.x, spawn.z, { radius: this._islandR }) + EYE_HEIGHT;
+    this._mode = 'to-fps';
+    this._controls.enabled = false; // el damping no pelea con la transición
+    this._animateTo(
+      {
+        position: new THREE.Vector3(spawn.x, eyeY, spawn.z),
+        target: new THREE.Vector3(spawn.lookX, eyeY, spawn.lookZ),
+      },
+      { duration: FPS_ANIM_MS, onDone: () => this._activateFps() },
+    );
+    this._emitMode('fps');
+  }
+
+  /**
+   * Sale de primera persona: suelta el pointer lock si sigue activo y vuelve,
+   * con transición, al encuadre aéreo con OrbitControls. También cubre la
+   * salida a mitad de la transición de entrada.
+   */
+  exitFirstPerson() {
+    if (this._phase !== 'ready') return;
+    if (this._mode !== 'fps' && this._mode !== 'to-fps') return;
+    // El cambio de modo va ANTES de soltar el lock: así el pointerlockchange
+    // resultante no re-entra aquí (sin estados colgados).
+    this._mode = 'to-aerial';
+    this._keys.clear();
+    this._expectUnlock = false;
+    if (this.renderRoot.pointerLockElement) document.exitPointerLock();
+    if (this._plc) this._plc.enabled = false;
+    if (this._nearCityId) {
+      this._nearCityId = null;
+      this._rebuildCities(); // apaga el resalte de proximidad
+    }
+    const THREE = this._THREE;
+    // El giro parte del punto que se está mirando ahora mismo (continuidad).
+    const lookNow = new THREE.Vector3();
+    this._camera.getWorldDirection(lookNow);
+    lookNow.multiplyScalar(EXIT_LOOK_AHEAD).add(this._camera.position);
+    const pose = this._overviewPose();
+    this._animateTo(pose, {
+      duration: FPS_ANIM_MS,
+      fromTarget: lookNow,
+      onDone: () => {
+        this._mode = 'aerial';
+        this._controls.target.copy(pose.target);
+        this._controls.enabled = true;
+        this._controls.update();
+      },
+    });
+    this._emitMode('aerial');
+  }
+
+  /**
+   * Punto de aparición del caminante: unos pasos por delante de la ciudad
+   * actual del journey mirándola (si existe); si no, junto al puerto mirando
+   * al interior de la isla; y en un mapa sin puerto, el centro mirando al norte.
+   * @returns {{ x: number, z: number, lookX: number, lookZ: number }}
+   */
+  _fpsSpawn() {
+    const currentId = this.journey?.currentCity ?? null;
+    const city = currentId ? (this.map.cities ?? []).find((c) => c.id === currentId) : null;
+    if (city) {
+      const { wx, wz } = worldFromMap(city.x, city.y);
+      const d = Math.hypot(wx, wz);
+      // Desplazado hacia el centro de la isla (o hacia +z si la ciudad está en el origen).
+      const ux = d > 0.001 ? wx / d : 0;
+      const uz = d > 0.001 ? wz / d : 1;
+      return {
+        x: wx - ux * CITY_SPAWN_OFFSET,
+        z: wz - uz * CITY_SPAWN_OFFSET,
+        lookX: wx,
+        lookZ: wz,
+      };
+    }
+    if (this.map.startPort) {
+      const { wx, wz } = worldFromMap(this.map.startPort.x, this.map.startPort.y);
+      if (Math.hypot(wx, wz) < 0.5) return { x: wx, z: wz, lookX: 0, lookZ: -10 };
+      return { x: wx, z: wz, lookX: 0, lookZ: 0 };
+    }
+    return { x: 0, z: 0, lookX: 0, lookZ: -10 };
+  }
+
+  /**
+   * La transición de entrada llegó a la altura de ojos: cambio de controles.
+   * OrbitControls queda apagado y PointerLockControls (creado perezosamente la
+   * primera vez) toma el ratón. El lock se pide aquí mismo: si el navegador lo
+   * rechaza (el gesto del clic ya caducó), el overlay «haz clic en la isla»
+   * queda como vía manual.
+   */
+  _activateFps() {
+    this._mode = 'fps';
+    this._lastWalkTs = 0;
+    if (!this._plc) {
+      const canvas = this.renderRoot.querySelector('canvas');
+      this._plc = new this._PointerLockControls(this._camera, canvas);
+      // Sin mirar al cénit/nadir puro: el forward proyectado al suelo nunca degenera.
+      this._plc.minPolarAngle = 0.15;
+      this._plc.maxPolarAngle = Math.PI - 0.15;
+      // IMPORTANTE (shadow DOM): document.pointerLockElement retargetea al HOST,
+      // así que el detector interno de PointerLockControls nunca ve el canvas y
+      // dejaría isLocked=false (sin ratón). Este listener se registra DESPUÉS
+      // del connect() del control (orden de registro = orden de ejecución) y
+      // corrige isLocked con la verdad del shadow root en cada cambio.
+      document.addEventListener('pointerlockchange', () => this._onPointerLockChange(), {
+        signal: this._abort.signal,
+      });
+    }
+    this._plc.enabled = true;
+    this._requestLock();
+  }
+
+  /** Pide el pointer lock sobre el canvas absorbiendo el rechazo del navegador. */
+  _requestLock() {
+    const canvas = this.renderRoot.querySelector('canvas');
+    try {
+      // requestPointerLock devuelve una promesa en navegadores modernos: el
+      // rechazo (sin gesto de usuario reciente) NO es un error de la app — el
+      // overlay «haz clic en la isla para tomar el control» es la vía manual.
+      canvas.requestPointerLock()?.catch?.(() => {});
+    } catch {
+      // Navegadores antiguos pueden lanzar de forma síncrona: mismo tratamiento.
+    }
+  }
+
+  /**
+   * Única fuente de verdad del estado del lock (ver nota de shadow DOM en
+   * _activateFps). Distingue tres despegues del lock:
+   *  - esperado (se abrió el panel de ciudadanía): sigue en fps, sin ratón;
+   *  - Escape del usuario en fps: salida completa a la vista aérea;
+   *  - cualquier otro modo (salida ya en curso, teardown): nada que hacer.
+   */
+  _onPointerLockChange() {
+    const canvas = this.renderRoot.querySelector('canvas');
+    const locked = this.renderRoot.pointerLockElement === canvas;
+    if (this._plc) this._plc.isLocked = locked; // corrige el retargeting del shadow DOM
+    this._fpsLocked = locked;
+    if (locked) {
+      this._expectUnlock = false;
+      return;
+    }
+    this._keys.clear(); // sin lock no hay keyups garantizados: nada de teclas pegadas
+    if (this._mode !== 'fps') return;
+    if (this._expectUnlock) {
+      this._expectUnlock = false; // liberado a propósito para usar el panel
+      return;
+    }
+    this.exitFirstPerson(); // Escape nativo del pointer lock
+  }
+
+  /** Teclas de marcha (mantenidas), por event.code: WASD (independiente del layout), flechas y Shift. */
+  static MOVE_CODES = Object.freeze(
+    new Set([
+      'KeyW', 'KeyA', 'KeyS', 'KeyD',
+      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+      'ShiftLeft', 'ShiftRight',
+    ]),
+  );
+
+  /** @param {KeyboardEvent} event */
+  _onKeyDown(event) {
+    if (this._mode !== 'fps') return;
+    if (!this._fpsLocked) {
+      // Con el lock suelto (overlay «haz clic» o panel abierto) solo se
+      // atiende Escape → salir. El Escape DENTRO del panel no llega aquí:
+      // el panel lo consume (stopPropagation) para cerrarse.
+      if (event.code === 'Escape') this.exitFirstPerson();
+      return;
+    }
+    if (CareerIsland3D.MOVE_CODES.has(event.code)) {
+      this._keys.add(event.code);
+      event.preventDefault(); // las flechas no deben hacer scroll de la página
+      return;
+    }
+    if (event.code === 'KeyE' && this._nearCityId) {
+      event.preventDefault();
+      this._openNearCity();
+    }
+  }
+
+  /** @param {KeyboardEvent} event */
+  _onKeyUp(event) {
+    this._keys.delete(event.code);
+  }
+
+  /**
+   * Un frame de marcha: teclas → dirección en el plano del suelo relativa a la
+   * cámara, paso acotado a la isla (stepPosition de walk.js, desliza por la
+   * costa) y cámara pegada al suelo a altura de ojos con groundHeightAt (el
+   * MISMO perfil que pintan las mallas: ni se atraviesa el suelo ni se pisa el
+   * agua). Cada PROXIMITY_CHECK_MS se refresca la ciudad cercana.
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickWalk(now) {
+    const dt = Math.min((now - (this._lastWalkTs || now)) / 1000, 0.05);
+    this._lastWalkTs = now;
+    const cam = this._camera.position;
+    if (this._fpsLocked) {
+      const key = (code) => (this._keys.has(code) ? 1 : 0);
+      const fwd = key('KeyW') + key('ArrowUp') - key('KeyS') - key('ArrowDown');
+      const strafe = key('KeyD') + key('ArrowRight') - key('KeyA') - key('ArrowLeft');
+      if (fwd !== 0 || strafe !== 0) {
+        // Forward de la cámara proyectado al plano XZ (los límites polares del
+        // PointerLockControls garantizan que nunca degenera).
+        const look = this._camera.getWorldDirection(this._walkDirScratch);
+        const flen = Math.hypot(look.x, look.z);
+        const fx = look.x / flen;
+        const fz = look.z / flen;
+        // right = forward × up (mundo y-arriba) = (-fz, fx).
+        const dir = { x: fx * fwd - fz * strafe, z: fz * fwd + fx * strafe };
+        const running = this._keys.has('ShiftLeft') || this._keys.has('ShiftRight');
+        const next = stepPosition(
+          { x: cam.x, z: cam.z },
+          dir,
+          dt,
+          WALK_SPEED * (running ? RUN_MULTIPLIER : 1),
+          { radius: this._walkRadius },
+        );
+        cam.x = next.x;
+        cam.z = next.z;
+      }
+    }
+    cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR }) + EYE_HEIGHT;
+    if (now - this._lastProxTs >= PROXIMITY_CHECK_MS) {
+      this._lastProxTs = now;
+      this._updateProximity();
+    }
+  }
+
+  /** Ciudad cercana al caminante, para el resalte emisivo y el prompt «[E] Ver ciudadanía». */
+  _updateProximity() {
+    const cam = this._camera.position;
+    const cities = (this.map?.cities ?? []).map((c) => ({ id: c.id, ...worldFromMap(c.x, c.y) }));
+    const near = nearestCityWithin({ x: cam.x, z: cam.z }, cities, PROXIMITY_RADIUS);
+    const id = near?.id ?? null;
+    if (id === this._nearCityId) return;
+    this._nearCityId = id;
+    this._rebuildCities(); // aplica/retira el resalte emisivo de proximidad
+  }
+
+  /**
+   * Abre el panel de ciudadanía de la ciudad cercana ([E] o clic): suelta el
+   * pointer lock A PROPÓSITO (marcándolo con _expectUnlock) para que el ratón
+   * pueda usar el panel, SIN salir del modo primera persona. Tras cerrar el
+   * panel, un clic en el canvas re-engancha el lock (_onPick).
+   */
+  _openNearCity() {
+    const cityId = this._nearCityId;
+    if (!cityId) return;
+    if (this._fpsLocked) {
+      this._expectUnlock = true;
+      document.exitPointerLock();
+    }
+    this.dispatchEvent(
+      new CustomEvent('select-city', { detail: { cityId }, bubbles: true, composed: true }),
+    );
+  }
+
+  /** Notifica el cambio de modo de cámara a <career-app> (adapta su HUD). @param {'aerial'|'fps'} mode */
+  _emitMode(mode) {
+    this.dispatchEvent(
+      new CustomEvent('mode-change', { detail: { mode }, bubbles: true, composed: true }),
+    );
+  }
+
+  /**
+   * Corte duro a vista aérea (cambio de isla bajo los pies): sin animación.
+   * El encuadre lo repone _frameIsland justo después.
+   */
+  _resetToAerial() {
+    this._camAnim = null;
+    this._keys.clear();
+    this._expectUnlock = false;
+    this._nearCityId = null;
+    if (this.renderRoot.pointerLockElement) document.exitPointerLock();
+    if (this._plc) this._plc.enabled = false;
+    this._controls.enabled = true;
+    if (this._mode !== 'aerial') {
+      this._mode = 'aerial';
+      this._emitMode('aerial');
+    }
+  }
+
+  /** Prompt inferior del modo fps: ciudad cercana o cómo retomar el control. */
+  _renderFpsHint() {
+    if (this._mode !== 'fps') return null;
+    if (!this._fpsLocked) {
+      return html`<div class="fps-hint">Haz clic en la isla para tomar el control · Esc para salir</div>`;
+    }
+    if (!this._nearCityId) return null;
+    const city = (this.map?.cities ?? []).find((c) => c.id === this._nearCityId);
+    if (!city) return null;
+    return html`<div class="fps-hint"><kbd>E</kbd> Ver ciudadanía de ${city.name}</div>`;
   }
 
   /** @param {ResizeObserverEntry[]} entries */
@@ -405,10 +859,13 @@ export class CareerIsland3D extends LitElement {
   _rebuildAll() {
     if (!this.map) return;
     this._islandR = islandRadius(this.map);
+    this._walkRadius = walkableRadius(this._islandR);
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
     if (this.map.id !== this._lastMapId) {
       this._lastMapId = this.map.id;
+      // Si cambia la ISLA con el caminante dentro, el modo a pie no sobrevive.
+      if (this._mode !== 'aerial') this._resetToAerial();
       this._frameIsland();
     }
   }
@@ -460,19 +917,31 @@ export class CareerIsland3D extends LitElement {
     group.add(water);
 
     // Playa: anillo de arena en pendiente con costa irregular (low-poly).
+    // El perfil (radios, alto, irregularidad) viene de walk.js: es el MISMO
+    // suelo que pisa el modo primera persona (groundHeightAt).
     const beach = new THREE.Mesh(
-      this._coastGeometry(R + 4, R + 8, 2, 0.05),
+      this._coastGeometry(
+        R + TERRAIN.beach.topPad,
+        R + TERRAIN.beach.bottomPad,
+        TERRAIN.beach.height,
+        TERRAIN.beach.amount,
+      ),
       new THREE.MeshLambertMaterial({ color: ENV_COLORS.sand, flatShading: true }),
     );
-    beach.position.y = 1;
+    beach.position.y = TERRAIN.baseY;
     group.add(beach);
 
     // Interior: meseta de hierba donde viven comarcas y ciudades.
     const grass = new THREE.Mesh(
-      this._coastGeometry(R, R + 3, 2.4, 0.04),
+      this._coastGeometry(
+        R + TERRAIN.grass.topPad,
+        R + TERRAIN.grass.bottomPad,
+        TERRAIN.grass.height,
+        TERRAIN.grass.amount,
+      ),
       new THREE.MeshLambertMaterial({ color: ENV_COLORS.grass, flatShading: true }),
     );
-    grass.position.y = 1;
+    grass.position.y = TERRAIN.baseY;
     group.add(grass);
 
     // Comarcas: parche circular sutil + etiqueta flotante con el nombre.
@@ -503,8 +972,9 @@ export class CareerIsland3D extends LitElement {
 
   /**
    * Cilindro low-poly con la costa irregular: los vértices del perímetro se
-   * desplazan radialmente con una función determinista del ángulo (sin RNG),
-   * para que la isla no sea un círculo perfecto pero sí estable entre renders.
+   * desplazan radialmente con coastFactor (walk.js), determinista y compartido
+   * con groundHeightAt — el suelo pintado y el suelo pisado son la misma
+   * función, para que la isla no sea un círculo perfecto pero sí estable.
    * @param {number} topR @param {number} bottomR @param {number} height
    * @param {number} amount Amplitud relativa del desplazamiento (0.05 → ±5%).
    */
@@ -517,8 +987,7 @@ export class CareerIsland3D extends LitElement {
       const z = pos.getZ(i);
       const r = Math.hypot(x, z);
       if (r < 0.001) continue; // vértices centrales de las tapas
-      const angle = Math.atan2(z, x);
-      const k = 1 + amount * Math.sin(angle * 4.7) + amount * 0.6 * Math.cos(angle * 7.3);
+      const k = coastFactor(Math.atan2(z, x), amount);
       pos.setX(i, x * k);
       pos.setZ(i, z * k);
     }
@@ -632,8 +1101,8 @@ export class CareerIsland3D extends LitElement {
         node.add(beam);
       }
 
-      // Selección (hook MC-6): resalte emisivo sutil, sin panel todavía.
-      if (this.selected === city.id) {
+      // Selección (MC-6) o proximidad a pie (MC-7): resalte emisivo sutil.
+      if (this.selected === city.id || (this._mode === 'fps' && this._nearCityId === city.id)) {
         const selMat = new THREE.MeshLambertMaterial({
           color,
           emissive: ACCENT_COLORS.route,
@@ -708,8 +1177,20 @@ export class CareerIsland3D extends LitElement {
    *     lo hace este componente; el contenedor NO debe volver a animar).
    *  2. Plataformas de comarca: zoom a la comarca (sin evento de selección).
    * Agua/vacío: nada — no se deselecciona de forma agresiva.
+   *
+   * En modo primera persona (MC-7) el clic cambia de papel: sin lock lo
+   * re-engancha; con lock abre la ciudad cercana (equivalente a la tecla E).
+   * Durante las transiciones de modo no hace nada.
    */
   _onPick(event) {
+    if (this._mode !== 'aerial') {
+      this._pointerDownAt = null;
+      if (this._mode === 'fps') {
+        if (!this._fpsLocked) this._requestLock();
+        else if (this._nearCityId) this._openNearCity();
+      }
+      return;
+    }
     if (!this._pointerDownAt || !this._citiesGroup) return;
     const moved = Math.hypot(
       event.clientX - this._pointerDownAt.x,
@@ -766,6 +1247,16 @@ export class CareerIsland3D extends LitElement {
   /** Detiene el bucle, desconecta observers y libera todos los recursos GPU. */
   _teardown() {
     this._stopLoop();
+    // El modo primera persona no sobrevive al teardown: se suelta el lock y se
+    // desconectan los PointerLockControls (sus listeners de documento incluidos).
+    if (this.renderRoot.pointerLockElement) document.exitPointerLock();
+    this._plc?.dispose();
+    this._plc = null;
+    this._mode = 'aerial';
+    this._fpsLocked = false;
+    this._expectUnlock = false;
+    this._keys.clear();
+    this._nearCityId = null;
     this._abort?.abort();
     this._abort = null;
     this._resizeObserver?.disconnect();
@@ -787,7 +1278,11 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En modo a pie: WASD o flechas para caminar, ratón para mirar y E para la ciudad cercana."></canvas>
+        ${this._mode === 'fps' && this._fpsLocked
+          ? html`<div class="crosshair" aria-hidden="true"></div>`
+          : null}
+        ${this._renderFpsHint()}
         ${this._phase === 'loading' ? html`<div class="overlay">Cargando isla 3D…</div>` : null}
         ${this._phase === 'unsupported'
           ? html`<div class="overlay">Tu navegador no soporta WebGL. Usa la vista plana.</div>`
