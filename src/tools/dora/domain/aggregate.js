@@ -10,7 +10,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
  * @param {DoraRepoDoc[]} repos
- * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null, leadTimeCommitDeployHoursAvg: number|null, changesPending: number, leadTimeApproxCount: number, changeFailureRatePct: number|null, deploymentsFailed: number, deploymentsTotal: number, people: number }}
+ * @returns {{ repos: number, measured: number, deployments: number, deployFrequencyPerWeek: number, leadTimeHoursAvg: number|null, leadTimeCommitDeployHoursAvg: number|null, changesPending: number, leadTimeApproxCount: number, changeFailureRatePct: number|null, deploymentsFailed: number, deploymentsTotal: number, mttrHoursAvg: number|null, downtimeHoursTotal: number, incidentsResolved: number, incidentsOpen: number, people: number }}
  */
 export function aggregateMetrics(repos) {
   const list = Array.isArray(repos) ? repos : [];
@@ -28,6 +28,12 @@ export function aggregateMetrics(repos) {
   // porcentajes. Se acumulan fallidos y total y se combinan al final.
   let deploymentsFailed = 0;
   let deploymentsTotal = 0;
+  // MTTR (D4): media PONDERADA por nº de incidentes resueltos, no media de MTTRs.
+  // Se acumulan downtime total y nº de resueltos y se combinan al final:
+  // Σ downtime / Σ resueltos. Sin incidentes resueltos → null (no medible).
+  let downtimeHoursTotal = 0;
+  let incidentsResolved = 0;
+  let incidentsOpen = 0;
   // Personas únicas del grupo: unión de logins, no suma (una persona en dos repos
   // del mismo equipo cuenta una vez).
   const people = new Set();
@@ -47,6 +53,9 @@ export function aggregateMetrics(repos) {
     leadTimeApproxCount += m.leadTimeApproxCount ?? 0;
     deploymentsFailed += m.deploymentsFailed ?? 0;
     deploymentsTotal += m.deploymentsTotal ?? 0;
+    downtimeHoursTotal += m.downtimeHoursTotal ?? 0;
+    incidentsResolved += m.incidentsResolved ?? 0;
+    incidentsOpen += m.incidentsOpen ?? 0;
     for (const login of m.contributorLogins ?? []) people.add(login);
   }
   return {
@@ -63,6 +72,12 @@ export function aggregateMetrics(repos) {
     changeFailureRatePct: deploymentsTotal > 0 ? round1((deploymentsFailed / deploymentsTotal) * 100) : null,
     deploymentsFailed,
     deploymentsTotal,
+    // MTTR agregado = Σ downtime / Σ resueltos (media ponderada por incidentes).
+    // Sin incidentes resueltos en el grupo → null (no medible), nunca 0.
+    mttrHoursAvg: incidentsResolved > 0 ? round1(downtimeHoursTotal / incidentsResolved) : null,
+    downtimeHoursTotal: round1(downtimeHoursTotal),
+    incidentsResolved,
+    incidentsOpen,
     people: people.size,
   };
 }

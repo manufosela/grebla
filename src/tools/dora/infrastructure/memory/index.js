@@ -19,6 +19,8 @@ export function createMemoryDoraPersistence(seed = [], options = {}) {
   const store = new Map(seed.map((r) => [r.id, { ...r }]));
   /** @type {Map<string, import('../../domain/types.js').Deployment[]>} eventos por repoId */
   const deploymentsStore = new Map();
+  /** @type {Map<string, import('../../domain/types.js').Incident[]>} incidentes por repoId */
+  const incidentsStore = new Map();
 
   return {
     repos: {
@@ -60,6 +62,34 @@ export function createMemoryDoraPersistence(seed = [], options = {}) {
         const next = list.filter((e) => e.id !== id);
         if (next.length === list.length) throw new Error(`Despliegue ${id} no existe en ${repoId}`);
         deploymentsStore.set(repoId, next);
+      },
+    },
+    incidents: {
+      async add(repoId, incident) {
+        const id = crypto.randomUUID();
+        const list = incidentsStore.get(repoId) ?? [];
+        list.push({ ...incident, id });
+        incidentsStore.set(repoId, list);
+        return id;
+      },
+      async listByRepo(repoId) {
+        const list = incidentsStore.get(repoId) ?? [];
+        return list
+          .map((i) => ({ ...i }))
+          .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+      },
+      async update(repoId, id, patch) {
+        const list = incidentsStore.get(repoId) ?? [];
+        const idx = list.findIndex((i) => i.id === id);
+        if (idx === -1) throw new Error(`Incidente ${id} no existe en ${repoId}`);
+        list[idx] = { ...list[idx], ...patch, id };
+        incidentsStore.set(repoId, list);
+      },
+      async remove(repoId, id) {
+        const list = incidentsStore.get(repoId) ?? [];
+        const next = list.filter((i) => i.id !== id);
+        if (next.length === list.length) throw new Error(`Incidente ${id} no existe en ${repoId}`);
+        incidentsStore.set(repoId, next);
       },
     },
   };

@@ -190,6 +190,90 @@ export function removeDeployment(persistence, repoId, id) {
 }
 
 /**
+ * Registra un INCIDENTE en producción de un repo (base del MTTR, DORA D4).
+ * Espejo de `registerDeployment`. Valida `startedAt` (ISO parseable). El
+ * incidente puede nacer ABIERTO (`restoredAt` null) o ya RESUELTO (`restoredAt`
+ * ISO parseable). `note`, `deploymentId` y `createdBy` (uid + name) solo se
+ * incluyen si vienen; no se escriben campos vacíos ni `undefined`. Sin fallbacks
+ * silenciosos: si `startedAt` o `restoredAt` no son válidos, lanza.
+ * @param {DoraPersistence} persistence
+ * @param {string} repoId
+ * @param {{ startedAt: string, restoredAt?: string|null, note?: string, deploymentId?: string|null, createdBy?: { uid: string, name: string } }} input
+ * @returns {Promise<string>}  id del incidente creado
+ */
+export function registerIncident(persistence, repoId, input) {
+  if (!repoId) throw new Error('registerIncident requiere el id del repo');
+  const startedAt = String(input?.startedAt ?? '').trim();
+  if (!startedAt || Number.isNaN(new Date(startedAt).getTime())) {
+    throw new Error('La fecha de inicio del incidente (startedAt) debe ser una fecha ISO válida');
+  }
+  // restoredAt opcional: null (abierto) o fecha ISO válida (resuelto de inicio).
+  const restoredRaw = input?.restoredAt == null ? null : String(input.restoredAt).trim();
+  let restoredAt = null;
+  if (restoredRaw) {
+    if (Number.isNaN(new Date(restoredRaw).getTime())) {
+      throw new Error('La fecha de restauración (restoredAt) debe ser una fecha ISO válida');
+    }
+    restoredAt = new Date(restoredRaw).toISOString();
+  }
+  const note = (input?.note ?? '').trim();
+  const deploymentId = (input?.deploymentId ?? '').trim();
+  /** @type {Omit<import('../domain/types.js').Incident,'id'>} */
+  const incident = {
+    startedAt: new Date(startedAt).toISOString(),
+    restoredAt,
+    createdAt: new Date().toISOString(),
+  };
+  if (note) incident.note = note;
+  if (deploymentId) incident.deploymentId = deploymentId;
+  // createdBy solo si viene completo (uid + name); no se estampa a medias.
+  if (input?.createdBy?.uid && input?.createdBy?.name) {
+    incident.createdBy = { uid: input.createdBy.uid, name: input.createdBy.name };
+  }
+  return persistence.incidents.add(repoId, incident);
+}
+
+/**
+ * Lista los incidentes de un repo (ordenados por `startedAt` desc).
+ * @param {DoraPersistence} persistence
+ * @param {string} repoId
+ * @returns {Promise<import('../domain/types.js').Incident[]>}
+ */
+export function listIncidents(persistence, repoId) {
+  return persistence.incidents.listByRepo(repoId);
+}
+
+/**
+ * Marca un incidente ABIERTO como RESUELTO, fijando su `restoredAt`. Valida que
+ * la fecha de restauración sea ISO parseable (sin fallbacks silenciosos).
+ * @param {DoraPersistence} persistence
+ * @param {string} repoId
+ * @param {string} id
+ * @param {string} restoredAt  Marca de restauración (ISO 8601).
+ * @returns {Promise<void>}
+ */
+export function resolveIncident(persistence, repoId, id, restoredAt) {
+  if (!repoId) throw new Error('resolveIncident requiere el id del repo');
+  if (!id) throw new Error('resolveIncident requiere el id del incidente');
+  const value = String(restoredAt ?? '').trim();
+  if (!value || Number.isNaN(new Date(value).getTime())) {
+    throw new Error('La fecha de restauración (restoredAt) debe ser una fecha ISO válida');
+  }
+  return persistence.incidents.update(repoId, id, { restoredAt: new Date(value).toISOString() });
+}
+
+/**
+ * Elimina un incidente de un repo.
+ * @param {DoraPersistence} persistence
+ * @param {string} repoId
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export function removeIncident(persistence, repoId, id) {
+  return persistence.incidents.remove(repoId, id);
+}
+
+/**
  * Resumen DORA agregado: global, por equipo y por gremio (sobre el campo metrics
  * ya calculado en cada repo). Siempre a nivel de equipo, nunca por persona.
  * @param {DoraPersistence} persistence

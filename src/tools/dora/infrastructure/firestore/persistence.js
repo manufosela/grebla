@@ -15,6 +15,8 @@ const reposCol = (db) => collection(db, 'dora');
 const repoDoc = (db, id) => doc(db, 'dora', id);
 const deploymentsCol = (db, repoId) => collection(db, 'dora', repoId, 'deployments');
 const deploymentDoc = (db, repoId, id) => doc(db, 'dora', repoId, 'deployments', id);
+const incidentsCol = (db, repoId) => collection(db, 'dora', repoId, 'incidents');
+const incidentDoc = (db, repoId, id) => doc(db, 'dora', repoId, 'incidents', id);
 
 /**
  * @param {Firestore} db
@@ -66,6 +68,29 @@ export function createFirestoreDoraPersistence(db, leaderUid, options = {}) {
       },
       async remove(repoId, id) {
         await deleteDoc(deploymentDoc(db, repoId, id));
+      },
+    },
+    incidents: {
+      // Espejo de `deployments`: registro manual de incidentes (base del MTTR,
+      // D4). `createdBy` solo se guarda si viene (lo normaliza el caso de uso);
+      // sin fallbacks silenciosos sobre datos críticos.
+      async add(repoId, incident) {
+        const ref = await addDoc(incidentsCol(db, repoId), { ...incident });
+        return ref.id;
+      },
+      async listByRepo(repoId) {
+        // Se ordena en cliente por `startedAt` desc para no exigir un índice
+        // compuesto; `startedAt` es siempre ISO 8601 (ordenable como string).
+        const snap = await getDocs(incidentsCol(db, repoId));
+        return snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+      },
+      async update(repoId, id, patch) {
+        await setDoc(incidentDoc(db, repoId, id), { ...patch }, { merge: true });
+      },
+      async remove(repoId, id) {
+        await deleteDoc(incidentDoc(db, repoId, id));
       },
     },
   };

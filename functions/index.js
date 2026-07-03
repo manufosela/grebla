@@ -245,6 +245,45 @@ function computeChangeFailureRate(deployments, from, to) {
   return { cfrPct: total > 0 ? round1((failed / total) * 100) : null, failed, total };
 }
 
+/**
+ * Mean Time to Recovery DORA D4 (espejo de src/tools/dora/domain/mttr.js;
+ * functions/ no importa de src/). MTTR = downtime total ÷ nº de incidentes
+ * resueltos. Un incidente RESUELTO tiene `restoredAt` no nulo; solo cuentan los
+ * resueltos cuyo `restoredAt` cae en [from, to] (inclusivo). Downtime de cada uno
+ * = (restoredAt − startedAt)/hora, descartando negativos/no finitos. Los abiertos
+ * (`restoredAt` null) se reportan aparte. Sin resueltos → mttrHoursAvg null.
+ * @param {{ startedAt: string, restoredAt: string|null }[]} incidents
+ * @param {string} from  inicio del periodo (ISO)
+ * @param {string} to    fin del periodo (ISO)
+ * @returns {{ mttrHoursAvg: number|null, downtimeHoursTotal: number, incidentsResolved: number, incidentsOpen: number }}
+ */
+function computeMeanTimeToRecovery(incidents, from, to) {
+  const fromMs = toMs(from);
+  const toMs2 = toMs(to);
+  let downtimeHoursTotal = 0;
+  let incidentsResolved = 0;
+  let incidentsOpen = 0;
+  for (const inc of Array.isArray(incidents) ? incidents : []) {
+    if (inc?.restoredAt == null) {
+      incidentsOpen += 1;
+      continue;
+    }
+    const restoredMs = toMs(inc.restoredAt);
+    if (!Number.isFinite(restoredMs) || restoredMs < fromMs || restoredMs > toMs2) continue;
+    const startedMs = toMs(inc?.startedAt);
+    const hours = (restoredMs - startedMs) / MS_HOUR;
+    if (!Number.isFinite(hours) || hours < 0) continue;
+    downtimeHoursTotal += hours;
+    incidentsResolved += 1;
+  }
+  return {
+    mttrHoursAvg: incidentsResolved > 0 ? round1(downtimeHoursTotal / incidentsResolved) : null,
+    downtimeHoursTotal: round1(downtimeHoursTotal),
+    incidentsResolved,
+    incidentsOpen,
+  };
+}
+
 /** Tope de PRs por repo a los que pedimos el primer commit (mitiga el rate-limit 60/h sin token). */
 const MAX_COMMIT_LOOKUPS = 50;
 
@@ -348,6 +387,18 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
       metrics.deploymentsFailed = cfr.failed;
       metrics.deploymentsTotal = cfr.total;
       metrics.leadTimeApproxCount = leadTimeApproxCount;
+
+      // ── Mean Time to Recovery (DORA D4) ─────────────────────────────────────
+      // Tiempo medio de recuperación tras un incidente en producción, sobre los
+      // incidentes registrados manualmente (subcolección /incidents del repo,
+      // espejo de /deployments). Admin SDK: omite reglas.
+      const incidentsSnap = await docSnap.ref.collection('incidents').get();
+      const incidents = incidentsSnap.docs.map((d) => d.data());
+      const mttr = computeMeanTimeToRecovery(incidents, from, now);
+      metrics.mttrHoursAvg = mttr.mttrHoursAvg;
+      metrics.downtimeHoursTotal = mttr.downtimeHoursTotal;
+      metrics.incidentsResolved = mttr.incidentsResolved;
+      metrics.incidentsOpen = mttr.incidentsOpen;
 
       await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: now, computedAt: now } }, { merge: true });
       results.push({ repo: repo.fullName, ok: true, ...metrics });

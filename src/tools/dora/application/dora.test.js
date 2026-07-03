@@ -12,6 +12,10 @@ import {
   registerDeployment,
   listDeployments,
   removeDeployment,
+  registerIncident,
+  listIncidents,
+  resolveIncident,
+  removeIncident,
 } from './usecases.js';
 
 describe('DORA — configuración de repos', () => {
@@ -164,6 +168,84 @@ describe('DORA — eventos de despliegue real', () => {
     events = await listDeployments(p, repoId);
     expect(events).toHaveLength(1);
     expect(events[0].at).toBe(new Date('2025-01-05T10:00:00Z').toISOString());
+  });
+});
+
+describe('DORA — incidentes (MTTR)', () => {
+  /** @type {ReturnType<typeof createMemoryDoraPersistence>} */
+  let p;
+  /** @type {string} */
+  let repoId;
+  beforeEach(async () => {
+    p = createMemoryDoraPersistence();
+    repoId = await addRepo(p, { fullName: 'org/web', startDate: '2025-01-01' });
+  });
+
+  it('registra un incidente abierto (restoredAt null) normalizado', async () => {
+    const id = await registerIncident(p, repoId, { startedAt: '2025-01-10T09:30', note: '  caída API  ' });
+    const incidents = await listIncidents(p, repoId);
+    expect(incidents).toHaveLength(1);
+    const i = incidents[0];
+    expect(i.id).toBe(id);
+    expect(i.startedAt).toBe(new Date('2025-01-10T09:30').toISOString());
+    expect(i.restoredAt).toBeNull();
+    expect(i.note).toBe('caída API');
+    expect(i.createdAt).toBeTruthy();
+  });
+
+  it('registra un incidente ya resuelto y enlazado a un despliegue', async () => {
+    const id = await registerIncident(p, repoId, {
+      startedAt: '2025-01-10T09:00',
+      restoredAt: '2025-01-10T11:00',
+      deploymentId: 'dep-123',
+    });
+    const i = (await listIncidents(p, repoId)).find((x) => x.id === id);
+    expect(i.restoredAt).toBe(new Date('2025-01-10T11:00').toISOString());
+    expect(i.deploymentId).toBe('dep-123');
+  });
+
+  it('guarda createdBy solo si viene completo (uid + name)', async () => {
+    const conAutor = await registerIncident(p, repoId, {
+      startedAt: '2025-01-10T09:00', createdBy: { uid: 'u1', name: 'Ana' },
+    });
+    const sinAutor = await registerIncident(p, repoId, {
+      startedAt: '2025-01-11T09:00', createdBy: { uid: 'u1' },
+    });
+    const incidents = await listIncidents(p, repoId);
+    expect(incidents.find((i) => i.id === conAutor).createdBy).toEqual({ uid: 'u1', name: 'Ana' });
+    expect(incidents.find((i) => i.id === sinAutor).createdBy).toBeUndefined();
+  });
+
+  it('rechaza fechas inválidas (startedAt y restoredAt)', () => {
+    expect(() => registerIncident(p, repoId, { startedAt: 'no-fecha' })).toThrow(/inicio.*ISO/i);
+    expect(() => registerIncident(p, repoId, { startedAt: '2025-01-10T09:00', restoredAt: 'no-fecha' }))
+      .toThrow(/restauración.*ISO/i);
+  });
+
+  it('resolveIncident marca un incidente abierto como resuelto', async () => {
+    const id = await registerIncident(p, repoId, { startedAt: '2025-01-10T09:00' });
+    expect((await listIncidents(p, repoId))[0].restoredAt).toBeNull();
+    await resolveIncident(p, repoId, id, '2025-01-10T12:00');
+    expect((await listIncidents(p, repoId))[0].restoredAt).toBe(new Date('2025-01-10T12:00').toISOString());
+  });
+
+  it('resolveIncident rechaza fecha inválida (validación síncrona)', async () => {
+    const id = await registerIncident(p, repoId, { startedAt: '2025-01-10T09:00' });
+    expect(() => resolveIncident(p, repoId, id, 'no-fecha')).toThrow(/restauración.*ISO/i);
+  });
+
+  it('lista ordenada por startedAt desc y permite borrar', async () => {
+    await registerIncident(p, repoId, { startedAt: '2025-01-05T09:00' });
+    const nuevo = await registerIncident(p, repoId, { startedAt: '2025-01-20T09:00' });
+    let incidents = await listIncidents(p, repoId);
+    expect(incidents.map((i) => i.startedAt)).toEqual([
+      new Date('2025-01-20T09:00').toISOString(),
+      new Date('2025-01-05T09:00').toISOString(),
+    ]);
+    await removeIncident(p, repoId, nuevo);
+    incidents = await listIncidents(p, repoId);
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0].startedAt).toBe(new Date('2025-01-05T09:00').toISOString());
   });
 });
 
