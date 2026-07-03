@@ -15,6 +15,16 @@
  * @property {GlossaryTerm[]} terms
  */
 
+/**
+ * Término DESTACADO: se muestra arriba del todo y más grande que el resto,
+ * porque es el concepto central de la cultura de ingeniería de la organización.
+ * @type {GlossaryTerm}
+ */
+export const FEATURED = {
+  term: 'Product Engineer',
+  desc: 'Ingeniero que no solo programa bien, sino que además entiende bien por qué programa lo que programa y qué impacto tiene en los usuarios.',
+};
+
 /** @type {GlossaryCategory[]} */
 export const GLOSSARY = [
   {
