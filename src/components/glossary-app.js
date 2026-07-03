@@ -9,7 +9,7 @@
  * las categorías con resultados; si no hay ninguno, se muestra un aviso.
  */
 import { LitElement, html, css } from 'lit';
-import { GLOSSARY } from '../data/glossary.js';
+import { GLOSSARY, FEATURED } from '../data/glossary.js';
 import { filterGlossary, countTerms } from '../lib/glossarySearch.js';
 
 export class GlossaryApp extends LitElement {
@@ -22,6 +22,29 @@ export class GlossaryApp extends LitElement {
     :host {
       display: block;
       font-family: var(--rm-font, system-ui, sans-serif);
+      color: var(--rm-text, #1e3a5f);
+    }
+
+    /* Concepto destacado (arriba del todo, más grande) */
+    .featured {
+      background: var(--rm-accent-soft, #eaf3f0);
+      border: 1px solid var(--rm-accent, #2a9d8f);
+      border-left: 5px solid var(--rm-accent, #2a9d8f);
+      border-radius: var(--rm-radius, 12px);
+      padding: 1.1rem 1.4rem;
+      margin-bottom: 1.75rem;
+    }
+    .featured-name {
+      margin: 0 0 0.4rem;
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--rm-accent-700, #1f7a6b);
+      line-height: 1.15;
+    }
+    .featured-desc {
+      margin: 0;
+      font-size: 1.1rem;
+      line-height: 1.5;
       color: var(--rm-text, #1e3a5f);
     }
 
@@ -146,6 +169,11 @@ export class GlossaryApp extends LitElement {
     const total = countTerms(categories);
 
     return html`
+      <section class="featured" aria-label="Concepto destacado">
+        <p class="featured-name">${FEATURED.term}</p>
+        <p class="featured-desc">${FEATURED.desc}</p>
+      </section>
+
       <div class="search">
         <div class="search-field">
           <label for="glossary-search">Buscar término, ley o concepto</label>
