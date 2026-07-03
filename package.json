@@ -23,7 +23,8 @@
     "@webcomponents/template-shadowroot": "^0.2.1",
     "astro": "^6.4.4",
     "firebase": "^12.14.0",
-    "lit": "^3.3.3"
+    "lit": "^3.3.3",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
