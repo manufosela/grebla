@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { aggregateMetrics, aggregateByKey, teamKeyOf, guildKeyOf } from './aggregate.js';
 
 const repos = [
-  { fullName: 'o/a', team: 'Plataforma', guilds: ['Frontend'], metrics: { deployments: 10, deployFrequencyPerWeek: 2.5, leadTimeHoursAvg: 10, contributorLogins: ['ana', 'bea'], deploymentsFailed: 1, deploymentsTotal: 10 } },
-  { fullName: 'o/b', team: 'Plataforma', guilds: ['Backend'], metrics: { deployments: 30, deployFrequencyPerWeek: 7.5, leadTimeHoursAvg: 20, contributorLogins: ['bea', 'caro'], deploymentsFailed: 3, deploymentsTotal: 30 } },
+  { fullName: 'o/a', team: 'Plataforma', guilds: ['Frontend'], metrics: { deployments: 10, deployFrequencyPerWeek: 2.5, leadTimeHoursAvg: 10, contributorLogins: ['ana', 'bea'], deploymentsFailed: 1, deploymentsTotal: 10, downtimeHoursTotal: 4, incidentsResolved: 2, incidentsOpen: 1 } },
+  { fullName: 'o/b', team: 'Plataforma', guilds: ['Backend'], metrics: { deployments: 30, deployFrequencyPerWeek: 7.5, leadTimeHoursAvg: 20, contributorLogins: ['bea', 'caro'], deploymentsFailed: 3, deploymentsTotal: 30, downtimeHoursTotal: 8, incidentsResolved: 2, incidentsOpen: 0 } },
   { fullName: 'o/c', team: 'Pagos', guilds: ['Backend', 'Frontend'], metrics: { error: 'GitHub 404' } },
   { fullName: 'o/d', team: null, guilds: [] }, // sin métricas
 ];
@@ -37,6 +37,20 @@ describe('aggregateMetrics', () => {
     const a = aggregateMetrics([{ metrics: { deployments: 5, deploymentsFailed: 0, deploymentsTotal: 0 } }]);
     expect(a.changeFailureRatePct).toBeNull();
     expect(a.deploymentsTotal).toBe(0);
+  });
+
+  it('MTTR agregado = Σdowntime/Σresueltos (media ponderada, no media de MTTRs)', () => {
+    const a = aggregateMetrics(repos);
+    expect(a.downtimeHoursTotal).toBe(12); // 4 + 8
+    expect(a.incidentsResolved).toBe(4); // 2 + 2
+    expect(a.incidentsOpen).toBe(1); // 1 + 0
+    expect(a.mttrHoursAvg).toBe(3); // 12/4 (no (2h+4h)/2 casual)
+  });
+
+  it('sin incidentes resueltos en el grupo → MTTR null (no medible)', () => {
+    const a = aggregateMetrics([{ metrics: { deployments: 5, downtimeHoursTotal: 0, incidentsResolved: 0, incidentsOpen: 3 } }]);
+    expect(a.mttrHoursAvg).toBeNull();
+    expect(a.incidentsOpen).toBe(3);
   });
 });
 

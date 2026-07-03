@@ -10,8 +10,16 @@ import { LitElement, html, css } from 'lit';
 import { getDoraSummary } from '../../tools/dora/application/usecases.js';
 import { leadTimeLevel, deployFrequencyLevel } from '../../tools/dora/domain/levels.js';
 import { levelBadge, levelStyles } from './level-badge.js';
+import { formatHours } from './format.js';
 
 const lt = (v) => (v != null ? `${v} h` : '—');
+/**
+ * MTTR para tablas de grupo. Muestra la duración legible si hay incidentes
+ * resueltos; si no, '—' (no medible). Sin badge de nivel: los umbrales son de D5.
+ * @param {{ mttrHoursAvg: number|null, incidentsResolved: number }} g
+ * @returns {string}
+ */
+const mttr = (g) => (g.incidentsResolved > 0 ? formatHours(g.mttrHoursAvg) : '—');
 /**
  * Change Failure Rate para tablas de grupo. Muestra el porcentaje si hay
  * despliegues registrados; si no, '—' (no medible, mismo criterio que el lead
@@ -83,7 +91,7 @@ export class DoraMetrics extends LitElement {
           : html`
               <table>
                 <thead>
-                  <tr><th>${title.includes('equipo') ? 'Equipo' : 'Gremio'}</th><th class="num">Repos</th><th class="num">Despliegues</th><th class="num">Deploy/sem</th><th class="num">Lead time</th><th class="num">CFR</th><th class="num">Personas</th></tr>
+                  <tr><th>${title.includes('equipo') ? 'Equipo' : 'Gremio'}</th><th class="num">Repos</th><th class="num">Despliegues</th><th class="num">Deploy/sem</th><th class="num">Lead time</th><th class="num">CFR</th><th class="num">MTTR</th><th class="num">Personas</th></tr>
                 </thead>
                 <tbody>
                   ${rows.map(
@@ -94,6 +102,7 @@ export class DoraMetrics extends LitElement {
                       <td class="num">${g.deployFrequencyPerWeek}${levelBadge(deployFrequencyLevel(g.deployFrequencyPerWeek))}</td>
                       <td class="num">${lt(g.leadTimeHoursAvg)}${levelBadge(leadTimeLevel(g.leadTimeHoursAvg))}</td>
                       <td class="num">${cfr(g)}</td>
+                      <td class="num">${mttr(g)}</td>
                       <td class="num">${g.people}</td>
                     </tr>`,
                   )}
@@ -119,6 +128,10 @@ export class DoraMetrics extends LitElement {
     // Change Failure Rate (D3): métrica REAL sobre los despliegues registrados
     // manualmente (D1). Si no hay despliegues registrados, no es medible.
     const hasDeploys = g.deploymentsTotal > 0;
+    // MTTR (D4): métrica REAL sobre los incidentes registrados. Si no hay
+    // incidentes resueltos, no es medible (se muestra el nº de abiertos si los hay).
+    const hasResolved = g.incidentsResolved > 0;
+    const mttrLabel = formatHours(g.mttrHoursAvg);
     return html`
       <section>
         <h2>Global (${g.measured}/${g.repos} repos medidos)</h2>
@@ -139,6 +152,14 @@ export class DoraMetrics extends LitElement {
               ? `Change Failure Rate · ${g.deploymentsFailed} de ${g.deploymentsTotal} despliegues fallaron`
               : 'Change Failure Rate · sin despliegues registrados'}</span>
           </div>
+          <div class="card">
+            <span class="value">${hasResolved ? mttrLabel : '—'}</span>
+            <span class="label">${hasResolved
+              ? `MTTR · ${g.incidentsResolved} ${g.incidentsResolved === 1 ? 'incidente resuelto' : 'incidentes resueltos'}${g.incidentsOpen > 0 ? `, ${g.incidentsOpen} abierto${g.incidentsOpen === 1 ? '' : 's'}` : ''}`
+              : g.incidentsOpen > 0
+                ? `MTTR · sin incidentes resueltos, ${g.incidentsOpen} abierto${g.incidentsOpen === 1 ? '' : 's'}`
+                : 'MTTR · sin incidentes registrados'}</span>
+          </div>
           <div class="card"><span class="value">${g.people}</span><span class="label">Personas que participan</span></div>
         </div>
         ${hasRealLead
@@ -153,7 +174,10 @@ export class DoraMetrics extends LitElement {
         ${hasDeploys
           ? html`<p class="note">Change Failure Rate = % de despliegues en producción que fallaron (${g.deploymentsFailed}/${g.deploymentsTotal}), sobre los despliegues registrados manualmente (D1). Métrica real, no proxy.</p>`
           : html`<p class="note">Change Failure Rate: sin despliegues registrados. Registra despliegues (con su resultado) para poder medirlo.</p>`}
-        <p class="note">Lead time agregado = media ponderada. Métricas de equipo, nunca por persona (R3).</p>
+        ${hasResolved
+          ? html`<p class="note">MTTR (Mean Time to Recovery) = downtime total ÷ nº de incidentes resueltos, sobre los incidentes registrados manualmente (D4). Métrica real, no proxy.</p>`
+          : html`<p class="note">MTTR: sin incidentes resueltos. Registra incidentes (inicio → restauración) en cada repo para poder medirlo.</p>`}
+        <p class="note">Lead time y MTTR agregados = media ponderada. Métricas de equipo, nunca por persona (R3).</p>
       </section>
       ${this._table('Por equipo', s.byTeam)}
       ${this._table('Por gremio', s.byGuild)}

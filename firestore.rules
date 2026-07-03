@@ -201,6 +201,17 @@ service cloud.firestore {
               && 'ownerLeaderUid' in get(/databases/$(database)/documents/dora/$(repoId)).data
               && get(/databases/$(database)/documents/dora/$(repoId)).data.ownerLeaderUid == request.auth.uid);
       }
+
+      // Incidentes en producción de un repo (registro manual; base del MTTR, D4).
+      // Mismos permisos que /deployments: los gestiona el líder dueño del repo
+      // (comprobando el ownerLeaderUid del doc padre) o el superadmin.
+      match /incidents/{incidentId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isSuperAdmin()
+          || (isLeader()
+              && 'ownerLeaderUid' in get(/databases/$(database)/documents/dora/$(repoId)).data
+              && get(/databases/$(database)/documents/dora/$(repoId)).data.ownerLeaderUid == request.auth.uid);
+      }
     }
 
     // Mapa de Carrera: el journey de cada persona, solo suyo.

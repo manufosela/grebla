@@ -35,6 +35,25 @@
  * @property {string} [createdAt]   Cuándo se registró (ISO 8601).
  */
 
+/**
+ * Incidente en producción de un repo (subcolección /dora/{repoId}/incidents).
+ * Es la base del MTTR (Mean Time to Recovery, DORA D4): mide cuánto tarda el
+ * servicio en recuperarse. ESPEJO del registro de despliegues (D1): mismo modelo
+ * agnóstico a la fuente (hoy manual desde la tool DORA; en el futuro, ingesta
+ * automática desde alertas/CI). Un incidente ABIERTO tiene `restoredAt: null`;
+ * uno RESUELTO tiene `restoredAt` con la marca de restauración. Las métricas son
+ * de equipo, nunca por persona; `createdBy` solo identifica quién lo registró.
+ *
+ * @typedef {Object} Incident
+ * @property {string} id
+ * @property {string} startedAt        Inicio del incidente / caída (ISO 8601).
+ * @property {string|null} restoredAt  Restauración del servicio (ISO 8601) o null si sigue abierto.
+ * @property {string} [note]           Nota libre opcional.
+ * @property {string|null} [deploymentId]  Despliegue fallido que lo causó (D1), opcional.
+ * @property {{ uid: string, name: string }} [createdBy]  Quién lo registró en la app.
+ * @property {string} [createdAt]      Cuándo se registró (ISO 8601).
+ */
+
 /** Formato "owner/repo" (caracteres válidos de GitHub). */
 const FULL_NAME_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 

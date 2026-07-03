@@ -21,9 +21,15 @@ import {
   registerDeployment,
   listDeployments,
   removeDeployment,
+  registerIncident,
+  listIncidents,
+  resolveIncident,
+  removeIncident,
 } from '../../tools/dora/application/usecases.js';
 import { leadTimeLevel, deployFrequencyLevel } from '../../tools/dora/domain/levels.js';
 import { deploymentFrequencyPerWeek } from '../../tools/dora/domain/deployments.js';
+import { meanTimeToRecovery } from '../../tools/dora/domain/mttr.js';
+import { formatHours } from './format.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { levelBadge, levelStyles } from './level-badge.js';
 
@@ -80,6 +86,19 @@ export class DoraRepos extends LitElement {
     _depSaving: { state: true },
     _depError: { state: true },
     _depConfirm: { state: true },
+    _incOpen: { state: true },
+    _incidents: { state: true },
+    _incLoading: { state: true },
+    _incDeployOptions: { state: true },
+    _incStartedAt: { state: true },
+    _incRestoredAt: { state: true },
+    _incNote: { state: true },
+    _incDeploymentId: { state: true },
+    _incSaving: { state: true },
+    _incError: { state: true },
+    _incConfirm: { state: true },
+    _incResolveId: { state: true },
+    _incResolveAt: { state: true },
   };
 
   static styles = [css`
@@ -174,6 +193,24 @@ export class DoraRepos extends LitElement {
     this._depError = '';
     /** @type {string|null} id del despliegue pendiente de confirmar borrado */
     this._depConfirm = null;
+    /** @type {string|null} id del repo con el panel de incidentes abierto */
+    this._incOpen = null;
+    /** @type {import('../../tools/dora/domain/types.js').Incident[]} */
+    this._incidents = [];
+    this._incLoading = false;
+    /** @type {import('../../tools/dora/domain/types.js').Deployment[]} despliegues fallidos para enlazar */
+    this._incDeployOptions = [];
+    this._incStartedAt = '';
+    this._incRestoredAt = '';
+    this._incNote = '';
+    this._incDeploymentId = '';
+    this._incSaving = false;
+    this._incError = '';
+    /** @type {string|null} id del incidente pendiente de confirmar borrado */
+    this._incConfirm = null;
+    /** @type {string|null} id del incidente en flujo de "marcar resuelto" */
+    this._incResolveId = null;
+    this._incResolveAt = '';
   }
 
   async _refreshMetrics() {
@@ -352,6 +389,118 @@ export class DoraRepos extends LitElement {
     return { from, to: new Date().toISOString() };
   }
 
+  /** Abre/cierra el panel de incidentes de un repo y carga sus datos. */
+  async _toggleIncidents(repo) {
+    if (this._incOpen === repo.id) {
+      this._incOpen = null;
+      this._incidents = [];
+      this._incDeployOptions = [];
+      return;
+    }
+    this._incOpen = repo.id;
+    this._incidents = [];
+    this._incError = '';
+    this._incConfirm = null;
+    this._incResolveId = null;
+    this._incStartedAt = nowForInput();
+    this._incRestoredAt = '';
+    this._incNote = '';
+    this._incDeploymentId = '';
+    await this._loadIncidents(repo.id);
+  }
+
+  async _loadIncidents(repoId) {
+    this._incLoading = true;
+    this._incError = '';
+    try {
+      // Incidentes del repo y, para el enlace opcional, sus despliegues fallidos.
+      const [incidents, deployments] = await Promise.all([
+        listIncidents(this.persistence, repoId),
+        listDeployments(this.persistence, repoId),
+      ]);
+      this._incidents = incidents;
+      this._incDeployOptions = deployments.filter((d) => d.status === 'failed');
+    } catch (err) {
+      this._incError = err instanceof Error ? err.message : 'No se pudieron cargar los incidentes.';
+    } finally {
+      this._incLoading = false;
+    }
+  }
+
+  /** Registra un incidente del repo con el autor de la sesión actual. */
+  async _registerIncident(event, repo) {
+    event.preventDefault();
+    this._incError = '';
+    this._incSaving = true;
+    try {
+      const user = getCurrentUser();
+      const createdBy = user ? { uid: user.uid, name: user.displayName ?? user.email ?? user.uid } : undefined;
+      await registerIncident(this.persistence, repo.id, {
+        startedAt: this._incStartedAt,
+        // Campo opcional: vacío = incidente abierto (se resolverá luego).
+        restoredAt: this._incRestoredAt || null,
+        note: this._incNote,
+        deploymentId: this._incDeploymentId || null,
+        createdBy,
+      });
+      // Reset del formulario a un nuevo "ahora" para el siguiente registro.
+      this._incStartedAt = nowForInput();
+      this._incRestoredAt = '';
+      this._incNote = '';
+      this._incDeploymentId = '';
+      await this._loadIncidents(repo.id);
+    } catch (err) {
+      this._incError = err instanceof Error ? err.message : 'No se pudo registrar el incidente.';
+    } finally {
+      this._incSaving = false;
+    }
+  }
+
+  /** Inicia el flujo de "marcar resuelto" de un incidente abierto (fecha = ahora). */
+  _startResolve(incident) {
+    this._incConfirm = null;
+    this._incResolveId = incident.id;
+    this._incResolveAt = nowForInput();
+  }
+
+  _cancelResolve() {
+    this._incResolveId = null;
+    this._incResolveAt = '';
+  }
+
+  async _confirmResolve(repoId) {
+    const id = this._incResolveId;
+    const restoredAt = this._incResolveAt;
+    this._incError = '';
+    try {
+      await resolveIncident(this.persistence, repoId, id, restoredAt);
+      this._cancelResolve();
+      await this._loadIncidents(repoId);
+    } catch (err) {
+      this._incError = err instanceof Error ? err.message : 'No se pudo marcar el incidente como resuelto.';
+    }
+  }
+
+  async _removeIncident(repoId, id) {
+    this._incConfirm = null;
+    this._incError = '';
+    try {
+      await removeIncident(this.persistence, repoId, id);
+      await this._loadIncidents(repoId);
+    } catch (err) {
+      this._incError = err instanceof Error ? err.message : 'No se pudo eliminar el incidente.';
+    }
+  }
+
+  /** Downtime en horas de un incidente resuelto (null si abierto o inválido). */
+  _downtimeHours(incident) {
+    if (incident?.restoredAt == null) return null;
+    const started = new Date(incident.startedAt).getTime();
+    const restored = new Date(incident.restoredAt).getTime();
+    const hours = (restored - started) / 3_600_000;
+    return Number.isFinite(hours) && hours >= 0 ? hours : null;
+  }
+
   _renderForm() {
     if (!this.canEdit) {
       return html`<p class="muted">Solo puedes consultar la lista de repositorios.</p>`;
@@ -480,6 +629,106 @@ export class DoraRepos extends LitElement {
     return html`<button class="del-btn" @click=${() => { this._depConfirm = e.id; }}>Quitar</button>`;
   }
 
+  /** Panel de incidentes de un repo: MTTR real, alta y lista (espejo de despliegues). */
+  _renderIncidentPanel(repo) {
+    const incidents = this._incidents;
+    const mttr = meanTimeToRecovery(incidents, this._deployPeriod(repo));
+    const mttrLabel = formatHours(mttr.mttrHoursAvg);
+    return html`
+      <div class="deploy-panel">
+        <div class="deploy-freq">
+          ${mttrLabel != null
+            ? html`<span class="real"><span class="value">${mttrLabel}</span> <span class="kind">MTTR real (${mttr.resolvedCount} ${mttr.resolvedCount === 1 ? 'incidente' : 'incidentes'})</span></span>`
+            : html`<span class="deploy-empty">Sin incidentes resueltos: el MTTR aún no se puede calcular.</span>`}
+          ${mttr.openCount > 0
+            ? html`<span class="proxy">${mttr.openCount} ${mttr.openCount === 1 ? 'incidente abierto' : 'incidentes abiertos'}</span>`
+            : null}
+        </div>
+        ${this.canEdit ? this._renderIncidentForm(repo) : null}
+        ${this._incError ? html`<p class="error">${this._incError}</p>` : null}
+        ${this._incLoading
+          ? html`<p class="deploy-empty">Cargando incidentes…</p>`
+          : this._renderIncidentList(repo)}
+      </div>
+    `;
+  }
+
+  _renderIncidentForm(repo) {
+    return html`
+      <form class="deploy-form" @submit=${(e) => this._registerIncident(e, repo)}>
+        <label>Inicio del incidente
+          <input type="datetime-local" required .value=${this._incStartedAt} @input=${(e) => { this._incStartedAt = e.target.value; }} />
+        </label>
+        <label>Restauración (opcional)
+          <input type="datetime-local" .value=${this._incRestoredAt} @input=${(e) => { this._incRestoredAt = e.target.value; }} />
+        </label>
+        <label>Despliegue que lo causó (opcional)
+          <select @change=${(e) => { this._incDeploymentId = e.target.value; }}>
+            <option value="" ?selected=${!this._incDeploymentId}>— ninguno —</option>
+            ${this._incDeployOptions.map((d) => html`
+              <option value=${d.id} ?selected=${this._incDeploymentId === d.id}>
+                ${fmtDateTime(d.at)}${d.sha ? ` · ${shortSha(d.sha)}` : ''}
+              </option>`)}
+          </select>
+        </label>
+        <label>Nota (opcional)
+          <input type="text" placeholder="contexto del incidente" .value=${this._incNote} @input=${(e) => { this._incNote = e.target.value; }} />
+        </label>
+        <button class="primary" type="submit" ?disabled=${this._incSaving}>${this._incSaving ? 'Registrando…' : 'Registrar incidente'}</button>
+      </form>
+    `;
+  }
+
+  _renderIncidentList(repo) {
+    if (this._incidents.length === 0) {
+      return html`<p class="deploy-empty">Aún no hay incidentes registrados para este repo.</p>`;
+    }
+    return html`
+      <ul class="deploy-list">
+        ${this._incidents.map((i) => {
+          const open = i.restoredAt == null;
+          const downtime = formatHours(this._downtimeHours(i));
+          return html`
+            <li>
+              <span class="pill ${open ? 'failed' : 'success'}">${open ? 'abierto' : 'resuelto'}</span>
+              <span class="when">${fmtDateTime(i.startedAt)}</span>
+              ${open
+                ? html`<span class="by">en curso</span>`
+                : html`<span class="by">→ ${fmtDateTime(i.restoredAt)}${downtime != null ? ` · ${downtime}` : ''}</span>`}
+              ${i.createdBy?.name ? html`<span class="by">por ${i.createdBy.name}</span>` : null}
+              ${i.note ? html`<span class="by" title=${i.note}>· ${i.note}</span>` : null}
+              <span class="spacer"></span>
+              ${this.canEdit ? this._renderIncidentActions(repo, i) : null}
+            </li>
+          `;
+        })}
+      </ul>
+    `;
+  }
+
+  _renderIncidentActions(repo, incident) {
+    // Flujo "marcar resuelto": input de fecha inline + confirmación.
+    if (this._incResolveId === incident.id) {
+      return html`<span class="confirm">
+        <input type="datetime-local" class="edit-in" .value=${this._incResolveAt} @input=${(e) => { this._incResolveAt = e.target.value; }} />
+        <button class="yes" @click=${() => this._confirmResolve(repo.id)}>Resolver</button>
+        <button @click=${() => this._cancelResolve()}>Cancelar</button>
+      </span>`;
+    }
+    if (this._incConfirm === incident.id) {
+      return html`<span class="confirm">¿Quitar?
+        <button class="yes" @click=${() => this._removeIncident(repo.id, incident.id)}>Sí</button>
+        <button @click=${() => { this._incConfirm = null; }}>No</button>
+      </span>`;
+    }
+    return html`
+      ${incident.restoredAt == null
+        ? html`<button class="del-btn edit" @click=${() => this._startResolve(incident)}>Marcar resuelto</button>`
+        : null}
+      <button class="del-btn" @click=${() => { this._incConfirm = incident.id; }}>Quitar</button>
+    `;
+  }
+
   /** Celdas de equipo, gremios y rama base: en edición (admin) muestran inputs. */
   _renderConfigCells(repo) {
     if (this.canEdit && this._editing === repo.id) {
@@ -539,6 +788,10 @@ export class DoraRepos extends LitElement {
                               @click=${() => this._toggleDeploys(r)}>
                               ${this._deployOpen === r.id ? '▾' : '▸'} Despliegues reales
                             </button>
+                            <button class="deploy-toggle" aria-expanded=${this._incOpen === r.id}
+                              @click=${() => this._toggleIncidents(r)}>
+                              ${this._incOpen === r.id ? '▾' : '▸'} Incidentes
+                            </button>
                           </td>
                           ${this._renderConfigCells(r)}
                           <td>${fmtDate(r.startDate)}</td>
@@ -548,13 +801,16 @@ export class DoraRepos extends LitElement {
                         ${this._deployOpen === r.id
                           ? html`<tr class="detail"><td colspan=${this.canEdit ? 9 : 8}>${this._renderDeployPanel(r)}</td></tr>`
                           : null}
+                        ${this._incOpen === r.id
+                          ? html`<tr class="detail"><td colspan=${this.canEdit ? 9 : 8}>${this._renderIncidentPanel(r)}</td></tr>`
+                          : null}
                       `,
                     )}
                   </tbody>
                 </table>
                 <datalist id="dora-teams">${this._teams.map((t) => html`<option value=${t}></option>`)}</datalist>
                 <datalist id="dora-guilds">${this._guilds.map((g) => html`<option value=${g}></option>`)}</datalist>
-                <p class="muted note">Equipo, gremios y rama base (señal de despliegue, por defecto <code>main</code>) se configuran aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Siempre a nivel de equipo, nunca por persona.</p>
+                <p class="muted note">Equipo, gremios y rama base (señal de despliegue, por defecto <code>main</code>) se configuran aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Para el <strong>MTTR</strong> abre «Incidentes» y registra las caídas (inicio → restauración). Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>
 
