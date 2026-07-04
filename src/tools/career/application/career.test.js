@@ -12,6 +12,10 @@ import {
   setEvidence,
   getAchievements,
   recordAchievements,
+  listQuestions,
+  askQuestion,
+  answerQuestion,
+  markQuestionSeen,
   stats,
 } from './usecases.js';
 
@@ -152,5 +156,64 @@ describe('career — casos de uso', () => {
     expect(saved.badges.legend).toEqual({ achievedAt: null });
     // Parche null: no escribe nada y devuelve lo que había.
     expect(await recordAchievements(store, 'p1', a, null)).toBe(a);
+  });
+
+  it('el brujo: preguntar, responder y marcar vista recorren el ciclo completo (MC-22)', async () => {
+    // Persona sin consultas: lista vacía y cabaña en reposo.
+    expect(await listQuestions(store, 'p1')).toEqual([]);
+    // El jugador deja una consulta: nace pending con fecha y autoría.
+    const created = await askQuestion(store, 'p1', {
+      islandId: 'island',
+      islandName: 'Bases de software',
+      text: '  ¿Por dónde empiezo con testing?  ',
+      createdBy: { uid: 'u-eng', name: 'Ada' },
+    });
+    expect(created).toMatchObject({
+      islandId: 'island',
+      text: '¿Por dónde empiezo con testing?',
+      status: 'pending',
+      createdBy: { uid: 'u-eng', name: 'Ada' },
+    });
+    expect(created.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // El líder responde con ayuda de un compañero (creditedTo).
+    await answerQuestion(store, 'p1', created.id, {
+      answer: 'Empieza por un test que falle.',
+      answeredBy: { uid: 'u-lead', name: 'Líder' },
+      creditedTo: 'Grace',
+    });
+    let [q] = await listQuestions(store, 'p1');
+    expect(q).toMatchObject({
+      status: 'answered',
+      answer: 'Empieza por un test que falle.',
+      answeredBy: { uid: 'u-lead', name: 'Líder' },
+      creditedTo: 'Grace',
+    });
+    expect(q.answeredAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // El jugador la marca como vista: solo status+seenAt cambian.
+    await markQuestionSeen(store, 'p1', created.id);
+    [q] = await listQuestions(store, 'p1');
+    expect(q.status).toBe('seen');
+    expect(q.seenAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(q.answer).toBe('Empieza por un test que falle.'); // la Q&A queda en la ficha
+  });
+
+  it('el brujo valida la entrada y aísla por persona (MC-22)', async () => {
+    await expect(askQuestion(store, 'p1', { islandId: 'island', text: '   ' })).rejects.toThrow();
+    await expect(askQuestion(store, 'p1', { islandId: '', text: 'Hola' })).rejects.toThrow();
+    const created = await askQuestion(store, 'p1', { islandId: 'island', text: 'Hola brujo' });
+    // Sin login con uid no se registra autoría (degradación con gracia).
+    expect(created.createdBy).toBeUndefined();
+    await expect(answerQuestion(store, 'p1', created.id, { answer: '  ' })).rejects.toThrow();
+    await expect(answerQuestion(store, 'p1', 'no-existe', { answer: 'X' })).rejects.toThrow();
+    // Las consultas de p1 no aparecen en p2.
+    expect(await listQuestions(store, 'p2')).toEqual([]);
+  });
+
+  it('las consultas del brujo se listan ordenadas por fecha descendente (MC-22)', async () => {
+    // Se siembran directamente en el store con fechas controladas.
+    await store.questions.ask('p1', { islandId: 'island', islandName: '', text: 'vieja', status: 'pending', createdAt: '2026-07-01T00:00:00.000Z' });
+    await store.questions.ask('p1', { islandId: 'frontend', islandName: '', text: 'nueva', status: 'pending', createdAt: '2026-07-03T00:00:00.000Z' });
+    const list = await listQuestions(store, 'p1');
+    expect(list.map((x) => x.text)).toEqual(['nueva', 'vieja']);
   });
 });

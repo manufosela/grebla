@@ -399,3 +399,55 @@ export function islandRadius(map, opts = {}) {
   const reach = pts.reduce((m, p) => Math.max(m, Math.hypot(p.wx, p.wz)), 0);
   return Math.max(reach + BEACH_MARGIN, MIN_ISLAND_RADIUS);
 }
+
+/**
+ * Colocación de la CABAÑA DEL BRUJO (MC-22): distancia hacia el interior desde
+ * el puerto, holgura mínima al eje de cualquier casa (colisión de casa ~2.5 +
+ * planta de la cabaña + respiro) y barrido de ángulos candidatos alrededor del
+ * centro de la isla (radianes, en orden de preferencia: primero junto al
+ * puerto, luego alternando a ambos lados hasta la cara opuesta).
+ */
+export const WIZARD_SPOT = Object.freeze({
+  inland: 16,
+  clearance: 8,
+  sweep: Object.freeze([0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6, 2.1, -2.1, 2.6, -2.6, Math.PI]),
+});
+
+/**
+ * Posición de mundo de la cabaña del brujo (MC-22), DETERMINISTA: el primer
+ * candidato del barrido (misma «anilla» radial que el puerto, retranqueada
+ * WIZARD_SPOT.inland hacia el interior) que respeta la holgura con TODAS las
+ * casas. La cabaña vive cerca del puerto — el viajero la encuentra al llegar —
+ * pero nunca pisa una casa. En un mapa sin puerto se ancla al sur de la isla
+ * (misma convención que el spawn). Si ningún candidato librara todas las casas
+ * (mapa imposiblemente denso), se devuelve el primero: mejor una cabaña rozada
+ * que una isla sin brujo — degradación documentada, no silenciosa.
+ *
+ * @param {CareerMap} map
+ * @param {WorldOptions & { maxRadius?: number }} [opts] `maxRadius` acota el
+ *   anillo de candidatos (p. ej. el radio caminable: la cabaña siempre pisable).
+ * @returns {WorldPoint}
+ */
+export function wizardSpot(map, opts = {}) {
+  const R = islandRadius(map, opts);
+  const port = map?.startPort ? worldFromMap(map.startPort.x, map.startPort.y, opts) : null;
+  const portDist = port ? Math.hypot(port.wx, port.wz) : R * 0.6;
+  // Ángulo base: el del puerto; sin puerto, el sur (+z, hacia la cámara aérea).
+  const baseAngle = port && portDist > 1e-6 ? Math.atan2(port.wz, port.wx) : Math.PI / 2;
+  let ring = Math.max(portDist - WIZARD_SPOT.inland, WIZARD_SPOT.inland);
+  if (Number.isFinite(opts.maxRadius) && opts.maxRadius > 0) {
+    ring = Math.min(ring, opts.maxRadius);
+  }
+  const cities = (map?.cities ?? []).map((c) => worldFromMap(c.x, c.y, opts));
+  const candidate = (offset) => ({
+    wx: Math.cos(baseAngle + offset) * ring,
+    wz: Math.sin(baseAngle + offset) * ring,
+  });
+  const clear = (p) =>
+    cities.every((c) => Math.hypot(c.wx - p.wx, c.wz - p.wz) >= WIZARD_SPOT.clearance);
+  for (const offset of WIZARD_SPOT.sweep) {
+    const p = candidate(offset);
+    if (clear(p)) return p;
+  }
+  return candidate(WIZARD_SPOT.sweep[0]);
+}

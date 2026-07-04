@@ -6,13 +6,24 @@
  * líder dueño / compartido-edit / superadmin escriben; la cuenta vinculada del
  * ingeniero LEE). `db` se inyecta.
  *
+ * Las CONSULTAS AL BRUJO (MC-22) viven en
+ * /people/{personId}/career/wizard/questions/{questionId} (un doc por
+ * consulta, bajo el doc-fantasma `wizard` del subárbol career: el path del
+ * diseño original /career/questions/{qId} tiene 5 segmentos — colección, no
+ * documento — y no puede alojar docs). Además de las reglas del subárbol, el
+ * jugador vinculado (Person.uid == auth.uid) tiene una excepción ACOTADA:
+ * crear consultas 'pending' y marcar la respuesta como vista (solo
+ * status+seenAt) — ver firestore.rules.
+ *
  * @typedef {import('firebase/firestore').Firestore} Firestore
  * @typedef {import('../../domain/ports.js').CareerStore} CareerStore
  */
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, collection } from 'firebase/firestore';
 
 const journeyDoc = (db, personId) => doc(db, 'people', personId, 'career', 'journey');
 const achievementsDoc = (db, personId) => doc(db, 'people', personId, 'career', 'achievements');
+const questionsCol = (db, personId) =>
+  collection(db, 'people', personId, 'career', 'wizard', 'questions');
 
 /**
  * @param {Firestore} db
@@ -48,6 +59,29 @@ export function createFirestoreCareerStore(db) {
         if (Object.keys(patch.badges ?? {}).length > 0) data.badges = patch.badges;
         if (Object.keys(data).length === 0) return;
         await setDoc(achievementsDoc(db, personId), data, { merge: true });
+      },
+    },
+    // Consultas al brujo (MC-22): repos «tontos» — los campos (status, fechas
+    // ISO, validación) los componen los casos de uso. markSeen escribe SOLO
+    // status+seenAt: la máscara que permite la excepción del jugador vinculado.
+    questions: {
+      async listByPerson(personId) {
+        const snap = await getDocs(questionsCol(db, personId));
+        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      },
+      async ask(personId, question) {
+        const ref = doc(questionsCol(db, personId)); // id autogenerado
+        await setDoc(ref, { ...question });
+        return { id: ref.id };
+      },
+      async answer(personId, questionId, patch) {
+        await updateDoc(doc(questionsCol(db, personId), questionId), { ...patch });
+      },
+      async markSeen(personId, questionId, patch) {
+        await updateDoc(doc(questionsCol(db, personId), questionId), {
+          status: patch.status,
+          seenAt: patch.seenAt,
+        });
       },
     },
   };

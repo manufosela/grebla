@@ -94,6 +94,22 @@
  * registra con la fecha ISO del momento. Las fechas existentes NUNCA se
  * re-escriben (newAchievements, puro).
  *
+ * El brujo (MC-22): cada isla tiene la cabaña del brujo (edificación singular
+ * de <career-island-3d>) donde el jugador deja CONSULTAS ASÍNCRONAS al líder.
+ * El evento `open-wizard` (clic aéreo, [E] o choque a pie) abre aquí el panel
+ * overlay «🧙 El brujo de {isla}»: textarea para dejar la consulta (quien
+ * puede escribir: líder jugando o jugador vinculado; si no, solo lectura) y
+ * las consultas de ESA isla de la persona cargada con su estado, la respuesta
+ * («— respondida por {answeredBy/creditedTo}») y el botón «Entendido» que la
+ * marca como vista. El estado visual de la cabaña se deriva en puro
+ * (domain/wizard.js) de las consultas de la isla actual: pendiente = farol
+ * ámbar, respuesta lista = farol teal. Con `canEdit` (líder/superadmin) la
+ * barra ofrece «🧙 Consultas (N)» con las PENDIENTES de todas sus personas
+ * (carga en paralelo, cap MAX_TEAM_JOURNEYS como los journeys) y un overlay
+ * de cola FIFO para responder (autoría del login, campo opcional «Con ayuda
+ * de» para acreditar al developer que ayudó — derivación v1 informativa).
+ * Todas las Q&A quedan en la ficha del jugador (<player-card>, MC-21).
+ *
  * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
  * localStorage `grebla:career:onboarded`) un cartel de bienvenida overlay
  * (DOM, estilo del panel) explica qué es la isla, los controles de la vista
@@ -103,7 +119,9 @@
  *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
- *  - people: { id: string, name: string }[]   personas del equipo del líder
+ *  - people: { id: string, name: string, uid?: string|null }[]   personas del equipo del líder
+ *  - canEdit: boolean                          líder/superadmin (cola del brujo, MC-22)
+ *  - currentUser: { uid: string, name: string }|null   login (autoría de consultas/respuestas)
  */
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
@@ -119,6 +137,10 @@ import {
   setEvidence,
   getAchievements,
   recordAchievements,
+  listQuestions,
+  askQuestion,
+  answerQuestion,
+  markQuestionSeen,
   stats,
 } from '../../tools/career/application/usecases.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds } from '../../lib/careerMap.js';
@@ -134,6 +156,7 @@ import {
 import { cityStatus, missingPrereqs, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 import { newAchievements } from '../../tools/career/domain/achievements.js';
+import { wizardState, pendingQuestions } from '../../tools/career/domain/wizard.js';
 
 /**
  * Pestañas de la tarjeta de la casa (MC-15): estado/acciones del certificado,
@@ -163,10 +186,22 @@ const RESOURCE_GROUPS = {
   doc: { icon: '📄', title: 'Docs' },
 };
 
+/** Formato de fechas de las consultas al brujo (MC-22). */
+const wizardDateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
+
+/** Fecha legible de una consulta (o '—' si no la trae/es corrupta). @param {string} iso */
+function formatWizardDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : wizardDateFmt.format(d);
+}
+
 export class CareerApp extends LitElement {
   static properties = {
     store: { attribute: false },
     people: { attribute: false },
+    canEdit: { attribute: false },
+    currentUser: { attribute: false },
     personId: { state: true },
     error: { state: true },
     journey: { state: true },
@@ -190,6 +225,12 @@ export class CareerApp extends LitElement {
     announcement: { state: true },
     achievements: { state: true },
     showPlayerCard: { state: true },
+    questions: { state: true },
+    showWizard: { state: true },
+    showWizardQueue: { state: true },
+    wizardPending: { state: true },
+    wizardBusy: { state: true },
+    wizardError: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -451,6 +492,49 @@ export class CareerApp extends LitElement {
       box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
       outline: none;
     }
+    /* ── El brujo (MC-22): panel del jugador y cola del líder (hermanos de la
+       ficha: mismo backdrop/section, contenido de consultas). ── */
+    .wizlead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
+    .wizreadonly { margin: 0.5rem 0 0.75rem; font-size: 0.85rem; color: var(--rm-muted, #9ca3af); }
+    .wizempty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; margin: 0.4rem 0 0; }
+    .sub { margin: 1.1rem 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 700; }
+    .wizform { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.5rem 0 0.25rem; }
+    .wizform label { font-size: 0.75rem; }
+    .wizform textarea,
+    .wizform input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.5rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid var(--rm-border, #d1d5db);
+      background: var(--rm-surface, #fff);
+      color: var(--rm-text, #111827);
+      font: inherit;
+      font-size: 0.88rem;
+      resize: vertical;
+    }
+    .wizform button { align-self: flex-start; }
+    .wizlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+    .wizq { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.8rem; }
+    .wmeta { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .wmeta strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
+    .wmeta .when { font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    .wisle { font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
+    .wstatus { font-size: 0.7rem; font-weight: 800; padding: 0.14rem 0.55rem; border-radius: 999px; white-space: nowrap; }
+    .wstatus.pending { background: #fdebc8; color: #8a5a00; }
+    .wstatus.answered { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .wstatus.seen { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    .wtext { margin: 0.4rem 0 0; font-size: 0.88rem; color: var(--rm-text, #111827); white-space: pre-wrap; }
+    .wizanswer {
+      margin-top: 0.55rem;
+      border-left: 4px solid var(--rm-accent, #2a9d8f);
+      background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 9%, var(--rm-surface, #fff));
+      border-radius: 0 10px 10px 0;
+      padding: 0.5rem 0.7rem;
+    }
+    .wizanswer .wtext { margin: 0; }
+    .wby { margin: 0.35rem 0 0; font-size: 0.76rem; font-style: italic; color: var(--rm-muted, #6b7280); }
+    .wseen { margin-top: 0.55rem; }
     .sea-map {
       position: relative;
       aspect-ratio: 16 / 10;
@@ -660,6 +744,25 @@ export class CareerApp extends LitElement {
     /** @type {import('../../tools/career/domain/achievements.js').Achievements|null} */
     this.achievements = null;
     this.showPlayerCard = false;
+    // El brujo (MC-22): rol del usuario (canEdit habilita la cola del líder),
+    // login para la autoría, consultas de la persona cargada (TODAS las islas;
+    // el panel del brujo filtra por la actual y la ficha las lista completas),
+    // overlays y caché de consultas del equipo para el contador de pendientes.
+    this.canEdit = false;
+    /** @type {{ uid: string, name: string }|null} */
+    this.currentUser = null;
+    /** @type {import('../../tools/career/domain/wizard.js').WizardQuestion[]|null} */
+    this.questions = null;
+    this.showWizard = false;
+    this.showWizardQueue = false;
+    /** Nº de consultas PENDIENTES de todas las personas visibles (cola del líder). */
+    this.wizardPending = 0;
+    this.wizardBusy = false;
+    this.wizardError = '';
+    /** Consultas por persona (MC-22), cacheadas como los journeys del equipo.
+     * @type {Map<string, import('../../tools/career/domain/wizard.js').WizardQuestion[]>} */
+    this._teamQuestions = new Map();
+    this._teamQuestionsLoaded = false;
     // Progresión (MC-20): aviso de ciudadanía/badge en pantalla (o null) y su
     // cola — los anuncios encadenados salen SECUENCIALES, nunca solapados.
     /** @type {import('../../tools/career/domain/citizenship.js').CitizenshipEvent|null} */
@@ -750,6 +853,9 @@ export class CareerApp extends LitElement {
       this._clearAnnouncements(); // los avisos encolados también (MC-20)
       this.showPlayerCard = false; // la ficha abierta era de otra persona (MC-21)
       this.achievements = null;
+      this.showWizard = false; // el panel del brujo abierto era de otra persona (MC-22)
+      this.questions = null;
+      this.wizardError = '';
     }
     if (this.store && !this._mapLoaded) {
       this._mapLoaded = true;
@@ -764,6 +870,19 @@ export class CareerApp extends LitElement {
     if (this.store && (this.people ?? []).length > 0 && !this._teamLoaded) {
       this._teamLoaded = true;
       this._loadTeamJourneys();
+    }
+    // Cola del brujo (MC-22): con canEdit se cargan en paralelo las consultas
+    // de todas las personas visibles (mismo cap y política que los journeys)
+    // para el contador «🧙 Consultas (N)».
+    if (this.store && this.canEdit && (this.people ?? []).length > 0 && !this._teamQuestionsLoaded) {
+      this._teamQuestionsLoaded = true;
+      this._loadTeamQuestions();
+    }
+    // Las consultas recién cargadas/mutadas de la persona actual refrescan la
+    // caché del equipo y el contador de pendientes (MC-22).
+    if (changed.has('questions') && this.personId && this.questions) {
+      this._teamQuestions.set(this.personId, this.questions);
+      this._refreshWizardPending();
     }
     // El journey propio recién cargado/mutado también refresca la caché del
     // equipo: al cambiar de persona, la anterior aparece como compañera con
@@ -792,6 +911,13 @@ export class CareerApp extends LitElement {
     if (changed.has('showPlayerCard') && this.showPlayerCard) {
       this.renderRoot.querySelector('.ficha')?.focus();
     }
+    // El panel del brujo y la cola del líder reciben el foco al abrirse (MC-22).
+    if (changed.has('showWizard') && this.showWizard) {
+      this.renderRoot.querySelector('.wizpanel')?.focus();
+    }
+    if (changed.has('showWizardQueue') && this.showWizardQueue) {
+      this.renderRoot.querySelector('.wizqueue')?.focus();
+    }
   }
 
   /** Nombre de una isla según el índice del archipiélago (o '' si no está). @param {string} islandId */
@@ -818,14 +944,16 @@ export class CareerApp extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      // Journey y logros registrados (MC-21) en paralelo: viven juntos en el
-      // subárbol career de la persona.
-      const [journey, achievements] = await Promise.all([
+      // Journey, logros registrados (MC-21) y consultas al brujo (MC-22) en
+      // paralelo: viven juntos en el subárbol career de la persona.
+      const [journey, achievements, questions] = await Promise.all([
         getJourney(this.store, this.personId),
         getAchievements(this.store, this.personId),
+        listQuestions(this.store, this.personId),
       ]);
       this.journey = journey;
       this.achievements = achievements;
+      this.questions = questions;
       // El journey es GLOBAL (MC-14): si esta persona está en otra isla del
       // archipiélago, se carga el mapa de SU isla.
       const island = this.journey.currentIsland ?? DEFAULT_ISLAND_ID;
@@ -1290,7 +1418,423 @@ export class CareerApp extends LitElement {
           .progress=${prog}
           .achievements=${this.achievements}
           .visitedIslands=${this.journey?.visitedIslands ?? []}
+          .questions=${this.questions ?? []}
         ></player-card>
+      </section>
+    </div>`;
+  }
+
+  // ---- El brujo de la isla (MC-22) --------------------------------------------
+
+  /** Etiquetas de estado de una consulta al brujo. */
+  static QUESTION_BADGES = Object.freeze({
+    pending: 'Esperando al brujo',
+    answered: 'Respuesta lista',
+    seen: 'Vista',
+  });
+
+  /** La persona seleccionada (con su uid de cuenta vinculada, si lo tiene). */
+  get _selectedPerson() {
+    return (this.people ?? []).find((p) => p.id === this.personId) ?? null;
+  }
+
+  /**
+   * true si el usuario puede DEJAR consultas y marcarlas como vistas: el líder
+   * jugando (canEdit: escribe todo el subárbol) o el jugador vinculado
+   * (Person.uid == su uid: la excepción acotada de las reglas). Si no, el
+   * panel del brujo queda en solo lectura.
+   */
+  get _canAskWizard() {
+    if (this.canEdit) return true;
+    const uid = this.currentUser?.uid;
+    return Boolean(uid && this._selectedPerson?.uid === uid);
+  }
+
+  /**
+   * Autoría de consultas/respuestas desde el login (como las notas del tool
+   * Equipo): sin uid no se registra autoría — degradación con gracia, nunca
+   * un autor inventado.
+   * @returns {{ uid: string, name: string }|undefined}
+   */
+  _wizardAuthor() {
+    const user = this.currentUser;
+    if (!user?.uid) return undefined;
+    return { uid: user.uid, name: user.name };
+  }
+
+  /** Nombre de la isla actual: el del índice del archipiélago o el del mapa cargado. */
+  _currentIslandName() {
+    const indexName = this._islandName(this.currentIsland);
+    if (indexName !== '') return indexName;
+    return this.map?.name ?? '';
+  }
+
+  /**
+   * Carga EN PARALELO las consultas al brujo de las personas visibles (cola
+   * del líder, MC-22): misma política y cap que los journeys del equipo. Una
+   * persona ilegible no tumba al resto (se avisa por consola y no cuenta).
+   */
+  async _loadTeamQuestions() {
+    const people = this.people ?? [];
+    const capped = people.slice(0, CareerApp.MAX_TEAM_JOURNEYS);
+    if (people.length > capped.length) {
+      console.warn(
+        `Cola del brujo: ${people.length} personas visibles; se cargan solo las consultas de las ${CareerApp.MAX_TEAM_JOURNEYS} primeras para acotar las lecturas.`,
+      );
+    }
+    await Promise.all(
+      capped.map(async (person) => {
+        if (person.id === this.personId && this.questions) return; // ya en caché vía _load()
+        try {
+          this._teamQuestions.set(person.id, await listQuestions(this.store, person.id));
+        } catch (err) {
+          console.warn(`Cola del brujo: no se pudieron cargar las consultas de "${person.id}".`, err);
+        }
+      }),
+    );
+    this._refreshWizardPending();
+  }
+
+  /** Recuenta las consultas PENDIENTES de la caché del equipo (contador HUD). */
+  _refreshWizardPending() {
+    let count = 0;
+    for (const questions of this._teamQuestions.values()) {
+      count += pendingQuestions(questions).length;
+    }
+    this.wizardPending = count;
+  }
+
+  /**
+   * Cola FIFO del líder: las consultas pendientes de TODAS las personas en
+   * caché, la más antigua primero, con su persona para responder en contexto.
+   * @returns {{ personId: string, personName: string, question: import('../../tools/career/domain/wizard.js').WizardQuestion }[]}
+   */
+  _pendingQueue() {
+    const names = new Map((this.people ?? []).map((p) => [p.id, p.name]));
+    const queue = [];
+    for (const [personId, questions] of this._teamQuestions) {
+      const personName = names.get(personId);
+      if (personName === undefined) continue; // persona ya no visible
+      for (const question of pendingQuestions(questions)) {
+        queue.push({ personId, personName, question });
+      }
+    }
+    return queue.toSorted((a, b) => {
+      if (a.question.createdAt === b.question.createdAt) return 0;
+      if (!a.question.createdAt) return 1;
+      if (!b.question.createdAt) return -1;
+      return a.question.createdAt < b.question.createdAt ? -1 : 1;
+    });
+  }
+
+  /** La cabaña pidió abrir el panel del brujo (clic, [E] o choque en la isla). */
+  _onOpenWizard() {
+    this._openWizard();
+  }
+
+  /** Abre el panel del brujo de la isla actual. */
+  _openWizard() {
+    if (!this.personId) return;
+    this.wizardError = '';
+    this.showWizard = true;
+  }
+
+  /** Cierra el panel del brujo (✕, Escape o fondo) y devuelve el foco al HUD. */
+  _closeWizard() {
+    this.showWizard = false;
+    this._recapturePointerLock();
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro del panel del brujo lo cierra. @param {KeyboardEvent} event */
+  _onWizardKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeWizard();
+  }
+
+  /**
+   * Deja la consulta escrita en la cabaña del brujo: usecase askQuestion
+   * (valida el texto), autoría del login y la isla ACTUAL. La lista local, la
+   * caché del equipo y el estado de la cabaña se refrescan al momento.
+   */
+  async _askWizard() {
+    if (!this.personId || this.wizardBusy) return;
+    const textarea = /** @type {HTMLTextAreaElement|null} */ (
+      this.renderRoot.querySelector('#wizard-question')
+    );
+    const text = textarea?.value.trim() ?? '';
+    if (!text) {
+      this.wizardError = 'Escribe tu consulta antes de dejarla al brujo.';
+      return;
+    }
+    this.wizardBusy = true;
+    this.wizardError = '';
+    try {
+      const created = await askQuestion(this.store, this.personId, {
+        islandId: this.currentIsland,
+        islandName: this._currentIslandName(),
+        text,
+        createdBy: this._wizardAuthor(),
+      });
+      this.questions = [created, ...(this.questions ?? [])];
+      textarea.value = '';
+    } catch (err) {
+      this.wizardError =
+        err instanceof Error ? err.message : 'No se pudo dejar la consulta al brujo.';
+    } finally {
+      this.wizardBusy = false;
+    }
+  }
+
+  /**
+   * «Entendido»: marca la respuesta como VISTA (usecase markQuestionSeen, que
+   * escribe SOLO status+seenAt — la máscara de la excepción del jugador
+   * vinculado). La cabaña vuelve a su reposo si no queda nada pendiente.
+   * @param {import('../../tools/career/domain/wizard.js').WizardQuestion} question
+   */
+  async _markSeen(question) {
+    if (!this.personId || this.wizardBusy) return;
+    this.wizardBusy = true;
+    this.wizardError = '';
+    try {
+      const patch = await markQuestionSeen(this.store, this.personId, question.id);
+      this.questions = (this.questions ?? []).map((q) =>
+        q.id === question.id ? { ...q, ...patch } : q,
+      );
+    } catch (err) {
+      this.wizardError =
+        err instanceof Error ? err.message : 'No se pudo marcar la respuesta como vista.';
+    } finally {
+      this.wizardBusy = false;
+    }
+  }
+
+  /** Abre la cola de consultas del líder (botón «🧙 Consultas (N)»). */
+  _openWizardQueue() {
+    if (!this.canEdit) return;
+    this.wizardError = '';
+    this.showWizardQueue = true;
+  }
+
+  /** Cierra la cola del líder y devuelve el foco al HUD. */
+  _closeWizardQueue() {
+    this.showWizardQueue = false;
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro de la cola del líder la cierra. @param {KeyboardEvent} event */
+  _onWizardQueueKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeWizardQueue();
+  }
+
+  /**
+   * «Responder» desde la cola del líder: usecase answerQuestion con la autoría
+   * del login y el «Con ayuda de» opcional (creditedTo). Al responder, la
+   * consulta sale de pendientes; si era de la persona cargada, su lista (y la
+   * cabaña de su isla) se refrescan también.
+   * @param {string} personId
+   * @param {import('../../tools/career/domain/wizard.js').WizardQuestion} question
+   */
+  async _answerFromQueue(personId, question) {
+    if (this.wizardBusy) return;
+    const textarea = /** @type {HTMLTextAreaElement|null} */ (
+      this.renderRoot.querySelector(`#wq-answer-${question.id}`)
+    );
+    const credited = /** @type {HTMLInputElement|null} */ (
+      this.renderRoot.querySelector(`#wq-credit-${question.id}`)
+    );
+    const answer = textarea?.value.trim() ?? '';
+    if (!answer) {
+      this.wizardError = 'Escribe la respuesta antes de enviarla.';
+      return;
+    }
+    this.wizardBusy = true;
+    this.wizardError = '';
+    try {
+      const patch = await answerQuestion(this.store, personId, question.id, {
+        answer,
+        answeredBy: this._wizardAuthor(),
+        creditedTo: credited?.value.trim() ?? '',
+      });
+      const updated = (this._teamQuestions.get(personId) ?? []).map((q) =>
+        q.id === question.id ? { ...q, ...patch } : q,
+      );
+      this._teamQuestions.set(personId, updated);
+      if (personId === this.personId) this.questions = updated; // la cabaña pasa a «respuesta lista»
+      this._refreshWizardPending();
+    } catch (err) {
+      this.wizardError =
+        err instanceof Error ? err.message : 'No se pudo responder la consulta.';
+    } finally {
+      this.wizardBusy = false;
+    }
+  }
+
+  /** Botón «🧙 Consultas (N)» de la barra: solo con canEdit (cola del líder). */
+  _renderWizardQueueButton() {
+    if (!this.canEdit) return null;
+    return html`<button
+      @click=${this._openWizardQueue}
+      title="Abrir la cola de consultas al brujo pendientes de tu gente"
+    >🧙 Consultas (${this.wizardPending})</button>`;
+  }
+
+  /** Insignia de estado de una consulta. @param {import('../../tools/career/domain/wizard.js').WizardQuestion} q */
+  _renderQuestionBadge(q) {
+    return html`<span class="wstatus ${q.status}">${CareerApp.QUESTION_BADGES[q.status]}</span>`;
+  }
+
+  /**
+   * Bloque de respuesta de una consulta (si la tiene): el texto del brujo y
+   * «— respondida por {con-ayuda-de ?? quien-respondió}». Con `creditedTo` el
+   * crédito es para el developer que ayudó (derivación v1 informativa).
+   * @param {import('../../tools/career/domain/wizard.js').WizardQuestion} q
+   */
+  _renderQuestionAnswer(q) {
+    if (!q.answer) return null;
+    const credit = q.creditedTo ?? q.answeredBy?.name ?? '';
+    return html`<div class="wizanswer">
+      <p class="wtext">${q.answer}</p>
+      <p class="wby">
+        ${credit ? `— respondida por ${credit}` : '— respuesta del brujo'}
+        ${q.answeredAt ? ` · ${formatWizardDate(q.answeredAt)}` : ''}
+      </p>
+    </div>`;
+  }
+
+  /**
+   * Overlay del PANEL DEL BRUJO (jugador, MC-22): tono jugable, textarea para
+   * dejar la consulta (solo quien puede escribir) y MIS consultas de esta isla
+   * con estado, respuesta y el botón «Entendido» (markSeen) cuando está
+   * respondida. Modal como el archipiélago: foco al abrir, Escape/✕/fondo
+   * cierran.
+   */
+  _renderWizard() {
+    if (!this.showWizard) return null;
+    const islandName = this._currentIslandName();
+    const mine = (this.questions ?? []).filter((q) => q.islandId === this.currentIsland);
+    const canAsk = this._canAskWizard;
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeWizard(); }}>
+      <section
+        class="ficha wizpanel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="El brujo de ${islandName}"
+        tabindex="-1"
+        @keydown=${this._onWizardKeydown}
+      >
+        <header class="sea-head">
+          <h3>🧙 El brujo de ${islandName}</h3>
+          <button class="close" aria-label="Cerrar el panel del brujo" title="Cerrar (Esc)" @click=${this._closeWizard}>✕</button>
+        </header>
+        <p class="wizlead">
+          El brujo escucha tu consulta sobre los temas de la isla y se la hace
+          llegar al líder. La respuesta te esperará aquí — su farol se
+          encenderá en turquesa.
+        </p>
+        ${this.wizardError ? html`<p class="error" role="alert">${this.wizardError}</p>` : null}
+        ${canAsk
+          ? html`<div class="wizform">
+              <label for="wizard-question">Tu consulta</label>
+              <textarea
+                id="wizard-question"
+                rows="3"
+                placeholder="Cuéntale tu duda al brujo…"
+                ?disabled=${this.wizardBusy}
+              ></textarea>
+              <button class="primary" ?disabled=${this.wizardBusy} @click=${this._askWizard}>
+                Dejar la consulta
+              </button>
+            </div>`
+          : html`<p class="wizreadonly">Solo puedes leer las consultas de esta persona.</p>`}
+        <p class="sub">Consultas en esta isla</p>
+        ${mine.length === 0
+          ? html`<p class="wizempty">Aún no has dejado ninguna consulta al brujo de esta isla.</p>`
+          : html`<ul class="wizlist">
+              ${mine.map(
+                (q) => html`<li class="wizq">
+                  <div class="wmeta">
+                    ${this._renderQuestionBadge(q)}
+                    <span class="when">${formatWizardDate(q.createdAt)}</span>
+                  </div>
+                  <p class="wtext">${q.text}</p>
+                  ${this._renderQuestionAnswer(q)}
+                  ${q.status === 'answered' && canAsk
+                    ? html`<button
+                        class="primary wseen"
+                        ?disabled=${this.wizardBusy}
+                        title="Marcar la respuesta como vista"
+                        @click=${() => this._markSeen(q)}
+                      >Entendido</button>`
+                    : null}
+                </li>`,
+              )}
+            </ul>`}
+      </section>
+    </div>`;
+  }
+
+  /**
+   * Overlay de la COLA DEL LÍDER (MC-22): las consultas pendientes de todas
+   * sus personas (FIFO, la más antigua primero) con persona, isla, fecha y
+   * texto; textarea de respuesta, «Con ayuda de» opcional (creditedTo) y
+   * «Responder». Al responder desaparece de pendientes.
+   */
+  _renderWizardQueue() {
+    if (!this.showWizardQueue) return null;
+    const queue = this._pendingQueue();
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeWizardQueue(); }}>
+      <section
+        class="ficha wizqueue"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Consultas al brujo pendientes"
+        tabindex="-1"
+        @keydown=${this._onWizardQueueKeydown}
+      >
+        <header class="sea-head">
+          <h3>🧙 Consultas pendientes (${queue.length})</h3>
+          <button class="close" aria-label="Cerrar la cola de consultas" title="Cerrar (Esc)" @click=${this._closeWizardQueue}>✕</button>
+        </header>
+        ${this.wizardError ? html`<p class="error" role="alert">${this.wizardError}</p>` : null}
+        ${queue.length === 0
+          ? html`<p class="wizempty">No hay consultas pendientes: los brujos descansan.</p>`
+          : html`<ul class="wizlist">
+              ${queue.map(
+                ({ personId, personName, question }) => html`<li class="wizq">
+                  <div class="wmeta">
+                    <strong>${personName}</strong>
+                    <span class="wisle">🏝️ ${question.islandName !== '' ? question.islandName : question.islandId}</span>
+                    <span class="when">${formatWizardDate(question.createdAt)}</span>
+                  </div>
+                  <p class="wtext">${question.text}</p>
+                  <div class="wizform">
+                    <label for="wq-answer-${question.id}">Respuesta</label>
+                    <textarea
+                      id="wq-answer-${question.id}"
+                      rows="3"
+                      placeholder="Tu respuesta (el brujo se la hará llegar)…"
+                      ?disabled=${this.wizardBusy}
+                    ></textarea>
+                    <label for="wq-credit-${question.id}">Con ayuda de (opcional)</label>
+                    <input
+                      id="wq-credit-${question.id}"
+                      type="text"
+                      placeholder="Developer que ayudó con la respuesta"
+                      ?disabled=${this.wizardBusy}
+                    />
+                    <button
+                      class="primary"
+                      ?disabled=${this.wizardBusy}
+                      @click=${() => this._answerFromQueue(personId, question)}
+                    >Responder</button>
+                  </div>
+                </li>`,
+              )}
+            </ul>`}
       </section>
     </div>`;
   }
@@ -2076,6 +2620,11 @@ export class CareerApp extends LitElement {
     const sel = this.selected ? map.cities.find((c) => c.id === this.selected) : null;
     const selAreaName = sel ? map.areas.find((a) => a.id === sel.area)?.name : null;
     const fps = this.viewMode === '3d' && this.mode3d === 'fps';
+    // Estado de la cabaña del brujo (MC-22): derivado en puro de las consultas
+    // de la persona cargada EN la isla actual.
+    const hutState = wizardState(
+      (this.questions ?? []).filter((q) => q.islandId === this.currentIsland),
+    );
     return html`
       ${fps
         ? null
@@ -2085,6 +2634,7 @@ export class CareerApp extends LitElement {
               ${this._renderViewSwitch()}
               ${this._renderArchipelagoButton()}
               ${this._renderPlayerCardButton()}
+              ${this._renderWizardQueueButton()}
               ${this._renderProgressHud(prog, s)}
             </div>
           `}
@@ -2098,11 +2648,17 @@ export class CareerApp extends LitElement {
               .journey=${this.journey}
               .reachable=${s.reachable}
               .selected=${this.selected}
-              .overlayOpen=${Boolean(this.selected) || this.showArchipelago || this.showPlayerCard}
+              .overlayOpen=${Boolean(this.selected) ||
+              this.showArchipelago ||
+              this.showPlayerCard ||
+              this.showWizard ||
+              this.showWizardQueue}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
+              .wizardState=${hutState}
               @select-city=${this._onSelect}
               @select-teammate=${this._onSelectTeammate}
               @open-archipelago=${this._onOpenArchipelago}
+              @open-wizard=${this._onOpenWizard}
               @webgl-unavailable=${this._onWebglUnavailable}
               @mode-change=${this._onModeChange}
             ></career-island-3d>
@@ -2172,6 +2728,8 @@ export class CareerApp extends LitElement {
       </div>`}
       ${this._renderArchipelago()}
       ${this._renderPlayerCard()}
+      ${this._renderWizard()}
+      ${this._renderWizardQueue()}
       ${this._renderTravelFade()}
       ${this._renderAnnouncement()}
     `;

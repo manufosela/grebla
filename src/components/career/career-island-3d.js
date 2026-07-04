@@ -161,6 +161,21 @@
  * contenido) se genera igual que cualquier otra (terreno + puerto) y añade un
  * cartel de obra junto al puerto.
  *
+ * La CABAÑA DEL BRUJO (MC-22): cada isla tiene una edificación SINGULAR —
+ * torre cónica púrpura con estrellas (CanvasTexture), tejado ladeado, farol y
+ * cartel «El brujo» — donde el jugador deja consultas asíncronas al líder. Su
+ * posición es determinista y cercana al puerto (wizardSpot, puro: barrido de
+ * candidatos con holgura a todas las casas) y entra en las exclusiones de la
+ * vegetación. La prop `wizardState` pinta el INDICADOR de estado: 'none' =
+ * humo gris tenue saliendo de la chimenea; 'pending' = farol ÁMBAR pulsante;
+ * 'ready' = farol TEAL brillante con un destello. Todo barato: materiales
+ * emisivos y tres esferitas de humo animadas en el loop, sin partículas. La
+ * interacción calca la de las casas: clic en vista aérea (raycast, como la
+ * barca), prompt «[E] El brujo» y choque frontal a pie/avatar — todas las vías
+ * emiten `open-wizard` y el panel DOM lo gestiona <career-app>. El grupo de la
+ * cabaña se rehace solo (al cambiar `wizardState` o el mapa), sin tocar el
+ * grupo estático ni el de ciudades.
+ *
  * Sonido (MC-11, islandAudio.js): ambiente de olas + gaviota ocasional, un
  * tick de paso por ZANCADA (fase ∝ distancia: el rate sigue a la velocidad,
  * tanto del avatar aéreo como del caminante fps) y la fanfarria de ciudadanía.
@@ -201,6 +216,7 @@ import {
   hashId,
   teammateOffsets,
   teammateTint,
+  wizardSpot,
   ACCENT_COLORS,
   STATUS_COLORS,
 } from '../../tools/career/domain/islandLayout.js';
@@ -468,6 +484,42 @@ const MINIMAP = Object.freeze({
   outline: 'rgba(255, 255, 255, 0.85)',
 });
 
+/**
+ * La cabaña del BRUJO (MC-22): dimensiones de la torre cónica púrpura, farol
+ * indicador y humo de reposo. `colliderRadius` cubre la planta (radio del
+ * tejado) más holgura del caminante, como CITY_COLLIDER_RADIUS; el radio de
+ * proximidad a pie es el mismo de las ciudades (PROXIMITY_RADIUS). Colores
+ * del indicador: reposo gris, pendiente ÁMBAR, respuesta lista TEAL (paleta
+ * GREBLA). El pulso del farol y el humo se animan en _tickWizard (barato:
+ * emisivos y tres esferitas).
+ */
+const WIZARD = Object.freeze({
+  bodyR: 1.7,
+  bodyH: 3,
+  roofR: 2.15,
+  roofH: 3.4,
+  /** Inclinación (rad) del tejado: el toque «retorcido» del brujo. */
+  roofTilt: 0.09,
+  colliderRadius: Math.hypot(2.15, 2.15) / 2 + 0.65,
+  colors: Object.freeze({
+    roof: 0x3f2a66,
+    star: 0xf4c96b,
+    none: 0x8a8f98,
+    pending: 0xf4a53b,
+    ready: 0x2a9d8f,
+    smoke: 0xb7bcc2,
+  }),
+  /** Farol junto a la puerta: radio, altura y poste. */
+  lantern: Object.freeze({ r: 0.3, y: 2.1, postX: 1.9 }),
+  /** Pulso del farol ÁMBAR (Hz) e intensidades emisivas por estado. */
+  pulseHz: 0.9,
+  emissive: Object.freeze({ none: 0.12, pendingMin: 0.25, pendingMax: 1, ready: 1.1 }),
+  /** Humo de reposo: esferitas que suben riseS segundos hasta height unidades. */
+  smoke: Object.freeze({ count: 3, riseS: 3.6, height: 2.8, r: 0.22, maxOpacity: 0.35 }),
+  /** Destello del estado «respuesta lista»: tamaño y pulso del sprite. */
+  sparkle: Object.freeze({ scale: 2.6, pulseHz: 0.6, opacityMin: 0.35, opacityMax: 0.9 }),
+});
+
 export class CareerIsland3D extends LitElement {
   static properties = {
     map: { attribute: false },
@@ -476,12 +528,14 @@ export class CareerIsland3D extends LitElement {
     selected: { attribute: false },
     teammates: { attribute: false },
     overlayOpen: { attribute: false },
+    wizardState: { attribute: false },
     _phase: { state: true },
     _mode: { state: true },
     _fpsLocked: { state: true },
     _nearCityId: { state: true },
     _insideCityId: { state: true },
     _nearBoat: { state: true },
+    _nearWizard: { state: true },
   };
 
   static styles = css`
@@ -652,6 +706,25 @@ export class CareerIsland3D extends LitElement {
     this._boatGroup = null;
     /** Posición de mundo de la barca para la proximidad a pie (MC-14), o null. */
     this._boatSpot = null;
+    // La cabaña del brujo (MC-22): estado visual (lo pone <career-app> desde
+    // las consultas de la isla), grupo propio (se rehace al cambiar el estado
+    // o el mapa), posición determinista (wizardSpot) y refs del indicador.
+    /** @type {'none'|'pending'|'ready'} */
+    this.wizardState = 'none';
+    /** Grupo de la cabaña del brujo (raycasteable, MC-22), o null. */
+    this._wizardGroup = null;
+    /** Posición de mundo de la cabaña (colisión, proximidad y exclusiones), o null. */
+    this._wizardSpotW = null;
+    /** true con el caminante junto a la cabaña (prompt «[E] El brujo»). */
+    this._nearWizard = false;
+    /** Farol indicador de la cabaña (pulso emisivo en _tickWizard), o null. */
+    this._wizardLantern = null;
+    /** Sprite del destello «respuesta lista» (pulsa en _tickWizard), o null. */
+    this._wizardSparkle = null;
+    /** Esferitas de humo del estado de reposo (userData.phase), animadas en _tickWizard. */
+    this._wizardSmoke = [];
+    /** Etiqueta flotante «El brujo» (muestreada con las demás, MC-17). */
+    this._wizardLabels = [];
     /** Casa en la que se ha «entrado» al chocar de frente (MC-9), o null. */
     this._insideCityId = null;
     /** Posiciones de mundo de las ciudades para la marcha (colisión y proximidad). */
@@ -792,6 +865,9 @@ export class CareerIsland3D extends LitElement {
     // Compañeros (MC-12): su grupo solo depende de la prop y del mapa (el
     // cambio de mapa ya los rehace dentro de _rebuildAll).
     if (!changed.has('map') && changed.has('teammates')) this._rebuildTeammates();
+    // La cabaña del brujo (MC-22): su grupo solo depende de wizardState y del
+    // mapa (el cambio de mapa ya la rehace dentro de _rebuildAll).
+    if (!changed.has('map') && changed.has('wizardState')) this._rebuildWizard();
     if (this._pendingCelebration) {
       const cityId = this._pendingCelebration;
       this._pendingCelebration = null;
@@ -980,6 +1056,7 @@ export class CareerIsland3D extends LitElement {
         this._updateLabels();
       }
       this._tickBeacons(now); // pulso de las balizas de visado disponible (MC-13)
+      this._tickWizard(now); // farol/humo de la cabaña del brujo (MC-22)
       this._renderer.render(this._scene, this._camera);
     };
     this._raf = requestAnimationFrame(step);
@@ -1025,7 +1102,7 @@ export class CareerIsland3D extends LitElement {
     const onFoot = this._mode === 'fps' || this._mode === 'to-fps';
     const sprites = onFoot
       ? this._teammateLabels
-      : [...this._areaLabels, ...this._cityLabels, ...this._teammateLabels];
+      : [...this._areaLabels, ...this._cityLabels, ...this._wizardLabels, ...this._teammateLabels];
     if (sprites.length === 0) return;
     const cam = this._camera;
     cam.updateMatrixWorld();
@@ -1094,7 +1171,7 @@ export class CareerIsland3D extends LitElement {
    * @param {boolean} visible
    */
   _setLabelsVisible(visible) {
-    for (const sprite of [...this._cityLabels, ...this._areaLabels]) {
+    for (const sprite of [...this._cityLabels, ...this._areaLabels, ...this._wizardLabels]) {
       sprite.visible = visible;
       if (visible) sprite.material.opacity = 1;
     }
@@ -1487,6 +1564,11 @@ export class CareerIsland3D extends LitElement {
       this._openNearCity();
       return;
     }
+    if (event.code === 'KeyE' && !event.repeat && this._nearWizard) {
+      event.preventDefault();
+      this._openWizard();
+      return;
+    }
     if (event.code === 'KeyE' && !event.repeat && this._nearBoat) {
       event.preventDefault();
       this._openArchipelago();
@@ -1562,12 +1644,15 @@ export class CareerIsland3D extends LitElement {
         // Colisión con las casas (MC-9, collideWithCities puro): no se
         // atraviesan — se desliza por su contorno — y un empuje FRONTAL
         // contra una casa «entra» (abre su panel de ciudadanía).
-        const col = collideWithCities(
+        const colCities = collideWithCities(
           { x: cam.x, z: cam.z },
           next,
           this._walkCities,
           CITY_COLLIDER_RADIUS,
         );
+        // La cabaña del brujo tampoco se atraviesa (MC-22): mismo colisionador
+        // puro, y el empuje FRONTAL abre el panel del brujo.
+        const col = this._collideWizard({ x: cam.x, z: cam.z }, colCities);
         // Pasos a pie (MC-11): misma fase ∝ distancia que la zancada del
         // avatar — un tick por media onda, con el rate siguiendo a la velocidad.
         this._fpsPhase += Math.hypot(col.x - cam.x, col.z - cam.z) * AVATAR.stepFreq;
@@ -1576,7 +1661,11 @@ export class CareerIsland3D extends LitElement {
         this._fpsStepCount = steps;
         cam.x = col.x;
         cam.z = col.z;
-        if (col.hitCityId !== null && this._insideCityId === null) this._enterCity(col.hitCityId);
+        if (colCities.hitCityId !== null && this._insideCityId === null) {
+          this._enterCity(colCities.hitCityId);
+        } else if (col.hitWizard) {
+          this._openWizard();
+        }
       }
     }
     cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR }) + EYE_HEIGHT;
@@ -1593,6 +1682,11 @@ export class CareerIsland3D extends LitElement {
     // ella (la ciudad cercana, si la hay, tiene prioridad en el HUD).
     this._nearBoat = this._boatSpot
       ? Math.hypot(cam.x - this._boatSpot.x, cam.z - this._boatSpot.z) <= BOAT_PROXIMITY_RADIUS
+      : false;
+    // La cabaña del brujo (MC-22): prompt «[E] El brujo» — mismo radio que
+    // las ciudades; en el HUD la ciudad cercana manda y la barca cede.
+    this._nearWizard = this._wizardSpotW
+      ? Math.hypot(cam.x - this._wizardSpotW.wx, cam.z - this._wizardSpotW.wz) <= PROXIMITY_RADIUS
       : false;
     const near = nearestCityWithin({ x: cam.x, z: cam.z }, this._walkCities, PROXIMITY_RADIUS);
     const id = near?.id ?? null;
@@ -1727,6 +1821,7 @@ export class CareerIsland3D extends LitElement {
     this._nearCityId = null;
     this._insideCityId = null;
     this._nearBoat = false;
+    this._nearWizard = false;
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
     if (this._plc) this._plc.enabled = false;
     this._controls.enabled = true;
@@ -1765,9 +1860,11 @@ export class CareerIsland3D extends LitElement {
     return html`
       ${city
         ? html`<div class="fps-hint near"><kbd>E</kbd> Entrar en ${city.name}</div>`
-        : this._nearBoat
-          ? html`<div class="fps-hint near"><kbd>E</kbd> Zarpar</div>`
-          : null}
+        : this._nearWizard
+          ? html`<div class="fps-hint near"><kbd>E</kbd> El brujo</div>`
+          : this._nearBoat
+            ? html`<div class="fps-hint near"><kbd>E</kbd> Zarpar</div>`
+            : null}
       ${CareerIsland3D.FPS_HELP}
     `;
   }
@@ -1810,6 +1907,11 @@ export class CareerIsland3D extends LitElement {
     // muestreo de proximidad comparten esta lista (se rehace con el mapa).
     this._walkCities = (this.map.cities ?? []).map((c) => ({ id: c.id, ...worldFromMap(c.x, c.y) }));
     if (this.map.id !== this._lastMapId) this._clearPlateCache(); // otra isla, otras placas
+    // La cabaña del brujo (MC-22): posición determinista ANTES del grupo
+    // estático (la vegetación la excluye). Acotada al radio caminable para que
+    // siempre se pueda llegar a pie.
+    this._wizardSpotW = wizardSpot(this.map, { maxRadius: this._walkRadius - WIZARD.colliderRadius });
+    this._nearWizard = false;
     // La barca vive en el grupo estático: sus referencias se rehacen con él
     // (y quedan null en un mapa sin puerto, MC-14).
     this._boatGroup = null;
@@ -1817,6 +1919,7 @@ export class CareerIsland3D extends LitElement {
     this._nearBoat = false;
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
+    this._rebuildWizard(); // la cabaña del brujo depende del mapa (MC-22)
     this._rebuildTeammates(); // las posiciones de los compañeros dependen del mapa (MC-12)
     // Avatar de la vista aérea (MC-10): se construye UNA vez (vive en la
     // escena, fuera de los grupos que se rehacen) y se recoloca por isla.
@@ -2649,6 +2752,287 @@ export class CareerIsland3D extends LitElement {
     }
   }
 
+  // ---- La cabaña del brujo (MC-22) -----------------------------------------------
+
+  /** Rehace SOLO el grupo de la cabaña (cambio de wizardState o de mapa). */
+  _rebuildWizard() {
+    if (!this.map) return;
+    this._replaceGroup('_wizardGroup', this._buildWizardHut());
+    this._updateLabels(); // la etiqueta nueva, ya con escala/declutter (MC-17)
+  }
+
+  /**
+   * La CABAÑA DEL BRUJO: torre cilíndrica púrpura con estrellas (CanvasTexture
+   * 'wizard'), tejado cónico LADEADO con estrella dorada en la punta, puerta,
+   * cartel «El brujo», chimenea trasera y un farol en un poste junto a la
+   * puerta — el INDICADOR de estado (wizardState): reposo = farol gris y humo
+   * tenue en la chimenea; 'pending' = farol ÁMBAR pulsante; 'ready' = farol
+   * TEAL brillante con un destello. Distinta a las casas a propósito (planta
+   * redonda, otro tejado, otra paleta): es LA edificación singular de la isla.
+   * La fachada mira al puerto, como las casas (facadeYawToward).
+   */
+  _buildWizardHut() {
+    const THREE = this._THREE;
+    const group = new THREE.Group();
+    this._wizardLantern = null;
+    this._wizardSparkle = null;
+    this._wizardSmoke = [];
+    this._wizardLabels = [];
+    const spot = this._wizardSpotW;
+    if (!spot) return group;
+    const { wx, wz } = spot;
+    group.position.set(wx, GROUND_Y, wz);
+    const portW = this.map.startPort
+      ? worldFromMap(this.map.startPort.x, this.map.startPort.y)
+      : null;
+    const d = Math.hypot(wx, wz);
+    group.rotation.y = portW
+      ? facadeYawToward({ wx, wz }, portW)
+      : d > 0.001
+        ? Math.atan2(-wx, -wz)
+        : 0;
+    group.userData.wizard = true;
+
+    // Torre: cilindro púrpura estrellado, levemente troncocónico.
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(WIZARD.bodyR * 0.88, WIZARD.bodyR, WIZARD.bodyH, 10),
+      new THREE.MeshLambertMaterial({ map: this._envTexture('wizard'), flatShading: true }),
+    );
+    body.position.y = WIZARD.bodyH / 2;
+    body.castShadow = SHADOWS.enabled;
+    group.add(body);
+
+    // Tejado cónico ladeado (el toque «retorcido») con estrella dorada arriba.
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(WIZARD.roofR, WIZARD.roofH, 10),
+      new THREE.MeshLambertMaterial({ color: WIZARD.colors.roof, flatShading: true }),
+    );
+    roof.position.y = WIZARD.bodyH + WIZARD.roofH / 2 - 0.25;
+    roof.rotation.z = WIZARD.roofTilt;
+    roof.castShadow = SHADOWS.enabled;
+    group.add(roof);
+    const star = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.3, 0),
+      new THREE.MeshLambertMaterial({
+        color: WIZARD.colors.star,
+        emissive: WIZARD.colors.star,
+        emissiveIntensity: 0.5,
+        flatShading: true,
+      }),
+    );
+    star.scale.set(0.6, 1, 0.6);
+    // La punta del cono, con su inclinación (rotación z alrededor del centro del tejado).
+    const tipLocalY = WIZARD.roofH / 2 + 0.25;
+    star.position.set(
+      -Math.sin(WIZARD.roofTilt) * tipLocalY,
+      roof.position.y + Math.cos(WIZARD.roofTilt) * tipLocalY,
+      0,
+    );
+    group.add(star);
+
+    // Puerta de madera en la fachada (+z local, hacia el puerto).
+    const door = new THREE.Mesh(
+      new THREE.BoxGeometry(CITY_DOOR.w, CITY_DOOR.h, CITY_DOOR.d),
+      new THREE.MeshLambertMaterial({ color: ENV_COLORS.door, flatShading: true, map: this._envTexture('wood') }),
+    );
+    door.position.set(0, CITY_DOOR.h / 2, WIZARD.bodyR - 0.08);
+    group.add(door);
+
+    // Cartel «El brujo» sobre la puerta (canvas por build, como el de obra).
+    const signCanvas = document.createElement('canvas');
+    signCanvas.width = 256;
+    signCanvas.height = 64;
+    const ctx = signCanvas.getContext('2d');
+    ctx.fillStyle = '#2c1e4a';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.strokeStyle = '#f4c96b';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(3, 3, 250, 58);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f4c96b';
+    ctx.font = '700 30px system-ui, sans-serif';
+    ctx.fillText('🔮 El brujo', 128, 34);
+    const signTexture = new THREE.CanvasTexture(signCanvas);
+    signTexture.colorSpace = THREE.SRGBColorSpace;
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(CITY_PLATE.w, CITY_PLATE.h),
+      new THREE.MeshBasicMaterial({ map: signTexture }),
+    );
+    sign.position.set(0, CITY_DOOR.h + 0.45, WIZARD.bodyR + 0.02);
+    group.add(sign);
+
+    // Chimenea trasera (ancla del humo de reposo).
+    const chimney = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.26, 1.1, 6),
+      new THREE.MeshLambertMaterial({ color: WIZARD.colors.roof, flatShading: true }),
+    );
+    const chimneyTop = WIZARD.bodyH + 1.15;
+    chimney.position.set(-WIZARD.bodyR * 0.55, chimneyTop - 0.55, -WIZARD.bodyR * 0.45);
+    group.add(chimney);
+
+    // Farol indicador junto a la puerta: poste + esfera emisiva por estado.
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.09, WIZARD.lantern.y, 6),
+      new THREE.MeshLambertMaterial({ color: ENV_COLORS.post, flatShading: true, map: this._envTexture('wood') }),
+    );
+    post.position.set(WIZARD.lantern.postX, WIZARD.lantern.y / 2, WIZARD.bodyR - 0.3);
+    group.add(post);
+    const lanternColor =
+      this.wizardState === 'pending'
+        ? WIZARD.colors.pending
+        : this.wizardState === 'ready'
+          ? WIZARD.colors.ready
+          : WIZARD.colors.none;
+    const lantern = new THREE.Mesh(
+      new THREE.SphereGeometry(WIZARD.lantern.r, 10, 8),
+      new THREE.MeshLambertMaterial({
+        color: lanternColor,
+        emissive: lanternColor,
+        emissiveIntensity:
+          this.wizardState === 'ready'
+            ? WIZARD.emissive.ready
+            : this.wizardState === 'pending'
+              ? WIZARD.emissive.pendingMax
+              : WIZARD.emissive.none,
+      }),
+    );
+    lantern.position.set(WIZARD.lantern.postX, WIZARD.lantern.y, WIZARD.bodyR - 0.3);
+    this._wizardLantern = lantern;
+    group.add(lantern);
+
+    // Destello de «respuesta lista»: sprite de brillo radial sobre el farol.
+    if (this.wizardState === 'ready') {
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = 64;
+      glowCanvas.height = 64;
+      const gctx = glowCanvas.getContext('2d');
+      const glow = gctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+      glow.addColorStop(0, 'rgba(120, 255, 235, 0.95)');
+      glow.addColorStop(0.4, 'rgba(42, 157, 143, 0.5)');
+      glow.addColorStop(1, 'rgba(42, 157, 143, 0)');
+      gctx.fillStyle = glow;
+      gctx.fillRect(0, 0, 64, 64);
+      const sparkle = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: new THREE.CanvasTexture(glowCanvas),
+          transparent: true,
+          depthWrite: false,
+          opacity: WIZARD.sparkle.opacityMax,
+        }),
+      );
+      sparkle.position.copy(lantern.position);
+      sparkle.scale.setScalar(WIZARD.sparkle.scale);
+      this._wizardSparkle = sparkle;
+      group.add(sparkle);
+    }
+
+    // Humo gris tenue en reposo: esferitas que suben y se desvanecen en bucle
+    // (fases repartidas; la animación vive en _tickWizard).
+    if (this.wizardState === 'none') {
+      const smokeGeo = new THREE.SphereGeometry(WIZARD.smoke.r, 8, 6);
+      for (let i = 0; i < WIZARD.smoke.count; i += 1) {
+        const puff = new THREE.Mesh(
+          smokeGeo,
+          new THREE.MeshLambertMaterial({
+            color: WIZARD.colors.smoke,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+          }),
+        );
+        puff.position.set(chimney.position.x, chimneyTop, chimney.position.z);
+        puff.userData.phase = i / WIZARD.smoke.count;
+        puff.userData.baseY = chimneyTop;
+        this._wizardSmoke.push(puff);
+        group.add(puff);
+      }
+    }
+
+    // Etiqueta flotante «El brujo» (misma política que las de ciudad: oculta a
+    // pie, muestreada con tamaño constante y declutter, MC-17).
+    const label = this._makeLabel('El brujo', {
+      x: 0,
+      y: WIZARD.bodyH + WIZARD.roofH + 1.6,
+      z: 0,
+      scale: 4,
+      color: '#5b3d8f',
+      id: 'wizard:hut',
+      kind: 'city',
+      targetPx: LABEL_PX.city,
+      priority: LABEL_PRIORITY.city,
+    });
+    label.visible = this._mode === 'aerial' || this._mode === 'to-aerial';
+    this._wizardLabels.push(label);
+    group.add(label);
+
+    return group;
+  }
+
+  /**
+   * Un frame del indicador de la cabaña del brujo (MC-22), en cualquier modo:
+   * farol ÁMBAR pulsante ('pending'), destello TEAL respirando ('ready') y
+   * humo de reposo subiendo en bucle ('none'). Barato: un emisivo, un sprite y
+   * tres esferitas.
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickWizard(now) {
+    const t = now / 1000;
+    if (this.wizardState === 'pending' && this._wizardLantern) {
+      const k = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 * WIZARD.pulseHz);
+      this._wizardLantern.material.emissiveIntensity =
+        WIZARD.emissive.pendingMin + (WIZARD.emissive.pendingMax - WIZARD.emissive.pendingMin) * k;
+    }
+    if (this._wizardSparkle) {
+      const k = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 * WIZARD.sparkle.pulseHz);
+      const m = this._wizardSparkle.material;
+      m.opacity =
+        WIZARD.sparkle.opacityMin + (WIZARD.sparkle.opacityMax - WIZARD.sparkle.opacityMin) * k;
+      this._wizardSparkle.scale.setScalar(WIZARD.sparkle.scale * (0.85 + 0.3 * k));
+    }
+    for (const puff of this._wizardSmoke) {
+      const p = (t / WIZARD.smoke.riseS + puff.userData.phase) % 1;
+      puff.position.y = puff.userData.baseY + p * WIZARD.smoke.height;
+      puff.material.opacity = WIZARD.smoke.maxOpacity * (1 - p);
+      puff.scale.setScalar(0.6 + p * 0.9);
+    }
+  }
+
+  /**
+   * Abre el panel del brujo en <career-app> (clic en la cabaña, [E] o choque
+   * frontal). A pie suelta el pointer lock A PROPÓSITO (como el panel de
+   * ciudadanía y la barca) para que el ratón pueda usar el overlay.
+   */
+  _openWizard() {
+    if (this.overlayOpen) return; // ya hay un overlay encima: no se re-dispara
+    this._keys.clear(); // sin lock no habrá pointerlockchange que las suelte (MC-18)
+    if (this._fpsLocked) {
+      this._expectUnlock = true;
+      document.exitPointerLock();
+    }
+    this.dispatchEvent(new CustomEvent('open-wizard', { bubbles: true, composed: true }));
+  }
+
+  /**
+   * Colisión del caminante/avatar con la cabaña del brujo (MC-22): el MISMO
+   * colisionador puro de las casas (collideWithCities) con la cabaña como
+   * único «edificio». Devuelve la posición corregida y si hubo empuje FRONTAL
+   * (hitWizard: abre el panel del brujo, como entrar en una casa).
+   * @param {{x: number, z: number}} from Posición previa.
+   * @param {{x: number, z: number}} next Posición ya corregida por las casas.
+   * @returns {{ x: number, z: number, hitWizard: boolean }}
+   */
+  _collideWizard(from, next) {
+    if (!this._wizardSpotW) return { x: next.x, z: next.z, hitWizard: false };
+    const col = collideWithCities(
+      from,
+      next,
+      [{ id: 'wizard', wx: this._wizardSpotW.wx, wz: this._wizardSpotW.wz }],
+      WIZARD.colliderRadius,
+    );
+    return { x: col.x, z: col.z, hitWizard: col.hitCityId !== null };
+  }
+
   /**
    * Textura de la placa de puerta con el nombre de la ciudad, cacheada por
    * nombre (userData.shared: _disposeSubtree no la libera; ver constructor).
@@ -2718,6 +3102,7 @@ export class CareerIsland3D extends LitElement {
     roof: Object.freeze({ size: 128, repeat: [4, 1] }),
     wood: Object.freeze({ size: 128, repeat: [1, 1] }),
     cloud: Object.freeze({ size: 128, repeat: [1, 1] }),
+    wizard: Object.freeze({ size: 128, repeat: [3, 1] }),
   });
 
   /**
@@ -2725,7 +3110,7 @@ export class CareerIsland3D extends LitElement {
    * vez en un canvas (determinista: hashUnit, sin Math.random) y se comparte
    * entre todos los materiales que la usan. userData.shared: _disposeSubtree
    * no la libera; su ciclo de vida lo lleva _clearEnvTextures (teardown).
-   * @param {'grass'|'sand'|'wall'|'roof'|'wood'|'cloud'} key
+   * @param {'grass'|'sand'|'wall'|'roof'|'wood'|'cloud'|'wizard'} key
    */
   _envTexture(key) {
     let texture = this._envTextures.get(key);
@@ -2863,6 +3248,45 @@ export class CareerIsland3D extends LitElement {
         gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
         ctx.fillStyle = gradient;
         ctx.fillRect(cx - cr, cy - cr, cr * 2, cr * 2);
+      }
+      return;
+    }
+    if (key === 'wizard') {
+      // Manto del brujo (MC-22): púrpura nocturno con estrellas de 4 puntas
+      // doradas/blancas. A COLOR (el material va en blanco, sin tintar): la
+      // cabaña no comparte paleta con ninguna casa.
+      ctx.fillStyle = '#4a3178';
+      ctx.fillRect(0, 0, size, size);
+      // Veteado sutil del manto.
+      for (let i = 0; i < 5; i += 1) {
+        ctx.fillStyle = `rgba(30, 18, 58, ${(0.12 + rnd(i * 7) * 0.1).toFixed(3)})`;
+        ctx.fillRect(0, rnd(i * 7 + 1) * size, size, 3 + rnd(i * 7 + 2) * 5);
+      }
+      const drawStar = (cx, cy, r, color) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        // Rombo de 4 puntas: vértices largos arriba/abajo, cortos a los lados.
+        ctx.moveTo(cx, cy - r);
+        ctx.lineTo(cx + r * 0.3, cy);
+        ctx.lineTo(cx, cy + r);
+        ctx.lineTo(cx - r * 0.3, cy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx - r, cy);
+        ctx.lineTo(cx, cy + r * 0.3);
+        ctx.lineTo(cx + r, cy);
+        ctx.lineTo(cx, cy - r * 0.3);
+        ctx.closePath();
+        ctx.fill();
+      };
+      for (let i = 0; i < 12; i += 1) {
+        drawStar(
+          rnd(i * 3 + 40) * size,
+          rnd(i * 3 + 41) * size,
+          3 + rnd(i * 3 + 42) * 5,
+          i % 3 === 0 ? '#f4c96b' : 'rgba(255, 250, 235, 0.9)',
+        );
       }
       return;
     }
@@ -3022,6 +3446,14 @@ export class CareerIsland3D extends LitElement {
     if (this.map.startPort) {
       const p = worldFromMap(this.map.startPort.x, this.map.startPort.y);
       exclusions.push({ x: p.wx, z: p.wz, r: 15 });
+    }
+    // La cabaña del brujo (MC-22): mismo respiro que las casas.
+    if (this._wizardSpotW) {
+      exclusions.push({
+        x: this._wizardSpotW.wx,
+        z: this._wizardSpotW.wz,
+        r: WIZARD.colliderRadius + 2.4,
+      });
     }
     const pathIds = [
       ...(this.journey?.visitedCities ?? []),
@@ -3320,7 +3752,10 @@ export class CareerIsland3D extends LitElement {
           WALK_SPEED * (running ? RUN_MULTIPLIER : 1),
           { radius: this._walkRadius },
         );
-        const col = collideWithCities(this._avatarPos, next, this._walkCities, CITY_COLLIDER_RADIUS);
+        const colCities = collideWithCities(this._avatarPos, next, this._walkCities, CITY_COLLIDER_RADIUS);
+        // La cabaña del brujo tampoco se atraviesa (MC-22); el choque frontal
+        // del avatar abre su panel, como el de las casas.
+        const col = this._collideWizard(this._avatarPos, colCities);
         moved = Math.hypot(col.x - this._avatarPos.x, col.z - this._avatarPos.z);
         this._avatarPos = { x: col.x, z: col.z };
         // Rota hacia la dirección de marcha DESEADA (aunque esté deslizando
@@ -3331,7 +3766,8 @@ export class CareerIsland3D extends LitElement {
           dt,
           AVATAR.turnSpeed,
         );
-        if (col.hitCityId !== null) this._enterCity(col.hitCityId);
+        if (colCities.hitCityId !== null) this._enterCity(colCities.hitCityId);
+        else if (col.hitWizard) this._openWizard();
       }
     }
     // Zancada procedural: fase ∝ distancia recorrida, peso con fundido al
@@ -3693,6 +4129,18 @@ export class CareerIsland3D extends LitElement {
       ctx.stroke();
     }
 
+    // La cabaña del brujo (MC-22): punto púrpura con aro blanco.
+    if (this._wizardSpotW) {
+      const q = project(this._wizardSpotW.wx, this._wizardSpotW.wz);
+      ctx.beginPath();
+      ctx.arc(q.px, q.py, MINIMAP.cityDot, 0, Math.PI * 2);
+      ctx.fillStyle = '#5b3d8f';
+      ctx.fill();
+      ctx.strokeStyle = MINIMAP.outline;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
     // Casas: un punto por ciudad con su color de estado; la actual, aro coral.
     const current = this.journey?.currentCity ?? null;
     for (const city of this.map.cities ?? []) {
@@ -3979,11 +4427,12 @@ export class CareerIsland3D extends LitElement {
           return;
         }
         // Con el lock tomado, el clic dispara lo que hay bajo la mira: un
-        // compañero (MC-12, su mini-resumen), la ciudad cercana (tecla E) o
-        // la barca para zarpar (MC-14).
+        // compañero (MC-12, su mini-resumen), la ciudad cercana (tecla E),
+        // la cabaña del brujo (MC-22) o la barca para zarpar (MC-14).
         const mateId = this._pickTeammateFromCenter();
         if (mateId) this._openTeammate(mateId);
         else if (this._nearCityId) this._openNearCity();
+        else if (this._nearWizard) this._openWizard();
         else if (this._nearBoat) this._openArchipelago();
       }
       return;
@@ -4022,6 +4471,16 @@ export class CareerIsland3D extends LitElement {
       raycaster.intersectObjects(this._boatGroup.children, true).length > 0
     ) {
       this._openArchipelago();
+      return;
+    }
+
+    // La cabaña del brujo (MC-22): clicable como las casas — abre su panel.
+    // Antes que las ciudades (wizardSpot ya garantiza que no se solapan).
+    if (
+      this._wizardGroup &&
+      raycaster.intersectObjects(this._wizardGroup.children, true).length > 0
+    ) {
+      this._openWizard();
       return;
     }
 
@@ -4093,6 +4552,14 @@ export class CareerIsland3D extends LitElement {
     this._nearBoat = false;
     this._boatGroup = null;
     this._boatSpot = null;
+    // La cabaña del brujo (MC-22) vive en la escena: se libera con ella.
+    this._wizardGroup = null;
+    this._wizardSpotW = null;
+    this._nearWizard = false;
+    this._wizardLantern = null;
+    this._wizardSparkle = null;
+    this._wizardSmoke = [];
+    this._wizardLabels = [];
     this._abort?.abort();
     this._abort = null;
     this._resizeObserver?.disconnect();
@@ -4132,7 +4599,7 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Q/E o Re Pág/Av Pág para mirar arriba y abajo, Shift para correr, ratón para mirar y E para entrar en la ciudad cercana — todo el modo a pie se puede jugar solo con el teclado. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie)."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Q/E o Re Pág/Av Pág para mirar arriba y abajo, Shift para correr, ratón para mirar y E para entrar en la ciudad cercana — todo el modo a pie se puede jugar solo con el teclado. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie). La cabaña del brujo, la torre púrpura cerca del puerto, recoge tus consultas para el líder: clic sobre ella, o E al acercarte a pie; su farol indica si hay consultas pendientes (ámbar) o una respuesta lista (turquesa)."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}

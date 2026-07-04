@@ -98,6 +98,28 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['careerTargetLevelId']));
       allow delete: if isSuperAdmin() || isOwner();
 
+      // Consultas al brujo (MC-22): el jugador vinculado (Person.uid ==
+      // auth.uid) CREA preguntas de SU persona (siempre nacen 'pending') y
+      // MARCA la respuesta como vista (solo status+seenAt, y solo a 'seen');
+      // el resto de escrituras siguen las reglas del subárbol de abajo (líder
+      // dueño/compartido-edit/superadmin), que también cubren la lectura.
+      // ADITIVO al {document=**}: en Firestore las reglas de matches
+      // solapados se OR-ean. OJO al path: el doc es
+      // /people/{p}/career/wizard/questions/{qId} — el del diseño original
+      // (/career/questions/{qId}) tiene 5 segmentos (colección, no documento)
+      // y la regla jamás aplicaría a un doc real.
+      match /career/wizard/questions/{questionId} {
+        allow create: if isSignedIn()
+          && 'uid' in get(/databases/$(database)/documents/people/$(personId)).data
+          && get(/databases/$(database)/documents/people/$(personId)).data.uid == request.auth.uid
+          && request.resource.data.status == 'pending';
+        allow update: if isSignedIn()
+          && 'uid' in get(/databases/$(database)/documents/people/$(personId)).data
+          && get(/databases/$(database)/documents/people/$(personId)).data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'seenAt'])
+          && request.resource.data.status == 'seen';
+      }
+
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
       match /{document=**} {

@@ -11,7 +11,10 @@
  *  - Por isla (orden del índice del archipiélago): certificados X/Y, barra de
  *    % con la marca del objetivo y 🏆 con la fecha de la ciudadanía («—» si no
  *    la tiene). Las islas sin pisar van atenuadas.
- *  - «Consultas al brujo»: placeholder hasta MC-22.
+ *  - «Consultas al brujo» (MC-22): las Q&A del jugador en TODAS las islas —
+ *    isla, fecha, estado, texto y la respuesta con su crédito («respondida por
+ *    {answeredBy/creditedTo}»). Solo lectura: preguntar y marcar como vista se
+ *    hace en el panel del brujo del juego.
  *
  * Todo llega derivado/cargado por el contenedor: `progress` sale de
  * archipelagoProgress (MC-20) y `achievements` del doc de logros (MC-21). Un
@@ -24,12 +27,32 @@
  *  - progress: ArchipelagoProgress|null       progresión derivada del journey
  *  - achievements: Achievements|null          logros registrados (fechas)
  *  - visitedIslands: string[]                 ids de islas pisadas (journey)
+ *  - questions: WizardQuestion[]              consultas al brujo (MC-22, ya ordenadas)
  *
  * @typedef {import('../../tools/career/domain/citizenship.js').ArchipelagoProgress} ArchipelagoProgress
  * @typedef {import('../../tools/career/domain/achievements.js').Achievements} Achievements
+ * @typedef {import('../../tools/career/domain/wizard.js').WizardQuestion} WizardQuestion
  */
 import { LitElement, html, css } from 'lit';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
+import { sortQuestionsByDateDesc } from '../../tools/career/domain/wizard.js';
+
+/** Etiquetas de estado de una consulta al brujo (MC-22). */
+const QUESTION_BADGES = Object.freeze({
+  pending: 'Esperando al brujo',
+  answered: 'Respuesta lista',
+  seen: 'Vista',
+});
+
+/** Formato de fechas de las consultas (misma localización que los logros). */
+const questionDateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
+
+/** Fecha legible de una consulta, o '—' si no la trae. @param {string} iso */
+function formatQuestionDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : questionDateFmt.format(d);
+}
 
 /** Metadatos de los badges de la cabecera (MC-20/21). */
 const BADGES = Object.freeze([
@@ -43,6 +66,7 @@ export class PlayerCard extends LitElement {
     progress: { attribute: false },
     achievements: { attribute: false },
     visitedIslands: { attribute: false },
+    questions: { attribute: false },
   };
 
   static styles = css`
@@ -92,6 +116,26 @@ export class PlayerCard extends LitElement {
       .isle .minibar { grid-column: 1 / -1; }
     }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; margin: 0.4rem 0 0; }
+    /* Consultas al brujo (MC-22): una entrada por Q&A, todas las islas. */
+    .wizqs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+    .wizq { border: 1px solid var(--rm-border, #eef0f2); border-radius: 10px; padding: 0.5rem 0.7rem; }
+    .wmeta { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+    .wisle { font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
+    .wmeta .when { font-size: 0.72rem; color: var(--rm-muted, #6b7280); }
+    .wstatus { font-size: 0.66rem; font-weight: 800; padding: 0.12rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+    .wstatus.pending { background: #fdebc8; color: #8a5a00; }
+    .wstatus.answered { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .wstatus.seen { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    .wtext { margin: 0.35rem 0 0; font-size: 0.83rem; color: var(--rm-text, #111827); white-space: pre-wrap; }
+    .wizanswer {
+      margin-top: 0.45rem;
+      border-left: 3px solid var(--rm-accent, #2a9d8f);
+      background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, var(--rm-surface, #fff));
+      border-radius: 0 8px 8px 0;
+      padding: 0.4rem 0.6rem;
+    }
+    .wizanswer .wtext { margin: 0; }
+    .wby { margin: 0.3rem 0 0; font-size: 0.72rem; font-style: italic; color: var(--rm-muted, #6b7280); }
   `;
 
   constructor() {
@@ -103,6 +147,8 @@ export class PlayerCard extends LitElement {
     this.achievements = null;
     /** @type {string[]} */
     this.visitedIslands = [];
+    /** @type {WizardQuestion[]} */
+    this.questions = [];
   }
 
   /**
@@ -185,8 +231,40 @@ export class PlayerCard extends LitElement {
         ${prog.islands.map((isle) => this._renderIsle(isle))}
       </ul>
       <p class="sub">Consultas al brujo</p>
-      <p class="empty">Aún no has hecho consultas.</p>
+      ${this._renderQuestions()}
     `;
+  }
+
+  /**
+   * Las Q&A del brujo (MC-22), todas las islas, la más reciente primero
+   * (ordenación defensiva en puro: el contenedor ya las manda ordenadas).
+   * Cada entrada: isla, fecha, estado, la consulta y — si la hay — la
+   * respuesta con su crédito (creditedTo releva a answeredBy).
+   */
+  _renderQuestions() {
+    const questions = sortQuestionsByDateDesc(this.questions ?? []);
+    if (questions.length === 0) {
+      return html`<p class="empty">Aún no has hecho consultas.</p>`;
+    }
+    return html`<ul class="wizqs">
+      ${questions.map((q) => {
+        const credit = q.creditedTo ?? q.answeredBy?.name ?? '';
+        return html`<li class="wizq">
+          <div class="wmeta">
+            <span class="wisle">🏝️ ${q.islandName !== '' ? q.islandName : q.islandId}</span>
+            <span class="wstatus ${q.status}">${QUESTION_BADGES[q.status]}</span>
+            <span class="when">${formatQuestionDate(q.createdAt)}</span>
+          </div>
+          <p class="wtext">${q.text}</p>
+          ${q.answer
+            ? html`<div class="wizanswer">
+                <p class="wtext">${q.answer}</p>
+                <p class="wby">${credit ? `— respondida por ${credit}` : '— respuesta del brujo'}</p>
+              </div>`
+            : null}
+        </li>`;
+      })}
+    </ul>`;
   }
 }
 
