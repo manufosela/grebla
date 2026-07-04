@@ -157,10 +157,25 @@
  * → _audio.unlock()); el silencio persiste en localStorage y lo conmuta el
  * botón HUD de <career-app> vía setAudioMuted().
  *
+ * Etiquetas legibles a cualquier zoom (MC-17, _updateLabels cada
+ * LABEL_FADE_MS): cada sprite de etiqueta (ciudades, comarcas, puerto y
+ * nombres de compañero) se re-escala por su profundidad de vista
+ * (labelWorldScale, puro, con clamp) para mantener un alto APARENTE constante
+ * en px (LABEL_PX por tipo), y un declutter puro por prioridad
+ * (declutterLabels sobre las cajas proyectadas a pantalla, LABEL_PRIORITY)
+ * decide la VISIBILIDAD: dos etiquetas nunca se pisan. Los fundidos por
+ * distancia previos (MC-8/MC-12) quedan como mera atenuación de opacidad.
+ *
  * Es un componente presentacional: no escribe en Firestore.
  */
 import { LitElement, html, css } from 'lit';
 import { cityStatus } from '../../tools/career/domain/progress.js';
+import {
+  LABEL_PRIORITY,
+  labelWorldScale,
+  labelScreenPx,
+  declutterLabels,
+} from '../../tools/career/domain/labels.js';
 import {
   worldFromMap,
   cityStatusColor,
@@ -228,8 +243,23 @@ const ROUTE_LIFT = 0.24;
 const PATH_WIDTH = 1.2;
 /** Fundido por distancia de las etiquetas de ciudad en vista aérea (× radio de isla). */
 const LABEL_FADE = { near: 1.1, far: 2.0 };
-/** Cadencia (ms) del fundido de etiquetas (no hace falta por-frame). */
+/** Cadencia (ms) del muestreo de etiquetas (fundido + tamaño + declutter, MC-17). */
 const LABEL_FADE_MS = 150;
+/**
+ * Alto APARENTE objetivo de cada tipo de etiqueta (px CSS del sprite, MC-17):
+ * el muestreo re-escala cada sprite según su profundidad de vista
+ * (labelWorldScale) para que en pantalla siempre mida esto, a cualquier zoom.
+ * La comarca va algo mayor que la ciudad (topónimo estructural) y el nombre
+ * de compañero menor (rótulo personal). El texto ocupa ~2/3 del alto del
+ * sprite (fuente de 44px en un canvas de 68px, _makeLabel).
+ */
+const LABEL_PX = Object.freeze({ area: 30, city: 24, teammate: 19 });
+/**
+ * Clamp de la escala de mundo resultante (unidades, MC-17): `min` evita
+ * sprites degenerados pegados a la cámara; `max` que un zoom-out extremo
+ * llene la isla de rótulos gigantes (a partir de ahí encogen en pantalla).
+ */
+const LABEL_WORLD_CLAMP = Object.freeze({ min: 0.5, max: 12 });
 /** Umbral (px de cliente) para distinguir un arrastre de órbita de un clic. */
 const DRAG_THRESHOLD = 5;
 /** Límite del paneo del target respecto al radio de la isla. */
@@ -610,12 +640,15 @@ export class CareerIsland3D extends LitElement {
     this._lastWalkTs = 0;
     this._lastProxTs = 0;
     this._lastLabelTs = 0;
+    /** Tamaño CSS (px) del viewport del canvas: lo fija _onResize (MC-17). */
+    this._viewW = 0;
+    this._viewH = 0;
     /** Vectores scratch para la marcha (se crean al cargar three). */
     this._walkDirScratch = null;
     this._lookScratch = null;
     /** Euler scratch (orden YXZ, el del pointer lock) para el giro con ←/→. */
     this._eulerScratch = null;
-    /** Etiquetas flotantes de ciudad (fundido por distancia; ocultas a pie). */
+    /** Etiquetas flotantes de ciudad (muestreadas en _updateLabels; ocultas a pie). */
     this._cityLabels = [];
     /** Etiquetas flotantes de comarca y puerto (ocultas a pie). */
     this._areaLabels = [];
@@ -623,9 +656,8 @@ export class CareerIsland3D extends LitElement {
     this._teammatesGroup = null;
     /** Figuras de compañero vivas (userData.limbs y userData.sway) para el idle. */
     this._teammateFigures = [];
-    /** Sprites de nombre de compañero (fundido por distancia propio). */
+    /** Sprites de nombre de compañero (muestreados en _updateLabels). */
     this._teammateLabels = [];
-    this._lastTeamLabelTs = 0;
     /**
      * Caché de texturas de placa de puerta por nombre de ciudad: el grupo de
      * ciudades se rehace a menudo (journey/selección/proximidad) y pintar el
@@ -903,11 +935,6 @@ export class CareerIsland3D extends LitElement {
         this._tickAvatar(now);
         this._tickCameraAnim(now);
         this._clampTarget();
-        // Etiquetas de ciudad: fundido por distancia (menos solape alejado).
-        if (now - this._lastLabelTs >= LABEL_FADE_MS) {
-          this._lastLabelTs = now;
-          this._fadeCityLabels();
-        }
       } else if (this._mode === 'fps') {
         this._tickWalk(now);
         // Minimapa (MC-13): composición barata cada redrawMs, solo a pie.
@@ -920,7 +947,13 @@ export class CareerIsland3D extends LitElement {
       }
       this._tickEnvironment(now); // agua ondulada y deriva de nubes (MC-10)
       this._tickCelebration(now); // confeti y pulso dorado, en cualquier modo (MC-11)
-      this._tickTeammates(now); // idle y nombres de compañeros, en cualquier modo (MC-12)
+      this._tickTeammates(now); // idle de los compañeros, en cualquier modo (MC-12)
+      // Etiquetas flotantes (MC-17): tamaño aparente constante + declutter,
+      // en cualquier modo y con la cadencia de los antiguos fundidos.
+      if (now - this._lastLabelTs >= LABEL_FADE_MS) {
+        this._lastLabelTs = now;
+        this._updateLabels();
+      }
       this._tickBeacons(now); // pulso de las balizas de visado disponible (MC-13)
       this._renderer.render(this._scene, this._camera);
     };
@@ -941,27 +974,92 @@ export class CareerIsland3D extends LitElement {
     t.y = GROUND_Y;
   }
 
-  // ---- Etiquetas flotantes (MC-8) ----------------------------------------------
+  // ---- Etiquetas flotantes (MC-8 / MC-17) --------------------------------------
 
   /**
-   * Fundido por distancia de las etiquetas de ciudad en vista aérea: a menos
-   * de LABEL_FADE.near×R son totalmente opacas y a partir de LABEL_FADE.far×R
-   * desaparecen. Así en el encuadre general (zonas densas) no se solapan unas
-   * con otras; las de comarca sí permanecen. Barato: decenas de sprites cada
-   * LABEL_FADE_MS.
+   * Muestreo de TODAS las etiquetas flotantes (MC-17), cada LABEL_FADE_MS:
+   *
+   *  1. Tamaño aparente constante: re-escala cada sprite por su profundidad de
+   *     vista (labelWorldScale + LABEL_WORLD_CLAMP, puro) para que mida
+   *     ~targetPx px en pantalla a cualquier zoom — ni gigante de cerca ni
+   *     ilegible de lejos.
+   *  2. Opacidad: se conservan los fundidos por distancia previos como pura
+   *     ATENUACIÓN (ciudades según LABEL_FADE×R, MC-8; compañeros con umbrales
+   *     absolutos y más cortos a pie, MC-12) — ya no controlan el tamaño.
+   *  3. Visibilidad: la decide el declutter puro (declutterLabels) sobre las
+   *     cajas proyectadas a pantalla, por prioridad (LABEL_PRIORITY, horneada
+   *     en cada sprite al construirlo) — ninguna letra pisa a otra. Detrás de
+   *     la cámara (profundidad ≤ 0) o más allá del far (NDC z > 1) → oculta.
+   *
+   * A pie (fps/to-fps) los topónimos siguen ocultos (_setLabelsVisible, la
+   * política de MC-8: placa de puerta y prompt hacen ese trabajo) y solo se
+   * muestrean los nombres de compañeros. Barato: decenas de sprites por tick.
    */
-  _fadeCityLabels() {
-    if (this._cityLabels.length === 0) return;
+  _updateLabels() {
+    if (!this._camera || !this._renderer || this._viewH === 0) return;
+    const onFoot = this._mode === 'fps' || this._mode === 'to-fps';
+    const sprites = onFoot
+      ? this._teammateLabels
+      : [...this._areaLabels, ...this._cityLabels, ...this._teammateLabels];
+    if (sprites.length === 0) return;
+    const cam = this._camera;
+    cam.updateMatrixWorld();
+    // El renderer refresca la inversa al pintar; recalcularla aquí evita
+    // proyectar con la cámara de un frame atrás justo después de moverla.
+    cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+    const fovRad = (cam.fov * Math.PI) / 180;
     const R = this._islandR || 50;
-    const near = R * LABEL_FADE.near;
-    const far = R * LABEL_FADE.far;
-    const cam = this._camera.position;
-    for (const sprite of this._cityLabels) {
-      const d = sprite.getWorldPosition(this._lookScratch).distanceTo(cam);
-      const k = 1 - Math.min(Math.max((d - near) / (far - near), 0), 1);
-      sprite.material.opacity = k;
-      sprite.visible = k > 0.02;
+    const cityNear = R * LABEL_FADE.near;
+    const cityFar = R * LABEL_FADE.far;
+    const mateConf = onFoot ? TEAMMATE.labelFadeFps : TEAMMATE.labelFadeAerial;
+    /** @type {import('../../tools/career/domain/labels.js').LabelBox[]} */
+    const boxes = [];
+    const byId = new Map();
+    const v = this._lookScratch;
+    for (const sprite of sprites) {
+      const meta = sprite.userData.label;
+      sprite.getWorldPosition(v).applyMatrix4(cam.matrixWorldInverse);
+      const depth = -v.z; // profundidad de vista: la que fija el tamaño aparente
+      if (depth <= 0) {
+        sprite.visible = false; // detrás de la cámara
+        continue;
+      }
+      const dist = v.length(); // euclídea: la semántica de los fundidos previos
+      let opacity = 1; // las comarcas y el puerto no se funden (como hasta ahora)
+      if (meta.kind === 'city') {
+        opacity = 1 - Math.min(Math.max((dist - cityNear) / (cityFar - cityNear), 0), 1);
+      } else if (meta.kind === 'teammate') {
+        opacity =
+          1 - Math.min(Math.max((dist - mateConf.near) / (mateConf.far - mateConf.near), 0), 1);
+      }
+      sprite.material.opacity = opacity;
+      if (opacity <= 0.02) {
+        sprite.visible = false;
+        continue;
+      }
+      const h = labelWorldScale(depth, meta.targetPx, fovRad, this._viewH, LABEL_WORLD_CLAMP);
+      sprite.scale.set(h * meta.aspect, h, 1);
+      // Caja en pantalla para el declutter: px reales tras el clamp y centro
+      // proyectado del ancla (los sprites se anclan centrados).
+      const px = labelScreenPx(h, depth, fovRad, this._viewH);
+      v.applyMatrix4(cam.projectionMatrix); // vista → NDC (con división perspectiva)
+      if (v.z > 1) {
+        sprite.visible = false; // más allá del far
+        continue;
+      }
+      boxes.push({
+        id: meta.id,
+        x: ((v.x + 1) / 2) * this._viewW,
+        y: ((1 - v.y) / 2) * this._viewH,
+        w: px * meta.aspect,
+        h: px,
+        priority: meta.priority,
+        dist,
+      });
+      byId.set(meta.id, sprite);
     }
+    const visibleIds = declutterLabels(boxes);
+    for (const [id, sprite] of byId) sprite.visible = visibleIds.has(id);
   }
 
   /**
@@ -975,6 +1073,9 @@ export class CareerIsland3D extends LitElement {
       sprite.visible = visible;
       if (visible) sprite.material.opacity = 1;
     }
+    // Al volver a la vista aérea el muestreo se aplica YA: ni un frame con
+    // etiquetas a escala vieja o pisándose antes del siguiente tick (MC-17).
+    if (visible) this._updateLabels();
   }
 
   // ---- Zoom animado de cámara (MC-6) ------------------------------------------
@@ -1622,6 +1723,9 @@ export class CareerIsland3D extends LitElement {
     this._renderer.setSize(width, height, false);
     this._camera.aspect = width / height;
     this._camera.updateProjectionMatrix();
+    // El muestreo de etiquetas (MC-17) proyecta a px CSS de este viewport.
+    this._viewW = width;
+    this._viewH = height;
   }
 
   // ---- Construcción de la escena ---------------------------------------------
@@ -1656,6 +1760,9 @@ export class CareerIsland3D extends LitElement {
       this._resetAvatar(); // nueva isla: el avatar aparece en su spawn
       this._frameIsland();
     }
+    // Etiquetas recién construidas: escala y declutter aplicados YA, sin
+    // esperar (hasta LABEL_FADE_MS) un frame de rótulos pisándose (MC-17).
+    this._updateLabels();
   }
 
   _rebuildCities() {
@@ -1664,6 +1771,7 @@ export class CareerIsland3D extends LitElement {
     // La capa estática del minimapa refleja estados y senda: se repinta en la
     // próxima composición (MC-13). Marcarla aquí cubre journey/reachable/mapa.
     this._minimapDirty = true;
+    this._updateLabels(); // etiquetas nuevas: ni un frame sin escala/declutter (MC-17)
   }
 
   /** Sustituye un grupo de la escena liberando los recursos GPU del anterior. */
@@ -1798,6 +1906,10 @@ export class CareerIsland3D extends LitElement {
         z: center.wz,
         scale: 6.5,
         color: '#5b6b7d',
+        id: `area:${area.id}`,
+        kind: 'area',
+        targetPx: LABEL_PX.area,
+        priority: LABEL_PRIORITY.area,
       });
       label.visible = labelsVisible;
       this._areaLabels.push(label);
@@ -2085,7 +2197,17 @@ export class CareerIsland3D extends LitElement {
     lighthouse.add(dome);
 
     // Cartel «Puerto» discreto (la etiqueta flotante existente).
-    const label = this._makeLabel('Puerto', { x: 0, y: 11, z: 0, scale: 6, color: '#5b6b7d' });
+    const label = this._makeLabel('Puerto', {
+      x: 0,
+      y: 11,
+      z: 0,
+      scale: 6,
+      color: '#5b6b7d',
+      id: 'area:puerto',
+      kind: 'area', // topónimo estructural: mismo rango que las comarcas
+      targetPx: LABEL_PX.area,
+      priority: LABEL_PRIORITY.area,
+    });
     label.visible = labelVisible;
     this._areaLabels.push(label);
     group.add(label);
@@ -2307,6 +2429,18 @@ export class CareerIsland3D extends LitElement {
       }
 
       const strike = status === 'deprecated';
+      // Prioridad del declutter (MC-17): la seleccionada manda, luego la
+      // ciudad actual del journey, luego las disponibles (las accionables) y
+      // por último el resto. Se hornea aquí: cambiar selected/journey ya
+      // reconstruye este grupo.
+      const labelPriority =
+        this.selected === city.id
+          ? LABEL_PRIORITY.selected
+          : current === city.id
+            ? LABEL_PRIORITY.current
+            : status === 'available'
+              ? LABEL_PRIORITY.available
+              : LABEL_PRIORITY.city;
       const label = this._makeLabel(city.name, {
         x: 0,
         y: bodyH + CITY_ROOF.h + 2.2,
@@ -2314,6 +2448,10 @@ export class CareerIsland3D extends LitElement {
         scale: 4,
         color: strike ? '#9ca3af' : '#1e3a5f',
         strike,
+        id: `city:${city.id}`,
+        kind: 'city',
+        targetPx: LABEL_PX.city,
+        priority: labelPriority,
       });
       label.visible = labelsVisible;
       this._cityLabels.push(label);
@@ -3165,6 +3303,7 @@ export class CareerIsland3D extends LitElement {
   _rebuildTeammates() {
     if (!this.map) return;
     this._replaceGroup('_teammatesGroup', this._buildTeammates());
+    this._updateLabels(); // etiquetas nuevas: ni un frame sin escala/declutter (MC-17)
   }
 
   /**
@@ -3175,8 +3314,9 @@ export class CareerIsland3D extends LitElement {
    * fuera. La variación es determinista por personId (teammateTint: camiseta y
    * gorra del hash, nunca la gorra coral del avatar propio) igual que la fase
    * del idle. El nombre va en un sprite pequeño sobre la cabeza que
-   * _fadeTeammateLabels funde por distancia. Geometrías y materiales se
-   * comparten dentro del build; _disposeSubtree los libera con el grupo.
+   * _updateLabels funde por distancia y desconflictúa (MC-17). Geometrías y
+   * materiales se comparten dentro del build; _disposeSubtree los libera con
+   * el grupo.
    */
   _buildTeammates() {
     const THREE = this._THREE;
@@ -3244,6 +3384,10 @@ export class CareerIsland3D extends LitElement {
           z: 0,
           scale: TEAMMATE.labelScale,
           color: '#1e3a5f',
+          id: `mate:${mate.personId}`,
+          kind: 'teammate',
+          targetPx: LABEL_PX.teammate,
+          priority: LABEL_PRIORITY.teammate,
         });
         label.material.opacity = 0; // el fundido por distancia lo enciende de cerca
         label.visible = false;
@@ -3261,8 +3405,8 @@ export class CareerIsland3D extends LitElement {
    * Un frame del idle de los compañeros (MC-12), en cualquier modo de cámara:
    * balanceo sutil de brazos a contrapié y una inclinación leve del cuerpo,
    * con fase/velocidad deterministas por persona — se sienten vivos sin
-   * caminar. En la misma pasada, con cadencia LABEL_FADE_MS, el fundido por
-   * distancia de sus nombres.
+   * caminar. Sus nombres (fundido por distancia, tamaño y declutter) los
+   * muestrea _updateLabels con el resto de etiquetas (MC-17).
    * @param {DOMHighResTimeStamp} now
    */
   _tickTeammates(now) {
@@ -3275,30 +3419,6 @@ export class CareerIsland3D extends LitElement {
       armL.rotation.x = s * TEAMMATE.swayArm;
       armR.rotation.x = -s * TEAMMATE.swayArm;
       figure.rotation.z = s * TEAMMATE.swayLean;
-    }
-    if (now - this._lastTeamLabelTs >= LABEL_FADE_MS) {
-      this._lastTeamLabelTs = now;
-      this._fadeTeammateLabels();
-    }
-  }
-
-  /**
-   * Fundido por distancia de los nombres de compañero: visibles solo de cerca
-   * (umbrales ABSOLUTOS en unidades de mundo, no relativos al radio como las
-   * etiquetas de ciudad: el nombre es un rótulo personal, no un topónimo). A
-   * pie los umbrales se acortan — misma política que placas y prompts: los
-   * nombres no ensucian el paseo salvo a corta distancia.
-   */
-  _fadeTeammateLabels() {
-    if (this._teammateLabels.length === 0) return;
-    const onFoot = this._mode === 'fps' || this._mode === 'to-fps';
-    const conf = onFoot ? TEAMMATE.labelFadeFps : TEAMMATE.labelFadeAerial;
-    const cam = this._camera.position;
-    for (const sprite of this._teammateLabels) {
-      const dist = sprite.getWorldPosition(this._lookScratch).distanceTo(cam);
-      const k = 1 - Math.min(Math.max((dist - conf.near) / (conf.far - conf.near), 0), 1);
-      sprite.material.opacity = k;
-      sprite.visible = k > 0.02;
     }
   }
 
@@ -3702,10 +3822,15 @@ export class CareerIsland3D extends LitElement {
   /**
    * Etiqueta flotante: sprite con el texto pintado en un CanvasTexture (siempre
    * de cara a la cámara). El halo blanco garantiza el contraste sobre la escena.
+   * `scale` es solo el alto INICIAL (unidades de mundo): el muestreo MC-17
+   * (_updateLabels) re-escala el sprite por distancia para mantener `targetPx`
+   * px en pantalla y decide su visibilidad con el declutter según `priority`.
    * @param {string} text
-   * @param {{x:number,y:number,z:number,scale:number,color:string,strike?:boolean}} opts
+   * @param {{x:number,y:number,z:number,scale:number,color:string,strike?:boolean,
+   *   id:string,kind:'area'|'city'|'teammate',targetPx:number,priority:number}} opts
+   *   id: identidad para el declutter; kind: elige el fundido por distancia.
    */
-  _makeLabel(text, { x, y, z, scale, color, strike = false }) {
+  _makeLabel(text, { x, y, z, scale, color, strike = false, id, kind, targetPx, priority }) {
     const THREE = this._THREE;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -3738,6 +3863,9 @@ export class CareerIsland3D extends LitElement {
     );
     sprite.position.set(x, y, z);
     sprite.scale.set((scale * canvas.width) / canvas.height, scale, 1);
+    // Metadatos del muestreo de etiquetas (MC-17): identidad y prioridad para
+    // el declutter, alto objetivo en px y proporción de la caja pintada.
+    sprite.userData.label = { id, kind, targetPx, priority, aspect: canvas.width / canvas.height };
     return sprite;
   }
 
