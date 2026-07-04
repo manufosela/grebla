@@ -23,6 +23,7 @@ import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
 import { getCareerMap, saveCareerMap, getArchipelago, saveArchipelago } from '../lib/careerMap.js';
 import { emptyCareerMap } from '../tools/career/data/maps.js';
+import { RESOURCE_KINDS, RESOURCE_FORMATS } from '../tools/career/domain/types.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 
 const CITY_KINDS = ['tech', 'skill', 'milestone'];
@@ -190,6 +191,10 @@ export class SuperadminPanel extends LitElement {
     .rec-row { display: grid; grid-template-columns: 7rem 1fr 1fr auto; gap: 0.4rem; margin-bottom: 0.4rem; align-items: center; }
     .rec-row input { min-width: 0; }
     @media (max-width: 640px) { .rec-row { grid-template-columns: 1fr; } }
+    /* Recursos de la tarjeta (MC-15): tipo + etiqueta + url + formato (libros). */
+    .res-row { display: grid; grid-template-columns: 6rem 1fr 1fr 6rem auto; gap: 0.4rem; margin-bottom: 0.4rem; align-items: center; }
+    .res-row input, .res-row select { min-width: 0; }
+    @media (max-width: 640px) { .res-row { grid-template-columns: 1fr; } }
     textarea {
       font: inherit; font-size: 0.85rem; width: 100%; box-sizing: border-box;
       padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px;
@@ -531,6 +536,38 @@ export class SuperadminPanel extends LitElement {
   _removeRecommendation(idx, recIdx) {
     const recommendations = (this._careerMap.cities[idx].recommendations ?? []).filter((_, i) => i !== recIdx);
     this._patchCity(idx, { recommendations });
+  }
+
+  // ── Contenido de la tarjeta de la ciudad (MC-15) ────────────────────────────
+  // keyPoints/aiFocus se editan en crudo (el saneo — trim, líneas vacías fuera,
+  // kinds inválidos descartados — lo aplica serializeCareerMap al guardar).
+
+  /** Añade una fila de recurso vacía a la ciudad. @param {number} idx */
+  _addResource(idx) {
+    const city = this._careerMap.cities[idx];
+    const resources = [...(city.resources ?? []), { kind: 'curso', label: '', url: '' }];
+    this._patchCity(idx, { resources });
+  }
+
+  /**
+   * Edita un recurso de la ciudad. Al cambiar el tipo a algo que no es libro,
+   * el formato (papel/online) deja de tener sentido y se retira.
+   * @param {number} idx @param {number} resIdx @param {Partial<import('../tools/career/domain/types.js').Resource>} patch
+   */
+  _patchResource(idx, resIdx, patch) {
+    const resources = (this._careerMap.cities[idx].resources ?? []).map((r, i) => {
+      if (i !== resIdx) return r;
+      const next = { ...r, ...patch };
+      if (next.kind !== 'libro') delete next.format;
+      return next;
+    });
+    this._patchCity(idx, { resources });
+  }
+
+  /** Quita un recurso de la ciudad. @param {number} idx @param {number} resIdx */
+  _removeResource(idx, resIdx) {
+    const resources = (this._careerMap.cities[idx].resources ?? []).filter((_, i) => i !== resIdx);
+    this._patchCity(idx, { resources });
   }
 
   /** Valida el mapa antes de guardar. @returns {string|null} mensaje de error o null */
@@ -1200,10 +1237,52 @@ export class SuperadminPanel extends LitElement {
                 .map((other) => html`<option value=${other.id} ?selected=${c.prereqs.includes(other.id)}>${other.name} (${other.id})</option>`)}
             </select>
           </label>
+          <label class="full">Qué aprender — puntos fundamentales (uno por línea)
+            <textarea
+              rows="4"
+              placeholder="Un punto fundamental por línea…"
+              .value=${(c.keyPoints ?? []).join('\n')}
+              ?disabled=${this.readOnly}
+              @input=${(e) => this._patchCity(idx, { keyPoints: e.target.value.split('\n') })}
+            ></textarea>
+          </label>
+          <label class="full">Con IA — qué puede hacer la IA por ti y dónde profundizar tú
+            <textarea
+              rows="3"
+              placeholder="Lente era-IA: qué delega el jugador en la IA y qué debe dominar él…"
+              .value=${c.aiFocus ?? ''}
+              ?disabled=${this.readOnly}
+              @input=${(e) => this._patchCity(idx, { aiFocus: e.target.value })}
+            ></textarea>
+          </label>
         </div>
         <div class="recs-edit">
           <div class="recs-head">
-            <span>Recomendaciones</span>
+            <span>Recursos</span>
+            ${this.readOnly ? null : html`<button @click=${() => this._addResource(idx)}>+ Añadir</button>`}
+          </div>
+          ${(c.resources ?? []).length === 0
+            ? html`<p class="empty">Sin recursos todavía.</p>`
+            : (c.resources ?? []).map(
+                (r, resIdx) => html`<div class="res-row">
+                  <select aria-label="Tipo de recurso" ?disabled=${this.readOnly} @change=${(e) => this._patchResource(idx, resIdx, { kind: e.target.value })}>
+                    ${RESOURCE_KINDS.map((k) => html`<option value=${k} ?selected=${k === r.kind}>${k}</option>`)}
+                  </select>
+                  <input type="text" placeholder="Etiqueta" .value=${r.label ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchResource(idx, resIdx, { label: e.target.value })} />
+                  <input type="url" placeholder="https://… (opcional)" .value=${r.url ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchResource(idx, resIdx, { url: e.target.value })} />
+                  ${r.kind === 'libro'
+                    ? html`<select aria-label="Formato del libro" ?disabled=${this.readOnly} @change=${(e) => this._patchResource(idx, resIdx, { format: e.target.value })}>
+                        <option value="" ?selected=${!r.format}>— formato —</option>
+                        ${RESOURCE_FORMATS.map((f) => html`<option value=${f} ?selected=${f === r.format}>${f}</option>`)}
+                      </select>`
+                    : html`<span></span>`}
+                  ${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeResource(idx, resIdx)}>×</button>`}
+                </div>`,
+              )}
+        </div>
+        <div class="recs-edit">
+          <div class="recs-head">
+            <span>Recomendaciones (legado — la tarjeta las usa solo si no hay recursos)</span>
             ${this.readOnly ? null : html`<button @click=${() => this._addRecommendation(idx)}>+ Añadir</button>`}
           </div>
           ${(c.recommendations ?? []).length === 0

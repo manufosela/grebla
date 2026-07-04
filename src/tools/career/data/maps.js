@@ -7,6 +7,7 @@
  * @typedef {import('../domain/types.js').CareerMap} CareerMap
  * @typedef {import('../domain/types.js').Area} Area
  */
+import { RESOURCE_KINDS, RESOURCE_FORMATS } from '../domain/types.js';
 
 /** Comarcas de la isla. Fundamentos es la comarca de entrada. */
 /** @type {ReadonlyArray<Area>} */
@@ -147,6 +148,38 @@ function normalizeRecommendation(rec) {
 }
 
 /**
+ * Normaliza un recurso crudo de la ciudad (MC-15). Devuelve null si no es
+ * salvable: sin label o con un kind fuera del catálogo (nada de fallbacks
+ * silenciosos a otro kind — un recurso mal tecleado se descarta entero).
+ * El formato (papel/online) solo tiene sentido en libros; en el resto se tira.
+ * @param {{ kind?: unknown, label?: unknown, url?: unknown, format?: unknown }} res
+ * @returns {import('../domain/types.js').Resource|null}
+ */
+function normalizeResource(res) {
+  const kind = String(res?.kind ?? '').trim();
+  const label = String(res?.label ?? '').trim();
+  if (!label || !RESOURCE_KINDS.includes(/** @type {any} */ (kind))) return null;
+  /** @type {import('../domain/types.js').Resource} */
+  const out = { kind: /** @type {any} */ (kind), label };
+  const url = String(res?.url ?? '').trim();
+  if (url) out.url = url;
+  const format = String(res?.format ?? '').trim();
+  if (kind === 'libro' && RESOURCE_FORMATS.includes(/** @type {any} */ (format))) {
+    out.format = /** @type {any} */ (format);
+  }
+  return out;
+}
+
+/**
+ * Sanea la lista de puntos fundamentales (MC-15): strings recortados, sin vacíos.
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function normalizeKeyPoints(value) {
+  return Array.isArray(value) ? value.map((p) => String(p ?? '').trim()).filter(Boolean) : [];
+}
+
+/**
  * Normaliza una ciudad cruda del documento al modelo City.
  * @param {Record<string, unknown>} city
  * @returns {import('../domain/types.js').City}
@@ -168,6 +201,16 @@ function normalizeCity(city) {
     ? city.recommendations.map(normalizeRecommendation).filter((r) => r.label)
     : [];
   if (recs.length) out.recommendations = recs;
+  // Contenido de la tarjeta (MC-15): keyPoints, aiFocus y resources. Los campos
+  // vacíos NO viajan en el objeto (mismo criterio que recommendations).
+  const keyPoints = normalizeKeyPoints(city?.keyPoints);
+  if (keyPoints.length) out.keyPoints = keyPoints;
+  const aiFocus = String(city?.aiFocus ?? '').trim();
+  if (aiFocus) out.aiFocus = aiFocus;
+  const resources = Array.isArray(city?.resources)
+    ? city.resources.map(normalizeResource).filter((r) => r !== null)
+    : [];
+  if (resources.length) out.resources = resources;
   return out;
 }
 
@@ -226,6 +269,14 @@ export function serializeCareerMap(map) {
         return rec;
       });
     if (recs.length) city.recommendations = recs;
+    // Contenido de la tarjeta (MC-15): mismo saneo que la lectura (normalize*),
+    // así lo que se escribe en Firestore ya va limpio y sin `undefined`.
+    const keyPoints = normalizeKeyPoints(c.keyPoints);
+    if (keyPoints.length) city.keyPoints = keyPoints;
+    const aiFocus = String(c.aiFocus ?? '').trim();
+    if (aiFocus) city.aiFocus = aiFocus;
+    const resources = (c.resources ?? []).map(normalizeResource).filter((r) => r !== null);
+    if (resources.length) city.resources = resources;
     return city;
   });
   return {

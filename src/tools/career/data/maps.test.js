@@ -99,6 +99,93 @@ describe('career — persistencia del mapa (helpers puros)', () => {
     expect(JSON.stringify(serialized)).not.toContain('null');
   });
 
+  it('normalizeCareerMap sanea keyPoints, aiFocus y resources (MC-15)', () => {
+    const map = normalizeCareerMap({
+      areas: [{ id: 'fe', name: 'Front' }],
+      cities: [
+        {
+          id: 'a', name: 'A', kind: 'tech', area: 'fe', x: 1, y: 2, weight: 1, prereqs: [],
+          keyPoints: ['  Aprender X  ', '', '   ', 'Dominar Y'],
+          aiFocus: '  La IA genera el boilerplate; tú decides la arquitectura.  ',
+          resources: [
+            { kind: 'curso', label: ' Curso A ', url: ' http://x ' },
+            { kind: 'libro', label: 'Libro B', format: 'papel' },
+            { kind: 'libro', label: 'Libro C', format: 'inventado' }, // format inválido → fuera
+            { kind: 'post', label: 'Post D', format: 'papel' }, // format solo en libros → fuera
+            { kind: 'inventado', label: 'Kind inválido' }, // recurso entero descartado
+            { kind: 'doc', label: '   ' }, // sin label → descartado
+          ],
+        },
+        { id: 'b', name: 'B', kind: 'tech', area: 'fe', x: 3, y: 4, weight: 1, prereqs: [] },
+      ],
+    });
+    const [a, b] = map.cities;
+    expect(a.keyPoints).toEqual(['Aprender X', 'Dominar Y']);
+    expect(a.aiFocus).toBe('La IA genera el boilerplate; tú decides la arquitectura.');
+    expect(a.resources).toEqual([
+      { kind: 'curso', label: 'Curso A', url: 'http://x' },
+      { kind: 'libro', label: 'Libro B', format: 'papel' },
+      { kind: 'libro', label: 'Libro C' },
+      { kind: 'post', label: 'Post D' },
+    ]);
+    // Ciudad sin contenido: los campos NO viajan (ni arrays vacíos ni undefined).
+    expect('keyPoints' in b).toBe(false);
+    expect('aiFocus' in b).toBe(false);
+    expect('resources' in b).toBe(false);
+  });
+
+  it('serializeCareerMap aplica el mismo saneo a keyPoints/aiFocus/resources (MC-15)', () => {
+    const serialized = serializeCareerMap({
+      id: 'island',
+      name: 'Mi isla',
+      areas: [{ id: 'fe', name: 'Front' }],
+      cities: [
+        {
+          id: 'a', name: 'A', kind: 'skill', area: 'fe', x: 1, y: 2, weight: 1, prereqs: [],
+          keyPoints: [' P1 ', ''],
+          aiFocus: '   ',
+          resources: [
+            { kind: 'libro', label: ' L ', url: '', format: 'online' },
+            { kind: 'nope', label: 'fuera' },
+          ],
+        },
+      ],
+      startPort: { x: 4, y: 50 },
+    });
+    const city = serialized.cities[0];
+    expect(city.keyPoints).toEqual(['P1']);
+    expect('aiFocus' in city).toBe(false); // aiFocus en blanco no se persiste
+    expect(city.resources).toEqual([{ kind: 'libro', label: 'L', format: 'online' }]);
+    expect(JSON.stringify(serialized)).not.toContain('null');
+  });
+
+  it('normalize→serialize→normalize es un roundtrip estable con los campos MC-15', () => {
+    const doc = {
+      name: 'Isla',
+      areas: [{ id: 'fe', name: 'Front' }],
+      cities: [
+        {
+          id: 'a', name: 'A', kind: 'tech', area: 'fe', x: 1, y: 2, weight: 2, prereqs: [],
+          keyPoints: ['P1', 'P2'],
+          aiFocus: 'Enfoque IA',
+          resources: [
+            { kind: 'curso', label: 'C', url: 'http://c' },
+            { kind: 'libro', label: 'L', format: 'papel' },
+            { kind: 'post', label: 'P' },
+            { kind: 'doc', label: 'D', url: 'http://d' },
+          ],
+        },
+      ],
+      startPort: { x: 4, y: 50 },
+    };
+    const once = serializeCareerMap(normalizeCareerMap(doc));
+    const twice = serializeCareerMap(normalizeCareerMap(once));
+    expect(twice).toEqual(once);
+    expect(once.cities[0].keyPoints).toEqual(['P1', 'P2']);
+    expect(once.cities[0].aiFocus).toBe('Enfoque IA');
+    expect(once.cities[0].resources).toHaveLength(4);
+  });
+
   it('normalize→serialize→normalize es estable para la isla semilla', () => {
     const once = serializeCareerMap(seedCareerMap());
     const back = normalizeCareerMap(once);
