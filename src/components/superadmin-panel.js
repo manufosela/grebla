@@ -21,7 +21,8 @@ import { listAllUsers, setUserRole, listLinkedUids, assignUserToLeader } from '.
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
-import { getCareerMap, saveCareerMap } from '../lib/careerMap.js';
+import { getCareerMap, saveCareerMap, getArchipelago, saveArchipelago } from '../lib/careerMap.js';
+import { emptyCareerMap } from '../tools/career/data/maps.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 
 const CITY_KINDS = ['tech', 'skill', 'milestone'];
@@ -88,6 +89,9 @@ export class SuperadminPanel extends LitElement {
     _labels: { state: true },
     _newCat: { state: true },
     _careerMap: { state: true },
+    _archipelago: { state: true },
+    _mapIsland: { state: true },
+    _newIsland: { state: true },
     _newArea: { state: true },
     _newCity: { state: true },
     _confirmArea: { state: true },
@@ -228,6 +232,11 @@ export class SuperadminPanel extends LitElement {
     this._newCat = { areas: '', guilds: '', labels: '' };
     /** @type {import('../tools/career/domain/types.js').CareerMap|null} */
     this._careerMap = null;
+    /** @type {import('../tools/career/domain/types.js').Archipelago|null} índice de islas (MC-14) */
+    this._archipelago = null;
+    /** @type {string} isla seleccionada en el editor del mapa (MC-14) */
+    this._mapIsland = 'island';
+    this._newIsland = { id: '', name: '' };
     this._newArea = { id: '', name: '' };
     this._newCity = { id: '', name: '' };
     this._confirmArea = null;
@@ -346,14 +355,93 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
-  // ── Mapa de carrera (editor) ───────────────────────────────────────────────
+  // ── Mapa de carrera (editor, multi-isla MC-14) ─────────────────────────────
 
+  /** Nombre de una isla en el índice del archipiélago. @param {string} islandId */
+  _islandName(islandId) {
+    return (this._archipelago?.islands ?? []).find((i) => i.id === islandId)?.name ?? '';
+  }
+
+  /** Carga el índice del archipiélago (una vez) y el mapa de la isla seleccionada. */
   async _loadCareerMap() {
     this._mapError = '';
     try {
-      this._careerMap = await getCareerMap();
+      this._archipelago ??= await getArchipelago();
+      this._careerMap = await getCareerMap(this._mapIsland, this._islandName(this._mapIsland));
     } catch (err) {
       this._mapError = err instanceof Error ? err.message : 'No se pudo cargar el mapa de carrera.';
+    }
+  }
+
+  /** Cambia la isla en edición y carga su mapa. @param {string} islandId */
+  async _selectIsland(islandId) {
+    if (islandId === this._mapIsland) return;
+    this._mapIsland = islandId;
+    this._careerMap = null; // «Cargando…» mientras llega la isla nueva
+    this._mapNotice = '';
+    this._confirmArea = null;
+    this._confirmCity = null;
+    await this._loadCareerMap();
+  }
+
+  /**
+   * «Nueva isla» (MC-14): la añade al índice del archipiélago (posición al
+   * centro del mar, editable después) y crea su doc vacío en /careerMap; luego
+   * la deja seleccionada para editarla.
+   */
+  async _addIsland() {
+    const id = slugify(this._newIsland.id || this._newIsland.name);
+    const name = this._newIsland.name.trim();
+    this._mapError = '';
+    if (!id || !name) { this._mapError = 'La isla necesita id y nombre.'; return; }
+    const islands = this._archipelago?.islands ?? [];
+    if (id === '_archipelago' || islands.some((i) => i.id === id)) {
+      this._mapError = `Ya existe la isla «${id}» (o el id está reservado).`;
+      return;
+    }
+    this._mapSaving = true;
+    try {
+      const next = { islands: [...islands, { id, name, x: 50, y: 50 }] };
+      await saveArchipelago(next);
+      await saveCareerMap(id, emptyCareerMap(id, name));
+      this._archipelago = next;
+      this._newIsland = { id: '', name: '' };
+      this._mapNotice = `Isla «${name}» creada.`;
+      this._mapIsland = id;
+      this._careerMap = null;
+      await this._loadCareerMap();
+    } catch (err) {
+      this._mapError = err instanceof Error ? err.message : 'No se pudo crear la isla.';
+    } finally {
+      this._mapSaving = false;
+    }
+  }
+
+  /**
+   * Edición mínima del índice (MC-14): nombre y posición x/y de la isla
+   * seleccionada en el mapa del mar. Se aplica en local; «Guardar índice»
+   * persiste el documento completo.
+   * @param {Partial<import('../tools/career/domain/types.js').IslandRef>} patch
+   */
+  _patchIslandRef(patch) {
+    const islands = (this._archipelago?.islands ?? []).map((i) =>
+      i.id === this._mapIsland ? { ...i, ...patch } : i,
+    );
+    this._archipelago = { islands };
+    this._mapNotice = '';
+  }
+
+  /** Persiste el índice del archipiélago (nombre/posición editados). */
+  async _saveArchipelago() {
+    this._mapError = '';
+    this._mapSaving = true;
+    try {
+      await saveArchipelago(this._archipelago ?? { islands: [] });
+      this._mapNotice = 'Índice del archipiélago guardado.';
+    } catch (err) {
+      this._mapError = err instanceof Error ? err.message : 'No se pudo guardar el índice.';
+    } finally {
+      this._mapSaving = false;
     }
   }
 
@@ -467,7 +555,7 @@ export class SuperadminPanel extends LitElement {
     if (invalid) { this._mapError = invalid; return; }
     this._mapSaving = true;
     try {
-      await saveCareerMap(this._careerMap);
+      await saveCareerMap(this._mapIsland, this._careerMap);
       this._mapNotice = 'Mapa guardado.';
     } catch (err) {
       this._mapError = err instanceof Error ? err.message : 'No se pudo guardar el mapa.';
@@ -927,9 +1015,10 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <h2>Mapa de carrera</h2>
-        <p class="ro-note">Edita la isla de la organización: comarcas y ciudades (hitos, skills y tecnologías). Los cambios se aplican al guardar.</p>
+        <p class="ro-note">Edita cada isla del archipiélago: comarcas y ciudades (hitos, skills y tecnologías). Los cambios se aplican al guardar.</p>
         ${this._mapError ? html`<p class="error">${this._mapError}</p>` : null}
         ${this._mapNotice ? html`<p class="notice">${this._mapNotice}</p>` : null}
+        ${this._renderIslandPicker()}
         ${!map
           ? html`<p class="empty">Cargando el mapa…</p>`
           : html`
@@ -940,12 +1029,57 @@ export class SuperadminPanel extends LitElement {
                 : html`
                     <div class="toolbar" style="margin-top:1rem">
                       <button class="primary" ?disabled=${this._mapSaving} @click=${() => this._saveCareerMap()}>
-                        ${this._mapSaving ? 'Guardando…' : 'Guardar mapa'}
+                        ${this._mapSaving ? 'Guardando…' : `Guardar mapa (${this._islandName(this._mapIsland) || this._mapIsland})`}
                       </button>
                     </div>
                   `}
             `}
       </section>
+    `;
+  }
+
+  /**
+   * Selector de isla del archipiélago (MC-14), alta de islas nuevas y edición
+   * mínima del índice (nombre y posición x/y en el mapa del mar).
+   */
+  _renderIslandPicker() {
+    const islands = this._archipelago?.islands ?? [];
+    const current = islands.find((i) => i.id === this._mapIsland) ?? null;
+    return html`
+      <details open>
+        <summary class="sub">Archipiélago (${islands.length} islas)</summary>
+        <div class="toolbar">
+          <label>Isla en edición
+            <select @change=${(e) => this._selectIsland(e.target.value)}>
+              ${islands.map(
+                (i) => html`<option value=${i.id} ?selected=${i.id === this._mapIsland}>
+                  ${i.name} (${i.id})${i.startIsland ? ' · inicio' : ''}
+                </option>`,
+              )}
+            </select>
+          </label>
+          ${this.readOnly || !current
+            ? null
+            : html`
+                <input type="text" style="width:12rem" placeholder="Nombre en el mapa del mar" .value=${current.name}
+                  @input=${(e) => this._patchIslandRef({ name: e.target.value })} />
+                <label>x <input type="number" min="0" max="100" step="1" style="width:4.5rem" .value=${String(current.x)}
+                  @input=${(e) => this._patchIslandRef({ x: Number(e.target.value) })} /></label>
+                <label>y <input type="number" min="0" max="100" step="1" style="width:4.5rem" .value=${String(current.y)}
+                  @input=${(e) => this._patchIslandRef({ y: Number(e.target.value) })} /></label>
+                <button ?disabled=${this._mapSaving} @click=${() => this._saveArchipelago()}>Guardar índice</button>
+              `}
+        </div>
+        ${this.readOnly
+          ? null
+          : html`<div class="toolbar">
+              <input type="text" placeholder="id (p. ej. data-engineer)" .value=${this._newIsland.id}
+                @input=${(e) => { this._newIsland = { ...this._newIsland, id: e.target.value }; }} />
+              <input type="text" placeholder="Nombre (p. ej. Isla Data Engineer)" .value=${this._newIsland.name}
+                @input=${(e) => { this._newIsland = { ...this._newIsland, name: e.target.value }; }} />
+              <button class="primary" ?disabled=${this._mapSaving || !this._newIsland.name.trim()} @click=${() => this._addIsland()}>Nueva isla</button>
+            </div>`}
+      </details>
     `;
   }
 

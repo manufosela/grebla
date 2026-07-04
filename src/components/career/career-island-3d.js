@@ -140,6 +140,16 @@
  *    casas, senda) se pre-pinta en un canvas offscreen al cambiar el journey y
  *    se compone cada ~MINIMAP.redrawMs con la capa dinámica (flecha, equipo).
  *
+ * Archipiélago (MC-14): la BARCA del muelle es la puerta a las demás islas —
+ * clicable en vista aérea (raycast, como las casas) y con prompt «[E] Zarpar»
+ * al acercarse a pie (radio propio, mayor que el de ciudades: la barca flota
+ * fuera del área caminable). Ambas vías emiten `open-archipelago`; el mapa del
+ * mar (overlay DOM) y el viaje los gestiona <career-app> — aquí solo se
+ * detecta el gesto (a pie soltando el lock a propósito, como el panel de
+ * ciudadanía). Una isla SIN ciudades (placeholder «En construcción», aún sin
+ * contenido) se genera igual que cualquier otra (terreno + puerto) y añade un
+ * cartel de obra junto al puerto.
+ *
  * Sonido (MC-11, islandAudio.js): ambiente de olas + gaviota ocasional, un
  * tick de paso por ZANCADA (fase ∝ distancia: el rate sigue a la velocidad,
  * tanto del avatar aéreo como del caminante fps) y la fanfarria de ciudadanía.
@@ -230,6 +240,15 @@ const FOCUS_ANIM_MS = 700;
 const FPS_ANIM_MS = 1200;
 /** Cadencia (ms) del muestreo de proximidad a ciudades al caminar. */
 const PROXIMITY_CHECK_MS = 100;
+/**
+ * Proximidad a la BARCA del muelle a pie (MC-14): la barca flota al final del
+ * muelle, fuera del radio caminable (el caminante no pisa el agua), así que su
+ * radio es mayor que el de ciudades — basta acercarse al arranque del muelle
+ * para que salga el prompt «[E] Zarpar».
+ */
+const BOAT_PROXIMITY_RADIUS = 12;
+/** Distancia (unidades) del cartel «En construcción» hacia el interior desde el puerto (MC-14). */
+const SIGN_INLAND_OFFSET = 10;
 /** Distancia (unidades) a la que se aparece frente a la ciudad actual del journey. */
 const CITY_SPAWN_OFFSET = 12;
 /** Distancia del punto de mira usado como origen del giro de cámara al salir del modo fps. */
@@ -417,6 +436,7 @@ export class CareerIsland3D extends LitElement {
     _fpsLocked: { state: true },
     _nearCityId: { state: true },
     _insideCityId: { state: true },
+    _nearBoat: { state: true },
   };
 
   static styles = css`
@@ -575,6 +595,12 @@ export class CareerIsland3D extends LitElement {
     this._keys = new Set();
     /** Ciudad dentro del radio de proximidad al caminar (o null). */
     this._nearCityId = null;
+    /** true con el caminante junto a la barca del muelle (prompt «[E] Zarpar», MC-14). */
+    this._nearBoat = false;
+    /** Grupo de la barca del muelle (raycasteable para zarpar, MC-14), o null. */
+    this._boatGroup = null;
+    /** Posición de mundo de la barca para la proximidad a pie (MC-14), o null. */
+    this._boatSpot = null;
     /** Casa en la que se ha «entrado» al chocar de frente (MC-9), o null. */
     this._insideCityId = null;
     /** Posiciones de mundo de las ciudades para la marcha (colisión y proximidad). */
@@ -1115,6 +1141,7 @@ export class CareerIsland3D extends LitElement {
     this._keys.clear();
     this._expectUnlock = false;
     this._insideCityId = null;
+    this._nearBoat = false;
     this._setLabelsVisible(true); // de vuelta a la vista aérea, con sus nombres
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
     if (this._plc) this._plc.enabled = false;
@@ -1310,6 +1337,12 @@ export class CareerIsland3D extends LitElement {
     if (event.code === 'KeyE' && this._nearCityId) {
       event.preventDefault();
       this._openNearCity();
+      return;
+    }
+    // [E] junto a la barca sin ciudad cerca (MC-14): zarpar.
+    if (event.code === 'KeyE' && this._nearBoat) {
+      event.preventDefault();
+      this._openArchipelago();
     }
   }
 
@@ -1393,6 +1426,11 @@ export class CareerIsland3D extends LitElement {
   /** Ciudad cercana al caminante, para el resalte emisivo y el prompt «[E] Ver ciudadanía». */
   _updateProximity() {
     const cam = this._camera.position;
+    // Barca del muelle (MC-14): el prompt «[E] Zarpar» sale al acercarse a
+    // ella (la ciudad cercana, si la hay, tiene prioridad en el HUD).
+    this._nearBoat = this._boatSpot
+      ? Math.hypot(cam.x - this._boatSpot.x, cam.z - this._boatSpot.z) <= BOAT_PROXIMITY_RADIUS
+      : false;
     const near = nearestCityWithin({ x: cam.x, z: cam.z }, this._walkCities, PROXIMITY_RADIUS);
     const id = near?.id ?? null;
     if (id === this._nearCityId) return;
@@ -1403,6 +1441,21 @@ export class CareerIsland3D extends LitElement {
   /** Abre el panel de ciudadanía de la ciudad cercana ([E] o clic). */
   _openNearCity() {
     if (this._nearCityId) this._openCityPanel(this._nearCityId);
+  }
+
+  /**
+   * Zarpar (MC-14): abre el mapa del archipiélago en <career-app>. A pie
+   * suelta el pointer lock A PROPÓSITO (como _openCityPanel) para que el ratón
+   * pueda usar el overlay; tras cerrarlo, un clic en el canvas re-engancha.
+   */
+  _openArchipelago() {
+    if (this._fpsLocked) {
+      this._expectUnlock = true;
+      document.exitPointerLock();
+    }
+    this.dispatchEvent(
+      new CustomEvent('open-archipelago', { bubbles: true, composed: true }),
+    );
   }
 
   /**
@@ -1508,6 +1561,7 @@ export class CareerIsland3D extends LitElement {
     this._expectUnlock = false;
     this._nearCityId = null;
     this._insideCityId = null;
+    this._nearBoat = false;
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
     if (this._plc) this._plc.enabled = false;
     this._controls.enabled = true;
@@ -1537,7 +1591,11 @@ export class CareerIsland3D extends LitElement {
       ? (this.map?.cities ?? []).find((c) => c.id === this._nearCityId)
       : null;
     return html`
-      ${city ? html`<div class="fps-hint near"><kbd>E</kbd> Ver ciudadanía de ${city.name}</div>` : null}
+      ${city
+        ? html`<div class="fps-hint near"><kbd>E</kbd> Ver ciudadanía de ${city.name}</div>`
+        : this._nearBoat
+          ? html`<div class="fps-hint near"><kbd>E</kbd> Zarpar</div>`
+          : null}
       <div class="fps-help">←→ girar · ↑↓ avanzar · A/D lateral · Shift correr · E ciudadanía · Esc salir</div>
     `;
   }
@@ -1577,6 +1635,11 @@ export class CareerIsland3D extends LitElement {
     // muestreo de proximidad comparten esta lista (se rehace con el mapa).
     this._walkCities = (this.map.cities ?? []).map((c) => ({ id: c.id, ...worldFromMap(c.x, c.y) }));
     if (this.map.id !== this._lastMapId) this._clearPlateCache(); // otra isla, otras placas
+    // La barca vive en el grupo estático: sus referencias se rehacen con él
+    // (y quedan null en un mapa sin puerto, MC-14).
+    this._boatGroup = null;
+    this._boatSpot = null;
+    this._nearBoat = false;
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
     this._rebuildTeammates(); // las posiciones de los compañeros dependen del mapa (MC-12)
@@ -1742,6 +1805,83 @@ export class CareerIsland3D extends LitElement {
     }
 
     if (this.map.startPort) group.add(this._buildPort(this.map.startPort, labelsVisible));
+    // Isla sin ciudades (aún sin contenido, MC-14): cartel «En construcción»
+    // recibiendo al viajero junto al puerto. La generación del resto de la
+    // isla (terreno, puerto, vegetación) ya tolera mapas vacíos.
+    if ((this.map.cities ?? []).length === 0) group.add(this._buildConstructionSign());
+    return group;
+  }
+
+  /**
+   * Cartel de obra low-poly para las islas-placeholder (MC-14): dos postes de
+   * madera y un tablero con «En construcción», plantado unos pasos hacia el
+   * interior desde el puerto y mirando HACIA él (el viajero lo lee al llegar).
+   * En un mapa sin puerto, en el centro de la isla mirando al sur.
+   */
+  _buildConstructionSign() {
+    const THREE = this._THREE;
+    const group = new THREE.Group();
+    let x = 0;
+    let z = 0;
+    let yaw = 0;
+    if (this.map.startPort) {
+      const { wx, wz } = worldFromMap(this.map.startPort.x, this.map.startPort.y);
+      const d = Math.hypot(wx, wz);
+      const ux = d > 0.001 ? wx / d : 0;
+      const uz = d > 0.001 ? wz / d : 1;
+      x = wx - ux * SIGN_INLAND_OFFSET;
+      z = wz - uz * SIGN_INLAND_OFFSET;
+      yaw = Math.atan2(wx - x, wz - z); // la cara del tablero (+z local) mira al puerto
+    }
+    group.position.set(x, groundHeightAt(x, z, { radius: this._islandR }), z);
+    group.rotation.y = yaw;
+
+    const postMat = new THREE.MeshLambertMaterial({
+      color: ENV_COLORS.post,
+      flatShading: true,
+      map: this._envTexture('wood'),
+    });
+    const postGeo = new THREE.CylinderGeometry(0.14, 0.16, 3.1, 6);
+    for (const lx of [-1.6, 1.6]) {
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(lx, 1.55, 0);
+      post.castShadow = SHADOWS.enabled;
+      group.add(post);
+    }
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(4.2, 1.7, 0.14),
+      new THREE.MeshLambertMaterial({ color: ENV_COLORS.plank, flatShading: true, map: this._envTexture('wood') }),
+    );
+    board.position.set(0, 2.5, 0);
+    board.castShadow = SHADOWS.enabled;
+    group.add(board);
+    // Texto pintado en un canvas (no cacheado: un cartel por build, lo libera
+    // _disposeSubtree con el grupo estático).
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 208;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f6ead2';
+    ctx.fillRect(0, 0, 512, 208);
+    ctx.strokeStyle = '#7a5a33';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(5, 5, 502, 198);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1e3a5f';
+    ctx.font = '700 58px system-ui, sans-serif';
+    ctx.fillText('🚧 En construcción', 256, 78);
+    ctx.fillStyle = '#5b6b7d';
+    ctx.font = '600 30px system-ui, sans-serif';
+    ctx.fillText('Esta disciplina llegará pronto', 256, 148);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.9, 1.55),
+      new THREE.MeshBasicMaterial({ map: texture }),
+    );
+    face.position.set(0, 2.5, 0.08);
+    group.add(face);
     return group;
   }
 
@@ -1858,9 +1998,20 @@ export class CareerIsland3D extends LitElement {
     }
 
     // Barca low-poly amarrada al costado del muelle, flotando en el agua:
-    // casco blanco con borda de madera, banco y proa apuntada.
+    // casco blanco con borda de madera, banco y proa apuntada. Es la puerta
+    // del ARCHIPIÉLAGO (MC-14): clicable en vista aérea (raycast, como las
+    // casas) y con prompt «[E] Zarpar» al acercarse a pie.
+    const BOAT_LOCAL = { lx: 2.7, lz: dockLen - 1.6 };
     const boat = new THREE.Group();
-    boat.position.set(2.7, TERRAIN.waterY - GROUND_Y, dockLen - 1.6);
+    boat.position.set(BOAT_LOCAL.lx, TERRAIN.waterY - GROUND_Y, BOAT_LOCAL.lz);
+    boat.userData.sail = true;
+    this._boatGroup = boat;
+    // Posición de MUNDO de la barca (offset local rotado, como los postes):
+    // la proximidad a pie se mide contra este punto.
+    this._boatSpot = {
+      x: wx + BOAT_LOCAL.lx * Math.cos(seaYaw) + BOAT_LOCAL.lz * Math.sin(seaYaw),
+      z: wz - BOAT_LOCAL.lx * Math.sin(seaYaw) + BOAT_LOCAL.lz * Math.cos(seaYaw),
+    };
     const hull = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.5, 2.6), materialFor(ENV_COLORS.boat));
     hull.position.y = 0.1;
     boat.add(hull);
@@ -3612,10 +3763,12 @@ export class CareerIsland3D extends LitElement {
           return;
         }
         // Con el lock tomado, el clic dispara lo que hay bajo la mira: un
-        // compañero (MC-12, su mini-resumen) o la ciudad cercana (tecla E).
+        // compañero (MC-12, su mini-resumen), la ciudad cercana (tecla E) o
+        // la barca para zarpar (MC-14).
         const mateId = this._pickTeammateFromCenter();
         if (mateId) this._openTeammate(mateId);
         else if (this._nearCityId) this._openNearCity();
+        else if (this._nearBoat) this._openArchipelago();
       }
       return;
     }
@@ -3643,6 +3796,16 @@ export class CareerIsland3D extends LitElement {
     );
     if (mateId) {
       this._emitTeammate(mateId, event.clientX - rect.left, event.clientY - rect.top);
+      return;
+    }
+
+    // Barca del muelle (MC-14): clicable como las casas — zarpar. Va antes que
+    // las ciudades (nunca se solapan: la barca flota fuera de la costa).
+    if (
+      this._boatGroup &&
+      raycaster.intersectObjects(this._boatGroup.children, true).length > 0
+    ) {
+      this._openArchipelago();
       return;
     }
 
@@ -3711,6 +3874,9 @@ export class CareerIsland3D extends LitElement {
     this._keys.clear();
     this._nearCityId = null;
     this._insideCityId = null;
+    this._nearBoat = false;
+    this._boatGroup = null;
+    this._boatSpot = null;
     this._abort?.abort();
     this._abort = null;
     this._resizeObserver?.disconnect();
@@ -3750,7 +3916,7 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie)."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}

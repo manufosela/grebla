@@ -15,7 +15,8 @@
     "seed": "node scripts/seed.mjs",
     "seed:tenant-admin": "node scripts/seed-tenant-admin.mjs",
     "seed:leaders": "node scripts/seed-leaders.mjs",
-    "seed:career-content": "node scripts/seed-career-content.mjs"
+    "seed:career-content": "node scripts/seed-career-content.mjs",
+    "seed:archipelago": "node scripts/seed-archipelago.mjs"
   },
   "dependencies": {
     "@astrojs/lit": "^4.3.0",

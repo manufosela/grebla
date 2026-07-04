@@ -41,6 +41,19 @@
  * mini-popover DOM (uno solo a la vez; clic fuera lo cierra). El botón HUD
  * «👥 Equipo» (persistente en localStorage) los muestra/oculta.
  *
+ * Archipiélago (MC-14): el mapa deja de ser una isla única — cada disciplina
+ * es una isla (/careerMap/{islandId}) y el índice /careerMap/_archipelago las
+ * sitúa en el MAPA DEL MAR. El journey de la persona es GLOBAL y guarda su
+ * `currentIsland`: aquí se carga el mapa de esa isla y, al viajar (barca del
+ * muelle, [E] Zarpar a pie o el botón «🧭 Archipiélago»), se abre un overlay
+ * DOM con el mar y las islas — la actual marcada, las que aún no tienen doc
+ * atenuadas como «En construcción» (se puede viajar igualmente: la isla
+ * placeholder tiene playa, puerto y cartel). Elegir destino persiste
+ * `currentIsland` (setCurrentIsland), recarga el mapa con un fundido de
+ * travesía y el avatar aparece en el puerto de la isla nueva. Los compañeros
+ * (MC-12) solo se pintan si su journey está en la MISMA isla; el progreso del
+ * HUD sigue siendo el de la isla cargada.
+ *
  * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
  * localStorage `grebla:career:onboarded`) un cartel de bienvenida overlay
  * (DOM, estilo del panel) explica qué es la isla, los controles de la vista
@@ -60,11 +73,13 @@ import {
   getJourney,
   toggleVisited,
   setCurrent,
+  setCurrentIsland,
   toggleRoute,
   setEvidence,
   stats,
 } from '../../tools/career/application/usecases.js';
-import { getCareerMap } from '../../lib/careerMap.js';
+import { getCareerMap, getArchipelago, getExistingIslandIds } from '../../lib/careerMap.js';
+import { DEFAULT_ISLAND_ID } from '../../tools/career/domain/types.js';
 import { cityStatus, missingPrereqs, progressPct } from '../../tools/career/domain/progress.js';
 
 export class CareerApp extends LitElement {
@@ -84,6 +99,11 @@ export class CareerApp extends LitElement {
     showTeam: { state: true },
     teammatePopover: { state: true },
     showOnboarding: { state: true },
+    currentIsland: { state: true },
+    archipelago: { state: true },
+    existingIslands: { state: true },
+    showArchipelago: { state: true },
+    traveling: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -100,6 +120,8 @@ export class CareerApp extends LitElement {
   static MAX_TEAM_JOURNEYS = 25;
   /** Lista vacía ESTABLE: la isla no rehace su grupo en cada render sin equipo. */
   static EMPTY_TEAMMATES = Object.freeze([]);
+  /** Duración (ms) del fundido de travesía entre islas (MC-14). */
+  static TRAVEL_FADE_MS = 900;
 
   static styles = css`
     :host { display: flex; flex-direction: column; min-height: 0; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
@@ -254,6 +276,107 @@ export class CareerApp extends LitElement {
       font-weight: 700;
     }
     .onboard .play { width: 100%; font-size: 0.95rem; padding: 0.6rem 1rem; }
+    /* Mapa del ARCHIPIÉLAGO (MC-14): modal fixed sobre toda la vista con un
+       mar estilizado y las islas en su x/y del índice. */
+    .sea-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      background: rgba(30, 58, 95, 0.45);
+      backdrop-filter: blur(2px);
+    }
+    .sea {
+      width: min(760px, calc(100% - 2rem));
+      max-height: calc(100% - 2rem);
+      box-sizing: border-box;
+      overflow-y: auto;
+      background: color-mix(in srgb, var(--rm-surface, #fff) 96%, transparent);
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: var(--rm-radius, 12px);
+      padding: 1rem 1.25rem 1.1rem;
+      box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
+      outline: none;
+    }
+    .sea-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .sea-head h3 { margin: 0; font-size: 1.1rem; color: var(--rm-navy, #1e3a5f); }
+    .sea-map {
+      position: relative;
+      aspect-ratio: 16 / 10;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--rm-border, #e5e7eb);
+      background:
+        radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.14), transparent 34%),
+        radial-gradient(circle at 76% 68%, rgba(255, 255, 255, 0.1), transparent 30%),
+        linear-gradient(165deg, #3f7fb4 0%, #4d90c4 45%, #2f6a9c 100%);
+    }
+    .isle {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+      padding: 0.3rem 0.4rem;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+    .isle:hover { background: rgba(255, 255, 255, 0.12); }
+    .isle:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+    .isle-dot {
+      width: 30px;
+      height: 30px;
+      border-radius: 46% 54% 52% 48% / 55% 48% 52% 45%; /* silueta de isla, no un círculo perfecto */
+      background: radial-gradient(circle at 38% 34%, #b7e0a8 0%, #9fce8f 52%, #e9dcae 78%, #dccb96 100%);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 5px 12px rgba(10, 30, 50, 0.35);
+    }
+    .isle.here .isle-dot { box-shadow: 0 0 0 3px var(--rm-coral-600, #e26d5e), 0 5px 12px rgba(10, 30, 50, 0.35); }
+    .isle.wip { opacity: 0.55; }
+    .isle.wip .isle-dot { filter: grayscale(0.45); }
+    .isle-name {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      text-shadow: 0 1px 3px rgba(17, 24, 39, 0.75);
+    }
+    .isle-tag {
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 0.08rem 0.45rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--rm-navy, #1e3a5f);
+      white-space: nowrap;
+    }
+    .isle-tag.here { background: var(--rm-coral-600, #e26d5e); color: #fff; }
+    .sea-hint { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    /* Fundido de travesía entre islas (MC-14). */
+    .travel-fade {
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, #16324f 0%, #1e3a5f 60%, #274b6e 100%);
+      animation: travel-in 260ms ease-out both;
+    }
+    .travel-fade p {
+      margin: 0;
+      color: #fff;
+      font-size: 1.15rem;
+      font-weight: 700;
+      animation: travel-bob 1.4s ease-in-out infinite;
+    }
+    @keyframes travel-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes travel-bob {
+      0%, 100% { transform: translateY(0) rotate(-1deg); }
+      50% { transform: translateY(-7px) rotate(1.5deg); }
+    }
     .legend-wrap { margin-top: 1rem; }
     .legend-wrap summary { font-size: 0.78rem; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .recs { margin: 0.75rem 0 0; padding: 0; list-style: none; font-size: 0.78rem; }
@@ -298,6 +421,16 @@ export class CareerApp extends LitElement {
     // entra al mapa 3D; el flag de localStorage lo silencia para siempre y el
     // botón «?» del HUD lo reabre a demanda.
     this.showOnboarding = !this._readOnboarded();
+    // Archipiélago (MC-14): isla actual (viene del journey de la persona),
+    // índice de islas, ids con doc real (para atenuar «En construcción» en el
+    // mapa del mar, cacheado por sesión), overlay abierto y fundido de viaje.
+    this.currentIsland = DEFAULT_ISLAND_ID;
+    /** @type {import('../../tools/career/domain/types.js').Archipelago|null} */
+    this.archipelago = null;
+    /** @type {Set<string>|null} */
+    this.existingIslands = null;
+    this.showArchipelago = false;
+    this.traveling = false;
     // Puntero grueso (táctil): la primera persona necesita ratón y teclado; el
     // botón queda deshabilitado como «modo de escritorio» (controles táctiles,
     // futura mejora). Guardado con typeof por el render estático de Astro.
@@ -405,12 +538,26 @@ export class CareerApp extends LitElement {
     if (changed.has('showOnboarding') && this.showOnboarding) {
       this.renderRoot.querySelector('.onboard')?.focus();
     }
+    // El mapa del archipiélago recibe el foco al abrirse (MC-14): Escape cierra.
+    if (changed.has('showArchipelago') && this.showArchipelago) {
+      this.renderRoot.querySelector('.sea')?.focus();
+    }
   }
 
-  /** Carga el mapa (la isla) desde Firestore una sola vez; con fallback a la semilla. */
+  /** Nombre de una isla según el índice del archipiélago (o '' si no está). @param {string} islandId */
+  _islandName(islandId) {
+    return (this.archipelago?.islands ?? []).find((i) => i.id === islandId)?.name ?? '';
+  }
+
+  /**
+   * Carga el índice del archipiélago (una vez) y el mapa de la ISLA ACTUAL
+   * desde Firestore; ambos con fallback a su semilla en código. Una isla sin
+   * doc llega como placeholder vacío con el nombre del índice (MC-14).
+   */
   async _loadMap() {
     try {
-      this.map = await getCareerMap();
+      this.archipelago ??= await getArchipelago();
+      this.map = await getCareerMap(this.currentIsland, this._islandName(this.currentIsland));
     } catch (err) {
       this._mapLoaded = false;
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa de carrera.';
@@ -422,6 +569,13 @@ export class CareerApp extends LitElement {
     this.error = '';
     try {
       this.journey = await getJourney(this.store, this.personId);
+      // El journey es GLOBAL (MC-14): si esta persona está en otra isla del
+      // archipiélago, se carga el mapa de SU isla.
+      const island = this.journey.currentIsland ?? DEFAULT_ISLAND_ID;
+      if (island !== this.currentIsland) {
+        this.currentIsland = island;
+        await this._loadMap();
+      }
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa de esta persona.';
     } finally {
@@ -475,6 +629,9 @@ export class CareerApp extends LitElement {
       .map((p) => {
         const journey = this._teamJourneys.get(p.id);
         if (!journey || !journey.currentCity) return null;
+        // Archipiélago (MC-14): cada compañero se pinta SOLO en su isla — si
+        // está en otra, aquí no aparece (su casa ni existe en este mapa).
+        if ((journey.currentIsland ?? DEFAULT_ISLAND_ID) !== this.currentIsland) return null;
         return {
           personId: p.id,
           name: p.name,
@@ -644,6 +801,151 @@ export class CareerApp extends LitElement {
     const next = !this.audioMuted;
     const island = this.renderRoot.querySelector('career-island-3d');
     this.audioMuted = island ? island.setAudioMuted(next) : writeStoredMuted(next);
+  }
+
+  // ---- Archipiélago: mapa del mar y viaje en barco (MC-14) -------------------
+
+  /**
+   * Abre el mapa del archipiélago (botón «🧭 Archipiélago» del HUD o la barca
+   * del muelle vía `open-archipelago`). Antes de abrir se asegura el índice y
+   * qué islas tienen ya doc (una consulta, cacheada para la sesión): las que
+   * no lo tienen se atenúan como «En construcción».
+   */
+  async _openArchipelago() {
+    if (!this.personId || this.traveling) return;
+    this.error = '';
+    try {
+      this.archipelago ??= await getArchipelago();
+      this.existingIslands ??= await getExistingIslandIds();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo cargar el archipiélago.';
+      return;
+    }
+    this.showArchipelago = true;
+  }
+
+  /** Cierra el mapa del archipiélago sin viajar y devuelve el foco al HUD. */
+  _closeArchipelago() {
+    this.showArchipelago = false;
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro del mapa del archipiélago lo cierra. @param {KeyboardEvent} event */
+  _onArchipelagoKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeArchipelago();
+  }
+
+  /** La barca del muelle (clic o [E] Zarpar a pie) pide abrir el mapa del mar. */
+  _onOpenArchipelago() {
+    this._openArchipelago();
+  }
+
+  /**
+   * Viaja en barco a otra isla: persiste `currentIsland` en el journey GLOBAL
+   * de la persona, recarga el mapa de la isla destino bajo un fundido de
+   * travesía y deja al avatar en su puerto (el spawn por defecto cuando la
+   * ciudad actual del journey no está en el mapa cargado).
+   * @param {string} islandId
+   */
+  async _travelTo(islandId) {
+    if (!this.personId || this.traveling) return;
+    if (islandId === this.currentIsland) {
+      this._closeArchipelago();
+      return;
+    }
+    this.error = '';
+    this.traveling = true;
+    this.showArchipelago = false;
+    this.selected = null; // el panel abierto era de una ciudad de la otra isla
+    this.teammatePopover = null;
+    try {
+      this.journey = await setCurrentIsland(this.store, this.personId, this.journey, islandId);
+      this.currentIsland = islandId;
+      await this._loadMap();
+      // El fundido tapa el cambio de isla; una pausa corta deja que la nueva
+      // termine de montar antes de descubrirla.
+      await new Promise((resolve) => setTimeout(resolve, CareerApp.TRAVEL_FADE_MS));
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo viajar a esa isla.';
+    } finally {
+      this.traveling = false;
+    }
+  }
+
+  /**
+   * Overlay del mapa del ARCHIPIÉLAGO (MC-14): un mar estilizado con cada isla
+   * en su x/y del índice. La isla actual va marcada («Estás aquí»); las que
+   * aún no tienen doc, atenuadas con «En construcción» (se puede viajar: al
+   * llegar espera la isla-placeholder con su puerto y su cartel). Clic en otra
+   * isla → zarpar. Modal suave: ✕ o Escape lo cierran.
+   */
+  _renderArchipelago() {
+    if (!this.showArchipelago) return null;
+    const islands = this.archipelago?.islands ?? [];
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeArchipelago(); }}>
+      <section
+        class="sea"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Mapa del archipiélago"
+        tabindex="-1"
+        @keydown=${this._onArchipelagoKeydown}
+      >
+        <header class="sea-head">
+          <h3>🧭 El archipiélago</h3>
+          <button class="close" aria-label="Cerrar el mapa del archipiélago" title="Cerrar (Esc)" @click=${this._closeArchipelago}>✕</button>
+        </header>
+        <div class="sea-map" role="list" aria-label="Islas del archipiélago">
+          ${islands.map((island) => {
+            const here = island.id === this.currentIsland;
+            const built = this.existingIslands?.has(island.id) ?? island.id === DEFAULT_ISLAND_ID;
+            return html`<button
+              type="button"
+              role="listitem"
+              class="isle ${here ? 'here' : ''} ${built ? '' : 'wip'}"
+              style=${`left:${island.x}%; top:${island.y}%`}
+              title=${here
+                ? `${island.name} — estás aquí`
+                : built
+                  ? `Zarpar hacia ${island.name}`
+                  : `Zarpar hacia ${island.name} (en construcción)`}
+              @click=${() => this._travelTo(island.id)}
+            >
+              <span class="isle-dot" aria-hidden="true"></span>
+              <span class="isle-name">${island.name}</span>
+              ${here
+                ? html`<span class="isle-tag here">Estás aquí</span>`
+                : built
+                  ? null
+                  : html`<span class="isle-tag">En construcción</span>`}
+            </button>`;
+          })}
+        </div>
+        <p class="sea-hint">
+          Elige una isla y zarpa. El viaje es libre: tus ciudadanías te acompañan
+          allá donde vayas.
+        </p>
+      </section>
+    </div>`;
+  }
+
+  /** Fundido de travesía mientras se cambia de isla (MC-14). */
+  _renderTravelFade() {
+    if (!this.traveling) return null;
+    const name = this._islandName(this.currentIsland) || this.map?.name || '';
+    return html`<div class="travel-fade" role="status" aria-live="polite">
+      <p>⛵ Rumbo a ${name}…</p>
+    </div>`;
+  }
+
+  /** Botón «🧭 Archipiélago» (siempre disponible: barra y HUD a pie). */
+  _renderArchipelagoButton() {
+    return html`<button
+      @click=${this._openArchipelago}
+      title="Abrir el mapa del archipiélago y viajar a otra isla"
+    >🧭 Archipiélago</button>`;
   }
 
   /** Botón HUD «👥 Equipo» (MC-12): muestra/oculta los avatares del equipo. */
@@ -969,6 +1271,7 @@ export class CareerApp extends LitElement {
             <div class="bar">
               ${this._renderPersonSelect()}
               ${this._renderViewSwitch()}
+              ${this._renderArchipelagoButton()}
               <div class="stat"><span class="lvl">${s.level}</span><span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span></div>
             </div>
             <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
@@ -986,6 +1289,7 @@ export class CareerApp extends LitElement {
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               @select-city=${this._onSelect}
               @select-teammate=${this._onSelectTeammate}
+              @open-archipelago=${this._onOpenArchipelago}
               @webgl-unavailable=${this._onWebglUnavailable}
               @mode-change=${this._onModeChange}
             ></career-island-3d>
@@ -994,7 +1298,7 @@ export class CareerApp extends LitElement {
                 ? html`<button
                     @click=${this._exitFps}
                     title="Volver a la vista aérea de la isla"
-                  >Salir (Esc)</button>${this._renderAudioButton()}`
+                  >Salir (Esc)</button>${this._renderArchipelagoButton()}${this._renderAudioButton()}`
                 : html`
                     <button
                       @click=${this._focusOverview}
@@ -1055,6 +1359,8 @@ export class CareerApp extends LitElement {
           </details>
         </div>
       </div>`}
+      ${this._renderArchipelago()}
+      ${this._renderTravelFade()}
     `;
   }
 }
