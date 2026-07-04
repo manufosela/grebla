@@ -68,6 +68,7 @@ export class PlayerCard extends LitElement {
     visitedIslands: { attribute: false },
     questions: { attribute: false },
     carpools: { attribute: false },
+    coins: { attribute: false },
   };
 
   static styles = css`
@@ -139,6 +140,23 @@ export class PlayerCard extends LitElement {
       .cp { grid-template-columns: 1fr auto; }
       .cp .minibar { grid-column: 1 / -1; }
     }
+    /* Tribbu-coins (CP-2): saldo y últimas transacciones del libro mayor. */
+    .coinsbar { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin: 0.2rem 0 0.4rem; }
+    .coinsbal { font-size: 1.15rem; font-weight: 800; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; }
+    .coinshint { font-size: 0.72rem; color: var(--rm-muted, #6b7280); }
+    .coinstx { list-style: none; margin: 0; padding: 0; }
+    .coinstx li {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 0.35rem 0.75rem;
+      align-items: baseline;
+      padding: 0.35rem 0;
+      border-top: 1px solid var(--rm-border, #eef0f2);
+      font-size: 0.83rem;
+    }
+    .coinstx .what { color: var(--rm-text, #111827); }
+    .coinstx .when { font-size: 0.72rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .coinstx .delta { font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; white-space: nowrap; }
     /* Consultas al brujo (MC-22): una entrada por Q&A, todas las islas. */
     .wizqs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
     .wizq { border: 1px solid var(--rm-border, #eef0f2); border-radius: 10px; padding: 0.5rem 0.7rem; }
@@ -180,6 +198,14 @@ export class PlayerCard extends LitElement {
      * @type {{ id: string, name: string, status: string, completed: number, total: number, pct: number }[]|null}
      */
     this.carpools = null;
+    /**
+     * Tribbu-coins del jugador (CP-2), derivados por el contenedor del ledger
+     * verificable: saldo materializado y las últimas transacciones legibles
+     * (razón + delta + fecha ISO). null = el contenedor no los aporta (p. ej.
+     * mi-espacio): la sección no se pinta.
+     * @type {{ balance: number, recent: { label: string, delta: number, ts: string }[] }|null}
+     */
+    this.coins = null;
   }
 
   /**
@@ -261,9 +287,38 @@ export class PlayerCard extends LitElement {
       <ul class="isles">
         ${prog.islands.map((isle) => this._renderIsle(isle))}
       </ul>
+      ${this._renderCoins()}
       ${this._renderCarpools()}
       <p class="sub">Consultas al brujo</p>
       ${this._renderQuestions()}
+    `;
+  }
+
+  /**
+   * Sección «Tribbu-coins» (CP-2): saldo del libro mayor y las últimas
+   * transacciones legibles (razón + delta + fecha). Solo se pinta si el
+   * contenedor la aporta (career-app la deriva del ledger verificable; en
+   * mi-espacio no llega y la sección desaparece entera).
+   */
+  _renderCoins() {
+    if (this.coins === null) return null;
+    return html`
+      <p class="sub">Tribbu-coins</p>
+      <div class="coinsbar">
+        <span class="coinsbal" title="Saldo de tribbu-coins según el libro mayor">🪙 ${this.coins.balance}</span>
+        <span class="coinshint">emitidos solo por contratos: libro mayor firmado y auditable</span>
+      </div>
+      ${this.coins.recent.length === 0
+        ? html`<p class="empty">Aún no hay transacciones: consigue certificados para ganar tribbu-coins.</p>`
+        : html`<ul class="coinstx" aria-label="Últimas transacciones de tribbu-coins">
+            ${this.coins.recent.map(
+              (tx) => html`<li>
+                <span class="what">${tx.label}</span>
+                <span class="when">${formatQuestionDate(tx.ts)}</span>
+                <span class="delta">+${tx.delta} 🪙</span>
+              </li>`,
+            )}
+          </ul>`}
     `;
   }
 
