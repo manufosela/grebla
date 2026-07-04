@@ -228,7 +228,7 @@ import {
   PROXIMITY_RADIUS,
 } from '../../tools/career/domain/walk.js';
 import {
-  CELEBRATION,
+  CELEBRATION_VARIANTS,
   CONFETTI_COLOR_COUNT,
   justVisitedCity,
   confettiParticles,
@@ -714,11 +714,12 @@ export class CareerIsland3D extends LitElement {
     this._clouds = [];
     this._lastEnvTs = 0;
     /**
-     * Celebración de ciudadanía en curso (MC-11), o null. Guarda el grupo de
+     * Celebración en curso (certificado MC-11 o ciudadanía de isla MC-20), o
+     * null. Guarda la variante (cfg: duración/fundido del tick), el grupo de
      * confeti (vive en la escena, sobrevive a rebuilds del grupo de ciudades),
      * las trayectorias puras y el material de pulso VIGENTE de la casa (se
      * recrea en cada rebuild: _disposeSubtree libera el del build anterior).
-     * @type {{cityId: string, start: number, group: object, mesh: object, params: object[], topY: number, bodyMat: object|null, intensity: number}|null}
+     * @type {{cityId: string, cfg: {durationS: number, fadeS: number, count: number, gravity: number}, start: number, group: object, mesh: object, params: object[], topY: number, bodyMat: object|null, intensity: number}|null}
      */
     this._celebration = null;
     /** Ciudad recién visitada pendiente de celebrar (diff en updated()). */
@@ -3792,23 +3793,39 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Dispara la celebración de ciudadanía sobre la casa de una ciudad (MC-11):
-   * pulso emisivo dorado en las paredes, confeti instanciado (trayectorias
-   * DETERMINISTAS de hash+índice, celebration.js) y fanfarria. El confeti vive
-   * en un grupo propio de la ESCENA (no del grupo de ciudades): sobrevive a
-   * los rebuilds; el material de pulso se re-aplica en cada rebuild
-   * (_buildCities). Una celebración nueva corta la anterior.
-   * @param {string} cityId
+   * Celebración MAYOR de CIUDADANÍA DE ISLA (MC-20), pública para el
+   * contenedor: <career-app> la invoca cuando el certificado recién obtenido
+   * cruza el % objetivo de la isla. Corta la celebración de certificado que
+   * este componente ya arrancó por su cuenta (mismo diff) y la sustituye por
+   * la variante 'island': más confeti, más duración y fanfarria larga.
+   * @param {string} cityId Ciudad cuyo certificado otorgó la ciudadanía.
    */
-  _celebrate(cityId) {
+  celebrateCitizenship(cityId) {
+    this._celebrate(cityId, 'island');
+  }
+
+  /**
+   * Dispara la celebración sobre la casa de una ciudad: pulso emisivo dorado
+   * en las paredes, confeti instanciado (trayectorias DETERMINISTAS de
+   * hash+índice, celebration.js) y fanfarria. Variantes (MC-20): 'city'
+   * celebra el CERTIFICADO (MC-11, por defecto) e 'island' es la celebración
+   * MAYOR de la ciudadanía de la isla. El confeti vive en un grupo propio de
+   * la ESCENA (no del grupo de ciudades): sobrevive a los rebuilds; el
+   * material de pulso se re-aplica en cada rebuild (_buildCities). Una
+   * celebración nueva corta la anterior.
+   * @param {string} cityId
+   * @param {'city'|'island'} [variant]
+   */
+  _celebrate(cityId, variant = 'city') {
     if (this._phase !== 'ready' || !this._citiesGroup) return;
     this._endCelebration();
     const node = this._citiesGroup.children.find((c) => c.userData.cityId === cityId);
     if (!node) return;
     const THREE = this._THREE;
+    const cfg = CELEBRATION_VARIANTS[variant];
 
     // Confeti: planos instanciados con color por instancia (paleta GREBLA).
-    const params = confettiParticles(hashId(`celebration:${cityId}`));
+    const params = confettiParticles(hashId(`celebration:${variant}:${cityId}`), cfg.count);
     const mesh = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(CONFETTI_SIZE.w, CONFETTI_SIZE.h),
       new THREE.MeshBasicMaterial({
@@ -3831,6 +3848,7 @@ export class CareerIsland3D extends LitElement {
 
     this._celebration = {
       cityId,
+      cfg,
       start: performance.now(),
       group,
       mesh,
@@ -3842,25 +3860,25 @@ export class CareerIsland3D extends LitElement {
     // El material de pulso lo aplica el MISMO camino que usan los rebuilds
     // (así no hay dos variantes que mantener): un rebuild inmediato lo monta.
     this._rebuildCities();
-    this._audio.fanfare();
+    this._audio.fanfare(variant);
   }
 
   /**
-   * Un frame de la celebración (MC-11), en cualquier modo de cámara: anima el
-   * pulso emisivo dorado de las paredes (destellos con fundido de salida) y el
-   * confeti (posición balística pura + giro; fundido al final). Al agotar la
-   * duración se limpia sola.
+   * Un frame de la celebración (MC-11/MC-20), en cualquier modo de cámara:
+   * anima el pulso emisivo dorado de las paredes (destellos con fundido de
+   * salida) y el confeti (posición balística pura + giro; fundido al final)
+   * según la variante en curso (c.cfg). Al agotar la duración se limpia sola.
    * @param {DOMHighResTimeStamp} now
    */
   _tickCelebration(now) {
     const c = this._celebration;
     if (!c) return;
     const t = (now - c.start) / 1000;
-    if (t >= CELEBRATION.durationS) {
+    if (t >= c.cfg.durationS) {
       this._endCelebration();
       return;
     }
-    const fade = 1 - t / CELEBRATION.durationS;
+    const fade = 1 - t / c.cfg.durationS;
     c.intensity = CELEBRATION_PULSE_PEAK * Math.abs(Math.sin(t * Math.PI * CELEBRATION_PULSE_HZ)) * fade;
     if (c.bodyMat) c.bodyMat.emissiveIntensity = c.intensity;
     const dummy = this._confettiDummy;
@@ -3872,9 +3890,9 @@ export class CareerIsland3D extends LitElement {
       c.mesh.setMatrixAt(i, dummy.matrix);
     }
     c.mesh.instanceMatrix.needsUpdate = true;
-    // Fundido de salida del confeti en los últimos CELEBRATION.fadeS segundos.
-    const fadeStart = CELEBRATION.durationS - CELEBRATION.fadeS;
-    c.mesh.material.opacity = t <= fadeStart ? 1 : (CELEBRATION.durationS - t) / CELEBRATION.fadeS;
+    // Fundido de salida del confeti en los últimos c.cfg.fadeS segundos.
+    const fadeStart = c.cfg.durationS - c.cfg.fadeS;
+    c.mesh.material.opacity = t <= fadeStart ? 1 : (c.cfg.durationS - t) / c.cfg.fadeS;
   }
 
   /** Corta y limpia la celebración en curso (fin, otra nueva o teardown). */

@@ -34,14 +34,34 @@ export function getIslandMap() {
 
 /** Normaliza un journey persistido (o crea uno vacío) al modelo actual. @returns {Journey} */
 function normalizeJourney(j) {
-  if (!j) return { ...EMPTY_JOURNEY, visitedCities: [], plannedRoute: [], evidences: {} };
+  if (!j) {
+    return {
+      ...EMPTY_JOURNEY,
+      visitedCities: [],
+      plannedRoute: [],
+      visitedIslands: [DEFAULT_ISLAND_ID],
+      evidences: {},
+    };
+  }
   const island = typeof j.currentIsland === 'string' ? j.currentIsland.trim() : '';
+  const currentIsland = island || DEFAULT_ISLAND_ID;
+  // Islas pisadas (MC-20): saneadas y sin duplicados. Migración suave de
+  // journeys previos a MC-20: la isla actual siempre figura como pisada.
+  const visitedIslands = [
+    ...new Set(
+      (Array.isArray(j.visitedIslands) ? j.visitedIslands : [])
+        .map((id) => (typeof id === 'string' ? id.trim() : ''))
+        .filter(Boolean),
+    ),
+  ];
+  if (!visitedIslands.includes(currentIsland)) visitedIslands.push(currentIsland);
   return {
     visitedCities: [...(j.visitedCities ?? [])],
     currentCity: j.currentCity ?? null,
     plannedRoute: [...(j.plannedRoute ?? [])],
     // Journeys previos al archipiélago (MC-14) no traen isla: la de inicio.
-    currentIsland: island || DEFAULT_ISLAND_ID,
+    currentIsland,
+    visitedIslands,
     evidences: { ...(j.evidences ?? {}) },
   };
 }
@@ -83,15 +103,21 @@ export async function setCurrent(store, personId, journey, cityId) {
 
 /**
  * Viaja en barco a otra isla del archipiélago (MC-14): persiste la isla actual
- * en el journey GLOBAL de la persona. El viaje es libre (sin gating); los
- * prerequisitos siguen siendo por ciudad dentro de cada isla.
+ * en el journey GLOBAL de la persona y la registra como PISADA en
+ * `visitedIslands` (MC-20, para el marcador 🏝️ del HUD). El viaje es libre
+ * (sin gating); los prerequisitos siguen siendo por ciudad dentro de cada isla.
  * @param {CareerStore} store @param {string} personId @param {Journey} journey @param {string} islandId
  * @returns {Promise<Journey>}
  */
 export async function setCurrentIsland(store, personId, journey, islandId) {
   const id = typeof islandId === 'string' ? islandId.trim() : '';
   if (!id) throw new Error('setCurrentIsland requiere el id de la isla de destino.');
-  const next = { ...journey, currentIsland: id };
+  const visited = journey.visitedIslands ?? [];
+  const next = {
+    ...journey,
+    currentIsland: id,
+    visitedIslands: visited.includes(id) ? [...visited] : [...visited, id],
+  };
   await store.journeys.save(personId, next);
   return next;
 }

@@ -29,6 +29,23 @@ export const CELEBRATION = Object.freeze({
   gravity: 7.5,
 });
 
+/**
+ * Variantes de celebración (MC-20). La de siempre ('city', MC-11) celebra un
+ * CERTIFICADO; la MAYOR ('island') celebra la CIUDADANÍA de la isla: dura más
+ * y suelta bastante más confeti (la fanfarria larga vive en islandAudio.js,
+ * misma clave de variante). Misma balística y mismo determinismo.
+ * @type {Readonly<Record<'city'|'island', typeof CELEBRATION>>}
+ */
+export const CELEBRATION_VARIANTS = Object.freeze({
+  city: CELEBRATION,
+  island: Object.freeze({
+    durationS: 4.2,
+    fadeS: 0.9,
+    count: 180,
+    gravity: 7.5,
+  }),
+});
+
 /** Número de colores del confeti (paleta GREBLA: teal, coral, navy, dorado). */
 export const CONFETTI_COLOR_COUNT = 4;
 

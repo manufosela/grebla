@@ -9,9 +9,11 @@
  *  - PASOS: tick corto de ruido por un bandpass con envolvente de ~70 ms;
  *    el RATE lo pone el llamante (un tick por zancada: proporcional a la
  *    velocidad de marcha, ver career-island-3d).
- *  - FANFARRIA de ciudadanía: tres notas ascendentes (C5-E5-G5, arpegio de
- *    do mayor) con osciladores triangulares y envolvente ataque/caída, más
- *    una octava inferior suave de cuerpo.
+ *  - FANFARRIA: notas ascendentes (arpegio de do mayor) con osciladores
+ *    triangulares y envolvente ataque/caída, más una octava inferior suave de
+ *    cuerpo. Dos variantes (MC-20): 'city' (C5-E5-G5, el CERTIFICADO de una
+ *    casa) e 'island' (el arpegio sigue una octava más y remata en acorde:
+ *    la CIUDADANÍA de la isla).
  *
  * IMPORTANTE — Math.random SOLO AQUÍ: este módulo es la ÚNICA parte del juego
  * donde se permite aleatoriedad no determinista (relleno del buffer de ruido,
@@ -41,15 +43,33 @@ export const VOLUMES = Object.freeze({
 });
 
 /**
- * Plan de la fanfarria de ciudadanía: notas ASCENDENTES (arpegio C5-E5-G5)
- * con su instante de inicio y duración. Puro y exportado para test.
+ * Plan de la fanfarria: notas ASCENDENTES con su instante de inicio y
+ * duración. Puro y exportado para test. Dos variantes (MC-20):
+ *  - 'city' (por defecto, la de MC-11): arpegio corto C5-E5-G5 — CERTIFICADO.
+ *  - 'island': la fanfarria LARGA de la CIUDADANÍA de una isla — el mismo
+ *    arpegio que sigue subiendo una octava (C6-E6-G6) y remata con un acorde
+ *    de do mayor sostenido (C5+E6+G6 simultáneas, la llegada triunfal).
+ * @param {'city'|'island'} [variant]
  * @returns {{freq: number, at: number, dur: number}[]}
  */
-export function fanfarePlan() {
-  return [
+export function fanfarePlan(variant = 'city') {
+  /** @type {{freq: number, at: number, dur: number}[]} */
+  const city = [
     { freq: 523.25, at: 0, dur: 0.2 }, // C5
     { freq: 659.25, at: 0.14, dur: 0.2 }, // E5
     { freq: 783.99, at: 0.28, dur: 0.55 }, // G5, más larga: la nota de llegada
+  ];
+  if (variant !== 'island') return city;
+  return [
+    ...city.slice(0, 2),
+    { freq: 783.99, at: 0.28, dur: 0.2 }, // G5 (aquí aún no es la llegada)
+    { freq: 1046.5, at: 0.42, dur: 0.2 }, // C6
+    { freq: 1318.51, at: 0.56, dur: 0.2 }, // E6
+    { freq: 1567.98, at: 0.7, dur: 0.7 }, // G6, la cima del arpegio
+    // Acorde final sostenido: la llegada triunfal de la ciudadanía.
+    { freq: 523.25, at: 0.94, dur: 1.1 }, // C5
+    { freq: 1318.51, at: 0.94, dur: 1.1 }, // E6
+    { freq: 1567.98, at: 0.94, dur: 1.1 }, // G6
   ];
 }
 
@@ -275,15 +295,17 @@ export class IslandAudio {
   }
 
   /**
-   * Fanfarria de ciudadanía: el arpegio ascendente de fanfarePlan() con
-   * osciladores triangulares (más una octava inferior suave de cuerpo) y
-   * envolvente ataque rápido / caída exponencial.
+   * Fanfarria: el arpegio ascendente de fanfarePlan() con osciladores
+   * triangulares (más una octava inferior suave de cuerpo) y envolvente
+   * ataque rápido / caída exponencial. La variante 'island' (MC-20) es la
+   * fanfarria LARGA de la ciudadanía de una isla.
+   * @param {'city'|'island'} [variant]
    */
-  fanfare() {
+  fanfare(variant = 'city') {
     if (!this.enabled) return;
     const ctx = this._ctx;
     const base = ctx.currentTime;
-    for (const { freq, at, dur } of fanfarePlan()) {
+    for (const { freq, at, dur } of fanfarePlan(variant)) {
       for (const [f, level] of [
         [freq, VOLUMES.fanfare],
         [freq / 2, VOLUMES.fanfare * 0.35], // octava inferior: cuerpo

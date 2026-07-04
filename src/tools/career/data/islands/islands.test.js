@@ -95,6 +95,15 @@ describe('career — contenido de islas (MC-16, convención)', () => {
       expect(map.cities.some((c) => c.prereqs.length === 0)).toBe(true);
     });
 
+    it('su citiesTotal del índice coincide con las ciudades NO deprecadas (MC-20)', () => {
+      // El HUD de progresión calcula la ciudadanía con el citiesTotal del
+      // ÍNDICE: si el contenido de la isla cambia, la semilla debe seguirlo
+      // (en Firestore lo mantiene scripts/seed-islands.mjs).
+      const total = map.cities.filter((c) => !c.deprecated).length;
+      expect(ref?.citiesTotal, `citiesTotal desactualizado en ARCHIPELAGO_ISLANDS para ${islandId}`).toBe(total);
+      expect(ref?.citizenshipPct, `citizenshipPct sin definir para ${islandId}`).toBeGreaterThan(0);
+    });
+
     it('posiciones en rango 0..100, separadas entre sí y lejos del puerto', () => {
       expect(map.startPort).toBeDefined();
       for (const city of map.cities) {

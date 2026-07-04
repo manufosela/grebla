@@ -13,6 +13,13 @@
  *
  * El contenido se escribe pasado por serializeCareerMap (mismo saneo que el
  * panel de admin: sin undefined, recursos válidos, Firestore-safe).
+ *
+ * Progresión (MC-20): tras procesar cada isla se actualiza su entrada del
+ * ÍNDICE /careerMap/_archipelago — `citiesTotal` con el nº de ciudades NO
+ * deprecadas del doc que quedó en Firestore (el sembrado, o el existente si
+ * se respetó) y `citizenshipPct` solo si faltaba (valor de la semilla/ADR).
+ * El índice se lee una vez y se escribe una vez al final, solo si cambió; si
+ * no existe, se crea desde la semilla con las islas procesadas al día.
  * Usa la service account *firebase-adminsdk*.json de la raíz.
  *
  * Uso:
@@ -27,7 +34,8 @@ import { parseArgs } from 'node:util';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ISLAND_CONTENT } from '../src/tools/career/data/islands/index.js';
-import { serializeCareerMap } from '../src/tools/career/data/maps.js';
+import { serializeCareerMap, normalizeCareerMap } from '../src/tools/career/data/maps.js';
+import { seedArchipelago, serializeArchipelago, normalizeArchipelago } from '../src/tools/career/data/archipelago.js';
 
 const { values } = parseArgs({
   options: {
@@ -66,6 +74,36 @@ const db = getFirestore();
 let written = 0;
 let skipped = 0;
 
+// Índice del archipiélago (MC-20): se lee UNA vez, se van apuntando los
+// totales de las islas procesadas y se escribe al final solo si cambió.
+const archRef = db.doc('careerMap/_archipelago');
+const archSnap = await archRef.get();
+const archipelago = archSnap.exists
+  ? normalizeArchipelago(archSnap.data())
+  : seedArchipelago();
+let archDirty = !archSnap.exists;
+
+/**
+ * Actualiza en el índice la entrada de una isla procesada: `citiesTotal` con
+ * las ciudades NO deprecadas del doc que quedó en Firestore y, si faltaba en
+ * el doc original (la normalización ya lo rellenó), `citizenshipPct` queda
+ * persistido con el valor de la semilla. Isla fuera del índice: aviso.
+ * @param {string} islandId
+ * @param {Record<string, unknown>} docData Doc de la isla tal y como queda en Firestore.
+ */
+function trackIslandTotal(islandId, docData) {
+  const entry = archipelago.islands.find((i) => i.id === islandId);
+  if (!entry) {
+    console.warn(`⚠ La isla ${islandId} no está en el índice del archipiélago: su citiesTotal no se registra.`);
+    return;
+  }
+  const total = normalizeCareerMap(docData, islandId).cities.filter((c) => !c.deprecated).length;
+  if (entry.citiesTotal !== total) {
+    entry.citiesTotal = total;
+    archDirty = true;
+  }
+}
+
 for (const islandId of targetIds) {
   const map = ISLAND_CONTENT[islandId];
   const ref = db.doc(`careerMap/${islandId}`);
@@ -73,6 +111,7 @@ for (const islandId of targetIds) {
 
   if (snap.exists && !values.force) {
     console.log(`• /careerMap/${islandId} ya existe: no se toca (usa --force para reemplazarlo).`);
+    trackIslandTotal(islandId, snap.data()); // el índice refleja el doc REAL
     skipped += 1;
     continue;
   }
@@ -91,7 +130,17 @@ for (const islandId of targetIds) {
   console.log(
     `✓ Sembrado /careerMap/${islandId} — «${doc.name}»: ${doc.areas.length} comarcas, ${doc.cities.length} ciudades.`,
   );
+  trackIslandTotal(islandId, doc);
   written += 1;
+}
+
+if (archDirty) {
+  await archRef.set({ ...serializeArchipelago(archipelago), updatedAt: FieldValue.serverTimestamp() });
+  console.log(
+    `✓ Índice /careerMap/_archipelago ${archSnap.exists ? 'actualizado' : 'creado'}: citiesTotal/citizenshipPct al día (MC-20).`,
+  );
+} else {
+  console.log('• Índice /careerMap/_archipelago ya al día: no se toca.');
 }
 
 console.log(`Hecho: ${written} isla(s) sembrada(s), ${skipped} respetada(s) por existir.`);
