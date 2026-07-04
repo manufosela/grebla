@@ -306,6 +306,9 @@ export class CareerApp extends LitElement {
       aspect-ratio: 16 / 10;
       border-radius: 10px;
       overflow: hidden;
+      /* Contenedor de query (MC-17): los nombres de isla escalan con el ancho
+         del mapa (cqi) para no pisarse entre islas vecinas a ventana estrecha. */
+      container-type: inline-size;
       border: 1px solid var(--rm-border, #e5e7eb);
       background:
         radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.14), transparent 34%),
@@ -338,14 +341,16 @@ export class CareerApp extends LitElement {
     .isle.wip { opacity: 0.55; }
     .isle.wip .isle-dot { filter: grayscale(0.45); }
     .isle-name {
-      font-size: 0.72rem;
+      /* Fluida con el ancho del mapa (MC-17): a 760px es el 0.72rem de siempre
+         y en móvil encoge hasta 0.55rem — los nombres largos dejan de tocarse. */
+      font-size: clamp(0.55rem, 1.6cqi, 0.72rem);
       font-weight: 700;
       color: #fff;
       white-space: nowrap;
       text-shadow: 0 1px 3px rgba(17, 24, 39, 0.75);
     }
     .isle-tag {
-      font-size: 0.6rem;
+      font-size: clamp(0.5rem, 1.3cqi, 0.6rem);
       font-weight: 700;
       padding: 0.08rem 0.45rem;
       border-radius: 999px;
