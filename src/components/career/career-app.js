@@ -110,18 +110,29 @@
  * de» para acreditar al developer que ayudó — derivación v1 informativa).
  * Todas las Q&A quedan en la ficha del jugador (<player-card>, MC-21).
  *
- * Tiempo de juego (MC-23): con `canEdit` (el flujo actual: líder/superadmin
- * jugando a la persona seleccionada) un cronómetro de sesión activa
+ * Tiempo de juego (MC-23): con permiso de JUGAR (canPlay || canEdit: el
+ * ingeniero con su propia persona, o líder/superadmin jugando a la persona
+ * seleccionada) un cronómetro de sesión activa
  * (src/lib/playtime.js) corre mientras la pestaña está visible Y hubo
  * interacción en los últimos 120 s; acumula en memoria y vuelca cada 60 s (y
  * al ocultarse la pestaña / pagehide) a
  * /people/{personId}/career/playtime con increment() — pérdida máxima ~60 s
  * si el navegador mata la pestaña sin avisar (best-effort documentado). El
- * jugador vinculado NO escribe (se ampliará cuando juegue con su cuenta). El
  * histórico por día se poda a los últimos 30 días al cargar a la persona
  * (dispara con >35 claves). La ficha 🏅 muestra el tiempo de la persona
  * cargada (hoy / 7 días / total) y el líder tiene el botón «⏱ Tiempo» con la
  * vista agregada de sus personas (carga en paralelo, cap MAX_TEAM_JOURNEYS).
+ *
+ * EL INGENIERO JUEGA (JG-1, RMR-TSK-0139): el gating se divide en DOS ejes.
+ *  - JUGAR el plan de la persona cargada (marcar visitadas/actual/ruta,
+ *    evidencias, viajar, crear/unirse a carpools, preguntar al brujo,
+ *    cronómetro de playtime y registro de achievements): `canPlay || canEdit`.
+ *    El glue pone canPlay = true SOLO para el ingeniero vinculado, cuyo
+ *    personId queda fijado a su propia persona (y las reglas de Firestore
+ *    solo le abren journey/playtime/achievements de la SUYA).
+ *  - Gestionar el EQUIPO (selector de persona, cola del brujo del líder,
+ *    tiempo agregado del equipo): solo `canEdit` (líder/superadmin).
+ * Con una sola persona y canPlay el selector ni se pinta.
  *
  * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
  * localStorage `grebla:career:onboarded`) un cartel de bienvenida overlay
@@ -132,8 +143,9 @@
  *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
- *  - people: { id: string, name: string, uid?: string|null }[]   personas del equipo del líder
- *  - canEdit: boolean                          líder/superadmin (cola del brujo, MC-22)
+ *  - people: { id: string, name: string, uid?: string|null }[]   personas visibles (equipo del líder; solo la propia con canPlay)
+ *  - canEdit: boolean                          líder/superadmin: juega Y gestiona el equipo (cola del brujo, tiempo agregado, selector)
+ *  - canPlay: boolean                          ingeniero vinculado (JG-1): juega SU plan, sin gestión de equipo
  *  - currentUser: { uid: string, name: string }|null   login (autoría de consultas/respuestas)
  */
 import { LitElement, html, css } from 'lit';
@@ -244,6 +256,7 @@ export class CareerApp extends LitElement {
     store: { attribute: false },
     people: { attribute: false },
     canEdit: { attribute: false },
+    canPlay: { attribute: false },
     currentUser: { attribute: false },
     personId: { state: true },
     error: { state: true },
@@ -947,6 +960,9 @@ export class CareerApp extends LitElement {
     // el panel del brujo filtra por la actual y la ficha las lista completas),
     // overlays y caché de consultas del equipo para el contador de pendientes.
     this.canEdit = false;
+    // El ingeniero juega (JG-1): canPlay = jugar el plan de la persona cargada
+    // (la suya) SIN gestión de equipo. Ver el bloque de gating del header.
+    this.canPlay = false;
     /** @type {{ uid: string, name: string }|null} */
     this.currentUser = null;
     /** @type {import('../../tools/career/domain/wizard.js').WizardQuestion[]|null} */
@@ -1279,7 +1295,9 @@ export class CareerApp extends LitElement {
    * fallback silencioso.
    */
   async _migrateAchievements() {
-    if (!this.personId || !this.achievements) return;
+    // Solo quien JUEGA escribe el registro (JG-1): el viewer ni lo intenta
+    // (antes degradaba con console.warn en cada carga).
+    if (!this._canPlayJourney || !this.personId || !this.achievements) return;
     this.archipelago ??= await getArchipelago();
     const progress = archipelagoProgress(this.journey, this.archipelago.islands);
     const patch = newAchievements(progress, this.achievements, null);
@@ -1299,7 +1317,7 @@ export class CareerApp extends LitElement {
    * Lanza en caso de error (el caller, _act, lo muestra como this.error).
    */
   async _recordNewAchievements() {
-    if (!this.personId || !this.achievements || !this.archipelago) return;
+    if (!this._canPlayJourney || !this.personId || !this.achievements || !this.archipelago) return;
     const progress = archipelagoProgress(this.journey, this.archipelago.islands);
     const patch = newAchievements(progress, this.achievements, new Date().toISOString());
     if (!patch) return;
@@ -1403,7 +1421,7 @@ export class CareerApp extends LitElement {
   }
 
   async _act(action) {
-    if (!this.personId || !this.selected) return;
+    if (!this._canPlayJourney || !this.personId || !this.selected) return;
     const map = this._map;
     this.error = '';
     try {
@@ -1477,6 +1495,7 @@ export class CareerApp extends LitElement {
 
   /** Persiste el objeto de evidencias completo de la ciudad seleccionada. */
   async _persistEvidence(next) {
+    if (!this._canPlayJourney) return;
     this.error = '';
     try {
       this.journey = await setEvidence(this.store, this.personId, this.journey, this.selected, next);
@@ -1750,14 +1769,15 @@ export class CareerApp extends LitElement {
 
   /**
    * (Re)arma el cronómetro de juego según el contexto: mide SOLO con store,
-   * persona seleccionada y permiso de escritura (canEdit: el flujo actual de
-   * líder/superadmin jugando; el jugador vinculado no escribe). Al cambiar de
-   * persona, el cronómetro anterior se para VOLCANDO su resto a la persona a
-   * la que midió (el onFlush captura su personId). Idempotente: sin cambios
-   * de contexto no toca nada.
+   * persona seleccionada y permiso de JUGAR (canPlay || canEdit — desde JG-1
+   * el ingeniero vinculado mide contra su propia persona; las reglas le abren
+   * career/playtime de la suya). Al cambiar de persona, el cronómetro
+   * anterior se para VOLCANDO su resto a la persona a la que midió (el
+   * onFlush captura su personId). Idempotente: sin cambios de contexto no
+   * toca nada.
    */
   _syncPlaytimeTracker() {
-    const target = this.store && this.canEdit && this.personId ? this.personId : null;
+    const target = this.store && this._canPlayJourney && this.personId ? this.personId : null;
     if (target === this._playtimePerson) return;
     this._playtimeTracker?.stop(); // volcado final a la persona anterior
     this._playtimeTracker = null;
@@ -1794,7 +1814,7 @@ export class CareerApp extends LitElement {
    * lo podará la próxima sesión con permisos.
    */
   async _prunePlaytime() {
-    if (!this.canEdit || !this.personId || !this.playtime) return;
+    if (!this._canPlayJourney || !this.personId || !this.playtime) return;
     try {
       this.playtime = await prunePlaytime(this.store, this.personId, this.playtime);
     } catch (err) {
@@ -2054,9 +2074,9 @@ export class CareerApp extends LitElement {
     this._closeCarpools();
   }
 
-  /** Pestañas visibles del overlay: «Crear» solo con permiso (canEdit, v1). */
+  /** Pestañas visibles del overlay: «Crear» solo para quien JUEGA (JG-1). */
   get _carpoolTabs() {
-    return this.canEdit
+    return this._canPlayJourney
       ? CareerApp.CARPOOL_TABS
       : CareerApp.CARPOOL_TABS.filter((t) => t !== 'create');
   }
@@ -2097,7 +2117,7 @@ export class CareerApp extends LitElement {
    * @param {import('../../tools/career/domain/carpool.js').Carpool} carpool
    */
   async _joinCarpool(carpool) {
-    if (!this.canEdit || this.carpoolBusy) return;
+    if (!this._canPlayJourney || this.carpoolBusy) return;
     const person = this._selectedPerson;
     if (!person) {
       this.carpoolError = 'Elige una persona (selector de arriba) para unirla al carpool.';
@@ -2128,7 +2148,7 @@ export class CareerApp extends LitElement {
    * @param {import('../../tools/career/domain/carpool.js').Carpool} carpool
    */
   async _leaveCarpool(carpool) {
-    if (!this.canEdit || this.carpoolBusy || !this.personId) return;
+    if (!this._canPlayJourney || this.carpoolBusy || !this.personId) return;
     this.carpoolBusy = true;
     this.carpoolError = '';
     try {
@@ -2291,7 +2311,7 @@ export class CareerApp extends LitElement {
 
   /** «Crear carpool»: la persona seleccionada queda de CONDUCTOR. */
   async _createCarpool() {
-    if (!this.canEdit || this.carpoolBusy) return;
+    if (!this._canPlayJourney || this.carpoolBusy) return;
     const person = this._selectedPerson;
     if (!person) {
       this.carpoolError = 'Elige la persona que conducirá (selector de arriba).';
@@ -2366,7 +2386,7 @@ export class CareerApp extends LitElement {
     const summary = carpoolRouteSummary(cp);
     const free = carpoolSeatsLeft(cp);
     const already = this.personId ? isCarpoolMember(cp, this.personId) : false;
-    const joinable = this.canEdit && this.personId && canJoinCarpool(cp, this.personId);
+    const joinable = this._canPlayJourney && this.personId && canJoinCarpool(cp, this.personId);
     return html`<li class="cpcard">
       <div class="cphead">
         <h4>🚗 ${cp.name}</h4>
@@ -2379,7 +2399,7 @@ export class CareerApp extends LitElement {
         Conduce <strong>${cp.conductor.name}</strong> ·
         ${summary.islandNames.join(' · ')} · ${summary.stops} parada${summary.stops === 1 ? '' : 's'}
       </p>
-      ${this.canEdit
+      ${this._canPlayJourney
         ? html`<div class="cpactions">
             ${already
               ? html`<span class="cpmeta">Ya vas dentro.</span>`
@@ -2461,7 +2481,7 @@ export class CareerApp extends LitElement {
         )}
       </ul>
       <div class="cpactions">
-        ${this.canEdit && inMarch && !isConductor && this.personId && isCarpoolMember(cp, this.personId)
+        ${this._canPlayJourney && inMarch && !isConductor && this.personId && isCarpoolMember(cp, this.personId)
           ? html`<button ?disabled=${this.carpoolBusy} @click=${() => this._leaveCarpool(cp)}>
               Salir del carpool
             </button>`
@@ -2576,7 +2596,7 @@ export class CareerApp extends LitElement {
 
   /** Contenido de la pestaña activa del overlay de carpools. */
   _renderCarpoolTabContent() {
-    if (this.carpoolTab === 'create' && this.canEdit) return this._renderCarpoolCreate();
+    if (this.carpoolTab === 'create' && this._canPlayJourney) return this._renderCarpoolCreate();
     if (this.carpoolTab === 'mine') {
       if (!this.personId) {
         return html`<p class="wizempty">Elige una persona (selector de arriba) para ver sus carpools.</p>`;
@@ -2590,7 +2610,7 @@ export class CareerApp extends LitElement {
     // Tablón (default).
     if (this.carpools === null) return html`<p class="wizempty">Cargando el tablón…</p>`;
     if (this.carpools.length === 0) {
-      return html`<p class="wizempty">No hay carpools abiertos: ${this.canEdit ? 'crea el primero.' : 'vuelve más tarde.'}</p>`;
+      return html`<p class="wizempty">No hay carpools abiertos: ${this._canPlayJourney ? 'crea el primero.' : 'vuelve más tarde.'}</p>`;
     }
     return html`<ul class="cplist">${this.carpools.map((cp) => this._renderBoardCarpool(cp))}</ul>`;
   }
@@ -2915,13 +2935,26 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * true si el usuario puede DEJAR consultas y marcarlas como vistas: el líder
-   * jugando (canEdit: escribe todo el subárbol) o el jugador vinculado
-   * (Person.uid == su uid: la excepción acotada de las reglas). Si no, el
+   * true si el usuario JUEGA el plan de la persona cargada (JG-1): el
+   * ingeniero vinculado (canPlay, su propia persona) o el líder/superadmin
+   * (canEdit, la persona seleccionada). Gatea TODAS las acciones de juego:
+   * visitadas/actual/ruta, evidencias, viajar, carpools (crear/unirse/salir),
+   * preguntar al brujo, cronómetro de playtime y registro de achievements.
+   * El viewer (ni canPlay ni canEdit) queda en solo lectura de verdad.
+   */
+  get _canPlayJourney() {
+    return this.canPlay || this.canEdit;
+  }
+
+  /**
+   * true si el usuario puede DEJAR consultas y marcarlas como vistas: quien
+   * JUEGA (canPlay || canEdit, JG-1) o el jugador vinculado a la persona
+   * seleccionada (Person.uid == su uid: la excepción acotada de las reglas,
+   * que cubre al ingeniero cuando un líder carga SU persona). Si no, el
    * panel del brujo queda en solo lectura.
    */
   get _canAskWizard() {
-    if (this.canEdit) return true;
+    if (this._canPlayJourney) return true;
     const uid = this.currentUser?.uid;
     return Boolean(uid && this._selectedPerson?.uid === uid);
   }
@@ -3329,6 +3362,9 @@ export class CareerApp extends LitElement {
       this._closeArchipelago();
       return;
     }
+    // Viajar ESCRIBE el journey (setCurrentIsland): solo quien juega (JG-1).
+    // El cierre del overlay de arriba sí queda disponible para todos.
+    if (!this._canPlayJourney) return;
     this.error = '';
     const islands = this.archipelago?.islands ?? [];
     const from = islands.find((i) => i.id === this.currentIsland);
@@ -3780,6 +3816,9 @@ export class CareerApp extends LitElement {
     if (sel.deprecated) {
       return html`<p class="dep">Tecnología en desuso — no forma parte de la ruta.</p>`;
     }
+    // Solo quien JUEGA (JG-1) ve las acciones de journey; el viewer, nada
+    // (antes veía botones que Firestore rechazaba después).
+    if (!this._canPlayJourney) return null;
     const visited = this.journey.visitedCities ?? [];
     const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
     return html`<div class="actions">
@@ -3964,12 +4003,14 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Evidencias de ciudadanía de la ciudad (editables; ocultas si está en
-   * desuso). Las listas se editan como chips (MC-8); los títulos legados se
-   * muestran fusionados dentro de cursos (ver _saveEvidenceList).
+   * Evidencias de ciudadanía de la ciudad (editables por quien JUEGA, JG-1;
+   * en solo lectura para el resto; ocultas si está en desuso). Las listas se
+   * editan como chips (MC-8); los títulos legados se muestran fusionados
+   * dentro de cursos (ver _saveEvidenceList).
    */
   _renderCityEvidences(sel) {
     if (sel.deprecated) return null;
+    const editable = this._canPlayJourney;
     const ev = this.journey.evidences?.[sel.id] ?? {};
     const cursos = [...(ev.cursos ?? []), ...(ev.titulos ?? [])];
     return html`<details class="ev">
@@ -3980,22 +4021,25 @@ export class CareerApp extends LitElement {
           min="0"
           step="0.5"
           .value=${ev.priorExperienceYears ?? ''}
+          ?disabled=${!editable}
           @change=${(e) => this._saveExperience(e.target.value)}
         />
       </label>
-      ${this._renderEvidenceList('formaciones', 'Formaciones', ev.formaciones ?? [])}
-      ${this._renderEvidenceList('cursos', 'Cursos y títulos', cursos)}
+      ${this._renderEvidenceList('formaciones', 'Formaciones', ev.formaciones ?? [], editable)}
+      ${this._renderEvidenceList('cursos', 'Cursos y títulos', cursos, editable)}
     </details>`;
   }
 
   /**
-   * Lista de evidencias editable como chips: cada valor con su ✕ para quitar,
-   * y un input con botón «+» (o Enter) para añadir de una en una.
+   * Lista de evidencias como chips: editable (cada valor con su ✕ para quitar
+   * y un input con botón «+» o Enter para añadir de una en una) o de solo
+   * lectura (chips sin controles) cuando no se juega el plan (JG-1).
    * @param {'formaciones'|'cursos'} field
    * @param {string} label
    * @param {string[]} values
+   * @param {boolean} editable
    */
-  _renderEvidenceList(field, label, values) {
+  _renderEvidenceList(field, label, values, editable) {
     const add = (input) => this._addEvidenceItem(field, values, input);
     return html`<div class="evlist">
       <span class="evtitle">${label}</span>
@@ -4004,36 +4048,40 @@ export class CareerApp extends LitElement {
             ${values.map(
               (value, i) => html`<li class="chip">
                 <span>${value}</span>
-                <button
-                  type="button"
-                  class="chip-x"
-                  aria-label="Quitar ${value} de ${label}"
-                  title="Quitar"
-                  @click=${() => this._removeEvidenceItem(field, values, i)}
-                >✕</button>
+                ${editable
+                  ? html`<button
+                      type="button"
+                      class="chip-x"
+                      aria-label="Quitar ${value} de ${label}"
+                      title="Quitar"
+                      @click=${() => this._removeEvidenceItem(field, values, i)}
+                    >✕</button>`
+                  : null}
               </li>`,
             )}
           </ul>`
         : null}
-      <div class="evadd">
-        <input
-          type="text"
-          placeholder="Añadir…"
-          aria-label="Añadir a ${label}"
-          @keydown=${(e) => {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            add(e.target);
-          }}
-        />
-        <button
-          type="button"
-          class="plus"
-          aria-label="Añadir a ${label}"
-          title="Añadir"
-          @click=${(e) => add(e.target.closest('.evadd').querySelector('input'))}
-        >+</button>
-      </div>
+      ${editable
+        ? html`<div class="evadd">
+            <input
+              type="text"
+              placeholder="Añadir…"
+              aria-label="Añadir a ${label}"
+              @keydown=${(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                add(e.target);
+              }}
+            />
+            <button
+              type="button"
+              class="plus"
+              aria-label="Añadir a ${label}"
+              title="Añadir"
+              @click=${(e) => add(e.target.closest('.evadd').querySelector('input'))}
+            >+</button>
+          </div>`
+        : null}
     </div>`;
   }
 
@@ -4073,6 +4121,9 @@ export class CareerApp extends LitElement {
   }
 
   _renderPersonSelect() {
+    // El ingeniero juega SU plan (JG-1): con una sola persona (la suya) el
+    // selector es ruido de gestión de equipo — no se pinta.
+    if (this.canPlay && (this.people ?? []).length === 1) return null;
     return html`<label>Persona
       <select @change=${this._changePerson}>
         <option value="" ?selected=${!this.personId}>— Elige una persona —</option>

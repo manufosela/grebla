@@ -71,6 +71,15 @@ service cloud.firestore {
       function isOwner() {
         return isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid;
       }
+      // Jugador VINCULADO (JG-1): la cuenta logada es la del titular de la
+      // persona (el doc padre lleva uid == request.auth.uid). Mismo patrón de
+      // get() del doc padre que la excepción del brujo; el guard 'uid' in
+      // evita romper la regla en personas sin cuenta vinculada.
+      function isLinkedPlayer() {
+        return isSignedIn()
+          && 'uid' in get(/databases/$(database)/documents/people/$(personId)).data
+          && get(/databases/$(database)/documents/people/$(personId)).data.uid == request.auth.uid;
+      }
       function sharedPerm(data) {
         return isSignedIn() && 'sharedWith' in data ? data.sharedWith[request.auth.uid] : null;
       }
@@ -118,6 +127,33 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/people/$(personId)).data.uid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'seenAt'])
           && request.resource.data.status == 'seen';
+      }
+
+      // EL INGENIERO JUEGA (JG-1, RMR-TSK-0139): el jugador vinculado escribe
+      // (crea/actualiza) EXACTAMENTE tres documentos de su plan de desarrollo,
+      // que es SUYO:
+      //  - career/journey: ruta planificada, ciudades visitadas/actual,
+      //    evidencias e isla actual (jugar el mapa con su cuenta).
+      //  - career/playtime: su cronómetro de tiempo de juego (el tracker
+      //    vuelca con increment sobre su propia persona).
+      //  - career/achievements: sus logros con fecha. Que pueda escribirlo es
+      //    COSMÉTICO: la capa antifraude real son los tribbu-coins firmados
+      //    por la Cloud Function (/coins, emisor único, escritura de cliente
+      //    prohibida) — inflarse la ficha no acuña ninguna moneda.
+      // ADITIVO al {document=**} de abajo (en Firestore las reglas de matches
+      // solapados se OR-ean): líder dueño / compartido-edit / superadmin
+      // siguen escribiendo por esa vía. El resto del subárbol (nivel,
+      // valoraciones, lecturas, notas, Role Mirror) sigue siendo del líder:
+      // el vinculado NO gana escritura fuera de estos tres docs. Sin delete:
+      // el plan se corrige, no se borra.
+      match /career/journey {
+        allow create, update: if isLinkedPlayer();
+      }
+      match /career/playtime {
+        allow create, update: if isLinkedPlayer();
+      }
+      match /career/achievements {
+        allow create, update: if isLinkedPlayer();
       }
 
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
@@ -244,23 +280,26 @@ service cloud.firestore {
     // Carpools de formación (CP-1): grupos con nombre que recorren juntos una
     // ruta de paradas del archipiélago. Colección raíz de la instancia.
     //  - Lectura: autenticados (el tablón lo ve todo el mundo logueado).
-    //  - Crear: líder o superadmin, y el doc debe declararle como creador
-    //    (createdBy.uid == auth.uid): nadie firma carpools en nombre de otro.
+    //  - Crear: cualquier usuario autenticado de la instancia, y el doc debe
+    //    declararle como creador (createdBy.uid == auth.uid): nadie firma
+    //    carpools en nombre de otro. Desde JG-1 el jugador vinculado también
+    //    crea; los viewers no juegan (la UI no les ofrece crear), pero un
+    //    carpool firmado como uno mismo no rompe ninguna garantía — la firma
+    //    es la barrera, no el rol.
     //  - Editar/borrar: el creador o el superadmin… MÁS la rama de UNIRSE/
-    //    SALIR: cualquier líder puede actualizar SOLO members/memberIds/status
-    //    (hasOnly). La validación fina de la unión (hay plaza, está 'open', no
-    //    estás ya dentro) es de CLIENTE en esta v1 pragmática — un líder
-    //    malicioso podría saltársela, pero no puede tocar nombre/ruta/aforo ni
-    //    firmar como otro. El jugador VINCULADO (Person.uid) aún no escribe:
-    //    se añadirá en una fase posterior con su propia excepción acotada
-    //    (como /career/wizard/questions).
+    //    SALIR: cualquier autenticado puede actualizar SOLO
+    //    members/memberIds/status (hasOnly) — antes solo líderes; desde JG-1
+    //    el ingeniero se une/sale con su cuenta. La validación fina de la
+    //    unión (hay plaza, está 'open', no estás ya dentro) es de CLIENTE en
+    //    esta v1 pragmática — un usuario malicioso podría saltársela, pero no
+    //    puede tocar nombre/ruta/aforo ni firmar como otro.
     match /carpools/{carpoolId} {
       allow read: if isSignedIn();
-      allow create: if (isLeader() || isSuperAdmin())
+      allow create: if isSignedIn()
         && request.resource.data.createdBy.uid == request.auth.uid;
       allow update: if isSuperAdmin()
         || (isSignedIn() && resource.data.createdBy.uid == request.auth.uid)
-        || (isLeader()
+        || (isSignedIn()
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['members', 'memberIds', 'status']));
       allow delete: if isSuperAdmin()

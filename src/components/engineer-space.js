@@ -106,6 +106,8 @@ export class EngineerSpace extends LitElement {
     section.rolemirror { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; margin: 0; }
+    .playlink { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; margin-left: 0.35rem; }
+    .playlink:hover { text-decoration: underline; }
     .topmost { color: var(--rm-accent, #2a9d8f); font-size: 0.9rem; font-weight: 600; margin: 0.2rem 0 0; }
 
     /* ── Sección Carrera (marcado espejo de <team-person-detail>) ── */
@@ -567,7 +569,12 @@ export class EngineerSpace extends LitElement {
           (journey.plannedRoute?.length ?? 0) > 0),
     );
     if (!island || !hasJourney) {
-      return html`<p class="empty">Aún no tienes un mapa de carrera trazado.</p>`;
+      // El ingeniero JUEGA (JG-1): sin plan trazado, la salida natural es ir
+      // al juego a trazarlo con su propia cuenta.
+      return html`<p class="empty">
+        Aún no tienes un mapa de carrera trazado.
+        <a class="playlink" href="/tools/career-map">🎮 Empieza a jugar tu mapa</a>
+      </p>`;
     }
 
     const s = stats(island, journey);
