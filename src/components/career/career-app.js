@@ -58,7 +58,12 @@
  * atenuadas como «En construcción» (se puede viajar igualmente: la isla
  * placeholder tiene playa, puerto y cartel). Elegir destino persiste
  * `currentIsland` (setCurrentIsland), recarga el mapa con un fundido de
- * travesía y el avatar aparece en el puerto de la isla nueva. Los compañeros
+ * travesía y el avatar aparece en el puerto de la isla nueva. Desde MC-19 el
+ * viaje se VE antes del fundido: un barquito ⛵ navega la curva puerto→puerto
+ * sobre el mapa del mar (estela incluida, proa al rumbo, duración según la
+ * distancia — domain/voyage.js, puro). Escape salta la animación (el viaje
+ * sigue), otros clics se ignoran (un viaje a la vez) y con
+ * `prefers-reduced-motion` se zarpa directo al fundido. Los compañeros
  * (MC-12) solo se pintan si su journey está en la MISMA isla; el progreso del
  * HUD sigue siendo el de la isla cargada.
  *
@@ -88,6 +93,14 @@ import {
 } from '../../tools/career/application/usecases.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds } from '../../lib/careerMap.js';
 import { DEFAULT_ISLAND_ID } from '../../tools/career/domain/types.js';
+import {
+  WAKE_INTERVAL_MS,
+  voyagePath,
+  voyagePointAt,
+  voyageTangentAngle,
+  voyageDuration,
+  voyageHeading,
+} from '../../tools/career/domain/voyage.js';
 import { cityStatus, missingPrereqs, progressPct } from '../../tools/career/domain/progress.js';
 
 /**
@@ -141,6 +154,7 @@ export class CareerApp extends LitElement {
     existingIslands: { state: true },
     showArchipelago: { state: true },
     traveling: { state: true },
+    voyage: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -396,6 +410,39 @@ export class CareerApp extends LitElement {
       white-space: nowrap;
     }
     .isle-tag.here { background: var(--rm-coral-600, #e26d5e); color: #fff; }
+    /* Barco animado puerto→puerto (MC-19): capa del viaje sobre el mar. El
+       bucle de rAF recoloca el barco (left/top/transform inline) y va soltando
+       puntos de estela que se desvanecen solos. */
+    .voyage-layer { position: absolute; inset: 0; pointer-events: none; }
+    .boat {
+      position: absolute;
+      z-index: 2; /* la proa por delante de su propia estela */
+      font-size: 1.45rem;
+      line-height: 1;
+      filter: drop-shadow(0 2px 3px rgba(10, 30, 50, 0.45));
+      will-change: left, top, transform;
+    }
+    .wake {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.85);
+      transform: translate(-50%, -50%);
+      animation: wake-fade 1s ease-out forwards;
+    }
+    @keyframes wake-fade {
+      from { opacity: 0.85; transform: translate(-50%, -50%) scale(1); }
+      to { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+    }
+    /* Estado del viaje (aria-live SIEMPRE presente: el texto entra y se anuncia). */
+    .sea-status {
+      margin: 0.45rem 0 0;
+      min-height: 1.2em;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--rm-navy, #1e3a5f);
+    }
     .sea-hint { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
     /* Fundido de travesía entre islas (MC-14). */
     .travel-fade {
@@ -509,6 +556,13 @@ export class CareerApp extends LitElement {
     this.existingIslands = null;
     this.showArchipelago = false;
     this.traveling = false;
+    // Barco animado (MC-19): viaje en curso sobre el mapa del mar, o null.
+    // El rAF y sus relojes son privados: solo `voyage` re-renderiza.
+    /** @type {{ toId: string, toName: string, path: import('../../tools/career/domain/voyage.js').VoyagePath, duration: number }|null} */
+    this.voyage = null;
+    this._voyageRaf = 0;
+    this._voyageStart = 0;
+    this._voyageWakeAt = 0;
     // Puntero grueso (táctil): la primera persona necesita ratón y teclado; el
     // botón queda deshabilitado como «modo de escritorio» (controles táctiles,
     // futura mejora). Guardado con typeof por el render estático de Astro.
@@ -913,17 +967,26 @@ export class CareerApp extends LitElement {
   }
 
   /** Cierra el mapa del archipiélago sin viajar y devuelve el foco al HUD.
-   * Si se llegó a pie ([E] Zarpar), intenta re-enganchar el lock (MC-18). */
+   * Si se llegó a pie ([E] Zarpar), intenta re-enganchar el lock (MC-18).
+   * Con el barco navegando (MC-19) ni ✕ ni el fondo cierran: un viaje a la
+   * vez y ya está zarpado — Escape salta la animación, no la cancela. */
   _closeArchipelago() {
+    if (this.voyage) return;
     this.showArchipelago = false;
     this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
-  /** Escape dentro del mapa del archipiélago lo cierra. @param {KeyboardEvent} event */
+  /** Escape dentro del mapa del archipiélago lo cierra; con el barco en el mar
+   * (MC-19) NO aborta el viaje: salta la animación y va directo a la carga.
+   * @param {KeyboardEvent} event */
   _onArchipelagoKeydown(event) {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
+    if (this.voyage) {
+      this._finishVoyage();
+      return;
+    }
     this._closeArchipelago();
   }
 
@@ -933,18 +996,41 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Viaja en barco a otra isla: persiste `currentIsland` en el journey GLOBAL
-   * de la persona, recarga el mapa de la isla destino bajo un fundido de
-   * travesía y deja al avatar en su puerto (el spawn por defecto cuando la
-   * ciudad actual del journey no está en el mapa cargado).
+   * Viaja en barco a otra isla. Desde MC-19 el viaje se VE: un barquito navega
+   * la curva puerto→puerto sobre el mapa del mar (con estela y la proa al
+   * rumbo) ANTES del fundido de travesía. Con `prefers-reduced-motion` — o si
+   * el índice no trae los puertos — se va directo al fundido de siempre.
+   * Un viaje a la vez: clics en otras islas mientras se navega se ignoran.
    * @param {string} islandId
    */
   async _travelTo(islandId) {
-    if (!this.personId || this.traveling) return;
+    if (!this.personId || this.traveling || this.voyage) return;
     if (islandId === this.currentIsland) {
       this._closeArchipelago();
       return;
     }
+    this.error = '';
+    const islands = this.archipelago?.islands ?? [];
+    const from = islands.find((i) => i.id === this.currentIsland);
+    const to = islands.find((i) => i.id === islandId);
+    const reduced =
+      typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || !from || !to) {
+      await this._departTo(islandId);
+      return;
+    }
+    await this._startVoyage(from, to);
+  }
+
+  /**
+   * Zarpa de verdad (MC-14): persiste `currentIsland` en el journey GLOBAL de
+   * la persona, recarga el mapa de la isla destino bajo el fundido de travesía
+   * y deja al avatar en su puerto (el spawn por defecto cuando la ciudad
+   * actual del journey no está en el mapa cargado). Es el tramo FINAL del
+   * viaje: la animación del barco (MC-19) desemboca aquí.
+   * @param {string} islandId
+   */
+  async _departTo(islandId) {
     this.error = '';
     this.traveling = true;
     this.showArchipelago = false;
@@ -962,6 +1048,115 @@ export class CareerApp extends LitElement {
     } finally {
       this.traveling = false;
     }
+  }
+
+  /**
+   * Arranca la animación del barco (MC-19): calcula el trayecto y su duración
+   * (puras, domain/voyage.js), publica el estado `voyage` (pinta el barco, la
+   * capa de estela y el aviso aria-live «Zarpando hacia…») y lanza el bucle de
+   * rAF. Si los dos puertos del índice coincidieran (trayecto imposible), se
+   * zarpa sin animación: el viaje NUNCA se pierde por la parte visual.
+   * @param {import('../../tools/career/domain/types.js').IslandRef} from
+   * @param {import('../../tools/career/domain/types.js').IslandRef} to
+   */
+  async _startVoyage(from, to) {
+    let path;
+    try {
+      path = voyagePath(from, to);
+    } catch {
+      await this._departTo(to.id);
+      return;
+    }
+    this.voyage = { toId: to.id, toName: to.name, path, duration: voyageDuration(path.distance) };
+    this._voyageStart = 0;
+    this._voyageWakeAt = 0;
+    await this.updateComplete; // el barco y su capa ya están en el DOM
+    this._voyageRaf = requestAnimationFrame((now) => this._voyageFrame(now));
+  }
+
+  /**
+   * Un frame del viaje: t = tiempo/duración, el barco se recoloca sobre la
+   * curva con la proa al rumbo tangente y suelta estela cada WAKE_INTERVAL_MS.
+   * Al llegar (t = 1) desemboca en _finishVoyage → _departTo. Se manipula el
+   * DOM directamente (fuera de Lit): re-renderizar el overlay entero a 60 fps
+   * sería tirar el resto del mapa por un left/top.
+   * @param {number} now Reloj del rAF (ms).
+   */
+  _voyageFrame(now) {
+    const voyage = this.voyage;
+    if (!voyage) return; // el viaje terminó (Escape) entre frame y frame
+    this._voyageStart ||= now;
+    const t = Math.min((now - this._voyageStart) / voyage.duration, 1);
+    const boat = this.renderRoot.querySelector('.boat');
+    if (boat) {
+      boat.style.cssText = this._boatStyleAt(voyage.path, t);
+      const layer = this.renderRoot.querySelector('.voyage-layer');
+      if (layer && now - this._voyageWakeAt >= WAKE_INTERVAL_MS && t < 1) {
+        this._voyageWakeAt = now;
+        this._spawnWake(layer, voyagePointAt(voyage.path, t));
+      }
+    }
+    if (t >= 1) {
+      this._finishVoyage();
+      return;
+    }
+    this._voyageRaf = requestAnimationFrame((n) => this._voyageFrame(n));
+  }
+
+  /**
+   * Estilo inline del barco en el instante t: posición sobre la curva y
+   * transform con la proa al rumbo tangente. voyageHeading asume un sprite con
+   * la proa a +x (este), pero el glifo ⛵ (Noto/Twemoji) mira a la IZQUIERDA:
+   * hace falta un espejo base a proa-este que se ANULA con el espejo de los
+   * rumbos al oeste — un XOR. El mástil nunca queda boca abajo (|rotate| ≤ 90).
+   * El scaleX va DESPUÉS del rotate: se aplica primero al glifo.
+   * @param {import('../../tools/career/domain/voyage.js').VoyagePath} path
+   * @param {number} t
+   * @returns {string}
+   */
+  _boatStyleAt(path, t) {
+    const p = voyagePointAt(path, t);
+    const heading = voyageHeading(voyageTangentAngle(path, t));
+    const mirror = heading.mirrored ? '' : ' scaleX(-1)';
+    return `left:${p.x}%; top:${p.y}%; transform: translate(-50%, -50%) rotate(${heading.rotateDeg}deg)${mirror}`;
+  }
+
+  /**
+   * Suelta un punto de estela en la posición actual del barco: un span barato
+   * con animación CSS de desvanecido que se borra solo al terminar. Imperativo
+   * a propósito (como el resto del frame): la estela no es estado de la app.
+   * @param {Element} layer Capa .voyage-layer del mapa del mar.
+   * @param {{ x: number, y: number }} point Posición en unidades de mapa (%).
+   */
+  _spawnWake(layer, point) {
+    const dot = document.createElement('span');
+    dot.className = 'wake';
+    dot.style.left = `${point.x}%`;
+    dot.style.top = `${point.y}%`;
+    dot.addEventListener('animationend', () => dot.remove());
+    layer.append(dot);
+  }
+
+  /**
+   * Fin del viaje animado (por llegada o por Escape): apaga el rAF, retira el
+   * barco y zarpa de verdad (_departTo). El viaje SIEMPRE se completa — saltar
+   * la animación no lo aborta.
+   */
+  _finishVoyage() {
+    if (!this.voyage) return;
+    cancelAnimationFrame(this._voyageRaf);
+    this._voyageRaf = 0;
+    this._voyageStart = 0;
+    const { toId } = this.voyage;
+    this.voyage = null;
+    this._departTo(toId);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Barco en el mar y componente fuera del DOM: se apaga el rAF (MC-19).
+    if (this._voyageRaf) cancelAnimationFrame(this._voyageRaf);
+    this._voyageRaf = 0;
   }
 
   /**
@@ -1012,7 +1207,15 @@ export class CareerApp extends LitElement {
                   : html`<span class="isle-tag">En construcción</span>`}
             </button>`;
           })}
+          ${this.voyage
+            ? html`<div class="voyage-layer" aria-hidden="true">
+                <span class="boat" style=${this._boatStyleAt(this.voyage.path, 0)}>⛵</span>
+              </div>`
+            : null}
         </div>
+        <p class="sea-status" role="status" aria-live="polite">
+          ${this.voyage ? `Zarpando hacia ${this.voyage.toName}…` : ''}
+        </p>
         <p class="sea-hint">
           Elige una isla y zarpa. El viaje es libre: tus certificados te acompañan
           allá donde vayas.
