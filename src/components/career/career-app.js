@@ -27,6 +27,10 @@
  * (se abre con E/clic desde la isla, que suelta el pointer lock; al cerrarlo,
  * un clic en el canvas lo re-engancha).
  *
+ * Sonido (MC-11): el HUD 3D lleva un botón 🔊/🔇 persistente (localStorage)
+ * que conmuta el audio procedural de la isla (olas, gaviotas, pasos y
+ * fanfarria de ciudadanía); el motor WebAudio vive en <career-island-3d>.
+ *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
  *  - people: { id: string, name: string }[]   personas del equipo del líder
@@ -34,6 +38,7 @@
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
 import './career-island-3d.js';
+import { readStoredMuted, writeStoredMuted } from './islandAudio.js';
 import {
   getJourney,
   toggleVisited,
@@ -57,6 +62,7 @@ export class CareerApp extends LitElement {
     map: { state: true },
     viewMode: { state: true },
     mode3d: { state: true },
+    audioMuted: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -183,6 +189,9 @@ export class CareerApp extends LitElement {
     this.viewMode = this._readViewMode();
     // Modo de cámara del 3D (MC-7): 'aerial' | 'fps'; lo comunica la isla.
     this.mode3d = 'aerial';
+    // Sonido de la isla (MC-11): preferencia persistida; el motor WebAudio
+    // vive en <career-island-3d> y este botón HUD solo lo conmuta.
+    this.audioMuted = readStoredMuted();
     // Puntero grueso (táctil): la primera persona necesita ratón y teclado; el
     // botón queda deshabilitado como «modo de escritorio» (controles táctiles,
     // futura mejora). Guardado con typeof por el render estático de Astro.
@@ -368,6 +377,28 @@ export class CareerApp extends LitElement {
   /** Botón HUD «Salir (Esc)»: vuelta a la vista aérea con transición. */
   _exitFps() {
     this.renderRoot.querySelector('career-island-3d')?.exitFirstPerson();
+  }
+
+  /**
+   * Botón HUD 🔊/🔇 (MC-11): conmuta el sonido de la isla. El motor y la
+   * persistencia viven en <career-island-3d>/islandAudio; si la isla no está
+   * montada (p. ej. cayó a la vista plana) solo se persiste la preferencia.
+   * El clic es un gesto real: activar el sonido puede crear el AudioContext.
+   */
+  _toggleAudio() {
+    const next = !this.audioMuted;
+    const island = this.renderRoot.querySelector('career-island-3d');
+    this.audioMuted = island ? island.setAudioMuted(next) : writeStoredMuted(next);
+  }
+
+  /** Botón HUD del sonido, presente en vista aérea Y a pie (MC-11). */
+  _renderAudioButton() {
+    return html`<button
+      @click=${this._toggleAudio}
+      aria-pressed=${!this.audioMuted}
+      aria-label=${this.audioMuted ? 'Activar el sonido de la isla' : 'Silenciar la isla'}
+      title=${this.audioMuted ? 'Activar el sonido de la isla' : 'Silenciar la isla'}
+    >${this.audioMuted ? '🔇' : '🔊'}</button>`;
   }
 
   /**
@@ -618,7 +649,7 @@ export class CareerApp extends LitElement {
                 ? html`<button
                     @click=${this._exitFps}
                     title="Volver a la vista aérea de la isla"
-                  >Salir (Esc)</button>`
+                  >Salir (Esc)</button>${this._renderAudioButton()}`
                 : html`
                     <button
                       @click=${this._focusOverview}
@@ -631,6 +662,7 @@ export class CareerApp extends LitElement {
                         ? 'Modo de escritorio: requiere ratón y teclado'
                         : 'Recorre la isla a pie en primera persona (WASD + ratón)'}
                     >🚶 Explorar a pie${this._coarsePointer ? ' (modo de escritorio)' : ''}</button>
+                    ${this._renderAudioButton()}
                   `}
             </div>
             ${sel ? this._renderCityPanel(sel) : null}
