@@ -18,6 +18,8 @@ import {
   CITY_ENTER_ALIGNMENT,
   hashUnit,
   scatterPositions,
+  minimapProject,
+  minimapHeading,
 } from './walk.js';
 
 /** Radio de isla de pruebas (del orden del que produce islandRadius). */
@@ -427,5 +429,73 @@ describe('collideWithCities', () => {
   it('falla en alto con un radio inválido', () => {
     expect(() => collideWithCities({ x: 0, z: 0 }, { x: 1, z: 0 }, HOUSES, 0)).toThrow();
     expect(() => collideWithCities({ x: 0, z: 0 }, { x: 1, z: 0 }, HOUSES, Number.NaN)).toThrow();
+  });
+});
+
+describe('minimapProject (MC-13)', () => {
+  const SIZE = 180;
+
+  it('el centro del mundo cae en el centro del canvas', () => {
+    expect(minimapProject(0, 0, R, SIZE)).toEqual({ px: SIZE / 2, py: SIZE / 2 });
+  });
+
+  it('convención de ejes: +x mundo → derecha, +z mundo → abajo (norte fijo = -z arriba)', () => {
+    // El borde este del mundo (x=+R) toca el borde derecho del canvas.
+    expect(minimapProject(R, 0, R, SIZE)).toEqual({ px: SIZE, py: SIZE / 2 });
+    // El borde oeste, el izquierdo.
+    expect(minimapProject(-R, 0, R, SIZE)).toEqual({ px: 0, py: SIZE / 2 });
+    // El sur del mundo (+z) va hacia ABAJO del canvas; el norte (-z), arriba.
+    expect(minimapProject(0, R, R, SIZE)).toEqual({ px: SIZE / 2, py: SIZE });
+    expect(minimapProject(0, -R, R, SIZE)).toEqual({ px: SIZE / 2, py: 0 });
+  });
+
+  it('la proyección es lineal (medio radio → cuarto de canvas desde el centro)', () => {
+    const p = minimapProject(R / 2, -R / 2, R, SIZE);
+    expect(p.px).toBeCloseTo(SIZE / 2 + SIZE / 4);
+    expect(p.py).toBeCloseTo(SIZE / 2 - SIZE / 4);
+  });
+
+  it('no acota: un punto más allá del radio sale del canvas (radio mal elegido)', () => {
+    expect(minimapProject(R * 2, 0, R, SIZE).px).toBeGreaterThan(SIZE);
+  });
+
+  it('es determinista (misma entrada, misma salida)', () => {
+    expect(minimapProject(12.3, -4.5, R, SIZE)).toEqual(minimapProject(12.3, -4.5, R, SIZE));
+  });
+
+  it('falla en alto con posición, radio o tamaño inválidos', () => {
+    expect(() => minimapProject(Number.NaN, 0, R, SIZE)).toThrow();
+    expect(() => minimapProject(0, Number.POSITIVE_INFINITY, R, SIZE)).toThrow();
+    expect(() => minimapProject(0, 0, 0, SIZE)).toThrow();
+    expect(() => minimapProject(0, 0, -3, SIZE)).toThrow();
+    expect(() => minimapProject(0, 0, R, 0)).toThrow();
+    expect(() => minimapProject(0, 0, R, Number.NaN)).toThrow();
+  });
+});
+
+describe('minimapHeading (MC-13)', () => {
+  it('mirar al norte del mundo (-z) es flecha arriba (giro 0)', () => {
+    expect(minimapHeading(0, -1)).toBe(0);
+  });
+
+  it('los cuatro puntos cardinales giran en sentido horario del canvas', () => {
+    expect(minimapHeading(1, 0)).toBeCloseTo(Math.PI / 2); // este → derecha
+    expect(Math.abs(minimapHeading(0, 1))).toBeCloseTo(Math.PI); // sur → abajo
+    expect(minimapHeading(-1, 0)).toBeCloseTo(-Math.PI / 2); // oeste → izquierda
+  });
+
+  it('la magnitud del vector no cambia el rumbo (solo importa la dirección)', () => {
+    expect(minimapHeading(3, -3)).toBeCloseTo(minimapHeading(0.3, -0.3));
+    expect(minimapHeading(3, -3)).toBeCloseTo(Math.PI / 4); // noreste
+  });
+
+  it('vector ~nulo devuelve 0 (determinista, no es un error de datos)', () => {
+    expect(minimapHeading(0, 0)).toBe(0);
+    expect(minimapHeading(1e-12, -1e-12)).toBe(0);
+  });
+
+  it('falla en alto con componentes no finitas', () => {
+    expect(() => minimapHeading(Number.NaN, 0)).toThrow();
+    expect(() => minimapHeading(0, Number.POSITIVE_INFINITY)).toThrow();
   });
 });

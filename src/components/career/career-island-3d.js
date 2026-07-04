@@ -123,6 +123,23 @@
  * mini-resumen. El grupo se reconstruye al cambiar la prop, con dispose limpio
  * y materiales/geometrías compartidos por build.
  *
+ * Guía de objetivo y minimapa (MC-13):
+ *  - las ciudades con visado DISPONIBLE (estado 'available') llevan una baliza:
+ *    haz de luz coral vertical SUTIL y pulsante (más estrecho y tenue que el de
+ *    la ciudad actual, con fase determinista por hashId — nada de RNG), visible
+ *    en vista aérea y a pie; la ciudad actual conserva su haz intenso y no
+ *    recibe baliza (su marcador manda)
+ *  - la ruta planificada gana presencia: bajo la línea discontinua navy va una
+ *    cinta translúcida del mismo color (ribbonStrip compartido con la senda)
+ *  - minimapa a pie estilo DOOM: disco Canvas 2D (overlay esquina inferior
+ *    izquierda, solo en modo fps) con NORTE FIJO — la silueta de la isla sale
+ *    del MISMO perfil de costa (coastFactor/TERRAIN de walk.js), casas como
+ *    puntos con su color de estado, puerto, senda de visitadas, compañeros como
+ *    puntitos neutros y tu posición como flecha orientada por el yaw de la
+ *    cámara (minimapProject/minimapHeading, puros). La capa estática (isla,
+ *    casas, senda) se pre-pinta en un canvas offscreen al cambiar el journey y
+ *    se compone cada ~MINIMAP.redrawMs con la capa dinámica (flecha, equipo).
+ *
  * Sonido (MC-11, islandAudio.js): ambiente de olas + gaviota ocasional, un
  * tick de paso por ZANCADA (fase ∝ distancia: el rate sigue a la velocidad,
  * tanto del avatar aéreo como del caminante fps) y la fanfarria de ciudadanía.
@@ -163,6 +180,8 @@ import {
   collideWithCities,
   hashUnit,
   scatterPositions,
+  minimapProject,
+  minimapHeading,
   WALK_SPEED,
   RUN_MULTIPLIER,
   TURN_SPEED,
@@ -334,6 +353,57 @@ const CONFETTI_SIZE = Object.freeze({ w: 0.24, h: 0.15 });
 const CELEBRATION_PULSE_PEAK = 0.85;
 /** Frecuencia (Hz) del pulso emisivo (dos destellos por segundo). */
 const CELEBRATION_PULSE_HZ = 2;
+/**
+ * Baliza de «visado disponible» (MC-13): haz coral vertical SUTIL y pulsante
+ * sobre las ciudades con estado 'available'. Más estrecho, más bajo y mucho
+ * más tenue que el haz de la ciudad actual (radio 0.9, opacidad 0.35) para
+ * señalar el objetivo sin competir con él; el pulso es lento y su fase es
+ * determinista por ciudad (hashId) para que no palpiten al unísono.
+ */
+const BEACON = Object.freeze({
+  radius: 0.55,
+  height: 24,
+  opacityMin: 0.08,
+  opacityMax: 0.22,
+  speedHz: 0.35,
+});
+/**
+ * Presencia de la ruta planificada en el suelo (MC-13): cinta navy translúcida
+ * bajo la línea discontinua (ribbonStrip, el mismo mecanismo que la senda),
+ * elevada entre la senda (PATH_LIFT) y la línea (ROUTE_LIFT) contra el
+ * z-fighting. La línea sube además su opacidad (antes 0.55).
+ */
+const ROUTE_RIBBON = Object.freeze({ width: 0.9, opacity: 0.22, lift: 0.21 });
+/** Opacidad de la línea discontinua de la ruta planificada (MC-13: antes 0.55). */
+const ROUTE_DASH_OPACITY = 0.75;
+/**
+ * Minimapa a pie (MC-13), estilo DOOM: disco de MINIMAP.size px de lado (CSS)
+ * en la esquina inferior izquierda, SOLO en modo fps. Norte fijo (el mapa no
+ * rota; rota la flecha del jugador). La capa estática (agua, silueta de isla,
+ * senda, puerto y casas por estado) se pre-pinta en un canvas offscreen y se
+ * compone con la dinámica (compañeros + flecha) cada redrawMs. Colores de la
+ * paleta GREBLA; el agua es navy oscurecido translúcido para que el overlay no
+ * tape la escena.
+ */
+const MINIMAP = Object.freeze({
+  size: 180,
+  redrawMs: 150,
+  worldPad: 2, // respiro (unidades de mundo) alrededor de la playa
+  cityDot: 3.5,
+  currentRing: 6,
+  portDot: 3,
+  mateDot: 2.5,
+  water: 'rgba(23, 48, 77, 0.78)',
+  sand: '#e9dcae',
+  grass: '#9fce8f',
+  path: '#2a9d8f',
+  port: '#1e3a5f',
+  // Pizarra oscura: neutro pero distinguible de las casas bloqueadas (#d7dee2).
+  mate: '#5b6b7d',
+  player: '#f2887a',
+  currentAccent: '#e26d5e',
+  outline: 'rgba(255, 255, 255, 0.85)',
+});
 
 export class CareerIsland3D extends LitElement {
   static properties = {
@@ -422,6 +492,18 @@ export class CareerIsland3D extends LitElement {
     }
     /* El prompt de ciudad cercana sube para dejar sitio a la ayuda de controles. */
     .fps-hint.near { bottom: 3.1rem; }
+    /* --- Minimapa a pie (MC-13): disco estilo DOOM, esquina inferior izquierda --- */
+    .minimap {
+      position: absolute;
+      left: 0.9rem;
+      bottom: 0.9rem;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.75);
+      box-shadow: 0 4px 14px rgba(17, 24, 39, 0.35);
+      pointer-events: none;
+    }
     .fps-help {
       position: absolute;
       left: 50%;
@@ -571,6 +653,15 @@ export class CareerIsland3D extends LitElement {
     /** Fase de zancada acumulada del caminante fps (solo para los pasos). */
     this._fpsPhase = 0;
     this._fpsStepCount = 0;
+    /** Balizas de «visado disponible» vivas (userData.phase) del build (MC-13). */
+    this._beacons = [];
+    /** Canvas offscreen con la capa ESTÁTICA del minimapa (isla, senda, casas). */
+    this._minimapBase = null;
+    /** true cuando la capa estática del minimapa debe repintarse (MC-13). */
+    this._minimapDirty = true;
+    this._lastMinimapTs = 0;
+    /** Posiciones de mundo de los compañeros para el minimapa (MC-13). */
+    this._teammateSpots = [];
     /** Puntero grueso (táctil): el hint de teclado del avatar no aplica. */
     this._coarsePointer =
       typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -793,12 +884,18 @@ export class CareerIsland3D extends LitElement {
         }
       } else if (this._mode === 'fps') {
         this._tickWalk(now);
+        // Minimapa (MC-13): composición barata cada redrawMs, solo a pie.
+        if (now - this._lastMinimapTs >= MINIMAP.redrawMs) {
+          this._lastMinimapTs = now;
+          this._drawMinimap();
+        }
       } else {
         this._tickCameraAnim(now);
       }
       this._tickEnvironment(now); // agua ondulada y deriva de nubes (MC-10)
       this._tickCelebration(now); // confeti y pulso dorado, en cualquier modo (MC-11)
       this._tickTeammates(now); // idle y nombres de compañeros, en cualquier modo (MC-12)
+      this._tickBeacons(now); // pulso de las balizas de visado disponible (MC-13)
       this._renderer.render(this._scene, this._camera);
     };
     this._raf = requestAnimationFrame(step);
@@ -1501,6 +1598,9 @@ export class CareerIsland3D extends LitElement {
   _rebuildCities() {
     if (!this.map) return;
     this._replaceGroup('_citiesGroup', this._buildCities());
+    // La capa estática del minimapa refleja estados y senda: se repinta en la
+    // próxima composición (MC-13). Marcarla aquí cubre journey/reachable/mapa.
+    this._minimapDirty = true;
   }
 
   /** Sustituye un grupo de la escena liberando los recursos GPU del anterior. */
@@ -1860,6 +1960,7 @@ export class CareerIsland3D extends LitElement {
     const route = new Set(this.journey?.plannedRoute ?? []);
     const current = this.journey?.currentCity ?? null;
     this._cityLabels = [];
+    this._beacons = []; // las balizas viven en este grupo: se rehacen con él (MC-13)
     const labelsVisible = this._mode === 'aerial' || this._mode === 'to-aerial';
 
     // Geometrías compartidas por todas las ciudades de este build.
@@ -1867,6 +1968,9 @@ export class CareerIsland3D extends LitElement {
     const roofGeo = new THREE.ConeGeometry(CITY_ROOF.r, CITY_ROOF.h, 4);
     roofGeo.rotateY(Math.PI / 4); // tejado alineado con la caja
     const ringGeo = new THREE.TorusGeometry(2.9, 0.28, 8, 28);
+    // Baliza de visado disponible (MC-13): geometría compartida; el material es
+    // por baliza (cada una pulsa con su propia fase → su propia opacidad).
+    const beaconGeo = new THREE.CylinderGeometry(BEACON.radius, BEACON.radius, BEACON.height, 10, 1, true);
     const doorGeo = new THREE.BoxGeometry(CITY_DOOR.w, CITY_DOOR.h, CITY_DOOR.d);
     const plateGeo = new THREE.PlaneGeometry(CITY_PLATE.w, CITY_PLATE.h);
     const windowGeo = new THREE.PlaneGeometry(CITY_WINDOW.w, CITY_WINDOW.h);
@@ -2014,6 +2118,26 @@ export class CareerIsland3D extends LitElement {
         node.add(beam);
       }
 
+      // Baliza de «visado disponible» (MC-13): haz coral sutil y PULSANTE en
+      // las ciudades alcanzables no visitadas. La ciudad actual no la lleva
+      // (su haz intenso manda). Fase determinista por id: no palpitan a la vez.
+      if (status === 'available' && current !== city.id) {
+        const beacon = new THREE.Mesh(
+          beaconGeo,
+          new THREE.MeshBasicMaterial({
+            color: STATUS_COLORS.available,
+            transparent: true,
+            opacity: BEACON.opacityMin,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        beacon.position.y = BEACON.height / 2;
+        beacon.userData.phase = hashUnit(hashId(city.id), 13) * Math.PI * 2;
+        this._beacons.push(beacon);
+        node.add(beacon);
+      }
+
       // Selección (MC-6) o proximidad a pie (MC-7): resalte emisivo sutil
       // (conserva la textura de tablones para no «despintar» la casa). La
       // celebración (MC-11) manda: su pulso dorado ya ocupa el material.
@@ -2052,7 +2176,16 @@ export class CareerIsland3D extends LitElement {
     // atenuada desde la ciudad actual (o la última visitada).
     const visited = this.journey?.visitedCities ?? [];
     const visitedPts = journeyPathPoints(this.map, visited);
-    if (visitedPts.length >= 2) group.add(this._buildVisitedPath(visitedPts));
+    if (visitedPts.length >= 2) {
+      group.add(
+        this._buildGroundRibbon(visitedPts, {
+          width: PATH_WIDTH,
+          color: STATUS_COLORS.visited,
+          opacity: 0.85,
+          y: GROUND_Y + PATH_LIFT,
+        }),
+      );
+    }
     const routeStart = current ?? visited.at(-1) ?? null;
     const routePts = journeyPathPoints(this.map, [
       ...(routeStart === null ? [] : [routeStart]),
@@ -2064,15 +2197,16 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Senda del camino recorrido: cinta plana (ribbonStrip, puro) apoyada sobre
-   * la hierba con elevación + polygonOffset anti z-fighting. Color teal de
-   * «visitada»; sin escribir profundidad (es un decal del suelo).
-   * @param {{wx: number, wz: number}[]} points Ciudades visitadas, en orden.
+   * Cinta plana de suelo (ribbonStrip, puro) apoyada sobre la hierba con
+   * elevación + polygonOffset anti z-fighting; sin escribir profundidad (es un
+   * decal del suelo). La usan la senda del camino recorrido (teal, MC-8) y la
+   * presencia de la ruta planificada (navy translúcido, MC-13).
+   * @param {{wx: number, wz: number}[]} points Polilínea de mundo, en orden.
+   * @param {{ width: number, color: number, opacity: number, y: number }} opts
    */
-  _buildVisitedPath(points) {
+  _buildGroundRibbon(points, { width, color, opacity, y }) {
     const THREE = this._THREE;
-    const strip = ribbonStrip(points, PATH_WIDTH);
-    const y = GROUND_Y + PATH_LIFT;
+    const strip = ribbonStrip(points, width);
     const positions = new Float32Array(strip.length * 2 * 3);
     for (const [i, p] of strip.entries()) {
       positions.set([p.lx, y, p.lz, p.rx, y, p.rz], i * 6);
@@ -2089,9 +2223,9 @@ export class CareerIsland3D extends LitElement {
     const mesh = new THREE.Mesh(
       geo,
       new THREE.MeshBasicMaterial({
-        color: STATUS_COLORS.visited,
+        color,
         transparent: true,
-        opacity: 0.85,
+        opacity,
         side: THREE.DoubleSide,
         depthWrite: false,
         polygonOffset: true,
@@ -2103,12 +2237,23 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Ruta planificada: línea discontinua navy atenuada, un poco por encima de
-   * la senda para que ambas convivan sin pelearse.
+   * Ruta planificada con presencia (MC-13): cinta navy translúcida en el suelo
+   * (la guía se ve de lejos) + la línea discontinua navy encima (el trazo de
+   * «plan»), cada una a su elevación para que convivan con la senda sin
+   * pelearse (WebGL ignora linewidth: el grosor lo aporta la cinta).
    * @param {{wx: number, wz: number}[]} points Ciudad de partida + ruta, en orden.
    */
   _buildPlannedRoute(points) {
     const THREE = this._THREE;
+    const group = new THREE.Group();
+    group.add(
+      this._buildGroundRibbon(points, {
+        width: ROUTE_RIBBON.width,
+        color: ACCENT_COLORS.route,
+        opacity: ROUTE_RIBBON.opacity,
+        y: GROUND_Y + ROUTE_RIBBON.lift,
+      }),
+    );
     const y = GROUND_Y + ROUTE_LIFT;
     const geo = new THREE.BufferGeometry().setFromPoints(
       points.map((p) => new THREE.Vector3(p.wx, y, p.wz)),
@@ -2118,13 +2263,30 @@ export class CareerIsland3D extends LitElement {
       new THREE.LineDashedMaterial({
         color: ACCENT_COLORS.route,
         transparent: true,
-        opacity: 0.55,
+        opacity: ROUTE_DASH_OPACITY,
         dashSize: 1.6,
         gapSize: 1.1,
       }),
     );
     line.computeLineDistances(); // sin esto el dash no se pinta
-    return line;
+    group.add(line);
+    return group;
+  }
+
+  /**
+   * Un frame del pulso de las balizas de «visado disponible» (MC-13), en
+   * cualquier modo de cámara: opacidad senoidal lenta entre opacityMin y
+   * opacityMax con fase determinista por ciudad. Barato: pocas balizas y solo
+   * se toca la opacidad del material.
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickBeacons(now) {
+    if (this._beacons.length === 0) return;
+    const t = (now / 1000) * Math.PI * 2 * BEACON.speedHz;
+    for (const beacon of this._beacons) {
+      const k = 0.5 + 0.5 * Math.sin(t + beacon.userData.phase);
+      beacon.material.opacity = BEACON.opacityMin + (BEACON.opacityMax - BEACON.opacityMin) * k;
+    }
   }
 
   /**
@@ -2870,6 +3032,7 @@ export class CareerIsland3D extends LitElement {
     const group = new THREE.Group();
     this._teammateFigures = [];
     this._teammateLabels = [];
+    this._teammateSpots = []; // posiciones para los puntitos del minimapa (MC-13)
     const list = this.teammates ?? [];
     if (list.length === 0) return group;
 
@@ -2936,6 +3099,7 @@ export class CareerIsland3D extends LitElement {
         figure.add(label);
         this._teammateLabels.push(label);
         this._teammateFigures.push(figure);
+        this._teammateSpots.push({ x, z });
         group.add(figure);
       });
     }
@@ -3072,6 +3236,200 @@ export class CareerIsland3D extends LitElement {
       cloud.position.x += cloud.userData.drift * dt;
       if (cloud.position.x > wrap) cloud.position.x = -wrap;
     }
+  }
+
+  // ---- Minimapa a pie (MC-13) ----------------------------------------------------
+
+  /**
+   * Radio de mundo que mapea al borde del disco del minimapa: cubre la playa
+   * completa (falda máxima con la costa más expandida) más un respiro, de modo
+   * que TODO lo caminable y la línea de costa caben siempre en el disco.
+   */
+  _minimapWorldRadius() {
+    return (
+      (this._islandR + TERRAIN.beach.bottomPad) * (1 + 1.6 * TERRAIN.beach.amount) +
+      MINIMAP.worldPad
+    );
+  }
+
+  /** Escala del backing store de los canvas del minimapa (nitidez en HiDPI). */
+  static _minimapDpr() {
+    return Math.min(globalThis.devicePixelRatio ?? 1, 2);
+  }
+
+  /**
+   * Pre-pinta la capa ESTÁTICA del minimapa en el canvas offscreen (MC-13):
+   * agua, silueta de la isla (la MISMA línea de costa que pintan las mallas y
+   * pisa el caminante: coastFactor + TERRAIN, como la espuma), meseta de
+   * hierba, senda de visitadas, puerto y casas como puntos con su color de
+   * estado (la ciudad actual con aro coral). Se repinta solo cuando
+   * _minimapDirty lo pide (cambio de journey/estados/mapa), no por frame.
+   */
+  _paintMinimapBase() {
+    const size = MINIMAP.size;
+    const dpr = CareerIsland3D._minimapDpr();
+    let base = this._minimapBase;
+    if (!base) {
+      base = document.createElement('canvas');
+      base.width = size * dpr;
+      base.height = size * dpr;
+      this._minimapBase = base;
+    }
+    const ctx = base.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    const R = this._islandR;
+    const worldR = this._minimapWorldRadius();
+    const project = (x, z) => minimapProject(x, z, worldR, size);
+
+    // Agua: disco de fondo (el recorte circular del overlay lo hace el CSS,
+    // pero pintar un círculo deja limpias las esquinas del canvas).
+    ctx.fillStyle = MINIMAP.water;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Contorno polar → polígono proyectado (96 segmentos, como la espuma).
+    const coastPoly = (radiusAt) => {
+      const SEGS = 96;
+      ctx.beginPath();
+      for (let i = 0; i <= SEGS; i += 1) {
+        const angle = (i / SEGS) * Math.PI * 2 - Math.PI;
+        const r = radiusAt(angle);
+        const p = project(Math.cos(angle) * r, Math.sin(angle) * r);
+        if (i === 0) ctx.moveTo(p.px, p.py);
+        else ctx.lineTo(p.px, p.py);
+      }
+      ctx.closePath();
+    };
+
+    // Silueta de la isla: el radio donde la falda de la playa cruza el nivel
+    // del agua (idéntico a _buildFoam: mismo perfil de walk.js).
+    const top = TERRAIN.baseY + TERRAIN.beach.height / 2;
+    const bottom = TERRAIN.baseY - TERRAIN.beach.height / 2;
+    const waterFrac = (TERRAIN.waterY - top) / (bottom - top);
+    coastPoly((angle) => {
+      const k = coastFactor(angle, TERRAIN.beach.amount);
+      const topR = (R + TERRAIN.beach.topPad) * k;
+      const bottomR = (R + TERRAIN.beach.bottomPad) * k;
+      return topR + waterFrac * (bottomR - topR);
+    });
+    ctx.fillStyle = MINIMAP.sand;
+    ctx.fill();
+
+    // Meseta de hierba (borde superior de su capa, con su propia irregularidad).
+    coastPoly((angle) => (R + TERRAIN.grass.topPad) * coastFactor(angle, TERRAIN.grass.amount));
+    ctx.fillStyle = MINIMAP.grass;
+    ctx.fill();
+
+    // Senda del camino recorrido: polilínea teal (misma fuente que la cinta 3D).
+    const visitedPts = journeyPathPoints(this.map, this.journey?.visitedCities ?? []);
+    if (visitedPts.length >= 2) {
+      ctx.beginPath();
+      for (const [i, p] of visitedPts.entries()) {
+        const q = project(p.wx, p.wz);
+        if (i === 0) ctx.moveTo(q.px, q.py);
+        else ctx.lineTo(q.px, q.py);
+      }
+      ctx.strokeStyle = MINIMAP.path;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+
+    // Puerto: punto navy con aro blanco (el punto de llegada).
+    if (this.map.startPort) {
+      const p = worldFromMap(this.map.startPort.x, this.map.startPort.y);
+      const q = project(p.wx, p.wz);
+      ctx.beginPath();
+      ctx.arc(q.px, q.py, MINIMAP.portDot, 0, Math.PI * 2);
+      ctx.fillStyle = MINIMAP.port;
+      ctx.fill();
+      ctx.strokeStyle = MINIMAP.outline;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Casas: un punto por ciudad con su color de estado; la actual, aro coral.
+    const current = this.journey?.currentCity ?? null;
+    for (const city of this.map.cities ?? []) {
+      const st = cityStatus(this.map, city.id, this.journey);
+      const status = st === 'unknown' ? 'blocked' : st;
+      const { wx, wz } = worldFromMap(city.x, city.y);
+      const q = project(wx, wz);
+      ctx.beginPath();
+      ctx.arc(q.px, q.py, MINIMAP.cityDot, 0, Math.PI * 2);
+      ctx.fillStyle = `#${cityStatusColor(status).toString(16).padStart(6, '0')}`;
+      ctx.fill();
+      ctx.strokeStyle = MINIMAP.outline;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      if (city.id === current) {
+        ctx.beginPath();
+        ctx.arc(q.px, q.py, MINIMAP.currentRing, 0, Math.PI * 2);
+        ctx.strokeStyle = MINIMAP.currentAccent;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+  }
+
+  /**
+   * Compone el minimapa (MC-13) en su canvas overlay: capa estática (repintada
+   * solo si está sucia) + compañeros como puntitos neutros + TU posición como
+   * flecha coral orientada con el yaw de la cámara (norte fijo: rota la
+   * flecha, no el mapa — minimapHeading, puro). Se llama desde el loop con
+   * cadencia MINIMAP.redrawMs y solo en modo fps.
+   */
+  _drawMinimap() {
+    if (!this.map || !this._camera) return;
+    const canvas = this.renderRoot.querySelector('canvas.minimap');
+    if (!canvas) return; // el overlay aún no está en el DOM (primer render del modo)
+    const size = MINIMAP.size;
+    const dpr = CareerIsland3D._minimapDpr();
+    if (canvas.width !== size * dpr || canvas.height !== size * dpr) {
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+    }
+    if (this._minimapDirty || !this._minimapBase) {
+      this._paintMinimapBase();
+      this._minimapDirty = false;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(this._minimapBase, 0, 0, size, size);
+    const worldR = this._minimapWorldRadius();
+
+    // Compañeros visibles: puntitos neutros (sin nombre: el minimapa orienta).
+    for (const spot of this._teammateSpots) {
+      const q = minimapProject(spot.x, spot.z, worldR, size);
+      ctx.beginPath();
+      ctx.arc(q.px, q.py, MINIMAP.mateDot, 0, Math.PI * 2);
+      ctx.fillStyle = MINIMAP.mate;
+      ctx.fill();
+    }
+
+    // Tu posición: flecha coral con el rumbo del forward de la cámara.
+    const cam = this._camera.position;
+    const look = this._camera.getWorldDirection(this._walkDirScratch);
+    const q = minimapProject(cam.x, cam.z, worldR, size);
+    ctx.save();
+    ctx.translate(q.px, q.py);
+    ctx.rotate(minimapHeading(look.x, look.z));
+    ctx.beginPath();
+    ctx.moveTo(0, -7);
+    ctx.lineTo(5, 6);
+    ctx.lineTo(0, 3);
+    ctx.lineTo(-5, 6);
+    ctx.closePath();
+    ctx.fillStyle = MINIMAP.player;
+    ctx.fill();
+    ctx.strokeStyle = MINIMAP.outline;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
   }
 
   // ---- Celebración de ciudadanía y audio (MC-11) --------------------------------
@@ -3365,6 +3723,12 @@ export class CareerIsland3D extends LitElement {
     this._teammatesGroup = null;
     this._teammateFigures = [];
     this._teammateLabels = [];
+    this._teammateSpots = [];
+    // Minimapa (MC-13): los canvas 2D no tienen dispose; basta soltar las
+    // referencias para que el GC los recoja. Sucio para el próximo montaje.
+    this._beacons = [];
+    this._minimapBase = null;
+    this._minimapDirty = true;
     this._controls?.dispose();
     this._renderer?.dispose();
     this._scene = null;
@@ -3389,6 +3753,9 @@ export class CareerIsland3D extends LitElement {
         <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
+          : null}
+        ${this._mode === 'fps'
+          ? html`<canvas class="minimap" aria-hidden="true"></canvas>`
           : null}
         ${this._renderFpsHint()}
         ${this._renderAerialHint()}

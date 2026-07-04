@@ -41,6 +41,13 @@
  * mini-popover DOM (uno solo a la vez; clic fuera lo cierra). El botón HUD
  * «👥 Equipo» (persistente en localStorage) los muestra/oculta.
  *
+ * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
+ * localStorage `grebla:career:onboarded`) un cartel de bienvenida overlay
+ * (DOM, estilo del panel) explica qué es la isla, los controles de la vista
+ * aérea y del modo a pie, y el objetivo (las casas con baliza tienen visado
+ * disponible). El botón «¡A jugar!» (o Escape) lo cierra, persiste el flag y
+ * no vuelve a salir; el botón «?» del HUD lo reabre cuando se quiera.
+ *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
  *  - people: { id: string, name: string }[]   personas del equipo del líder
@@ -76,12 +83,15 @@ export class CareerApp extends LitElement {
     teammates: { state: true },
     showTeam: { state: true },
     teammatePopover: { state: true },
+    showOnboarding: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
   static VIEW_MODE_KEY = 'grebla:career:viewMode';
   /** Clave de persistencia del toggle «👥 Equipo» (MC-12). */
   static TEAM_VISIBLE_KEY = 'grebla:career:teamVisible';
+  /** Clave del flag «ya vio el cartel de bienvenida» (onboarding, MC-13). */
+  static ONBOARDED_KEY = 'grebla:career:onboarded';
   /**
    * Tope de journeys de compañeros a cargar (MC-12): 1 lectura de Firestore
    * por persona es aceptable en equipos pequeños; con más de 25 personas
@@ -204,6 +214,46 @@ export class CareerApp extends LitElement {
     .matepop strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
     .matepop p { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
     .matepop .pct { font-weight: 700; color: var(--rm-accent, #2a9d8f); }
+    /* Cartel de bienvenida / onboarding (MC-13): overlay centrado sobre el
+       mapa, por encima del panel de ciudadanía y del mini-popover. */
+    .onboard-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: grid;
+      place-items: center;
+      background: rgba(30, 58, 95, 0.35);
+      backdrop-filter: blur(2px);
+    }
+    .onboard {
+      max-width: 480px;
+      width: calc(100% - 2rem);
+      max-height: calc(100% - 2rem);
+      box-sizing: border-box;
+      overflow-y: auto;
+      background: color-mix(in srgb, var(--rm-surface, #fff) 96%, transparent);
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: var(--rm-radius, 12px);
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
+      outline: none;
+    }
+    .onboard h3 { margin: 0 0 0.35rem; font-size: 1.15rem; color: var(--rm-navy, #1e3a5f); }
+    .onboard .lead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
+    .onboard ul { margin: 0 0 1rem; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+    .onboard li { font-size: 0.85rem; color: var(--rm-text, #111827); }
+    .onboard li strong { color: var(--rm-navy, #1e3a5f); }
+    .onboard kbd {
+      display: inline-block;
+      padding: 0 0.35rem;
+      border-radius: 4px;
+      border: 1px solid var(--rm-border, #d1d5db);
+      background: var(--rm-track, #e9f0f2);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .onboard .play { width: 100%; font-size: 0.95rem; padding: 0.6rem 1rem; }
     .legend-wrap { margin-top: 1rem; }
     .legend-wrap summary { font-size: 0.78rem; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .recs { margin: 0.75rem 0 0; padding: 0; list-style: none; font-size: 0.78rem; }
@@ -244,11 +294,46 @@ export class CareerApp extends LitElement {
     this.showTeam = this._readTeamVisible();
     /** Mini-popover del compañero clicado (uno solo a la vez), o null. */
     this.teammatePopover = null;
+    // Onboarding (MC-13): el cartel de bienvenida sale la PRIMERA vez que se
+    // entra al mapa 3D; el flag de localStorage lo silencia para siempre y el
+    // botón «?» del HUD lo reabre a demanda.
+    this.showOnboarding = !this._readOnboarded();
     // Puntero grueso (táctil): la primera persona necesita ratón y teclado; el
     // botón queda deshabilitado como «modo de escritorio» (controles táctiles,
     // futura mejora). Guardado con typeof por el render estático de Astro.
     this._coarsePointer =
       typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+  }
+
+  /** true si el cartel de bienvenida ya se vio (SSR cuenta como visto: en el
+   * servidor no hay nada que enseñar; el cliente relee al hidratar). */
+  _readOnboarded() {
+    if (typeof localStorage === 'undefined') return true;
+    return localStorage.getItem(CareerApp.ONBOARDED_KEY) === 'done';
+  }
+
+  /**
+   * Cierra el cartel de bienvenida («¡A jugar!» o Escape) y persiste el flag:
+   * no vuelve a salir solo. El foco vuelve al HUD para no perder el teclado.
+   */
+  _closeOnboarding() {
+    this.showOnboarding = false;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(CareerApp.ONBOARDED_KEY, 'done');
+    }
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Botón «?» del HUD: reabre el cartel de bienvenida a demanda (MC-13). */
+  _openOnboarding() {
+    this.showOnboarding = true;
+  }
+
+  /** Escape dentro del cartel de bienvenida lo cierra. @param {KeyboardEvent} event */
+  _onOnboardingKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeOnboarding();
   }
 
   /** Lee la preferencia del toggle «👥 Equipo» (visible por defecto, MC-12). */
@@ -314,6 +399,11 @@ export class CareerApp extends LitElement {
     // (tabindex="-1"), de modo que Escape lo cierra sin pasos intermedios.
     if (changed.has('selected') && this.selected && this.viewMode === '3d') {
       this.renderRoot.querySelector('.citypanel')?.focus();
+    }
+    // El cartel de bienvenida recibe el foco al abrirse (tabindex="-1"): Escape
+    // lo cierra sin pasos intermedios, como el panel de ciudadanía (MC-13).
+    if (changed.has('showOnboarding') && this.showOnboarding) {
+      this.renderRoot.querySelector('.onboard')?.focus();
     }
   }
 
@@ -601,6 +691,49 @@ export class CareerApp extends LitElement {
     </div>`;
   }
 
+  /**
+   * Cartel de bienvenida overlay (onboarding, MC-13): qué es la isla, los
+   * controles de ambos modos y el objetivo (las balizas coral). Modal suave
+   * sobre el mapa: «¡A jugar!» o Escape lo cierran y persisten el flag.
+   */
+  _renderOnboarding() {
+    if (!this.showOnboarding) return null;
+    return html`<div class="onboard-backdrop">
+      <section
+        class="onboard"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Bienvenida a tu isla de carrera"
+        tabindex="-1"
+        @keydown=${this._onOnboardingKeydown}
+      >
+        <h3>Bienvenido a tu isla de carrera</h3>
+        <p class="lead">
+          Cada casa de la isla es un conocimiento de tu mapa de carrera: visítalas,
+          aporta evidencias y consigue sus ciudadanías.
+        </p>
+        <ul>
+          <li>
+            <strong>Vista aérea:</strong> arrastra para orbitar, rueda para hacer zoom
+            y clic en una casa abre su ciudadanía. <kbd>WASD</kbd> o las flechas mueven
+            tu avatar por la isla.
+          </li>
+          <li>
+            <strong>A pie:</strong> el botón 🚶 te baja a la isla en primera persona:
+            <kbd>WASD</kbd> + ratón para caminar, <kbd>E</kbd> abre la ciudad cercana
+            y <kbd>Esc</kbd> vuelve a la vista aérea.
+          </li>
+          <li>
+            <strong>Tu objetivo:</strong> las casas con una baliza de luz coral tienen
+            el <strong>visado disponible</strong> — son tu siguiente paso. La ruta
+            planificada queda marcada en el suelo.
+          </li>
+        </ul>
+        <button class="primary play" @click=${this._closeOnboarding}>¡A jugar!</button>
+      </section>
+    </div>`;
+  }
+
   /** Botón HUD del sonido, presente en vista aérea Y a pie (MC-11). */
   _renderAudioButton() {
     return html`<button
@@ -876,10 +1009,16 @@ export class CareerApp extends LitElement {
                     >🚶 Explorar a pie${this._coarsePointer ? ' (modo de escritorio)' : ''}</button>
                     ${this._renderTeamButton()}
                     ${this._renderAudioButton()}
+                    <button
+                      @click=${this._openOnboarding}
+                      aria-label="Ver la guía de la isla"
+                      title="Ver la guía de la isla"
+                    >?</button>
                   `}
             </div>
             ${this._renderTeammatePopover()}
             ${sel ? this._renderCityPanel(sel) : null}
+            ${fps ? null : this._renderOnboarding()}
           </div>`
         : html`<div class="grid">
         <career-map

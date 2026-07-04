@@ -303,6 +303,59 @@ export function nearestCityWithin(pos, cities, maxDist) {
   return best;
 }
 
+/**
+ * Proyección PURA mundo→minimapa (MC-13): convierte una posición del plano del
+ * suelo (x, z de mundo) a píxeles de un minimapa cuadrado de lado `size` con
+ * NORTE FIJO (el mapa no rota; rota la flecha del jugador). Convención:
+ * el centro del mundo (0, 0) cae en el centro del canvas, +x de mundo va a la
+ * derecha y +z de mundo hacia abajo (la misma orientación que la vista aérea
+ * cenital: el norte del mapa lógico es -z). `radius` es el radio de mundo que
+ * cubre el disco completo (media diagonal del canvas NO: medio LADO), así que
+ * el llamante debe pasar un radio que envuelva todo lo que quiera ver (isla +
+ * playa). La proyección es lineal y NO acota: un punto más allá de `radius`
+ * sale fuera del canvas — señal de que el radio elegido no cubre el contenido.
+ *
+ * @param {number} x Coordenada x de mundo.
+ * @param {number} z Coordenada z de mundo.
+ * @param {number} radius Radio de mundo que mapea al borde del disco (size/2).
+ * @param {number} size Lado del canvas del minimapa en píxeles.
+ * @returns {{ px: number, py: number }} Posición en píxeles del canvas.
+ */
+export function minimapProject(x, z, radius, size) {
+  if (!Number.isFinite(x) || !Number.isFinite(z)) {
+    throw new Error(`Posición inválida para minimapProject: (${x}, ${z})`);
+  }
+  if (!Number.isFinite(radius) || radius <= 0) {
+    throw new Error(`Radio inválido para minimapProject: "${radius}"`);
+  }
+  if (!Number.isFinite(size) || size <= 0) {
+    throw new Error(`Tamaño inválido para minimapProject: "${size}"`);
+  }
+  const scale = size / 2 / radius;
+  return { px: size / 2 + x * scale, py: size / 2 + z * scale };
+}
+
+/**
+ * Rumbo PURO de la flecha del jugador en el minimapa (MC-13): ángulo de giro
+ * (radianes, sentido horario del canvas) que orienta una flecha dibujada
+ * apuntando HACIA ARRIBA según la dirección de avance en el mundo (fx, fz) —
+ * el forward de la cámara proyectado al plano del suelo. Con la convención de
+ * minimapProject (+z de mundo hacia abajo): mirar al norte (0, -1) → 0, al
+ * este (1, 0) → π/2. Sin dirección definida (vector ~nulo) devuelve 0
+ * (determinista; los límites polares del pointer lock impiden que ocurra).
+ *
+ * @param {number} fx Componente x de la dirección de avance en el mundo.
+ * @param {number} fz Componente z de la dirección de avance en el mundo.
+ * @returns {number} Ángulo (radianes) para rotar la flecha en el canvas.
+ */
+export function minimapHeading(fx, fz) {
+  if (!Number.isFinite(fx) || !Number.isFinite(fz)) {
+    throw new Error(`Dirección inválida para minimapHeading: (${fx}, ${fz})`);
+  }
+  if (Math.hypot(fx, fz) < 1e-9) return 0;
+  return Math.atan2(fx, -fz);
+}
+
 /** Ángulo áureo (radianes): reparte puntos en espiral sin patrones visibles. */
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
