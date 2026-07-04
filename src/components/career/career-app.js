@@ -110,6 +110,19 @@
  * de» para acreditar al developer que ayudó — derivación v1 informativa).
  * Todas las Q&A quedan en la ficha del jugador (<player-card>, MC-21).
  *
+ * Tiempo de juego (MC-23): con `canEdit` (el flujo actual: líder/superadmin
+ * jugando a la persona seleccionada) un cronómetro de sesión activa
+ * (src/lib/playtime.js) corre mientras la pestaña está visible Y hubo
+ * interacción en los últimos 120 s; acumula en memoria y vuelca cada 60 s (y
+ * al ocultarse la pestaña / pagehide) a
+ * /people/{personId}/career/playtime con increment() — pérdida máxima ~60 s
+ * si el navegador mata la pestaña sin avisar (best-effort documentado). El
+ * jugador vinculado NO escribe (se ampliará cuando juegue con su cuenta). El
+ * histórico por día se poda a los últimos 30 días al cargar a la persona
+ * (dispara con >35 claves). La ficha 🏅 muestra el tiempo de la persona
+ * cargada (hoy / 7 días / total) y el líder tiene el botón «⏱ Tiempo» con la
+ * vista agregada de sus personas (carga en paralelo, cap MAX_TEAM_JOURNEYS).
+ *
  * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
  * localStorage `grebla:career:onboarded`) un cartel de bienvenida overlay
  * (DOM, estilo del panel) explica qué es la isla, los controles de la vista
@@ -141,8 +154,13 @@ import {
   askQuestion,
   answerQuestion,
   markQuestionSeen,
+  getPlaytime,
+  recordPlaytime,
+  prunePlaytime,
   stats,
 } from '../../tools/career/application/usecases.js';
+import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/playtime.js';
+import { startPlaytimeTracker } from '../../lib/playtime.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds } from '../../lib/careerMap.js';
 import { DEFAULT_ISLAND_ID } from '../../tools/career/domain/types.js';
 import {
@@ -231,6 +249,9 @@ export class CareerApp extends LitElement {
     wizardPending: { state: true },
     wizardBusy: { state: true },
     wizardError: { state: true },
+    playtime: { state: true },
+    showPlaytime: { state: true },
+    playtimeRows: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -492,6 +513,31 @@ export class CareerApp extends LitElement {
       box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
       outline: none;
     }
+    /* ── Tiempo de juego (MC-23): bloque de la ficha y tabla del líder. ── */
+    .playblock {
+      margin: 0 0 0.75rem;
+      padding: 0.45rem 0.7rem;
+      border-radius: 10px;
+      background: var(--rm-track, #e9f0f2);
+      font-size: 0.85rem;
+      color: var(--rm-muted, #6b7280);
+    }
+    .playblock strong { color: var(--rm-navy, #1e3a5f); }
+    .timesheet table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .timesheet th {
+      text-align: left;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--rm-muted, #6b7280);
+      padding: 0.35rem 0.5rem;
+      border-bottom: 2px solid var(--rm-border, #e5e7eb);
+    }
+    .timesheet td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
+    .timesheet th.num, .timesheet td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .timesheet td.who { font-weight: 600; color: var(--rm-navy, #1e3a5f); }
+    .timesheet .zero { color: var(--rm-muted, #9ca3af); }
+    .playlead { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     /* ── El brujo (MC-22): panel del jugador y cola del líder (hermanos de la
        ficha: mismo backdrop/section, contenido de consultas). ── */
     .wizlead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
@@ -763,6 +809,19 @@ export class CareerApp extends LitElement {
      * @type {Map<string, import('../../tools/career/domain/wizard.js').WizardQuestion[]>} */
     this._teamQuestions = new Map();
     this._teamQuestionsLoaded = false;
+    // Tiempo de juego (MC-23): registro de la persona cargada (para la ficha),
+    // overlay del líder con sus filas cargadas en paralelo, y el cronómetro
+    // vivo (solo canEdit; se rearma al cambiar de persona con volcado final).
+    /** @type {import('../../tools/career/domain/playtime.js').Playtime|null} */
+    this.playtime = null;
+    this.showPlaytime = false;
+    /** Filas del overlay «⏱ Tiempo» (null = cargando).
+     * @type {{ personId: string, name: string, today: number, last7Days: number, total: number }[]|null} */
+    this.playtimeRows = null;
+    /** Handle del cronómetro (startPlaytimeTracker), o null sin persona/permiso. */
+    this._playtimeTracker = null;
+    /** Persona a la que mide el cronómetro vivo (o null). */
+    this._playtimePerson = null;
     // Progresión (MC-20): aviso de ciudadanía/badge en pantalla (o null) y su
     // cola — los anuncios encadenados salen SECUENCIALES, nunca solapados.
     /** @type {import('../../tools/career/domain/citizenship.js').CitizenshipEvent|null} */
@@ -856,7 +915,11 @@ export class CareerApp extends LitElement {
       this.showWizard = false; // el panel del brujo abierto era de otra persona (MC-22)
       this.questions = null;
       this.wizardError = '';
+      this.playtime = null; // el tiempo mostrado era de otra persona (MC-23)
     }
+    // Cronómetro de juego (MC-23): se (re)arma cuando hay store + persona +
+    // permiso de escritura; al cambiar de persona el anterior vuelca su resto.
+    this._syncPlaytimeTracker();
     if (this.store && !this._mapLoaded) {
       this._mapLoaded = true;
       this._loadMap();
@@ -918,6 +981,10 @@ export class CareerApp extends LitElement {
     if (changed.has('showWizardQueue') && this.showWizardQueue) {
       this.renderRoot.querySelector('.wizqueue')?.focus();
     }
+    // El resumen de tiempo del líder recibe el foco al abrirse (MC-23).
+    if (changed.has('showPlaytime') && this.showPlaytime) {
+      this.renderRoot.querySelector('.timesheet')?.focus();
+    }
   }
 
   /** Nombre de una isla según el índice del archipiélago (o '' si no está). @param {string} islandId */
@@ -944,16 +1011,20 @@ export class CareerApp extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      // Journey, logros registrados (MC-21) y consultas al brujo (MC-22) en
-      // paralelo: viven juntos en el subárbol career de la persona.
-      const [journey, achievements, questions] = await Promise.all([
+      // Journey, logros registrados (MC-21), consultas al brujo (MC-22) y
+      // tiempo de juego (MC-23) en paralelo: viven juntos en el subárbol
+      // career de la persona.
+      const [journey, achievements, questions, playtime] = await Promise.all([
         getJourney(this.store, this.personId),
         getAchievements(this.store, this.personId),
         listQuestions(this.store, this.personId),
+        getPlaytime(this.store, this.personId),
       ]);
       this.journey = journey;
       this.achievements = achievements;
       this.questions = questions;
+      this.playtime = playtime;
+      await this._prunePlaytime();
       // El journey es GLOBAL (MC-14): si esta persona está en otra isla del
       // archipiélago, se carga el mapa de SU isla.
       const island = this.journey.currentIsland ?? DEFAULT_ISLAND_ID;
@@ -1413,6 +1484,7 @@ export class CareerApp extends LitElement {
           <h3>🏅 Ficha de ciudadanía</h3>
           <button class="close" aria-label="Cerrar la ficha de ciudadanía" title="Cerrar (Esc)" @click=${this._closePlayerCard}>✕</button>
         </header>
+        ${this._renderPlaytimeBlock()}
         <player-card
           .playerName=${name}
           .progress=${prog}
@@ -1420,6 +1492,188 @@ export class CareerApp extends LitElement {
           .visitedIslands=${this.journey?.visitedIslands ?? []}
           .questions=${this.questions ?? []}
         ></player-card>
+      </section>
+    </div>`;
+  }
+
+  // ---- Tiempo de juego (MC-23) --------------------------------------------------
+
+  /**
+   * (Re)arma el cronómetro de juego según el contexto: mide SOLO con store,
+   * persona seleccionada y permiso de escritura (canEdit: el flujo actual de
+   * líder/superadmin jugando; el jugador vinculado no escribe). Al cambiar de
+   * persona, el cronómetro anterior se para VOLCANDO su resto a la persona a
+   * la que midió (el onFlush captura su personId). Idempotente: sin cambios
+   * de contexto no toca nada.
+   */
+  _syncPlaytimeTracker() {
+    const target = this.store && this.canEdit && this.personId ? this.personId : null;
+    if (target === this._playtimePerson) return;
+    this._playtimeTracker?.stop(); // volcado final a la persona anterior
+    this._playtimeTracker = null;
+    this._playtimePerson = target;
+    if (!target) return;
+    const store = this.store;
+    this._playtimeTracker = startPlaytimeTracker({
+      onFlush: async (minutes) => {
+        const { day } = await recordPlaytime(store, target, minutes);
+        this._applyPlaytimeIncrement(target, day, minutes);
+      },
+    });
+  }
+
+  /**
+   * Refleja en el estado local un incremento ya persistido: la ficha abierta
+   * ve crecer el tiempo sin relecturas. Si la persona cargada ya es otra (el
+   * volcado final de un cambio de persona), no hay nada que reflejar.
+   * @param {string} personId @param {string} day @param {number} minutes
+   */
+  _applyPlaytimeIncrement(personId, day, minutes) {
+    if (personId !== this.personId || !this.playtime) return;
+    this.playtime = {
+      totalMinutes: this.playtime.totalMinutes + minutes,
+      byDay: { ...this.playtime.byDay, [day]: (this.playtime.byDay[day] ?? 0) + minutes },
+    };
+  }
+
+  /**
+   * Poda del histórico por día al cargar a la persona (MC-23): solo con
+   * permiso de escritura, y solo si byDay superó el umbral (>35 claves →
+   * quedan 30). Las claves crecen 1 por día: podar al cargar basta y evita
+   * leer el doc en cada flush. El fallo no tumba la carga (console.warn):
+   * lo podará la próxima sesión con permisos.
+   */
+  async _prunePlaytime() {
+    if (!this.canEdit || !this.personId || !this.playtime) return;
+    try {
+      this.playtime = await prunePlaytime(this.store, this.personId, this.playtime);
+    } catch (err) {
+      console.warn('Tiempo de juego: no se pudo podar el histórico por día.', err);
+    }
+  }
+
+  /**
+   * Bloque de tiempo de juego de la ficha 🏅 (MC-23): hoy / últimos 7 días /
+   * total de la persona cargada, en minutos legibles.
+   */
+  _renderPlaytimeBlock() {
+    const s = playtimeSummary(this.playtime, new Date());
+    const fmt = (m) => formatPlayMinutes(m) ?? '—';
+    return html`<p
+      class="playblock"
+      title="Tiempo de juego activo en el mapa (pestaña visible y jugando)"
+    >
+      ⏱ Tiempo de juego — hoy <strong>${fmt(s.today)}</strong> · 7 días
+      <strong>${fmt(s.last7Days)}</strong> · total <strong>${fmt(s.total)}</strong>
+    </p>`;
+  }
+
+  /** Botón «⏱ Tiempo» de la barra: solo con canEdit (vista agregada del líder). */
+  _renderPlaytimeButton() {
+    if (!this.canEdit) return null;
+    return html`<button
+      @click=${this._openPlaytimeSummary}
+      title="Ver el tiempo de juego de tu gente (hoy, últimos 7 días y total)"
+    >⏱ Tiempo</button>`;
+  }
+
+  /**
+   * Abre la vista agregada del líder (MC-23): carga EN PARALELO el playtime de
+   * las personas visibles (misma política y cap que los journeys del equipo) y
+   * lo resume por filas. Una persona ilegible no tumba al resto (console.warn
+   * y fila a cero). Se recarga en cada apertura: el tiempo cambia jugando.
+   */
+  async _openPlaytimeSummary() {
+    if (!this.canEdit) return;
+    this.showPlaytime = true;
+    this.playtimeRows = null; // «Cargando…»
+    const people = this.people ?? [];
+    const capped = people.slice(0, CareerApp.MAX_TEAM_JOURNEYS);
+    if (people.length > capped.length) {
+      console.warn(
+        `Tiempo de juego: ${people.length} personas visibles; se carga solo el de las ${CareerApp.MAX_TEAM_JOURNEYS} primeras para acotar las lecturas.`,
+      );
+    }
+    const now = new Date();
+    const rows = await Promise.all(
+      capped.map(async (person) => {
+        try {
+          const summary = playtimeSummary(await getPlaytime(this.store, person.id), now);
+          return { personId: person.id, name: person.name, ...summary };
+        } catch (err) {
+          console.warn(`Tiempo de juego: no se pudo cargar el de "${person.id}".`, err);
+          return { personId: person.id, name: person.name, today: 0, last7Days: 0, total: 0 };
+        }
+      }),
+    );
+    if (!this.showPlaytime) return; // se cerró mientras cargaba
+    this.playtimeRows = rows;
+  }
+
+  /** Cierra el resumen de tiempo y devuelve el foco al HUD. */
+  _closePlaytimeSummary() {
+    this.showPlaytime = false;
+    this.playtimeRows = null;
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro del resumen de tiempo lo cierra. @param {KeyboardEvent} event */
+  _onPlaytimeKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closePlaytimeSummary();
+  }
+
+  /**
+   * Overlay «⏱ Tiempo de juego» del líder (MC-23): tabla sencilla y legible —
+   * persona, hoy, últimos 7 días y total — de las personas visibles. Modal
+   * hermano de la ficha (mismo backdrop/section): foco al abrir, Escape/✕/
+   * fondo cierran.
+   */
+  _renderPlaytimeSummary() {
+    if (!this.showPlaytime) return null;
+    const fmt = (m) => formatPlayMinutes(m) ?? '—';
+    const cell = (m) =>
+      m > 0 ? html`<td class="num">${fmt(m)}</td>` : html`<td class="num zero">0 min</td>`;
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closePlaytimeSummary(); }}>
+      <section
+        class="ficha timesheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tiempo de juego del equipo"
+        tabindex="-1"
+        @keydown=${this._onPlaytimeKeydown}
+      >
+        <header class="sea-head">
+          <h3>⏱ Tiempo de juego</h3>
+          <button class="close" aria-label="Cerrar el resumen de tiempo de juego" title="Cerrar (Esc)" @click=${this._closePlaytimeSummary}>✕</button>
+        </header>
+        <p class="playlead">
+          Tiempo de sesión activa en el mapa por persona (pestaña visible y
+          jugando). Se guarda por día; el detalle diario cubre los últimos 30 días.
+        </p>
+        ${this.playtimeRows === null
+          ? html`<p class="wizempty">Cargando el tiempo de juego…</p>`
+          : this.playtimeRows.length === 0
+            ? html`<p class="wizempty">No hay personas visibles en tu equipo.</p>`
+            : html`<table>
+                <thead>
+                  <tr>
+                    <th scope="col">Persona</th>
+                    <th scope="col" class="num">Hoy</th>
+                    <th scope="col" class="num">7 días</th>
+                    <th scope="col" class="num">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${this.playtimeRows.map(
+                    (row) => html`<tr>
+                      <td class="who">${row.name}</td>
+                      ${cell(row.today)}${cell(row.last7Days)}${cell(row.total)}
+                    </tr>`,
+                  )}
+                </tbody>
+              </table>`}
       </section>
     </div>`;
   }
@@ -2004,6 +2258,10 @@ export class CareerApp extends LitElement {
     // Y el timer de avisos de ciudadanía (MC-20).
     clearTimeout(this._announceTimer);
     this._announceTimer = 0;
+    // Y el cronómetro de juego, con su volcado final best-effort (MC-23).
+    this._playtimeTracker?.stop();
+    this._playtimeTracker = null;
+    this._playtimePerson = null;
   }
 
   /**
@@ -2635,6 +2893,7 @@ export class CareerApp extends LitElement {
               ${this._renderArchipelagoButton()}
               ${this._renderPlayerCardButton()}
               ${this._renderWizardQueueButton()}
+              ${this._renderPlaytimeButton()}
               ${this._renderProgressHud(prog, s)}
             </div>
           `}
@@ -2652,7 +2911,8 @@ export class CareerApp extends LitElement {
               this.showArchipelago ||
               this.showPlayerCard ||
               this.showWizard ||
-              this.showWizardQueue}
+              this.showWizardQueue ||
+              this.showPlaytime}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               .wizardState=${hutState}
               @select-city=${this._onSelect}
@@ -2730,6 +2990,7 @@ export class CareerApp extends LitElement {
       ${this._renderPlayerCard()}
       ${this._renderWizard()}
       ${this._renderWizardQueue()}
+      ${this._renderPlaytimeSummary()}
       ${this._renderTravelFade()}
       ${this._renderAnnouncement()}
     `;

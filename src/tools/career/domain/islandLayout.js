@@ -451,3 +451,82 @@ export function wizardSpot(map, opts = {}) {
   }
   return candidate(WIZARD_SPOT.sweep[0]);
 }
+
+/**
+ * Colocación de las VALLAS PUBLICITARIAS DE TRIBBU (MC-23): cuántas vallas se
+ * intentan por isla, retranqueo hacia el interior desde la anilla del puerto,
+ * holgura mínima al eje de cualquier casa (colisión de casa ~2.5 + tablero +
+ * respiro), separación mínima entre vallas y barrido de ángulos candidatos
+ * (radianes de offset sobre el ángulo del puerto). El barrido EXCLUYE el 0 a
+ * propósito: justo frente al puerto viven el muelle, la senda de llegada y la
+ * cabaña del brujo — las vallas FLANQUEAN el camino, no lo tapan.
+ */
+export const BILLBOARD_SPOT = Object.freeze({
+  count: 3,
+  inland: 9,
+  clearance: 6.5,
+  separation: 9,
+  sweep: Object.freeze([
+    0.55, -0.55, 0.95, -0.95, 1.35, -1.35, 1.8, -1.8, 2.25, -2.25, 2.7, -2.7,
+  ]),
+});
+
+/**
+ * Posiciones de mundo de las vallas TRIBBU (MC-23), DETERMINISTAS: sobre la
+ * misma «anilla» radial que el puerto retranqueada BILLBOARD_SPOT.inland hacia
+ * el interior (la anilla que cruza la senda de llegada), se recorren los
+ * ángulos del barrido a ambos lados del puerto y se aceptan los primeros
+ * `count` candidatos que respetan la holgura con TODAS las casas, con los
+ * círculos vetados de `opts.avoid` (p. ej. la cabaña del brujo) y la
+ * separación entre vallas ya aceptadas. Cada valla mira HACIA el puerto
+ * (misma convención de yaw que facadeYawToward: la cara +z local apunta a él),
+ * así el viajero las lee al llegar y flanquean el camino sin invadirlo.
+ *
+ * En un mapa sin puerto se anclan al sur de la isla (la misma convención que
+ * el spawn y el brujo). En una isla imposiblemente densa pueden salir MENOS de
+ * `count` vallas (incluso ninguna): son decorativas — degradación documentada,
+ * no un error.
+ *
+ * @param {CareerMap} map
+ * @param {WorldOptions & { maxRadius?: number, avoid?: { x: number, z: number, r: number }[], count?: number }} [opts]
+ *   `maxRadius` acota la anilla (p. ej. el borde de la hierba); `avoid` añade
+ *   círculos vetados; `count` cambia el nº de vallas deseado (por defecto
+ *   BILLBOARD_SPOT.count).
+ * @returns {{ wx: number, wz: number, yaw: number }[]}
+ */
+export function billboardSpots(map, opts = {}) {
+  const count = opts.count ?? BILLBOARD_SPOT.count;
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error(`Cantidad inválida para billboardSpots: "${count}"`);
+  }
+  if (count === 0) return [];
+  const R = islandRadius(map, opts);
+  const port = map?.startPort ? worldFromMap(map.startPort.x, map.startPort.y, opts) : null;
+  const portDist = port ? Math.hypot(port.wx, port.wz) : R * 0.6;
+  // Ángulo base: el del puerto; sin puerto, el sur (+z), como wizardSpot.
+  const baseAngle = port && portDist > 1e-6 ? Math.atan2(port.wz, port.wx) : Math.PI / 2;
+  let ring = Math.max(portDist - BILLBOARD_SPOT.inland, BILLBOARD_SPOT.inland);
+  if (Number.isFinite(opts.maxRadius) && opts.maxRadius > 0) {
+    ring = Math.min(ring, opts.maxRadius);
+  }
+  // Punto al que miran las vallas: el puerto o, sin él, la orilla sur.
+  const anchor = port ?? { wx: Math.cos(baseAngle) * R, wz: Math.sin(baseAngle) * R };
+  const cities = (map?.cities ?? []).map((c) => worldFromMap(c.x, c.y, opts));
+  const avoid = opts.avoid ?? [];
+  /** @type {{ wx: number, wz: number, yaw: number }[]} */
+  const spots = [];
+  const clear = (p) =>
+    cities.every((c) => Math.hypot(c.wx - p.wx, c.wz - p.wz) >= BILLBOARD_SPOT.clearance) &&
+    avoid.every((a) => Math.hypot(a.x - p.wx, a.z - p.wz) >= a.r) &&
+    spots.every((s) => Math.hypot(s.wx - p.wx, s.wz - p.wz) >= BILLBOARD_SPOT.separation);
+  for (const offset of BILLBOARD_SPOT.sweep) {
+    if (spots.length >= count) break;
+    const p = {
+      wx: Math.cos(baseAngle + offset) * ring,
+      wz: Math.sin(baseAngle + offset) * ring,
+    };
+    if (!clear(p)) continue;
+    spots.push({ ...p, yaw: facadeYawToward(p, anchor) });
+  }
+  return spots;
+}

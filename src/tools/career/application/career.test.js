@@ -16,8 +16,12 @@ import {
   askQuestion,
   answerQuestion,
   markQuestionSeen,
+  getPlaytime,
+  recordPlaytime,
+  prunePlaytime,
   stats,
 } from './usecases.js';
+import { PLAYTIME, dayKey } from '../domain/playtime.js';
 
 describe('career — casos de uso', () => {
   /** @type {ReturnType<typeof createMemoryCareerStore>} */
@@ -215,5 +219,42 @@ describe('career — casos de uso', () => {
     await store.questions.ask('p1', { islandId: 'frontend', islandName: '', text: 'nueva', status: 'pending', createdAt: '2026-07-03T00:00:00.000Z' });
     const list = await listQuestions(store, 'p1');
     expect(list.map((x) => x.text)).toEqual(['nueva', 'vieja']);
+  });
+
+  it('el tiempo de juego arranca vacío y acumula incrementos por día y total (MC-23)', async () => {
+    expect(await getPlaytime(store, 'p1')).toEqual({ totalMinutes: 0, byDay: {} });
+    const now = new Date(2026, 6, 4, 18, 30);
+    await recordPlaytime(store, 'p1', 1, now);
+    await recordPlaytime(store, 'p1', 0.5, now);
+    const pt = await getPlaytime(store, 'p1');
+    expect(pt.totalMinutes).toBe(1.5);
+    expect(pt.byDay[dayKey(now)]).toBe(1.5);
+    // Aislado por persona.
+    expect(await getPlaytime(store, 'p2')).toEqual({ totalMinutes: 0, byDay: {} });
+  });
+
+  it('recordPlaytime falla en alto con minutos no positivos o sin persona (MC-23)', async () => {
+    await expect(recordPlaytime(store, 'p1', 0)).rejects.toThrow();
+    await expect(recordPlaytime(store, 'p1', -2)).rejects.toThrow();
+    await expect(recordPlaytime(store, 'p1', Number.NaN)).rejects.toThrow();
+    await expect(recordPlaytime(store, '', 1)).rejects.toThrow();
+  });
+
+  it('prunePlaytime deja los últimos 30 días cuando el histórico supera el umbral (MC-23)', async () => {
+    // 36 días consecutivos de 1 minuto (> pruneThreshold = 35).
+    for (let i = 0; i < PLAYTIME.pruneThreshold + 1; i += 1) {
+      await recordPlaytime(store, 'p1', 1, new Date(2026, 0, 1 + i, 12, 0));
+    }
+    let pt = await getPlaytime(store, 'p1');
+    expect(Object.keys(pt.byDay)).toHaveLength(PLAYTIME.pruneThreshold + 1);
+    const pruned = await prunePlaytime(store, 'p1', pt);
+    expect(Object.keys(pruned.byDay)).toHaveLength(PLAYTIME.maxDays);
+    expect(pruned.byDay['2026-01-01']).toBeUndefined(); // la más vieja fuera
+    expect(pruned.totalMinutes).toBe(PLAYTIME.pruneThreshold + 1); // el total NO se poda
+    // Y lo persistido coincide con lo devuelto.
+    pt = await getPlaytime(store, 'p1');
+    expect(pt.byDay).toEqual(pruned.byDay);
+    // Con el histórico ya podado no vuelve a escribir: devuelve el mismo objeto.
+    expect(await prunePlaytime(store, 'p1', pruned)).toBe(pruned);
   });
 });

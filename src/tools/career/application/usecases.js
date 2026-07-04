@@ -14,6 +14,7 @@ import { EMPTY_JOURNEY, DEFAULT_ISLAND_ID } from '../domain/types.js';
 import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from '../domain/progress.js';
 import { normalizeAchievements, mergeAchievements } from '../domain/achievements.js';
 import { normalizeQuestion, sortQuestionsByDateDesc } from '../domain/wizard.js';
+import { dayKey, normalizePlaytime, staleDayKeys } from '../domain/playtime.js';
 
 /** @returns {ReadonlyArray<CareerMap>} */
 export function getMaps() {
@@ -269,6 +270,68 @@ export async function markQuestionSeen(store, personId, questionId) {
   });
   await store.questions.markSeen(personId, questionId, patch);
   return patch;
+}
+
+// ---- Tiempo de juego (MC-23) --------------------------------------------------
+
+/** @typedef {import('../domain/playtime.js').Playtime} Playtime */
+
+/** @param {unknown} personId @returns {string} */
+function requirePerson(personId) {
+  const id = typeof personId === 'string' ? personId.trim() : '';
+  if (!id) throw new Error('El tiempo de juego requiere la persona (personId).');
+  return id;
+}
+
+/**
+ * Tiempo de juego registrado de la persona, normalizado. Sin documento todavía
+ * devuelve el playtime vacío (persona que aún no jugó).
+ * @param {CareerStore} store @param {string} personId
+ * @returns {Promise<Playtime>}
+ */
+export async function getPlaytime(store, personId) {
+  requirePerson(personId);
+  return normalizePlaytime(await store.playtime.get(personId));
+}
+
+/**
+ * Vuelca minutos de juego al registro de la persona (MC-23): incremento
+ * atómico del total Y del día LOCAL de `now` (increment() en la persistencia:
+ * sin leer-modificar-escribir). Falla en alto con minutos no positivos — el
+ * tracker no debe volcar ruido.
+ * @param {CareerStore} store @param {string} personId
+ * @param {number} minutes Minutos a sumar (> 0).
+ * @param {Date} [now] Reloj de referencia del día (por defecto, ahora).
+ * @returns {Promise<{ day: string, minutes: number }>} El incremento aplicado.
+ */
+export async function recordPlaytime(store, personId, minutes, now = new Date()) {
+  requirePerson(personId);
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    throw new Error(`Minutos de juego inválidos para recordPlaytime: "${minutes}"`);
+  }
+  const day = dayKey(now);
+  await store.playtime.increment(personId, { day, minutes });
+  return { day, minutes };
+}
+
+/**
+ * Poda del histórico por día (MC-23): si byDay supera el umbral
+ * (PLAYTIME.pruneThreshold) borra los días más antiguos dejando los últimos
+ * PLAYTIME.maxDays, y devuelve el playtime ya podado para el estado local.
+ * Sin nada que podar no escribe (y devuelve el mismo objeto).
+ * @param {CareerStore} store @param {string} personId @param {Playtime} playtime
+ * @returns {Promise<Playtime>}
+ */
+export async function prunePlaytime(store, personId, playtime) {
+  requirePerson(personId);
+  const stale = staleDayKeys(playtime.byDay);
+  if (stale.length === 0) return playtime;
+  await store.playtime.prune(personId, stale);
+  const gone = new Set(stale);
+  return {
+    ...playtime,
+    byDay: Object.fromEntries(Object.entries(playtime.byDay).filter(([day]) => !gone.has(day))),
+  };
 }
 
 /**

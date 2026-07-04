@@ -176,6 +176,15 @@
  * cabaña se rehace solo (al cambiar `wizardState` o el mapa), sin tocar el
  * grupo estático ni el de ciudades.
  *
+ * Vallas TRIBBU (MC-23): 2-3 vallas publicitarias low-poly por isla — dos
+ * postes de madera y un tablero ligeramente inclinado hacia el camino con la
+ * marca TRIBBU pintada en CanvasTexture (pin + logotipo con tipografía
+ * redondeada, teal sobre blanco; UNA textura cacheada compartida por todas).
+ * Posiciones puras y deterministas (billboardSpots): flanquean la senda de
+ * llegada cerca del puerto, con holgura a casas y a la cabaña del brujo, y
+ * entran en las exclusiones de la vegetación. Decorativas: sin colisión ni
+ * picking, visibles en vista aérea y a pie.
+ *
  * Sonido (MC-11, islandAudio.js): ambiente de olas + gaviota ocasional, un
  * tick de paso por ZANCADA (fase ∝ distancia: el rate sigue a la velocidad,
  * tanto del avatar aéreo como del caminante fps) y la fanfarria de ciudadanía.
@@ -217,6 +226,7 @@ import {
   teammateOffsets,
   teammateTint,
   wizardSpot,
+  billboardSpots,
   ACCENT_COLORS,
   STATUS_COLORS,
 } from '../../tools/career/domain/islandLayout.js';
@@ -520,6 +530,38 @@ const WIZARD = Object.freeze({
   sparkle: Object.freeze({ scale: 2.6, pulseHz: 0.6, opacityMin: 0.35, opacityMax: 0.9 }),
 });
 
+/**
+ * Vallas publicitarias de TRIBBU (MC-23): tablero sobre dos postes de madera,
+ * ligeramente inclinado hacia el camino (rotation.x del subgrupo del tablero),
+ * con la marca pintada en CanvasTexture (una textura cacheada para TODAS las
+ * vallas). Decorativas: sin colisión ni picking. `clearance` es el respiro que
+ * la vegetación deja alrededor de cada valla; `avoidWizard` la holgura extra
+ * con la cabaña del brujo al elegir posiciones.
+ */
+const BILLBOARD = Object.freeze({
+  boardW: 4,
+  boardH: 1.9,
+  boardD: 0.12,
+  faceW: 3.72,
+  faceH: 1.66,
+  postX: 1.5,
+  postH: 3.1,
+  postR: 0.13,
+  boardY: 2.6,
+  /** Inclinación (rad) del tablero hacia el camino (+z local mira al puerto). */
+  tilt: 0.09,
+  clearance: 3,
+  avoidWizard: 4,
+});
+
+/** Colores de la marca TRIBBU en las vallas (teal/verde sobre blanco + coral). */
+const TRIBBU_BRAND = Object.freeze({
+  teal: '#2a9d8f',
+  dark: '#1f7268',
+  coral: '#f2887a',
+  white: '#ffffff',
+});
+
 export class CareerIsland3D extends LitElement {
   static properties = {
     map: { attribute: false },
@@ -715,6 +757,9 @@ export class CareerIsland3D extends LitElement {
     this._wizardGroup = null;
     /** Posición de mundo de la cabaña (colisión, proximidad y exclusiones), o null. */
     this._wizardSpotW = null;
+    /** Posiciones de mundo de las vallas TRIBBU (MC-23), con su yaw hacia el puerto.
+     * @type {{ wx: number, wz: number, yaw: number }[]} */
+    this._billboardSpotsW = [];
     /** true con el caminante junto a la cabaña (prompt «[E] El brujo»). */
     this._nearWizard = false;
     /** Farol indicador de la cabaña (pulso emisivo en _tickWizard), o null. */
@@ -1912,6 +1957,19 @@ export class CareerIsland3D extends LitElement {
     // siempre se pueda llegar a pie.
     this._wizardSpotW = wizardSpot(this.map, { maxRadius: this._walkRadius - WIZARD.colliderRadius });
     this._nearWizard = false;
+    // Vallas TRIBBU (MC-23): posiciones deterministas ANTES del grupo estático
+    // (la vegetación las excluye), acotadas al radio caminable — se ven de
+    // cerca a pie — y esquivando la cabaña del brujo.
+    this._billboardSpotsW = billboardSpots(this.map, {
+      maxRadius: this._walkRadius - 2,
+      avoid: [
+        {
+          x: this._wizardSpotW.wx,
+          z: this._wizardSpotW.wz,
+          r: WIZARD.colliderRadius + BILLBOARD.avoidWizard,
+        },
+      ],
+    });
     // La barca vive en el grupo estático: sus referencias se rehacen con él
     // (y quedan null en un mapa sin puerto, MC-14).
     this._boatGroup = null;
@@ -2090,6 +2148,10 @@ export class CareerIsland3D extends LitElement {
       group.add(label);
     }
 
+    // Vallas TRIBBU (MC-23): decorativas y deterministas, flanqueando la
+    // senda de llegada — la marca recibe al viajero desde el mar y desde el aire.
+    for (const spot of this._billboardSpotsW) group.add(this._buildTribbuBillboard(spot));
+
     if (this.map.startPort) group.add(this._buildPort(this.map.startPort, labelsVisible));
     // Isla sin ciudades (aún sin contenido, MC-14): cartel «En construcción»
     // recibiendo al viajero junto al puerto. La generación del resto de la
@@ -2169,6 +2231,145 @@ export class CareerIsland3D extends LitElement {
     face.position.set(0, 2.5, 0.08);
     group.add(face);
     return group;
+  }
+
+  /**
+   * Una valla publicitaria de TRIBBU (MC-23): dos postes de madera y un
+   * tablero LIGERAMENTE inclinado hacia el camino (subgrupo con rotation.x:
+   * con el yaw mirando al puerto, el tablero se vence hacia el viajero que
+   * llega) con la marca en CanvasTexture. Sin colisión: decorativa.
+   * @param {{ wx: number, wz: number, yaw: number }} spot
+   */
+  _buildTribbuBillboard(spot) {
+    const THREE = this._THREE;
+    const group = new THREE.Group();
+    group.position.set(
+      spot.wx,
+      groundHeightAt(spot.wx, spot.wz, { radius: this._islandR }),
+      spot.wz,
+    );
+    group.rotation.y = spot.yaw;
+
+    const postMat = new THREE.MeshLambertMaterial({
+      color: ENV_COLORS.post,
+      flatShading: true,
+      map: this._envTexture('wood'),
+    });
+    const postGeo = new THREE.CylinderGeometry(
+      BILLBOARD.postR,
+      BILLBOARD.postR + 0.03,
+      BILLBOARD.postH,
+      6,
+    );
+    for (const lx of [-BILLBOARD.postX, BILLBOARD.postX]) {
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(lx, BILLBOARD.postH / 2, 0);
+      post.castShadow = SHADOWS.enabled;
+      group.add(post);
+    }
+
+    // Tablero + cara de la marca en un subgrupo inclinado hacia el camino:
+    // rotación +x → el borde superior (+y) se vence hacia +z (el puerto).
+    const tilted = new THREE.Group();
+    tilted.position.set(0, BILLBOARD.boardY, 0);
+    tilted.rotation.x = BILLBOARD.tilt;
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(BILLBOARD.boardW, BILLBOARD.boardH, BILLBOARD.boardD),
+      new THREE.MeshLambertMaterial({
+        color: ENV_COLORS.plank,
+        flatShading: true,
+        map: this._envTexture('wood'),
+      }),
+    );
+    board.castShadow = SHADOWS.enabled;
+    tilted.add(board);
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(BILLBOARD.faceW, BILLBOARD.faceH),
+      new THREE.MeshBasicMaterial({ map: this._tribbuTexture() }),
+    );
+    face.position.z = BILLBOARD.boardD / 2 + 0.02;
+    tilted.add(face);
+    group.add(tilted);
+    return group;
+  }
+
+  /**
+   * Textura de la marca TRIBBU (MC-23): pin de mapa redondeado + logotipo con
+   * tipografía redondeada, teal sobre blanco con un guiño coral — todo paths
+   * de canvas, sin assets externos. Se pinta UNA vez y se cachea en
+   * _envTextures ('tribbu', userData.shared): todas las vallas la comparten y
+   * la libera _clearEnvTextures en el teardown, no _disposeSubtree.
+   */
+  _tribbuTexture() {
+    let texture = this._envTextures.get('tribbu');
+    if (texture) return texture;
+    const THREE = this._THREE;
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 232;
+    const ctx = canvas.getContext('2d');
+
+    // Fondo blanco con marco teal redondeado.
+    ctx.fillStyle = TRIBBU_BRAND.white;
+    ctx.fillRect(0, 0, 512, 232);
+    ctx.strokeStyle = TRIBBU_BRAND.teal;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.roundRect(9, 9, 494, 214, 20);
+    ctx.stroke();
+
+    // Pin de mapa (marca simple): gota teal con rueda blanca y cubo coral —
+    // el guiño «coche compartido» de TRIBBU. Todo con paths.
+    const cx = 96;
+    const cy = 96;
+    const r = 40;
+    ctx.fillStyle = TRIBBU_BRAND.teal;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.72, cy + r * 0.62);
+    ctx.lineTo(cx + r * 0.72, cy + r * 0.62);
+    ctx.lineTo(cx, cy + r * 1.75);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = TRIBBU_BRAND.white;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.52, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = TRIBBU_BRAND.coral;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Logotipo: TRIBBU en tipografía redondeada, teal, con subrayado coral
+    // (la «carretera» del pin al texto). El tamaño se ajusta al hueco entre el
+    // pin y el marco (mismo patrón de encaje que las placas de las puertas).
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = TRIBBU_BRAND.dark;
+    const logoFont = (px) =>
+      `800 ${px}px ui-rounded, "Arial Rounded MT Bold", "Nunito", system-ui, sans-serif`;
+    let fontSize = 80;
+    ctx.font = logoFont(fontSize);
+    while (fontSize > 40 && ctx.measureText('TRIBBU').width > 512 - 168 - 44) {
+      fontSize -= 2;
+      ctx.font = logoFont(fontSize);
+    }
+    ctx.fillText('TRIBBU', 168, 104);
+    ctx.strokeStyle = TRIBBU_BRAND.coral;
+    ctx.lineWidth = 9;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(172, 168);
+    ctx.quadraticCurveTo(320, 148, 468, 168);
+    ctx.stroke();
+
+    texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.userData.shared = true;
+    this._envTextures.set('tribbu', texture);
+    return texture;
   }
 
   /**
@@ -3454,6 +3655,11 @@ export class CareerIsland3D extends LitElement {
         z: this._wizardSpotW.wz,
         r: WIZARD.colliderRadius + 2.4,
       });
+    }
+    // Vallas TRIBBU (MC-23): respiro alrededor de cada valla (que ningún árbol
+    // tape la marca).
+    for (const spot of this._billboardSpotsW) {
+      exclusions.push({ x: spot.wx, z: spot.wz, r: BILLBOARD.clearance });
     }
     const pathIds = [
       ...(this.journey?.visitedCities ?? []),

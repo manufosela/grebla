@@ -16,6 +16,8 @@ export function createMemoryCareerStore(seed = {}) {
   const achievements = new Map();
   /** Consultas al brujo por persona (MC-22): personId → (id → consulta). @type {Map<string, Map<string, Record<string, unknown>>>} */
   const questions = new Map();
+  /** Tiempo de juego por persona (MC-23). @type {Map<string, { totalMinutes: number, byDay: Record<string, number> }>} */
+  const playtime = new Map();
   let nextQuestionId = 1;
   /** @param {import('../../domain/types.js').Journey} j */
   const clone = (j) => ({
@@ -71,6 +73,25 @@ export function createMemoryCareerStore(seed = {}) {
         if (!q) throw new Error(`Consulta al brujo no encontrada: "${questionId}"`);
         q.status = patch.status;
         q.seenAt = patch.seenAt;
+      },
+    },
+    // Tiempo de juego (MC-23): mismo contrato que la persistencia Firestore
+    // (incrementos de total+día juntos; poda por claves de día).
+    playtime: {
+      async get(personId) {
+        const p = playtime.get(personId);
+        return p ? structuredClone(p) : null;
+      },
+      async increment(personId, { day, minutes }) {
+        const current = playtime.get(personId) ?? { totalMinutes: 0, byDay: {} };
+        current.totalMinutes += minutes;
+        current.byDay[day] = (current.byDay[day] ?? 0) + minutes;
+        playtime.set(personId, current);
+      },
+      async prune(personId, days) {
+        const current = playtime.get(personId);
+        if (!current) throw new Error(`Playtime no encontrado para podar: "${personId}"`);
+        for (const day of days) delete current.byDay[day];
       },
     },
   };
