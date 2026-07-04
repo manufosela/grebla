@@ -7,9 +7,12 @@
  * (/login) o con el script de seed.
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import * as coins from './coins.js';
+import { sign, coinsKmsKeyName } from './signer.js';
 
 initializeApp();
 
@@ -411,3 +414,219 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
 
   return { computedAt: now, results };
 });
+
+// ── TRIBBU-COINS (CP-2): emisor único del ledger firmado ─────────────────────
+//
+// La emisión de tribbu-coins va SOLO por contratos (functions/coins.js, espejo
+// del dominio del cliente) y la ejecuta ÚNICAMENTE esta Function: /coins es de
+// solo lectura para clientes (firestore.rules) y el Admin SDK omite reglas.
+// Cada apunte se encadena por hash y se firma con Cloud KMS (signer.js; sin
+// COINS_KMS_KEY el apunte sale `unsigned: true` — degradación documentada).
+
+/**
+ * Añade UN apunte al ledger de forma atómica e idempotente. Transacción:
+ * lee /coins/meta (seq + headHash) y el propio apunte; si el id determinista
+ * ya existe NO se re-emite (idempotencia: re-visitar una ciudad retirada no
+ * paga dos veces); si no, crea el apunte con seq+1 y prevHash=headHash,
+ * actualiza meta y suma el delta al saldo materializado de la persona. La
+ * firma KMS se pide DENTRO de la transacción (el hash depende de seq/prevHash
+ * leídos); si Firestore reintenta, se re-firma el hash nuevo — coste asumido,
+ * los reintentos son raros.
+ * @param {import('firebase-admin/firestore').Firestore} db
+ * @param {{ id: string, personId: string, delta: number, reason: string,
+ *   ruleId: string, refs: Record<string, unknown> }} draft
+ * @returns {Promise<boolean>} true si se emitió, false si ya existía.
+ */
+async function appendCoinsEntry(db, draft) {
+  const metaRef = db.doc('coins/meta');
+  const entryRef = db.doc(`coins/ledger/entries/${draft.id}`);
+  const balanceRef = db.doc(`coins/balances/people/${draft.personId}`);
+  return db.runTransaction(async (tx) => {
+    const [entrySnap, metaSnap] = await Promise.all([tx.get(entryRef), tx.get(metaRef)]);
+    if (entrySnap.exists) return false; // ya emitido: idempotente
+    const meta = metaSnap.exists ? metaSnap.data() : null;
+    const seq = (Number.isInteger(meta?.seq) ? meta.seq : 0) + 1;
+    const prevHash = typeof meta?.headHash === 'string' && meta.headHash !== '' ? meta.headHash : coins.GENESIS_HASH;
+    const ts = new Date().toISOString();
+    /** @type {Record<string, unknown>} */
+    const entry = {
+      id: draft.id,
+      seq,
+      personId: draft.personId,
+      delta: draft.delta,
+      reason: draft.reason,
+      ruleId: draft.ruleId,
+      ruleVersion: coins.RULE_VERSION,
+      refs: draft.refs,
+      ts,
+      prevHash,
+    };
+    // El marcador de degradación entra en el HASH: nadie puede quitar la firma
+    // de un apunte legítimo y marcarlo unsigned sin romper la cadena.
+    const unsigned = coinsKmsKeyName() === null;
+    if (unsigned) entry.unsigned = true;
+    const hash = coins.sha256Hex(coins.canonicalEntry(entry));
+    const signature = unsigned ? null : await sign(hash); // un fallo de KMS lanza: no se escribe nada
+    tx.create(entryRef, signature ? { ...entry, hash, sig: signature.sig, kid: signature.kid } : { ...entry, hash });
+    tx.set(metaRef, { seq, headHash: hash, updatedAt: ts }, { merge: true });
+    tx.set(balanceRef, { balance: FieldValue.increment(draft.delta), updatedAt: ts }, { merge: true });
+    return true;
+  });
+}
+
+/**
+ * Doc de una isla (/careerMap/{islandId}) cacheado por ejecución: varios
+ * certificados de la misma isla en un mismo write no la releen.
+ * @param {import('firebase-admin/firestore').Firestore} db
+ * @param {Map<string, Record<string, unknown>|null>} cache
+ * @param {string} islandId
+ * @returns {Promise<Record<string, unknown>|null>}
+ */
+async function loadIslandDoc(db, cache, islandId) {
+  if (!cache.has(islandId)) {
+    const snap = await db.doc(`careerMap/${islandId}`).get();
+    cache.set(islandId, snap.exists ? snap.data() : null);
+  }
+  return cache.get(islandId) ?? null;
+}
+
+/**
+ * EMISOR de tribbu-coins: trigger sobre el journey de cada persona
+ * (/people/{personId}/career/journey). En cada escritura:
+ *  1. Diff de visitedCities (solo AÑADIDAS) → apuntes `cert:` con el peso de
+ *     la ciudad leído del doc de su isla (disciplina = prefijo del cityId,
+ *     resuelta contra el índice /careerMap/_archipelago; cacheado por
+ *     ejecución).
+ *  2. Recalcula ciudadanías y badges con la MISMA lógica que el cliente
+ *     (aritmética entera de citizenship.js) → apuntes `citz:` y `badge:`.
+ *  3. Carpools del personId (query memberIds array-contains) cuya ruta esté
+ *     COMPLETA (ruta ⊆ visitadas) → apuntes `carpool:`.
+ * Todos los apuntes tienen id determinista: los ya emitidos se saltan dentro
+ * de la transacción (idempotencia), así que re-ejecutar el trigger nunca
+ * duplica coins. Retirar ciudades no resta: el ledger es historia.
+ */
+export const emitCoinsOnJourneyWrite = onDocumentWritten(
+  { document: 'people/{personId}/career/journey', region: 'europe-west1' },
+  async (event) => {
+    const personId = event.params.personId;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    if (!after) return; // journey borrado: el ledger es historia, no se emite ni se resta
+
+    const db = getFirestore();
+    // Índice del archipiélago: imprescindible para pesos (isla de cada ciudad)
+    // y ciudadanías. Sin él no se puede emitir NADA con garantías: se avisa
+    // alto y se sale (los apuntes pendientes saldrán en el próximo write, los
+    // ids deterministas lo permiten). Nunca se emite con datos inventados.
+    const archSnap = await db.doc('careerMap/_archipelago').get();
+    if (!archSnap.exists) {
+      console.error('[coins] Falta /careerMap/_archipelago: no se emiten tribbu-coins en este write.');
+      return;
+    }
+    const islands = coins.normalizeIslands(archSnap.data().islands);
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const visited = [
+      ...new Set(
+        (Array.isArray(after.visitedCities) ? after.visitedCities : [])
+          .filter((c) => typeof c === 'string' && c.trim() !== '')
+          .map((c) => c.trim()),
+      ),
+    ];
+    const added = coins.addedCities(before?.visitedCities, after.visitedCities);
+
+    /** @type {{ id: string, personId: string, delta: number, reason: string, ruleId: string, refs: Record<string, unknown> }[]} */
+    const drafts = [];
+
+    // 1) Certificados: solo las ciudades AÑADIDAS en este write.
+    const islandCache = new Map();
+    for (const cityId of added) {
+      const discipline = cityId.includes('/') ? cityId.slice(0, cityId.indexOf('/')) : '';
+      const islandRef = islands.find((i) => i.discipline === discipline);
+      if (!islandRef) {
+        console.warn(`[coins] Ciudad «${cityId}» sin isla en el índice (disciplina «${discipline}»): sin apunte.`);
+        continue;
+      }
+      const map = await loadIslandDoc(db, islandCache, islandRef.id);
+      const city = (Array.isArray(map?.cities) ? map.cities : []).find((c) => c?.id === cityId);
+      const weight = Number(city?.weight);
+      if (!city || !Number.isInteger(weight) || weight < 1 || weight > 3) {
+        console.warn(`[coins] Ciudad «${cityId}» sin peso 1-3 en /careerMap/${islandRef.id}: sin apunte.`);
+        continue;
+      }
+      drafts.push({
+        id: coins.certEntryId(personId, cityId),
+        personId,
+        delta: coins.CONTRACTS_V1.certificate(weight),
+        reason: `Certificado de ${city.name ?? cityId}`,
+        ruleId: 'certificate',
+        refs: { cityId, cityName: String(city.name ?? cityId), islandId: islandRef.id, weight },
+      });
+    }
+
+    // 2) Ciudadanías y badges: recomputo completo (espejo del cliente). Los
+    // ids deterministas hacen que las ya emitidas se salten solas.
+    const achieved = coins.achievedCitizenships(visited, islands);
+    for (const isle of achieved) {
+      drafts.push({
+        id: coins.citizenshipEntryId(personId, isle.id),
+        personId,
+        delta: coins.CONTRACTS_V1.citizenship,
+        reason: `Ciudadanía de ${isle.name}`,
+        ruleId: 'citizenship',
+        refs: { islandId: isle.id, islandName: isle.name },
+      });
+    }
+    const badges = coins.earnedBadges(achieved);
+    if (badges.superCitizen) {
+      drafts.push({
+        id: coins.badgeEntryId(personId, 'superCitizen'),
+        personId,
+        delta: coins.CONTRACTS_V1.superCitizen,
+        reason: 'Badge ⭐ Super-ciudadano del archipiélago',
+        ruleId: 'superCitizen',
+        refs: { badge: 'superCitizen' },
+      });
+    }
+    if (badges.legend) {
+      drafts.push({
+        id: coins.badgeEntryId(personId, 'legend'),
+        personId,
+        delta: coins.CONTRACTS_V1.legend,
+        reason: 'Badge 👑 Leyenda del archipiélago',
+        ruleId: 'legend',
+        refs: { badge: 'legend' },
+      });
+    }
+
+    // 3) Carpools con la ruta COMPLETA por esta persona (ruta ⊆ visitadas).
+    // Cualquier estado del carpool vale: completar la ruta es el contrato (el
+    // status 'closed' retira el grupo del tablón, no el mérito del viaje).
+    const visitedSet = new Set(visited);
+    const carpoolsSnap = await db.collection('carpools').where('memberIds', 'array-contains', personId).get();
+    for (const docSnap of carpoolsSnap.docs) {
+      const data = docSnap.data();
+      const routeCityIds = (Array.isArray(data.route) ? data.route : [])
+        .map((stop) => String(stop?.cityId ?? '').trim())
+        .filter((cityId) => cityId !== '');
+      if (routeCityIds.length === 0) continue; // sin ruta no hay contrato que cumplir
+      if (!routeCityIds.every((cityId) => visitedSet.has(cityId))) continue;
+      drafts.push({
+        id: coins.carpoolEntryId(docSnap.id, personId),
+        personId,
+        delta: coins.CONTRACTS_V1.carpoolCompleted(routeCityIds.length),
+        reason: `Carpool «${data.name ?? docSnap.id}» completado`,
+        ruleId: 'carpoolCompleted',
+        refs: { carpoolId: docSnap.id, carpoolName: String(data.name ?? docSnap.id), stops: routeCityIds.length },
+      });
+    }
+
+    // Emisión SECUENCIAL (la cadena de hashes exige un orden): cada apunte en
+    // su transacción; los ya existentes se saltan dentro de ella.
+    let emitted = 0;
+    for (const draft of drafts) {
+      if (await appendCoinsEntry(db, draft)) emitted += 1;
+    }
+    if (emitted > 0) {
+      console.log(`[coins] ${emitted} apunte(s) emitido(s) para ${personId} (${drafts.length} candidatos).`);
+    }
+  },
+);

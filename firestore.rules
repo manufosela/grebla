@@ -267,6 +267,18 @@ service cloud.firestore {
         || (isSignedIn() && resource.data.createdBy.uid == request.auth.uid);
     }
 
+    // TRIBBU-COINS (CP-2): libro mayor firmado y verificable. /coins/meta
+    // (contador seq + cabeza de la cadena), /coins/ledger/entries/{entryId}
+    // (apuntes hash-encadenados y firmados con KMS) y
+    // /coins/balances/people/{personId} (saldos materializados). SOLO LECTURA
+    // para cualquier autenticado (todos pueden auditar el ledger); escribe
+    // únicamente la Cloud Function emisora vía Admin SDK (omite reglas).
+    // Cualquier escritura de cliente rompería la garantía del emisor único.
+    match /coins/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // Mapa de Carrera (la isla): documento único /careerMap/island con las
     // comarcas, ciudades y puerto de inicio. Lo leen los autenticados (el tool);
     // solo lo edita el superadmin desde el panel /admin.

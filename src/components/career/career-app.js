@@ -174,6 +174,19 @@ import {
   carpoolProgress,
   carpoolFromPlannedRoute,
 } from '../../tools/career/domain/carpool.js';
+import {
+  getLedger,
+  getCoinsMeta,
+  getCoinsBalance,
+  listCoinsBalances,
+  readCoinsCheckpoint,
+  writeCoinsCheckpoint,
+} from '../../lib/coins.js';
+import { COINS_PUBLIC_KEY_PEM } from '../../lib/coinsPublicKey.js';
+import {
+  verifyLedger as verifyCoinsLedger,
+  entryLabel as coinsEntryLabel,
+} from '../../tools/career/domain/coins.js';
 import { DEFAULT_ISLAND_ID } from '../../tools/career/domain/types.js';
 import {
   WAKE_INTERVAL_MS,
@@ -273,6 +286,13 @@ export class CareerApp extends LitElement {
     carpoolError: { state: true },
     cpDraft: { state: true },
     carpoolStops: { state: true },
+    showCoins: { state: true },
+    coinsBalance: { state: true },
+    coinsLedger: { state: true },
+    coinsVerify: { state: true },
+    coinsAlert: { state: true },
+    coinsBusy: { state: true },
+    coinsError: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -823,6 +843,39 @@ export class CareerApp extends LitElement {
     .cpstop .when { margin-left: auto; color: var(--rm-muted, #6b7280); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .cpstop button { padding: 0.15rem 0.45rem; font-size: 0.75rem; line-height: 1; }
     .cpnotice { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    /* ── Tribbu-coins (CP-2): overlay del libro mayor (saldo, verificación,
+       historial) y alerta roja del HUD si la verificación detecta trampa. ── */
+    .hudbadge.coinsalert { background: var(--rm-danger, #dc2626); color: #fff; animation: coinspulse 1.2s ease-in-out infinite; }
+    @keyframes coinspulse { 50% { opacity: 0.55; } }
+    @media (prefers-reduced-motion: reduce) { .hudbadge.coinsalert { animation: none; } }
+    .coinshead { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0.2rem 0 0.6rem; }
+    .coinsbal { font-size: 1.25rem; font-weight: 800; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; }
+    .coinsbal small { font-size: 0.75rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
+    .vsummary { margin: 0.4rem 0; font-size: 0.9rem; font-weight: 700; }
+    .vsummary.good { color: var(--rm-accent, #2a9d8f); }
+    .vsummary.warn { color: #8a5a00; }
+    .vsummary.alert { color: var(--rm-danger, #dc2626); }
+    .vchecks { list-style: none; margin: 0.3rem 0 0; padding: 0; font-size: 0.83rem; }
+    .vcheck { display: flex; gap: 0.45rem; align-items: baseline; padding: 0.18rem 0; }
+    .vcheck .vicon { font-weight: 800; }
+    .vcheck.pass .vicon { color: var(--rm-accent, #2a9d8f); }
+    .vcheck.fail { color: var(--rm-danger, #dc2626); }
+    .vcheck.fail .vicon { color: var(--rm-danger, #dc2626); }
+    .vcheck.skip { color: var(--rm-muted, #9ca3af); }
+    .vwarnings { list-style: none; margin: 0.4rem 0 0; padding: 0; font-size: 0.78rem; color: #8a5a00; }
+    .sub-coins { margin: 1rem 0 0.25rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 700; }
+    .coinslist { list-style: none; margin: 0; padding: 0; }
+    .coinslist li {
+      display: grid; grid-template-columns: 1fr auto auto; gap: 0.35rem 0.75rem;
+      align-items: baseline; padding: 0.35rem 0;
+      border-top: 1px solid var(--rm-border, #eef0f2); font-size: 0.85rem;
+    }
+    .coinslist .when { font-size: 0.72rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .coinslist .delta { font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .coinslist .unsigned {
+      font-size: 0.62rem; font-weight: 800; padding: 0.08rem 0.4rem; border-radius: 999px;
+      background: #fdebc8; color: #8a5a00; text-transform: uppercase; letter-spacing: 0.03em;
+    }
     /* Pestaña «Recursos»: grupos por tipo con icono; enlaces cuando hay url. */
     .resgroup { margin: 0.7rem 0 0; }
     .resgroup h4 { margin: 0 0 0.25rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
@@ -948,6 +1001,24 @@ export class CareerApp extends LitElement {
     /** Miembros de mis carpools cuyo journey NO se pudo leer (privacidad
      * entre líderes): su avance se muestra como «sin datos». @type {Set<string>} */
     this._carpoolJourneysMissing = new Set();
+    // Tribbu-coins (CP-2): saldo de la persona cargada, ledger cacheado,
+    // resultado de la verificación y alerta roja del HUD (historia vista
+    // traicionada / cadena rota / firma inválida).
+    this.showCoins = false;
+    /** Saldo materializado de la persona cargada (null mientras carga). @type {number|null} */
+    this.coinsBalance = null;
+    /** Ledger completo cacheado tras la verificación en segundo plano (o null).
+     * @type {import('../../tools/career/domain/coins.js').CoinsEntry[]|null} */
+    this.coinsLedger = null;
+    /** Resultado de la última verificación completa (o null sin verificar).
+     * @type {import('../../tools/career/domain/coins.js').LedgerVerification|null} */
+    this.coinsVerify = null;
+    /** true si la verificación detectó MANIPULACIÓN: la alerta roja del HUD. */
+    this.coinsAlert = false;
+    this.coinsBusy = false;
+    this.coinsError = '';
+    /** La verificación en segundo plano corre UNA vez por sesión. */
+    this._coinsVerifyStarted = false;
     // Progresión (MC-20): aviso de ciudadanía/badge en pantalla (o null) y su
     // cola — los anuncios encadenados salen SECUENCIALES, nunca solapados.
     /** @type {import('../../tools/career/domain/citizenship.js').CitizenshipEvent|null} */
@@ -1048,6 +1119,11 @@ export class CareerApp extends LitElement {
       this.myCarpools = null;
       this.carpoolError = '';
       this.cpDraft = CareerApp.EMPTY_CP_DRAFT;
+      // El saldo y el overlay de coins eran de otra persona (CP-2); _load()
+      // recarga el saldo. El ledger y su verificación son GLOBALES: se quedan.
+      this.showCoins = false;
+      this.coinsBalance = null;
+      this.coinsError = '';
     }
     // Paradas del carpool a señalizar (CP-1): dependen de mis carpools y de la
     // isla cargada. Se recalculan con guarda de igualdad (no re-dispara).
@@ -1126,6 +1202,10 @@ export class CareerApp extends LitElement {
     if (changed.has('showCarpools') && this.showCarpools) {
       this.renderRoot.querySelector('.cppanel')?.focus();
     }
+    // El overlay de tribbu-coins recibe el foco al abrirse (CP-2): Escape cierra.
+    if (changed.has('showCoins') && this.showCoins) {
+      this.renderRoot.querySelector('.coinspanel')?.focus();
+    }
   }
 
   /** Nombre de una isla según el índice del archipiélago (o '' si no está). @param {string} islandId */
@@ -1177,6 +1257,11 @@ export class CareerApp extends LitElement {
       // Carpools de la persona (CP-1): en paralelo y SIN bloquear la carga
       // (gestiona sus propios errores — el mapa no se cae por el tablón).
       this._loadMyCarpools();
+      // Tribbu-coins (CP-2): saldo de la persona y, UNA vez por sesión, la
+      // verificación del libro mayor en segundo plano. Ninguna bloquea la
+      // carga ni la tumba (gestionan sus propios errores).
+      this._loadCoinsBalance();
+      this._startCoinsBackgroundVerification();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa de esta persona.';
     } finally {
@@ -1655,6 +1740,7 @@ export class CareerApp extends LitElement {
           .visitedIslands=${this.journey?.visitedIslands ?? []}
           .questions=${this.questions ?? []}
           .carpools=${carpools}
+          .coins=${this._coinsForCard()}
         ></player-card>
       </section>
     </div>`;
@@ -2561,6 +2647,259 @@ export class CareerApp extends LitElement {
     </div>`;
   }
 
+  // ---- Tribbu-coins (CP-2) ------------------------------------------------------
+
+  /**
+   * Saldo materializado de la persona cargada (/coins/balances). No bloquea
+   * ni tumba la carga: sin saldo legible se muestra «—» y se deja constancia.
+   */
+  async _loadCoinsBalance() {
+    const personId = this.personId;
+    this.coinsBalance = null;
+    if (!personId) return;
+    try {
+      const balance = await getCoinsBalance(personId);
+      if (this.personId === personId) this.coinsBalance = balance; // se cambió de persona mientras cargaba
+    } catch (err) {
+      console.warn('Tribbu-coins: no se pudo leer el saldo.', err);
+    }
+  }
+
+  /**
+   * Lee ledger + meta + saldos y ejecuta la verificación COMPLETA del dominio
+   * (cadena, contratos, saldos, firmas si hay clave pública, checkpoint
+   * local). Si NO hay manipulación, avanza el checkpoint a la cabeza recién
+   * verificada (avanzarlo sobre una historia manipulada la «bendeciría»).
+   * Actualiza coinsLedger/coinsVerify/coinsAlert. Lanza si la IO falla.
+   */
+  async _refreshCoinsLedger() {
+    const [entries, meta, balances] = await Promise.all([
+      getLedger(),
+      getCoinsMeta(),
+      listCoinsBalances(),
+    ]);
+    const result = await verifyCoinsLedger({
+      entries,
+      meta,
+      balances,
+      publicKeyPem: COINS_PUBLIC_KEY_PEM,
+      checkpoint: readCoinsCheckpoint(),
+    });
+    this.coinsLedger = entries;
+    this.coinsVerify = result;
+    this.coinsAlert = result.alert;
+    if (!result.alert && entries.length > 0) {
+      const head = entries.at(-1);
+      writeCoinsCheckpoint({ seq: head.seq, headHash: head.hash });
+    }
+    return result;
+  }
+
+  /**
+   * Verificación EN SEGUNDO PLANO al abrir el juego (una vez por sesión): si
+   * la historia vista por este navegador cambió (o la cadena/firmas no
+   * cuadran), coinsAlert enciende la alerta roja del HUD. Un fallo de IO no
+   * molesta al jugador: queda en consola y el botón «verificar» permite
+   * reintentar a mano.
+   */
+  _startCoinsBackgroundVerification() {
+    if (this._coinsVerifyStarted || !this.store) return;
+    this._coinsVerifyStarted = true;
+    this._refreshCoinsLedger().catch((err) => {
+      console.warn('Tribbu-coins: no se pudo verificar el libro mayor en segundo plano.', err);
+    });
+  }
+
+  /** Botón «🪙 Verificar libro mayor» del overlay: verificación a demanda. */
+  async _runCoinsVerification() {
+    if (this.coinsBusy) return;
+    this.coinsBusy = true;
+    this.coinsError = '';
+    try {
+      await this._refreshCoinsLedger();
+      await this._loadCoinsBalance(); // el saldo mostrado se refresca a la vez
+    } catch (err) {
+      this.coinsError =
+        err instanceof Error ? err.message : 'No se pudo verificar el libro mayor.';
+    } finally {
+      this.coinsBusy = false;
+    }
+  }
+
+  /** Abre el overlay «🪙 Tribbu-coins» (y verifica si aún no hay resultado). */
+  _openCoins() {
+    this.coinsError = '';
+    this.showCoins = true;
+    if (this.coinsLedger === null) this._runCoinsVerification();
+  }
+
+  /** Cierra el overlay de coins y devuelve el foco al HUD. */
+  _closeCoins() {
+    this.showCoins = false;
+    this._recapturePointerLock();
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro del overlay de coins lo cierra. @param {KeyboardEvent} event */
+  _onCoinsKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeCoins();
+  }
+
+  /** Botón «🪙 Tribbu-coins» de la barra. */
+  _renderCoinsButton() {
+    return html`<button
+      @click=${this._openCoins}
+      title="Tribbu-coins: saldo, historial y verificación del libro mayor firmado"
+    >🪙 Tribbu-coins</button>`;
+  }
+
+  /**
+   * Apuntes del ledger de la PERSONA cargada, el más reciente primero
+   * (null si el ledger aún no se cargó).
+   * @returns {import('../../tools/career/domain/coins.js').CoinsEntry[]|null}
+   */
+  get _personCoinsEntries() {
+    if (this.coinsLedger === null || !this.personId) return null;
+    return this.coinsLedger
+      .filter((e) => e.personId === this.personId)
+      .toSorted((a, b) => b.seq - a.seq);
+  }
+
+  /**
+   * Datos de coins para <player-card> (CP-2): saldo y las últimas 10
+   * transacciones legibles. null mientras no haya nada que enseñar (la ficha
+   * oculta la sección).
+   * @returns {{ balance: number, recent: { label: string, delta: number, ts: string }[] }|null}
+   */
+  _coinsForCard() {
+    const entries = this._personCoinsEntries;
+    if (this.coinsBalance === null && entries === null) return null;
+    return {
+      balance: this.coinsBalance ?? 0,
+      recent: (entries ?? []).slice(0, 10).map((e) => ({
+        label: coinsEntryLabel(e),
+        delta: e.delta,
+        ts: e.ts,
+      })),
+    };
+  }
+
+  /**
+   * Una línea del resultado de verificación: ✓/✗ (o ○ si esa comprobación se
+   * saltó) + etiqueta + motivo del fallo si lo hay.
+   * @param {string} label
+   * @param {{ ok: boolean, checked?: boolean, reason?: string }} check
+   * @param {string} [detail] Detalle extra del fallo (ya legible).
+   */
+  _renderCoinsCheck(label, check, detail = '') {
+    const skipped = check.checked === false;
+    const icon = skipped ? '○' : check.ok ? '✓' : '✗';
+    const cls = skipped ? 'skip' : check.ok ? 'pass' : 'fail';
+    const reason = skipped ? 'no comprobado' : (check.reason ?? detail);
+    return html`<li class="vcheck ${cls}">
+      <span class="vicon" aria-hidden="true">${icon}</span>
+      <span>${label}${!check.ok || skipped ? html` — <em>${reason}</em>` : null}</span>
+    </li>`;
+  }
+
+  /** Resultado DETALLADO de la última verificación del libro mayor. */
+  _renderCoinsVerifyResult() {
+    const v = this.coinsVerify;
+    if (!v) return html`<p class="wizempty">Aún sin verificar: pulsa «Verificar libro mayor».</p>`;
+    const c = v.checks;
+    const rulesDetail = c.rules.failures
+      .map((f) => `apunte ${f.seq}: ${f.reason}`)
+      .join(' · ');
+    const balancesDetail = c.balances.mismatches
+      .map((m) => `${m.personId}: ledger ${m.computed} ≠ guardado ${m.stored}`)
+      .join(' · ');
+    const sigDetail = c.signatures.failures.length
+      ? `firma inválida en seq ${c.signatures.failures.join(', ')}`
+      : '';
+    return html`
+      <p class="vsummary ${v.alert ? 'alert' : v.ok ? 'good' : 'warn'}" role="status">
+        ${v.alert
+          ? '🚨 MANIPULACIÓN DETECTADA en el libro mayor'
+          : v.ok
+            ? `✅ Libro mayor íntegro (${c.chain.length} apuntes verificados)`
+            : '⚠️ El libro mayor tiene discrepancias (detalle abajo)'}
+      </p>
+      <ul class="vchecks">
+        ${this._renderCoinsCheck('Cadena de hashes (seq + prevHash + hash)', c.chain)}
+        ${this._renderCoinsCheck('Cabeza /coins/meta coherente con la cadena', c.meta)}
+        ${this._renderCoinsCheck('Contratos: cada delta sale de su regla', c.rules, rulesDetail)}
+        ${this._renderCoinsCheck('Saldos materializados = recomputación del ledger', c.balances, balancesDetail)}
+        ${this._renderCoinsCheck(
+          `Firmas KMS (${c.signatures.verified} verificadas, ${c.signatures.unsigned} sin firma)`,
+          c.signatures,
+          sigDetail,
+        )}
+        ${this._renderCoinsCheck('Historia vista por este navegador (checkpoint)', c.checkpoint)}
+      </ul>
+      ${v.warnings.length
+        ? html`<ul class="vwarnings">${v.warnings.map((w) => html`<li>⚠️ ${w}</li>`)}</ul>`
+        : null}
+    `;
+  }
+
+  /**
+   * Overlay «🪙 Tribbu-coins» (CP-2): saldo de la persona, verificación del
+   * libro mayor (botón + resultado detallado) e historial completo de sus
+   * transacciones. Modal hermano de la ficha: foco al abrir, Escape/✕/fondo
+   * cierran.
+   */
+  _renderCoins() {
+    if (!this.showCoins) return null;
+    const name = (this.people ?? []).find((p) => p.id === this.personId)?.name ?? '';
+    const entries = this._personCoinsEntries;
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeCoins(); }}>
+      <section
+        class="ficha coinspanel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tribbu-coins de ${name}"
+        tabindex="-1"
+        @keydown=${this._onCoinsKeydown}
+      >
+        <header class="sea-head">
+          <h3>🪙 Tribbu-coins</h3>
+          <button class="close" aria-label="Cerrar el panel de tribbu-coins" title="Cerrar (Esc)" @click=${this._closeCoins}>✕</button>
+        </header>
+        <p class="cplead">
+          Los tribbu-coins se emiten SOLO por contratos y quedan en un libro
+          mayor firmado y encadenado que cualquiera puede auditar: si alguien
+          tocase la base de datos, aquí se vería.
+        </p>
+        <div class="coinshead">
+          <span class="coinsbal" title="Saldo materializado de ${name}">
+            🪙 ${this.coinsBalance ?? '—'} <small>de ${name}</small>
+          </span>
+          <button @click=${this._runCoinsVerification} ?disabled=${this.coinsBusy}>
+            ${this.coinsBusy ? 'Verificando…' : '🪙 Verificar libro mayor'}
+          </button>
+        </div>
+        ${this.coinsError ? html`<p class="error" role="alert">${this.coinsError}</p>` : null}
+        ${this._renderCoinsVerifyResult()}
+        <p class="sub-coins">Historial de ${name}</p>
+        ${entries === null
+          ? html`<p class="wizempty">Cargando el libro mayor…</p>`
+          : entries.length === 0
+            ? html`<p class="wizempty">Sin transacciones todavía: los coins llegan con certificados, ciudadanías, badges y carpools completados.</p>`
+            : html`<ul class="coinslist">
+                ${entries.map(
+                  (e) => html`<li>
+                    <span class="what">${coinsEntryLabel(e)}${e.unsigned ? html` <span class="unsigned" title="Apunte emitido sin clave KMS configurada">sin firma</span>` : null}</span>
+                    <span class="when">${formatWizardDate(e.ts)}</span>
+                    <span class="delta">+${e.delta} 🪙</span>
+                  </li>`,
+                )}
+              </ul>`}
+      </section>
+    </div>`;
+  }
+
   // ---- El brujo de la isla (MC-22) --------------------------------------------
 
   /** Etiquetas de estado de una consulta al brujo. */
@@ -3251,6 +3590,16 @@ export class CareerApp extends LitElement {
         🏝️ ${prog.islandsVisited}/${prog.islands.length}
       </span>
       <span class="hudstat" title="Ciudadanías de isla conseguidas">🛂 ${prog.citizenships}</span>
+      ${this.coinsBalance !== null
+        ? html`<span class="hudstat" title="Tribbu-coins: saldo según el libro mayor firmado (botón 🪙 para auditarlo)">🪙 ${this.coinsBalance}</span>`
+        : null}
+      ${this.coinsAlert
+        ? html`<span
+            class="hudbadge coinsalert"
+            role="alert"
+            title="La verificación del libro mayor de tribbu-coins detectó manipulación: cadena rota, firma inválida o historia reescrita. Abre 🪙 Tribbu-coins para el detalle."
+          >🚨 Libro mayor alterado</span>`
+        : null}
       ${prog.legend
         ? html`<span class="hudbadge legend" title="Leyenda del archipiélago: 6 ciudadanías o más">👑 Leyenda</span>`
         : prog.superCitizen
@@ -3778,6 +4127,7 @@ export class CareerApp extends LitElement {
               ${this._renderWizardQueueButton()}
               ${this._renderPlaytimeButton()}
               ${this._renderCarpoolButton()}
+              ${this._renderCoinsButton()}
               ${this._renderCarpoolHudStat()}
               ${this._renderProgressHud(prog, s)}
             </div>
@@ -3799,7 +4149,8 @@ export class CareerApp extends LitElement {
               this.showWizard ||
               this.showWizardQueue ||
               this.showPlaytime ||
-              this.showCarpools}
+              this.showCarpools ||
+              this.showCoins}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               .wizardState=${hutState}
               @select-city=${this._onSelect}
@@ -3879,6 +4230,7 @@ export class CareerApp extends LitElement {
       ${this._renderWizardQueue()}
       ${this._renderPlaytimeSummary()}
       ${this._renderCarpools()}
+      ${this._renderCoins()}
       ${this._renderTravelFade()}
       ${this._renderAnnouncement()}
     `;
