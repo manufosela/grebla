@@ -21,6 +21,10 @@ import {
   AREA_FOCUS,
   cityFocusFrame,
   areaFocusFrame,
+  TEAMMATE_ARC,
+  TEAMMATE_HUE,
+  teammateOffsets,
+  teammateTint,
 } from './islandLayout.js';
 
 /** Mapa mínimo de pruebas: dos comarcas, una vacía, y puerto de inicio. */
@@ -372,5 +376,110 @@ describe('facadeYawToward', () => {
     expect(() => facadeYawToward({ wx: 0, wz: 0 }, undefined)).toThrow();
     expect(() => facadeYawToward(undefined, { wx: 0, wz: 0 })).toThrow();
     expect(() => facadeYawToward({ wx: Number.NaN, wz: 0 }, { wx: 1, wz: 1 })).toThrow();
+  });
+});
+
+describe('teammateOffsets (MC-12)', () => {
+  it('0 compañeros → sin offsets; 1 → centrado frente a la puerta', () => {
+    expect(teammateOffsets(0)).toEqual([]);
+    const [only] = teammateOffsets(1);
+    expect(only.lx).toBeCloseTo(0);
+    expect(only.lz).toBeCloseTo(TEAMMATE_ARC.radius);
+    expect(only.yaw).toBe(0);
+  });
+
+  it('n compañeros: todos a radio constante, dentro del arco y sin solaparse', () => {
+    for (const n of [2, 3, 5, 8]) {
+      const offsets = teammateOffsets(n);
+      expect(offsets).toHaveLength(n);
+      for (const o of offsets) {
+        expect(Math.hypot(o.lx, o.lz)).toBeCloseTo(TEAMMATE_ARC.radius);
+        expect(Math.abs(o.yaw)).toBeLessThanOrEqual(TEAMMATE_ARC.span / 2 + 1e-9);
+      }
+      // Ángulos estrictamente crecientes: posiciones distintas, sin solape.
+      for (let i = 1; i < n; i += 1) {
+        expect(offsets[i].yaw).toBeGreaterThan(offsets[i - 1].yaw);
+      }
+    }
+  });
+
+  it('el arco es simétrico respecto al eje de la fachada', () => {
+    const offsets = teammateOffsets(3);
+    expect(offsets[0].yaw).toBeCloseTo(-offsets[2].yaw);
+    expect(offsets[1].yaw).toBeCloseTo(0);
+    expect(offsets[0].lx).toBeCloseTo(-offsets[2].lx);
+    expect(offsets[0].lz).toBeCloseTo(offsets[2].lz);
+  });
+
+  it('es determinista y acepta radio/arco propios', () => {
+    expect(teammateOffsets(4)).toEqual(teammateOffsets(4));
+    const custom = teammateOffsets(2, { radius: 10, span: Math.PI });
+    expect(Math.hypot(custom[0].lx, custom[0].lz)).toBeCloseTo(10);
+    expect(custom[0].yaw).toBeCloseTo(-Math.PI / 2);
+    expect(custom[1].yaw).toBeCloseTo(Math.PI / 2);
+  });
+
+  it('falla en alto con parámetros inválidos (sin fallbacks silenciosos)', () => {
+    expect(() => teammateOffsets(-1)).toThrow();
+    expect(() => teammateOffsets(1.5)).toThrow();
+    expect(() => teammateOffsets(2, { radius: 0 })).toThrow();
+    expect(() => teammateOffsets(2, { span: 0 })).toThrow();
+    expect(() => teammateOffsets(2, { span: Math.PI * 3 })).toThrow();
+  });
+});
+
+describe('teammateTint (MC-12)', () => {
+  /** Tono HSL (grados 0..360) de un color hex numérico 0xRRGGBB. */
+  const hueOf = (hex) => {
+    const r = ((hex >> 16) & 0xff) / 255;
+    const g = ((hex >> 8) & 0xff) / 255;
+    const b = (hex & 0xff) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max === min) return 0;
+    const d = max - min;
+    let h;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    return (h * 60 + 360) % 360;
+  };
+
+  it('es determinista: mismo personId → mismos colores', () => {
+    expect(teammateTint('p-001')).toEqual(teammateTint('p-001'));
+  });
+
+  it('personas distintas suelen vestir distinto', () => {
+    const a = teammateTint('persona-a');
+    const b = teammateTint('persona-b');
+    expect(a.body === b.body && a.cap === b.cap).toBe(false);
+  });
+
+  it('camiseta y gorra caen SIEMPRE fuera de la franja coral del avatar propio', () => {
+    // La gorra coral (#e26d5e, tono ~8°) es exclusiva del avatar propio: los
+    // tonos de compañero viven en [TEAMMATE_HUE.min, TEAMMATE_HUE.max).
+    for (let i = 0; i < 200; i += 1) {
+      const tint = teammateTint(`persona-${i}`);
+      for (const color of [tint.body, tint.cap]) {
+        expect(color).not.toBe(0xe26d5e);
+        const hue = hueOf(color);
+        expect(hue).toBeGreaterThanOrEqual(TEAMMATE_HUE.min - 1);
+        expect(hue).toBeLessThanOrEqual(TEAMMATE_HUE.max + 1);
+      }
+    }
+  });
+
+  it('devuelve colores hex de 24 bits', () => {
+    const tint = teammateTint('p-hex');
+    for (const color of [tint.body, tint.cap]) {
+      expect(Number.isInteger(color)).toBe(true);
+      expect(color).toBeGreaterThanOrEqual(0);
+      expect(color).toBeLessThanOrEqual(0xffffff);
+    }
+  });
+
+  it('falla en alto con un personId inválido', () => {
+    expect(() => teammateTint('')).toThrow();
+    expect(() => teammateTint(undefined)).toThrow();
   });
 });
