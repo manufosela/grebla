@@ -67,6 +67,21 @@
  * (MC-12) solo se pintan si su journey está en la MISMA isla; el progreso del
  * HUD sigue siendo el de la isla cargada.
  *
+ * Progresión (MC-20): completar una casa = CERTIFICADO; alcanzar el % objetivo
+ * de certificados de una isla (citizenshipPct del índice) = CIUDADANÍA de esa
+ * isla. El HUD superior (barra de arriba, modos 3D y plano; en fps el HUD es
+ * mínimo) muestra el % de la isla actual frente a su objetivo (mini-barra con
+ * la marca de la meta; lograda → «🏆 Ciudadanía»), las islas pisadas
+ * (journey.visitedIslands), las ciudadanías y el badge más alto
+ * (⭐ Super-ciudadano ≥ 3 incluyendo Bases; 👑 Leyenda ≥ 6) — todo derivado en
+ * puro (domain/citizenship.js) del journey global y el índice del archipiélago
+ * ya cargado (los ids de ciudad prefijados por disciplina lo hacen barato).
+ * El contador de nivel de viaje de antes queda como tooltip del bloque de la
+ * isla. Al cruzar el umbral con un certificado, la celebración de la isla 3D
+ * se SUSTITUYE por la variante MAYOR (más confeti, fanfarria larga) y sale el
+ * aviso «¡Ciudadanía de {isla} conseguida!»; si además cae un badge, se
+ * anuncia después EN COLA (secuencial, nunca solapado).
+ *
  * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
  * localStorage `grebla:career:onboarded`) un cartel de bienvenida overlay
  * (DOM, estilo del panel) explica qué es la isla, los controles de la vista
@@ -102,6 +117,7 @@ import {
   voyageHeading,
 } from '../../tools/career/domain/voyage.js';
 import { cityStatus, missingPrereqs, progressPct } from '../../tools/career/domain/progress.js';
+import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 
 /**
  * Pestañas de la tarjeta de la casa (MC-15): estado/acciones del certificado,
@@ -155,6 +171,7 @@ export class CareerApp extends LitElement {
     showArchipelago: { state: true },
     traveling: { state: true },
     voyage: { state: true },
+    announcement: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -173,6 +190,11 @@ export class CareerApp extends LitElement {
   static EMPTY_TEAMMATES = Object.freeze([]);
   /** Duración (ms) del fundido de travesía entre islas (MC-14). */
   static TRAVEL_FADE_MS = 900;
+  /** Duración (ms) del aviso de CIUDADANÍA DE ISLA (acompaña a la celebración
+   * mayor, CELEBRATION_VARIANTS.island ≈ 4.2 s) (MC-20). */
+  static ANNOUNCE_ISLAND_MS = 4200;
+  /** Duración (ms) de los avisos de badge (super-ciudadano / leyenda, MC-20). */
+  static ANNOUNCE_BADGE_MS = 3200;
 
   static styles = css`
     :host { display: flex; flex-direction: column; min-height: 0; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
@@ -227,11 +249,55 @@ export class CareerApp extends LitElement {
     .viewswitch button + button { border-left: 1px solid var(--rm-border, #d1d5db); }
     .viewswitch button.active { background: var(--rm-accent, #2a9d8f); color: #fff; }
     .viewswitch button:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: -2px; }
-    .stat { display: flex; align-items: baseline; gap: 0.6rem; }
-    .lvl { font-weight: 800; color: var(--rm-accent, #2a9d8f); }
-    .pts { font-size: 0.85rem; color: var(--rm-muted, #6b7280); font-variant-numeric: tabular-nums; }
-    .progress { height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; margin-bottom: 1rem; }
-    .progress span { display: block; height: 100%; background: var(--rm-accent, #2a9d8f); border-radius: 999px; transition: width 0.3s ease; }
+    /* ── HUD superior de progresión (MC-20): ciudadanía de la isla actual,
+       islas pisadas, ciudadanías y badge. Compacto y a la derecha de la barra. ── */
+    .hudtop { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-left: auto; }
+    .isle-stat { display: flex; align-items: center; gap: 0.45rem; }
+    .isle-here { font-weight: 800; font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); white-space: nowrap; }
+    .minibar { position: relative; width: 110px; height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; }
+    .minibar .fill {
+      display: block; height: 100%; max-width: 100%;
+      background: var(--rm-accent, #2a9d8f); border-radius: 999px; transition: width 0.3s ease;
+    }
+    /* Marca del % objetivo sobre la mini-barra: la meta visible de la ciudadanía. */
+    .minibar .goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--rm-coral-600, #e26d5e); border-radius: 1px; }
+    .pcts { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hudstat { font-size: 0.85rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hudbadge {
+      font-size: 0.72rem; font-weight: 800; padding: 0.18rem 0.6rem; border-radius: 999px; white-space: nowrap;
+      background: linear-gradient(135deg, #f6d365 0%, #e8b931 100%); color: #5b4300;
+      box-shadow: 0 1px 4px rgba(17, 24, 39, 0.18);
+    }
+    .hudbadge.legend { background: linear-gradient(135deg, #b993ff 0%, #7f5af0 100%); color: #fff; }
+    /* Aviso de progresión (MC-20): toast centrado arriba, sobre todo lo demás
+       (acompaña a la celebración mayor; los badges salen detrás, en cola). */
+    .cit-toast {
+      position: fixed;
+      top: 4.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 80;
+      pointer-events: none;
+      background: linear-gradient(135deg, #f6d365 0%, #e8b931 100%);
+      color: #4a3700;
+      border-radius: 999px;
+      padding: 0.65rem 1.4rem;
+      box-shadow: 0 10px 30px rgba(17, 24, 39, 0.3);
+      animation: cit-pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+    }
+    .cit-toast.legend { background: linear-gradient(135deg, #b993ff 0%, #7f5af0 100%); color: #fff; }
+    .cit-toast p { margin: 0; font-size: 1.05rem; font-weight: 800; white-space: nowrap; }
+    @keyframes cit-pop {
+      from { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.85); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cit-toast { animation: none; }
+    }
+    @media (max-width: 760px) {
+      .hudtop { margin-left: 0; }
+      .cit-toast p { white-space: normal; text-align: center; }
+    }
     .grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: 1.5rem; align-items: start; }
     @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
     .panel { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); padding: 1rem 1.25rem; }
@@ -556,6 +622,13 @@ export class CareerApp extends LitElement {
     this.existingIslands = null;
     this.showArchipelago = false;
     this.traveling = false;
+    // Progresión (MC-20): aviso de ciudadanía/badge en pantalla (o null) y su
+    // cola — los anuncios encadenados salen SECUENCIALES, nunca solapados.
+    /** @type {import('../../tools/career/domain/citizenship.js').CitizenshipEvent|null} */
+    this.announcement = null;
+    /** @type {import('../../tools/career/domain/citizenship.js').CitizenshipEvent[]} */
+    this._announceQueue = [];
+    this._announceTimer = 0;
     // Barco animado (MC-19): viaje en curso sobre el mapa del mar, o null.
     // El rAF y sus relojes son privados: solo `voyage` re-renderiza.
     /** @type {{ toId: string, toName: string, path: import('../../tools/career/domain/voyage.js').VoyagePath, duration: number }|null} */
@@ -636,6 +709,7 @@ export class CareerApp extends LitElement {
     if (changed.has('personId')) {
       this.selected = null;
       this.teammatePopover = null; // el resumen abierto era de otro contexto
+      this._clearAnnouncements(); // los avisos encolados también (MC-20)
     }
     if (this.store && !this._mapLoaded) {
       this._mapLoaded = true;
@@ -816,12 +890,70 @@ export class CareerApp extends LitElement {
     const map = this._map;
     this.error = '';
     try {
-      if (action === 'toggle') this.journey = await toggleVisited(this.store, this.personId, map, this.journey, this.selected);
-      else if (action === 'current') this.journey = await setCurrent(this.store, this.personId, this.journey, this.selected);
-      else if (action === 'route') this.journey = await toggleRoute(this.store, this.personId, this.journey, this.selected);
+      if (action === 'toggle') {
+        const prev = this.journey;
+        this.journey = await toggleVisited(this.store, this.personId, map, prev, this.selected);
+        // Progresión (MC-20): si este certificado cruza el % objetivo de la
+        // isla, celebración MAYOR y avisos encadenados (isla → badges).
+        await this._queueCitizenshipCelebrations(prev, this.journey, this.selected);
+      } else if (action === 'current') {
+        this.journey = await setCurrent(this.store, this.personId, this.journey, this.selected);
+      } else if (action === 'route') {
+        this.journey = await toggleRoute(this.store, this.personId, this.journey, this.selected);
+      }
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo actualizar.';
     }
+  }
+
+  // ---- Progresión: ciudadanía por isla y badges (MC-20) ----------------------
+
+  /**
+   * Detecta (puro, citizenshipCelebrations) qué anuncios dispara el
+   * certificado recién obtenido y los ENCOLA: la ciudadanía de la isla
+   * sustituye la celebración de certificado del 3D por la variante MAYOR
+   * (más confeti y fanfarria larga) y los badges (super-ciudadano, leyenda)
+   * se anuncian después, secuenciales — nunca solapados.
+   * @param {import('../../tools/career/domain/types.js').Journey} prev
+   * @param {import('../../tools/career/domain/types.js').Journey} next
+   * @param {string} cityId Ciudad del certificado recién obtenido.
+   */
+  async _queueCitizenshipCelebrations(prev, next, cityId) {
+    const events = citizenshipCelebrations(prev, next, this.archipelago?.islands ?? []);
+    if (events.length === 0) return;
+    if (events.some((e) => e.kind === 'island') && this.viewMode === '3d') {
+      // La isla 3D ya arrancó la celebración de certificado con el mismo diff:
+      // se espera a que su update procese el journey y se SUSTITUYE por la
+      // celebración mayor de ciudadanía (una celebración nueva corta la anterior).
+      await this.updateComplete;
+      const island = this.renderRoot.querySelector('career-island-3d');
+      if (island) {
+        await island.updateComplete;
+        island.celebrateCitizenship(cityId);
+      }
+    }
+    this._announceQueue.push(...events);
+    if (!this.announcement) this._nextAnnouncement();
+  }
+
+  /** Muestra el siguiente aviso de la cola (o retira el actual si no quedan). */
+  _nextAnnouncement() {
+    clearTimeout(this._announceTimer);
+    this._announceTimer = 0;
+    const event = this._announceQueue.shift() ?? null;
+    this.announcement = event;
+    if (!event) return;
+    const ms =
+      event.kind === 'island' ? CareerApp.ANNOUNCE_ISLAND_MS : CareerApp.ANNOUNCE_BADGE_MS;
+    this._announceTimer = setTimeout(() => this._nextAnnouncement(), ms);
+  }
+
+  /** Vacía la cola de avisos (cambio de persona: eran de otro contexto). */
+  _clearAnnouncements() {
+    clearTimeout(this._announceTimer);
+    this._announceTimer = 0;
+    this._announceQueue = [];
+    this.announcement = null;
   }
 
   /** Persiste el objeto de evidencias completo de la ciudad seleccionada. */
@@ -1157,6 +1289,9 @@ export class CareerApp extends LitElement {
     // Barco en el mar y componente fuera del DOM: se apaga el rAF (MC-19).
     if (this._voyageRaf) cancelAnimationFrame(this._voyageRaf);
     this._voyageRaf = 0;
+    // Y el timer de avisos de ciudadanía (MC-20).
+    clearTimeout(this._announceTimer);
+    this._announceTimer = 0;
   }
 
   /**
@@ -1221,6 +1356,72 @@ export class CareerApp extends LitElement {
           allá donde vayas.
         </p>
       </section>
+    </div>`;
+  }
+
+  /**
+   * HUD superior de PROGRESIÓN (MC-20), en 3D y plano (en fps el HUD es
+   * mínimo y no se pinta): progreso de ciudadanía de la isla actual (% frente
+   * al objetivo con mini-barra y marca del objetivo; lograda → «🏆
+   * Ciudadanía»), islas pisadas, ciudadanías y el badge más alto
+   * (👑 Leyenda releva a ⭐ Super-ciudadano). Absorbe al contador de nivel de
+   * viaje de antes: los pts/nivel quedan como tooltip del bloque de la isla.
+   * @param {import('../../tools/career/domain/citizenship.js').ArchipelagoProgress|null} prog
+   * @param {ReturnType<typeof stats>} s Estadísticas de la isla cargada (tooltip).
+   */
+  _renderProgressHud(prog, s) {
+    if (!prog) return null;
+    const isle = prog.islands.find((i) => i.id === this.currentIsland) ?? null;
+    return html`<div class="hudtop">
+      ${isle
+        ? html`<div
+            class="isle-stat"
+            title=${`Nivel de viaje: ${s.level} · ${s.points}/${s.total} pts (${s.pct}%)`}
+          >
+            <span class="isle-here">${isle.name}</span>
+            <div
+              class="minibar"
+              role="progressbar"
+              aria-valuenow=${isle.pct}
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-label=${`Certificados de ${isle.name}: ${isle.certificates} de ${isle.total} (${isle.pct}%, objetivo ${isle.targetPct}%)`}
+            >
+              <span class="fill" style=${`width:${isle.pct}%`}></span>
+              <span class="goal" style=${`left:${isle.targetPct}%`}></span>
+            </div>
+            <span class="pcts">${isle.pct}% / objetivo ${isle.targetPct}%</span>
+            ${isle.achieved ? html`<span class="hudbadge got">🏆 Ciudadanía</span>` : null}
+          </div>`
+        : null}
+      <span class="hudstat" title="Islas del archipiélago pisadas">
+        🏝️ ${prog.islandsVisited}/${prog.islands.length}
+      </span>
+      <span class="hudstat" title="Ciudadanías de isla conseguidas">🛂 ${prog.citizenships}</span>
+      ${prog.legend
+        ? html`<span class="hudbadge legend" title="Leyenda del archipiélago: 6 ciudadanías o más">👑 Leyenda</span>`
+        : prog.superCitizen
+          ? html`<span class="hudbadge super" title="Super-ciudadano: 3 ciudadanías incluyendo Bases de software">⭐ Super-ciudadano</span>`
+          : null}
+    </div>`;
+  }
+
+  /**
+   * Aviso de progresión en pantalla (MC-20): «¡Ciudadanía de {isla}
+   * conseguida!» acompaña a la celebración mayor y, detrás, los badges
+   * (super-ciudadano / leyenda) — uno cada vez, desde la cola secuencial.
+   */
+  _renderAnnouncement() {
+    const a = this.announcement;
+    if (!a) return null;
+    const text =
+      a.kind === 'island'
+        ? `🏆 ¡Ciudadanía de ${a.islandName} conseguida!`
+        : a.kind === 'super'
+          ? '⭐ ¡Super-ciudadano del archipiélago!'
+          : '👑 ¡Leyenda del archipiélago!';
+    return html`<div class="cit-toast ${a.kind}" role="status" aria-live="assertive">
+      <p>${text}</p>
     </div>`;
   }
 
@@ -1701,6 +1902,9 @@ export class CareerApp extends LitElement {
 
     const map = this._map;
     const s = stats(map, this.journey);
+    // Progresión del archipiélago (MC-20): del journey global y el índice ya
+    // cargado para el mapa del mar (nada de leer los 13 docs de isla).
+    const prog = this.archipelago ? archipelagoProgress(this.journey, this.archipelago.islands) : null;
     const sel = this.selected ? map.cities.find((c) => c.id === this.selected) : null;
     const selAreaName = sel ? map.areas.find((a) => a.id === sel.area)?.name : null;
     const fps = this.viewMode === '3d' && this.mode3d === 'fps';
@@ -1712,9 +1916,8 @@ export class CareerApp extends LitElement {
               ${this._renderPersonSelect()}
               ${this._renderViewSwitch()}
               ${this._renderArchipelagoButton()}
-              <div class="stat"><span class="lvl">${s.level}</span><span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span></div>
+              ${this._renderProgressHud(prog, s)}
             </div>
-            <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
           `}
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
 
@@ -1800,6 +2003,7 @@ export class CareerApp extends LitElement {
       </div>`}
       ${this._renderArchipelago()}
       ${this._renderTravelFade()}
+      ${this._renderAnnouncement()}
     `;
   }
 }

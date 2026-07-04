@@ -96,6 +96,28 @@ describe('career — casos de uso', () => {
     expect(legacy.visitedCities).toEqual(['git']);
   });
 
+  it('las islas pisadas se registran al viajar y migran suave al cargar (MC-20)', async () => {
+    // Journey nuevo: la isla de inicio ya cuenta como pisada.
+    let j = await getJourney(store, 'p1');
+    expect(j.visitedIslands).toEqual(['island']);
+    // Viajar registra la isla destino; repetir destino no duplica.
+    j = await setCurrentIsland(store, 'p1', j, 'frontend');
+    expect(j.visitedIslands).toEqual(['island', 'frontend']);
+    j = await setCurrentIsland(store, 'p1', j, 'island');
+    j = await setCurrentIsland(store, 'p1', j, 'frontend');
+    expect(j.visitedIslands).toEqual(['island', 'frontend']);
+    const saved = await getJourney(store, 'p1');
+    expect(saved.visitedIslands).toEqual(['island', 'frontend']);
+    // Journey pre-MC-20 (sin visitedIslands): la isla actual figura como pisada.
+    await store.journeys.save('p2', { visitedCities: [], currentCity: null, plannedRoute: [], currentIsland: 'devops', evidences: {} });
+    const legacy = await getJourney(store, 'p2');
+    expect(legacy.visitedIslands).toEqual(['devops']);
+    // Y uno con duplicados/basura persistidos se sanea al leer.
+    await store.journeys.save('p3', { visitedIslands: ['island', 'island', ' ', 42, 'ios'], currentIsland: 'ios' });
+    const dirty = await getJourney(store, 'p3');
+    expect(dirty.visitedIslands).toEqual(['island', 'ios']);
+  });
+
   it('setCurrentIsland persiste el viaje y no toca el resto del journey (MC-14)', async () => {
     const map = getIslandMap();
     let j = await getJourney(store, 'p1');

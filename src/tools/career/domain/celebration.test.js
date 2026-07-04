@@ -1,11 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import {
   CELEBRATION,
+  CELEBRATION_VARIANTS,
   CONFETTI_COLOR_COUNT,
   justVisitedCity,
   confettiParticles,
   confettiPosition,
 } from './celebration.js';
+
+describe('CELEBRATION_VARIANTS (certificado vs ciudadanía de isla, MC-20)', () => {
+  it('la variante city es la celebración de siempre (MC-11)', () => {
+    expect(CELEBRATION_VARIANTS.city).toBe(CELEBRATION);
+  });
+
+  it('la variante island es MAYOR: dura más y suelta más confeti', () => {
+    const { city, island } = CELEBRATION_VARIANTS;
+    expect(island.durationS).toBeGreaterThan(city.durationS);
+    expect(island.count).toBeGreaterThan(city.count);
+    // El fundido cabe dentro de la duración y la balística no cambia.
+    expect(island.fadeS).toBeLessThan(island.durationS);
+    expect(island.gravity).toBe(city.gravity);
+  });
+});
 
 describe('justVisitedCity (diff de visitadas, MC-11)', () => {
   it('detecta la ciudad que acaba de pasar a visitada', () => {

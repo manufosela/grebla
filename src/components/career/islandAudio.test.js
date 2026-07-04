@@ -147,6 +147,30 @@ describe('fanfarePlan (puro)', () => {
       expect(plan[i].at).toBeGreaterThan(plan[i - 1].at);
     }
     for (const note of plan) expect(note.dur).toBeGreaterThan(0);
+    // 'city' es la variante por defecto (compat MC-11).
+    expect(fanfarePlan('city')).toEqual(plan);
+  });
+
+  it('la variante island (MC-20) es la fanfarria LARGA: arpegio extendido más acorde final', () => {
+    const city = fanfarePlan();
+    const island = fanfarePlan('island');
+    // Más notas y más duración total que la de certificado.
+    expect(island.length).toBeGreaterThan(city.length);
+    const endOf = (plan) => Math.max(...plan.map((n) => n.at + n.dur));
+    expect(endOf(island)).toBeGreaterThan(endOf(city));
+    // Arranca con el MISMO arpegio (es la celebración «que sigue subiendo»).
+    expect(island.slice(0, 2)).toEqual(city.slice(0, 2));
+    // El tramo de arpegio (todo lo anterior al acorde final) es ascendente en
+    // frecuencia e instantes.
+    const lastAt = Math.max(...island.map((n) => n.at));
+    const arpeggio = island.filter((n) => n.at < lastAt);
+    for (let i = 1; i < arpeggio.length; i += 1) {
+      expect(arpeggio[i].freq).toBeGreaterThan(arpeggio[i - 1].freq);
+      expect(arpeggio[i].at).toBeGreaterThan(arpeggio[i - 1].at);
+    }
+    // Remata en ACORDE: varias notas simultáneas en el último instante.
+    expect(island.filter((n) => n.at === lastAt).length).toBeGreaterThanOrEqual(3);
+    for (const note of island) expect(note.dur).toBeGreaterThan(0);
   });
 });
 
@@ -206,6 +230,20 @@ describe('IslandAudio (gating por gesto y grafo de nodos)', () => {
     for (const osc of oscs) {
       expect(osc.started).toBe(true);
       expect(osc.stopped).toBe(true); // stop programado: nada queda sonando
+    }
+    audio.dispose();
+  });
+
+  it('fanfare("island") programa la fanfarria larga completa (plan × 2 osciladores)', () => {
+    const { ctx, audio } = build();
+    audio.unlock();
+    const before = ctx.byType('oscillator').length;
+    audio.fanfare('island');
+    const oscs = ctx.byType('oscillator').slice(before);
+    expect(oscs).toHaveLength(fanfarePlan('island').length * 2);
+    for (const osc of oscs) {
+      expect(osc.started).toBe(true);
+      expect(osc.stopped).toBe(true);
     }
     audio.dispose();
   });

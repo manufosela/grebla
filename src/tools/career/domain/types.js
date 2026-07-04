@@ -56,6 +56,8 @@
  * @property {number} x          Posición 0..100 en el mapa del mar
  * @property {number} y          Posición 0..100 en el mapa del mar
  * @property {boolean} [startIsland] Isla de inicio (la del doc actual)
+ * @property {number} citizenshipPct % de certificados que otorga la CIUDADANÍA de la isla (MC-20)
+ * @property {number} citiesTotal    Nº de ciudades NO deprecadas de su doc (lo mantiene el seed; 0 = aún sin sembrar)
  *
  * @typedef {Object} Archipelago  Índice /careerMap/_archipelago
  * @property {IslandRef[]} islands
@@ -71,6 +73,7 @@
  * @property {string|null} currentCity         ciudad actual (donde está la persona)
  * @property {string[]} plannedRoute           ids de ciudades en la ruta planificada
  * @property {string} currentIsland            isla actual del archipiélago (default 'island')
+ * @property {string[]} visitedIslands         ids de islas PISADAS (incluye la actual, MC-20)
  * @property {Record<string, CityEvidence>} evidences  evidencias por ciudad
  */
 
@@ -88,6 +91,7 @@ export const EMPTY_JOURNEY = Object.freeze({
   currentCity: null,
   plannedRoute: [],
   currentIsland: DEFAULT_ISLAND_ID,
+  visitedIslands: [DEFAULT_ISLAND_ID],
   evidences: {},
 });
 
