@@ -82,6 +82,18 @@
  * aviso «¡Ciudadanía de {isla} conseguida!»; si además cae un badge, se
  * anuncia después EN COLA (secuencial, nunca solapado).
  *
+ * Ficha del jugador (MC-21): el botón «🏅 Ficha» (barra superior y HUD a pie)
+ * abre un overlay modal (como el del archipiélago) con la ficha de ciudadanía
+ * — <player-card>, compartida con mi-espacio —: badges con fecha, totales y el
+ * detalle por isla. Los LOGROS con fecha se persisten en
+ * /people/{personId}/career/achievements de solo-añadir: al cargar a la
+ * persona se registran con fecha null los logros pre-MC-21 aún sin registro
+ * (migración suave, «fecha no registrada»; si el rol no puede escribir se
+ * degrada a console.warn y lo registrará la próxima sesión con permisos) y,
+ * al cruzar un umbral jugando, el mismo gesto que celebró la ciudadanía la
+ * registra con la fecha ISO del momento. Las fechas existentes NUNCA se
+ * re-escriben (newAchievements, puro).
+ *
  * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
  * localStorage `grebla:career:onboarded`) un cartel de bienvenida overlay
  * (DOM, estilo del panel) explica qué es la isla, los controles de la vista
@@ -96,6 +108,7 @@
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
 import './career-island-3d.js';
+import './player-card.js';
 import { readStoredMuted, writeStoredMuted } from './islandAudio.js';
 import {
   getJourney,
@@ -104,6 +117,8 @@ import {
   setCurrentIsland,
   toggleRoute,
   setEvidence,
+  getAchievements,
+  recordAchievements,
   stats,
 } from '../../tools/career/application/usecases.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds } from '../../lib/careerMap.js';
@@ -118,6 +133,7 @@ import {
 } from '../../tools/career/domain/voyage.js';
 import { cityStatus, missingPrereqs, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
+import { newAchievements } from '../../tools/career/domain/achievements.js';
 
 /**
  * Pestañas de la tarjeta de la casa (MC-15): estado/acciones del certificado,
@@ -172,6 +188,8 @@ export class CareerApp extends LitElement {
     traveling: { state: true },
     voyage: { state: true },
     announcement: { state: true },
+    achievements: { state: true },
+    showPlayerCard: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -418,6 +436,21 @@ export class CareerApp extends LitElement {
     }
     .sea-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
     .sea-head h3 { margin: 0; font-size: 1.1rem; color: var(--rm-navy, #1e3a5f); }
+    /* Ficha de ciudadanía del jugador (MC-21): modal hermano del mapa del mar
+       (mismo backdrop y cabecera), algo más estrecho — es una lista, no un mapa. */
+    .ficha {
+      width: min(640px, calc(100% - 2rem));
+      max-height: calc(100% - 2rem);
+      box-sizing: border-box;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: color-mix(in srgb, var(--rm-surface, #fff) 96%, transparent);
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: var(--rm-radius, 12px);
+      padding: 1rem 1.25rem 1.1rem;
+      box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
+      outline: none;
+    }
     .sea-map {
       position: relative;
       aspect-ratio: 16 / 10;
@@ -622,6 +655,11 @@ export class CareerApp extends LitElement {
     this.existingIslands = null;
     this.showArchipelago = false;
     this.traveling = false;
+    // Ficha del jugador (MC-21): logros registrados de la persona cargada y
+    // visibilidad del overlay «🏅 Ficha».
+    /** @type {import('../../tools/career/domain/achievements.js').Achievements|null} */
+    this.achievements = null;
+    this.showPlayerCard = false;
     // Progresión (MC-20): aviso de ciudadanía/badge en pantalla (o null) y su
     // cola — los anuncios encadenados salen SECUENCIALES, nunca solapados.
     /** @type {import('../../tools/career/domain/citizenship.js').CitizenshipEvent|null} */
@@ -710,6 +748,8 @@ export class CareerApp extends LitElement {
       this.selected = null;
       this.teammatePopover = null; // el resumen abierto era de otro contexto
       this._clearAnnouncements(); // los avisos encolados también (MC-20)
+      this.showPlayerCard = false; // la ficha abierta era de otra persona (MC-21)
+      this.achievements = null;
     }
     if (this.store && !this._mapLoaded) {
       this._mapLoaded = true;
@@ -748,6 +788,10 @@ export class CareerApp extends LitElement {
     if (changed.has('showArchipelago') && this.showArchipelago) {
       this.renderRoot.querySelector('.sea')?.focus();
     }
+    // La ficha del jugador recibe el foco al abrirse (MC-21): Escape cierra.
+    if (changed.has('showPlayerCard') && this.showPlayerCard) {
+      this.renderRoot.querySelector('.ficha')?.focus();
+    }
   }
 
   /** Nombre de una isla según el índice del archipiélago (o '' si no está). @param {string} islandId */
@@ -774,7 +818,14 @@ export class CareerApp extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      this.journey = await getJourney(this.store, this.personId);
+      // Journey y logros registrados (MC-21) en paralelo: viven juntos en el
+      // subárbol career de la persona.
+      const [journey, achievements] = await Promise.all([
+        getJourney(this.store, this.personId),
+        getAchievements(this.store, this.personId),
+      ]);
+      this.journey = journey;
+      this.achievements = achievements;
       // El journey es GLOBAL (MC-14): si esta persona está en otra isla del
       // archipiélago, se carga el mapa de SU isla.
       const island = this.journey.currentIsland ?? DEFAULT_ISLAND_ID;
@@ -782,11 +833,49 @@ export class CareerApp extends LitElement {
         this.currentIsland = island;
         await this._loadMap();
       }
+      await this._migrateAchievements();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa de esta persona.';
     } finally {
       this.loading = false;
     }
+  }
+
+  /**
+   * Migración suave de logros pre-MC-21: si el journey recién cargado YA
+   * cumple ciudadanías/badges sin registro, se registran con fecha null
+   * («fecha no registrada»: registrar la fecha de hoy sería inventarla). El
+   * fallo aquí NO tumba la carga (p. ej. un rol de solo lectura no puede
+   * escribir el subárbol): se deja constancia por consola y lo registrará la
+   * próxima sesión con permisos de edición — degradación documentada, no un
+   * fallback silencioso.
+   */
+  async _migrateAchievements() {
+    if (!this.personId || !this.achievements) return;
+    this.archipelago ??= await getArchipelago();
+    const progress = archipelagoProgress(this.journey, this.archipelago.islands);
+    const patch = newAchievements(progress, this.achievements, null);
+    if (!patch) return;
+    try {
+      this.achievements = await recordAchievements(this.store, this.personId, this.achievements, patch);
+    } catch (err) {
+      console.warn('Ficha del jugador: no se pudieron registrar los logros previos a MC-21.', err);
+    }
+  }
+
+  /**
+   * Registra los logros que el journey actual acaba de cumplir y aún no tienen
+   * fecha (MC-21): el MISMO gesto de juego que celebró la ciudadanía/badge la
+   * persiste con la fecha ISO del momento. newAchievements garantiza que las
+   * fechas ya registradas no se re-escriben; sin nada nuevo no hay escritura.
+   * Lanza en caso de error (el caller, _act, lo muestra como this.error).
+   */
+  async _recordNewAchievements() {
+    if (!this.personId || !this.achievements || !this.archipelago) return;
+    const progress = archipelagoProgress(this.journey, this.archipelago.islands);
+    const patch = newAchievements(progress, this.achievements, new Date().toISOString());
+    if (!patch) return;
+    this.achievements = await recordAchievements(this.store, this.personId, this.achievements, patch);
   }
 
   /**
@@ -896,6 +985,8 @@ export class CareerApp extends LitElement {
         // Progresión (MC-20): si este certificado cruza el % objetivo de la
         // isla, celebración MAYOR y avisos encadenados (isla → badges).
         await this._queueCitizenshipCelebrations(prev, this.journey, this.selected);
+        // Y el logro queda REGISTRADO con su fecha en la ficha (MC-21).
+        await this._recordNewAchievements();
       } else if (action === 'current') {
         this.journey = await setCurrent(this.store, this.personId, this.journey, this.selected);
       } else if (action === 'route') {
@@ -1125,6 +1216,83 @@ export class CareerApp extends LitElement {
   /** La barca del muelle (clic o [E] Zarpar a pie) pide abrir el mapa del mar. */
   _onOpenArchipelago() {
     this._openArchipelago();
+  }
+
+  // ---- Ficha del jugador (MC-21) ----------------------------------------------
+
+  /**
+   * Abre la ficha de ciudadanía (botón «🏅 Ficha»). Asegura el índice del
+   * archipiélago (la ficha lista TODAS las islas en su orden); los logros ya
+   * llegaron con _load(). Modal como el del archipiélago: foco al abrir
+   * (updated), Escape/✕/fondo cierran.
+   */
+  async _openPlayerCard() {
+    if (!this.personId) return;
+    this.error = '';
+    try {
+      this.archipelago ??= await getArchipelago();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo cargar el archipiélago.';
+      return;
+    }
+    this.showPlayerCard = true;
+  }
+
+  /** Cierra la ficha y devuelve el foco al HUD (re-enganche del lock en fps). */
+  _closePlayerCard() {
+    this.showPlayerCard = false;
+    this._recapturePointerLock();
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro de la ficha la cierra. @param {KeyboardEvent} event */
+  _onPlayerCardKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closePlayerCard();
+  }
+
+  /** Botón «🏅 Ficha» (barra superior y HUD a pie, junto al archipiélago). */
+  _renderPlayerCardButton() {
+    return html`<button
+      @click=${this._openPlayerCard}
+      title="Abrir la ficha de ciudadanía del jugador: sus logros en el archipiélago"
+    >🏅 Ficha</button>`;
+  }
+
+  /**
+   * Overlay de la FICHA DE CIUDADANÍA (MC-21): modal fixed (mismo patrón que
+   * el mapa del archipiélago, reutiliza su backdrop) con <player-card> — el
+   * componente compartido con mi-espacio — alimentada con la progresión
+   * derivada del journey (MC-20) y los logros registrados.
+   */
+  _renderPlayerCard() {
+    if (!this.showPlayerCard) return null;
+    const prog = this.archipelago
+      ? archipelagoProgress(this.journey, this.archipelago.islands)
+      : null;
+    const name = (this.people ?? []).find((p) => p.id === this.personId)?.name ?? '';
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closePlayerCard(); }}>
+      <section
+        class="ficha"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ficha de ciudadanía de ${name}"
+        tabindex="-1"
+        @keydown=${this._onPlayerCardKeydown}
+      >
+        <header class="sea-head">
+          <h3>🏅 Ficha de ciudadanía</h3>
+          <button class="close" aria-label="Cerrar la ficha de ciudadanía" title="Cerrar (Esc)" @click=${this._closePlayerCard}>✕</button>
+        </header>
+        <player-card
+          .playerName=${name}
+          .progress=${prog}
+          .achievements=${this.achievements}
+          .visitedIslands=${this.journey?.visitedIslands ?? []}
+        ></player-card>
+      </section>
+    </div>`;
   }
 
   /**
@@ -1916,6 +2084,7 @@ export class CareerApp extends LitElement {
               ${this._renderPersonSelect()}
               ${this._renderViewSwitch()}
               ${this._renderArchipelagoButton()}
+              ${this._renderPlayerCardButton()}
               ${this._renderProgressHud(prog, s)}
             </div>
           `}
@@ -1929,7 +2098,7 @@ export class CareerApp extends LitElement {
               .journey=${this.journey}
               .reachable=${s.reachable}
               .selected=${this.selected}
-              .overlayOpen=${Boolean(this.selected) || this.showArchipelago}
+              .overlayOpen=${Boolean(this.selected) || this.showArchipelago || this.showPlayerCard}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               @select-city=${this._onSelect}
               @select-teammate=${this._onSelectTeammate}
@@ -1942,7 +2111,7 @@ export class CareerApp extends LitElement {
                 ? html`<button
                     @click=${this._exitFps}
                     title="Volver a la vista aérea de la isla"
-                  >Salir (Esc)</button>${this._renderArchipelagoButton()}${this._renderAudioButton()}`
+                  >Salir (Esc)</button>${this._renderArchipelagoButton()}${this._renderPlayerCardButton()}${this._renderAudioButton()}`
                 : html`
                     <button
                       @click=${this._focusOverview}
@@ -2002,6 +2171,7 @@ export class CareerApp extends LitElement {
         </div>
       </div>`}
       ${this._renderArchipelago()}
+      ${this._renderPlayerCard()}
       ${this._renderTravelFade()}
       ${this._renderAnnouncement()}
     `;

@@ -11,12 +11,12 @@
 import { collection, query, where, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { getPersonProfile, getSession, getOrgConfig } from './firestore.js';
-import { getCareerMap } from './careerMap.js';
+import { getCareerMap, getArchipelago } from './careerMap.js';
 import { computeProfile } from './scoring.js';
 import { ITEMS } from '../data/items.js';
 import { ROLES } from '../data/roles.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
-import { getJourney } from '../tools/career/application/usecases.js';
+import { getJourney, getAchievements } from '../tools/career/application/usecases.js';
 
 /**
  * Devuelve la persona vinculada a un `uid` (la cuenta del propio ingeniero), o
@@ -63,19 +63,33 @@ export async function getMyRoleMirrorProfile(personId) {
 }
 
 /**
- * Isla del Mapa de Carrera (documento global `/careerMap/island`) y el journey de
- * la persona (`/people/{personId}/career/journey`), ambos en solo lectura. Reutiliza
- * los loaders del tool career en modo firestore; no realiza ninguna escritura.
+ * Datos del Mapa de Carrera de la persona vinculada, TODO en solo lectura:
+ * la isla de inicio (`/careerMap/island`), su journey
+ * (`/people/{personId}/career/journey`) y, para la ficha de ciudadanía (MC-21),
+ * el índice del archipiélago (`/careerMap/_archipelago`) y los logros
+ * registrados (`/people/{personId}/career/achievements`). Reutiliza los
+ * loaders del tool career en modo firestore; no realiza NINGUNA escritura (la
+ * migración de logros pre-MC-21 la hace la vista de juego del líder, nunca
+ * mi-espacio).
  * @param {string} personId
- * @returns {Promise<{ island: import('../tools/career/domain/types.js').CareerMap, journey: import('../tools/career/domain/types.js').Journey }>}
+ * @returns {Promise<{
+ *   island: import('../tools/career/domain/types.js').CareerMap,
+ *   journey: import('../tools/career/domain/types.js').Journey,
+ *   archipelago: import('../tools/career/domain/types.js').Archipelago,
+ *   achievements: import('../tools/career/domain/achievements.js').Achievements,
+ * }>}
  */
 export async function getMyCareerMap(personId) {
-  const [{ store }, island] = await Promise.all([
+  const [{ store }, island, archipelago] = await Promise.all([
     createCareerContainer({ mode: 'firestore' }),
     getCareerMap(),
+    getArchipelago(),
   ]);
-  const journey = await getJourney(store, personId);
-  return { island, journey };
+  const [journey, achievements] = await Promise.all([
+    getJourney(store, personId),
+    getAchievements(store, personId),
+  ]);
+  return { island, journey, archipelago, achievements };
 }
 
 /**
