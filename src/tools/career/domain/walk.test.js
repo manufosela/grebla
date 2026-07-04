@@ -12,6 +12,9 @@ import {
   walkableRadius,
   stepPosition,
   turnYaw,
+  tiltPitch,
+  PITCH_SPEED,
+  PITCH_LIMIT,
   yawToward,
   nearestCityWithin,
   collideWithCities,
@@ -204,6 +207,43 @@ describe('turnYaw', () => {
   it('falla en alto con una velocidad inválida', () => {
     expect(() => turnYaw(0, 1, 0.016, 0)).toThrow();
     expect(() => turnYaw(0, 1, 0.016, Number.NaN)).toThrow();
+  });
+});
+
+describe('tiltPitch', () => {
+  it('inclina la mirada a velocidad angular constante (+1 arriba, -1 abajo)', () => {
+    expect(tiltPitch(0, 1, 0.5, 2, PITCH_LIMIT)).toBeCloseTo(1);
+    expect(tiltPitch(0, -1, 0.5, 2, PITCH_LIMIT)).toBeCloseTo(-1);
+    expect(tiltPitch(0.2, 1, 0.1, PITCH_SPEED, PITCH_LIMIT)).toBeCloseTo(0.2 + 0.1 * PITCH_SPEED);
+  });
+
+  it('sin dirección no se mueve', () => {
+    expect(tiltPitch(0.4, 0, 0.016, PITCH_SPEED, PITCH_LIMIT)).toBe(0.4);
+  });
+
+  it('se clava en ±limit y no lo rebasa aunque se mantenga la tecla', () => {
+    let pitch = 0;
+    for (let i = 0; i < 500; i += 1) pitch = tiltPitch(pitch, 1, 0.016, PITCH_SPEED, PITCH_LIMIT);
+    expect(pitch).toBe(PITCH_LIMIT);
+    for (let i = 0; i < 1000; i += 1) pitch = tiltPitch(pitch, -1, 0.016, PITCH_SPEED, PITCH_LIMIT);
+    expect(pitch).toBe(-PITCH_LIMIT);
+    // Un pitch fuera de rango (p. ej. heredado del ratón en el borde) se reencaja.
+    expect(tiltPitch(2, 1, 0.016, PITCH_SPEED, PITCH_LIMIT)).toBe(PITCH_LIMIT);
+  });
+
+  it('los límites por defecto dejan margen respecto al cénit/nadir', () => {
+    expect(PITCH_SPEED).toBeGreaterThan(0);
+    expect(PITCH_LIMIT).toBeGreaterThan(0);
+    expect(PITCH_LIMIT).toBeLessThan(Math.PI / 2);
+    expect(PITCH_LIMIT).toBeCloseTo(Math.PI / 2 - 0.15);
+  });
+
+  it('falla en alto con velocidad o límite inválidos', () => {
+    expect(() => tiltPitch(0, 1, 0.016, 0, PITCH_LIMIT)).toThrow();
+    expect(() => tiltPitch(0, 1, 0.016, Number.NaN, PITCH_LIMIT)).toThrow();
+    expect(() => tiltPitch(0, 1, 0.016, PITCH_SPEED, 0)).toThrow();
+    expect(() => tiltPitch(0, 1, 0.016, PITCH_SPEED, Math.PI)).toThrow();
+    expect(() => tiltPitch(0, 1, 0.016, PITCH_SPEED, Number.NaN)).toThrow();
   });
 });
 
