@@ -8,8 +8,14 @@
  *   2. Mi Role Mirror — perfil calculado (dominante, afinidades, radar y barras
  *                       por dimensión) reutilizando <role-result> sin el selector
  *                       de rol objetivo (comparador what-if desactivado).
- *   3. Mi mapa        — resumen del journey: isla, ciudad actual, ciudades
- *                       dominadas por comarca y ruta marcada. Sin acciones.
+ *   3. Mi mapa        — «Mi ficha de ciudadanía» (MC-21): el MISMO componente
+ *                       <player-card> del juego (badges con fecha, totales y
+ *                       detalle por isla), alimentado con el journey + índice
+ *                       del archipiélago + logros que carga el glue, todo en
+ *                       solo lectura (mi-espacio NUNCA registra logros — la
+ *                       migración de fechas la hace la vista de juego). Y el
+ *                       resumen del journey de siempre: isla, ciudad actual,
+ *                       ciudades dominadas por comarca y ruta marcada.
  *
  * El componente recibe todos los datos ya cargados por el glue (client/engineer.js)
  * y es de SOLO LECTURA salvo por una ÚNICA escritura muy acotada: en «Mi carrera»,
@@ -28,6 +34,7 @@
 import { LitElement, html, css } from 'lit';
 import './role-result.js';
 import './career/career-map.js';
+import './career/player-card.js';
 import {
   getLevel,
   expectationsForLevel,
@@ -35,6 +42,7 @@ import {
   aspirationalLevels,
 } from '../tools/career/data/framework.js';
 import { stats } from '../tools/career/application/usecases.js';
+import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
 import { setCareerTarget } from '../lib/engineer.js';
 
 /**
@@ -64,6 +72,8 @@ export class EngineerSpace extends LitElement {
     roles: { attribute: false },
     island: { attribute: false },
     journey: { attribute: false },
+    archipelago: { attribute: false },
+    achievements: { attribute: false },
     _tab: { state: true },
     _targetError: { state: true },
     _targetSaving: { state: true },
@@ -191,6 +201,10 @@ export class EngineerSpace extends LitElement {
     this.island = null;
     /** @type {Journey|null} */
     this.journey = null;
+    /** @type {import('../tools/career/domain/types.js').Archipelago|null} índice del archipiélago (ficha MC-21) */
+    this.archipelago = null;
+    /** @type {import('../tools/career/domain/achievements.js').Achievements|null} logros registrados (ficha MC-21) */
+    this.achievements = null;
     /** @type {string|null} aviso in-place si falla la escritura del objetivo */
     this._targetError = null;
     /** @type {boolean} true mientras se persiste el objetivo (deshabilita controles) */
@@ -511,11 +525,32 @@ export class EngineerSpace extends LitElement {
   }
 
   /**
-   * Sección «Mi mapa de carrera»: resumen de solo lectura del journey sobre la
-   * isla. Muestra la isla (visual, sin acciones), progreso, ciudad actual,
-   * ciudades dominadas agrupadas por comarca y la ruta marcada. Sin botones ni
-   * escritura: <career-map> es presentacional y su evento `select-city` no se
-   * enlaza a nada.
+   * Bloque «Mi ficha de ciudadanía» (MC-21): el MISMO <player-card> del juego,
+   * en solo lectura, con la progresión derivada del journey + índice del
+   * archipiélago y los logros registrados (fechas). Sin índice o sin journey
+   * todavía no se pinta (el resto de la pestaña ya comunica el estado vacío).
+   * @returns {import('lit').TemplateResult|null}
+   */
+  _renderCitizenshipCard() {
+    if (!this.archipelago || !this.journey) return null;
+    const progress = archipelagoProgress(this.journey, this.archipelago.islands);
+    return html`
+      <p class="sub">Mi ficha de ciudadanía</p>
+      <player-card
+        .playerName=${this.person?.name ?? ''}
+        .progress=${progress}
+        .achievements=${this.achievements}
+        .visitedIslands=${this.journey.visitedIslands ?? []}
+      ></player-card>
+    `;
+  }
+
+  /**
+   * Sección «Mi mapa de carrera»: la ficha de ciudadanía (MC-21) y el resumen
+   * de solo lectura del journey sobre la isla. Muestra la isla (visual, sin
+   * acciones), progreso, ciudad actual, ciudades dominadas agrupadas por
+   * comarca y la ruta marcada. Sin botones ni escritura: <career-map> es
+   * presentacional y su evento `select-city` no se enlaza a nada.
    * @returns {import('lit').TemplateResult}
    */
   _renderMap() {
@@ -547,6 +582,8 @@ export class EngineerSpace extends LitElement {
       .filter((group) => group.cities.length > 0);
 
     return html`
+      ${this._renderCitizenshipCard()}
+      <p class="sub">Mi isla actual</p>
       <div class="map-head">
         <span class="lvl">${s.level}</span>
         <span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span>

@@ -10,6 +10,8 @@ import {
   setCurrentIsland,
   toggleRoute,
   setEvidence,
+  getAchievements,
+  recordAchievements,
   stats,
 } from './usecases.js';
 
@@ -129,5 +131,26 @@ describe('career — casos de uso', () => {
     expect(saved.visitedCities).toContain('git'); // el journey es GLOBAL: nada se pierde al zarpar
     // Destino vacío: error alto, sin fallbacks silenciosos.
     await expect(setCurrentIsland(store, 'p1', saved, '  ')).rejects.toThrow();
+  });
+
+  it('los logros se registran de solo-añadir y no re-escriben fechas (MC-21)', async () => {
+    // Persona sin documento: logros vacíos.
+    let a = await getAchievements(store, 'p1');
+    expect(a).toEqual({ citizenships: {}, badges: {} });
+    // Registro de una ciudadanía con fecha: persiste y devuelve el fusionado.
+    const patch = { citizenships: { frontend: { achievedAt: '2026-07-04T12:00:00.000Z' } }, badges: {} };
+    a = await recordAchievements(store, 'p1', a, patch);
+    expect(a.citizenships.frontend).toEqual({ achievedAt: '2026-07-04T12:00:00.000Z' });
+    expect((await getAchievements(store, 'p1')).citizenships.frontend.achievedAt).toBe('2026-07-04T12:00:00.000Z');
+    // Un parche que trae la misma isla NO pisa la fecha registrada (merge de solo-añadir).
+    const again = { citizenships: { frontend: { achievedAt: '2030-01-01T00:00:00.000Z' } }, badges: { legend: { achievedAt: null } } };
+    a = await recordAchievements(store, 'p1', a, again);
+    expect(a.citizenships.frontend.achievedAt).toBe('2026-07-04T12:00:00.000Z');
+    expect(a.badges.legend).toEqual({ achievedAt: null });
+    const saved = await getAchievements(store, 'p1');
+    expect(saved.citizenships.frontend.achievedAt).toBe('2026-07-04T12:00:00.000Z');
+    expect(saved.badges.legend).toEqual({ achievedAt: null });
+    // Parche null: no escribe nada y devuelve lo que había.
+    expect(await recordAchievements(store, 'p1', a, null)).toBe(a);
   });
 });

@@ -7,10 +7,12 @@
  * @typedef {import('../domain/types.js').CareerMap} CareerMap
  * @typedef {import('../domain/types.js').Journey} Journey
  * @typedef {import('../domain/types.js').CityEvidence} CityEvidence
+ * @typedef {import('../domain/achievements.js').Achievements} Achievements
  */
 import { SAMPLE_MAPS, ISLAND } from '../data/maps.js';
 import { EMPTY_JOURNEY, DEFAULT_ISLAND_ID } from '../domain/types.js';
 import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from '../domain/progress.js';
+import { normalizeAchievements, mergeAchievements } from '../domain/achievements.js';
 
 /** @returns {ReadonlyArray<CareerMap>} */
 export function getMaps() {
@@ -147,6 +149,31 @@ export async function setEvidence(store, personId, journey, cityId, evidence) {
   };
   await store.journeys.save(personId, next);
   return next;
+}
+
+/**
+ * Logros persistentes de la persona (MC-21), normalizados. Sin documento
+ * todavía devuelve logros vacíos (jugador sin nada registrado).
+ * @param {CareerStore} store @param {string} personId
+ * @returns {Promise<Achievements>}
+ */
+export async function getAchievements(store, personId) {
+  return normalizeAchievements(await store.achievements.get(personId));
+}
+
+/**
+ * Registra un parche de logros (MC-21, solo-añadir): lo persiste con semántica
+ * merge (los registros existentes no se pisan) y devuelve los achievements
+ * fusionados para el estado local. Con parche null no escribe nada.
+ * @param {CareerStore} store @param {string} personId
+ * @param {Achievements} achievements Logros actuales en memoria.
+ * @param {Achievements|null} patch Parche de newAchievements (o null).
+ * @returns {Promise<Achievements>}
+ */
+export async function recordAchievements(store, personId, achievements, patch) {
+  if (!patch) return achievements;
+  await store.achievements.save(personId, patch);
+  return mergeAchievements(achievements, patch);
 }
 
 /**

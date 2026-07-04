@@ -53,7 +53,7 @@ onUserChanged(async (user) => {
  * @param {import('../lib/engineer.js').Person & { id: string }} person
  * @param {import('../tools/career/data/framework.js').CareerFramework} framework
  * @param {import('../lib/scoring.js').Profile|null} profile
- * @param {{ island: import('../tools/career/domain/types.js').CareerMap, journey: import('../tools/career/domain/types.js').Journey }} career
+ * @param {Awaited<ReturnType<import('../lib/engineer.js').getMyCareerMap>>} career
  * @returns {void}
  */
 function renderSpace(person, framework, profile, career) {
@@ -64,6 +64,9 @@ function renderSpace(person, framework, profile, career) {
   space.roles = ROLES;
   space.island = career.island;
   space.journey = career.journey;
+  // Ficha de ciudadanía (MC-21): índice del archipiélago y logros registrados.
+  space.archipelago = career.archipelago;
+  space.achievements = career.achievements;
 }
 
 /**
