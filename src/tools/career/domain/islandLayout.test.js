@@ -27,6 +27,8 @@ import {
   teammateTint,
   WIZARD_SPOT,
   wizardSpot,
+  BILLBOARD_SPOT,
+  billboardSpots,
 } from './islandLayout.js';
 
 /** Mapa mínimo de pruebas: dos comarcas, una vacía, y puerto de inicio. */
@@ -538,5 +540,96 @@ describe('wizardSpot (MC-22)', () => {
     expect(spot.wz).toBeGreaterThan(0); // sur = +z
     const capped = wizardSpot(noPort, { maxRadius: 5 });
     expect(Math.hypot(capped.wx, capped.wz)).toBeLessThanOrEqual(5 + 1e-9);
+  });
+});
+
+describe('billboardSpots (MC-23)', () => {
+  it('es determinista y devuelve las vallas pedidas sobre la anilla del puerto', () => {
+    const a = billboardSpots(MAP);
+    const b = billboardSpots(MAP);
+    expect(a).toEqual(b);
+    expect(a).toHaveLength(BILLBOARD_SPOT.count);
+    const port = worldFromMap(MAP.startPort.x, MAP.startPort.y);
+    const ring = Math.hypot(port.wx, port.wz) - BILLBOARD_SPOT.inland;
+    for (const spot of a) {
+      expect(Math.hypot(spot.wx, spot.wz)).toBeCloseTo(ring, 6);
+      // Dentro de la isla (nunca en el agua).
+      expect(Math.hypot(spot.wx, spot.wz)).toBeLessThanOrEqual(islandRadius(MAP));
+    }
+  });
+
+  it('respeta la holgura con todas las casas y la separación entre vallas', () => {
+    const spots = billboardSpots(MAP);
+    for (const spot of spots) {
+      for (const city of MAP.cities) {
+        const { wx, wz } = worldFromMap(city.x, city.y);
+        expect(Math.hypot(wx - spot.wx, wz - spot.wz)).toBeGreaterThanOrEqual(
+          BILLBOARD_SPOT.clearance,
+        );
+      }
+    }
+    for (let i = 0; i < spots.length; i += 1) {
+      for (let j = i + 1; j < spots.length; j += 1) {
+        expect(
+          Math.hypot(spots[i].wx - spots[j].wx, spots[i].wz - spots[j].wz),
+        ).toBeGreaterThanOrEqual(BILLBOARD_SPOT.separation);
+      }
+    }
+  });
+
+  it('cada valla mira hacia el puerto (misma convención de yaw que las fachadas)', () => {
+    const port = worldFromMap(MAP.startPort.x, MAP.startPort.y);
+    for (const spot of billboardSpots(MAP)) {
+      expect(spot.yaw).toBeCloseTo(Math.atan2(port.wx - spot.wx, port.wz - spot.wz), 9);
+    }
+  });
+
+  it('los círculos vetados de avoid (p. ej. la cabaña del brujo) desplazan candidatos', () => {
+    const [first] = billboardSpots(MAP);
+    const avoided = billboardSpots(MAP, { avoid: [{ x: first.wx, z: first.wz, r: 4 }] });
+    for (const spot of avoided) {
+      expect(Math.hypot(spot.wx - first.wx, spot.wz - first.wz)).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('acota la anilla con maxRadius y acepta count propio (0 → sin vallas)', () => {
+    for (const spot of billboardSpots(MAP, { maxRadius: 10 })) {
+      expect(Math.hypot(spot.wx, spot.wz)).toBeLessThanOrEqual(10 + 1e-9);
+    }
+    expect(billboardSpots(MAP, { count: 2 })).toHaveLength(2);
+    expect(billboardSpots(MAP, { count: 0 })).toEqual([]);
+    expect(() => billboardSpots(MAP, { count: -1 })).toThrow();
+    expect(() => billboardSpots(MAP, { count: 1.5 })).toThrow();
+  });
+
+  it('un mapa sin puerto ancla las vallas al sur, mirando a la orilla', () => {
+    const noPort = { ...MAP, startPort: undefined };
+    const spots = billboardSpots(noPort);
+    expect(spots.length).toBeGreaterThan(0);
+    expect(spots).toEqual(billboardSpots(noPort));
+    // El barrido parte del sur (+z): ninguna valla cae en el norte profundo.
+    for (const spot of spots) {
+      expect(Math.hypot(spot.wx, spot.wz)).toBeLessThanOrEqual(islandRadius(noPort));
+    }
+  });
+
+  it('en una isla imposiblemente densa devuelve menos vallas (decorativas, no un error)', () => {
+    // Una casa por cada candidato del barrido: nada libra la holgura.
+    const port = worldFromMap(MAP.startPort.x, MAP.startPort.y);
+    const angle = Math.atan2(port.wz, port.wx);
+    const ring = Math.hypot(port.wx, port.wz) - BILLBOARD_SPOT.inland;
+    const scale = 100 / 100;
+    const blockers = BILLBOARD_SPOT.sweep.map((offset, i) => ({
+      id: `blocker-${i}`,
+      name: `Bloqueadora ${i}`,
+      kind: 'tech',
+      area: 'a1',
+      x: (Math.cos(angle + offset) * ring) / scale + 50,
+      y: (Math.sin(angle + offset) * ring) / scale + 50,
+      weight: 1,
+      prereqs: [],
+    }));
+    const dense = { ...MAP, cities: [...MAP.cities, ...blockers] };
+    expect(billboardSpots(dense)).toEqual([]);
   });
 });

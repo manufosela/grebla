@@ -15,15 +15,29 @@
  * crear consultas 'pending' y marcar la respuesta como vista (solo
  * status+seenAt) — ver firestore.rules.
  *
+ * El TIEMPO DE JUEGO (MC-23) vive en /people/{personId}/career/playtime:
+ * { totalMinutes, byDay: { 'YYYY-MM-DD': minutos } }, con incrementos
+ * atómicos (increment()) y poda de días antiguos (deleteField).
+ *
  * @typedef {import('firebase/firestore').Firestore} Firestore
  * @typedef {import('../../domain/ports.js').CareerStore} CareerStore
  */
-import { doc, getDoc, getDocs, setDoc, updateDoc, collection } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  collection,
+  increment,
+  deleteField,
+} from 'firebase/firestore';
 
 const journeyDoc = (db, personId) => doc(db, 'people', personId, 'career', 'journey');
 const achievementsDoc = (db, personId) => doc(db, 'people', personId, 'career', 'achievements');
 const questionsCol = (db, personId) =>
   collection(db, 'people', personId, 'career', 'wizard', 'questions');
+const playtimeDoc = (db, personId) => doc(db, 'people', personId, 'career', 'playtime');
 
 /**
  * @param {Firestore} db
@@ -82,6 +96,35 @@ export function createFirestoreCareerStore(db) {
           status: patch.status,
           seenAt: patch.seenAt,
         });
+      },
+    },
+    // Tiempo de juego (MC-23): incrementos ATÓMICOS con increment() — total y
+    // día suben juntos, sin transacciones ni leer-modificar-escribir (dos
+    // pestañas del líder no se pisan). setDoc con merge crea el doc en el
+    // primer flush. Escribe quien juega HOY: líder dueño / compartido-edit /
+    // superadmin (las reglas del subárbol de la persona ya lo cubren); el
+    // jugador vinculado NO escribe — cuando juegue con su cuenta habrá que
+    // ampliar las reglas con una excepción acotada, como la del brujo.
+    playtime: {
+      async get(personId) {
+        const d = await getDoc(playtimeDoc(db, personId));
+        return d.exists() ? d.data() : null;
+      },
+      async increment(personId, { day, minutes }) {
+        await setDoc(
+          playtimeDoc(db, personId),
+          { totalMinutes: increment(minutes), byDay: { [day]: increment(minutes) } },
+          { merge: true },
+        );
+      },
+      // Poda del histórico (MC-23): borra días antiguos con deleteField. Solo
+      // se llama con el doc ya existente (la poda se decide sobre lo leído).
+      async prune(personId, days) {
+        if (days.length === 0) return;
+        await updateDoc(
+          playtimeDoc(db, personId),
+          Object.fromEntries(days.map((day) => [`byDay.${day}`, deleteField()])),
+        );
       },
     },
   };

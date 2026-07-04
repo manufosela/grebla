@@ -28,10 +28,21 @@
  * @property {(personId: string, questionId: string, patch: Record<string, unknown>) => Promise<void>} answer
  * @property {(personId: string, questionId: string, patch: { status: 'seen', seenAt: string }) => Promise<void>} markSeen
  *
+ * Tiempo de juego (MC-23): /people/{personId}/career/playtime, un doc por
+ * persona { totalMinutes, byDay: { 'YYYY-MM-DD': minutos } }. `increment`
+ * suma minutos al total Y al día con semántica de incremento atómico
+ * (increment() en Firestore: sin transacciones); `prune` borra días antiguos
+ * (deleteField) — la política de poda vive en el dominio (staleDayKeys).
+ * @typedef {Object} PlaytimeRepository
+ * @property {(personId: string) => Promise<Record<string, unknown>|null>} get
+ * @property {(personId: string, entry: { day: string, minutes: number }) => Promise<void>} increment
+ * @property {(personId: string, days: string[]) => Promise<void>} prune
+ *
  * @typedef {Object} CareerStore
  * @property {JourneyRepository} journeys
  * @property {AchievementsRepository} achievements
  * @property {QuestionsRepository} questions
+ * @property {PlaytimeRepository} playtime
  */
 
 export {};
