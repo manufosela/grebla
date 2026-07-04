@@ -67,6 +67,7 @@ export class PlayerCard extends LitElement {
     achievements: { attribute: false },
     visitedIslands: { attribute: false },
     questions: { attribute: false },
+    carpools: { attribute: false },
   };
 
   static styles = css`
@@ -116,6 +117,28 @@ export class PlayerCard extends LitElement {
       .isle .minibar { grid-column: 1 / -1; }
     }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; margin: 0.4rem 0 0; }
+    /* Carpools del jugador (CP-1): una fila por grupo, misma retícula que las islas. */
+    .cps { list-style: none; margin: 0; padding: 0; }
+    .cp {
+      display: grid;
+      grid-template-columns: minmax(120px, 1.2fr) auto minmax(90px, 1fr) auto;
+      gap: 0.35rem 0.75rem;
+      align-items: center;
+      padding: 0.45rem 0;
+      border-top: 1px solid var(--rm-border, #eef0f2);
+      font-size: 0.85rem;
+    }
+    .cp .name { font-weight: 700; color: var(--rm-navy, #1e3a5f); }
+    .cp .certs { color: var(--rm-muted, #6b7280); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cpstatus { font-size: 0.66rem; font-weight: 800; padding: 0.12rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+    .cpstatus.open { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .cpstatus.full { background: var(--rm-navy, #1e3a5f); color: #fff; }
+    .cpstatus.completed { background: linear-gradient(135deg, #f6d365 0%, #e8b931 100%); color: #5b4300; }
+    .cpstatus.closed { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    @media (max-width: 560px) {
+      .cp { grid-template-columns: 1fr auto; }
+      .cp .minibar { grid-column: 1 / -1; }
+    }
     /* Consultas al brujo (MC-22): una entrada por Q&A, todas las islas. */
     .wizqs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
     .wizq { border: 1px solid var(--rm-border, #eef0f2); border-radius: 10px; padding: 0.5rem 0.7rem; }
@@ -149,6 +172,14 @@ export class PlayerCard extends LitElement {
     this.visitedIslands = [];
     /** @type {WizardQuestion[]} */
     this.questions = [];
+    /**
+     * Carpools del jugador con su avance (CP-1), derivados por el contenedor
+     * (career-app: sus carpools + su propio journey — sin lecturas extra).
+     * null = el contenedor no los aporta (p. ej. mi-espacio): la sección no
+     * se pinta. [] = aporta y no participa en ninguno.
+     * @type {{ id: string, name: string, status: string, completed: number, total: number, pct: number }[]|null}
+     */
+    this.carpools = null;
   }
 
   /**
@@ -230,10 +261,52 @@ export class PlayerCard extends LitElement {
       <ul class="isles">
         ${prog.islands.map((isle) => this._renderIsle(isle))}
       </ul>
+      ${this._renderCarpools()}
       <p class="sub">Consultas al brujo</p>
       ${this._renderQuestions()}
     `;
   }
+
+  /**
+   * Sección «Carpools» (CP-1): los grupos del jugador con su avance personal
+   * (paradas X/Y y %). Solo se pinta si el contenedor aporta la lista (en
+   * mi-espacio no llega y la sección desaparece entera).
+   */
+  _renderCarpools() {
+    if (this.carpools === null) return null;
+    return html`
+      <p class="sub">Carpools</p>
+      ${this.carpools.length === 0
+        ? html`<p class="empty">Aún no participa en ningún carpool.</p>`
+        : html`<ul class="cps">
+            ${this.carpools.map(
+              (cp) => html`<li class="cp">
+                <span class="name">🚗 ${cp.name}</span>
+                <span class="certs">${cp.completed}/${cp.total} paradas</span>
+                <span
+                  class="minibar"
+                  role="progressbar"
+                  aria-valuenow=${cp.pct}
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-label=${`Avance en el carpool ${cp.name}: ${cp.completed} de ${cp.total} paradas (${cp.pct}%)`}
+                >
+                  <span class="fill" style=${`width:${cp.pct}%`}></span>
+                </span>
+                <span class="cpstatus ${cp.status}">${PlayerCard.CARPOOL_STATUS_LABELS[cp.status] ?? cp.status}</span>
+              </li>`,
+            )}
+          </ul>`}
+    `;
+  }
+
+  /** Etiquetas legibles del estado de un carpool (CP-1). */
+  static CARPOOL_STATUS_LABELS = Object.freeze({
+    open: 'Abierto',
+    full: 'Completo',
+    completed: 'Terminado',
+    closed: 'Cerrado',
+  });
 
   /**
    * Las Q&A del brujo (MC-22), todas las islas, la más reciente primero
