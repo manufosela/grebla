@@ -466,6 +466,18 @@ const ROUTE_RIBBON = Object.freeze({ width: 0.9, opacity: 0.22, lift: 0.21 });
 /** Opacidad de la línea discontinua de la ruta planificada (MC-13: antes 0.55). */
 const ROUTE_DASH_OPACITY = 0.75;
 /**
+ * Banderola de parada de CARPOOL (CP-1): mástil navy con banderín coral junto
+ * a la casa, acompañando al anillo coral exterior (el navy interior sigue
+ * siendo el de la ruta planificada personal). offset = separación en x/z
+ * locales para no atravesar la fachada.
+ */
+const CARPOOL_FLAG = Object.freeze({
+  poleH: 7.2,
+  pennantW: 1.5,
+  pennantH: 0.85,
+  offset: 2.4,
+});
+/**
  * Minimapa a pie (MC-13), estilo DOOM: disco de MINIMAP.size px de lado (CSS)
  * en la esquina inferior izquierda, SOLO en modo fps. Norte fijo (el mapa no
  * rota; rota la flecha del jugador). La capa estática (agua, silueta de isla,
@@ -568,6 +580,7 @@ export class CareerIsland3D extends LitElement {
     journey: { attribute: false },
     reachable: { attribute: false },
     selected: { attribute: false },
+    carpoolStops: { attribute: false },
     teammates: { attribute: false },
     overlayOpen: { attribute: false },
     wizardState: { attribute: false },
@@ -692,6 +705,13 @@ export class CareerIsland3D extends LitElement {
     this.journey = { visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} };
     this.reachable = [];
     this.selected = null;
+    /**
+     * Paradas del CARPOOL activo de la persona cargada que caen en ESTA isla
+     * (CP-1): ids de ciudad a señalizar con la banderola navy+coral. La pone
+     * <career-app> (union de sus carpools abiertos/llenos).
+     * @type {string[]}
+     */
+    this.carpoolStops = [];
     /**
      * Compañeros del equipo a pintar junto a su ciudad actual (MC-12). SOLO
      * nombre, ciudad y % de progreso: el contenedor no pasa nada más.
@@ -904,7 +924,12 @@ export class CareerIsland3D extends LitElement {
       this._endCelebration();
       this._pendingCelebration = null;
       this._rebuildAll();
-    } else if (changed.has('journey') || changed.has('reachable') || changed.has('selected')) {
+    } else if (
+      changed.has('journey') ||
+      changed.has('reachable') ||
+      changed.has('selected') ||
+      changed.has('carpoolStops') // señalización del carpool (CP-1)
+    ) {
       this._rebuildCities();
     }
     // Compañeros (MC-12): su grupo solo depende de la prop y del mapa (el
@@ -2616,6 +2641,12 @@ export class CareerIsland3D extends LitElement {
     const roofGeo = new THREE.ConeGeometry(CITY_ROOF.r, CITY_ROOF.h, 4);
     roofGeo.rotateY(Math.PI / 4); // tejado alineado con la caja
     const ringGeo = new THREE.TorusGeometry(2.9, 0.28, 8, 28);
+    // Señalización del CARPOOL (CP-1): anillo exterior + banderola navy+coral
+    // en las paradas del grupo. Geometrías compartidas por todas las paradas.
+    const carpool = new Set(this.carpoolStops ?? []);
+    const carpoolRingGeo = new THREE.TorusGeometry(3.55, 0.24, 8, 30);
+    const carpoolPoleGeo = new THREE.CylinderGeometry(0.09, 0.09, CARPOOL_FLAG.poleH, 8);
+    const carpoolPennantGeo = new THREE.PlaneGeometry(CARPOOL_FLAG.pennantW, CARPOOL_FLAG.pennantH);
     // Baliza de visado disponible (MC-13): geometría compartida; el material es
     // por baliza (cada una pulsa con su propia fase → su propia opacidad).
     const beaconGeo = new THREE.CylinderGeometry(BEACON.radius, BEACON.radius, BEACON.height, 10, 1, true);
@@ -2748,6 +2779,29 @@ export class CareerIsland3D extends LitElement {
         ring.rotation.x = -Math.PI / 2;
         ring.position.y = 0.25;
         node.add(ring);
+      }
+
+      // Parada del CARPOOL activo (CP-1): anillo coral EXTERIOR (convive con
+      // el navy de la ruta personal) y banderola — mástil navy con banderín
+      // coral — junto a la casa. Distintivo del grupo, no del estado.
+      if (carpool.has(city.id)) {
+        const cpRing = new THREE.Mesh(carpoolRingGeo, materialFor(STATUS_COLORS.available));
+        cpRing.rotation.x = -Math.PI / 2;
+        cpRing.position.y = 0.45;
+        node.add(cpRing);
+        const pole = new THREE.Mesh(carpoolPoleGeo, materialFor(ACCENT_COLORS.route));
+        pole.position.set(CARPOOL_FLAG.offset, CARPOOL_FLAG.poleH / 2, CARPOOL_FLAG.offset);
+        node.add(pole);
+        const pennant = new THREE.Mesh(
+          carpoolPennantGeo,
+          new THREE.MeshBasicMaterial({ color: ACCENT_COLORS.current, side: THREE.DoubleSide }),
+        );
+        pennant.position.set(
+          CARPOOL_FLAG.offset + CARPOOL_FLAG.pennantW / 2 + 0.09,
+          CARPOOL_FLAG.poleH - CARPOOL_FLAG.pennantH / 2 - 0.15,
+          CARPOOL_FLAG.offset,
+        );
+        node.add(pennant);
       }
 
       // Ciudad actual: haz de luz vertical coral (marcador distintivo).

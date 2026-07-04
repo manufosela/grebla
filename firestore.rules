@@ -241,6 +241,32 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // Carpools de formación (CP-1): grupos con nombre que recorren juntos una
+    // ruta de paradas del archipiélago. Colección raíz de la instancia.
+    //  - Lectura: autenticados (el tablón lo ve todo el mundo logueado).
+    //  - Crear: líder o superadmin, y el doc debe declararle como creador
+    //    (createdBy.uid == auth.uid): nadie firma carpools en nombre de otro.
+    //  - Editar/borrar: el creador o el superadmin… MÁS la rama de UNIRSE/
+    //    SALIR: cualquier líder puede actualizar SOLO members/memberIds/status
+    //    (hasOnly). La validación fina de la unión (hay plaza, está 'open', no
+    //    estás ya dentro) es de CLIENTE en esta v1 pragmática — un líder
+    //    malicioso podría saltársela, pero no puede tocar nombre/ruta/aforo ni
+    //    firmar como otro. El jugador VINCULADO (Person.uid) aún no escribe:
+    //    se añadirá en una fase posterior con su propia excepción acotada
+    //    (como /career/wizard/questions).
+    match /carpools/{carpoolId} {
+      allow read: if isSignedIn();
+      allow create: if (isLeader() || isSuperAdmin())
+        && request.resource.data.createdBy.uid == request.auth.uid;
+      allow update: if isSuperAdmin()
+        || (isSignedIn() && resource.data.createdBy.uid == request.auth.uid)
+        || (isLeader()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['members', 'memberIds', 'status']));
+      allow delete: if isSuperAdmin()
+        || (isSignedIn() && resource.data.createdBy.uid == request.auth.uid);
+    }
+
     // Mapa de Carrera (la isla): documento único /careerMap/island con las
     // comarcas, ciudades y puerto de inicio. Lo leen los autenticados (el tool);
     // solo lo edita el superadmin desde el panel /admin.

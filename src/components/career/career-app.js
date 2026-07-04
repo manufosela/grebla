@@ -162,6 +162,18 @@ import {
 import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/playtime.js';
 import { startPlaytimeTracker } from '../../lib/playtime.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds } from '../../lib/careerMap.js';
+import * as carpoolsIo from '../../lib/carpools.js';
+import {
+  DEFAULT_CARPOOL_SEATS,
+  MIN_CARPOOL_SEATS,
+  MAX_CARPOOL_SEATS,
+  canJoin as canJoinCarpool,
+  isMember as isCarpoolMember,
+  seatsLeft as carpoolSeatsLeft,
+  routeSummary as carpoolRouteSummary,
+  carpoolProgress,
+  carpoolFromPlannedRoute,
+} from '../../tools/career/domain/carpool.js';
 import { DEFAULT_ISLAND_ID } from '../../tools/career/domain/types.js';
 import {
   WAKE_INTERVAL_MS,
@@ -252,6 +264,15 @@ export class CareerApp extends LitElement {
     playtime: { state: true },
     showPlaytime: { state: true },
     playtimeRows: { state: true },
+    carpoolService: { attribute: false },
+    showCarpools: { state: true },
+    carpoolTab: { state: true },
+    carpools: { state: true },
+    myCarpools: { state: true },
+    carpoolBusy: { state: true },
+    carpoolError: { state: true },
+    cpDraft: { state: true },
+    carpoolStops: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
@@ -275,6 +296,34 @@ export class CareerApp extends LitElement {
   static ANNOUNCE_ISLAND_MS = 4200;
   /** Duración (ms) de los avisos de badge (super-ciudadano / leyenda, MC-20). */
   static ANNOUNCE_BADGE_MS = 3200;
+  /** Lista vacía ESTABLE de paradas de carpool (CP-1): sin cambios de
+   * referencia la isla no rehace su grupo de ciudades en cada render. */
+  static EMPTY_CARPOOL_STOPS = Object.freeze([]);
+  /** Borrador VACÍO del formulario «Crear carpool» (CP-1). */
+  static EMPTY_CP_DRAFT = Object.freeze({
+    name: '',
+    seats: DEFAULT_CARPOOL_SEATS,
+    islandId: '',
+    cityId: '',
+    targetDate: '',
+    stops: Object.freeze([]),
+    notice: '',
+  });
+  /** Pestañas del overlay de carpools (CP-1). */
+  static CARPOOL_TABS = Object.freeze(['board', 'mine', 'create']);
+  /** Etiquetas de las pestañas del overlay de carpools. */
+  static CARPOOL_TAB_LABELS = Object.freeze({
+    board: 'Tablón',
+    mine: 'Los míos',
+    create: 'Crear',
+  });
+  /** Etiquetas legibles del estado de un carpool (CP-1). */
+  static CARPOOL_STATUS_LABELS = Object.freeze({
+    open: 'Abierto',
+    full: 'Completo',
+    completed: 'Terminado',
+    closed: 'Cerrado',
+  });
 
   static styles = css`
     :host { display: flex; flex-direction: column; min-height: 0; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
@@ -724,6 +773,56 @@ export class CareerApp extends LitElement {
     }
     .aifocus h4 { margin: 0 0 0.3rem; font-size: 0.8rem; color: var(--rm-navy, #1e3a5f); }
     .aifocus p { margin: 0; font-size: 0.83rem; color: var(--rm-text, #111827); }
+    /* ── Carpools (CP-1): overlay hermano de la ficha (tablón / los míos /
+       crear). Tarjetas por grupo, tabla compacta de avance y formulario. ── */
+    .cplead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
+    .cplist { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+    .cpcard { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.8rem; }
+    .cphead { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .cphead h4 { margin: 0; font-size: 0.95rem; color: var(--rm-navy, #1e3a5f); }
+    .cphead .spacer { margin-left: auto; }
+    .cpmeta { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .cpseats { font-weight: 700; color: var(--rm-navy, #1e3a5f); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .cpstatus { font-size: 0.66rem; font-weight: 800; padding: 0.12rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+    .cpstatus.open { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .cpstatus.full { background: var(--rm-navy, #1e3a5f); color: #fff; }
+    .cpstatus.completed { background: linear-gradient(135deg, #f6d365 0%, #e8b931 100%); color: #5b4300; }
+    .cpstatus.closed { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    /* Tabla compacta de avance: una fila por parada, una columna por miembro. */
+    .cptable { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.5rem; }
+    .cptable th {
+      text-align: left; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--rm-muted, #6b7280); padding: 0.25rem 0.4rem;
+      border-bottom: 2px solid var(--rm-border, #e5e7eb); white-space: nowrap;
+    }
+    .cptable td { padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
+    .cptable th.mate, .cptable td.mate { text-align: center; }
+    .cptable .stopname { font-weight: 600; color: var(--rm-navy, #1e3a5f); }
+    .cptable .stopisle { color: var(--rm-muted, #6b7280); }
+    .cptable .stopdate { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--rm-muted, #6b7280); }
+    .cptable .stopdate.delayed { color: var(--rm-coral-600, #e26d5e); font-weight: 700; }
+    .cpmark { font-weight: 700; }
+    .cpmark.done { color: var(--rm-accent, #2a9d8f); }
+    .cpmark.pending { color: var(--rm-muted, #9ca3af); }
+    .cpmark.delayed { color: var(--rm-coral-600, #e26d5e); }
+    /* Avance por miembro bajo la tabla. */
+    .cpprogress { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; gap: 0.5rem 1rem; flex-wrap: wrap; font-size: 0.8rem; }
+    .cpprogress .pct { font-weight: 700; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
+    .cpprogress .nodata { color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .cpactions { display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
+    /* Formulario de creación: filas del constructor de ruta y lista de paradas. */
+    .cpformrow { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; margin: 0.4rem 0 0; }
+    .cpformrow label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; }
+    .cpformrow select, .cpformrow input { min-width: 0; }
+    .cpstops { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+    .cpstop {
+      display: flex; align-items: center; gap: 0.5rem;
+      border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; padding: 0.3rem 0.5rem; font-size: 0.82rem;
+    }
+    .cpstop .ord { font-weight: 800; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; }
+    .cpstop .when { margin-left: auto; color: var(--rm-muted, #6b7280); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .cpstop button { padding: 0.15rem 0.45rem; font-size: 0.75rem; line-height: 1; }
+    .cpnotice { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
     /* Pestaña «Recursos»: grupos por tipo con icono; enlaces cuando hay url. */
     .resgroup { margin: 0.7rem 0 0; }
     .resgroup h4 { margin: 0 0 0.25rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
@@ -822,6 +921,33 @@ export class CareerApp extends LitElement {
     this._playtimeTracker = null;
     /** Persona a la que mide el cronómetro vivo (o null). */
     this._playtimePerson = null;
+    // Carpools (CP-1): tablón de grupos abiertos, los de la persona cargada,
+    // el borrador del formulario de creación y las paradas a señalizar en la
+    // isla actual. La IO vive en src/lib/carpools.js; `carpoolService` permite
+    // inyectar un doble (arnés/tests) igual que se inyecta el store.
+    /** @type {typeof carpoolsIo|null} */
+    this.carpoolService = null;
+    this.showCarpools = false;
+    /** @type {'board'|'mine'|'create'} */
+    this.carpoolTab = 'board';
+    /** Tablón (carpools abiertos), o null mientras carga.
+     * @type {import('../../tools/career/domain/carpool.js').Carpool[]|null} */
+    this.carpools = null;
+    /** Carpools de la persona cargada (cualquier estado), o null sin cargar.
+     * @type {import('../../tools/career/domain/carpool.js').Carpool[]|null} */
+    this.myCarpools = null;
+    this.carpoolBusy = false;
+    this.carpoolError = '';
+    this.cpDraft = CareerApp.EMPTY_CP_DRAFT;
+    /** Paradas del carpool activo en la ISLA ACTUAL (para <career-island-3d>).
+     * @type {ReadonlyArray<string>} */
+    this.carpoolStops = CareerApp.EMPTY_CARPOOL_STOPS;
+    /** Mapas de isla cacheados para el constructor de rutas (CP-1).
+     * @type {Map<string, import('../../tools/career/domain/types.js').CareerMap>} */
+    this._islandMaps = new Map();
+    /** Miembros de mis carpools cuyo journey NO se pudo leer (privacidad
+     * entre líderes): su avance se muestra como «sin datos». @type {Set<string>} */
+    this._carpoolJourneysMissing = new Set();
     // Progresión (MC-20): aviso de ciudadanía/badge en pantalla (o null) y su
     // cola — los anuncios encadenados salen SECUENCIALES, nunca solapados.
     /** @type {import('../../tools/career/domain/citizenship.js').CitizenshipEvent|null} */
@@ -916,6 +1042,17 @@ export class CareerApp extends LitElement {
       this.questions = null;
       this.wizardError = '';
       this.playtime = null; // el tiempo mostrado era de otra persona (MC-23)
+      // Los carpools mostrados eran de otra persona (CP-1); _load() recarga.
+      this.showCarpools = false;
+      this.carpoolTab = 'board';
+      this.myCarpools = null;
+      this.carpoolError = '';
+      this.cpDraft = CareerApp.EMPTY_CP_DRAFT;
+    }
+    // Paradas del carpool a señalizar (CP-1): dependen de mis carpools y de la
+    // isla cargada. Se recalculan con guarda de igualdad (no re-dispara).
+    if (changed.has('myCarpools') || changed.has('currentIsland')) {
+      this._refreshCarpoolStops();
     }
     // Cronómetro de juego (MC-23): se (re)arma cuando hay store + persona +
     // permiso de escritura; al cambiar de persona el anterior vuelca su resto.
@@ -985,6 +1122,10 @@ export class CareerApp extends LitElement {
     if (changed.has('showPlaytime') && this.showPlaytime) {
       this.renderRoot.querySelector('.timesheet')?.focus();
     }
+    // El overlay de carpools recibe el foco al abrirse (CP-1): Escape cierra.
+    if (changed.has('showCarpools') && this.showCarpools) {
+      this.renderRoot.querySelector('.cppanel')?.focus();
+    }
   }
 
   /** Nombre de una isla según el índice del archipiélago (o '' si no está). @param {string} islandId */
@@ -1033,6 +1174,9 @@ export class CareerApp extends LitElement {
         await this._loadMap();
       }
       await this._migrateAchievements();
+      // Carpools de la persona (CP-1): en paralelo y SIN bloquear la carga
+      // (gestiona sus propios errores — el mapa no se cae por el tablón).
+      this._loadMyCarpools();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa de esta persona.';
     } finally {
@@ -1471,6 +1615,25 @@ export class CareerApp extends LitElement {
       ? archipelagoProgress(this.journey, this.archipelago.islands)
       : null;
     const name = (this.people ?? []).find((p) => p.id === this.personId)?.name ?? '';
+    // Carpools del jugador con SU avance (CP-1): derivado de lo ya cargado
+    // (sus carpools + su propio journey) — cero lecturas extra. null mientras
+    // la lista no está: la ficha oculta la sección.
+    const visited = new Set(this.journey?.visitedCities ?? []);
+    const carpools =
+      this.myCarpools === null
+        ? null
+        : this.myCarpools.map((cp) => {
+            const total = cp.route.length;
+            const completed = cp.route.filter((s) => visited.has(s.cityId)).length;
+            return {
+              id: cp.id,
+              name: cp.name,
+              status: cp.status,
+              completed,
+              total,
+              pct: total > 0 ? Math.round((completed / total) * 100) : 0,
+            };
+          });
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closePlayerCard(); }}>
       <section
         class="ficha"
@@ -1491,6 +1654,7 @@ export class CareerApp extends LitElement {
           .achievements=${this.achievements}
           .visitedIslands=${this.journey?.visitedIslands ?? []}
           .questions=${this.questions ?? []}
+          .carpools=${carpools}
         ></player-card>
       </section>
     </div>`;
@@ -1674,6 +1838,725 @@ export class CareerApp extends LitElement {
                   )}
                 </tbody>
               </table>`}
+      </section>
+    </div>`;
+  }
+
+  // ---- Carpools de formación (CP-1) --------------------------------------------
+
+  /** IO de carpools: la real (src/lib/carpools.js) o el doble inyectado. */
+  get _carpoolApi() {
+    return this.carpoolService ?? carpoolsIo;
+  }
+
+  /** Mis carpools EN MARCHA (abiertos o llenos): los que se señalizan. */
+  get _activeCarpools() {
+    return (this.myCarpools ?? []).filter((c) => c.status === 'open' || c.status === 'full');
+  }
+
+  /**
+   * Recalcula las paradas a señalizar en la ISLA ACTUAL (CP-1): la unión de
+   * las paradas de mis carpools en marcha que caen en ella. Con guarda de
+   * igualdad para no re-disparar renders (la isla 3D rehace su grupo de
+   * ciudades cuando esta lista CAMBIA).
+   */
+  _refreshCarpoolStops() {
+    const ids = [
+      ...new Set(
+        this._activeCarpools.flatMap((c) =>
+          c.route.filter((s) => s.islandId === this.currentIsland).map((s) => s.cityId),
+        ),
+      ),
+    ];
+    const next = ids.length > 0 ? ids : CareerApp.EMPTY_CARPOOL_STOPS;
+    if (next.join('|') !== (this.carpoolStops ?? []).join('|')) this.carpoolStops = next;
+  }
+
+  /**
+   * Carga los carpools de la persona cargada (consulta array-contains sobre
+   * memberIds). No tumba nada: un fallo deja la lista vacía y constancia por
+   * consola (el mapa sigue jugable sin tablón).
+   */
+  async _loadMyCarpools() {
+    const personId = this.personId;
+    if (!personId) return;
+    try {
+      const list = await this._carpoolApi.listMyCarpools(personId);
+      if (personId !== this.personId) return; // cambió la persona mientras cargaba
+      this.myCarpools = list;
+      this._ensureCarpoolJourneys();
+    } catch (err) {
+      console.warn(`Carpools: no se pudieron cargar los de "${personId}".`, err);
+      if (personId === this.personId) this.myCarpools = [];
+    }
+  }
+
+  /**
+   * Asegura los journeys de los MIEMBROS de mis carpools para derivar su
+   * avance (mismo patrón que MC-12: 1 lectura por persona, cap
+   * MAX_TEAM_JOURNEYS, caché compartida en _teamJourneys). Un journey
+   * ilegible (persona de otro líder: las reglas protegen su subárbol) no
+   * tumba al resto — ese miembro queda como «sin datos».
+   */
+  async _ensureCarpoolJourneys() {
+    const ids = new Set((this.myCarpools ?? []).flatMap((c) => c.memberIds));
+    ids.delete(this.personId);
+    const missing = [...ids]
+      .filter((id) => !this._teamJourneys.has(id) && !this._carpoolJourneysMissing.has(id))
+      .slice(0, CareerApp.MAX_TEAM_JOURNEYS);
+    if (missing.length === 0 || !this.store) return;
+    await Promise.all(
+      missing.map(async (id) => {
+        try {
+          this._teamJourneys.set(id, await getJourney(this.store, id));
+        } catch (err) {
+          this._carpoolJourneysMissing.add(id);
+          console.warn(`Carpools: no se pudo cargar el journey del miembro "${id}".`, err);
+        }
+      }),
+    );
+    // Re-render: la tabla de avance ya puede pintar los journeys recién cargados.
+    if (this.myCarpools !== null) this.myCarpools = [...this.myCarpools];
+  }
+
+  /** Journeys por persona para el progreso: la caché del equipo + el propio. */
+  _carpoolJourneyMap() {
+    const journeys = new Map(this._teamJourneys);
+    if (this.personId) journeys.set(this.personId, this.journey);
+    return journeys;
+  }
+
+  /** Abre el overlay de carpools (botón «🚗 Carpools») y refresca el tablón. */
+  async _openCarpools() {
+    this.carpoolError = '';
+    this.showCarpools = true;
+    try {
+      this.archipelago ??= await getArchipelago(); // islas del constructor de rutas
+    } catch (err) {
+      this.carpoolError =
+        err instanceof Error ? err.message : 'No se pudo cargar el archipiélago.';
+    }
+    this._loadCarpoolBoard();
+    if (this.personId && this.myCarpools === null) this._loadMyCarpools();
+  }
+
+  /** Refresca el TABLÓN (carpools abiertos). Se recarga en cada apertura. */
+  async _loadCarpoolBoard() {
+    this.carpools = null; // «Cargando…»
+    try {
+      const list = await this._carpoolApi.listOpenCarpools();
+      if (!this.showCarpools) return; // se cerró mientras cargaba
+      this.carpools = list;
+    } catch (err) {
+      this.carpools = [];
+      this.carpoolError =
+        err instanceof Error ? err.message : 'No se pudo cargar el tablón de carpools.';
+    }
+  }
+
+  /** Cierra el overlay de carpools y devuelve el foco al HUD. */
+  _closeCarpools() {
+    this.showCarpools = false;
+    this._recapturePointerLock();
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro del overlay de carpools lo cierra. @param {KeyboardEvent} event */
+  _onCarpoolsKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeCarpools();
+  }
+
+  /** Pestañas visibles del overlay: «Crear» solo con permiso (canEdit, v1). */
+  get _carpoolTabs() {
+    return this.canEdit
+      ? CareerApp.CARPOOL_TABS
+      : CareerApp.CARPOOL_TABS.filter((t) => t !== 'create');
+  }
+
+  /** Activa una pestaña del overlay de carpools. @param {'board'|'mine'|'create'} tab */
+  _setCarpoolTab(tab) {
+    this.carpoolTab = tab;
+    this.carpoolError = '';
+  }
+
+  /**
+   * Teclado de la barra de pestañas de carpools (mismo patrón tablist que la
+   * tarjeta de la casa): ←/→ circulan, Home/End a los extremos.
+   * @param {KeyboardEvent} e
+   */
+  _onCarpoolTabsKeydown(e) {
+    const tabs = this._carpoolTabs;
+    const i = tabs.indexOf(this.carpoolTab);
+    let next = i;
+    if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    const tab = tabs[next];
+    this._setCarpoolTab(tab);
+    this.updateComplete.then(() => {
+      /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#cptab-${tab}`))?.focus();
+    });
+  }
+
+  /**
+   * «Unirse» desde el tablón: la PERSONA SELECCIONADA entra de copiloto. La
+   * validación fina (abierto, plaza, no repetido) es del dominio y de la lib;
+   * aquí solo se refrescan tablón, «los míos» y la señalización.
+   * @param {import('../../tools/career/domain/carpool.js').Carpool} carpool
+   */
+  async _joinCarpool(carpool) {
+    if (!this.canEdit || this.carpoolBusy) return;
+    const person = this._selectedPerson;
+    if (!person) {
+      this.carpoolError = 'Elige una persona (selector de arriba) para unirla al carpool.';
+      return;
+    }
+    this.carpoolBusy = true;
+    this.carpoolError = '';
+    try {
+      const updated = await this._carpoolApi.joinCarpool(carpool, {
+        personId: person.id,
+        name: person.name,
+      });
+      // El tablón solo lista abiertos: si se llenó, sale; si no, se refresca.
+      this.carpools = (this.carpools ?? [])
+        .map((c) => (c.id === updated.id ? updated : c))
+        .filter((c) => c.status === 'open');
+      this.myCarpools = [updated, ...(this.myCarpools ?? []).filter((c) => c.id !== updated.id)];
+      this._ensureCarpoolJourneys();
+    } catch (err) {
+      this.carpoolError = err instanceof Error ? err.message : 'No se pudo unir al carpool.';
+    } finally {
+      this.carpoolBusy = false;
+    }
+  }
+
+  /**
+   * «Salir» de un carpool (la persona cargada). El conductor no sale: cierra.
+   * @param {import('../../tools/career/domain/carpool.js').Carpool} carpool
+   */
+  async _leaveCarpool(carpool) {
+    if (!this.canEdit || this.carpoolBusy || !this.personId) return;
+    this.carpoolBusy = true;
+    this.carpoolError = '';
+    try {
+      const updated = await this._carpoolApi.leaveCarpool(carpool, this.personId);
+      this.myCarpools = (this.myCarpools ?? []).filter((c) => c.id !== updated.id);
+      this.carpools = (this.carpools ?? []).map((c) => (c.id === updated.id ? updated : c));
+    } catch (err) {
+      this.carpoolError = err instanceof Error ? err.message : 'No se pudo salir del carpool.';
+    } finally {
+      this.carpoolBusy = false;
+    }
+  }
+
+  /**
+   * «Cerrar» un carpool: solo su creador (createdBy.uid, lo mismo que exigen
+   * las reglas) — lo retira del tablón y de la señalización del mapa.
+   * @param {import('../../tools/career/domain/carpool.js').Carpool} carpool
+   */
+  async _closeCarpool(carpool) {
+    if (this.carpoolBusy) return;
+    this.carpoolBusy = true;
+    this.carpoolError = '';
+    try {
+      const updated = await this._carpoolApi.closeCarpool(carpool);
+      this.myCarpools = (this.myCarpools ?? []).map((c) => (c.id === updated.id ? updated : c));
+      this.carpools = (this.carpools ?? []).filter((c) => c.id !== updated.id);
+    } catch (err) {
+      this.carpoolError = err instanceof Error ? err.message : 'No se pudo cerrar el carpool.';
+    } finally {
+      this.carpoolBusy = false;
+    }
+  }
+
+  /**
+   * Mapa de una isla para el constructor de rutas, cargado BAJO DEMANDA y
+   * cacheado por sesión (la isla actual reutiliza el mapa ya cargado).
+   * @param {string} islandId
+   * @returns {Promise<import('../../tools/career/domain/types.js').CareerMap>}
+   */
+  async _ensureIslandMap(islandId) {
+    const cached = this._islandMaps.get(islandId);
+    if (cached) return cached;
+    if (islandId === this.currentIsland && this.map) {
+      this._islandMaps.set(islandId, this.map);
+      return this.map;
+    }
+    const map = await getCareerMap(islandId, this._islandName(islandId));
+    this._islandMaps.set(islandId, map);
+    return map;
+  }
+
+  /** Cambio de isla en el constructor de rutas: carga su mapa para el selector
+   * de ciudades. @param {Event} e */
+  async _onCpIslandChange(e) {
+    const islandId = /** @type {HTMLSelectElement} */ (e.target).value;
+    this.cpDraft = { ...this.cpDraft, islandId, cityId: '' };
+    if (!islandId) return;
+    try {
+      await this._ensureIslandMap(islandId);
+      this.cpDraft = { ...this.cpDraft }; // re-render: ya hay ciudades que ofrecer
+    } catch (err) {
+      this.carpoolError =
+        err instanceof Error ? err.message : 'No se pudo cargar el mapa de esa isla.';
+    }
+  }
+
+  /** Añade la parada del constructor (isla + ciudad + fecha objetivo opcional). */
+  _cpAddStop() {
+    const { islandId, cityId, targetDate, stops } = this.cpDraft;
+    if (!islandId || !cityId) {
+      this.carpoolError = 'Elige isla y ciudad para añadir la parada.';
+      return;
+    }
+    if (stops.some((s) => s.cityId === cityId)) {
+      this.carpoolError = 'Esa ciudad ya está en la ruta.';
+      return;
+    }
+    const map = this._islandMaps.get(islandId);
+    const city = map?.cities.find((c) => c.id === cityId);
+    if (!map || !city) {
+      this.carpoolError = 'No se encontró la ciudad elegida en el mapa de la isla.';
+      return;
+    }
+    this.carpoolError = '';
+    this.cpDraft = {
+      ...this.cpDraft,
+      cityId: '',
+      targetDate: '',
+      stops: [
+        ...stops,
+        {
+          cityId,
+          islandId,
+          islandName: this._islandName(islandId) || map.name,
+          cityName: city.name,
+          targetDate: targetDate || null,
+        },
+      ],
+    };
+  }
+
+  /** Quita una parada del borrador. @param {number} index */
+  _cpRemoveStop(index) {
+    this.cpDraft = { ...this.cpDraft, stops: this.cpDraft.stops.toSpliced(index, 1) };
+  }
+
+  /** Sube/baja una parada del borrador. @param {number} index @param {-1|1} delta */
+  _cpMoveStop(index, delta) {
+    const to = index + delta;
+    const stops = this.cpDraft.stops;
+    if (to < 0 || to >= stops.length) return;
+    this.cpDraft = {
+      ...this.cpDraft,
+      stops: stops.toSpliced(index, 1).toSpliced(to, 0, stops[index]),
+    };
+  }
+
+  /**
+   * «Compartir mi ruta planificada»: precarga las paradas del borrador desde
+   * la plannedRoute de la persona cargada, resolviendo isla y nombres con los
+   * mapas del archipiélago — cargados BAJO DEMANDA (solo hasta resolver todas
+   * las ciudades) y cacheados. Las ciudades que no aparezcan en ningún mapa
+   * se cuentan en un aviso, nunca se inventan.
+   */
+  async _cpSharePlanned() {
+    if (!this.personId || this.carpoolBusy) return;
+    const planned = this.journey?.plannedRoute ?? [];
+    if (planned.length === 0) {
+      this.carpoolError = 'Esta persona no tiene ruta planificada que compartir.';
+      return;
+    }
+    this.carpoolBusy = true;
+    this.carpoolError = '';
+    try {
+      this.archipelago ??= await getArchipelago();
+      const maps = [];
+      const pending = new Set(planned);
+      for (const isle of this.archipelago.islands) {
+        if (pending.size === 0) break;
+        const map = await this._ensureIslandMap(isle.id);
+        maps.push(map);
+        for (const city of map.cities) pending.delete(city.id);
+      }
+      const { stops, missing } = carpoolFromPlannedRoute(this.journey, maps);
+      this.cpDraft = {
+        ...this.cpDraft,
+        stops,
+        notice:
+          missing.length > 0
+            ? `${missing.length} parada${missing.length === 1 ? '' : 's'} de la ruta planificada no está${missing.length === 1 ? '' : 'n'} en ningún mapa y se ha${missing.length === 1 ? '' : 'n'} omitido.`
+            : '',
+      };
+    } catch (err) {
+      this.carpoolError =
+        err instanceof Error ? err.message : 'No se pudo leer la ruta planificada.';
+    } finally {
+      this.carpoolBusy = false;
+    }
+  }
+
+  /** «Crear carpool»: la persona seleccionada queda de CONDUCTOR. */
+  async _createCarpool() {
+    if (!this.canEdit || this.carpoolBusy) return;
+    const person = this._selectedPerson;
+    if (!person) {
+      this.carpoolError = 'Elige la persona que conducirá (selector de arriba).';
+      return;
+    }
+    if (!this.currentUser?.uid) {
+      this.carpoolError = 'Hace falta la sesión iniciada para crear un carpool.';
+      return;
+    }
+    this.carpoolBusy = true;
+    this.carpoolError = '';
+    try {
+      const created = await this._carpoolApi.createCarpool(
+        {
+          name: this.cpDraft.name,
+          seats: Number(this.cpDraft.seats),
+          route: this.cpDraft.stops,
+          conductor: { personId: person.id, name: person.name },
+        },
+        this.currentUser,
+      );
+      this.myCarpools = [created, ...(this.myCarpools ?? [])];
+      this.carpools = [created, ...(this.carpools ?? [])];
+      this.cpDraft = CareerApp.EMPTY_CP_DRAFT;
+      this.carpoolTab = 'mine';
+    } catch (err) {
+      this.carpoolError = err instanceof Error ? err.message : 'No se pudo crear el carpool.';
+    } finally {
+      this.carpoolBusy = false;
+    }
+  }
+
+  /** Botón «🚗 Carpools» de la barra: el tablón lo ve todo el mundo. */
+  _renderCarpoolButton() {
+    return html`<button
+      @click=${this._openCarpools}
+      title="Abrir el tablón de carpools: recorre la formación en grupo"
+    >🚗 Carpools</button>`;
+  }
+
+  /**
+   * Chip del HUD (CP-1): «🚗 {nombre}: X/Y paradas» del primer carpool EN
+   * MARCHA de la persona cargada — X = paradas que ELLA ya completó.
+   */
+  _renderCarpoolHudStat() {
+    const cp = this._activeCarpools.at(0);
+    if (!cp) return null;
+    const visited = new Set(this.journey?.visitedCities ?? []);
+    const done = cp.route.filter((s) => visited.has(s.cityId)).length;
+    return html`<span
+      class="hudstat"
+      title=${`Carpool «${cp.name}»: has completado ${done} de ${cp.route.length} paradas`}
+    >🚗 ${cp.name}: ${done}/${cp.route.length} paradas</span>`;
+  }
+
+  /** Insignia del estado de un carpool. @param {import('../../tools/career/domain/carpool.js').Carpool} cp */
+  _renderCarpoolStatus(cp) {
+    return html`<span class="cpstatus ${cp.status}">${CareerApp.CARPOOL_STATUS_LABELS[cp.status]}</span>`;
+  }
+
+  /** Fecha objetivo legible de una parada ('—' sin objetivo). @param {string|null} iso */
+  _cpDateLabel(iso) {
+    return iso ?? '—';
+  }
+
+  /**
+   * Una entrada del TABLÓN: nombre, conductor, ruta resumida (islas y nº de
+   * paradas), plazas y el botón «Unirse» con la persona seleccionada.
+   * @param {import('../../tools/career/domain/carpool.js').Carpool} cp
+   */
+  _renderBoardCarpool(cp) {
+    const summary = carpoolRouteSummary(cp);
+    const free = carpoolSeatsLeft(cp);
+    const already = this.personId ? isCarpoolMember(cp, this.personId) : false;
+    const joinable = this.canEdit && this.personId && canJoinCarpool(cp, this.personId);
+    return html`<li class="cpcard">
+      <div class="cphead">
+        <h4>🚗 ${cp.name}</h4>
+        ${this._renderCarpoolStatus(cp)}
+        <span class="cpseats spacer" title="Plazas ocupadas / totales">
+          ${cp.members.length}/${cp.seats} plazas
+        </span>
+      </div>
+      <p class="cpmeta">
+        Conduce <strong>${cp.conductor.name}</strong> ·
+        ${summary.islandNames.join(' · ')} · ${summary.stops} parada${summary.stops === 1 ? '' : 's'}
+      </p>
+      ${this.canEdit
+        ? html`<div class="cpactions">
+            ${already
+              ? html`<span class="cpmeta">Ya vas dentro.</span>`
+              : html`<button
+                  class="primary"
+                  ?disabled=${!joinable || this.carpoolBusy}
+                  title=${!this.personId
+                    ? 'Elige una persona en el selector de arriba'
+                    : free === 0
+                      ? 'Sin plazas libres'
+                      : `Unir a ${this._selectedPerson?.name ?? 'la persona seleccionada'}`}
+                  @click=${() => this._joinCarpool(cp)}
+                >Unirse</button>`}
+          </div>`
+        : null}
+    </li>`;
+  }
+
+  /**
+   * Una entrada de «LOS MÍOS»: ruta completa (isla · ciudad · tiempo objetivo)
+   * con el estado ✓/pendiente/⏰ de cada miembro en tabla compacta, el avance
+   * % por miembro y las acciones (Salir / Cerrar del conductor-creador).
+   * @param {import('../../tools/career/domain/carpool.js').Carpool} cp
+   */
+  _renderMyCarpool(cp) {
+    const prog = carpoolProgress(cp, this._carpoolJourneyMap());
+    const inMarch = cp.status === 'open' || cp.status === 'full';
+    const isConductor = cp.conductor.personId === this.personId;
+    const isCreator = Boolean(this.currentUser?.uid) && cp.createdBy?.uid === this.currentUser.uid;
+    /** Estado de una parada para un miembro, como marca compacta. */
+    const mark = (state) =>
+      state === 'done'
+        ? html`<span class="cpmark done" title="Parada completada">✓</span>`
+        : state === 'delayed'
+          ? html`<span class="cpmark delayed" title="Tiempo objetivo pasado (sin castigo)">⏰</span>`
+          : html`<span class="cpmark pending" title="Pendiente">·</span>`;
+    return html`<li class="cpcard">
+      <div class="cphead">
+        <h4>🚗 ${cp.name}</h4>
+        ${this._renderCarpoolStatus(cp)}
+        ${prog.completed ? html`<span class="cpstatus completed">🏁 Ruta completada</span>` : null}
+        <span class="cpseats spacer" title="Plazas ocupadas / totales">
+          ${cp.members.length}/${cp.seats} plazas
+        </span>
+      </div>
+      <p class="cpmeta">Conduce <strong>${cp.conductor.name}</strong></p>
+      <table class="cptable">
+        <thead>
+          <tr>
+            <th scope="col">Parada</th>
+            <th scope="col">Objetivo</th>
+            ${cp.members.map(
+              (m) => html`<th scope="col" class="mate" title=${m.name}>${m.name.split(' ').at(0)}</th>`,
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          ${prog.stops.map(
+            (s) => html`<tr>
+              <td>
+                <span class="stopisle">${s.stop.islandName} · </span>
+                <span class="stopname">${s.stop.cityName}</span>
+              </td>
+              <td class="stopdate ${s.delayed ? 'delayed' : ''}">${this._cpDateLabel(s.stop.targetDate)}</td>
+              ${cp.members.map((m) => html`<td class="mate">${mark(s.states[m.personId])}</td>`)}
+            </tr>`,
+          )}
+        </tbody>
+      </table>
+      <ul class="cpprogress" aria-label="Avance por miembro">
+        ${prog.members.map(
+          (m) => html`<li>
+            ${m.name}
+            <span class="pct">${m.pct}%</span>
+            ${m.personId !== this.personId && this._carpoolJourneysMissing.has(m.personId)
+              ? html`<span class="nodata">(sin datos)</span>`
+              : null}
+          </li>`,
+        )}
+      </ul>
+      <div class="cpactions">
+        ${this.canEdit && inMarch && !isConductor && this.personId && isCarpoolMember(cp, this.personId)
+          ? html`<button ?disabled=${this.carpoolBusy} @click=${() => this._leaveCarpool(cp)}>
+              Salir del carpool
+            </button>`
+          : null}
+        ${isCreator && cp.status !== 'closed'
+          ? html`<button
+              ?disabled=${this.carpoolBusy}
+              title="Cerrar el carpool: lo retira del tablón y del mapa"
+              @click=${() => this._closeCarpool(cp)}
+            >Cerrar</button>`
+          : null}
+      </div>
+    </li>`;
+  }
+
+  /** Pestaña «Crear» (CP-1): nombre, plazas, constructor de ruta y compartir
+   * la ruta planificada de la persona cargada. */
+  _renderCarpoolCreate() {
+    const draft = this.cpDraft;
+    const islands = this.archipelago?.islands ?? [];
+    const islandMap = draft.islandId ? this._islandMaps.get(draft.islandId) : undefined;
+    const cities = (islandMap?.cities ?? []).filter((c) => c.deprecated !== true);
+    return html`
+      <div class="wizform">
+        <label for="cp-name">Nombre del carpool</label>
+        <input
+          id="cp-name"
+          type="text"
+          placeholder="P. ej. «Los frontends del sur»"
+          .value=${draft.name}
+          ?disabled=${this.carpoolBusy}
+          @input=${(e) => { this.cpDraft = { ...this.cpDraft, name: e.target.value }; }}
+        />
+        <label for="cp-seats">Plazas (incluye a quien conduce)</label>
+        <input
+          id="cp-seats"
+          type="number"
+          min=${MIN_CARPOOL_SEATS}
+          max=${MAX_CARPOOL_SEATS}
+          .value=${String(draft.seats)}
+          ?disabled=${this.carpoolBusy}
+          @input=${(e) => { this.cpDraft = { ...this.cpDraft, seats: e.target.value }; }}
+        />
+      </div>
+      <p class="sub">Ruta (paradas en orden)</p>
+      <div class="cpformrow">
+        <label>Isla
+          <select .value=${draft.islandId} ?disabled=${this.carpoolBusy} @change=${this._onCpIslandChange}>
+            <option value="" ?selected=${!draft.islandId}>— Isla —</option>
+            ${islands.map(
+              (i) => html`<option value=${i.id} ?selected=${i.id === draft.islandId}>${i.name}</option>`,
+            )}
+          </select>
+        </label>
+        <label>Ciudad
+          <select
+            .value=${draft.cityId}
+            ?disabled=${this.carpoolBusy || !draft.islandId}
+            @change=${(e) => { this.cpDraft = { ...this.cpDraft, cityId: e.target.value }; }}
+          >
+            <option value="" ?selected=${!draft.cityId}>— Ciudad —</option>
+            ${cities.map(
+              (c) => html`<option value=${c.id} ?selected=${c.id === draft.cityId}>${c.name}</option>`,
+            )}
+          </select>
+        </label>
+        <label>Tiempo objetivo (opcional)
+          <input
+            type="date"
+            .value=${draft.targetDate}
+            ?disabled=${this.carpoolBusy}
+            @input=${(e) => { this.cpDraft = { ...this.cpDraft, targetDate: e.target.value }; }}
+          />
+        </label>
+        <button type="button" ?disabled=${this.carpoolBusy} @click=${this._cpAddStop}>
+          + Añadir parada
+        </button>
+      </div>
+      ${draft.stops.length === 0
+        ? html`<p class="wizempty">Aún no hay paradas: añade ciudades o comparte tu ruta planificada.</p>`
+        : html`<ol class="cpstops">
+            ${draft.stops.map(
+              (s, i) => html`<li class="cpstop">
+                <span class="ord">${i + 1}.</span>
+                <span>${s.islandName} · <strong>${s.cityName}</strong></span>
+                <span class="when">${this._cpDateLabel(s.targetDate)}</span>
+                <button type="button" aria-label="Subir la parada ${s.cityName}" title="Subir"
+                  ?disabled=${this.carpoolBusy || i === 0} @click=${() => this._cpMoveStop(i, -1)}>↑</button>
+                <button type="button" aria-label="Bajar la parada ${s.cityName}" title="Bajar"
+                  ?disabled=${this.carpoolBusy || i === draft.stops.length - 1} @click=${() => this._cpMoveStop(i, 1)}>↓</button>
+                <button type="button" aria-label="Quitar la parada ${s.cityName}" title="Quitar"
+                  ?disabled=${this.carpoolBusy} @click=${() => this._cpRemoveStop(i)}>✕</button>
+              </li>`,
+            )}
+          </ol>`}
+      ${draft.notice ? html`<p class="cpnotice">${draft.notice}</p>` : null}
+      <div class="cpactions">
+        <button
+          type="button"
+          ?disabled=${this.carpoolBusy || (this.journey?.plannedRoute ?? []).length === 0}
+          title=${(this.journey?.plannedRoute ?? []).length === 0
+            ? 'Esta persona no tiene ruta planificada'
+            : 'Precargar las paradas desde la ruta planificada de la persona cargada'}
+          @click=${this._cpSharePlanned}
+        >⛵ Compartir mi ruta planificada</button>
+        <button class="primary" ?disabled=${this.carpoolBusy} @click=${this._createCarpool}>
+          Crear carpool
+        </button>
+      </div>
+    `;
+  }
+
+  /** Contenido de la pestaña activa del overlay de carpools. */
+  _renderCarpoolTabContent() {
+    if (this.carpoolTab === 'create' && this.canEdit) return this._renderCarpoolCreate();
+    if (this.carpoolTab === 'mine') {
+      if (!this.personId) {
+        return html`<p class="wizempty">Elige una persona (selector de arriba) para ver sus carpools.</p>`;
+      }
+      if (this.myCarpools === null) return html`<p class="wizempty">Cargando tus carpools…</p>`;
+      if (this.myCarpools.length === 0) {
+        return html`<p class="wizempty">Aún no participas en ningún carpool: únete desde el tablón o crea uno.</p>`;
+      }
+      return html`<ul class="cplist">${this.myCarpools.map((cp) => this._renderMyCarpool(cp))}</ul>`;
+    }
+    // Tablón (default).
+    if (this.carpools === null) return html`<p class="wizempty">Cargando el tablón…</p>`;
+    if (this.carpools.length === 0) {
+      return html`<p class="wizempty">No hay carpools abiertos: ${this.canEdit ? 'crea el primero.' : 'vuelve más tarde.'}</p>`;
+    }
+    return html`<ul class="cplist">${this.carpools.map((cp) => this._renderBoardCarpool(cp))}</ul>`;
+  }
+
+  /**
+   * Overlay «🚗 Carpools» (CP-1): modal hermano de la ficha con pestañas
+   * Tablón / Los míos / Crear (esta última solo con permiso). Foco al abrir,
+   * Escape/✕/fondo cierran.
+   */
+  _renderCarpools() {
+    if (!this.showCarpools) return null;
+    const tabs = this._carpoolTabs;
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeCarpools(); }}>
+      <section
+        class="ficha cppanel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Carpools de formación"
+        tabindex="-1"
+        @keydown=${this._onCarpoolsKeydown}
+      >
+        <header class="sea-head">
+          <h3>🚗 Carpools</h3>
+          <button class="close" aria-label="Cerrar el tablón de carpools" title="Cerrar (Esc)" @click=${this._closeCarpools}>✕</button>
+        </header>
+        <p class="cplead">
+          Como compartir coche: un grupo con nombre recorre junto una ruta de
+          paradas con tiempos objetivo. Únete a uno abierto o comparte tu ruta.
+        </p>
+        <div class="ctabs" role="tablist" aria-label="Secciones de carpools" @keydown=${this._onCarpoolTabsKeydown}>
+          ${tabs.map((tab) => {
+            const selected = this.carpoolTab === tab;
+            return html`<button
+              id="cptab-${tab}"
+              class="ctab ${selected ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected=${selected ? 'true' : 'false'}
+              aria-controls="cppanel-${tab}"
+              tabindex=${selected ? '0' : '-1'}
+              @click=${() => this._setCarpoolTab(tab)}
+            >${CareerApp.CARPOOL_TAB_LABELS[tab]}</button>`;
+          })}
+        </div>
+        ${this.carpoolError ? html`<p class="error" role="alert">${this.carpoolError}</p>` : null}
+        <div
+          id="cppanel-${this.carpoolTab}"
+          class="ctabpanel"
+          role="tabpanel"
+          aria-labelledby="cptab-${this.carpoolTab}"
+          tabindex="0"
+        >${this._renderCarpoolTabContent()}</div>
       </section>
     </div>`;
   }
@@ -2894,6 +3777,8 @@ export class CareerApp extends LitElement {
               ${this._renderPlayerCardButton()}
               ${this._renderWizardQueueButton()}
               ${this._renderPlaytimeButton()}
+              ${this._renderCarpoolButton()}
+              ${this._renderCarpoolHudStat()}
               ${this._renderProgressHud(prog, s)}
             </div>
           `}
@@ -2907,12 +3792,14 @@ export class CareerApp extends LitElement {
               .journey=${this.journey}
               .reachable=${s.reachable}
               .selected=${this.selected}
+              .carpoolStops=${this.carpoolStops}
               .overlayOpen=${Boolean(this.selected) ||
               this.showArchipelago ||
               this.showPlayerCard ||
               this.showWizard ||
               this.showWizardQueue ||
-              this.showPlaytime}
+              this.showPlaytime ||
+              this.showCarpools}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               .wizardState=${hutState}
               @select-city=${this._onSelect}
@@ -2991,6 +3878,7 @@ export class CareerApp extends LitElement {
       ${this._renderWizard()}
       ${this._renderWizardQueue()}
       ${this._renderPlaytimeSummary()}
+      ${this._renderCarpools()}
       ${this._renderTravelFade()}
       ${this._renderAnnouncement()}
     `;
