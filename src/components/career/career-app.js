@@ -29,8 +29,11 @@
  * queda deshabilitado como «modo de escritorio». El evento `mode-change`
  * reduce el HUD en fps: se ocultan la barra superior (persona/vistas/progreso)
  * y solo queda el botón «Salir (Esc)». El panel de ciudadanía funciona igual
- * (se abre con E/clic desde la isla, que suelta el pointer lock; al cerrarlo,
- * un clic en el canvas lo re-engancha).
+ * (se abre con E/clic desde la isla, que suelta el pointer lock; al cerrarlo
+ * con Escape/✕ se pide el re-enganche del lock — el gesto del cierre aún
+ * vale, MC-18 — y, si el navegador lo rechaza, la isla sigue jugable solo con
+ * teclado). La prop `overlayOpen` de la isla refleja si hay un overlay DOM
+ * abierto (panel o archipiélago) para pausar la marcha por teclado sin lock.
  *
  * Sonido (MC-11): el HUD 3D lleva un botón 🔊/🔇 persistente (localStorage)
  * que conmuta el audio procedural de la isla (olas, gaviotas, pasos y
@@ -831,11 +834,20 @@ export class CareerApp extends LitElement {
   /**
    * Cierra la tarjeta de la casa: deselecciona SIN mover la cámara (el usuario
    * sigue donde estaba) y devuelve el foco al HUD para no perder el teclado.
-   * En fps el foco cae en «Salir (Esc)»; un clic en el canvas retoma el lock.
+   * En fps se intenta re-enganchar el pointer lock (MC-18: el Escape/clic del
+   * cierre aún cuenta como gesto); si el navegador lo rechaza, la marcha por
+   * teclado sin lock sigue funcionando y un clic en el canvas retoma el ratón.
    */
   _closeCityPanel() {
     this.selected = null;
+    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Pide a la isla re-enganchar el pointer lock si se está a pie (MC-18). */
+  _recapturePointerLock() {
+    if (this.viewMode !== '3d' || this.mode3d !== 'fps') return;
+    this.renderRoot.querySelector('career-island-3d')?.recapturePointerLock();
   }
 
   /** Escape dentro de la tarjeta de la casa la cierra. @param {KeyboardEvent} event */
@@ -900,9 +912,11 @@ export class CareerApp extends LitElement {
     this.showArchipelago = true;
   }
 
-  /** Cierra el mapa del archipiélago sin viajar y devuelve el foco al HUD. */
+  /** Cierra el mapa del archipiélago sin viajar y devuelve el foco al HUD.
+   * Si se llegó a pie ([E] Zarpar), intenta re-enganchar el lock (MC-18). */
   _closeArchipelago() {
     this.showArchipelago = false;
+    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
@@ -1509,6 +1523,7 @@ export class CareerApp extends LitElement {
               .journey=${this.journey}
               .reachable=${s.reachable}
               .selected=${this.selected}
+              .overlayOpen=${Boolean(this.selected) || this.showArchipelago}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               @select-city=${this._onSelect}
               @select-teammate=${this._onSelectTeammate}

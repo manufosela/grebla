@@ -67,6 +67,17 @@
  * vista aérea. `mode-change {mode:'fps'|'aerial'}` avisa a <career-app>.
  * Pensado para escritorio: en táctil el HUD no ofrece el botón de entrada.
  *
+ * Jugabilidad 100% teclado (MC-18): en fps las teclas mandan CON y SIN pointer
+ * lock. Q/Re Pág y E/Av Pág inclinan la mirada (tiltPitch puro, mismos topes
+ * polares que el ratón); con el lock suelto (rechazado por el navegador o
+ * recién cerrado un panel) la marcha, el giro, la mirada y [E] siguen
+ * funcionando salvo con un overlay DOM abierto encima (prop `overlayOpen`,
+ * puesta por <career-app>: panel de ciudadanía o archipiélago) o escribiendo
+ * en un campo (_isTypingTarget). El contenedor puede pedir el re-enganche del
+ * lock con `recapturePointerLock()` (cierre del panel con Escape/✕: el gesto
+ * sigue vigente); si el navegador lo rechaza, un aviso discreto no bloqueante
+ * ofrece el clic y el teclado no pierde el control.
+ *
  * Avatar en vista aérea (MC-10): un personajillo low-poly (piernas navy,
  * cuerpo teal, gorra coral: colores GREBLA) SIEMPRE visible en la vista aérea
  * que se mueve con WASD/flechas usando LA MISMA lógica pura del modo a pie
@@ -200,6 +211,7 @@ import {
   walkableRadius,
   stepPosition,
   turnYaw,
+  tiltPitch,
   yawToward,
   nearestCityWithin,
   collideWithCities,
@@ -210,6 +222,8 @@ import {
   WALK_SPEED,
   RUN_MULTIPLIER,
   TURN_SPEED,
+  PITCH_SPEED,
+  PITCH_LIMIT,
   EYE_HEIGHT,
   PROXIMITY_RADIUS,
 } from '../../tools/career/domain/walk.js';
@@ -461,6 +475,7 @@ export class CareerIsland3D extends LitElement {
     reachable: { attribute: false },
     selected: { attribute: false },
     teammates: { attribute: false },
+    overlayOpen: { attribute: false },
     _phase: { state: true },
     _mode: { state: true },
     _fpsLocked: { state: true },
@@ -587,6 +602,12 @@ export class CareerIsland3D extends LitElement {
      * @type {{ personId: string, name: string, currentCity: string, progressPct: number }[]}
      */
     this.teammates = [];
+    /**
+     * true con un overlay DOM del contenedor abierto encima (panel de
+     * ciudadanía, archipiélago): la marcha por teclado SIN lock se pausa para
+     * no pelear con la navegación del overlay (MC-18). La pone <career-app>.
+     */
+    this.overlayOpen = false;
     /** Fase del canvas: 'loading' | 'ready' | 'unsupported' | 'error'. */
     this._phase = 'loading';
     /** Módulo three (cargado dinámicamente). */
@@ -746,6 +767,9 @@ export class CareerIsland3D extends LitElement {
     // El panel de ciudadanía se cerró desde el contenedor (✕ o Escape): ya no
     // se está «dentro» de ninguna casa (MC-9).
     if (changed.has('selected') && this.selected === null) this._insideCityId = null;
+    // Un overlay DOM se abrió encima (panel, archipiélago): las teclas
+    // mantenidas se sueltan — con él abierto no se camina ni se mira (MC-18).
+    if (changed.has('overlayOpen') && this.overlayOpen) this._keys.clear();
     // Celebración (MC-11): diff de visitadas ANTES de reconstruir. Solo cuenta
     // el gesto real de «marcar como visitada» (el conjunto anterior + una) y
     // solo si es la ciudad del panel abierto — cargar el journey de otra
@@ -1320,9 +1344,10 @@ export class CareerIsland3D extends LitElement {
     if (!this._plc) {
       const canvas = this.renderRoot.querySelector('canvas');
       this._plc = new this._PointerLockControls(this._camera, canvas);
-      // Sin mirar al cénit/nadir puro: el forward proyectado al suelo nunca degenera.
-      this._plc.minPolarAngle = 0.15;
-      this._plc.maxPolarAngle = Math.PI - 0.15;
+      // Sin mirar al cénit/nadir puro: el forward proyectado al suelo nunca
+      // degenera. El MISMO tope que la mirada por teclado (PITCH_LIMIT, MC-18).
+      this._plc.minPolarAngle = Math.PI / 2 - PITCH_LIMIT;
+      this._plc.maxPolarAngle = Math.PI / 2 + PITCH_LIMIT;
       // IMPORTANTE (shadow DOM): document.pointerLockElement retargetea al HOST,
       // así que el detector interno de PointerLockControls nunca ve el canvas y
       // dejaría isLocked=false (sin ratón). Este listener se registra DESPUÉS
@@ -1333,6 +1358,18 @@ export class CareerIsland3D extends LitElement {
       });
     }
     this._plc.enabled = true;
+    this._requestLock();
+  }
+
+  /**
+   * Re-engancha el pointer lock a petición del contenedor (MC-18): al cerrar
+   * el panel de ciudadanía o el archipiélago con Escape/✕ el gesto (tecla o
+   * clic) sigue vigente y el lock puede volver sin pasar por el ratón. Si el
+   * navegador lo rechaza no pasa nada: la marcha por teclado sin lock sigue
+   * funcionando y el aviso discreto ofrece el clic como vía manual.
+   */
+  recapturePointerLock() {
+    if (this._phase !== 'ready' || this._mode !== 'fps' || this._fpsLocked) return;
     this._requestLock();
   }
 
@@ -1383,6 +1420,14 @@ export class CareerIsland3D extends LitElement {
     ]),
   );
 
+  /** Teclas de mirada vertical (mantenidas, MC-18): Q/Re Pág arriba, E/Av Pág abajo. */
+  static PITCH_CODES = Object.freeze(new Set(['KeyQ', 'KeyE', 'PageUp', 'PageDown']));
+
+  /** Todas las teclas que se MANTIENEN pulsadas en el modo a pie (marcha + mirada). */
+  static HELD_CODES = Object.freeze(
+    new Set([...CareerIsland3D.MOVE_CODES, ...CareerIsland3D.PITCH_CODES]),
+  );
+
   /** @param {KeyboardEvent} event */
   _onKeyDown(event) {
     // Cualquier tecla es un gesto real: momento válido para el audio (MC-11).
@@ -1411,39 +1456,44 @@ export class CareerIsland3D extends LitElement {
     }
     if (this._mode !== 'fps') return;
     if (!this._fpsLocked) {
-      // Con el lock suelto (overlay «haz clic» o panel abierto) se atiende
-      // Escape → salir, y, con el panel abierto por CHOQUE contra una casa
-      // (MC-9), ↓/S → salir de la casa (salvo que se esté escribiendo en un
-      // campo del panel). El Escape DENTRO del panel no llega aquí: el panel
-      // lo consume (stopPropagation) para cerrarse.
+      // Con el lock suelto se atiende Escape → salir del modo y, con el panel
+      // abierto por CHOQUE contra una casa (MC-9), ↓/S → salir de la casa
+      // (salvo que se esté escribiendo en un campo del panel). El Escape
+      // DENTRO del panel no llega aquí: el panel lo consume (stopPropagation)
+      // para cerrarse. El RESTO de teclas del modo a pie sigue funcionando
+      // (MC-18) — un lock rechazado por el navegador no deja al jugador sin
+      // control — salvo con un overlay DOM abierto encima (panel/archipiélago).
       if (event.code === 'Escape') {
         this.exitFirstPerson();
         return;
       }
+      if (CareerIsland3D._isTypingTarget(event)) return;
       if (
         this._insideCityId !== null &&
-        (event.code === 'ArrowDown' || event.code === 'KeyS') &&
-        !CareerIsland3D._isTypingTarget(event)
+        (event.code === 'ArrowDown' || event.code === 'KeyS')
       ) {
         event.preventDefault();
         this._exitCity();
+        return;
       }
-      return;
+      if (this.overlayOpen) return;
     }
-    if (CareerIsland3D.MOVE_CODES.has(event.code)) {
-      this._keys.add(event.code);
-      event.preventDefault(); // las flechas no deben hacer scroll de la página
-      return;
-    }
-    if (event.code === 'KeyE' && this._nearCityId) {
+    // Interacción [E] (solo la pulsación inicial: MANTENER E es mirar abajo,
+    // MC-18): entrar en la ciudad cercana o zarpar en la barca (MC-14).
+    // Funciona con y sin lock: la proximidad no depende del ratón.
+    if (event.code === 'KeyE' && !event.repeat && this._nearCityId) {
       event.preventDefault();
       this._openNearCity();
       return;
     }
-    // [E] junto a la barca sin ciudad cerca (MC-14): zarpar.
-    if (event.code === 'KeyE' && this._nearBoat) {
+    if (event.code === 'KeyE' && !event.repeat && this._nearBoat) {
       event.preventDefault();
       this._openArchipelago();
+      return;
+    }
+    if (CareerIsland3D.HELD_CODES.has(event.code)) {
+      this._keys.add(event.code);
+      event.preventDefault(); // ni scroll con las flechas ni paginación con Re/Av Pág
     }
   }
 
@@ -1467,15 +1517,26 @@ export class CareerIsland3D extends LitElement {
     const dt = Math.min((now - (this._lastWalkTs || now)) / 1000, 0.05);
     this._lastWalkTs = now;
     const cam = this._camera.position;
-    if (this._fpsLocked) {
+    // Sin gate por _fpsLocked (MC-18): _keys solo se llena en los estados
+    // válidos (_onKeyDown filtra overlay/campos y el unlock la vacía), así que
+    // el teclado sigue mandando aunque el navegador rechazara el lock.
+    if (this._keys.size > 0) {
       const key = (code) => (this._keys.has(code) ? 1 : 0);
-      // Giro sobre uno mismo: se edita SOLO el yaw del euler YXZ de la cámara
-      // (mismo orden que usa PointerLockControls, que relee el quaternion en
-      // cada movimiento de ratón: ambos giros conviven sin pelearse).
+      // Giro sobre uno mismo y mirada vertical: se editan SOLO yaw/pitch del
+      // euler YXZ de la cámara (mismo orden que usa PointerLockControls, que
+      // relee el quaternion en cada movimiento de ratón: conviven sin
+      // pelearse). El pitch por teclas (Q/Re Pág arriba, E/Av Pág abajo,
+      // MC-18) comparte topes con el ratón (tiltPitch puro, ±PITCH_LIMIT).
       const turn = key('ArrowLeft') - key('ArrowRight');
-      if (turn !== 0) {
+      const tilt = key('KeyQ') + key('PageUp') - key('KeyE') - key('PageDown');
+      if (turn !== 0 || tilt !== 0) {
         this._eulerScratch.setFromQuaternion(this._camera.quaternion);
-        this._eulerScratch.y = turnYaw(this._eulerScratch.y, turn, dt, TURN_SPEED);
+        if (turn !== 0) {
+          this._eulerScratch.y = turnYaw(this._eulerScratch.y, turn, dt, TURN_SPEED);
+        }
+        if (tilt !== 0) {
+          this._eulerScratch.x = tiltPitch(this._eulerScratch.x, tilt, dt, PITCH_SPEED, PITCH_LIMIT);
+        }
         this._camera.quaternion.setFromEuler(this._eulerScratch);
       }
       const fwd = key('KeyW') + key('ArrowUp') - key('KeyS') - key('ArrowDown');
@@ -1550,6 +1611,7 @@ export class CareerIsland3D extends LitElement {
    * pueda usar el overlay; tras cerrarlo, un clic en el canvas re-engancha.
    */
   _openArchipelago() {
+    this._keys.clear(); // sin lock no habrá pointerlockchange que las suelte (MC-18)
     if (this._fpsLocked) {
       this._expectUnlock = true;
       document.exitPointerLock();
@@ -1567,6 +1629,7 @@ export class CareerIsland3D extends LitElement {
    * @param {string} cityId
    */
   _openCityPanel(cityId) {
+    this._keys.clear(); // sin lock no habrá pointerlockchange que las suelte (MC-18)
     if (this._fpsLocked) {
       this._expectUnlock = true;
       document.exitPointerLock();
@@ -1674,10 +1737,14 @@ export class CareerIsland3D extends LitElement {
     }
   }
 
+  /** Ayuda compacta de controles del modo a pie (visible con y sin lock, MC-18). */
+  static FPS_HELP = html`<div class="fps-help">←→ girar · ↑↓ avanzar · A/D lateral · Q/E o RePág/AvPág mirar · Shift correr · E entrar · Esc salir</div>`;
+
   /**
-   * HUD inferior del modo fps: ayuda compacta de controles siempre visible con
-   * el lock tomado, y encima el prompt de ciudad cercana cuando la hay. Sin
-   * lock, cómo retomar el control.
+   * HUD inferior del modo fps: ayuda compacta de controles siempre visible, y
+   * encima el prompt de ciudad cercana cuando la hay. Sin lock, un aviso
+   * DISCRETO y no bloqueante (píldora con pointer-events: none, MC-18)
+   * recuerda que el teclado sigue mandando y que el clic solo añade el ratón.
    */
   _renderFpsHint() {
     if (this._mode !== 'fps') return null;
@@ -1686,7 +1753,10 @@ export class CareerIsland3D extends LitElement {
       if (this._insideCityId !== null) {
         return html`<div class="fps-hint"><kbd>↓</kbd>/<kbd>S</kbd> da hacia atrás para salir a la isla</div>`;
       }
-      return html`<div class="fps-hint">Haz clic en la isla para tomar el control · Esc para salir</div>`;
+      return html`
+        <div class="fps-hint near">Teclado activo · clic en la isla para mirar también con el ratón</div>
+        ${CareerIsland3D.FPS_HELP}
+      `;
     }
     const city = this._nearCityId
       ? (this.map?.cities ?? []).find((c) => c.id === this._nearCityId)
@@ -1697,7 +1767,7 @@ export class CareerIsland3D extends LitElement {
         : this._nearBoat
           ? html`<div class="fps-hint near"><kbd>E</kbd> Zarpar</div>`
           : null}
-      <div class="fps-help">←→ girar · ↑↓ avanzar · A/D lateral · Shift correr · E entrar · Esc salir</div>
+      ${CareerIsland3D.FPS_HELP}
     `;
   }
 
@@ -4044,7 +4114,7 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para entrar en la ciudad cercana. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie)."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Q/E o Re Pág/Av Pág para mirar arriba y abajo, Shift para correr, ratón para mirar y E para entrar en la ciudad cercana — todo el modo a pie se puede jugar solo con el teclado. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie)."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}

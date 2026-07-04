@@ -193,6 +193,40 @@ export function turnYaw(yaw, dir, dt, speed) {
   return normalizeYaw(yaw + dir * speed * dt);
 }
 
+/** Velocidad angular al mirar arriba/abajo con teclas (radianes por segundo, MC-18). */
+export const PITCH_SPEED = 1.6;
+/**
+ * Límite simétrico de inclinación de la mirada (radianes desde la horizontal,
+ * MC-18): el MISMO margen polar de 0.15 rad que se impone a
+ * PointerLockControls — nunca al cénit/nadir puro, así el forward proyectado
+ * al suelo no degenera (min/maxPolarAngle = π/2 ∓ PITCH_LIMIT).
+ */
+export const PITCH_LIMIT = Math.PI / 2 - 0.15;
+
+/**
+ * Un paso de inclinación de la mirada con teclas (MC-18): mirar arriba/abajo
+ * a velocidad angular constante mientras se mantiene la tecla, con clamp
+ * simétrico en ±limit (los mismos topes polares que el ratón del pointer
+ * lock). Convención de cámara three.js (euler YXZ): pitch positivo mira
+ * ARRIBA. Pura y determinista, como turnYaw.
+ *
+ * @param {number} pitch Pitch actual (radianes; positivo mira arriba).
+ * @param {number} dir Sentido: +1 arriba, -1 abajo (0 = quieto).
+ * @param {number} dt Delta de tiempo en segundos.
+ * @param {number} speed Velocidad angular (radianes por segundo).
+ * @param {number} limit Límite simétrico (radianes, 0 < limit < π/2).
+ * @returns {number} Nuevo pitch acotado a [-limit, limit].
+ */
+export function tiltPitch(pitch, dir, dt, speed, limit) {
+  if (!Number.isFinite(speed) || speed <= 0) {
+    throw new Error(`Velocidad de giro inválida para tiltPitch: "${speed}"`);
+  }
+  if (!Number.isFinite(limit) || limit <= 0 || limit >= Math.PI / 2) {
+    throw new Error(`Límite de pitch inválido para tiltPitch: "${limit}"`);
+  }
+  return Math.min(Math.max(pitch + dir * speed * dt, -limit), limit);
+}
+
 /**
  * Un paso de giro HACIA un yaw objetivo por el arco más corto (MC-10): el
  * avatar de la vista aérea rota suavemente hacia su dirección de marcha. El
