@@ -110,6 +110,19 @@
  * Además la placa de la puerta de las casas VISITADAS es DORADA de forma
  * permanente: el distintivo de ciudadano.
  *
+ * Compañeros del equipo (MC-12): la prop `teammates` ({personId, name,
+ * currentCity, progressPct}, SOLO esos datos: privacidad) pinta un avatar por
+ * compañero junto a su ciudad actual — figura del avatar propio con camiseta y
+ * gorra deterministas por personId (teammateTint, sin la gorra coral propia),
+ * repartidos en arco frente a la fachada (teammateOffsets) para que varios en
+ * la misma ciudad no se solapen, mirando hacia fuera. Nombre en sprite sobre
+ * la cabeza con fundido por distancia (a pie, solo a corta distancia) e idle
+ * de balanceo procedural con fase por hash. Clic sobre un compañero (raycast
+ * en aérea; desde la mira en fps, soltando el lock como el panel) emite
+ * `select-teammate {personId, x, y}` para que <career-app> muestre su
+ * mini-resumen. El grupo se reconstruye al cambiar la prop, con dispose limpio
+ * y materiales/geometrías compartidos por build.
+ *
  * Sonido (MC-11, islandAudio.js): ambiente de olas + gaviota ocasional, un
  * tick de paso por ZANCADA (fase ∝ distancia: el rate sigue a la velocidad,
  * tanto del avatar aéreo como del caminante fps) y la fanfarria de ciudadanía.
@@ -133,6 +146,8 @@ import {
   journeyPathPoints,
   ribbonStrip,
   hashId,
+  teammateOffsets,
+  teammateTint,
   ACCENT_COLORS,
   STATUS_COLORS,
 } from '../../tools/career/domain/islandLayout.js';
@@ -284,6 +299,28 @@ const AVATAR_COLORS = Object.freeze({
   skin: 0xf1c9a5,
   cap: 0xe26d5e,
 });
+/**
+ * Compañeros del equipo en la isla (MC-12). Sus figuras reutilizan la geometría
+ * del avatar propio con variación determinista por personId (teammateTint):
+ * camiseta y gorra del hash — la gorra coral queda EXCLUSIVA del avatar propio.
+ */
+const TEAMMATE = Object.freeze({
+  /** Fundido por distancia del nombre sobre la cabeza (unidades de mundo). */
+  labelFadeAerial: Object.freeze({ near: 22, far: 44 }),
+  /** A pie el nombre solo se ve a corta distancia (misma política que placas/prompts). */
+  labelFadeFps: Object.freeze({ near: 8, far: 16 }),
+  /** Altura (unidades) del nombre sobre los pies y escala del sprite. */
+  labelY: 3.05,
+  labelScale: 1.7,
+  /** Balanceo idle: amplitudes (rad) de brazos y de la inclinación del cuerpo. */
+  swayArm: 0.09,
+  swayLean: 0.022,
+  /** Velocidad angular (rad/s) base y variación determinista del balanceo. */
+  swaySpeedBase: 0.9,
+  swaySpeedJitter: 0.7,
+  /** Alcance (unidades) del clic sobre un compañero desde la mira en modo fps. */
+  fpsPickRange: 22,
+});
 /** Dorado de ciudadano (MC-11): placa de las casas visitadas y pulso emisivo. */
 const CITIZEN_GOLD = 0xd4af37;
 /**
@@ -304,6 +341,7 @@ export class CareerIsland3D extends LitElement {
     journey: { attribute: false },
     reachable: { attribute: false },
     selected: { attribute: false },
+    teammates: { attribute: false },
     _phase: { state: true },
     _mode: { state: true },
     _fpsLocked: { state: true },
@@ -411,6 +449,12 @@ export class CareerIsland3D extends LitElement {
     this.journey = { visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} };
     this.reachable = [];
     this.selected = null;
+    /**
+     * Compañeros del equipo a pintar junto a su ciudad actual (MC-12). SOLO
+     * nombre, ciudad y % de progreso: el contenedor no pasa nada más.
+     * @type {{ personId: string, name: string, currentCity: string, progressPct: number }[]}
+     */
+    this.teammates = [];
     /** Fase del canvas: 'loading' | 'ready' | 'unsupported' | 'error'. */
     this._phase = 'loading';
     /** Módulo three (cargado dinámicamente). */
@@ -467,6 +511,13 @@ export class CareerIsland3D extends LitElement {
     this._cityLabels = [];
     /** Etiquetas flotantes de comarca y puerto (ocultas a pie). */
     this._areaLabels = [];
+    /** Grupo de figuras de compañeros (MC-12): se rehace al cambiar la prop. */
+    this._teammatesGroup = null;
+    /** Figuras de compañero vivas (userData.limbs y userData.sway) para el idle. */
+    this._teammateFigures = [];
+    /** Sprites de nombre de compañero (fundido por distancia propio). */
+    this._teammateLabels = [];
+    this._lastTeamLabelTs = 0;
     /**
      * Caché de texturas de placa de puerta por nombre de ciudad: el grupo de
      * ciudades se rehace a menudo (journey/selección/proximidad) y pintar el
@@ -564,6 +615,9 @@ export class CareerIsland3D extends LitElement {
     } else if (changed.has('journey') || changed.has('reachable') || changed.has('selected')) {
       this._rebuildCities();
     }
+    // Compañeros (MC-12): su grupo solo depende de la prop y del mapa (el
+    // cambio de mapa ya los rehace dentro de _rebuildAll).
+    if (!changed.has('map') && changed.has('teammates')) this._rebuildTeammates();
     if (this._pendingCelebration) {
       const cityId = this._pendingCelebration;
       this._pendingCelebration = null;
@@ -744,6 +798,7 @@ export class CareerIsland3D extends LitElement {
       }
       this._tickEnvironment(now); // agua ondulada y deriva de nubes (MC-10)
       this._tickCelebration(now); // confeti y pulso dorado, en cualquier modo (MC-11)
+      this._tickTeammates(now); // idle y nombres de compañeros, en cualquier modo (MC-12)
       this._renderer.render(this._scene, this._camera);
     };
     this._raf = requestAnimationFrame(step);
@@ -1427,6 +1482,7 @@ export class CareerIsland3D extends LitElement {
     if (this.map.id !== this._lastMapId) this._clearPlateCache(); // otra isla, otras placas
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
+    this._rebuildTeammates(); // las posiciones de los compañeros dependen del mapa (MC-12)
     // Avatar de la vista aérea (MC-10): se construye UNA vez (vive en la
     // escena, fuera de los grupos que se rehacen) y se recoloca por isla.
     if (!this._avatar) {
@@ -2582,58 +2638,87 @@ export class CareerIsland3D extends LitElement {
   // ---- Avatar en vista aérea (MC-10) --------------------------------------------
 
   /**
-   * Personajillo low-poly (estilo noventero, colores GREBLA): piernas navy con
-   * pivote en la cadera, cuerpo teal, brazos con pivote en el hombro, cabeza y
-   * gorra coral. Los pivotes van horneados en las geometrías (translate) para
-   * que la animación procedural sea un simple rotation.x. userData.limbs guarda
-   * las referencias que anima _tickAvatar. La fachada del avatar es +z local
-   * (la misma convención que las casas): rotation.y = yaw de marcha.
+   * Geometrías del personajillo low-poly, con los pivotes horneados (translate)
+   * para que la animación procedural sea un simple rotation.x. Se crean por
+   * build y se COMPARTEN entre todas las figuras de ese build (avatar propio o
+   * compañeros, MC-12); _disposeSubtree las libera con su grupo.
    */
-  _buildAvatar() {
+  _makeFigureAssets() {
+    const THREE = this._THREE;
+    const legGeo = new THREE.BoxGeometry(AVATAR.legW, AVATAR.legH, AVATAR.legW);
+    legGeo.translate(0, -AVATAR.legH / 2, 0); // pivote en la cadera
+    const bodyGeo = new THREE.BoxGeometry(AVATAR.bodyW, AVATAR.bodyH, AVATAR.bodyD);
+    const armGeo = new THREE.BoxGeometry(AVATAR.armW, AVATAR.armH, AVATAR.armW);
+    armGeo.translate(0, -AVATAR.armH / 2 + 0.06, 0); // pivote en el hombro
+    const headGeo = new THREE.BoxGeometry(AVATAR.headS, AVATAR.headS, AVATAR.headS);
+    const capGeo = new THREE.BoxGeometry(AVATAR.headS + 0.08, 0.16, AVATAR.headS + 0.08);
+    return { legGeo, bodyGeo, armGeo, headGeo, capGeo };
+  }
+
+  /**
+   * Figura low-poly del personajillo (estilo noventero): piernas con pivote en
+   * la cadera, cuerpo, brazos con pivote en el hombro, cabeza y gorra.
+   * userData.limbs guarda las referencias que animan _tickAvatar (zancada) y
+   * _tickTeammates (idle). La fachada de la figura es +z local (la misma
+   * convención que las casas): rotation.y = yaw.
+   * @param {{ legGeo: object, bodyGeo: object, armGeo: object, headGeo: object, capGeo: object }} assets
+   * @param {(color: number) => object} materialFor Cache de materiales del build.
+   * @param {{ body: number, legs: number, skin: number, cap: number }} colors
+   */
+  _buildFigure(assets, materialFor, colors) {
     const THREE = this._THREE;
     const group = new THREE.Group();
-    const mat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
     const add = (mesh) => {
       mesh.castShadow = SHADOWS.enabled;
       group.add(mesh);
       return mesh;
     };
-    const legGeo = new THREE.BoxGeometry(AVATAR.legW, AVATAR.legH, AVATAR.legW);
-    legGeo.translate(0, -AVATAR.legH / 2, 0); // pivote en la cadera
-    const legMat = mat(AVATAR_COLORS.legs);
-    const legL = add(new THREE.Mesh(legGeo, legMat));
+    const legMat = materialFor(colors.legs);
+    const legL = add(new THREE.Mesh(assets.legGeo, legMat));
     legL.position.set(-AVATAR.hipGap, AVATAR.legH, 0);
-    const legR = add(new THREE.Mesh(legGeo, legMat));
+    const legR = add(new THREE.Mesh(assets.legGeo, legMat));
     legR.position.set(AVATAR.hipGap, AVATAR.legH, 0);
-    const bodyMat = mat(AVATAR_COLORS.body);
-    const body = add(
-      new THREE.Mesh(new THREE.BoxGeometry(AVATAR.bodyW, AVATAR.bodyH, AVATAR.bodyD), bodyMat),
-    );
+    const bodyMat = materialFor(colors.body);
+    const body = add(new THREE.Mesh(assets.bodyGeo, bodyMat));
     body.position.y = AVATAR.legH + AVATAR.bodyH / 2;
-    const armGeo = new THREE.BoxGeometry(AVATAR.armW, AVATAR.armH, AVATAR.armW);
-    armGeo.translate(0, -AVATAR.armH / 2 + 0.06, 0); // pivote en el hombro
     const shoulderY = AVATAR.legH + AVATAR.bodyH - 0.06;
     const armX = AVATAR.bodyW / 2 + AVATAR.armW / 2 + 0.02;
-    const armL = add(new THREE.Mesh(armGeo, bodyMat));
+    const armL = add(new THREE.Mesh(assets.armGeo, bodyMat));
     armL.position.set(-armX, shoulderY, 0);
-    const armR = add(new THREE.Mesh(armGeo, bodyMat));
+    const armR = add(new THREE.Mesh(assets.armGeo, bodyMat));
     armR.position.set(armX, shoulderY, 0);
-    const head = add(
-      new THREE.Mesh(
-        new THREE.BoxGeometry(AVATAR.headS, AVATAR.headS, AVATAR.headS),
-        mat(AVATAR_COLORS.skin),
-      ),
-    );
+    const head = add(new THREE.Mesh(assets.headGeo, materialFor(colors.skin)));
     head.position.y = AVATAR.legH + AVATAR.bodyH + AVATAR.headS / 2 + 0.04;
-    const cap = add(
-      new THREE.Mesh(
-        new THREE.BoxGeometry(AVATAR.headS + 0.08, 0.16, AVATAR.headS + 0.08),
-        mat(AVATAR_COLORS.cap),
-      ),
-    );
+    const cap = add(new THREE.Mesh(assets.capGeo, materialFor(colors.cap)));
     cap.position.y = head.position.y + AVATAR.headS / 2 + 0.06;
     group.userData.limbs = { legL, legR, armL, armR };
     return group;
+  }
+
+  /** Cache de materiales Lambert planos por color para un build de figuras. */
+  static _figureMaterialCache(THREE) {
+    const materials = new Map();
+    return (color) => {
+      let m = materials.get(color);
+      if (!m) {
+        m = new THREE.MeshLambertMaterial({ color, flatShading: true });
+        materials.set(color, m);
+      }
+      return m;
+    };
+  }
+
+  /**
+   * Avatar PROPIO de la vista aérea (MC-10): la figura compartida con los
+   * colores GREBLA (piernas navy, cuerpo teal y gorra coral — la gorra coral
+   * es exclusiva del propio; los compañeros visten teammateTint).
+   */
+  _buildAvatar() {
+    return this._buildFigure(
+      this._makeFigureAssets(),
+      CareerIsland3D._figureMaterialCache(this._THREE),
+      AVATAR_COLORS,
+    );
   }
 
   /**
@@ -2760,6 +2845,204 @@ export class CareerIsland3D extends LitElement {
       this._camera.position.x += dx;
       this._camera.position.z += dz;
     }
+  }
+
+  // ---- Compañeros del equipo (MC-12) --------------------------------------------
+
+  _rebuildTeammates() {
+    if (!this.map) return;
+    this._replaceGroup('_teammatesGroup', this._buildTeammates());
+  }
+
+  /**
+   * Grupo de compañeros (MC-12): una figura por compañero con `currentCity`
+   * válida (las ciudades retiradas del mapa se omiten, como en
+   * journeyPathPoints), colocada en arco frente a la fachada de su casa
+   * (teammateOffsets: varios en la misma ciudad no se solapan) y mirando hacia
+   * fuera. La variación es determinista por personId (teammateTint: camiseta y
+   * gorra del hash, nunca la gorra coral del avatar propio) igual que la fase
+   * del idle. El nombre va en un sprite pequeño sobre la cabeza que
+   * _fadeTeammateLabels funde por distancia. Geometrías y materiales se
+   * comparten dentro del build; _disposeSubtree los libera con el grupo.
+   */
+  _buildTeammates() {
+    const THREE = this._THREE;
+    const group = new THREE.Group();
+    this._teammateFigures = [];
+    this._teammateLabels = [];
+    const list = this.teammates ?? [];
+    if (list.length === 0) return group;
+
+    const byId = new Map((this.map.cities ?? []).map((c) => [c.id, c]));
+    const portW = this.map.startPort
+      ? worldFromMap(this.map.startPort.x, this.map.startPort.y)
+      : null;
+    const assets = this._makeFigureAssets();
+    const materialFor = CareerIsland3D._figureMaterialCache(THREE);
+
+    // Agrupados por ciudad y ordenados por personId DENTRO de cada ciudad: el
+    // offset de cada compañero no depende del orden de llegada de la prop.
+    const byCity = Object.groupBy(
+      list.filter((t) => byId.has(t.currentCity)),
+      (t) => t.currentCity,
+    );
+    for (const [cityId, mates] of Object.entries(byCity)) {
+      const city = byId.get(cityId);
+      const { wx, wz } = worldFromMap(city.x, city.y);
+      // MISMA orientación que la casa en _buildCities: fachada hacia el puerto
+      // con el jitter determinista de cityVariant.
+      const v = cityVariant(city.id);
+      const d = Math.hypot(wx, wz);
+      const baseYaw = portW
+        ? facadeYawToward({ wx, wz }, portW)
+        : d > 0.001
+          ? Math.atan2(-wx, -wz)
+          : 0;
+      const houseYaw = baseYaw + v.rotation * FACADE_JITTER;
+      const cosY = Math.cos(houseYaw);
+      const sinY = Math.sin(houseYaw);
+      const sorted = [...mates].sort((a, b) => a.personId.localeCompare(b.personId));
+      const offsets = teammateOffsets(sorted.length);
+      sorted.forEach((mate, i) => {
+        const o = offsets[i];
+        // Offset local de la casa rotado a mundo (misma matriz que los postes del muelle).
+        const x = wx + o.lx * cosY + o.lz * sinY;
+        const z = wz - o.lx * sinY + o.lz * cosY;
+        const tint = teammateTint(mate.personId);
+        const figure = this._buildFigure(assets, materialFor, {
+          body: tint.body,
+          legs: AVATAR_COLORS.legs,
+          skin: AVATAR_COLORS.skin,
+          cap: tint.cap,
+        });
+        figure.position.set(x, groundHeightAt(x, z, { radius: this._islandR }), z);
+        figure.rotation.y = houseYaw + o.yaw; // de espaldas a su casa, mirando hacia fuera
+        figure.userData.personId = mate.personId;
+        // Idle con fase y velocidad deterministas por persona (nada de RNG).
+        const seed = hashId(mate.personId);
+        figure.userData.sway = {
+          phase: hashUnit(seed, 1) * Math.PI * 2,
+          speed: TEAMMATE.swaySpeedBase + hashUnit(seed, 2) * TEAMMATE.swaySpeedJitter,
+        };
+        const label = this._makeLabel(mate.name, {
+          x: 0,
+          y: TEAMMATE.labelY,
+          z: 0,
+          scale: TEAMMATE.labelScale,
+          color: '#1e3a5f',
+        });
+        label.material.opacity = 0; // el fundido por distancia lo enciende de cerca
+        label.visible = false;
+        figure.add(label);
+        this._teammateLabels.push(label);
+        this._teammateFigures.push(figure);
+        group.add(figure);
+      });
+    }
+    return group;
+  }
+
+  /**
+   * Un frame del idle de los compañeros (MC-12), en cualquier modo de cámara:
+   * balanceo sutil de brazos a contrapié y una inclinación leve del cuerpo,
+   * con fase/velocidad deterministas por persona — se sienten vivos sin
+   * caminar. En la misma pasada, con cadencia LABEL_FADE_MS, el fundido por
+   * distancia de sus nombres.
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickTeammates(now) {
+    if (this._teammateFigures.length === 0) return;
+    const t = now / 1000;
+    for (const figure of this._teammateFigures) {
+      const { phase, speed } = figure.userData.sway;
+      const s = Math.sin(t * speed + phase);
+      const { armL, armR } = figure.userData.limbs;
+      armL.rotation.x = s * TEAMMATE.swayArm;
+      armR.rotation.x = -s * TEAMMATE.swayArm;
+      figure.rotation.z = s * TEAMMATE.swayLean;
+    }
+    if (now - this._lastTeamLabelTs >= LABEL_FADE_MS) {
+      this._lastTeamLabelTs = now;
+      this._fadeTeammateLabels();
+    }
+  }
+
+  /**
+   * Fundido por distancia de los nombres de compañero: visibles solo de cerca
+   * (umbrales ABSOLUTOS en unidades de mundo, no relativos al radio como las
+   * etiquetas de ciudad: el nombre es un rótulo personal, no un topónimo). A
+   * pie los umbrales se acortan — misma política que placas y prompts: los
+   * nombres no ensucian el paseo salvo a corta distancia.
+   */
+  _fadeTeammateLabels() {
+    if (this._teammateLabels.length === 0) return;
+    const onFoot = this._mode === 'fps' || this._mode === 'to-fps';
+    const conf = onFoot ? TEAMMATE.labelFadeFps : TEAMMATE.labelFadeAerial;
+    const cam = this._camera.position;
+    for (const sprite of this._teammateLabels) {
+      const dist = sprite.getWorldPosition(this._lookScratch).distanceTo(cam);
+      const k = 1 - Math.min(Math.max((dist - conf.near) / (conf.far - conf.near), 0), 1);
+      sprite.material.opacity = k;
+      sprite.visible = k > 0.02;
+    }
+  }
+
+  /**
+   * Compañero bajo la mira en modo fps (raycast desde el centro de la
+   * pantalla, alcance acotado), o null.
+   * @returns {string|null} personId del compañero apuntado.
+   */
+  _pickTeammateFromCenter() {
+    if (!this._teammatesGroup || this._teammatesGroup.children.length === 0) return null;
+    const THREE = this._THREE;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), this._camera);
+    raycaster.far = TEAMMATE.fpsPickRange;
+    return CareerIsland3D._teammateFromHits(
+      raycaster.intersectObjects(this._teammatesGroup.children, true),
+    );
+  }
+
+  /** personId del primer impacto de raycast que pertenezca a una figura de compañero. */
+  static _teammateFromHits(hits) {
+    for (const hit of hits) {
+      let obj = hit.object;
+      while (obj && obj.userData.personId === undefined) obj = obj.parent;
+      if (obj?.userData.personId) return obj.userData.personId;
+    }
+    return null;
+  }
+
+  /**
+   * Abre el mini-resumen de un compañero desde el modo fps: suelta el pointer
+   * lock A PROPÓSITO (como _openCityPanel) para que el ratón pueda usar el
+   * popover; un clic en el canvas lo re-engancha.
+   * @param {string} personId
+   */
+  _openTeammate(personId) {
+    if (this._fpsLocked) {
+      this._expectUnlock = true;
+      document.exitPointerLock();
+    }
+    const canvas = this.renderRoot.querySelector('canvas');
+    const rect = canvas.getBoundingClientRect();
+    this._emitTeammate(personId, rect.width / 2, rect.height / 2);
+  }
+
+  /**
+   * Notifica el clic sobre un compañero. x/y son píxeles RELATIVOS al canvas
+   * (ancla del popover del contenedor). El detalle lleva SOLO el personId: los
+   * datos del resumen ya los tiene <career-app> (privacidad en un único sitio).
+   * @param {string} personId @param {number} x @param {number} y
+   */
+  _emitTeammate(personId, x, y) {
+    this.dispatchEvent(
+      new CustomEvent('select-teammate', {
+        detail: { personId, x, y },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   /**
@@ -2966,7 +3249,14 @@ export class CareerIsland3D extends LitElement {
     if (this._mode !== 'aerial') {
       this._pointerDownAt = null;
       if (this._mode === 'fps') {
-        if (!this._fpsLocked) this._requestLock();
+        if (!this._fpsLocked) {
+          this._requestLock();
+          return;
+        }
+        // Con el lock tomado, el clic dispara lo que hay bajo la mira: un
+        // compañero (MC-12, su mini-resumen) o la ciudad cercana (tecla E).
+        const mateId = this._pickTeammateFromCenter();
+        if (mateId) this._openTeammate(mateId);
         else if (this._nearCityId) this._openNearCity();
       }
       return;
@@ -2987,6 +3277,17 @@ export class CareerIsland3D extends LitElement {
     );
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(ndc, this._camera);
+
+    // Compañeros primero (MC-12): son pequeños y están pegados a las casas —
+    // si el clic los toca, esa es la intención. Sin zoom: solo el mini-resumen.
+    const mateId = CareerIsland3D._teammateFromHits(
+      this._teammatesGroup ? raycaster.intersectObjects(this._teammatesGroup.children, true) : [],
+    );
+    if (mateId) {
+      this._emitTeammate(mateId, event.clientX - rect.left, event.clientY - rect.top);
+      return;
+    }
+
     const hits = raycaster.intersectObjects(this._citiesGroup.children, true);
     for (const hit of hits) {
       let obj = hit.object;
@@ -3061,6 +3362,9 @@ export class CareerIsland3D extends LitElement {
     this._clearEnvTextures();
     this._cityLabels = [];
     this._areaLabels = [];
+    this._teammatesGroup = null;
+    this._teammateFigures = [];
+    this._teammateLabels = [];
     this._controls?.dispose();
     this._renderer?.dispose();
     this._scene = null;
@@ -3082,7 +3386,7 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su panel de ciudadanía. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Shift para correr, ratón para mirar y E para la ciudad cercana. Chocar de frente contra una casa abre su ciudadanía; con ese panel abierto, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}

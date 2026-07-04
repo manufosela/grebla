@@ -31,6 +31,16 @@
  * que conmuta el audio procedural de la isla (olas, gaviotas, pasos y
  * fanfarria de ciudadanía); el motor WebAudio vive en <career-island-3d>.
  *
+ * Compañeros en la isla (MC-12): el mapa individual es también el mapa del
+ * EQUIPO. Al tener store y people se cargan EN PARALELO los journeys de todas
+ * las personas visibles (asíncrono, 1 lectura por persona; con más de
+ * MAX_TEAM_JOURNEYS se corta y se avisa por consola) y se derivan los
+ * `teammates` [{personId, name, currentCity, progressPct}] — SOLO esos datos:
+ * nada de lecturas ni evidencias de terceros (privacidad). La isla los pinta
+ * junto a su ciudad actual; el clic sobre uno (`select-teammate`) abre aquí un
+ * mini-popover DOM (uno solo a la vez; clic fuera lo cierra). El botón HUD
+ * «👥 Equipo» (persistente en localStorage) los muestra/oculta.
+ *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
  *  - people: { id: string, name: string }[]   personas del equipo del líder
@@ -48,7 +58,7 @@ import {
   stats,
 } from '../../tools/career/application/usecases.js';
 import { getCareerMap } from '../../lib/careerMap.js';
-import { cityStatus, missingPrereqs } from '../../tools/career/domain/progress.js';
+import { cityStatus, missingPrereqs, progressPct } from '../../tools/career/domain/progress.js';
 
 export class CareerApp extends LitElement {
   static properties = {
@@ -63,10 +73,23 @@ export class CareerApp extends LitElement {
     viewMode: { state: true },
     mode3d: { state: true },
     audioMuted: { state: true },
+    teammates: { state: true },
+    showTeam: { state: true },
+    teammatePopover: { state: true },
   };
 
   /** Clave de persistencia sencilla para el modo de vista. */
   static VIEW_MODE_KEY = 'grebla:career:viewMode';
+  /** Clave de persistencia del toggle «👥 Equipo» (MC-12). */
+  static TEAM_VISIBLE_KEY = 'grebla:career:teamVisible';
+  /**
+   * Tope de journeys de compañeros a cargar (MC-12): 1 lectura de Firestore
+   * por persona es aceptable en equipos pequeños; con más de 25 personas
+   * visibles se cargan solo las 25 primeras y se avisa por consola.
+   */
+  static MAX_TEAM_JOURNEYS = 25;
+  /** Lista vacía ESTABLE: la isla no rehace su grupo en cada render sin equipo. */
+  static EMPTY_TEAMMATES = Object.freeze([]);
 
   static styles = css`
     :host { display: flex; flex-direction: column; min-height: 0; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
@@ -162,6 +185,25 @@ export class CareerApp extends LitElement {
     .evadd { display: flex; gap: 0.35rem; }
     .evadd input { width: auto; flex: 1 1 auto; min-width: 0; margin-top: 0; }
     .evadd .plus { flex: 0 0 auto; padding: 0.3rem 0.75rem; font-weight: 700; font-size: 0.9rem; line-height: 1; }
+    /* Mini-popover del compañero clicado en la isla (MC-12): flota sobre el
+       canvas anclado al clic, por encima del HUD y bajo el panel de ciudadanía. */
+    .matepop {
+      position: absolute;
+      z-index: 4;
+      transform: translate(-50%, calc(-100% - 14px));
+      min-width: 170px;
+      max-width: 240px;
+      background: color-mix(in srgb, var(--rm-surface, #fff) 94%, transparent);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: var(--rm-radius, 12px);
+      padding: 0.6rem 0.8rem;
+      box-shadow: 0 8px 24px rgba(17, 24, 39, 0.2);
+    }
+    .matepop header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .matepop strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
+    .matepop p { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .matepop .pct { font-weight: 700; color: var(--rm-accent, #2a9d8f); }
     .legend-wrap { margin-top: 1rem; }
     .legend-wrap summary { font-size: 0.78rem; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .recs { margin: 0.75rem 0 0; padding: 0; list-style: none; font-size: 0.78rem; }
@@ -192,11 +234,36 @@ export class CareerApp extends LitElement {
     // Sonido de la isla (MC-11): preferencia persistida; el motor WebAudio
     // vive en <career-island-3d> y este botón HUD solo lo conmuta.
     this.audioMuted = readStoredMuted();
+    // Compañeros en la isla (MC-12): journeys del equipo cacheados por persona
+    // (1 lectura por persona, una sola vez) y lista derivada para la isla.
+    /** @type {Map<string, import('../../tools/career/domain/types.js').Journey>} */
+    this._teamJourneys = new Map();
+    this._teamLoaded = false;
+    /** @type {{ personId: string, name: string, currentCity: string, progressPct: number }[]} */
+    this.teammates = CareerApp.EMPTY_TEAMMATES;
+    this.showTeam = this._readTeamVisible();
+    /** Mini-popover del compañero clicado (uno solo a la vez), o null. */
+    this.teammatePopover = null;
     // Puntero grueso (táctil): la primera persona necesita ratón y teclado; el
     // botón queda deshabilitado como «modo de escritorio» (controles táctiles,
     // futura mejora). Guardado con typeof por el render estático de Astro.
     this._coarsePointer =
       typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+  }
+
+  /** Lee la preferencia del toggle «👥 Equipo» (visible por defecto, MC-12). */
+  _readTeamVisible() {
+    if (typeof localStorage === 'undefined') return true;
+    return localStorage.getItem(CareerApp.TEAM_VISIBLE_KEY) !== 'hidden';
+  }
+
+  /** Botón HUD «👥 Equipo»: muestra/oculta a los compañeros y lo persiste. */
+  _toggleTeam() {
+    this.showTeam = !this.showTeam;
+    if (!this.showTeam) this.teammatePopover = null;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(CareerApp.TEAM_VISIBLE_KEY, this.showTeam ? 'visible' : 'hidden');
+    }
   }
 
   /** Lee la preferencia de modo de vista sin romper SSR/estático. El valor
@@ -216,7 +283,10 @@ export class CareerApp extends LitElement {
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
-    if (changed.has('personId')) this.selected = null;
+    if (changed.has('personId')) {
+      this.selected = null;
+      this.teammatePopover = null; // el resumen abierto era de otro contexto
+    }
     if (this.store && !this._mapLoaded) {
       this._mapLoaded = true;
       this._loadMap();
@@ -224,6 +294,21 @@ export class CareerApp extends LitElement {
     if (this.store && this.personId && this._loadedPerson !== this.personId) {
       this._loadedPerson = this.personId;
       this._load();
+    }
+    // Compañeros (MC-12): una única carga en paralelo de los journeys del
+    // equipo en cuanto hay store y personas visibles.
+    if (this.store && (this.people ?? []).length > 0 && !this._teamLoaded) {
+      this._teamLoaded = true;
+      this._loadTeamJourneys();
+    }
+    // El journey propio recién cargado/mutado también refresca la caché del
+    // equipo: al cambiar de persona, la anterior aparece como compañera con
+    // sus últimos cambios.
+    if (changed.has('journey') && this.personId) {
+      this._teamJourneys.set(this.personId, this.journey);
+    }
+    if (changed.has('personId') || changed.has('journey') || changed.has('map')) {
+      this._refreshTeammates();
     }
     // Accesibilidad del panel de ciudadanía (3D): al abrirse recibe el foco
     // (tabindex="-1"), de modo que Escape lo cierra sin pasos intermedios.
@@ -254,6 +339,63 @@ export class CareerApp extends LitElement {
     }
   }
 
+  /**
+   * Carga EN PARALELO los journeys de las personas visibles (MC-12). Coste: 1
+   * lectura de Firestore por persona (aceptable en equipos pequeños); con más
+   * de MAX_TEAM_JOURNEYS personas se cargan solo las primeras y se deja
+   * constancia por consola. La persona seleccionada se salta: su journey ya lo
+   * trae _load() y la caché se refresca desde updated(). Un journey ilegible
+   * no tumba al resto: ese compañero no se pinta y se avisa por consola.
+   */
+  async _loadTeamJourneys() {
+    const people = this.people ?? [];
+    const capped = people.slice(0, CareerApp.MAX_TEAM_JOURNEYS);
+    if (people.length > capped.length) {
+      console.warn(
+        `Mapa del equipo: ${people.length} personas visibles; se cargan solo los journeys de las ${CareerApp.MAX_TEAM_JOURNEYS} primeras para acotar las lecturas.`,
+      );
+    }
+    await Promise.all(
+      capped.map(async (person) => {
+        if (person.id === this.personId) return;
+        try {
+          this._teamJourneys.set(person.id, await getJourney(this.store, person.id));
+        } catch (err) {
+          console.warn(`Mapa del equipo: no se pudo cargar el journey de "${person.id}".`, err);
+        }
+      }),
+    );
+    this._refreshTeammates();
+  }
+
+  /**
+   * Deriva la lista de compañeros para la isla (MC-12) a partir de la caché de
+   * journeys: todas las personas visibles MENOS la seleccionada, y solo
+   * quienes tienen ciudad actual (sin `currentCity` no hay dónde pintarlos).
+   * SOLO nombre, ciudad y % de progreso — nada sensible (privacidad).
+   */
+  _refreshTeammates() {
+    const map = this.map;
+    if (!map) {
+      this.teammates = CareerApp.EMPTY_TEAMMATES;
+      return;
+    }
+    const next = (this.people ?? [])
+      .filter((p) => p.id !== this.personId)
+      .map((p) => {
+        const journey = this._teamJourneys.get(p.id);
+        if (!journey || !journey.currentCity) return null;
+        return {
+          personId: p.id,
+          name: p.name,
+          currentCity: journey.currentCity,
+          progressPct: progressPct(map, journey.visitedCities),
+        };
+      })
+      .filter((t) => t !== null);
+    this.teammates = next.length > 0 ? next : CareerApp.EMPTY_TEAMMATES;
+  }
+
   get _map() {
     return this.map;
   }
@@ -265,6 +407,28 @@ export class CareerApp extends LitElement {
 
   _onSelect(event) {
     this.selected = event.detail.cityId;
+    this.teammatePopover = null; // el panel de ciudadanía releva al mini-resumen
+  }
+
+  /**
+   * Clic sobre un compañero en la isla (MC-12): abre su mini-popover anclado a
+   * las coordenadas del clic (px relativos al canvas). Uno solo a la vez: el
+   * anterior, si lo había, se sustituye.
+   * @param {CustomEvent<{personId: string, x: number, y: number}>} event
+   */
+  _onSelectTeammate(event) {
+    const { personId, x, y } = event.detail;
+    this.teammatePopover = { personId, x, y };
+  }
+
+  /**
+   * Cualquier pointerdown en el escenario 3D (canvas, HUD…) cierra el
+   * mini-popover abierto: «clic fuera lo cierra». El popover detiene la
+   * propagación de sus propios pointerdown; si el mismo gesto acaba sobre otro
+   * compañero, el `select-teammate` posterior abre el suyo.
+   */
+  _onStagePointerDown() {
+    if (this.teammatePopover) this.teammatePopover = null;
   }
 
   async _act(action) {
@@ -366,6 +530,7 @@ export class CareerApp extends LitElement {
   /** La isla comunica su modo de cámara ('aerial'|'fps'): el HUD se adapta. */
   _onModeChange(event) {
     this.mode3d = event.detail.mode;
+    this.teammatePopover = null; // el ancla del popover ya no vale en el otro modo
   }
 
   /** Botón HUD «Explorar a pie»: entra en primera persona (solo escritorio). */
@@ -389,6 +554,51 @@ export class CareerApp extends LitElement {
     const next = !this.audioMuted;
     const island = this.renderRoot.querySelector('career-island-3d');
     this.audioMuted = island ? island.setAudioMuted(next) : writeStoredMuted(next);
+  }
+
+  /** Botón HUD «👥 Equipo» (MC-12): muestra/oculta los avatares del equipo. */
+  _renderTeamButton() {
+    return html`<button
+      @click=${this._toggleTeam}
+      aria-pressed=${this.showTeam}
+      title=${this.showTeam
+        ? 'Ocultar a los compañeros del equipo en la isla'
+        : 'Mostrar a los compañeros del equipo en la isla'}
+    >👥 Equipo</button>`;
+  }
+
+  /**
+   * Mini-popover del compañero clicado (MC-12): nombre, ciudad actual y % de
+   * progreso — NADA más (privacidad: sin lecturas ni evidencias de terceros).
+   * Anclado al punto del clic, acotado a los bordes del escenario; su
+   * pointerdown no se propaga (el del escenario lo cerraría).
+   */
+  _renderTeammatePopover() {
+    const pop = this.teammatePopover;
+    if (!pop || !this.showTeam) return null;
+    const mate = this.teammates.find((t) => t.personId === pop.personId);
+    if (!mate) return null;
+    const cityName =
+      this.map?.cities.find((c) => c.id === mate.currentCity)?.name ?? mate.currentCity;
+    return html`<div
+      class="matepop"
+      role="dialog"
+      aria-label="Resumen de ${mate.name}"
+      style=${`left: clamp(110px, ${Math.round(pop.x)}px, calc(100% - 110px)); top: ${Math.max(Math.round(pop.y), 96)}px;`}
+      @pointerdown=${(e) => e.stopPropagation()}
+    >
+      <header>
+        <strong>${mate.name}</strong>
+        <button
+          class="close"
+          aria-label="Cerrar resumen"
+          title="Cerrar"
+          @click=${() => { this.teammatePopover = null; }}
+        >✕</button>
+      </header>
+      <p>Vive en ${cityName}</p>
+      <p>Progreso <span class="pct">${mate.progressPct}%</span></p>
+    </div>`;
   }
 
   /** Botón HUD del sonido, presente en vista aérea Y a pie (MC-11). */
@@ -633,14 +843,16 @@ export class CareerApp extends LitElement {
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
 
       ${this.viewMode === '3d'
-        ? html`<div class="stage3d">
+        ? html`<div class="stage3d" @pointerdown=${this._onStagePointerDown}>
             <career-island-3d
               class="stage"
               .map=${map}
               .journey=${this.journey}
               .reachable=${s.reachable}
               .selected=${this.selected}
+              .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               @select-city=${this._onSelect}
+              @select-teammate=${this._onSelectTeammate}
               @webgl-unavailable=${this._onWebglUnavailable}
               @mode-change=${this._onModeChange}
             ></career-island-3d>
@@ -662,9 +874,11 @@ export class CareerApp extends LitElement {
                         ? 'Modo de escritorio: requiere ratón y teclado'
                         : 'Recorre la isla a pie en primera persona (WASD + ratón)'}
                     >🚶 Explorar a pie${this._coarsePointer ? ' (modo de escritorio)' : ''}</button>
+                    ${this._renderTeamButton()}
                     ${this._renderAudioButton()}
                   `}
             </div>
+            ${this._renderTeammatePopover()}
             ${sel ? this._renderCityPanel(sel) : null}
           </div>`
         : html`<div class="grid">

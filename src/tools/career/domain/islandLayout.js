@@ -213,6 +213,69 @@ export function facadeYawToward(housePos, portPos) {
 }
 
 /**
+ * Arco de compañeros frente a la fachada de una casa (MC-12): radio desde el
+ * eje de la casa (fuera del radio de colisión, ~2.5, sin invadir la puerta) y
+ * apertura total del arco. En coordenadas LOCALES de la casa la fachada es la
+ * cara +z (la misma convención que facadeYawToward).
+ */
+export const TEAMMATE_ARC = Object.freeze({ radius: 4.4, span: (2 * Math.PI) / 3 });
+
+/**
+ * Rango de tonos HSL (grados) para camiseta y gorra de los compañeros (MC-12).
+ * Excluye la franja coral (~8°, la gorra coral es EXCLUSIVA del avatar propio):
+ * los tonos generados caen siempre en [min, max) y nunca rozan el coral.
+ */
+export const TEAMMATE_HUE = Object.freeze({ min: 30, max: 330 });
+
+/**
+ * Offsets DETERMINISTAS de los compañeros alrededor de una casa (MC-12): un
+ * arco frente a la fachada (+z local), centrado en la puerta, para que varios
+ * compañeros en la misma ciudad no se solapen. Con 1 compañero queda frente a
+ * la puerta; con n, repartidos uniformemente por el arco. `yaw` es el ángulo
+ * local del offset (0 = eje de la fachada): rotándolo con el yaw de la casa
+ * cada figura queda mirando hacia FUERA (de espaldas a su casa).
+ *
+ * @param {number} count Número de compañeros en la ciudad (entero ≥ 0).
+ * @param {{ radius?: number, span?: number }} [opts] Radio del arco y apertura
+ *   total (radianes); por defecto TEAMMATE_ARC.
+ * @returns {{ lx: number, lz: number, yaw: number }[]} Offsets locales de la casa.
+ */
+export function teammateOffsets(count, opts = {}) {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error(`Cantidad inválida para teammateOffsets: "${count}"`);
+  }
+  const radius = opts.radius ?? TEAMMATE_ARC.radius;
+  const span = opts.span ?? TEAMMATE_ARC.span;
+  if (!Number.isFinite(radius) || radius <= 0) {
+    throw new Error(`Radio inválido para teammateOffsets: "${radius}"`);
+  }
+  if (!Number.isFinite(span) || span <= 0 || span > Math.PI * 2) {
+    throw new Error(`Apertura de arco inválida para teammateOffsets: "${span}"`);
+  }
+  return Array.from({ length: count }, (_, i) => {
+    const yaw = count === 1 ? 0 : -span / 2 + (span * i) / (count - 1);
+    return { lx: Math.sin(yaw) * radius, lz: Math.cos(yaw) * radius, yaw };
+  });
+}
+
+/**
+ * Colores DETERMINISTAS de un compañero (MC-12) a partir de su personId: tono
+ * de camiseta y de gorra derivados de bytes independientes del hash, dentro de
+ * TEAMMATE_HUE (nunca la gorra coral del avatar propio). Piernas y piel no
+ * varían: las aporta la paleta base del componente.
+ *
+ * @param {string} personId
+ * @returns {{ body: number, cap: number }} Colores hex numéricos (materiales 3D).
+ */
+export function teammateTint(personId) {
+  const h = hashId(personId);
+  const range = TEAMMATE_HUE.max - TEAMMATE_HUE.min;
+  const bodyHue = TEAMMATE_HUE.min + (h % range);
+  const capHue = TEAMMATE_HUE.min + ((h >>> 8) % range);
+  return { body: hslToHex(bodyHue, 52, 50), cap: hslToHex(capHue, 55, 42) };
+}
+
+/**
  * Puntos de mundo (en orden) de una secuencia de ids de ciudad. Los ids que no
  * existen en el mapa se omiten (journeys antiguos pueden referenciar ciudades
  * retiradas del mapa; no es un error de datos). Para dibujar la senda del
