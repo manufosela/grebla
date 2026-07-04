@@ -12,6 +12,17 @@
  * @property {string} label
  * @property {string} [url]
  *
+ * Recurso curado de una ciudad (MC-15). Sustituye a las recomendaciones en la
+ * pestaña «Recursos» de la tarjeta (las recommendations siguen existiendo por
+ * compatibilidad: la UI cae a ellas cuando una ciudad aún no tiene resources).
+ * @typedef {'curso'|'post'|'libro'|'doc'} ResourceKind
+ * @typedef {'papel'|'online'} ResourceFormat
+ * @typedef {Object} Resource
+ * @property {ResourceKind} kind
+ * @property {string} label
+ * @property {string|null} [url]
+ * @property {ResourceFormat|null} [format]  Solo para libros (papel u online)
+ *
  * @typedef {Object} City
  * @property {string} id
  * @property {string} name
@@ -22,7 +33,10 @@
  * @property {number} weight    Importancia (puntos al alcanzarla)
  * @property {string[]} prereqs ids de ciudades prerequisito
  * @property {boolean} [deprecated]            Tecnología/skill en desuso: no visitable
- * @property {Recommendation[]} [recommendations] Material recomendado para alcanzarla
+ * @property {Recommendation[]} [recommendations] Material recomendado (legado, compat)
+ * @property {string[]} [keyPoints]  Puntos fundamentales a aprender (MC-15)
+ * @property {string} [aiFocus]      Lente era-IA: qué hace la IA por ti y dónde profundizar tú (MC-15)
+ * @property {Resource[]} [resources] Recursos curados de la pestaña «Recursos» (MC-15)
  *
  * @typedef {Object} Area     Comarca de la isla
  * @property {string} id
@@ -62,6 +76,12 @@
 
 /** Isla del archipiélago en la que arranca todo journey (el doc actual). */
 export const DEFAULT_ISLAND_ID = 'island';
+
+/** Tipos de recurso válidos de una ciudad (MC-15). @type {ReadonlyArray<ResourceKind>} */
+export const RESOURCE_KINDS = Object.freeze(['curso', 'post', 'libro', 'doc']);
+
+/** Formatos válidos de un libro (MC-15). @type {ReadonlyArray<ResourceFormat>} */
+export const RESOURCE_FORMATS = Object.freeze(['papel', 'online']);
 
 export const EMPTY_JOURNEY = Object.freeze({
   visitedCities: [],
