@@ -2,7 +2,8 @@
  * <career-island-3d>
  * Render 3D REAL de la isla de carrera con Three.js (MC-5: fundación;
  * MC-6: zoom animado a ciudad/comarca; MC-7: primera persona; MC-8: pulido;
- * MC-9: puerto reconocible, fachadas hacia el puerto y entrar en las casas).
+ * MC-9: puerto reconocible, fachadas hacia el puerto y entrar en las casas;
+ * MC-11: celebración de ciudadanía y sonido de la isla).
  *
  * Es intercambiable con <career-map> (vista plana): mismas propiedades y el
  * mismo evento `select-city`. La escena se GENERA del modelo (/careerMap/island)
@@ -99,6 +100,23 @@
  *    0.185 — (casas, árboles, rocas y avatar proyectan; terreno y plataformas
  *    reciben). El flag SHADOWS.enabled permite apagarlas si algún hardware sufre.
  *
+ * Celebración de ciudadanía (MC-11): cuando el journey cambia y el diff de
+ * visitedCities dice que una ciudad ACABA de pasar a visitada (justVisitedCity,
+ * puro — y solo si es la ciudad del panel abierto: cargar el journey de otra
+ * persona no celebra nada), sobre su casa se dispara una celebración de ~2 s:
+ * pulso emisivo dorado en las paredes, confeti instanciado con colores GREBLA
+ * (trayectorias DETERMINISTAS de hash+índice, celebration.js) y fanfarria
+ * (islandAudio). Funciona en vista aérea y a pie (si la casa está a la vista).
+ * Además la placa de la puerta de las casas VISITADAS es DORADA de forma
+ * permanente: el distintivo de ciudadano.
+ *
+ * Sonido (MC-11, islandAudio.js): ambiente de olas + gaviota ocasional, un
+ * tick de paso por ZANCADA (fase ∝ distancia: el rate sigue a la velocidad,
+ * tanto del avatar aéreo como del caminante fps) y la fanfarria de ciudadanía.
+ * El AudioContext se crea/reanuda SOLO en gestos reales (pointerdown/keydown
+ * → _audio.unlock()); el silencio persiste en localStorage y lo conmuta el
+ * botón HUD de <career-app> vía setAudioMuted().
+ *
  * Es un componente presentacional: no escribe en Firestore.
  */
 import { LitElement, html, css } from 'lit';
@@ -136,6 +154,14 @@ import {
   EYE_HEIGHT,
   PROXIMITY_RADIUS,
 } from '../../tools/career/domain/walk.js';
+import {
+  CELEBRATION,
+  CONFETTI_COLOR_COUNT,
+  justVisitedCity,
+  confettiParticles,
+  confettiPosition,
+} from '../../tools/career/domain/celebration.js';
+import { IslandAudio } from './islandAudio.js';
 
 /**
  * Altura (y de mundo) de la superficie de hierba donde se asientan las
@@ -258,6 +284,19 @@ const AVATAR_COLORS = Object.freeze({
   skin: 0xf1c9a5,
   cap: 0xe26d5e,
 });
+/** Dorado de ciudadano (MC-11): placa de las casas visitadas y pulso emisivo. */
+const CITIZEN_GOLD = 0xd4af37;
+/**
+ * Paleta del confeti de la celebración (MC-11): colores GREBLA + dorado. Su
+ * longitud DEBE ser CONFETTI_COLOR_COUNT (celebration.js reparte los índices).
+ */
+const CONFETTI_COLORS = Object.freeze([0x2a9d8f, 0xf2887a, 0x1e3a5f, CITIZEN_GOLD]);
+/** Tamaño (unidades) de cada plano de confeti. */
+const CONFETTI_SIZE = Object.freeze({ w: 0.24, h: 0.15 });
+/** Pico de intensidad del pulso emisivo dorado de la casa celebrada. */
+const CELEBRATION_PULSE_PEAK = 0.85;
+/** Frecuencia (Hz) del pulso emisivo (dos destellos por segundo). */
+const CELEBRATION_PULSE_HZ = 2;
 
 export class CareerIsland3D extends LitElement {
   static properties = {
@@ -462,6 +501,25 @@ export class CareerIsland3D extends LitElement {
     /** Sprites de nube con deriva (userData.drift) del mapa actual. */
     this._clouds = [];
     this._lastEnvTs = 0;
+    /**
+     * Celebración de ciudadanía en curso (MC-11), o null. Guarda el grupo de
+     * confeti (vive en la escena, sobrevive a rebuilds del grupo de ciudades),
+     * las trayectorias puras y el material de pulso VIGENTE de la casa (se
+     * recrea en cada rebuild: _disposeSubtree libera el del build anterior).
+     * @type {{cityId: string, start: number, group: object, mesh: object, params: object[], topY: number, bodyMat: object|null, intensity: number}|null}
+     */
+    this._celebration = null;
+    /** Ciudad recién visitada pendiente de celebrar (diff en updated()). */
+    this._pendingCelebration = null;
+    /** Object3D scratch para las matrices del confeti (creado al cargar three). */
+    this._confettiDummy = null;
+    /** Motor de audio procedural de la isla (MC-11): gestiona su propio gating. */
+    this._audio = new IslandAudio();
+    /** Zancadas completas ya sonadas del avatar aéreo (fase ∝ distancia). */
+    this._avatarStepCount = 0;
+    /** Fase de zancada acumulada del caminante fps (solo para los pasos). */
+    this._fpsPhase = 0;
+    this._fpsStepCount = 0;
     /** Puntero grueso (táctil): el hint de teclado del avatar no aplica. */
     this._coarsePointer =
       typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -488,10 +546,28 @@ export class CareerIsland3D extends LitElement {
     // El panel de ciudadanía se cerró desde el contenedor (✕ o Escape): ya no
     // se está «dentro» de ninguna casa (MC-9).
     if (changed.has('selected') && this.selected === null) this._insideCityId = null;
+    // Celebración (MC-11): diff de visitadas ANTES de reconstruir. Solo cuenta
+    // el gesto real de «marcar como visitada» (el conjunto anterior + una) y
+    // solo si es la ciudad del panel abierto — cargar el journey de otra
+    // persona (selected es null en ese momento) no celebra nada.
+    if (changed.has('journey')) {
+      const prev = changed.get('journey');
+      const justId = justVisitedCity(prev?.visitedCities, this.journey?.visitedCities);
+      this._pendingCelebration = justId !== null && justId === this.selected ? justId : null;
+    }
     if (changed.has('map')) {
+      // Cambio de isla: una celebración en curso quedaría en coordenadas de
+      // la isla anterior — se corta antes de reconstruir.
+      this._endCelebration();
+      this._pendingCelebration = null;
       this._rebuildAll();
     } else if (changed.has('journey') || changed.has('reachable') || changed.has('selected')) {
       this._rebuildCities();
+    }
+    if (this._pendingCelebration) {
+      const cityId = this._pendingCelebration;
+      this._pendingCelebration = null;
+      this._celebrate(cityId);
     }
   }
 
@@ -532,6 +608,7 @@ export class CareerIsland3D extends LitElement {
     this._walkDirScratch = new THREE.Vector3();
     this._lookScratch = new THREE.Vector3();
     this._eulerScratch = new THREE.Euler(0, 0, 0, 'YXZ');
+    this._confettiDummy = new THREE.Object3D();
 
     // Detección de WebGL en un canvas desechable (no bloquea el canvas real).
     const probe = document.createElement('canvas');
@@ -606,6 +683,9 @@ export class CareerIsland3D extends LitElement {
       'pointerdown',
       (e) => {
         this._pointerDownAt = { x: e.clientX, y: e.clientY };
+        // Gesto real del usuario: momento válido para crear/reanudar el audio
+        // (autoplay policy). Idempotente: unlock() es barato.
+        this._audio.unlock();
       },
       { signal },
     );
@@ -663,6 +743,7 @@ export class CareerIsland3D extends LitElement {
         this._tickCameraAnim(now);
       }
       this._tickEnvironment(now); // agua ondulada y deriva de nubes (MC-10)
+      this._tickCelebration(now); // confeti y pulso dorado, en cualquier modo (MC-11)
       this._renderer.render(this._scene, this._camera);
     };
     this._raf = requestAnimationFrame(step);
@@ -1024,6 +1105,8 @@ export class CareerIsland3D extends LitElement {
 
   /** @param {KeyboardEvent} event */
   _onKeyDown(event) {
+    // Cualquier tecla es un gesto real: momento válido para el audio (MC-11).
+    this._audio.unlock();
     if (this._mode === 'aerial') {
       // Marcha del avatar en vista aérea (MC-10): el teclado está libre (sin
       // pointer lock), así que se ignoran las teclas escritas en campos
@@ -1137,6 +1220,12 @@ export class CareerIsland3D extends LitElement {
           this._walkCities,
           CITY_COLLIDER_RADIUS,
         );
+        // Pasos a pie (MC-11): misma fase ∝ distancia que la zancada del
+        // avatar — un tick por media onda, con el rate siguiendo a la velocidad.
+        this._fpsPhase += Math.hypot(col.x - cam.x, col.z - cam.z) * AVATAR.stepFreq;
+        const steps = Math.floor(this._fpsPhase / Math.PI);
+        if (steps > this._fpsStepCount) this._audio.step();
+        this._fpsStepCount = steps;
         cam.x = col.x;
         cam.z = col.z;
         if (col.hitCityId !== null && this._insideCityId === null) this._enterCity(col.hitCityId);
@@ -1781,6 +1870,8 @@ export class CareerIsland3D extends LitElement {
           : 0;
       node.rotation.y = baseYaw + v.rotation * FACADE_JITTER;
       node.userData.cityId = city.id;
+      // Altura del tejado: origen del confeti de la celebración (MC-11).
+      node.userData.topY = bodyH + CITY_ROOF.h;
 
       // Paredes con tablones (textura procedural tintada por el estado, MC-10).
       const body = new THREE.Mesh(bodyGeo, materialFor(color, 'wall'));
@@ -1788,6 +1879,22 @@ export class CareerIsland3D extends LitElement {
       body.position.y = bodyH / 2;
       body.castShadow = SHADOWS.enabled;
       node.add(body);
+      node.userData.body = body; // paredes: objetivo del pulso de celebración
+
+      // Celebración en curso sobre ESTA casa y el grupo se reconstruye (p. ej.
+      // el propio rebuild del toggle, o proximidad): se re-aplica el material
+      // de pulso dorado. Se crea uno NUEVO por build (el anterior lo libera
+      // _disposeSubtree con su grupo); _tickCelebration anima el vigente.
+      if (this._celebration?.cityId === city.id) {
+        const pulseMat = new THREE.MeshLambertMaterial({
+          color,
+          map: this._envTexture('wall'),
+          emissive: CITIZEN_GOLD,
+          emissiveIntensity: this._celebration.intensity,
+        });
+        body.material = pulseMat;
+        this._celebration.bodyMat = pulseMat;
+      }
 
       // Tejado: mismo tono oscurecido (determinista) para dar volumen, con
       // textura de tejas escalonadas (MC-10).
@@ -1803,9 +1910,13 @@ export class CareerIsland3D extends LitElement {
       node.add(door);
 
       // Placa con el nombre de la ciudad sobre la puerta (textura cacheada).
+      // En las casas VISITADAS la placa es DORADA de forma permanente (MC-11):
+      // el distintivo de ciudadano.
       const plate = new THREE.Mesh(
         plateGeo,
-        new THREE.MeshBasicMaterial({ map: this._plateTexture(city.name) }),
+        new THREE.MeshBasicMaterial({
+          map: this._plateTexture(city.name, status === 'visited'),
+        }),
       );
       plate.position.set(0, CITY_DOOR.h + 0.42, half + 0.03);
       node.add(plate);
@@ -1848,8 +1959,12 @@ export class CareerIsland3D extends LitElement {
       }
 
       // Selección (MC-6) o proximidad a pie (MC-7): resalte emisivo sutil
-      // (conserva la textura de tablones para no «despintar» la casa).
-      if (this.selected === city.id || (this._mode === 'fps' && this._nearCityId === city.id)) {
+      // (conserva la textura de tablones para no «despintar» la casa). La
+      // celebración (MC-11) manda: su pulso dorado ya ocupa el material.
+      if (
+        this._celebration?.cityId !== city.id &&
+        (this.selected === city.id || (this._mode === 'fps' && this._nearCityId === city.id))
+      ) {
         const selMat = new THREE.MeshLambertMaterial({
           color,
           map: this._envTexture('wall'),
@@ -1960,22 +2075,34 @@ export class CareerIsland3D extends LitElement {
    * Textura de la placa de puerta con el nombre de la ciudad, cacheada por
    * nombre (userData.shared: _disposeSubtree no la libera; ver constructor).
    * Placa clara con borde de madera y texto navy, con la fuente adaptada para
-   * que quepan también los nombres largos.
+   * que quepan también los nombres largos. La variante DORADA (MC-11, casas
+   * visitadas: el distintivo de ciudadano) se cachea con su propia clave.
    * @param {string} name
+   * @param {boolean} [golden] Placa dorada de ciudadano (ciudad visitada).
    */
-  _plateTexture(name) {
-    let texture = this._plateTextures.get(name);
+  _plateTexture(name, golden = false) {
+    const key = golden ? `gold:${name}` : name;
+    let texture = this._plateTextures.get(key);
     if (texture) return texture;
     const THREE = this._THREE;
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 64;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#f6ead2';
+    ctx.fillStyle = golden ? '#d4af37' : '#f6ead2';
     ctx.fillRect(0, 0, 256, 64);
-    ctx.strokeStyle = '#7a5a33';
+    ctx.strokeStyle = golden ? '#8a6d1d' : '#7a5a33';
     ctx.lineWidth = 6;
     ctx.strokeRect(3, 3, 250, 58);
+    if (golden) {
+      // Brillo sutil de metal: banda clara diagonal sobre el dorado.
+      const shine = ctx.createLinearGradient(0, 0, 256, 64);
+      shine.addColorStop(0.35, 'rgba(255, 245, 200, 0)');
+      shine.addColorStop(0.5, 'rgba(255, 245, 200, 0.5)');
+      shine.addColorStop(0.65, 'rgba(255, 245, 200, 0)');
+      ctx.fillStyle = shine;
+      ctx.fillRect(3, 3, 250, 58);
+    }
     let fontSize = 34;
     ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
     while (fontSize > 14 && ctx.measureText(name).width > 228) {
@@ -1989,7 +2116,7 @@ export class CareerIsland3D extends LitElement {
     texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.userData.shared = true;
-    this._plateTextures.set(name, texture);
+    this._plateTextures.set(key, texture);
     return texture;
   }
 
@@ -2521,6 +2648,7 @@ export class CareerIsland3D extends LitElement {
     this._avatarYaw = Math.atan2(spawn.lookX - spawn.x, spawn.lookZ - spawn.z);
     this._avatarPhase = 0;
     this._avatarSwing = 0;
+    this._avatarStepCount = 0;
     this._placeAvatar();
   }
 
@@ -2604,6 +2732,11 @@ export class CareerIsland3D extends LitElement {
     if (moved > 1e-6) {
       this._avatarPhase += moved * AVATAR.stepFreq;
       this._avatarSwing = Math.min(this._avatarSwing + dt * 6, 1);
+      // Un tick de paso por ZANCADA (media onda de la fase, MC-11): al ir la
+      // fase ∝ distancia, el rate del sonido sigue solo a la velocidad.
+      const steps = Math.floor(this._avatarPhase / Math.PI);
+      if (steps > this._avatarStepCount) this._audio.step();
+      this._avatarStepCount = steps;
     } else {
       this._avatarSwing = Math.max(this._avatarSwing - dt * 6, 0);
     }
@@ -2656,6 +2789,122 @@ export class CareerIsland3D extends LitElement {
       cloud.position.x += cloud.userData.drift * dt;
       if (cloud.position.x > wrap) cloud.position.x = -wrap;
     }
+  }
+
+  // ---- Celebración de ciudadanía y audio (MC-11) --------------------------------
+
+  /**
+   * Silencia/activa el sonido de la isla (API pública para el botón HUD de
+   * <career-app>). La preferencia persiste en localStorage; activar cuenta
+   * como gesto (clic del botón) y desbloquea el AudioContext si hace falta.
+   * @param {boolean} muted
+   * @returns {boolean} El estado aplicado.
+   */
+  setAudioMuted(muted) {
+    return this._audio.setMuted(muted);
+  }
+
+  /** Estado actual de silencio del audio de la isla. */
+  get audioMuted() {
+    return this._audio.muted;
+  }
+
+  /**
+   * Dispara la celebración de ciudadanía sobre la casa de una ciudad (MC-11):
+   * pulso emisivo dorado en las paredes, confeti instanciado (trayectorias
+   * DETERMINISTAS de hash+índice, celebration.js) y fanfarria. El confeti vive
+   * en un grupo propio de la ESCENA (no del grupo de ciudades): sobrevive a
+   * los rebuilds; el material de pulso se re-aplica en cada rebuild
+   * (_buildCities). Una celebración nueva corta la anterior.
+   * @param {string} cityId
+   */
+  _celebrate(cityId) {
+    if (this._phase !== 'ready' || !this._citiesGroup) return;
+    this._endCelebration();
+    const node = this._citiesGroup.children.find((c) => c.userData.cityId === cityId);
+    if (!node) return;
+    const THREE = this._THREE;
+
+    // Confeti: planos instanciados con color por instancia (paleta GREBLA).
+    const params = confettiParticles(hashId(`celebration:${cityId}`));
+    const mesh = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(CONFETTI_SIZE.w, CONFETTI_SIZE.h),
+      new THREE.MeshBasicMaterial({
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+      }),
+      params.length,
+    );
+    const color = new THREE.Color();
+    params.forEach((p, i) => {
+      mesh.setColorAt(i, color.setHex(CONFETTI_COLORS[p.colorIndex % CONFETTI_COLOR_COUNT]));
+    });
+    mesh.instanceColor.needsUpdate = true;
+    const group = new THREE.Group();
+    group.position.copy(node.position); // pie de la casa (wx, GROUND_Y, wz)
+    group.add(mesh);
+    this._scene.add(group);
+
+    this._celebration = {
+      cityId,
+      start: performance.now(),
+      group,
+      mesh,
+      params,
+      topY: node.userData.topY,
+      bodyMat: null,
+      intensity: 0,
+    };
+    // El material de pulso lo aplica el MISMO camino que usan los rebuilds
+    // (así no hay dos variantes que mantener): un rebuild inmediato lo monta.
+    this._rebuildCities();
+    this._audio.fanfare();
+  }
+
+  /**
+   * Un frame de la celebración (MC-11), en cualquier modo de cámara: anima el
+   * pulso emisivo dorado de las paredes (destellos con fundido de salida) y el
+   * confeti (posición balística pura + giro; fundido al final). Al agotar la
+   * duración se limpia sola.
+   * @param {DOMHighResTimeStamp} now
+   */
+  _tickCelebration(now) {
+    const c = this._celebration;
+    if (!c) return;
+    const t = (now - c.start) / 1000;
+    if (t >= CELEBRATION.durationS) {
+      this._endCelebration();
+      return;
+    }
+    const fade = 1 - t / CELEBRATION.durationS;
+    c.intensity = CELEBRATION_PULSE_PEAK * Math.abs(Math.sin(t * Math.PI * CELEBRATION_PULSE_HZ)) * fade;
+    if (c.bodyMat) c.bodyMat.emissiveIntensity = c.intensity;
+    const dummy = this._confettiDummy;
+    for (const [i, p] of c.params.entries()) {
+      const pos = confettiPosition(p, t, c.topY);
+      dummy.position.set(pos.x, pos.y, pos.z);
+      dummy.rotation.set(p.tilt, p.spin * t, p.tilt * 0.5);
+      dummy.updateMatrix();
+      c.mesh.setMatrixAt(i, dummy.matrix);
+    }
+    c.mesh.instanceMatrix.needsUpdate = true;
+    // Fundido de salida del confeti en los últimos CELEBRATION.fadeS segundos.
+    const fadeStart = CELEBRATION.durationS - CELEBRATION.fadeS;
+    c.mesh.material.opacity = t <= fadeStart ? 1 : (CELEBRATION.durationS - t) / CELEBRATION.fadeS;
+  }
+
+  /** Corta y limpia la celebración en curso (fin, otra nueva o teardown). */
+  _endCelebration() {
+    const c = this._celebration;
+    if (!c) return;
+    this._scene.remove(c.group);
+    CareerIsland3D._disposeSubtree(c.group);
+    // El material de pulso queda en la casa (se libera con su grupo en el
+    // siguiente rebuild): basta apagar la emisión.
+    if (c.bodyMat) c.bodyMat.emissiveIntensity = 0;
+    this._celebration = null;
   }
 
   /**
@@ -2783,6 +3032,15 @@ export class CareerIsland3D extends LitElement {
   /** Detiene el bucle, desconecta observers y libera todos los recursos GPU. */
   _teardown() {
     this._stopLoop();
+    // Celebración y audio (MC-11): confeti fuera de la escena y AudioContext
+    // cerrado con todos sus nodos parados. IslandAudio queda reutilizable: si
+    // el componente se re-monta, el siguiente gesto vuelve a desbloquearlo.
+    this._endCelebration();
+    this._pendingCelebration = null;
+    this._audio.dispose();
+    this._avatarStepCount = 0;
+    this._fpsPhase = 0;
+    this._fpsStepCount = 0;
     // El modo primera persona no sobrevive al teardown: se suelta el lock y se
     // desconectan los PointerLockControls (sus listeners de documento incluidos).
     if (this.renderRoot.pointerLockElement) document.exitPointerLock();
