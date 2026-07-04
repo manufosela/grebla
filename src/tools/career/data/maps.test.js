@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ISLAND, seedCareerMap, normalizeCareerMap, serializeCareerMap } from './maps.js';
+import { ISLAND, seedCareerMap, emptyCareerMap, normalizeCareerMap, serializeCareerMap } from './maps.js';
 
 describe('career — persistencia del mapa (helpers puros)', () => {
   it('seedCareerMap devuelve una copia profunda de la isla (fallback)', () => {
@@ -13,6 +13,33 @@ describe('career — persistencia del mapa (helpers puros)', () => {
   it('normalizeCareerMap(null) usa la semilla (documento inexistente)', () => {
     expect(normalizeCareerMap(null)).toEqual(ISLAND);
     expect(normalizeCareerMap(undefined)).toEqual(ISLAND);
+  });
+
+  it('normalizeCareerMap(null, otraIsla) cae al placeholder vacío, no a la semilla (MC-14)', () => {
+    const map = normalizeCareerMap(null, 'frontend');
+    expect(map).toEqual(emptyCareerMap('frontend'));
+    expect(map.cities).toEqual([]);
+    expect(map.areas).toEqual([]);
+    expect(map.startPort).toEqual(ISLAND.startPort);
+  });
+
+  it('normalizeCareerMap respeta el islandId y su nombre cae al id (MC-14)', () => {
+    const map = normalizeCareerMap({ areas: [], cities: [] }, 'devops');
+    expect(map.id).toBe('devops');
+    expect(map.name).toBe('devops'); // sin name en data → el id, no «Isla GREBLA»
+    const named = normalizeCareerMap({ name: 'Isla DevOps', areas: [], cities: [] }, 'devops');
+    expect(named.name).toBe('Isla DevOps');
+  });
+
+  it('emptyCareerMap exige id y usa el nombre del índice cuando llega', () => {
+    expect(() => emptyCareerMap('')).toThrow();
+    expect(emptyCareerMap('fde', 'Isla FDE')).toEqual({
+      id: 'fde',
+      name: 'Isla FDE',
+      areas: [],
+      cities: [],
+      startPort: ISLAND.startPort,
+    });
   });
 
   it('normalizeCareerMap reconstruye id/name y saneadores de tipos', () => {

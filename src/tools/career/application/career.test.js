@@ -7,6 +7,7 @@ import {
   getJourney,
   toggleVisited,
   setCurrent,
+  setCurrentIsland,
   toggleRoute,
   setEvidence,
   stats,
@@ -83,5 +84,28 @@ describe('career — casos de uso', () => {
     j1 = await toggleVisited(store, 'p1', map, j1, 'git');
     const j2 = await getJourney(store, 'p2');
     expect(j2.visitedCities).toEqual([]);
+  });
+
+  it('el journey arranca en la isla de inicio y los journeys legados también (MC-14)', async () => {
+    const fresh = await getJourney(store, 'p1');
+    expect(fresh.currentIsland).toBe('island');
+    // Journey persistido ANTES del archipiélago (sin currentIsland): normaliza a 'island'.
+    await store.journeys.save('p2', { visitedCities: ['git'], currentCity: 'git', plannedRoute: [], evidences: {} });
+    const legacy = await getJourney(store, 'p2');
+    expect(legacy.currentIsland).toBe('island');
+    expect(legacy.visitedCities).toEqual(['git']);
+  });
+
+  it('setCurrentIsland persiste el viaje y no toca el resto del journey (MC-14)', async () => {
+    const map = getIslandMap();
+    let j = await getJourney(store, 'p1');
+    j = await toggleVisited(store, 'p1', map, j, 'git');
+    j = await setCurrentIsland(store, 'p1', j, 'frontend');
+    expect(j.currentIsland).toBe('frontend');
+    const saved = await getJourney(store, 'p1');
+    expect(saved.currentIsland).toBe('frontend');
+    expect(saved.visitedCities).toContain('git'); // el journey es GLOBAL: nada se pierde al zarpar
+    // Destino vacío: error alto, sin fallbacks silenciosos.
+    await expect(setCurrentIsland(store, 'p1', saved, '  ')).rejects.toThrow();
   });
 });

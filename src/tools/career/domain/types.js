@@ -35,23 +35,39 @@
  * @property {City[]} cities
  * @property {{x: number, y: number}} [startPort]  Puerto neutro de inicio
  *
+ * @typedef {Object} IslandRef   Entrada del índice del archipiélago (MC-14)
+ * @property {string} id         Id del doc /careerMap/{id}
+ * @property {string} name
+ * @property {string} [discipline]   Disciplina del ADR (frontend, devops…)
+ * @property {number} x          Posición 0..100 en el mapa del mar
+ * @property {number} y          Posición 0..100 en el mapa del mar
+ * @property {boolean} [startIsland] Isla de inicio (la del doc actual)
+ *
+ * @typedef {Object} Archipelago  Índice /careerMap/_archipelago
+ * @property {IslandRef[]} islands
+ *
  * @typedef {Object} CityEvidence
  * @property {number} [priorExperienceYears]
  * @property {string[]} [formaciones]
  * @property {string[]} [cursos]
  * @property {string[]} [titulos]
  *
- * @typedef {Object} Journey
+ * @typedef {Object} Journey    GLOBAL por persona (abarca todo el archipiélago, MC-14)
  * @property {string[]} visitedCities          ids de ciudades visitadas
  * @property {string|null} currentCity         ciudad actual (donde está la persona)
  * @property {string[]} plannedRoute           ids de ciudades en la ruta planificada
+ * @property {string} currentIsland            isla actual del archipiélago (default 'island')
  * @property {Record<string, CityEvidence>} evidences  evidencias por ciudad
  */
+
+/** Isla del archipiélago en la que arranca todo journey (el doc actual). */
+export const DEFAULT_ISLAND_ID = 'island';
 
 export const EMPTY_JOURNEY = Object.freeze({
   visitedCities: [],
   currentCity: null,
   plannedRoute: [],
+  currentIsland: DEFAULT_ISLAND_ID,
   evidences: {},
 });
 

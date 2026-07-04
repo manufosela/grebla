@@ -9,7 +9,7 @@
  * @typedef {import('../domain/types.js').CityEvidence} CityEvidence
  */
 import { SAMPLE_MAPS, ISLAND } from '../data/maps.js';
-import { EMPTY_JOURNEY } from '../domain/types.js';
+import { EMPTY_JOURNEY, DEFAULT_ISLAND_ID } from '../domain/types.js';
 import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from '../domain/progress.js';
 
 /** @returns {ReadonlyArray<CareerMap>} */
@@ -35,10 +35,13 @@ export function getIslandMap() {
 /** Normaliza un journey persistido (o crea uno vacío) al modelo actual. @returns {Journey} */
 function normalizeJourney(j) {
   if (!j) return { ...EMPTY_JOURNEY, visitedCities: [], plannedRoute: [], evidences: {} };
+  const island = typeof j.currentIsland === 'string' ? j.currentIsland.trim() : '';
   return {
     visitedCities: [...(j.visitedCities ?? [])],
     currentCity: j.currentCity ?? null,
     plannedRoute: [...(j.plannedRoute ?? [])],
+    // Journeys previos al archipiélago (MC-14) no traen isla: la de inicio.
+    currentIsland: island || DEFAULT_ISLAND_ID,
     evidences: { ...(j.evidences ?? {}) },
   };
 }
@@ -74,6 +77,21 @@ export async function toggleVisited(store, personId, map, journey, cityId) {
 /** @param {CareerStore} store @param {string} personId @param {Journey} journey @param {string|null} cityId */
 export async function setCurrent(store, personId, journey, cityId) {
   const next = { ...journey, currentCity: cityId };
+  await store.journeys.save(personId, next);
+  return next;
+}
+
+/**
+ * Viaja en barco a otra isla del archipiélago (MC-14): persiste la isla actual
+ * en el journey GLOBAL de la persona. El viaje es libre (sin gating); los
+ * prerequisitos siguen siendo por ciudad dentro de cada isla.
+ * @param {CareerStore} store @param {string} personId @param {Journey} journey @param {string} islandId
+ * @returns {Promise<Journey>}
+ */
+export async function setCurrentIsland(store, personId, journey, islandId) {
+  const id = typeof islandId === 'string' ? islandId.trim() : '';
+  if (!id) throw new Error('setCurrentIsland requiere el id de la isla de destino.');
+  const next = { ...journey, currentIsland: id };
   await store.journeys.save(personId, next);
   return next;
 }

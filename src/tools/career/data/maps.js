@@ -79,10 +79,11 @@ export const ISLAND = {
  */
 export const SAMPLE_MAPS = [ISLAND];
 
-// ── Persistencia del mapa (MC-3) ────────────────────────────────────────────
-// El mapa se guarda en Firestore (/careerMap/island). Estas funciones PURAS
-// (sin Firebase) normalizan el documento leído y lo serializan para escribir;
-// así pueden testearse sin depender de Firestore. La IO vive en src/lib/careerMap.js.
+// ── Persistencia del mapa (MC-3, multi-isla en MC-14) ───────────────────────
+// Cada isla se guarda en Firestore (/careerMap/{islandId}). Estas funciones
+// PURAS (sin Firebase) normalizan el documento leído y lo serializan para
+// escribir; así pueden testearse sin depender de Firestore. La IO vive en
+// src/lib/careerMap.js.
 
 /**
  * Semilla/fallback del mapa: copia profunda de la isla en código. Se usa cuando
@@ -91,6 +92,28 @@ export const SAMPLE_MAPS = [ISLAND];
  */
 export function seedCareerMap() {
   return structuredClone(ISLAND);
+}
+
+/**
+ * Isla-PLACEHOLDER para una isla del archipiélago que aún no tiene documento
+ * (MC-14): sin comarcas ni ciudades, solo el puerto de inicio. La generación
+ * 3D ya tolera mapas vacíos (radio mínimo de isla, progreso 0), así que esta
+ * isla se ve como playa + puerto con el cartel «En construcción» hasta que
+ * llegue su contenido (MC-16).
+ * @param {string} islandId
+ * @param {string} [name] Nombre del índice del archipiélago (por defecto el id).
+ * @returns {CareerMap}
+ */
+export function emptyCareerMap(islandId, name = '') {
+  const id = String(islandId ?? '').trim();
+  if (!id) throw new Error('emptyCareerMap requiere el id de la isla.');
+  return {
+    id,
+    name: String(name ?? '').trim() || id,
+    areas: [],
+    cities: [],
+    startPort: { ...ISLAND.startPort },
+  };
 }
 
 /** @param {unknown} value @param {number} fallback @returns {number} */
@@ -150,20 +173,23 @@ function normalizeCity(city) {
 
 /**
  * Reconstruye un CareerMap completo a partir del documento de Firestore. Si no
- * hay datos (documento inexistente) devuelve la semilla en código.
- * @param {Record<string, unknown>|null|undefined} data  data() del documento /careerMap/island
+ * hay datos (documento inexistente): la isla de inicio ('island') cae a la
+ * semilla en código; cualquier otra isla del archipiélago (MC-14) cae a su
+ * isla-placeholder vacía («En construcción»).
+ * @param {Record<string, unknown>|null|undefined} data  data() del documento /careerMap/{islandId}
+ * @param {string} [islandId] Id de la isla (por defecto la de inicio, 'island').
  * @returns {CareerMap}
  */
-export function normalizeCareerMap(data) {
-  if (!data) return seedCareerMap();
+export function normalizeCareerMap(data, islandId = 'island') {
+  if (!data) return islandId === 'island' ? seedCareerMap() : emptyCareerMap(islandId);
   const name = String(data.name ?? '').trim();
   const startPort =
     data.startPort && typeof data.startPort === 'object'
       ? { x: toFiniteNumber(/** @type {any} */ (data.startPort).x, ISLAND.startPort.x), y: toFiniteNumber(/** @type {any} */ (data.startPort).y, ISLAND.startPort.y) }
       : { ...ISLAND.startPort };
   return {
-    id: 'island',
-    name: name || ISLAND.name,
+    id: islandId,
+    name: name || (islandId === 'island' ? ISLAND.name : islandId),
     areas: Array.isArray(data.areas) ? data.areas.map(normalizeArea).filter((a) => a.id) : [],
     cities: Array.isArray(data.cities) ? data.cities.map(normalizeCity).filter((c) => c.id) : [],
     startPort,
@@ -203,7 +229,9 @@ export function serializeCareerMap(map) {
     return city;
   });
   return {
-    name: String(map?.name ?? '').trim() || ISLAND.name,
+    // Sin nombre: cae al id de la isla (multi-isla, MC-14) y, en último
+    // término, al nombre de la isla semilla.
+    name: String(map?.name ?? '').trim() || String(map?.id ?? '').trim() || ISLAND.name,
     areas: (map?.areas ?? []).map((a) => ({ id: String(a.id ?? '').trim(), name: String(a.name ?? '').trim() || String(a.id ?? '').trim() })).filter((a) => a.id),
     cities,
     startPort: map?.startPort
