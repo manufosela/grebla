@@ -25,6 +25,8 @@ import {
   TEAMMATE_HUE,
   teammateOffsets,
   teammateTint,
+  WIZARD_SPOT,
+  wizardSpot,
 } from './islandLayout.js';
 
 /** Mapa mínimo de pruebas: dos comarcas, una vacía, y puerto de inicio. */
@@ -481,5 +483,60 @@ describe('teammateTint (MC-12)', () => {
   it('falla en alto con un personId inválido', () => {
     expect(() => teammateTint('')).toThrow();
     expect(() => teammateTint(undefined)).toThrow();
+  });
+});
+
+describe('wizardSpot (MC-22)', () => {
+  it('es determinista y respeta la holgura con todas las casas', () => {
+    const a = wizardSpot(MAP);
+    const b = wizardSpot(MAP);
+    expect(a).toEqual(b);
+    for (const city of MAP.cities) {
+      const { wx, wz } = worldFromMap(city.x, city.y);
+      expect(Math.hypot(wx - a.wx, wz - a.wz)).toBeGreaterThanOrEqual(WIZARD_SPOT.clearance);
+    }
+    // Dentro de la isla (nunca en el agua).
+    expect(Math.hypot(a.wx, a.wz)).toBeLessThanOrEqual(islandRadius(MAP));
+  });
+
+  it('queda cerca del puerto: retranqueada WIZARD_SPOT.inland hacia el interior', () => {
+    const spot = wizardSpot(MAP);
+    const port = worldFromMap(MAP.startPort.x, MAP.startPort.y);
+    const portDist = Math.hypot(port.wx, port.wz);
+    // Misma anilla radial que el puerto menos el retranqueo.
+    expect(Math.hypot(spot.wx, spot.wz)).toBeCloseTo(portDist - WIZARD_SPOT.inland, 6);
+  });
+
+  it('barre candidatos cuando una casa ocupa el sitio preferido', () => {
+    const port = worldFromMap(MAP.startPort.x, MAP.startPort.y);
+    const portDist = Math.hypot(port.wx, port.wz);
+    const angle = Math.atan2(port.wz, port.wx);
+    const ring = portDist - WIZARD_SPOT.inland;
+    // Una casa plantada exactamente en el candidato 0 fuerza el barrido.
+    const scale = WORLD_SIZE / 100;
+    const blocker = {
+      id: 'blocker',
+      name: 'Bloqueadora',
+      kind: 'tech',
+      area: 'a1',
+      x: (Math.cos(angle) * ring) / scale + 50,
+      y: (Math.sin(angle) * ring) / scale + 50,
+      weight: 1,
+      prereqs: [],
+    };
+    const blocked = { ...MAP, cities: [...MAP.cities, blocker] };
+    const spot = wizardSpot(blocked);
+    const b = worldFromMap(blocker.x, blocker.y);
+    expect(Math.hypot(b.wx - spot.wx, b.wz - spot.wz)).toBeGreaterThanOrEqual(
+      WIZARD_SPOT.clearance,
+    );
+  });
+
+  it('un mapa sin puerto ancla la cabaña al sur y acota con maxRadius', () => {
+    const noPort = { ...MAP, startPort: undefined };
+    const spot = wizardSpot(noPort);
+    expect(spot.wz).toBeGreaterThan(0); // sur = +z
+    const capped = wizardSpot(noPort, { maxRadius: 5 });
+    expect(Math.hypot(capped.wx, capped.wz)).toBeLessThanOrEqual(5 + 1e-9);
   });
 });

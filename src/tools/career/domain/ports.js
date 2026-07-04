@@ -4,6 +4,8 @@
  * Los LOGROS con fecha (MC-21) viven al lado, en
  * /people/{personId}/career/achievements, y son de SOLO-AÑADIR: `save` fusiona
  * el parche sin pisar los registros existentes (semántica merge).
+ * Las CONSULTAS AL BRUJO (MC-22) también viven en el subárbol career:
+ * /people/{personId}/career/wizard/questions/{questionId}, un doc por consulta.
  *
  * @typedef {import('./types.js').Journey} Journey
  * @typedef {import('./achievements.js').Achievements} Achievements
@@ -16,9 +18,20 @@
  * @property {(personId: string) => Promise<Record<string, unknown>|null>} get
  * @property {(personId: string, patch: Achievements) => Promise<void>} save Fusiona (merge), nunca sobrescribe.
  *
+ * Consultas al brujo (MC-22). Los repos son «tontos» (persisten lo que llega);
+ * la composición de campos (status, fechas ISO, validación) vive en los casos
+ * de uso. `markSeen` escribe SOLO { status, seenAt }: es la excepción de
+ * escritura acotada del jugador vinculado en las reglas de Firestore.
+ * @typedef {Object} QuestionsRepository
+ * @property {(personId: string) => Promise<(Record<string, unknown> & { id: string })[]>} listByPerson
+ * @property {(personId: string, question: Record<string, unknown>) => Promise<{ id: string }>} ask Crea la consulta y devuelve su id.
+ * @property {(personId: string, questionId: string, patch: Record<string, unknown>) => Promise<void>} answer
+ * @property {(personId: string, questionId: string, patch: { status: 'seen', seenAt: string }) => Promise<void>} markSeen
+ *
  * @typedef {Object} CareerStore
  * @property {JourneyRepository} journeys
  * @property {AchievementsRepository} achievements
+ * @property {QuestionsRepository} questions
  */
 
 export {};

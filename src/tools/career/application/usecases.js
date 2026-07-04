@@ -13,6 +13,7 @@ import { SAMPLE_MAPS, ISLAND } from '../data/maps.js';
 import { EMPTY_JOURNEY, DEFAULT_ISLAND_ID } from '../domain/types.js';
 import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from '../domain/progress.js';
 import { normalizeAchievements, mergeAchievements } from '../domain/achievements.js';
+import { normalizeQuestion, sortQuestionsByDateDesc } from '../domain/wizard.js';
 
 /** @returns {ReadonlyArray<CareerMap>} */
 export function getMaps() {
@@ -174,6 +175,100 @@ export async function recordAchievements(store, personId, achievements, patch) {
   if (!patch) return achievements;
   await store.achievements.save(personId, patch);
   return mergeAchievements(achievements, patch);
+}
+
+// ---- Consultas al brujo (MC-22) ---------------------------------------------
+
+/** @typedef {import('../domain/wizard.js').WizardQuestion} WizardQuestion */
+/** @typedef {import('../domain/wizard.js').QuestionAuthor} QuestionAuthor */
+
+/** @param {unknown} value @param {string} field @returns {string} */
+function requireText(value, field) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) throw new Error(`La consulta al brujo requiere ${field}.`);
+  return text;
+}
+
+/**
+ * Consultas al brujo de la persona, normalizadas y ordenadas por fecha
+ * descendente (todas las islas: la ficha del jugador las lista completas; el
+ * panel de cada brujo filtra por su isla).
+ * @param {CareerStore} store @param {string} personId
+ * @returns {Promise<WizardQuestion[]>}
+ */
+export async function listQuestions(store, personId) {
+  const raw = await store.questions.listByPerson(personId);
+  return sortQuestionsByDateDesc(raw.map((q) => normalizeQuestion(q)));
+}
+
+/**
+ * Deja una consulta en la cabaña del brujo de una isla: nace 'pending' con la
+ * fecha ISO del momento y, si hay login con uid, la autoría (como las notas
+ * del tool Equipo: sin uid no se registra autoría — degradación con gracia).
+ * @param {CareerStore} store @param {string} personId
+ * @param {{ islandId: string, islandName?: string, text: string, createdBy?: QuestionAuthor }} input
+ * @returns {Promise<WizardQuestion>} La consulta creada, normalizada.
+ */
+export async function askQuestion(store, personId, { islandId, islandName, text, createdBy }) {
+  requireText(personId, 'la persona (personId)');
+  /** @type {Record<string, unknown>} */
+  const question = {
+    islandId: requireText(islandId, 'la isla (islandId)'),
+    islandName: typeof islandName === 'string' ? islandName.trim() : '',
+    text: requireText(text, 'el texto de la pregunta'),
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+  if (createdBy?.uid && createdBy?.name) {
+    question.createdBy = { uid: createdBy.uid, name: createdBy.name };
+  }
+  const { id } = await store.questions.ask(personId, question);
+  return normalizeQuestion({ id, ...question });
+}
+
+/**
+ * Responde una consulta (el líder, desde su cola): pasa a 'answered' con la
+ * respuesta, la fecha ISO y la autoría del que responde. `creditedTo` registra
+ * al developer que ayudó cuando el líder derivó la duda fuera (la derivación
+ * v1 es informativa: el líder recoge la respuesta del compañero).
+ * @param {CareerStore} store @param {string} personId @param {string} questionId
+ * @param {{ answer: string, answeredBy?: QuestionAuthor, creditedTo?: string }} input
+ * @returns {Promise<{ status: 'answered', answer: string, answeredAt: string }>} El parche aplicado.
+ */
+export async function answerQuestion(store, personId, questionId, { answer, answeredBy, creditedTo }) {
+  requireText(personId, 'la persona (personId)');
+  requireText(questionId, 'el id de la consulta');
+  /** @type {Record<string, unknown>} */
+  const patch = {
+    status: 'answered',
+    answer: requireText(answer, 'el texto de la respuesta'),
+    answeredAt: new Date().toISOString(),
+  };
+  if (answeredBy?.uid && answeredBy?.name) {
+    patch.answeredBy = { uid: answeredBy.uid, name: answeredBy.name };
+  }
+  const credited = typeof creditedTo === 'string' ? creditedTo.trim() : '';
+  if (credited) patch.creditedTo = credited;
+  await store.questions.answer(personId, questionId, patch);
+  return /** @type {{ status: 'answered', answer: string, answeredAt: string }} */ (patch);
+}
+
+/**
+ * Marca una respuesta como VISTA (el jugador leyó al brujo): escribe SOLO
+ * { status: 'seen', seenAt } — la máscara exacta que la excepción de reglas
+ * permite al jugador vinculado. La cabaña vuelve a su estado de reposo.
+ * @param {CareerStore} store @param {string} personId @param {string} questionId
+ * @returns {Promise<{ status: 'seen', seenAt: string }>} El parche aplicado.
+ */
+export async function markQuestionSeen(store, personId, questionId) {
+  requireText(personId, 'la persona (personId)');
+  requireText(questionId, 'el id de la consulta');
+  const patch = /** @type {{ status: 'seen', seenAt: string }} */ ({
+    status: 'seen',
+    seenAt: new Date().toISOString(),
+  });
+  await store.questions.markSeen(personId, questionId, patch);
+  return patch;
 }
 
 /**

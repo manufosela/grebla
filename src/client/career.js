@@ -29,7 +29,13 @@ onUserChanged(async (user) => {
     // Personas del equipo del líder (reusa la tool Equipo), como en Role Mirror.
     const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid });
     const people = await listActivePeople(persistence);
-    app.people = people.map((p) => ({ id: p.id, name: p.name }));
+    // El uid vinculado viaja con la persona: el panel del brujo (MC-22) decide
+    // con él si el usuario logado es el jugador vinculado.
+    app.people = people.map((p) => ({ id: p.id, name: p.name, uid: p.uid ?? null }));
+    // Rol y login para el brujo (MC-22): canEdit habilita la cola del líder y
+    // currentUser firma la autoría de consultas/respuestas (como las notas).
+    app.canEdit = role === 'leader' || role === 'superadmin';
+    app.currentUser = { uid: user.uid, name: user.displayName ?? user.email ?? 'Usuario' };
     app.store = store;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar el mapa de carrera.';
