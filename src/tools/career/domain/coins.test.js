@@ -29,6 +29,7 @@ import {
   verifyEntrySignature,
   verifyLedger,
   entryLabel,
+  coinsFillLevel,
 } from './coins.js';
 
 /**
@@ -379,5 +380,27 @@ describe('entryLabel', () => {
     expect(entryLabel({ ruleId: 'superCitizen', refs: {} })).toContain('Super-ciudadano');
     expect(entryLabel({ ruleId: 'legend', refs: {} })).toContain('Leyenda');
     expect(entryLabel({ ruleId: 'carpoolCompleted', refs: { carpoolName: 'Ruta JS' } })).toBe('Carpool «Ruta JS» completado');
+  });
+});
+
+describe('coinsFillLevel', () => {
+  it('saldo 0 (o inválido) es cofre vacío', () => {
+    expect(coinsFillLevel(0)).toBe('empty');
+    expect(coinsFillLevel(-10)).toBe('empty');
+    expect(coinsFillLevel(NaN)).toBe('empty');
+    expect(coinsFillLevel(undefined)).toBe('empty');
+    expect(coinsFillLevel(null)).toBe('empty');
+  });
+
+  it('umbrales alineados con los contratos v1 (cert/ciudadanía/⭐/👑)', () => {
+    expect(coinsFillLevel(1)).toBe('low'); // un certificado suelto
+    expect(coinsFillLevel(30)).toBe('low');
+    expect(coinsFillLevel(99)).toBe('low');
+    expect(coinsFillLevel(100)).toBe('mid'); // primera ciudadanía
+    expect(coinsFillLevel(499)).toBe('mid');
+    expect(coinsFillLevel(500)).toBe('high'); // badge ⭐
+    expect(coinsFillLevel(1499)).toBe('high');
+    expect(coinsFillLevel(1500)).toBe('overflow'); // 👑 + ⭐: desborda
+    expect(coinsFillLevel(9000)).toBe('overflow');
   });
 });

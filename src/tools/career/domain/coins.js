@@ -607,6 +607,26 @@ export async function verifyLedger({
  * @param {CoinsEntry} entry
  * @returns {string}
  */
+/**
+ * Nivel de llenado del cofre de tribbu-coins según el saldo (JG-13). Umbrales
+ * alineados con los CONTRATOS v1 para que cada salto «se sienta» al jugar:
+ *  - 'empty'    saldo 0 (o no numérico/negativo): cofre vacío.
+ *  - 'low'      1-99: certificados sueltos (10-30 coins cada uno).
+ *  - 'mid'      100-499: al menos una ciudadanía de isla (100).
+ *  - 'high'     500-1499: badge ⭐ Super-ciudadano (500) o varias ciudadanías.
+ *  - 'overflow' ≥1500: 👑 Leyenda + ⭐ (1000+500): el cofre desborda.
+ * @param {number} balance Saldo materializado de la persona.
+ * @returns {'empty'|'low'|'mid'|'high'|'overflow'}
+ */
+export function coinsFillLevel(balance) {
+  const value = Number(balance);
+  if (!Number.isFinite(value) || value <= 0) return 'empty';
+  if (value < 100) return 'low';
+  if (value < 500) return 'mid';
+  if (value < 1500) return 'high';
+  return 'overflow';
+}
+
 export function entryLabel(entry) {
   const refs = entry?.refs ?? {};
   switch (entry?.ruleId) {
