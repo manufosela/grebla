@@ -228,6 +228,43 @@ export function tiltPitch(pitch, dir, dt, speed, limit) {
 }
 
 /**
+ * Sensibilidad del arrastre de mirada del modo a pie LIBRE (JG-3): radianes de
+ * giro por píxel de arrastre. Suave: ~200 px de arrastre ≈ 57° de giro.
+ */
+export const DRAG_LOOK_SENSITIVITY = 0.005;
+
+/**
+ * Un paso de mirada ARRASTRANDO con el ratón en el modo a pie libre (JG-3):
+ * metáfora de «agarrar el mundo» (como un visor de panorámicas) — arrastrar a
+ * la DERECHA gira la vista a la izquierda (el mundo se va con el cursor) y
+ * arrastrar hacia ABAJO inclina la mirada hacia arriba. El yaw se normaliza a
+ * (-π, π] (como turnYaw) y el pitch se acota a ±limit (los MISMOS topes que el
+ * teclado y el pointer lock: el forward proyectado al suelo nunca degenera).
+ * Convención de cámara three.js (euler YXZ): pitch positivo mira arriba.
+ * Pura y determinista, como turnYaw/tiltPitch.
+ *
+ * @param {number} yaw Yaw actual (radianes).
+ * @param {number} pitch Pitch actual (radianes; positivo mira arriba).
+ * @param {number} dxPx Desplazamiento horizontal del arrastre (px; positivo a la derecha).
+ * @param {number} dyPx Desplazamiento vertical del arrastre (px; positivo hacia abajo).
+ * @param {number} sensitivity Radianes por píxel de arrastre (> 0).
+ * @param {number} limit Límite simétrico del pitch (radianes, 0 < limit < π/2).
+ * @returns {{ yaw: number, pitch: number }} Nueva orientación acotada.
+ */
+export function dragLook(yaw, pitch, dxPx, dyPx, sensitivity, limit) {
+  if (!Number.isFinite(sensitivity) || sensitivity <= 0) {
+    throw new Error(`Sensibilidad inválida para dragLook: "${sensitivity}"`);
+  }
+  if (!Number.isFinite(limit) || limit <= 0 || limit >= Math.PI / 2) {
+    throw new Error(`Límite de pitch inválido para dragLook: "${limit}"`);
+  }
+  return {
+    yaw: normalizeYaw(yaw + dxPx * sensitivity),
+    pitch: Math.min(Math.max(pitch + dyPx * sensitivity, -limit), limit),
+  };
+}
+
+/**
  * Un paso de giro HACIA un yaw objetivo por el arco más corto (MC-10): el
  * avatar de la vista aérea rota suavemente hacia su dirección de marcha. El
  * giro avanza a velocidad angular constante y NUNCA se pasa del objetivo (si

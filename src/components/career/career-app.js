@@ -24,16 +24,17 @@
  * cursos, se escriben en `cursos` vaciando `titulos` (migración suave; el
  * modelo CityEvidence no cambia).
  *
- * Primera persona (MC-7): el botón «Explorar a pie» del HUD 3D llama a
- * `enterFirstPerson()` del componente de la isla; con puntero grueso (táctil)
- * queda deshabilitado como «modo de escritorio». El evento `mode-change`
- * reduce el HUD en fps: se ocultan la barra superior (persona/vistas/progreso)
- * y solo queda el botón «Salir (Esc)». El panel de ciudadanía funciona igual
- * (se abre con E/clic desde la isla, que suelta el pointer lock; al cerrarlo
- * con Escape/✕ se pide el re-enganche del lock — el gesto del cierre aún
- * vale, MC-18 — y, si el navegador lo rechaza, la isla sigue jugable solo con
- * teclado). La prop `overlayOpen` de la isla refleja si hay un overlay DOM
- * abierto (panel o archipiélago) para pausar la marcha por teclado sin lock.
+ * Primera persona (MC-7, rediseñada en JG-3): el botón «Explorar a pie» del
+ * HUD 3D llama a `enterFirstPerson()` del componente de la isla; con puntero
+ * grueso (táctil) queda deshabilitado como «modo de escritorio». El evento
+ * `mode-change` reduce el HUD en fps: se ocultan la barra superior
+ * (persona/vistas/progreso) y quedan «Salir (Esc)» y «🎮 Inmersivo» (opt-in:
+ * captura el ratón vía `enterImmersive()`; Escape lo suelta y vuelve al modo
+ * libre). Por defecto el cursor queda LIBRE: los botones del HUD funcionan y
+ * el panel de ciudadanía se cierra con ✕/Escape SIN re-capturas de ratón
+ * (JG-3: cerrar un panel nunca re-engancha el lock). La prop `overlayOpen` de
+ * la isla refleja si hay un overlay DOM abierto (panel o archipiélago) para
+ * pausar la marcha por teclado.
  *
  * Sonido (MC-11): el HUD 3D lleva un botón 🔊/🔇 persistente (localStorage)
  * que conmuta el audio procedural de la isla (olas, gaviotas, pasos y
@@ -1598,20 +1599,13 @@ export class CareerApp extends LitElement {
   /**
    * Cierra la tarjeta de la casa: deselecciona SIN mover la cámara (el usuario
    * sigue donde estaba) y devuelve el foco al HUD para no perder el teclado.
-   * En fps se intenta re-enganchar el pointer lock (MC-18: el Escape/clic del
-   * cierre aún cuenta como gesto); si el navegador lo rechaza, la marcha por
-   * teclado sin lock sigue funcionando y un clic en el canvas retoma el ratón.
+   * A pie NO se re-captura el ratón (JG-3): el modo libre no tiene nada que
+   * re-enganchar y desde el inmersivo se vuelve al libre — «🎮 Inmersivo» es
+   * siempre una decisión explícita del jugador.
    */
   _closeCityPanel() {
     this.selected = null;
-    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
-  }
-
-  /** Pide a la isla re-enganchar el pointer lock si se está a pie (MC-18). */
-  _recapturePointerLock() {
-    if (this.viewMode !== '3d' || this.mode3d !== 'fps') return;
-    this.renderRoot.querySelector('career-island-3d')?.recapturePointerLock();
   }
 
   /** Escape dentro de la tarjeta de la casa la cierra. @param {KeyboardEvent} event */
@@ -1641,6 +1635,15 @@ export class CareerApp extends LitElement {
   /** Botón HUD «Salir (Esc)»: vuelta a la vista aérea con transición. */
   _exitFps() {
     this.renderRoot.querySelector('career-island-3d')?.exitFirstPerson();
+  }
+
+  /**
+   * Botón HUD «🎮 Inmersivo» (JG-3, OPT-IN): captura el ratón (pointer lock)
+   * para el mouse-look continuo. El clic del botón es el gesto real que exige
+   * el navegador; Escape lo suelta y devuelve al modo libre.
+   */
+  _enterImmersive() {
+    this.renderRoot.querySelector('career-island-3d')?.enterImmersive();
   }
 
   /**
@@ -1677,13 +1680,11 @@ export class CareerApp extends LitElement {
   }
 
   /** Cierra el mapa del archipiélago sin viajar y devuelve el foco al HUD.
-   * Si se llegó a pie ([E] Zarpar), intenta re-enganchar el lock (MC-18).
    * Con el barco navegando (MC-19) ni ✕ ni el fondo cierran: un viaje a la
    * vez y ya está zarpado — Escape salta la animación, no la cancela. */
   _closeArchipelago() {
     if (this.voyage) return;
     this.showArchipelago = false;
-    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
@@ -1725,10 +1726,9 @@ export class CareerApp extends LitElement {
     this.showPlayerCard = true;
   }
 
-  /** Cierra la ficha y devuelve el foco al HUD (re-enganche del lock en fps). */
+  /** Cierra la ficha y devuelve el foco al HUD. */
   _closePlayerCard() {
     this.showPlayerCard = false;
-    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
@@ -2103,7 +2103,6 @@ export class CareerApp extends LitElement {
   /** Cierra el overlay de carpools y devuelve el foco al HUD. */
   _closeCarpools() {
     this.showCarpools = false;
-    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
@@ -2796,7 +2795,6 @@ export class CareerApp extends LitElement {
   /** Cierra el overlay de coins y devuelve el foco al HUD. */
   _closeCoins() {
     this.showCoins = false;
-    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
@@ -3091,7 +3089,6 @@ export class CareerApp extends LitElement {
   /** Cierra el panel del brujo (✕, Escape o fondo) y devuelve el foco al HUD. */
   _closeWizard() {
     this.showWizard = false;
-    this._recapturePointerLock();
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
@@ -4322,7 +4319,10 @@ export class CareerApp extends LitElement {
                 ? html`<button
                     @click=${this._exitFps}
                     title="Volver a la vista aérea de la isla"
-                  >Salir (Esc)</button>${this._renderArchipelagoButton()}${this._renderPlayerCardButton()}${this._renderAudioButton()}`
+                  >Salir (Esc)</button><button
+                    @click=${this._enterImmersive}
+                    title="Captura el ratón para mirar moviéndolo, sin arrastrar (Escape lo suelta y vuelve al cursor libre)"
+                  >🎮 Inmersivo</button>${this._renderArchipelagoButton()}${this._renderPlayerCardButton()}${this._renderAudioButton()}`
                 : html`
                     <button
                       @click=${this._focusOverview}
@@ -4333,7 +4333,7 @@ export class CareerApp extends LitElement {
                       ?disabled=${this._coarsePointer}
                       title=${this._coarsePointer
                         ? 'Modo de escritorio: requiere ratón y teclado'
-                        : 'Recorre la isla a pie en primera persona (WASD + ratón)'}
+                        : 'Recorre la isla a pie en primera persona: cursor libre, arrastra para mirar (WASD/flechas para andar)'}
                     >🚶 Explorar a pie${this._coarsePointer ? ' (modo de escritorio)' : ''}</button>
                     ${this._renderTeamButton()}
                     ${this._renderAudioButton()}

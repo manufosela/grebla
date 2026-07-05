@@ -43,40 +43,45 @@
  * del loop rAF existente. Cualquier input del usuario sobre los OrbitControls
  * (evento 'start': arrastre, rueda, touch) cancela la animación en curso.
  *
- * Primera persona (MC-7): `enterFirstPerson()` baja la cámara con transición
- * hasta la altura de ojos (puerto o ciudad actual del journey) y cambia
- * OrbitControls por PointerLockControls (ratón) + controles tipo DOOM (MC-8):
- * ←/→ GIRAN sobre uno mismo (turnYaw, puro), ↑/↓ y W/S avanzan/retroceden,
- * A/D hacen strafe y con Shift se corre. A pie las etiquetas flotantes se
- * ocultan (el nombre se lee en la placa de la puerta y en el prompt de
- * proximidad). La lógica de marcha es pura y compartida con el terreno (walk.js):
- * groundHeightAt pega la cámara al MISMO suelo que pintan las mallas y
- * stepPosition acota el paso a la isla deslizando por la costa. Cada ~100 ms
- * se muestrea la ciudad cercana: se resalta (emisivo, como selected) y un
- * prompt ofrece [E]/clic → `select-city` soltando el lock a propósito para
- * poder usar el panel; al cerrarse, un clic en el canvas re-engancha el lock.
+ * Primera persona (MC-7, rediseñada en JG-3): `enterFirstPerson()` baja la
+ * cámara con transición hasta la altura de ojos (puerto o ciudad actual del
+ * journey) y activa los controles tipo DOOM por teclado (MC-8): ←/→ GIRAN
+ * sobre uno mismo (turnYaw, puro), ↑/↓ y W/S avanzan/retroceden, A/D hacen
+ * strafe y con Shift se corre. Por defecto el modo a pie es LIBRE (JG-3): SIN
+ * pointer lock, con el cursor visible — los botones del HUD funcionan y las
+ * tarjetas se cierran con ✕ siempre. Se mira MANTENIENDO pulsado el botón
+ * izquierdo y ARRASTRANDO sobre el canvas (dragLook puro: metáfora de «agarrar
+ * el mundo», mismos topes de pitch que el teclado) con cursor grab/grabbing; un
+ * CLIC corto y quieto (< DRAG_THRESHOLD px y < FPS_CLICK_MAX_MS) sobre una
+ * casa/compañero/brujo/barca interactúa (raycast) — un arrastre JAMÁS abre
+ * nada. El pointer lock queda como «🎮 Modo inmersivo» OPT-IN
+ * (`enterImmersive()`, botón HUD de <career-app>): mouse-look continuo con
+ * crosshair; Escape (nativo del lock) o abrir cualquier panel lo sueltan y
+ * DEVUELVEN al modo libre — nunca hay re-captura automática. A pie las
+ * etiquetas flotantes se ocultan (el nombre se lee en la placa de la puerta y
+ * en el prompt de proximidad). La lógica de marcha es pura y compartida con el
+ * terreno (walk.js): groundHeightAt pega la cámara al MISMO suelo que pintan
+ * las mallas y stepPosition acota el paso a la isla deslizando por la costa.
+ * Cada ~100 ms se muestrea la ciudad cercana: se resalta (emisivo, como
+ * selected) y un prompt ofrece [E]/clic → `select-city`.
  *
  * Entrar en las casas (MC-9): las casas NO se atraviesan (collideWithCities,
  * puro: deslizamiento por el contorno). Un empuje FRONTAL contra una casa
  * «entra»: se abre su panel de ciudadanía (mismo flujo que la tecla E) con el
  * jugador detenido en la puerta y `_insideCityId` recordando la casa. Con ese
  * panel abierto, ↓ o S (si el foco no está en un campo del panel) cierran el
- * panel, retroceden unos pasos y re-enganchan el pointer lock; el ✕/Escape del
- * panel también limpian `_insideCityId` (vía la propiedad `selected` a null).
- * Escape (nativo del lock) o `exitFirstPerson()` vuelven, con transición, a la
- * vista aérea. `mode-change {mode:'fps'|'aerial'}` avisa a <career-app>.
+ * panel y retroceden unos pasos; el ✕/Escape del panel también limpian
+ * `_insideCityId` (vía la propiedad `selected` a null). Escape (en modo libre)
+ * o `exitFirstPerson()` vuelven, con transición, a la vista aérea.
+ * `mode-change {mode:'fps'|'aerial'}` avisa a <career-app>.
  * Pensado para escritorio: en táctil el HUD no ofrece el botón de entrada.
  *
  * Jugabilidad 100% teclado (MC-18): en fps las teclas mandan CON y SIN pointer
  * lock. Q/Re Pág y E/Av Pág inclinan la mirada (tiltPitch puro, mismos topes
- * polares que el ratón); con el lock suelto (rechazado por el navegador o
- * recién cerrado un panel) la marcha, el giro, la mirada y [E] siguen
- * funcionando salvo con un overlay DOM abierto encima (prop `overlayOpen`,
- * puesta por <career-app>: panel de ciudadanía o archipiélago) o escribiendo
- * en un campo (_isTypingTarget). El contenedor puede pedir el re-enganche del
- * lock con `recapturePointerLock()` (cierre del panel con Escape/✕: el gesto
- * sigue vigente); si el navegador lo rechaza, un aviso discreto no bloqueante
- * ofrece el clic y el teclado no pierde el control.
+ * polares que el ratón); la marcha, el giro, la mirada y [E] funcionan siempre
+ * salvo con un overlay DOM abierto encima (prop `overlayOpen`, puesta por
+ * <career-app>: panel de ciudadanía o archipiélago) o escribiendo en un campo
+ * (_isTypingTarget).
  *
  * Avatar en vista aérea (MC-10): un personajillo low-poly (piernas navy,
  * cuerpo teal, gorra coral: colores GREBLA) SIEMPRE visible en la vista aérea
@@ -238,6 +243,7 @@ import {
   stepPosition,
   turnYaw,
   tiltPitch,
+  dragLook,
   yawToward,
   nearestCityWithin,
   collideWithCities,
@@ -250,6 +256,7 @@ import {
   TURN_SPEED,
   PITCH_SPEED,
   PITCH_LIMIT,
+  DRAG_LOOK_SENSITIVITY,
   EYE_HEIGHT,
   PROXIMITY_RADIUS,
 } from '../../tools/career/domain/walk.js';
@@ -300,8 +307,14 @@ const LABEL_PX = Object.freeze({ area: 30, city: 24, teammate: 19 });
  * llene la isla de rótulos gigantes (a partir de ahí encogen en pantalla).
  */
 const LABEL_WORLD_CLAMP = Object.freeze({ min: 0.5, max: 12 });
-/** Umbral (px de cliente) para distinguir un arrastre de órbita de un clic. */
+/** Umbral (px de cliente) para distinguir un arrastre (órbita o mirada a pie) de un clic. */
 const DRAG_THRESHOLD = 5;
+/**
+ * Duración máxima (ms) de un CLIC de interacción en el modo a pie libre
+ * (JG-3): pointerdown→pointerup más largos (o con más desplazamiento que
+ * DRAG_THRESHOLD) son un arrastre de mirada y JAMÁS abren tarjetas.
+ */
+const FPS_CLICK_MAX_MS = 400;
 /** Límite del paneo del target respecto al radio de la isla. */
 const PAN_LIMIT_FACTOR = 1.2;
 /** Duración (ms) de las animaciones de foco de cámara (zoom a ciudad/comarca/vista general). */
@@ -587,6 +600,7 @@ export class CareerIsland3D extends LitElement {
     _phase: { state: true },
     _mode: { state: true },
     _fpsLocked: { state: true },
+    _fpsDragging: { state: true },
     _nearCityId: { state: true },
     _insideCityId: { state: true },
     _nearBoat: { state: true },
@@ -605,6 +619,9 @@ export class CareerIsland3D extends LitElement {
       border: 1px solid var(--rm-border, #e5e7eb);
     }
     canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    /* Modo a pie LIBRE (JG-3): el cursor invita a arrastrar para mirar. */
+    .wrap.fps-free canvas { cursor: grab; }
+    .wrap.fps-free.dragging canvas { cursor: grabbing; }
     .overlay {
       position: absolute;
       inset: 0;
@@ -754,10 +771,17 @@ export class CareerIsland3D extends LitElement {
     /** Clase PointerLockControls (import dinámico) e instancia perezosa. */
     this._PointerLockControls = null;
     this._plc = null;
-    /** true mientras el puntero está capturado por el canvas (modo fps). */
+    /** true mientras el puntero está capturado por el canvas (🎮 modo inmersivo, opt-in JG-3). */
     this._fpsLocked = false;
-    /** Liberación de lock ESPERADA (se abre el panel de ciudadanía): no salir del modo. */
-    this._expectUnlock = false;
+    /**
+     * Arrastre de mirada en curso en el modo a pie LIBRE (JG-3), o null.
+     * `moved` pasa a true al superar DRAG_THRESHOLD: a partir de ahí el gesto
+     * es mirada y el pointerup NO interactúa.
+     * @type {{ startX: number, startY: number, lastX: number, lastY: number, t: number, moved: boolean }|null}
+     */
+    this._fpsDrag = null;
+    /** true con un arrastre de mirada activo (cursor grabbing, JG-3). */
+    this._fpsDragging = false;
     /** Teclas de marcha actualmente pulsadas (por event.code). */
     this._keys = new Set();
     /** Ciudad dentro del radio de proximidad al caminar (o null). */
@@ -907,8 +931,12 @@ export class CareerIsland3D extends LitElement {
     // se está «dentro» de ninguna casa (MC-9).
     if (changed.has('selected') && this.selected === null) this._insideCityId = null;
     // Un overlay DOM se abrió encima (panel, archipiélago): las teclas
-    // mantenidas se sueltan — con él abierto no se camina ni se mira (MC-18).
-    if (changed.has('overlayOpen') && this.overlayOpen) this._keys.clear();
+    // mantenidas se sueltan — con él abierto no se camina ni se mira (MC-18) —
+    // y un arrastre de mirada a medias se aborta (JG-3).
+    if (changed.has('overlayOpen') && this.overlayOpen) {
+      this._keys.clear();
+      this._endFpsDrag();
+    }
     // Celebración (MC-11): diff de visitadas ANTES de reconstruir. Solo cuenta
     // el gesto real de «marcar como visitada» (el conjunto anterior + una) y
     // solo si es la ciudad del panel abierto — cargar el journey de otra
@@ -1057,12 +1085,35 @@ export class CareerIsland3D extends LitElement {
       'pointerdown',
       (e) => {
         this._pointerDownAt = { x: e.clientX, y: e.clientY };
+        // Modo a pie LIBRE (JG-3): mantener el botón izquierdo y arrastrar
+        // mira (dragLook); un clic corto y quieto interactúa (ver _onPick).
+        if (this._mode === 'fps' && !this._fpsLocked && e.button === 0) {
+          this._fpsDrag = {
+            startX: e.clientX,
+            startY: e.clientY,
+            lastX: e.clientX,
+            lastY: e.clientY,
+            t: e.timeStamp,
+            moved: false,
+          };
+          // La captura del PUNTERO (no confundir con el pointer lock) mantiene
+          // el arrastre aunque el cursor salga del canvas a mitad de gesto.
+          // Puede fallar con un puntero ya liberado (o sintético en tests):
+          // el arrastre sigue funcionando mientras el cursor esté encima.
+          try {
+            canvas.setPointerCapture(e.pointerId);
+          } catch {
+            /* sin captura: solo se pierde el arrastre fuera del canvas */
+          }
+        }
         // Gesto real del usuario: momento válido para crear/reanudar el audio
         // (autoplay policy). Idempotente: unlock() es barato.
         this._audio.unlock();
       },
       { signal },
     );
+    canvas.addEventListener('pointermove', (e) => this._onFpsDragMove(e), { signal });
+    canvas.addEventListener('pointercancel', () => this._endFpsDrag(), { signal });
     canvas.addEventListener('pointerup', (e) => this._onPick(e), { signal });
 
     // Marcha en primera persona (MC-7): las teclas se escuchan en el documento
@@ -1412,7 +1463,7 @@ export class CareerIsland3D extends LitElement {
     // resultante no re-entra aquí (sin estados colgados).
     this._mode = 'to-aerial';
     this._keys.clear();
-    this._expectUnlock = false;
+    this._endFpsDrag();
     this._insideCityId = null;
     this._nearBoat = false;
     this._setLabelsVisible(true); // de vuelta a la vista aérea, con sus nombres
@@ -1482,9 +1533,10 @@ export class CareerIsland3D extends LitElement {
   /**
    * La transición de entrada llegó a la altura de ojos: cambio de controles.
    * OrbitControls queda apagado y PointerLockControls (creado perezosamente la
-   * primera vez) toma el ratón. El lock se pide aquí mismo: si el navegador lo
-   * rechaza (el gesto del clic ya caducó), el overlay «haz clic en la isla»
-   * queda como vía manual.
+   * primera vez) queda LISTO pero sin capturar el ratón (JG-3): el modo a pie
+   * arranca SIEMPRE libre — el lock solo llega vía «🎮 Modo inmersivo»
+   * (enterImmersive, opt-in). PLC solo procesa el ratón con isLocked=true, así
+   * que dejarlo enabled es inocuo en modo libre.
    */
   _activateFps() {
     this._mode = 'fps';
@@ -1506,18 +1558,19 @@ export class CareerIsland3D extends LitElement {
       });
     }
     this._plc.enabled = true;
-    this._requestLock();
   }
 
   /**
-   * Re-engancha el pointer lock a petición del contenedor (MC-18): al cerrar
-   * el panel de ciudadanía o el archipiélago con Escape/✕ el gesto (tecla o
-   * clic) sigue vigente y el lock puede volver sin pasar por el ratón. Si el
-   * navegador lo rechaza no pasa nada: la marcha por teclado sin lock sigue
-   * funcionando y el aviso discreto ofrece el clic como vía manual.
+   * «🎮 Modo inmersivo» (JG-3, OPT-IN): captura el ratón (pointer lock) para el
+   * mouse-look continuo tipo DOOM. API pública para el botón del HUD de
+   * <career-app> — el clic del botón es el gesto real que el navegador exige.
+   * Escape (nativo del lock) o abrir cualquier panel lo sueltan y DEVUELVEN al
+   * modo libre: nunca hay re-captura automática (la preferencia no se
+   * persiste; el default siempre es libre).
    */
-  recapturePointerLock() {
+  enterImmersive() {
     if (this._phase !== 'ready' || this._mode !== 'fps' || this._fpsLocked) return;
+    this._endFpsDrag(); // un arrastre a medias no debe sobrevivir al cambio de modo
     this._requestLock();
   }
 
@@ -1527,7 +1580,7 @@ export class CareerIsland3D extends LitElement {
     try {
       // requestPointerLock devuelve una promesa en navegadores modernos: el
       // rechazo (sin gesto de usuario reciente) NO es un error de la app — el
-      // overlay «haz clic en la isla para tomar el control» es la vía manual.
+      // modo libre sigue siendo completamente jugable sin lock.
       canvas.requestPointerLock()?.catch?.(() => {});
     } catch {
       // Navegadores antiguos pueden lanzar de forma síncrona: mismo tratamiento.
@@ -1536,27 +1589,65 @@ export class CareerIsland3D extends LitElement {
 
   /**
    * Única fuente de verdad del estado del lock (ver nota de shadow DOM en
-   * _activateFps). Distingue tres despegues del lock:
-   *  - esperado (se abrió el panel de ciudadanía): sigue en fps, sin ratón;
-   *  - Escape del usuario en fps: salida completa a la vista aérea;
-   *  - cualquier otro modo (salida ya en curso, teardown): nada que hacer.
+   * _activateFps). Soltar el lock — Escape del usuario o apertura de un panel
+   * desde el modo inmersivo — SIEMPRE devuelve al modo a pie LIBRE (JG-3): se
+   * sigue caminando con el cursor visible y se re-activa «🎮 inmersivo» a
+   * voluntad. Nada de re-capturas automáticas ni salidas sorpresa del modo.
    */
   _onPointerLockChange() {
     const canvas = this.renderRoot.querySelector('canvas');
     const locked = this.renderRoot.pointerLockElement === canvas;
     if (this._plc) this._plc.isLocked = locked; // corrige el retargeting del shadow DOM
     this._fpsLocked = locked;
-    if (locked) {
-      this._expectUnlock = false;
-      return;
-    }
+    if (locked) return;
     this._keys.clear(); // sin lock no hay keyups garantizados: nada de teclas pegadas
-    if (this._mode !== 'fps') return;
-    if (this._expectUnlock) {
-      this._expectUnlock = false; // liberado a propósito para usar el panel
+  }
+
+  /**
+   * Arrastre de mirada del modo a pie libre (JG-3): con el botón izquierdo
+   * mantenido, el movimiento del puntero gira la cámara (dragLook puro,
+   * metáfora de «agarrar el mundo»). Hasta superar DRAG_THRESHOLD el gesto
+   * sigue siendo un posible CLIC y la cámara no se toca (los primeros píxeles
+   * se descartan: nada de micro-giros al clicar).
+   * @param {PointerEvent} event
+   */
+  _onFpsDragMove(event) {
+    const drag = this._fpsDrag;
+    if (!drag) return;
+    if (this._mode !== 'fps' || this._fpsLocked) {
+      this._endFpsDrag(); // el modo cambió a mitad de gesto: se aborta limpio
       return;
     }
-    this.exitFirstPerson(); // Escape nativo del pointer lock
+    const dx = event.clientX - drag.lastX;
+    const dy = event.clientY - drag.lastY;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    if (!drag.moved) {
+      const total = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+      if (total <= DRAG_THRESHOLD) return;
+      drag.moved = true;
+      this._fpsDragging = true; // cursor grabbing vía CSS
+    }
+    // Solo se editan yaw/pitch del euler YXZ de la cámara (mismo esquema que
+    // el giro por teclado de _tickWalk: conviven sin pelearse).
+    this._eulerScratch.setFromQuaternion(this._camera.quaternion);
+    const next = dragLook(
+      this._eulerScratch.y,
+      this._eulerScratch.x,
+      dx,
+      dy,
+      DRAG_LOOK_SENSITIVITY,
+      PITCH_LIMIT,
+    );
+    this._eulerScratch.y = next.yaw;
+    this._eulerScratch.x = next.pitch;
+    this._camera.quaternion.setFromEuler(this._eulerScratch);
+  }
+
+  /** Cierra (o aborta) el arrastre de mirada del modo libre y repone el cursor. */
+  _endFpsDrag() {
+    this._fpsDrag = null;
+    this._fpsDragging = false;
   }
 
   /** Teclas de marcha (mantenidas), por event.code: WASD (independiente del layout), flechas y Shift. */
@@ -1604,13 +1695,14 @@ export class CareerIsland3D extends LitElement {
     }
     if (this._mode !== 'fps') return;
     if (!this._fpsLocked) {
-      // Con el lock suelto se atiende Escape → salir del modo y, con el panel
-      // abierto por CHOQUE contra una casa (MC-9), ↓/S → salir de la casa
+      // Modo LIBRE (JG-3, el default): Escape → salir del modo a pie y, con el
+      // panel abierto por CHOQUE contra una casa (MC-9), ↓/S → salir de la casa
       // (salvo que se esté escribiendo en un campo del panel). El Escape
       // DENTRO del panel no llega aquí: el panel lo consume (stopPropagation)
-      // para cerrarse. El RESTO de teclas del modo a pie sigue funcionando
-      // (MC-18) — un lock rechazado por el navegador no deja al jugador sin
-      // control — salvo con un overlay DOM abierto encima (panel/archipiélago).
+      // para cerrarse. En el modo inmersivo el Escape lo consume el propio
+      // pointer lock (suelta el ratón → modo libre) y no llega a este handler.
+      // El RESTO de teclas del modo a pie funciona siempre (MC-18) salvo con
+      // un overlay DOM abierto encima (panel/archipiélago).
       if (event.code === 'Escape') {
         this.exitFirstPerson();
         return;
@@ -1771,34 +1863,28 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Zarpar (MC-14): abre el mapa del archipiélago en <career-app>. A pie
-   * suelta el pointer lock A PROPÓSITO (como _openCityPanel) para que el ratón
-   * pueda usar el overlay; tras cerrarlo, un clic en el canvas re-engancha.
+   * Zarpar (MC-14): abre el mapa del archipiélago en <career-app>. Desde el
+   * modo inmersivo suelta el pointer lock (JG-3: se vuelve al modo libre) para
+   * que el ratón pueda usar el overlay; al cerrarlo se sigue en modo libre.
    */
   _openArchipelago() {
     this._keys.clear(); // sin lock no habrá pointerlockchange que las suelte (MC-18)
-    if (this._fpsLocked) {
-      this._expectUnlock = true;
-      document.exitPointerLock();
-    }
+    if (this._fpsLocked) document.exitPointerLock();
     this.dispatchEvent(
       new CustomEvent('open-archipelago', { bubbles: true, composed: true }),
     );
   }
 
   /**
-   * Abre el panel de ciudadanía de una ciudad a pie: suelta el pointer lock
-   * A PROPÓSITO (marcándolo con _expectUnlock) para que el ratón pueda usar el
-   * panel, SIN salir del modo primera persona. Tras cerrar el panel, un clic
-   * en el canvas re-engancha el lock (_onPick).
+   * Abre el panel de ciudadanía de una ciudad a pie, SIN salir del modo
+   * primera persona. Desde el modo inmersivo suelta el pointer lock (JG-3): al
+   * cerrar el panel se sigue en modo LIBRE — el ✕/Escape cierran siempre, sin
+   * bailes de re-captura.
    * @param {string} cityId
    */
   _openCityPanel(cityId) {
     this._keys.clear(); // sin lock no habrá pointerlockchange que las suelte (MC-18)
-    if (this._fpsLocked) {
-      this._expectUnlock = true;
-      document.exitPointerLock();
-    }
+    if (this._fpsLocked) document.exitPointerLock();
     this.dispatchEvent(
       new CustomEvent('select-city', { detail: { cityId }, bubbles: true, composed: true }),
     );
@@ -1823,9 +1909,8 @@ export class CareerIsland3D extends LitElement {
    * MC-9/10): cierra el panel (select-city con cityId null: el contenedor
    * deselecciona) y retrocede al caminante unos pasos alejándose de la puerta
    * (stepPosition: acotado a la isla). En vista aérea el que retrocede es el
-   * AVATAR y no hay pointer lock que re-enganchar; a pie retrocede la cámara y
-   * se vuelve a pedir el lock — el keydown cuenta como activación de usuario;
-   * si el navegador lo rechaza, queda el overlay «haz clic en la isla…».
+   * AVATAR; a pie retrocede la cámara y se sigue en modo LIBRE (JG-3: nada de
+   * re-capturas del ratón — «🎮 inmersivo» es siempre una decisión del jugador).
    */
   _exitCity() {
     const city = this._walkCities.find((c) => c.id === this._insideCityId) ?? null;
@@ -1857,7 +1942,6 @@ export class CareerIsland3D extends LitElement {
         cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR }) + EYE_HEIGHT;
       }
     }
-    this._requestLock();
   }
 
   /**
@@ -1887,7 +1971,7 @@ export class CareerIsland3D extends LitElement {
   _resetToAerial() {
     this._camAnim = null;
     this._keys.clear();
-    this._expectUnlock = false;
+    this._endFpsDrag();
     this._nearCityId = null;
     this._insideCityId = null;
     this._nearBoat = false;
@@ -1903,26 +1987,23 @@ export class CareerIsland3D extends LitElement {
     }
   }
 
-  /** Ayuda compacta de controles del modo a pie (visible con y sin lock, MC-18). */
-  static FPS_HELP = html`<div class="fps-help">←→ girar · ↑↓ avanzar · A/D lateral · Q/E o RePág/AvPág mirar · Shift correr · E entrar · Esc salir</div>`;
+  /** Ayuda compacta del modo a pie LIBRE (JG-3, el default): arrastrar para mirar + teclado. */
+  static FPS_HELP_FREE = html`<div class="fps-help">arrastra para mirar · ←→ girar · ↑↓ avanzar · A/D lateral · E entrar · 🎮 inmersivo</div>`;
+
+  /** Ayuda compacta del 🎮 modo inmersivo (pointer lock): mouse-look continuo, Esc lo suelta. */
+  static FPS_HELP_IMMERSIVE = html`<div class="fps-help">←→ girar · ↑↓ avanzar · A/D lateral · Q/E o RePág/AvPág mirar · Shift correr · E entrar · Esc salir</div>`;
 
   /**
-   * HUD inferior del modo fps: ayuda compacta de controles siempre visible, y
-   * encima el prompt de ciudad cercana cuando la hay. Sin lock, un aviso
-   * DISCRETO y no bloqueante (píldora con pointer-events: none, MC-18)
-   * recuerda que el teclado sigue mandando y que el clic solo añade el ratón.
+   * HUD inferior del modo fps: ayuda compacta de controles siempre visible
+   * (la del modo libre o la del inmersivo, JG-3) y encima el prompt de
+   * proximidad ([E] ciudad/brujo/barca) cuando lo hay — la proximidad no
+   * depende del ratón, así que el prompt sale en AMBOS modos.
    */
   _renderFpsHint() {
     if (this._mode !== 'fps') return null;
-    if (!this._fpsLocked) {
-      // Dentro de una casa por choque (MC-9): la salida natural es dar atrás.
-      if (this._insideCityId !== null) {
-        return html`<div class="fps-hint"><kbd>↓</kbd>/<kbd>S</kbd> da hacia atrás para salir a la isla</div>`;
-      }
-      return html`
-        <div class="fps-hint near">Teclado activo · clic en la isla para mirar también con el ratón</div>
-        ${CareerIsland3D.FPS_HELP}
-      `;
+    // Dentro de una casa por choque (MC-9): la salida natural es dar atrás.
+    if (this._insideCityId !== null) {
+      return html`<div class="fps-hint"><kbd>↓</kbd>/<kbd>S</kbd> da hacia atrás para salir a la isla</div>`;
     }
     const city = this._nearCityId
       ? (this.map?.cities ?? []).find((c) => c.id === this._nearCityId)
@@ -1935,7 +2016,7 @@ export class CareerIsland3D extends LitElement {
           : this._nearBoat
             ? html`<div class="fps-hint near"><kbd>E</kbd> Zarpar</div>`
             : null}
-      ${CareerIsland3D.FPS_HELP}
+      ${this._fpsLocked ? CareerIsland3D.FPS_HELP_IMMERSIVE : CareerIsland3D.FPS_HELP_FREE}
     `;
   }
 
@@ -3261,10 +3342,7 @@ export class CareerIsland3D extends LitElement {
   _openWizard() {
     if (this.overlayOpen) return; // ya hay un overlay encima: no se re-dispara
     this._keys.clear(); // sin lock no habrá pointerlockchange que las suelte (MC-18)
-    if (this._fpsLocked) {
-      this._expectUnlock = true;
-      document.exitPointerLock();
-    }
+    if (this._fpsLocked) document.exitPointerLock(); // del inmersivo al modo libre (JG-3)
     this.dispatchEvent(new CustomEvent('open-wizard', { bubbles: true, composed: true }));
   }
 
@@ -4216,16 +4294,13 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Abre el mini-resumen de un compañero desde el modo fps: suelta el pointer
-   * lock A PROPÓSITO (como _openCityPanel) para que el ratón pueda usar el
-   * popover; un clic en el canvas lo re-engancha.
+   * Abre el mini-resumen de un compañero apuntado desde el modo inmersivo:
+   * suelta el pointer lock (JG-3: se vuelve al modo libre) para que el ratón
+   * pueda usar el popover.
    * @param {string} personId
    */
   _openTeammate(personId) {
-    if (this._fpsLocked) {
-      this._expectUnlock = true;
-      document.exitPointerLock();
-    }
+    if (this._fpsLocked) document.exitPointerLock();
     const canvas = this.renderRoot.querySelector('canvas');
     const rect = canvas.getBoundingClientRect();
     this._emitTeammate(personId, rect.width / 2, rect.height / 2);
@@ -4674,27 +4749,39 @@ export class CareerIsland3D extends LitElement {
    *  2. Plataformas de comarca: zoom a la comarca (sin evento de selección).
    * Agua/vacío: nada — no se deselecciona de forma agresiva.
    *
-   * En modo primera persona (MC-7) el clic cambia de papel: sin lock lo
-   * re-engancha; con lock abre la ciudad cercana (equivalente a la tecla E).
-   * Durante las transiciones de modo no hace nada.
+   * En modo primera persona (JG-3) el clic depende del modo del ratón: en el
+   * modo LIBRE (default), un clic corto y quieto raycastea desde el CURSOR
+   * (como en aérea) y un arrastre jamás abre nada; en el modo inmersivo (lock)
+   * dispara lo que hay bajo la mira. Durante las transiciones de modo no hace
+   * nada.
    */
   _onPick(event) {
     if (this._mode !== 'aerial') {
       this._pointerDownAt = null;
-      if (this._mode === 'fps') {
-        if (!this._fpsLocked) {
-          this._requestLock();
-          return;
-        }
-        // Con el lock tomado, el clic dispara lo que hay bajo la mira: un
-        // compañero (MC-12, su mini-resumen), la ciudad cercana (tecla E),
-        // la cabaña del brujo (MC-22) o la barca para zarpar (MC-14).
+      if (this._mode !== 'fps') {
+        this._endFpsDrag();
+        return;
+      }
+      if (this._fpsLocked) {
+        // 🎮 Inmersivo: el clic dispara lo que hay bajo la mira — un compañero
+        // (MC-12, su mini-resumen), la ciudad cercana (tecla E), la cabaña del
+        // brujo (MC-22) o la barca para zarpar (MC-14).
         const mateId = this._pickTeammateFromCenter();
         if (mateId) this._openTeammate(mateId);
         else if (this._nearCityId) this._openNearCity();
         else if (this._nearWizard) this._openWizard();
         else if (this._nearBoat) this._openArchipelago();
+        return;
       }
+      // Modo LIBRE (JG-3): solo interactúa el CLIC de verdad — corto
+      // (< FPS_CLICK_MAX_MS) y quieto (< DRAG_THRESHOLD). Un arrastre de
+      // mirada (moved) o un gesto largo terminan aquí sin abrir nada.
+      const drag = this._fpsDrag;
+      this._endFpsDrag();
+      if (!drag || drag.moved) return;
+      const total = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+      if (total > DRAG_THRESHOLD || event.timeStamp - drag.t > FPS_CLICK_MAX_MS) return;
+      this._pickOnFoot(event);
       return;
     }
     if (!this._pointerDownAt || !this._citiesGroup) return;
@@ -4767,6 +4854,70 @@ export class CareerIsland3D extends LitElement {
     if (areaHit) this.focusArea(areaHit.object.userData.areaId);
   }
 
+  /**
+   * Interacción por CLIC en el modo a pie libre (JG-3): raycast desde la
+   * posición del cursor (no desde la mira), con el MISMO orden de prioridad
+   * que la vista aérea — compañeros (alcance corto, como la mira del modo
+   * inmersivo), barca, cabaña del brujo y casas — pero disparando las acciones
+   * del modo a pie (abrir tarjeta / zarpar, sin zoom de cámara). Agua/vacío:
+   * nada.
+   * @param {PointerEvent} event pointerup ya validado como clic corto y quieto.
+   */
+  _pickOnFoot(event) {
+    if (!this._citiesGroup) return;
+    const THREE = this._THREE;
+    const canvas = this.renderRoot.querySelector('canvas');
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, this._camera);
+
+    // Compañeros primero (MC-12): pequeños y pegados a las casas — si el clic
+    // los toca, esa es la intención. Mismo alcance corto que la mira (fps).
+    raycaster.far = TEAMMATE.fpsPickRange;
+    const mateId = CareerIsland3D._teammateFromHits(
+      this._teammatesGroup ? raycaster.intersectObjects(this._teammatesGroup.children, true) : [],
+    );
+    if (mateId) {
+      this._emitTeammate(mateId, event.clientX - rect.left, event.clientY - rect.top);
+      return;
+    }
+    raycaster.far = Infinity;
+
+    // Barca del muelle (MC-14): zarpar. Antes que las ciudades (no se solapan).
+    if (
+      this._boatGroup &&
+      raycaster.intersectObjects(this._boatGroup.children, true).length > 0
+    ) {
+      this._openArchipelago();
+      return;
+    }
+
+    // La cabaña del brujo (MC-22): abre su panel.
+    if (
+      this._wizardGroup &&
+      raycaster.intersectObjects(this._wizardGroup.children, true).length > 0
+    ) {
+      this._openWizard();
+      return;
+    }
+
+    // Casas: abrir la tarjeta de ciudadanía SIN mover la cámara (a pie el
+    // jugador sigue donde está; nada de focusCity).
+    const hits = raycaster.intersectObjects(this._citiesGroup.children, true);
+    for (const hit of hits) {
+      let obj = hit.object;
+      while (obj && !obj.userData.cityId) obj = obj.parent;
+      if (obj?.userData.cityId) {
+        this._openCityPanel(obj.userData.cityId);
+        return;
+      }
+    }
+  }
+
   // ---- Limpieza ---------------------------------------------------------------
 
   /**
@@ -4805,7 +4956,7 @@ export class CareerIsland3D extends LitElement {
     this._plc = null;
     this._mode = 'aerial';
     this._fpsLocked = false;
-    this._expectUnlock = false;
+    this._endFpsDrag();
     this._keys.clear();
     this._nearCityId = null;
     this._insideCityId = null;
@@ -4857,9 +5008,13 @@ export class CareerIsland3D extends LitElement {
   }
 
   render() {
+    // Cursor del modo a pie libre (JG-3): grab en reposo, grabbing arrastrando.
+    const wrapClass = `wrap${this._mode === 'fps' && !this._fpsLocked ? ' fps-free' : ''}${
+      this._fpsDragging ? ' dragging' : ''
+    }`;
     return html`
-      <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una casa para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Q/E o Re Pág/Av Pág para mirar arriba y abajo, Shift para correr, ratón para mirar y E para entrar en la casa cercana — todo el modo a pie se puede jugar solo con el teclado. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su casa actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie). La cabaña del brujo, la torre púrpura cerca del puerto, recoge tus consultas para el líder: clic sobre ella, o E al acercarte a pie; su farol indica si hay consultas pendientes (ámbar) o una respuesta lista (turquesa)."></canvas>
+      <div class=${wrapClass}>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una casa para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie el cursor queda libre: mantén pulsado el botón izquierdo y arrastra para mirar alrededor, y haz un clic corto sobre una casa para abrir su tarjeta. Con el teclado: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Q/E o Re Pág/Av Pág para mirar arriba y abajo, Shift para correr y E para entrar en la casa cercana — todo el modo a pie se puede jugar solo con el teclado. El botón «🎮 Inmersivo» captura el ratón para mirar moviéndolo sin arrastrar; Escape lo suelta y vuelve al cursor libre. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su casa actual: haz clic sobre uno para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie). La cabaña del brujo, la torre púrpura cerca del puerto, recoge tus consultas para el líder: clic sobre ella, o E al acercarte a pie; su farol indica si hay consultas pendientes (ámbar) o una respuesta lista (turquesa)."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}
