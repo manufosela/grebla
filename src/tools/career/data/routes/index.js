@@ -30,6 +30,8 @@ import { ROUTE_TIERS as BACKEND_PYTHON_ROUTE } from './backend-python.js';
 import { ROUTE_TIERS as POSTGRES_ROUTE } from './postgres.js';
 import { ROUTE_TIERS as ANDROID_ROUTE } from './android.js';
 import { ROUTE_TIERS as IOS_ROUTE } from './ios.js';
+import { ROUTE_TIERS as DEVOPS_ROUTE } from './devops.js';
+import { ROUTE_TIERS as AI_ENGINEER_ROUTE } from './ai-engineer.js';
 import { ROUTE_TIER_KEYS, routeDocId } from '../../domain/careerRoutes.js';
 
 /**
@@ -45,6 +47,8 @@ export const CAREER_ROUTES = Object.freeze({
   [POSTGRES_ROUTE.discipline]: POSTGRES_ROUTE,
   [ANDROID_ROUTE.discipline]: ANDROID_ROUTE,
   [IOS_ROUTE.discipline]: IOS_ROUTE,
+  [DEVOPS_ROUTE.discipline]: DEVOPS_ROUTE,
+  [AI_ENGINEER_ROUTE.discipline]: AI_ENGINEER_ROUTE,
 });
 
 /**
