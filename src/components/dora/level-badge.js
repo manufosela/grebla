@@ -13,8 +13,8 @@ export function levelBadge(level) {
 /** Estilos del badge; añadir al array `static styles` del componente. */
 export const levelStyles = css`
   .lvl { display: inline-block; margin-left: 0.4rem; padding: 0.03rem 0.45rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; vertical-align: middle; white-space: nowrap; }
-  .lvl-elite { background: var(--rm-success, #16a34a); color: #fff; }
-  .lvl-high { background: var(--rm-accent, #2a9d8f); color: #fff; }
-  .lvl-medium { background: var(--rm-warning, #f2887a); color: #fff; }
-  .lvl-low { background: var(--rm-danger, #dc2626); color: #fff; }
+  .lvl-elite { background: var(--rm-success, #16a34a); color: var(--rm-on-accent, #fff); }
+  .lvl-high { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
+  .lvl-medium { background: var(--rm-warning, #f2887a); color: var(--rm-on-accent, #fff); }
+  .lvl-low { background: var(--rm-danger, #dc2626); color: var(--rm-on-accent, #fff); }
 `;

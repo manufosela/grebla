@@ -163,7 +163,7 @@ export class TeamPersonDetail extends LitElement {
     textarea { resize: vertical; min-height: 2.4rem; }
     .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
     button.primary {
-      border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: #fff;
+      border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff);
       border-radius: 8px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
     }
     button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -223,8 +223,8 @@ export class TeamPersonDetail extends LitElement {
     .career .seg-btn { border: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.35rem 0.9rem; cursor: pointer; }
     .career .seg-btn + .seg-btn { border-left: 1px solid var(--rm-border, #d1d5db); }
     .career .seg-btn:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: -2px; }
-    .career .seg-btn.ok.on { background: var(--rm-accent, #2a9d8f); color: #fff; }
-    .career .seg-btn.bad.on { background: var(--rm-danger, #dc2626); color: #fff; }
+    .career .seg-btn.ok.on { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
+    .career .seg-btn.bad.on { background: var(--rm-danger, #dc2626); color: var(--rm-on-accent, #fff); }
     .career .assess-row .exp { margin: 0.5rem 0 0; }
     .career .assess-row .exp summary { cursor: pointer; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
     .career .assess-row .exp p { margin: 0.3rem 0 0; font-size: 0.85rem; color: var(--rm-text, #111827); }
@@ -292,7 +292,7 @@ export class TeamPersonDetail extends LitElement {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
       border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
     }
-    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     .subpanel:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: var(--rm-radius, 12px); }

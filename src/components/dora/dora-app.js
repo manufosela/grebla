@@ -21,7 +21,7 @@ export class DoraApp extends LitElement {
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .tab { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.4rem 1rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
-    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     .loading { padding: 2rem; text-align: center; color: var(--rm-muted, #6b7280); border: 1px dashed var(--rm-border, #d1d5db); border-radius: var(--rm-radius, 12px); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }

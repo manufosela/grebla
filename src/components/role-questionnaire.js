@@ -113,7 +113,7 @@ export class RoleQuestionnaire extends LitElement {
     .yesno-btn.active {
       background: var(--rm-accent, #4f46e5);
       border-color: var(--rm-accent, #4f46e5);
-      color: #fff;
+      color: var(--rm-on-accent, #fff);
     }
     .yesno-btn:focus-visible { outline: 2px solid var(--rm-accent, #4f46e5); outline-offset: 2px; }
     .scale { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
@@ -141,7 +141,7 @@ export class RoleQuestionnaire extends LitElement {
     .scale input:checked + .dot {
       background: var(--rm-accent, #3b82f6);
       border-color: var(--rm-accent, #3b82f6);
-      color: #fff;
+      color: var(--rm-on-accent, #fff);
     }
     .scale input:focus-visible + .dot { outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 2px; }
     .multi { display: grid; gap: 0.35rem; }

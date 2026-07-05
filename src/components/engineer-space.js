@@ -90,7 +90,7 @@ export class EngineerSpace extends LitElement {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
       border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
     }
-    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     section:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
@@ -168,7 +168,7 @@ export class EngineerSpace extends LitElement {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
       color: var(--rm-text, #111827); border-radius: 999px; padding: 0.3rem 0.9rem; margin-top: 0.5rem;
     }
-    .target-btn.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .target-btn.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .target-btn:hover:not(:disabled) { filter: brightness(0.97); }
     .target-btn:disabled { opacity: 0.6; cursor: default; }
     .target-btn:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }

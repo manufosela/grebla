@@ -36,7 +36,7 @@ export class TeamMap extends LitElement {
     td.person { font-weight: 600; white-space: nowrap; }
     .roles { display: block; font-weight: 400; font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
     .lvl { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
-    .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.12); flex: none; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--rm-dot-border, rgba(0,0,0,0.12)); flex: none; }
     .muted { color: var(--rm-muted, #9ca3af); }
     .profile { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--rm-track, #e9f0f2); font-weight: 700; font-size: 0.78rem; }
     .areas { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
