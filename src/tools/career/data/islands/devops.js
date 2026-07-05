@@ -35,6 +35,7 @@ export const DEVOPS_ISLAND = {
       x: 42,
       y: 76,
       weight: 3,
+      summary: 'Linux es el sistema donde vive casi todo el software del mundo: servidores, contenedores y la nube. Consiste en moverte por el sistema de ficheros, procesos, permisos y servicios. Te capacita para operar los entornos donde tu código realmente se ejecuta.',
       prereqs: [],
       keyPoints: [
         'Procesos, señales y systemd: qué corre, quién lo lanzó y cómo pararlo con elegancia.',
@@ -59,6 +60,7 @@ export const DEVOPS_ISLAND = {
       x: 30,
       y: 76,
       weight: 2,
+      summary: 'El shell y el scripting son automatizar tareas encadenando comandos en scripts repetibles. Consiste en escribir bash robusto que hace lo mismo cada vez. Te capacita para eliminar el trabajo manual que se olvida o se hace mal a las tres de la mañana.',
       prereqs: ['devops/linux'],
       keyPoints: [
         'Pipes, redirecciones y exit codes: la shell como pegamento de todo lo demás.',
@@ -83,6 +85,7 @@ export const DEVOPS_ISLAND = {
       x: 54,
       y: 76,
       weight: 2,
+      summary: 'Las redes son entender cómo se comunican las máquinas: IPs, puertos, DNS, TLS y firewalls. Consiste en saber por dónde va el tráfico y por qué a veces no llega. Te capacita para diagnosticar los problemas de conectividad que bloquean cualquier despliegue.',
       prereqs: ['devops/linux'],
       keyPoints: [
         'DNS de verdad: resolución, TTLs, registros — está detrás de la mitad de los «está caído».',
@@ -108,6 +111,7 @@ export const DEVOPS_ISLAND = {
       x: 30,
       y: 66,
       weight: 3,
+      summary: 'Docker y los contenedores son empaquetar tu app con todo lo que necesita para que corra igual en cualquier sitio. Consiste en construir imágenes y ejecutar contenedores reproducibles. Te capacita para acabar con el «en mi máquina funciona» de una vez.',
       prereqs: ['devops/linux'],
       keyPoints: [
         'Qué es un contenedor de verdad: namespaces y cgroups, no una VM ligera.',
@@ -131,6 +135,7 @@ export const DEVOPS_ISLAND = {
       x: 18,
       y: 66,
       weight: 1,
+      summary: 'Las imágenes y los registros son construir bien tus contenedores y guardarlos donde el resto los pueda usar. Consiste en optimizar imágenes, etiquetarlas y versionarlas. Te capacita para distribuir tus builds de forma ordenada y segura por todo el pipeline.',
       prereqs: ['devops/docker'],
       keyPoints: [
         'Registros de imágenes: publicar, versionar y limpiar (las imágenes viejas cuestan dinero).',
@@ -153,6 +158,7 @@ export const DEVOPS_ISLAND = {
       x: 30,
       y: 56,
       weight: 3,
+      summary: 'Kubernetes es el orquestador que gestiona contenedores a escala: los despliega, los reinicia y los escala solo. Consiste en describir el estado deseado y dejar que él lo mantenga. Te capacita para operar aplicaciones grandes y resilientes sin hacerlo todo a mano.',
       prereqs: ['devops/docker'],
       keyPoints: [
         'El modelo declarativo: describes el estado deseado y los controladores reconcilian.',
@@ -177,6 +183,7 @@ export const DEVOPS_ISLAND = {
       x: 18,
       y: 56,
       weight: 2,
+      summary: 'Helm y el empaquetado son plantillas para desplegar aplicaciones en Kubernetes sin repetir YAML. Consiste en parametrizar despliegues reutilizables (charts). Te capacita para instalar y versionar aplicaciones complejas en el clúster de forma limpia.',
       prereqs: ['devops/kubernetes'],
       keyPoints: [
         'Charts: empaquetar una app con sus valores por entorno (dev, staging, prod).',
@@ -202,6 +209,7 @@ export const DEVOPS_ISLAND = {
       x: 54,
       y: 66,
       weight: 3,
+      summary: 'La integración continua es que cada cambio se compile y pase los tests automáticamente al subirlo. Consiste en montar pipelines que validan antes de fusionar. Te capacita para detectar los fallos en minutos en vez de descubrirlos en producción.',
       prereqs: ['devops/shell-scripting'],
       keyPoints: [
         'Pipeline mínimo en cada push: build, lint, tests — rápido o el equipo lo ignorará.',
@@ -225,6 +233,7 @@ export const DEVOPS_ISLAND = {
       x: 54,
       y: 56,
       weight: 2,
+      summary: 'El despliegue continuo y sus estrategias son llevar los cambios a producción de forma segura y frecuente. Consiste en automatizar releases con canary, blue-green o rolling. Te capacita para desplegar varias veces al día sin miedo y con marcha atrás si algo falla.',
       prereqs: ['devops/ci', 'devops/docker'],
       keyPoints: [
         'Estrategias de despliegue: rolling, blue/green y canary — y qué problema resuelve cada una.',
@@ -248,6 +257,7 @@ export const DEVOPS_ISLAND = {
       x: 42,
       y: 56,
       weight: 2,
+      summary: 'GitOps es operar la infraestructura declarando su estado en Git como fuente de verdad. Consiste en que un cambio en el repo se aplique solo al clúster. Te capacita para tener despliegues auditables, reproducibles y con historial completo.',
       prereqs: ['devops/kubernetes', 'devops/ci'],
       keyPoints: [
         'Git como fuente de verdad: lo desplegado es lo que dice el repo, nada más.',
@@ -271,6 +281,7 @@ export const DEVOPS_ISLAND = {
       x: 66,
       y: 66,
       weight: 3,
+      summary: 'Dominar un proveedor cloud es saber usar de verdad AWS, GCP o Azure: cómputo, redes, almacenamiento e identidad. Consiste en montar infraestructura con sus servicios en vez de a mano. Te capacita para construir sistemas que escalan sin comprar servidores.',
       prereqs: ['devops/redes'],
       keyPoints: [
         'Domina UNO (AWS, GCP o Azure): los conceptos se transfieren, el detalle no.',
@@ -294,6 +305,7 @@ export const DEVOPS_ISLAND = {
       x: 66,
       y: 56,
       weight: 3,
+      summary: 'Terraform y la IaC son definir tu infraestructura como código versionado en vez de clicando en consolas. Consiste en describir recursos y aplicarlos de forma repetible. Te capacita para levantar y reproducir entornos enteros con un comando.',
       prereqs: ['devops/cloud'],
       keyPoints: [
         'Infraestructura declarativa: recursos, variables, módulos y outputs.',
@@ -318,6 +330,7 @@ export const DEVOPS_ISLAND = {
       x: 78,
       y: 66,
       weight: 1,
+      summary: 'La gestión de configuración es separar los ajustes del código para que la misma app corra en dev, staging y producción. Consiste en variables de entorno y configuración por entorno. Te capacita para desplegar el mismo build en todas partes cambiando solo la config.',
       prereqs: ['devops/shell-scripting'],
       keyPoints: [
         'Ansible básico: inventarios, playbooks y roles para configurar máquinas en serie.',
@@ -340,6 +353,7 @@ export const DEVOPS_ISLAND = {
       x: 78,
       y: 56,
       weight: 2,
+      summary: 'La gestión de secretos es guardar contraseñas, claves y tokens sin que acaben en el código ni en un chat. Consiste en usar un gestor de secretos y rotarlos. Te capacita para operar de forma segura y no ser la próxima filtración de credenciales.',
       prereqs: ['devops/cloud'],
       keyPoints: [
         'Los secretos nunca en git ni en la imagen: gestor de secretos o secretos del proveedor.',
@@ -365,6 +379,7 @@ export const DEVOPS_ISLAND = {
       x: 90,
       y: 56,
       weight: 2,
+      summary: 'Los logs centralizados son recoger lo que escupen todos tus servicios en un solo sitio consultable. Consiste en enviar, estructurar y buscar logs sin entrar máquina por máquina. Te capacita para diagnosticar un problema en segundos en vez de en horas.',
       prereqs: ['devops/kubernetes'],
       keyPoints: [
         'Logs a stdout y un agente los recoge: la app no gestiona ficheros de log.',
@@ -388,6 +403,7 @@ export const DEVOPS_ISLAND = {
       x: 78,
       y: 46,
       weight: 3,
+      summary: 'Las métricas y los dashboards son medir cómo va tu sistema en números: latencia, errores, uso. Consiste en instrumentar, recoger y visualizar lo que importa. Te capacita para ver la salud del sistema de un vistazo y detectar problemas antes de que exploten.',
       prereqs: ['devops/kubernetes'],
       keyPoints: [
         'Prometheus y el modelo pull: exporters, series temporales y PromQL básico.',
@@ -411,6 +427,7 @@ export const DEVOPS_ISLAND = {
       x: 90,
       y: 46,
       weight: 2,
+      summary: 'Las trazas distribuidas son seguir una petición a través de todos los servicios por los que pasa. Consiste en propagar contexto y ver el recorrido completo. Te capacita para encontrar dónde se pierde el tiempo en un sistema con muchas piezas.',
       prereqs: ['devops/metricas'],
       keyPoints: [
         'Una petición, muchos servicios: la traza reconstruye el viaje completo.',
@@ -434,6 +451,7 @@ export const DEVOPS_ISLAND = {
       x: 66,
       y: 46,
       weight: 2,
+      summary: 'Las alertas accionables son avisar cuando algo va mal, pero solo cuando de verdad importa y con qué hacer. Consiste en alertar sobre síntomas del usuario, no sobre ruido. Te capacita para enterarte de los problemas reales sin morir de fatiga de alertas.',
       prereqs: ['devops/metricas'],
       keyPoints: [
         'Alerta = alguien debe actuar YA; lo demás es un dashboard o un ticket.',
@@ -459,6 +477,7 @@ export const DEVOPS_ISLAND = {
       x: 54,
       y: 36,
       weight: 3,
+      summary: 'Los SLOs y los presupuestos de error son definir cuánta fiabilidad prometes y cuánto fallo te puedes permitir. Consiste en poner objetivos medibles y gestionar el margen. Te capacita para equilibrar entregar rápido y mantener el servicio estable con datos, no opiniones.',
       prereqs: ['devops/alertas'],
       keyPoints: [
         'SLI: qué mides (disponibilidad, latencia). SLO: el objetivo. SLA: el contrato con penalización.',
@@ -482,6 +501,7 @@ export const DEVOPS_ISLAND = {
       x: 66,
       y: 36,
       weight: 2,
+      summary: 'La gestión de incidentes es responder cuando algo se rompe en producción sin que cunda el pánico. Consiste en detectar, mitigar, comunicar y aprender con un postmortem. Te capacita para convertir un desastre en una crisis controlada de la que el sistema sale más fuerte.',
       prereqs: ['devops/slos'],
       keyPoints: [
         'Roles claros durante el incidente: quién manda, quién comunica, quién teclea.',
@@ -505,6 +525,7 @@ export const DEVOPS_ISLAND = {
       x: 78,
       y: 36,
       weight: 2,
+      summary: 'El FinOps básico es controlar lo que gasta la nube antes de que la factura te dé un susto. Consiste en medir el coste por servicio y optimizar lo que sobra. Te capacita para operar de forma responsable y defender que la infraestructura no se dispara.',
       prereqs: ['devops/cloud', 'devops/metricas'],
       keyPoints: [
         'Visibilidad primero: etiquetas de coste por equipo/servicio o la factura es una caja negra.',
@@ -528,6 +549,7 @@ export const DEVOPS_ISLAND = {
       x: 54,
       y: 26,
       weight: 3,
+      summary: 'Una plataforma fiable en producción es el hito de operar un sistema que aguanta, se recupera solo y se observa. Consiste en juntar todo lo de la isla en algo que la gente confía. Te capacita para demostrar que sabes sostener servicios reales, no solo montarlos.',
       prereqs: ['devops/terraform', 'devops/cd-estrategias', 'devops/slos', 'devops/incidentes'],
       keyPoints: [
         'Integras el ciclo completo: commit → pipeline → despliegue → observabilidad → incidente → mejora.',
@@ -553,6 +575,7 @@ export const DEVOPS_ISLAND = {
       x: 42,
       y: 46,
       weight: 3,
+      summary: 'La IaC y los pipelines con IA son usar el modelo para generar y revisar configuración de infraestructura y CI. Consiste en dirigir a la IA y verificar cada cambio, que aquí rompe fuerte. Te capacita para acelerar el trabajo de plataforma sin meter agujeros de seguridad.',
       prereqs: ['devops/terraform', 'devops/ci'],
       keyPoints: [
         'Genera Terraform, manifests y pipelines con IA: es el boilerplate perfecto para delegar.',
@@ -577,6 +600,7 @@ export const DEVOPS_ISLAND = {
       x: 30,
       y: 46,
       weight: 2,
+      summary: 'La IA en operaciones es apoyarte en el modelo para diagnosticar incidentes, resumir logs y proponer soluciones. Consiste en usarla como copiloto de guardia sin delegarle el criterio. Te capacita para responder más rápido a los problemas sin dejar de ser tú quien decide.',
       prereqs: ['devops/ia-infra'],
       keyPoints: [
         'Diagnóstico asistido: la IA correlaciona logs, métricas y cambios recientes durante un incidente.',

@@ -135,6 +135,12 @@ describe('career — contenido de islas (MC-16, convención)', () => {
       }
     });
 
+    it('cada ciudad tiene un summary didáctico (≥80 caracteres)', () => {
+      for (const city of map.cities) {
+        expect(city.summary?.trim().length, `summary vacío o demasiado corto en ${city.id}`).toBeGreaterThanOrEqual(80);
+      }
+    });
+
     it('cada ciudad tiene keyPoints (4-6), aiFocus específico y 2-4 recursos reales', () => {
       for (const city of map.cities) {
         expect(city.keyPoints?.length, `keyPoints fuera de 4-6 en ${city.id}`).toBeGreaterThanOrEqual(4);

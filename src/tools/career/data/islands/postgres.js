@@ -34,6 +34,7 @@ export const POSTGRES_ISLAND = {
       x: 50,
       y: 74,
       weight: 3,
+      summary: 'El SQL sólido es el idioma para preguntarle datos a una base relacional: seleccionar, filtrar, ordenar y agrupar. Consiste en pensar en conjuntos, no en bucles. Te capacita para sacar exactamente la información que necesitas de cualquier base de datos.',
       prereqs: [],
       keyPoints: [
         'SQL es declarativo: describes el QUÉ y el planificador decide el cómo — piensa en conjuntos, no en bucles.',
@@ -58,6 +59,7 @@ export const POSTGRES_ISLAND = {
       x: 38,
       y: 66,
       weight: 3,
+      summary: 'El modelado relacional es diseñar tus tablas y relaciones para que los datos sean coherentes y no se dupliquen. Consiste en claves, normalización y decidir qué va junto y qué separado. Te capacita para construir una base que aguanta el crecimiento sin volverse un caos.',
       prereqs: ['postgres/sql-fundamentos'],
       keyPoints: [
         'Modela entidades y relaciones antes de escribir CREATE TABLE: el esquema es la decisión más cara de cambiar.',
@@ -82,6 +84,7 @@ export const POSTGRES_ISLAND = {
       x: 62,
       y: 66,
       weight: 3,
+      summary: 'Los joins y las agregaciones son cruzar tablas y resumir datos (sumar, contar, promediar) en una sola consulta. Consiste en combinar información dispersa y calcular sobre ella. Te capacita para responder preguntas complejas del negocio directamente en SQL.',
       prereqs: ['postgres/sql-fundamentos'],
       keyPoints: [
         'Los joins como operaciones de conjuntos: INNER, LEFT, y qué filas aparecen o desaparecen en cada uno.',
@@ -105,6 +108,7 @@ export const POSTGRES_ISLAND = {
       x: 50,
       y: 58,
       weight: 2,
+      summary: 'Los tipos de datos de Postgres son mucho más ricos que texto y número: fechas, JSON, arrays, rangos, geometrías. Consiste en elegir el tipo correcto para cada dato. Te capacita para modelar con precisión y dejar que la base valide y calcule por ti.',
       prereqs: ['postgres/modelado-relacional'],
       keyPoints: [
         'Elige el tipo exacto: text, numeric para dinero (nunca float), timestamptz para fechas, uuid, boolean.',
@@ -128,6 +132,7 @@ export const POSTGRES_ISLAND = {
       x: 70,
       y: 76,
       weight: 2,
+      summary: 'Las CTEs y window functions son herramientas para consultas potentes y legibles: pasos con nombre y cálculos por ventana (rankings, acumulados). Consiste en estructurar consultas complejas sin subconsultas ilegibles. Te capacita para resolver en SQL lo que muchos exportan a código.',
       prereqs: ['postgres/joins-agregaciones'],
       keyPoints: [
         'CTEs (WITH) para dar nombre a los pasos: consultas complejas legibles como un pipeline.',
@@ -153,6 +158,7 @@ export const POSTGRES_ISLAND = {
       x: 28,
       y: 74,
       weight: 3,
+      summary: 'Las transacciones son agrupar varias operaciones para que ocurran todas o ninguna. Consiste en entender commit, rollback y las garantías ACID. Te capacita para que tu base nunca quede a medias aunque algo falle en mitad de una operación.',
       prereqs: ['postgres/sql-fundamentos'],
       keyPoints: [
         'ACID no es marketing: atomicidad y consistencia son lo que te deja dormir por la noche.',
@@ -176,6 +182,7 @@ export const POSTGRES_ISLAND = {
       x: 16,
       y: 64,
       weight: 2,
+      summary: 'El MVCC y el aislamiento son cómo Postgres deja que muchos escriban y lean a la vez sin pisarse. Consiste en entender los niveles de aislamiento y sus efectos. Te capacita para razonar sobre concurrencia y evitar datos inconsistentes bajo carga.',
       prereqs: ['postgres/transacciones'],
       keyPoints: [
         'MVCC: los lectores no bloquean a los escritores porque cada transacción ve su propia foto de los datos.',
@@ -199,6 +206,7 @@ export const POSTGRES_ISLAND = {
       x: 20,
       y: 48,
       weight: 2,
+      summary: 'Los bloqueos y la contención son lo que pasa cuando varias operaciones se pelean por los mismos datos. Consiste en entender qué bloquea qué y cómo evitar esperas y deadlocks. Te capacita para diagnosticar por qué una base se atasca bajo carga y desatascarla.',
       prereqs: ['postgres/transacciones'],
       keyPoints: [
         'Qué bloquea qué: locks de fila (UPDATE, SELECT FOR UPDATE) vs locks de tabla (DDL, ALTER).',
@@ -224,6 +232,7 @@ export const POSTGRES_ISLAND = {
       x: 42,
       y: 36,
       weight: 3,
+      summary: 'Los índices son atajos que hacen que las consultas encuentren datos sin recorrer toda la tabla. Consiste en saber cuáles crear, de qué tipo y cuándo estorban. Te capacita para que una consulta pase de segundos a milisegundos sin cambiar los datos.',
       prereqs: ['postgres/joins-agregaciones'],
       keyPoints: [
         'B-tree como modelo mental: por qué sirve para igualdad y rangos, y por qué el orden de columnas importa.',
@@ -247,6 +256,7 @@ export const POSTGRES_ISLAND = {
       x: 62,
       y: 36,
       weight: 3,
+      summary: 'EXPLAIN y el planificador son ver cómo Postgres piensa ejecutar tu consulta antes de optimizarla. Consiste en leer el plan e identificar escaneos completos y estimaciones malas. Te capacita para saber POR QUÉ una consulta va lenta, no solo QUE va lenta.',
       prereqs: ['postgres/indices'],
       keyPoints: [
         'EXPLAIN ANALYZE es la verdad: el plan real ejecutado, con tiempos y filas por nodo.',
@@ -270,6 +280,7 @@ export const POSTGRES_ISLAND = {
       x: 50,
       y: 28,
       weight: 2,
+      summary: 'La optimización de consultas es reescribir el SQL lento para que vuele, guiándote por el plan. Consiste en índices, reescrituras y ajustar estadísticas. Te capacita para exprimir la base y evitar el reflejo de meter más máquina a la primera.',
       prereqs: ['postgres/explain'],
       keyPoints: [
         'Encuentra lo lento con datos: pg_stat_statements te dice qué queries dominan el tiempo total.',
@@ -293,6 +304,7 @@ export const POSTGRES_ISLAND = {
       x: 66,
       y: 22,
       weight: 2,
+      summary: 'El VACUUM y las estadísticas son el mantenimiento que mantiene Postgres sano: limpia versiones muertas y afina el planificador. Consiste en entender el autovacuum y cuándo intervenir. Te capacita para que la base no se degrade con el tiempo y las consultas sigan rápidas.',
       prereqs: ['postgres/explain'],
       keyPoints: [
         'VACUUM recicla las tuplas muertas que MVCC deja atrás; ANALYZE refresca las estadísticas del planificador.',
@@ -318,6 +330,7 @@ export const POSTGRES_ISLAND = {
       x: 80,
       y: 66,
       weight: 2,
+      summary: 'La instalación y configuración son poner Postgres en marcha y ajustar sus parámetros clave (memoria, conexiones). Consiste en no dejarlo por defecto cuando importa el rendimiento. Te capacita para operar la base tú mismo en vez de depender siempre de otro.',
       prereqs: [],
       keyPoints: [
         'Monta tu Postgres de práctica (paquete o Docker): romper una base propia enseña más que diez posts.',
@@ -341,6 +354,7 @@ export const POSTGRES_ISLAND = {
       x: 92,
       y: 58,
       weight: 3,
+      summary: 'Los backups y la recuperación son poder volver atrás cuando algo va muy mal, y haberlo probado. Consiste en copias, recuperación en el tiempo y ensayar la restauración. Te capacita para que un borrado o un desastre sea un susto y no el fin del negocio.',
       prereqs: ['postgres/instalacion-configuracion'],
       keyPoints: [
         'Un backup no probado no es un backup: ensaya la restauración completa de forma periódica.',
@@ -364,6 +378,7 @@ export const POSTGRES_ISLAND = {
       x: 82,
       y: 46,
       weight: 3,
+      summary: 'La seguridad y los roles son controlar quién accede a qué dentro de la base. Consiste en usuarios, permisos, roles y seguridad a nivel de fila. Te capacita para proteger los datos sensibles y cumplir con el mínimo privilegio.',
       prereqs: ['postgres/instalacion-configuracion'],
       keyPoints: [
         'Mínimo privilegio de verdad: la aplicación NO se conecta como superusuario, jamás.',
@@ -387,6 +402,7 @@ export const POSTGRES_ISLAND = {
       x: 68,
       y: 54,
       weight: 2,
+      summary: 'La replicación y los upgrades son tener copias vivas de la base para alta disponibilidad y actualizarla sin caídas. Consiste en réplicas, failover y migraciones de versión. Te capacita para operar una base que aguanta caídas y evoluciona sin parar el servicio.',
       prereqs: ['postgres/backups-recuperacion'],
       keyPoints: [
         'Replicación streaming para alta disponibilidad y réplicas de lectura: primario, standbys y su retardo.',
@@ -412,6 +428,7 @@ export const POSTGRES_ISLAND = {
       x: 30,
       y: 40,
       weight: 2,
+      summary: 'JSONB es guardar datos semiestructurados dentro de Postgres con la potencia de indexarlos y consultarlos. Consiste en mezclar lo relacional y lo flexible con criterio. Te capacita para modelar lo que no encaja en columnas fijas sin salir de tu base de siempre.',
       prereqs: ['postgres/tipos-datos'],
       keyPoints: [
         'jsonb (no json) para datos semiestructurados: binario, indexable y con operadores ricos.',
@@ -435,6 +452,7 @@ export const POSTGRES_ISLAND = {
       x: 6,
       y: 54,
       weight: 2,
+      summary: 'Las extensiones convierten Postgres en muchas bases a la vez: geolocalización, colas, criptografía y más. Consiste en conocer las que resuelven tu problema antes de montar otro sistema. Te capacita para hacer más con Postgres y menos piezas en tu arquitectura.',
       prereqs: ['postgres/instalacion-configuracion'],
       keyPoints: [
         'Las extensiones son el superpoder de Postgres: funcionalidad de otro producto sin salir de tu base.',
@@ -457,6 +475,7 @@ export const POSTGRES_ISLAND = {
       x: 6,
       y: 36,
       weight: 1,
+      summary: 'El texto y los vectores con pgvector son buscar por significado dentro de Postgres, base de las apps de IA. Consiste en guardar embeddings y consultar por similitud. Te capacita para montar búsqueda semántica y RAG sin añadir una base de datos vectorial aparte.',
       prereqs: ['postgres/extensiones'],
       keyPoints: [
         'Full-text search nativo: tsvector, tsquery y ranking — buscador decente sin montar Elasticsearch.',
@@ -482,6 +501,7 @@ export const POSTGRES_ISLAND = {
       x: 22,
       y: 28,
       weight: 3,
+      summary: 'Generar SQL con IA es pedirle consultas al modelo para ir más rápido con lo repetitivo. Consiste en describir bien lo que quieres y entender lo que devuelve. Te capacita para acelerar el trabajo con datos sin dejar de ser tú quien manda.',
       prereqs: ['postgres/joins-agregaciones'],
       keyPoints: [
         'Da el esquema en el prompt: CREATE TABLEs, relaciones y filas de ejemplo — sin él, la IA inventa columnas.',
@@ -505,6 +525,7 @@ export const POSTGRES_ISLAND = {
       x: 10,
       y: 20,
       weight: 3,
+      summary: 'Verificar planes y no confiar es no ejecutar a ciegas el SQL que genera la IA. Consiste en revisar el EXPLAIN y comprobar que la consulta es correcta y eficiente. Te capacita para aprovechar la velocidad de la IA sin meter consultas que revientan la base.',
       prereqs: ['postgres/sql-generado-ia', 'postgres/explain'],
       keyPoints: [
         'Toda query generada que vaya a producción pasa por EXPLAIN ANALYZE sobre datos con volumen realista.',
@@ -528,6 +549,7 @@ export const POSTGRES_ISLAND = {
       x: 18,
       y: 10,
       weight: 2,
+      summary: 'Las migraciones generadas y revisadas son no aplicar cambios de esquema propuestos por la IA sin mirarlos. Consiste en comprobar que no pierden datos, no bloquean y son reversibles. Te capacita para evolucionar el esquema con ayuda de la IA sin jugarte la integridad.',
       prereqs: ['postgres/sql-generado-ia', 'postgres/transacciones'],
       keyPoints: [
         'Las migraciones son el código de mayor riesgo que genera la IA: tocan datos y no tienen git revert.',
@@ -551,6 +573,7 @@ export const POSTGRES_ISLAND = {
       x: 34,
       y: 6,
       weight: 3,
+      summary: 'Ser guardián de los datos es el hito de tratar la base con el respeto que merece lo más valioso de una empresa. Consiste en juntar modelado, rendimiento, seguridad y backups con criterio. Te capacita para ser la persona en quien el equipo confía sus datos.',
       prereqs: [
         'postgres/verificar-planes-ia',
         'postgres/backups-recuperacion',

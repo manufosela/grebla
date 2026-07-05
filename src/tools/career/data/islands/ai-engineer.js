@@ -36,6 +36,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 42,
       y: 76,
       weight: 3,
+      summary: 'Entender cómo funciona un LLM es saber qué hace por dentro: predice el siguiente token a partir de patrones, no razona ni consulta una verdad. Consiste en tener el modelo mental correcto de sus tripas. Te capacita para usarlo bien y no sorprenderte de sus aciertos ni de sus fallos.',
       prereqs: [],
       keyPoints: [
         'Tokens, no palabras: todo (coste, límites, rarezas al contar letras) se explica desde ahí.',
@@ -60,6 +61,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 42,
       y: 66,
       weight: 3,
+      summary: 'Conocer los límites de los modelos es saber dónde flaquean: alucinan, no saben lo reciente, se pierden en contextos largos y no calculan bien. Consiste en anticipar esos fallos por diseño. Te capacita para construir productos que funcionan pese a las limitaciones, no a pesar de ignorarlas.',
       prereqs: ['ai-engineer/como-funciona-llm'],
       keyPoints: [
         'Alucinación por diseño: el modelo no distingue entre lo que sabe y lo que suena bien.',
@@ -83,6 +85,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 54,
       y: 76,
       weight: 3,
+      summary: 'Las APIs de modelos son cómo llamas a un LLM desde tu código: mensajes, parámetros, streaming y costes. Consiste en dominar la interfaz de los proveedores y sus opciones. Te capacita para integrar IA en cualquier aplicación de forma controlada.',
       prereqs: ['ai-engineer/como-funciona-llm'],
       keyPoints: [
         'La llamada básica: mensajes con roles (system, user, assistant), parámetros y respuesta.',
@@ -107,6 +110,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 66,
       y: 76,
       weight: 1,
+      summary: 'Los modelos abiertos y locales son alternativas que puedes ejecutar tú mismo, sin depender de un proveedor. Consiste en saber cuándo compensan por coste, privacidad o control. Te capacita para elegir entre API y modelo propio según lo que el proyecto necesite.',
       prereqs: ['ai-engineer/apis-modelos'],
       keyPoints: [
         'El ecosistema open weights: qué se publica, con qué licencias y qué puedes hacer con ello.',
@@ -132,6 +136,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 30,
       y: 66,
       weight: 3,
+      summary: 'El prompting con método es dirigir al modelo con instrucciones claras en vez de a base de suerte. Consiste en dar contexto, formato y ejemplos, e iterar midiendo. Te capacita para sacar resultados fiables y repetibles del modelo, no ocurrencias.',
       prereqs: ['ai-engineer/como-funciona-llm'],
       keyPoints: [
         'System prompt como especificación: rol, reglas, formato de salida y casos límite.',
@@ -155,6 +160,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 30,
       y: 56,
       weight: 3,
+      summary: 'El context engineering es decidir qué información entra en la ventana del modelo y cómo. Consiste en seleccionar, resumir y ordenar el contexto para que el modelo trabaje sobre lo relevante. Te capacita para que el modelo responda con precisión en vez de ahogado en ruido.',
       prereqs: ['ai-engineer/prompting'],
       keyPoints: [
         'La disciplina real: decidir QUÉ entra en la ventana de contexto en cada llamada, y qué no.',
@@ -178,6 +184,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 18,
       y: 56,
       weight: 2,
+      summary: 'La salida estructurada es forzar al modelo a devolver datos con una forma fija (JSON, esquema) en vez de texto libre. Consiste en usar esquemas y validación de la respuesta. Te capacita para conectar la IA con tu código sin parsear a mano lo que dijo.',
       prereqs: ['ai-engineer/apis-modelos', 'ai-engineer/prompting'],
       keyPoints: [
         'JSON con esquema: structured outputs o tool use para que la salida sea parseable siempre.',
@@ -203,6 +210,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 30,
       y: 46,
       weight: 3,
+      summary: 'Los embeddings y la búsqueda semántica son convertir texto en vectores para buscar por significado, no por palabras exactas. Consiste en generar embeddings y comparar por similitud. Te capacita para encontrar contenido relevante aunque no coincidan las palabras.',
       prereqs: ['ai-engineer/apis-modelos'],
       keyPoints: [
         'Texto a vectores: cercanía en el espacio = similitud de significado.',
@@ -226,6 +234,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 30,
       y: 36,
       weight: 3,
+      summary: 'El RAG (generación aumentada por recuperación) es darle al modelo tus documentos relevantes para que responda con datos reales. Consiste en recuperar contexto y pasárselo al generar. Te capacita para construir asistentes que responden sobre TU información, no solo la que memorizaron.',
       prereqs: ['ai-engineer/embeddings', 'ai-engineer/context-engineering'],
       keyPoints: [
         'El patrón: recuperar lo relevante, montarlo en el contexto, generar con las fuentes a la vista.',
@@ -249,6 +258,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 18,
       y: 36,
       weight: 2,
+      summary: 'El chunking y la búsqueda híbrida son partir bien los documentos y combinar búsqueda por palabras y por significado. Consiste en trocear con criterio y mezclar léxico y semántico. Te capacita para que tu RAG recupere lo correcto en vez de fragmentos inútiles.',
       prereqs: ['ai-engineer/rag'],
       keyPoints: [
         'El chunking decide el RAG: trozos con sentido (secciones, funciones), no cortes cada N caracteres.',
@@ -274,6 +284,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 54,
       y: 66,
       weight: 3,
+      summary: 'El tool use y function calling son dar al modelo herramientas (funciones, APIs) que puede invocar para actuar, no solo hablar. Consiste en describir las tools y ejecutar lo que pide. Te capacita para que la IA consulte datos reales y haga cosas, no solo genere texto.',
       prereqs: ['ai-engineer/apis-modelos', 'ai-engineer/salida-estructurada'],
       keyPoints: [
         'El modelo no ejecuta nada: pide una llamada con argumentos y TU código la ejecuta.',
@@ -297,6 +308,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 54,
       y: 56,
       weight: 3,
+      summary: 'Los agentes son sistemas donde el modelo planifica, usa herramientas y decide pasos hacia un objetivo. Consiste en montar el bucle de razonar-actuar-observar con límites. Te capacita para construir asistentes que resuelven tareas de varios pasos, no una sola respuesta.',
       prereqs: ['ai-engineer/tool-use'],
       keyPoints: [
         'El bucle agéntico: el modelo decide, actúa con herramientas, observa el resultado y repite.',
@@ -320,6 +332,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 66,
       y: 56,
       weight: 2,
+      summary: 'MCP y los protocolos son estándares para conectar modelos con herramientas y datos de forma interoperable. Consiste en exponer y consumir capacidades por un contrato común. Te capacita para integrar la IA con el mundo sin reinventar la conexión cada vez.',
       prereqs: ['ai-engineer/tool-use'],
       keyPoints: [
         'El problema: cada app integraba cada herramienta a mano; un protocolo estándar lo corta.',
@@ -343,6 +356,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 66,
       y: 66,
       weight: 1,
+      summary: 'La orquestación multiagente es coordinar varios modelos o agentes especializados en un flujo. Consiste en repartir el trabajo, pasar contexto y juntar resultados. Te capacita para atacar problemas grandes que un solo prompt no resuelve bien.',
       prereqs: ['ai-engineer/agentes'],
       keyPoints: [
         'Patrones: orquestador-trabajadores, pipelines de especialistas, paralelización de subtareas.',
@@ -367,6 +381,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 66,
       y: 46,
       weight: 3,
+      summary: 'Los evals son medir la calidad de tu sistema de IA con datos en vez de con la sensación de que «va bien». Consiste en montar conjuntos de prueba y puntuar los cambios. Te capacita para mejorar tu producto de IA con rigor y no romperlo sin enterarte.',
       prereqs: ['ai-engineer/prompting'],
       keyPoints: [
         '«Parece que funciona» no es una métrica: sin evals no puedes cambiar nada con confianza.',
@@ -391,6 +406,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 78,
       y: 46,
       weight: 2,
+      summary: 'La observabilidad de LLMs es ver qué hace tu sistema de IA en producción: prompts, respuestas, costes y fallos. Consiste en trazar y registrar cada llamada. Te capacita para diagnosticar por qué el modelo respondió mal a un usuario real, no en abstracto.',
       prereqs: ['ai-engineer/evals'],
       keyPoints: [
         'Traza cada petición: prompt completo, contexto, respuesta, tokens, latencia y coste.',
@@ -414,6 +430,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 78,
       y: 56,
       weight: 3,
+      summary: 'La seguridad de IA es defender tu sistema de inyección de prompts, fugas de datos y usos maliciosos. Consiste en no confiar en la entrada ni en la salida y poner límites. Te capacita para desplegar IA sin abrir un agujero por el que se cuele cualquiera.',
       prereqs: ['ai-engineer/tool-use'],
       keyPoints: [
         'Inyección de prompts: cualquier texto que el modelo lee (webs, docs, emails) puede darle órdenes.',
@@ -439,6 +456,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 54,
       y: 46,
       weight: 3,
+      summary: 'El coste y la latencia son que tu producto de IA sea sostenible en dinero y rápido para el usuario. Consiste en elegir modelo, cachear, y recortar tokens con criterio. Te capacita para escalar un producto de IA sin arruinarte ni hacer esperar a la gente.',
       prereqs: ['ai-engineer/apis-modelos', 'ai-engineer/evals'],
       keyPoints: [
         'El coste escala con el uso: modela €/petición y €/usuario antes de lanzar, no después.',
@@ -462,6 +480,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 42,
       y: 46,
       weight: 2,
+      summary: 'El fine-tuning es entrenar un modelo con tus datos, y saber cuándo NO merece la pena frente a un buen prompt o RAG. Consiste en juzgar el coste-beneficio antes de lanzarte. Te capacita para elegir la herramienta correcta en vez de afinar por moda.',
       prereqs: ['ai-engineer/evals'],
       keyPoints: [
         'El orden correcto: prompting → few-shot → RAG → y solo si todo eso falla, fine-tuning.',
@@ -485,6 +504,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 42,
       y: 36,
       weight: 2,
+      summary: 'El producto y la UX con IA son diseñar para algo que a veces se equivoca: mostrar confianza, permitir corregir y no prometer magia. Consiste en abrazar la incertidumbre en la interfaz. Te capacita para construir productos de IA en los que la gente confía porque son honestos.',
       prereqs: ['ai-engineer/limites-modelos'],
       keyPoints: [
         'Diseña para el error: el modelo fallará en producción; el producto decide si el fallo es grave o trivial.',
@@ -508,6 +528,7 @@ export const AI_ENGINEER_ISLAND = {
       x: 54,
       y: 36,
       weight: 3,
+      summary: 'Un producto con IA en producción es el hito de tener algo real, evaluado, observado y sostenible en manos de usuarios. Consiste en juntar todo lo de la isla en un sistema fiable. Te capacita para demostrar que sabes llevar la IA de la demo al producto de verdad.',
       prereqs: ['ai-engineer/rag', 'ai-engineer/agentes', 'ai-engineer/seguridad-ia', 'ai-engineer/coste-latencia'],
       keyPoints: [
         'Integras todo: modelo + contexto + herramientas + evals + observabilidad + UX, con usuarios reales.',

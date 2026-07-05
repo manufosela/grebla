@@ -34,6 +34,7 @@ export const ANDROID_ISLAND = {
       x: 42,
       y: 76,
       weight: 3,
+      summary: 'Kotlin idiomático es el lenguaje oficial de Android: conciso, seguro frente a nulos y muy expresivo. Consiste en escribir Kotlin al estilo Kotlin, no traduciendo Java. Te capacita para construir apps Android modernas sobre el lenguaje que Google recomienda.',
       prereqs: [],
       keyPoints: [
         'Null-safety de verdad: tipos anulables, ?. y ?:, y por qué !! es una alarma en el code review.',
@@ -58,6 +59,7 @@ export const ANDROID_ISLAND = {
       x: 54,
       y: 76,
       weight: 2,
+      summary: 'Android Studio y el emulador son tu taller: el IDE, las herramientas y el dispositivo virtual donde pruebas. Consiste en dominar el entorno, la depuración y el emulador. Te capacita para desarrollar y probar apps sin necesitar siempre un móvil físico.',
       prereqs: [],
       keyPoints: [
         'Anatomía de un proyecto: módulos, manifest, resources y dónde vive cada cosa.',
@@ -81,6 +83,7 @@ export const ANDROID_ISLAND = {
       x: 66,
       y: 76,
       weight: 2,
+      summary: 'Gradle y los builds son el sistema que compila, empaqueta y firma tu app gestionando dependencias y variantes. Consiste en entender los scripts de build y las flavors. Te capacita para controlar cómo se construye tu app y automatizar sus versiones.',
       prereqs: ['android/android-studio'],
       keyPoints: [
         'Qué hace cada build.gradle.kts: plugins, dependencias, configuración por módulo.',
@@ -104,6 +107,7 @@ export const ANDROID_ISLAND = {
       x: 42,
       y: 66,
       weight: 3,
+      summary: 'Las corrutinas y Flow son la forma moderna de hacer trabajo asíncrono en Android sin bloquear la interfaz. Consiste en lanzar tareas concurrentes y manejar flujos de datos con elegancia. Te capacita para cargar datos y reaccionar a cambios sin congelar la app.',
       prereqs: ['android/kotlin'],
       keyPoints: [
         'suspend y structured concurrency: los scopes cancelan a sus hijos, no hay tareas huérfanas.',
@@ -127,6 +131,7 @@ export const ANDROID_ISLAND = {
       x: 54,
       y: 66,
       weight: 3,
+      summary: 'El ciclo de vida y los componentes son entender cuándo nace, se pausa y muere cada pantalla y proceso. Consiste en gestionar estado y recursos según ese ciclo. Te capacita para evitar los fugas y crashes clásicos de no respetar cómo Android gestiona tu app.',
       prereqs: ['android/kotlin'],
       keyPoints: [
         'Ciclo de vida de Activity: created, started, resumed — y qué se pierde en cada rotación.',
@@ -152,6 +157,7 @@ export const ANDROID_ISLAND = {
       x: 30,
       y: 66,
       weight: 3,
+      summary: 'Jetpack Compose es la forma moderna de construir interfaces Android de manera declarativa con Kotlin. Consiste en describir la UI para cada estado y dejar que Compose la actualice. Te capacita para hacer interfaces con menos código y más mantenibles que el XML de antes.',
       prereqs: ['android/kotlin'],
       keyPoints: [
         'UI declarativa: la pantalla es una función del estado, no un árbol que mutas.',
@@ -175,6 +181,7 @@ export const ANDROID_ISLAND = {
       x: 18,
       y: 66,
       weight: 3,
+      summary: 'El estado y la recomposición son el corazón de Compose: cómo los datos disparan que la interfaz se redibuje. Consiste en gestionar el estado en el sitio correcto y evitar recomposiciones de más. Te capacita para hacer UIs reactivas y eficientes sin bugs sutiles.',
       prereqs: ['android/compose'],
       keyPoints: [
         'remember y mutableStateOf: qué sobrevive a la recomposición y qué no.',
@@ -198,6 +205,7 @@ export const ANDROID_ISLAND = {
       x: 18,
       y: 56,
       weight: 2,
+      summary: 'La navegación es moverse entre pantallas de forma coherente, con pila, argumentos y deep links. Consiste en definir el grafo de navegación y sus rutas. Te capacita para estructurar apps de varias pantallas sin que la navegación se convierta en un lío.',
       prereqs: ['android/compose'],
       keyPoints: [
         'Navigation Compose: grafo de destinos, rutas tipadas y paso de argumentos.',
@@ -221,6 +229,7 @@ export const ANDROID_ISLAND = {
       x: 30,
       y: 56,
       weight: 2,
+      summary: 'Material Design 3 es el lenguaje visual de Android: componentes, tema dinámico y guías de interacción. Consiste en construir con sus piezas para que la app se sienta nativa. Te capacita para diseñar interfaces coherentes y reconocibles sin partir de cero.',
       prereqs: ['android/compose'],
       keyPoints: [
         'El sistema de diseño de Android: componentes, elevación, movimiento y cuándo desviarse.',
@@ -244,6 +253,7 @@ export const ANDROID_ISLAND = {
       x: 6,
       y: 56,
       weight: 2,
+      summary: 'La accesibilidad en Android es que tu app la pueda usar todo el mundo, con TalkBack o sin ver bien. Consiste en descripciones, foco, tamaños y contraste correctos. Te capacita para no dejar fuera a nadie y llegar a más usuarios.',
       prereqs: ['android/compose'],
       keyPoints: [
         'TalkBack: navega tu app con los ojos cerrados al menos una vez por release.',
@@ -269,6 +279,7 @@ export const ANDROID_ISLAND = {
       x: 42,
       y: 46,
       weight: 3,
+      summary: 'El MVVM y las capas son separar la interfaz de la lógica y los datos para que la app no sea un plato de spaghetti. Consiste en ViewModels, estado observable y capas con responsabilidad clara. Te capacita para construir apps que crecen sin volverse imposibles de tocar.',
       prereqs: ['android/ciclo-vida', 'android/estado-compose'],
       keyPoints: [
         'Capas con frontera clara: UI, ViewModel, dominio (opcional) y datos con repositorios.',
@@ -292,6 +303,7 @@ export const ANDROID_ISLAND = {
       x: 30,
       y: 46,
       weight: 2,
+      summary: 'La inyección de dependencias (con Hilt) es dar a cada componente lo que necesita desde fuera. Consiste en desacoplar piezas para poder cambiarlas y testearlas. Te capacita para escribir apps flexibles y probables en vez de un nudo de dependencias.',
       prereqs: ['android/mvvm'],
       keyPoints: [
         'Por qué DI: dependencias explícitas, sustituibles en tests, sin singletons a mano.',
@@ -315,6 +327,7 @@ export const ANDROID_ISLAND = {
       x: 18,
       y: 46,
       weight: 1,
+      summary: 'La modularización es partir una app grande en módulos independientes que compilan y evolucionan por separado. Consiste en definir fronteras claras entre features. Te capacita para que la app escale en tamaño y equipo sin que el build tarde una eternidad.',
       prereqs: ['android/mvvm'],
       keyPoints: [
         'Cuándo modularizar: builds lentas, equipos que pisan los mismos ficheros, features aislables.',
@@ -337,6 +350,7 @@ export const ANDROID_ISLAND = {
       x: 54,
       y: 46,
       weight: 3,
+      summary: 'El testing en Android es probar la app en sus niveles: lógica, UI con Compose y flujos de extremo a extremo. Consiste en cubrir lo importante y ejecutarlo a menudo. Te capacita para cambiar la app con confianza en vez de rezar en cada release.',
       prereqs: ['android/mvvm'],
       keyPoints: [
         'Tests unitarios de ViewModels y repositorios en JVM: rápidos, sin emulador.',
@@ -362,6 +376,7 @@ export const ANDROID_ISLAND = {
       x: 66,
       y: 56,
       weight: 3,
+      summary: 'La red y las APIs son cómo tu app habla con el servidor: peticiones, respuestas y manejo de errores. Consiste en usar bien Retrofit o Ktor y gestionar carga y fallos. Te capacita para conectar tu app con cualquier backend sin dejar la pantalla colgada.',
       prereqs: ['android/corrutinas-flow'],
       keyPoints: [
         'Cliente HTTP con Retrofit o Ktor: definición del API, serialización con kotlinx.serialization.',
@@ -385,6 +400,7 @@ export const ANDROID_ISLAND = {
       x: 78,
       y: 66,
       weight: 3,
+      summary: 'La persistencia local es guardar datos en el dispositivo para trabajar offline y no repetir peticiones. Consiste en usar Room o DataStore según el caso. Te capacita para que tu app funcione sin conexión y responda al instante.',
       prereqs: ['android/corrutinas-flow'],
       keyPoints: [
         'Room: entidades, DAOs con Flow y migraciones que no pierden datos del usuario.',
@@ -408,6 +424,7 @@ export const ANDROID_ISLAND = {
       x: 78,
       y: 56,
       weight: 2,
+      summary: 'El trabajo en segundo plano es ejecutar tareas cuando la app no está en primer plano respetando las reglas del sistema. Consiste en WorkManager y servicios bien usados. Te capacita para sincronizar y procesar sin que Android te mate el proceso ni gastes batería.',
       prereqs: ['android/corrutinas-flow', 'android/ciclo-vida'],
       keyPoints: [
         'WorkManager para trabajo diferible y garantizado: sincronizaciones, subidas, limpieza.',
@@ -433,6 +450,7 @@ export const ANDROID_ISLAND = {
       x: 66,
       y: 36,
       weight: 2,
+      summary: 'El rendimiento y la batería son que la app vaya fluida y no vacíe el móvil. Consiste en medir, evitar trabajo en el hilo principal y perfilar el consumo. Te capacita para entregar apps que los usuarios no desinstalan por lentas o por tragonas.',
       prereqs: ['android/estado-compose', 'android/segundo-plano'],
       keyPoints: [
         'Mide antes de tocar: Profiler, Macrobenchmark y Perfetto sobre build de release.',
@@ -456,6 +474,7 @@ export const ANDROID_ISLAND = {
       x: 54,
       y: 26,
       weight: 3,
+      summary: 'Las firmas y Play Console son lo necesario para publicar: firmar la app y gestionarla en la tienda. Consiste en entender claves, releases y los canales de distribución. Te capacita para llevar tu app de tu máquina a millones de móviles de forma segura.',
       prereqs: ['android/gradle', 'android/testing'],
       keyPoints: [
         'Firma de apps y Play App Signing: qué clave guarda Google y cuál no puedes perder jamás.',
@@ -479,6 +498,7 @@ export const ANDROID_ISLAND = {
       x: 66,
       y: 26,
       weight: 2,
+      summary: 'Los crashes y la observabilidad son enterarte de qué falla a tus usuarios reales y por qué. Consiste en integrar reporte de errores y métricas de uso. Te capacita para arreglar lo que de verdad rompe en producción, no lo que tú imaginas.',
       prereqs: ['android/firmas-play'],
       keyPoints: [
         'Crash reporting (Crashlytics o similar) desde el primer release: sin datos estás ciego.',
@@ -502,6 +522,7 @@ export const ANDROID_ISLAND = {
       x: 54,
       y: 16,
       weight: 3,
+      summary: 'Una app publicada y mantenida es el hito de tener algo real en Play Store que cuidas versión a versión. Consiste en juntar todo lo de la isla en un producto vivo. Te capacita para demostrar que sabes entregar y sostener una app, no solo empezarla.',
       prereqs: ['android/firmas-play', 'android/red', 'android/persistencia', 'android/rendimiento'],
       keyPoints: [
         'Cierra el ciclo: idea → app → Play Store → usuarios reales → siguiente versión.',
@@ -526,6 +547,7 @@ export const ANDROID_ISLAND = {
       x: 30,
       y: 36,
       weight: 2,
+      summary: 'Desarrollar Android con IA es usar el modelo para generar código, tests y boilerplate y así ir más rápido. Consiste en dirigir bien a la IA y verificar lo que produce en tu proyecto. Te capacita para acelerar el desarrollo móvil sin perder el control de la calidad.',
       prereqs: ['android/mvvm'],
       keyPoints: [
         'Asistentes en el IDE (Gemini en Android Studio y similares): generar, explicar y refactorizar en contexto.',
@@ -549,6 +571,7 @@ export const ANDROID_ISLAND = {
       x: 18,
       y: 36,
       weight: 2,
+      summary: 'La IA en el dispositivo es ejecutar modelos directamente en el móvil, sin enviar datos a un servidor. Consiste en integrar modelos con las APIs on-device de Android. Te capacita para dar funciones inteligentes rápidas, privadas y que funcionan sin conexión.',
       prereqs: ['android/ia-flujo-trabajo'],
       keyPoints: [
         'On-device vs nube: latencia, privacidad y coste deciden dónde corre cada inferencia.',

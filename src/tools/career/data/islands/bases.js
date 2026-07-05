@@ -61,6 +61,7 @@ export const BASES_ISLAND = {
       x: 50,
       y: 74,
       weight: 3,
+      summary: 'Pensar con la IA es usar el modelo como un colaborador al que diriges, no como un oráculo al que obedeces. Consiste en plantear el problema, decidir qué delegar y mantener tú el criterio. Te capacita para ir más rápido sin perder el control de lo que construyes.',
       prereqs: [],
       keyPoints: [
         'Escribe prompts con contexto: objetivo, restricciones, ejemplos y formato de salida esperado.',
@@ -84,6 +85,7 @@ export const BASES_ISLAND = {
       x: 38,
       y: 66,
       weight: 3,
+      summary: 'Revisar el código que genera la IA es leerlo entero antes de integrarlo, porque tú firmas lo que entra. Consiste en buscar los fallos típicos del modelo: casos borde, APIs inventadas, dependencias de más. Te capacita para aprovechar su velocidad sin heredar sus errores.',
       prereqs: ['bases/pensar-con-ia', 'bases/leer-codigo'],
       keyPoints: [
         'Lee TODO el código generado antes de integrarlo: eres responsable de lo que firmas.',
@@ -107,6 +109,7 @@ export const BASES_ISLAND = {
       x: 62,
       y: 66,
       weight: 2,
+      summary: 'Delegar vs hacer es decidir cuándo pedirle algo a la IA y cuándo resolverlo tú. Consiste en calibrar el coste de explicar y verificar frente al de hacerlo a mano. Te capacita para no perder tiempo delegando lo trivial ni jugártela delegando lo crítico.',
       prereqs: ['bases/pensar-con-ia'],
       keyPoints: [
         'Delega lo mecánico: boilerplate, tests repetitivos, migraciones de sintaxis, borradores.',
@@ -131,6 +134,7 @@ export const BASES_ISLAND = {
       x: 50,
       y: 58,
       weight: 3,
+      summary: 'Verificar la salida de la IA es comprobar que lo que produce es correcto, no solo que suena bien. Consiste en ejecutar, probar y contrastar contra la realidad antes de darlo por bueno. Te capacita para distinguir plausible de correcto, la habilidad clave de esta década.',
       prereqs: ['bases/pensar-con-ia'],
       keyPoints: [
         'Nunca asumas que la salida es correcta: contrasta con la fuente (doc oficial, ejecución real).',
@@ -154,6 +158,7 @@ export const BASES_ISLAND = {
       x: 70,
       y: 76,
       weight: 2,
+      summary: 'Conocer los límites y riesgos de la IA es saber dónde falla: alucina, no razona de verdad, filtra datos sensibles y refleja sus sesgos. Consiste en anticipar esos fallos antes de que te muerdan. Te capacita para usarla con confianza informada, ni fe ciega ni miedo.',
       prereqs: ['bases/pensar-con-ia'],
       keyPoints: [
         'Alucinaciones: el modelo genera texto plausible, no verdad; cuanto más específica la pregunta, más riesgo.',
@@ -179,6 +184,7 @@ export const BASES_ISLAND = {
       x: 28,
       y: 74,
       weight: 3,
+      summary: 'La lógica y la descomposición son partir un problema grande en piezas pequeñas que sí sabes resolver. Consiste en pensar en pasos, condiciones y casos antes de escribir una línea. Te capacita para atacar cualquier problema sin bloquearte ante su tamaño.',
       prereqs: [],
       keyPoints: [
         'Reformula el problema con tus palabras antes de tocar código (o de escribir el prompt).',
@@ -203,6 +209,7 @@ export const BASES_ISLAND = {
       x: 16,
       y: 64,
       weight: 3,
+      summary: 'Las estructuras de datos son las formas de organizar la información: listas, mapas, conjuntos, árboles. Consiste en elegir la adecuada para lo que necesitas hacer con los datos. Te capacita para escribir código que va rápido y se lee claro en vez de enrevesado.',
       prereqs: ['bases/logica-descomposicion'],
       keyPoints: [
         'Domina el catálogo esencial: array, mapa/diccionario, conjunto, pila, cola, árbol.',
@@ -227,6 +234,7 @@ export const BASES_ISLAND = {
       x: 6,
       y: 54,
       weight: 2,
+      summary: 'La intuición de coste es notar cuándo un código se va a poner lento al crecer los datos. Consiste en distinguir de un vistazo lo que escala de lo que no (bucles anidados, búsquedas repetidas). Te capacita para evitar el cuello de botella antes de que llegue a producción.',
       prereqs: ['bases/estructuras-datos'],
       keyPoints: [
         'Big-O como intuición: ¿qué le pasa a este código si los datos crecen ×10 o ×1000?',
@@ -250,6 +258,7 @@ export const BASES_ISLAND = {
       x: 20,
       y: 48,
       weight: 3,
+      summary: 'La depuración sistemática es encontrar la causa de un fallo con método en vez de a base de suerte. Consiste en reproducir, aislar, formular hipótesis y comprobarlas una a una. Te capacita para resolver cualquier bug sin dar palos de ciego durante horas.',
       prereqs: ['bases/logica-descomposicion'],
       keyPoints: [
         'Reproduce el fallo de forma fiable antes de intentar arreglarlo.',
@@ -274,6 +283,7 @@ export const BASES_ISLAND = {
       x: 30,
       y: 40,
       weight: 3,
+      summary: 'Leer código ajeno es entender un programa que no escribiste tú, que es la mayor parte del trabajo real. Consiste en seguir el flujo, identificar lo importante y no perderte en el detalle. Te capacita para incorporarte a cualquier proyecto sin tener que reescribirlo.',
       prereqs: ['bases/logica-descomposicion'],
       keyPoints: [
         'Empieza por los puntos de entrada y sigue el flujo de un caso de uso concreto.',
@@ -299,6 +309,7 @@ export const BASES_ISLAND = {
       x: 80,
       y: 66,
       weight: 3,
+      summary: 'Git es el control de versiones estándar: guarda la historia de tu código en commits y permite trabajar en paralelo con ramas. Consiste en confirmar, ramificar, fusionar y resolver conflictos sin pánico. Te capacita para colaborar sin pisar el trabajo de nadie y sin miedo a romper.',
       prereqs: [],
       keyPoints: [
         'Flujo básico con soltura: rama, commit, push, pull request, merge.',
@@ -323,6 +334,7 @@ export const BASES_ISLAND = {
       x: 92,
       y: 58,
       weight: 2,
+      summary: 'La terminal y el shell son la vía directa para hablar con tu máquina sin ratón. Consiste en moverte por ficheros, encadenar comandos y automatizar tareas repetitivas con scripts. Te capacita para trabajar más rápido y para manejar servidores donde no hay interfaz gráfica.',
       prereqs: [],
       keyPoints: [
         'Muévete con soltura: navegar, buscar ficheros, ver logs, matar procesos.',
@@ -346,6 +358,7 @@ export const BASES_ISLAND = {
       x: 82,
       y: 46,
       weight: 2,
+      summary: 'Dominar tu editor y sus asistentes de IA es sacarle partido a la herramienta donde pasas el día. Consiste en atajos, navegación, refactors y usar el copiloto sin que te lleve él a ti. Te capacita para editar a la velocidad del pensamiento en vez de pelearte con el editor.',
       prereqs: ['bases/pensar-con-ia'],
       keyPoints: [
         'Domina TU editor: navegación por símbolos, multi-cursor, refactor básico, depurador integrado.',
@@ -369,6 +382,7 @@ export const BASES_ISLAND = {
       x: 68,
       y: 54,
       weight: 2,
+      summary: 'La búsqueda efectiva es encontrar la respuesta buena rápido, ya sea en Google, la documentación o preguntando a la IA. Consiste en formular bien la pregunta y saber juzgar la fuente. Te capacita para desatascarte solo en minutos en vez de quedarte parado.',
       prereqs: [],
       keyPoints: [
         'La documentación oficial es la fuente primaria; posts, foros e IA son fuentes secundarias.',
@@ -394,6 +408,7 @@ export const BASES_ISLAND = {
       x: 50,
       y: 28,
       weight: 3,
+      summary: 'HTTP y las APIs son cómo se hablan los programas por la red: peticiones, respuestas, métodos y códigos de estado. Consiste en entender qué se pide, qué se devuelve y qué significa cada error. Te capacita para conectar tu software con cualquier servicio del mundo.',
       prereqs: ['bases/logica-descomposicion'],
       keyPoints: [
         'El ciclo petición/respuesta: métodos, códigos de estado, cabeceras, cuerpo.',
@@ -417,6 +432,7 @@ export const BASES_ISLAND = {
       x: 36,
       y: 20,
       weight: 1,
+      summary: 'JSON es el formato en el que viajan casi todos los datos entre sistemas: objetos, listas y valores. Consiste en leerlo, construirlo y validar que tiene la forma esperada. Te capacita para intercambiar información entre tu código y cualquier API sin liarte.',
       prereqs: ['bases/estructuras-datos'],
       keyPoints: [
         'JSON como lengua franca: tipos, anidamiento y sus límites (fechas, números grandes).',
@@ -439,6 +455,7 @@ export const BASES_ISLAND = {
       x: 62,
       y: 36,
       weight: 3,
+      summary: 'El testing es escribir código que comprueba que tu código funciona, hoy y cuando lo cambies mañana. Consiste en cubrir los casos importantes y ejecutar las pruebas a menudo. Te capacita para refactorizar y entregar con la red de seguridad puesta, sin miedo a romper.',
       prereqs: ['bases/verificar-salida-ia', 'bases/depuracion'],
       keyPoints: [
         'La pirámide: muchos tests unitarios, algunos de integración, pocos end-to-end.',
@@ -462,6 +479,7 @@ export const BASES_ISLAND = {
       x: 42,
       y: 36,
       weight: 3,
+      summary: 'El código legible es el que la próxima persona (o tú en tres meses) entiende sin sufrir. Consiste en buenos nombres, funciones pequeñas y quitar lo que sobra. Te capacita para trabajar en equipo sobre una base que se mantiene en vez de pudrirse.',
       prereqs: ['bases/leer-codigo', 'bases/revisar-codigo-ia'],
       keyPoints: [
         'Optimiza para quien lee: nombres que cuentan la intención, funciones cortas, una responsabilidad.',
@@ -486,6 +504,7 @@ export const BASES_ISLAND = {
       x: 66,
       y: 22,
       weight: 3,
+      summary: 'La seguridad básica es no dejar la puerta abierta: validar entradas, no confiar en el cliente y proteger secretos. Consiste en conocer los fallos más comunes (inyección, XSS, credenciales expuestas) y cerrarlos. Te capacita para entregar software que no sea un regalo para el primer atacante.',
       prereqs: ['bases/http-apis', 'bases/limites-riesgos-ia'],
       keyPoints: [
         'Nunca en el código: secretos, claves y tokens van en variables de entorno o gestores de secretos.',
@@ -510,6 +529,7 @@ export const BASES_ISLAND = {
       x: 52,
       y: 12,
       weight: 3,
+      summary: 'Entregar software que funciona es el hito de llevar algo pequeño de la idea a manos de un usuario real. Consiste en juntar todo lo aprendido en un producto completo, por humilde que sea. Te capacita para demostrarte que sabes cerrar, no solo empezar.',
       prereqs: ['bases/testing', 'bases/clean-code', 'bases/git'],
       keyPoints: [
         'Cierra el ciclo completo: idea → código → tests → PR → desplegado y usado por alguien.',
@@ -534,6 +554,7 @@ export const BASES_ISLAND = {
       x: 22,
       y: 28,
       weight: 3,
+      summary: 'El code review es revisar (y que te revisen) los cambios antes de que entren, mejorando el código y el criterio de ambos. Consiste en dar feedback claro y recibirlo sin ego. Te capacita para elevar la calidad del equipo y aprender de cada revisión.',
       prereqs: ['bases/revisar-codigo-ia', 'bases/git'],
       keyPoints: [
         'Al revisar: entiende el propósito del cambio antes de comentar líneas.',
@@ -557,6 +578,7 @@ export const BASES_ISLAND = {
       x: 10,
       y: 20,
       weight: 2,
+      summary: 'La documentación útil es la mínima que hace falta para que otro use tu trabajo sin preguntarte: un README claro, decisiones anotadas. Consiste en escribir lo que no se deduce del código. Te capacita para que tu trabajo sobreviva sin ti pegado al lado.',
       prereqs: ['bases/clean-code'],
       keyPoints: [
         'Documenta el PORQUÉ (decisiones, restricciones); el qué ya lo cuenta el código.',
@@ -580,6 +602,7 @@ export const BASES_ISLAND = {
       x: 18,
       y: 10,
       weight: 2,
+      summary: 'La comunicación asíncrona es dejar las cosas escritas de forma que se entiendan sin ti delante: mensajes, tickets, propuestas. Consiste en dar contexto, ser conciso y no obligar a una reunión. Te capacita para trabajar con equipos distribuidos y por husos horarios.',
       prereqs: ['bases/documentacion'],
       keyPoints: [
         'Mensajes autocontenidos: contexto, qué necesitas y para cuándo — evita el «hola» a secas.',
@@ -603,6 +626,7 @@ export const BASES_ISLAND = {
       x: 6,
       y: 36,
       weight: 2,
+      summary: 'La estimación honesta es dar un plazo en el que tú mismo confías, con su margen de incertidumbre. Consiste en descomponer el trabajo, reconocer lo que no sabes y no prometer de más. Te capacita para que confíen en tu palabra y para planificar sin dramas.',
       prereqs: ['bases/delegar-o-hacer'],
       keyPoints: [
         'Estima en rangos, no en fechas exactas: la incertidumbre también es información.',
@@ -626,6 +650,7 @@ export const BASES_ISLAND = {
       x: 34,
       y: 6,
       weight: 3,
+      summary: 'Ser profesional en la era IA es el hito de trabajar como ingeniero de verdad: entregas valor, colaboras y usas la IA con criterio. Consiste en juntar oficio, comunicación y juicio, no solo teclear. Te capacita para ser alguien en quien un equipo se apoya, no un generador de código más.',
       prereqs: ['bases/primer-producto', 'bases/code-review', 'bases/seguridad-basica', 'bases/estimacion'],
       keyPoints: [
         'Integras todo: delegas con criterio, verificas lo delegado y respondes por el resultado.',

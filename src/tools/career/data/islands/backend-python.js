@@ -34,6 +34,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 50,
       y: 74,
       weight: 3,
+      summary: 'Python moderno es el lenguaje más versátil del momento, con su sintaxis clara y sus features actuales. Consiste en escribir Python idiomático y limpio, aprovechando lo que trae hoy. Te capacita para construir desde APIs hasta scripts de datos sobre una base enorme y demandada.',
       prereqs: [],
       keyPoints: [
         'Domina el núcleo de verdad: iterables, dicts, funciones como valores, contextos (with) y el modelo de objetos.',
@@ -58,6 +59,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 38,
       y: 66,
       weight: 3,
+      summary: 'Los entornos y uv son aislar las dependencias de cada proyecto para que no se pisen, con la herramienta más rápida del momento. Consiste en crear entornos y gestionar paquetes reproducibles. Te capacita para que tu proyecto funcione igual en tu máquina y en producción.',
       prereqs: ['backend-python/python-moderno'],
       keyPoints: [
         'Un entorno por proyecto, siempre: nada de instalar en el Python del sistema.',
@@ -81,6 +83,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 62,
       y: 66,
       weight: 3,
+      summary: 'El tipado con type hints es anotar tus datos y funciones para que editor y herramientas te avisen de errores. Consiste en añadir tipos donde aportan y comprobarlos con mypy o pyright. Te capacita para escribir Python grande sin que un cambio rompa cosas por sorpresa.',
       prereqs: ['backend-python/python-moderno'],
       keyPoints: [
         'Tipa las fronteras: firmas públicas, modelos de datos y respuestas — es donde los hints pagan.',
@@ -104,6 +107,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 50,
       y: 58,
       weight: 2,
+      summary: 'Los datos y estructuras idiomáticas son resolver problemas al estilo Python: comprensiones, generadores, dataclasses. Consiste en usar lo que el lenguaje ofrece en vez de traducir de otro. Te capacita para escribir código conciso, legible y que otros pythonistas entienden al instante.',
       prereqs: ['backend-python/python-moderno'],
       keyPoints: [
         'Elige el contenedor con criterio: dict para buscar, set para pertenencia, deque para colas, tuple para lo fijo.',
@@ -127,6 +131,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 70,
       y: 76,
       weight: 2,
+      summary: 'Los errores y el logging son controlar los fallos y dejar rastro de lo que pasa. Consiste en excepciones bien usadas y logs con nivel y contexto en vez de prints. Te capacita para construir servicios que fallan con control y que puedes diagnosticar después.',
       prereqs: ['backend-python/python-moderno'],
       keyPoints: [
         'Excepciones concretas: captura ValueError, no Exception; el except desnudo está prohibido.',
@@ -152,6 +157,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 28,
       y: 74,
       weight: 3,
+      summary: 'FastAPI es el framework de APIs más popular en Python moderno: rápido, tipado y con documentación automática. Consiste en definir endpoints con tipos y validación de serie. Te capacita para construir APIs robustas y bien documentadas en muy poco código.',
       prereqs: ['backend-python/tipado', 'backend-python/entornos-uv'],
       keyPoints: [
         'El framework donde los tipos trabajan: validación, serialización y docs OpenAPI salen de tus firmas.',
@@ -175,6 +181,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 16,
       y: 64,
       weight: 2,
+      summary: 'Django es el framework Python con todo incluido: ORM, admin, autenticación y estructura para proyectos grandes. Consiste en aprovechar sus convenciones para ir rápido y seguro. Te capacita para construir aplicaciones web completas con una base probada durante años.',
       prereqs: ['backend-python/entornos-uv'],
       keyPoints: [
         'El monolito con pilas incluidas: ORM, admin, auth, migraciones y templates resueltos y cohesionados.',
@@ -199,6 +206,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 20,
       y: 48,
       weight: 2,
+      summary: 'Pydantic es validar y estructurar datos con tipos: convierte entrada cruda en objetos comprobados. Consiste en definir modelos y dejar que valide y serialice por ti. Te capacita para que los datos que entran a tu servicio tengan siempre la forma esperada.',
       prereqs: ['backend-python/tipado'],
       keyPoints: [
         'Modelos Pydantic en las fronteras: lo que entra del exterior se parsea y valida, no se confía.',
@@ -224,6 +232,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 30,
       y: 40,
       weight: 3,
+      summary: 'Una API REST en Python es exponer tus operaciones por HTTP de forma clara y predecible. Consiste en diseñar recursos, métodos y errores coherentes. Te capacita para que cualquier cliente —web, móvil o terceros— consuma tu backend sin sorpresas.',
       prereqs: ['backend-python/fastapi'],
       keyPoints: [
         'Diseña el contrato antes que el código: recursos, verbos, códigos de estado y errores consistentes.',
@@ -247,6 +256,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 6,
       y: 54,
       weight: 3,
+      summary: 'SQLAlchemy y el ORM son hablar con la base de datos en objetos Python sin renunciar al control del SQL cuando hace falta. Consiste en modelar entidades, relaciones y sesiones. Te capacita para persistir datos con comodidad sin perder de vista lo que hace la base.',
       prereqs: ['backend-python/fastapi'],
       keyPoints: [
         'SQLAlchemy 2.x moderno: modelos declarativos tipados, select() y sesiones con contexto claro.',
@@ -270,6 +280,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 42,
       y: 36,
       weight: 3,
+      summary: 'La autenticación y los permisos son saber quién llama a tu API y qué puede hacer. Consiste en tokens, sesiones y control de acceso por rol o recurso. Te capacita para proteger tu servicio dejando pasar a los tuyos y bloqueando al resto.',
       prereqs: ['backend-python/api-rest'],
       keyPoints: [
         'Authn y authz son dos problemas: identidad (tokens, OAuth2/OIDC) y permisos (roles, ownership).',
@@ -293,6 +304,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 36,
       y: 20,
       weight: 1,
+      summary: 'Las tareas en segundo plano son sacar el trabajo pesado (con Celery o similares) fuera de la petición. Consiste en encolar y procesar aparte lo que tarda. Te capacita para que tu API responda al instante aunque detrás se cueza trabajo lento.',
       prereqs: ['backend-python/api-rest'],
       keyPoints: [
         'Saca del request lo lento: correos, informes, procesado de ficheros, llamadas a terceros.',
@@ -315,6 +327,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 50,
       y: 28,
       weight: 2,
+      summary: 'OpenAPI y los contratos son describir tu API en un formato estándar que sirve de fuente de verdad. Consiste en definir el contrato y generar docs, clientes y validación desde él. Te capacita para que frontend y backend trabajen sin malentendidos ni sorpresas.',
       prereqs: ['backend-python/api-rest'],
       keyPoints: [
         'El spec OpenAPI es el contrato: consumidores, SDKs generados y tests se cuelgan de él.',
@@ -337,6 +350,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 52,
       y: 12,
       weight: 3,
+      summary: 'Poner un servicio Python en producción es el hito de tener un backend real: desplegado, con datos, seguro y observable. Consiste en juntar todo lo de la isla en algo que aguanta usuarios. Te capacita para demostrar que sabes operar un servicio, no solo escribirlo.',
       prereqs: [
         'backend-python/api-rest',
         'backend-python/autenticacion',
@@ -365,6 +379,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 62,
       y: 36,
       weight: 2,
+      summary: 'El async en Python es atender muchas cosas a la vez sin bloquear, ideal para I/O como redes y bases de datos. Consiste en entender async/await y cuándo aporta de verdad. Te capacita para escribir servicios que escalan en concurrencia sin gastar de más.',
       prereqs: ['backend-python/python-moderno'],
       keyPoints: [
         'Async sirve para esperar mejor (IO concurrente), no para calcular más rápido: entiende cuándo aplica.',
@@ -388,6 +403,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 66,
       y: 22,
       weight: 2,
+      summary: 'El rendimiento y el perfilado son medir dónde tarda tu código antes de tocar nada. Consiste en usar perfiladores, localizar el cuello real y optimizar solo eso. Te capacita para acelerar de forma dirigida en vez de a base de corazonadas.',
       prereqs: ['backend-python/estructuras-idiomaticas'],
       keyPoints: [
         'Mide antes de opinar: cProfile, py-spy o el timing del propio servicio dicen dónde se va el tiempo.',
@@ -413,6 +429,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 22,
       y: 28,
       weight: 3,
+      summary: 'pytest es la herramienta de testing de Python: pruebas concisas, fixtures y un ecosistema enorme. Consiste en cubrir la lógica y los flujos importantes y ejecutar a menudo. Te capacita para cambiar tu código con la seguridad de que sigue funcionando.',
       prereqs: ['backend-python/estructuras-idiomaticas'],
       keyPoints: [
         'pytest idiomático: asserts planos, fixtures para el contexto y parametrize para las variantes.',
@@ -436,6 +453,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 6,
       y: 36,
       weight: 2,
+      summary: 'Ruff y el estilo automatizado son dejar que una herramienta rapidísima formatee y revise tu código por ti. Consiste en integrar lint y formato para no discutir de estilo nunca más. Te capacita para mantener un código consistente sin esfuerzo manual.',
       prereqs: ['backend-python/entornos-uv'],
       keyPoints: [
         'Ruff como linter y formateador: cientos de reglas, un binario, milisegundos.',
@@ -458,6 +476,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 10,
       y: 20,
       weight: 2,
+      summary: 'La depuración en Python es encontrar la causa de un fallo con el debugger y método, no con prints al azar. Consiste en reproducir, inspeccionar y aislar el problema paso a paso. Te capacita para resolver cualquier bug sin perder la tarde dando palos de ciego.',
       prereqs: ['backend-python/errores-logging'],
       keyPoints: [
         'breakpoint() y el debugger del editor: inspeccionar el estado real gana a adivinar con prints.',
@@ -482,6 +501,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 18,
       y: 10,
       weight: 2,
+      summary: 'El scripting acelerado con IA es usar el modelo para montar en minutos esos scripts de datos y automatización que antes costaban horas. Consiste en describir la tarea y verificar la salida. Te capacita para automatizar lo tedioso a una velocidad nueva.',
       prereqs: ['backend-python/python-moderno'],
       keyPoints: [
         'Python es el lenguaje pegamento: automatiza ficheros, APIs, datos y tareas de oficina con scripts generados.',
@@ -505,6 +525,7 @@ export const BACKEND_PYTHON_ISLAND = {
       x: 34,
       y: 6,
       weight: 3,
+      summary: 'Las dependencias alucinadas son un riesgo real: la IA a veces inventa paquetes que no existen o sugiere versiones con fallos. Consiste en verificar cada import que propone antes de instalarlo. Te capacita para aprovechar la IA sin abrir la puerta a librerías falsas o comprometidas.',
       prereqs: ['backend-python/scripting-ia', 'backend-python/entornos-uv'],
       keyPoints: [
         'La IA inventa paquetes con nombres plausibles: verifica en PyPI que existen ANTES de instalar.',
