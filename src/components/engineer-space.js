@@ -74,6 +74,7 @@ export class EngineerSpace extends LitElement {
     journey: { attribute: false },
     archipelago: { attribute: false },
     achievements: { attribute: false },
+    endorsements: { attribute: false },
     questions: { attribute: false },
     _tab: { state: true },
     _targetError: { state: true },
@@ -208,6 +209,8 @@ export class EngineerSpace extends LitElement {
     this.archipelago = null;
     /** @type {import('../tools/career/domain/achievements.js').Achievements|null} logros registrados (ficha MC-21) */
     this.achievements = null;
+    /** @type {import('../tools/career/domain/endorsements.js').Endorsements|null} avales del manager (JG-6, contador de la ficha) */
+    this.endorsements = null;
     /** @type {import('../tools/career/domain/wizard.js').WizardQuestion[]} consultas al brujo (ficha MC-22) */
     this.questions = [];
     /** @type {string|null} aviso in-place si falla la escritura del objetivo */
@@ -545,6 +548,7 @@ export class EngineerSpace extends LitElement {
         .playerName=${this.person?.name ?? ''}
         .progress=${progress}
         .achievements=${this.achievements}
+        .endorsements=${this.endorsements}
         .visitedIslands=${this.journey.visitedIslands ?? []}
         .questions=${this.questions ?? []}
       ></player-card>

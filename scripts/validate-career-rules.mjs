@@ -8,7 +8,10 @@
  *  2. NO escribe los de OTRA persona, y un viewer no escribe ninguno.
  *  3. NO gana escritura fuera de esos tres docs: lecturas/notas/Role Mirror
  *     de su propio subárbol siguen siendo del líder; tampoco puede BORRAR
- *     su journey (el plan se corrige, no se borra).
+ *     su journey (el plan se corrige, no se borra). En particular NO escribe
+ *     career/endorsements (JG-6): el aval del manager es la clave de
+ *     seguridad del sello ✓ — el jugador no puede auto-avalarse; el líder
+ *     dueño sí avala (vía las reglas del subárbol, sin regla nueva).
  *  4. Su ficha /people/{id} sigue acotada a careerTargetLevelId (regresión).
  *  5. El líder dueño conserva su flujo (escribe el journey de su gente).
  *  6. /carpools: cualquier autenticado crea FIRMANDO como él mismo
@@ -176,6 +179,25 @@ try {
     'vinculado NO BORRA su journey (el plan se corrige, no se borra)',
     assertFails(deleteDoc(doc(eng, 'people', 'p1', 'career', 'journey'))),
   );
+  // JG-6: el aval del manager. El doc endorsements queda FUERA de las
+  // excepciones del jugador (journey/playtime/achievements): auto-avalarse
+  // está prohibido por diseño; el viewer tampoco escribe.
+  await check(
+    'vinculado NO escribe sus endorsements (el aval es del manager, JG-6)',
+    assertFails(
+      setDoc(doc(eng, 'people', 'p1', 'career', 'endorsements'), {
+        byCity: { 'bases~git': { by: { uid: 'eng-uid', name: 'Ingeniera Uno' }, at: '2026-07-05T12:00:00Z' } },
+      }),
+    ),
+  );
+  await check(
+    'viewer NO avala certificados de nadie (JG-6)',
+    assertFails(
+      setDoc(doc(viewer, 'people', 'p1', 'career', 'endorsements'), {
+        byCity: { 'bases~git': { by: { uid: 'viewer-uid', name: 'Viewer' }, at: '2026-07-05T12:00:00Z' } },
+      }),
+    ),
+  );
   await check(
     'ficha acotada (regresión): vinculado declara su careerTargetLevelId',
     assertSucceeds(updateDoc(doc(eng, 'people', 'p1'), { careerTargetLevelId: 'l3' })),
@@ -193,6 +215,20 @@ try {
         plannedRoute: ['bases~git', 'bases~http'],
       }),
     ),
+  );
+  await check(
+    'líder dueño AVALA un certificado de su gente (endorsements, JG-6)',
+    assertSucceeds(
+      setDoc(
+        doc(leader, 'people', 'p1', 'career', 'endorsements'),
+        { byCity: { 'bases~git': { by: { uid: 'leader-uid', name: 'Líder' }, at: '2026-07-05T12:00:00Z' } } },
+        { merge: true },
+      ),
+    ),
+  );
+  await check(
+    'vinculado LEE sus endorsements (ve el sello, no lo firma, JG-6)',
+    assertSucceeds(getDoc(doc(eng, 'people', 'p1', 'career', 'endorsements'))),
   );
 
   console.log('Carpools: todo usuario firma como él mismo y usa la máscara de unirse:');
@@ -247,7 +283,7 @@ try {
     assertFails(deleteDoc(doc(eng, 'carpools', 'cp1'))),
   );
 
-  console.log(`\n${passed} comprobaciones de reglas de JG-1 pasadas.`);
+  console.log(`\n${passed} comprobaciones de reglas de JG-1/JG-6 pasadas.`);
 } finally {
   await env.cleanup();
 }

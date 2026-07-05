@@ -31,10 +31,12 @@ import {
   collection,
   increment,
   deleteField,
+  FieldPath,
 } from 'firebase/firestore';
 
 const journeyDoc = (db, personId) => doc(db, 'people', personId, 'career', 'journey');
 const achievementsDoc = (db, personId) => doc(db, 'people', personId, 'career', 'achievements');
+const endorsementsDoc = (db, personId) => doc(db, 'people', personId, 'career', 'endorsements');
 const questionsCol = (db, personId) =>
   collection(db, 'people', personId, 'career', 'wizard', 'questions');
 const playtimeDoc = (db, personId) => doc(db, 'people', personId, 'career', 'playtime');
@@ -73,6 +75,34 @@ export function createFirestoreCareerStore(db) {
         if (Object.keys(patch.badges ?? {}).length > 0) data.badges = patch.badges;
         if (Object.keys(data).length === 0) return;
         await setDoc(achievementsDoc(db, personId), data, { merge: true });
+      },
+    },
+    // Avales del manager (JG-6): el doc vive en el subárbol de la persona
+    // PERO fuera de las excepciones del jugador vinculado (JG-1) — solo líder
+    // dueño / compartido-edit / superadmin escriben (reglas del {document=**}).
+    // `endorse` escribe SOLO la clave de esa casa: setDoc con merge fusiona
+    // mapas anidados sin reemplazar byCity (el gotcha del mapa VACÍO no aplica:
+    // aquí siempre viaja exactamente una clave). `unendorse` borra la clave
+    // con FieldPath — los ids de ciudad llevan '/' (p. ej. 'bases/html') y una
+    // ruta con puntos ('byCity.bases/html') sería rechazada por el SDK.
+    endorsements: {
+      async get(personId) {
+        const d = await getDoc(endorsementsDoc(db, personId));
+        return d.exists() ? d.data() : null;
+      },
+      async endorse(personId, cityId, record) {
+        await setDoc(
+          endorsementsDoc(db, personId),
+          { byCity: { [cityId]: record } },
+          { merge: true },
+        );
+      },
+      async unendorse(personId, cityId) {
+        await updateDoc(
+          endorsementsDoc(db, personId),
+          new FieldPath('byCity', cityId),
+          deleteField(),
+        );
       },
     },
     // Consultas al brujo (MC-22): repos «tontos» — los campos (status, fechas

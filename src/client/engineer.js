@@ -67,6 +67,8 @@ function renderSpace(person, framework, profile, career) {
   // Ficha de ciudadanía (MC-21): índice del archipiélago y logros registrados.
   space.archipelago = career.archipelago;
   space.achievements = career.achievements;
+  // Avales del manager (JG-6): el contador «N avalados ✓» de la ficha.
+  space.endorsements = career.endorsements;
   // Consultas al brujo (MC-22): la ficha las lista como Q&A (solo lectura).
   space.questions = career.questions;
 }

@@ -16,7 +16,7 @@ import { computeProfile } from './scoring.js';
 import { ITEMS } from '../data/items.js';
 import { ROLES } from '../data/roles.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
-import { getJourney, getAchievements, listQuestions } from '../tools/career/application/usecases.js';
+import { getJourney, getAchievements, getEndorsements, listQuestions } from '../tools/career/application/usecases.js';
 
 /**
  * Devuelve la persona vinculada a un `uid` (la cuenta del propio ingeniero), o
@@ -67,17 +67,20 @@ export async function getMyRoleMirrorProfile(personId) {
  * la isla de inicio (`/careerMap/island`), su journey
  * (`/people/{personId}/career/journey`), para la ficha de ciudadanía (MC-21)
  * el índice del archipiélago (`/careerMap/_archipelago`) y los logros
- * registrados (`/people/{personId}/career/achievements`), y las consultas al
- * brujo (MC-22, `/people/{personId}/career/wizard/questions`) que la ficha
- * lista como Q&A. Reutiliza los loaders del tool career en modo firestore; no
- * realiza NINGUNA escritura (la migración de logros pre-MC-21 la hace la
- * vista de juego del líder, nunca mi-espacio).
+ * registrados (`/people/{personId}/career/achievements`), los avales del
+ * manager (JG-6, `/people/{personId}/career/endorsements`: el contador
+ * «N avalados ✓» de la ficha), y las consultas al brujo (MC-22,
+ * `/people/{personId}/career/wizard/questions`) que la ficha lista como Q&A.
+ * Reutiliza los loaders del tool career en modo firestore; no realiza NINGUNA
+ * escritura (la migración de logros pre-MC-21 la hace la vista de juego del
+ * líder, nunca mi-espacio — y el aval solo lo firma el manager).
  * @param {string} personId
  * @returns {Promise<{
  *   island: import('../tools/career/domain/types.js').CareerMap,
  *   journey: import('../tools/career/domain/types.js').Journey,
  *   archipelago: import('../tools/career/domain/types.js').Archipelago,
  *   achievements: import('../tools/career/domain/achievements.js').Achievements,
+ *   endorsements: import('../tools/career/domain/endorsements.js').Endorsements,
  *   questions: import('../tools/career/domain/wizard.js').WizardQuestion[],
  * }>}
  */
@@ -87,12 +90,13 @@ export async function getMyCareerMap(personId) {
     getCareerMap(),
     getArchipelago(),
   ]);
-  const [journey, achievements, questions] = await Promise.all([
+  const [journey, achievements, endorsements, questions] = await Promise.all([
     getJourney(store, personId),
     getAchievements(store, personId),
+    getEndorsements(store, personId),
     listQuestions(store, personId),
   ]);
-  return { island, journey, archipelago, achievements, questions };
+  return { island, journey, archipelago, achievements, endorsements, questions };
 }
 
 /**
