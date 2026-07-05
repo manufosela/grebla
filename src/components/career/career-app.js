@@ -118,16 +118,22 @@
  * registra con la fecha ISO del momento. Las fechas existentes NUNCA se
  * re-escriben (newAchievements, puro).
  *
- * El brujo (MC-22): cada isla tiene la cabaña del brujo (edificación singular
- * de <career-island-3d>) donde el jugador deja CONSULTAS ASÍNCRONAS al líder.
- * El evento `open-wizard` (clic aéreo, [E] o choque a pie) abre aquí el panel
- * overlay «🧙 El brujo de {isla}»: textarea para dejar la consulta (quien
- * puede escribir: líder jugando o jugador vinculado; si no, solo lectura) y
- * las consultas de ESA isla de la persona cargada con su estado, la respuesta
- * («— respondida por {answeredBy/creditedTo}») y el botón «Entendido» que la
- * marca como vista. El estado visual de la cabaña se deriva en puro
- * (domain/wizard.js) de las consultas de la isla actual: pendiente = farol
- * ámbar, respuesta lista = farol teal. Con `canEdit` (líder/superadmin) la
+ * El brujo (MC-22, conversación JG-8): cada isla tiene la cabaña del brujo
+ * (edificación singular de <career-island-3d>) donde el jugador deja
+ * CONSULTAS ASÍNCRONAS al líder. El evento `open-wizard` (clic aéreo, [E] o
+ * choque a pie) abre aquí el panel overlay «🧙 El brujo de {isla}»: una
+ * CONVERSACIÓN estilo Monkey Island (<game-dialog>: retrato voodoo,
+ * bocadillos con texto progresivo) cuyo guion se construye al abrir
+ * (_buildWizardScript) — saludo, entrega de respuestas listas con «Entendido»
+ * (markSeen) y la consulta como paso 'ask' (quien puede escribir: líder
+ * jugando o jugador vinculado; si no, el brujo lo deja en solo escuchar). Al
+ * enviarla el brujo entra en TRANCE y promete la LUZ VIOLETA. La lista
+ * clásica de consultas de la isla queda tras «ver mis consultas». El estado
+ * visual de la cabaña se deriva en puro (domain/wizard.js) de las consultas
+ * de la isla actual: pendiente = farol ámbar, respuesta lista = farol VIOLETA
+ * — y esa luz también se ve DESDE EL MAR: en el mapa del tesoro las islas con
+ * respuesta lista emiten un halo violeta pulsante (JG-8). Con `canEdit`
+ * (líder/superadmin) la
  * barra ofrece «🧙 Consultas (N)» con las PENDIENTES de todas sus personas
  * (carga en paralelo, cap MAX_TEAM_JOURNEYS como los journeys) y un overlay
  * de cola FIFO para responder (autoría del login, campo opcional «Con ayuda
@@ -176,6 +182,7 @@ import { LitElement, html, css } from 'lit';
 import './career-map.js';
 import './career-island-3d.js';
 import './player-card.js';
+import './game-dialog.js';
 import { readStoredMuted, writeStoredMuted } from './islandAudio.js';
 import {
   getJourney,
@@ -242,7 +249,11 @@ import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 import { newAchievements, formatAchievedAt } from '../../tools/career/domain/achievements.js';
 import { endorsementFor } from '../../tools/career/domain/endorsements.js';
-import { wizardState, pendingQuestions } from '../../tools/career/domain/wizard.js';
+import {
+  wizardState,
+  pendingQuestions,
+  sortQuestionsByDateDesc,
+} from '../../tools/career/domain/wizard.js';
 import {
   challengeRouteForIsland,
   challengeProgress,
@@ -329,6 +340,8 @@ export class CareerApp extends LitElement {
     showPlayerCard: { state: true },
     questions: { state: true },
     showWizard: { state: true },
+    showWizardLog: { state: true },
+    wizardScript: { state: true },
     showWizardQueue: { state: true },
     wizardPending: { state: true },
     wizardBusy: { state: true },
@@ -1074,8 +1087,20 @@ export class CareerApp extends LitElement {
     .playlead { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     /* ── El brujo (MC-22): panel del jugador y cola del líder (hermanos de la
        ficha: mismo backdrop/section, contenido de consultas). ── */
-    .wizlead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
-    .wizreadonly { margin: 0.5rem 0 0.75rem; font-size: 0.85rem; color: var(--rm-muted, #9ca3af); }
+    /* La escena de conversación (JG-8) vive sobre el pergamino del panel. */
+    .wizpanel game-dialog { margin: 0.25rem 0 0; }
+    .wizlog-link { margin: 0.6rem 0 0; text-align: right; }
+    .wizlog-link .linky {
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-size: 0.78rem;
+      color: var(--rm-muted, #6b7280);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .wizlog-link .linky:hover { color: var(--rm-text, #111827); }
     .wizempty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; margin: 0.4rem 0 0; }
     .sub { margin: 1.1rem 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 700; }
     .wizform { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.5rem 0 0.25rem; }
@@ -1102,13 +1127,15 @@ export class CareerApp extends LitElement {
     .wisle { font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .wstatus { font-size: 0.7rem; font-weight: 800; padding: 0.14rem 0.55rem; border-radius: 999px; white-space: nowrap; }
     .wstatus.pending { background: #fdebc8; color: #8a5a00; }
-    .wstatus.answered { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    /* «Respuesta lista» viste de VIOLETA místico (JG-8): el color de la luz
+       del brujo, coherente con el farol de la cabaña y el halo del mar. */
+    .wstatus.answered { background: #7b2cbf; color: #fff; }
     .wstatus.seen { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
     .wtext { margin: 0.4rem 0 0; font-size: 0.88rem; color: var(--rm-text, #111827); white-space: pre-wrap; }
     .wizanswer {
       margin-top: 0.55rem;
-      border-left: 4px solid var(--rm-accent, #2a9d8f);
-      background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 9%, var(--rm-surface, #fff));
+      border-left: 4px solid #9d4edd;
+      background: color-mix(in srgb, #9d4edd 10%, var(--rm-surface, #fff));
       border-radius: 0 10px 10px 0;
       padding: 0.5rem 0.7rem;
     }
@@ -1154,6 +1181,31 @@ export class CareerApp extends LitElement {
     .isle.here .isle-dot { box-shadow: 0 0 0 3px var(--rm-coral-600, #e26d5e), 0 5px 12px rgba(10, 30, 50, 0.35); }
     .isle.wip { opacity: 0.55; }
     .isle.wip .isle-dot { filter: grayscale(0.45); }
+    /* La LUZ del brujo en el mar (JG-8): la isla con una respuesta lista
+       emite un halo VIOLETA pulsante sobre su mancha del mapa del tesoro —
+       visible desde el archipiélago, no solo desde la propia isla. */
+    .isle.wizlit .isle-dot { position: relative; }
+    .isle.wizlit .isle-dot::after {
+      content: '';
+      position: absolute;
+      inset: -14px;
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(157, 78, 221, 0.85) 0%,
+        rgba(157, 78, 221, 0.35) 45%,
+        rgba(157, 78, 221, 0) 72%
+      );
+      animation: wizhalo 1.7s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes wizhalo {
+      0%, 100% { opacity: 0.55; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.18); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .isle.wizlit .isle-dot::after { animation: none; }
+    }
     .isle-name {
       /* Fluida con el ancho del mapa (MC-17): a 760px es el 0.72rem de siempre
          y en móvil encoge hasta 0.55rem — los nombres largos dejan de tocarse. */
@@ -1571,6 +1623,11 @@ export class CareerApp extends LitElement {
     /** @type {import('../../tools/career/domain/wizard.js').WizardQuestion[]|null} */
     this.questions = null;
     this.showWizard = false;
+    /** true con la lista «mis consultas» del panel del brujo desplegada (JG-8). */
+    this.showWizardLog = false;
+    /** Guion del <game-dialog> del brujo, construido al abrir el panel (JG-8).
+     * @type {import('./dialogScript.js').DialogStep[]|null} */
+    this.wizardScript = null;
     this.showWizardQueue = false;
     /** Nº de consultas PENDIENTES de todas las personas visibles (cola del líder). */
     this.wizardPending = 0;
@@ -4307,11 +4364,107 @@ export class CareerApp extends LitElement {
     this._openWizard();
   }
 
-  /** Abre el panel del brujo de la isla actual. */
+  /** Personaje del <game-dialog> del brujo (identidad estable entre renders). */
+  static WIZARD_CHARACTER = Object.freeze({ name: 'El brujo', portrait: 'brujo' });
+
+  /**
+   * Abre el panel del brujo de la isla actual y construye el GUION de la
+   * conversación (JG-8): la escena arranca con el saludo y sigue según el
+   * estado de las consultas (respuesta lista → la entrega; si no → pregunta).
+   */
   _openWizard() {
     if (!this.personId) return;
     this.wizardError = '';
+    this.showWizardLog = false;
+    this.wizardScript = this._buildWizardScript();
     this.showWizard = true;
+  }
+
+  /**
+   * Respuestas LISTAS (status 'answered') de la persona en la isla actual, la
+   * más antigua primero: el brujo las entrega en orden de llegada.
+   * @returns {import('../../tools/career/domain/wizard.js').WizardQuestion[]}
+   */
+  _answeredQueue() {
+    const mine = (this.questions ?? []).filter(
+      (q) => q.islandId === this.currentIsland && q.status === 'answered',
+    );
+    return sortQuestionsByDateDesc(mine).toReversed();
+  }
+
+  /**
+   * Guion inicial de la conversación con el brujo: saludo con sabor según el
+   * estado de la cabaña y, después, la primera respuesta lista (con su
+   * «Entendido») o directamente la pregunta. El viewer (sin _canAskWizard)
+   * solo escucha: ni Entendido ni consulta.
+   * @returns {import('./dialogScript.js').DialogStep[]}
+   */
+  _buildWizardScript() {
+    const islandName = this._currentIslandName() || 'la isla';
+    const mine = (this.questions ?? []).filter((q) => q.islandId === this.currentIsland);
+    const state = wizardState(mine);
+    const greeting =
+      state === 'ready'
+        ? `Ahh… te esperaba, viajero de ${islandName}. El éter trae noticias para ti…`
+        : state === 'pending'
+          ? `Ahh… un viajero de ${islandName}. Tu consulta aún viaja por el éter… paciencia. ¿Otra duda te atormenta?`
+          : `Ahh… un viajero de ${islandName}. Pasa, no temas a las sombras. ¿Qué duda te atormenta?`;
+    const steps = [{ kind: 'say', text: greeting }];
+    if (!this._canAskWizard) {
+      steps.push({
+        kind: 'say',
+        text: 'Tú solo puedes escuchar los ecos: las consultas de esta persona no son tuyas. Su lista espera abajo, en «ver mis consultas».',
+      });
+      return steps;
+    }
+    const answered = this._answeredQueue().at(0);
+    steps.push(...(answered ? this._wizardAnswerSteps(answered) : this._wizardAskSteps()));
+    return steps;
+  }
+
+  /**
+   * Pasos de ENTREGA de una respuesta lista: recordatorio de la pregunta, el
+   * oráculo con su crédito y el «Entendido» (choices v1) que la marca vista.
+   * @param {import('../../tools/career/domain/wizard.js').WizardQuestion} q
+   * @returns {import('./dialogScript.js').DialogStep[]}
+   */
+  _wizardAnswerSteps(q) {
+    const credit = q.creditedTo ?? q.answeredBy?.name ?? '';
+    return [
+      { kind: 'say', text: `Preguntaste: «${q.text}»` },
+      {
+        kind: 'say',
+        text: `El oráculo ha hablado: «${q.answer ?? ''}»${credit ? ` — palabra de ${credit}.` : ''}`,
+      },
+      {
+        kind: 'choices',
+        text: '¿Te sirve? Márcalo y seguimos.',
+        options: [{ id: `seen:${q.id}`, label: 'Entendido' }],
+      },
+    ];
+  }
+
+  /**
+   * Paso de PREGUNTA al brujo: el textarea de la consulta (el envío lo
+   * resuelve _onWizardSubmit con el trance y la promesa de la luz violeta).
+   * @returns {import('./dialogScript.js').DialogStep[]}
+   */
+  _wizardAskSteps() {
+    return [
+      {
+        kind: 'ask',
+        text: 'Escribe tu duda y la susurraré al éter…',
+        placeholder: 'Cuéntale tu duda al brujo…',
+        submitLabel: 'Consultar al brujo',
+      },
+    ];
+  }
+
+  /** El <game-dialog> del brujo montado en el panel (o null). */
+  _wizardDialog() {
+    return /** @type {import('./game-dialog.js').GameDialog|null} */ (
+      this.renderRoot.querySelector('game-dialog')
+    );
   }
 
   /** Cierra el panel del brujo (✕, Escape o fondo) y devuelve el foco al HUD. */
@@ -4328,37 +4481,75 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Deja la consulta escrita en la cabaña del brujo: usecase askQuestion
-   * (valida el texto), autoría del login y la isla ACTUAL. La lista local, la
-   * caché del equipo y el estado de la cabaña se refrescan al momento.
+   * El jugador envió su consulta en el diálogo (evento 'dialog-submit'):
+   * usecase askQuestion (texto ya validado por la escena), autoría del login y
+   * la isla ACTUAL. En éxito el brujo entra en TRANCE para llevarla al manager
+   * y promete la LUZ VIOLETA; si falla, el paso sigue vivo para reintentar.
+   * @param {CustomEvent<{ text: string }>} event
    */
-  async _askWizard() {
+  async _onWizardSubmit(event) {
     if (!this.personId || this.wizardBusy) return;
-    const textarea = /** @type {HTMLTextAreaElement|null} */ (
-      this.renderRoot.querySelector('#wizard-question')
-    );
-    const text = textarea?.value.trim() ?? '';
-    if (!text) {
-      this.wizardError = 'Escribe tu consulta antes de dejarla al brujo.';
-      return;
-    }
     this.wizardBusy = true;
     this.wizardError = '';
     try {
       const created = await askQuestion(this.store, this.personId, {
         islandId: this.currentIsland,
         islandName: this._currentIslandName(),
-        text,
+        text: event.detail.text,
         createdBy: this._wizardAuthor(),
       });
       this.questions = [created, ...(this.questions ?? [])];
-      textarea.value = '';
+      this._wizardDialog()?.continueWith([
+        {
+          kind: 'effect',
+          effect: 'trance',
+          text: '✨ mmmMMMmmm… tu consulta viaja por el éter hasta tu manager…',
+        },
+        {
+          kind: 'say',
+          text: 'Está hecho: se lo he susurrado a tu manager. Cuando tenga la respuesta, encenderé una LUZ VIOLETA en mi cabaña… la verás incluso desde el mar, allá donde navegues.',
+        },
+      ]);
     } catch (err) {
       this.wizardError =
         err instanceof Error ? err.message : 'No se pudo dejar la consulta al brujo.';
     } finally {
       this.wizardBusy = false;
     }
+  }
+
+  /**
+   * El jugador pulsó una opción del diálogo (evento 'dialog-choice'). Única
+   * opción v1: «Entendido» (`seen:{questionId}`) — marca la respuesta como
+   * vista y el brujo sigue con la siguiente respuesta lista o con la pregunta.
+   * @param {CustomEvent<{ id: string }>} event
+   */
+  async _onWizardChoice(event) {
+    const id = event.detail.id;
+    if (!id.startsWith('seen:')) return; // opción de otro guion futuro
+    const question = (this.questions ?? []).find((q) => q.id === id.slice('seen:'.length));
+    if (!question) return;
+    await this._markSeen(question);
+    if (this.wizardError) return; // markSeen falló: el paso sigue vivo
+    const next = this._answeredQueue().at(0);
+    this._wizardDialog()?.continueWith(
+      next
+        ? this._wizardAnswerSteps(next)
+        : [
+            { kind: 'say', text: 'Bien. El éter queda en calma…' },
+            ...this._wizardAskSteps(),
+          ],
+    );
+  }
+
+  /** El guion terminó: la lista de consultas se despliega como cierre suave. */
+  _onWizardDialogEnd() {
+    this.showWizardLog = true;
+  }
+
+  /** Despliega/oculta la lista «mis consultas» del panel del brujo (JG-8). */
+  _toggleWizardLog() {
+    this.showWizardLog = !this.showWizardLog;
   }
 
   /**
@@ -4480,17 +4671,18 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Overlay del PANEL DEL BRUJO (jugador, MC-22): tono jugable, textarea para
-   * dejar la consulta (solo quien puede escribir) y MIS consultas de esta isla
-   * con estado, respuesta y el botón «Entendido» (markSeen) cuando está
-   * respondida. Modal como el archipiélago: foco al abrir, Escape/✕/fondo
-   * cierran.
+   * Overlay del PANEL DEL BRUJO (JG-8): la CONVERSACIÓN estilo Monkey Island
+   * dentro del pergamino — <game-dialog> con el retrato voodoo, bocadillos
+   * progresivos, la consulta como paso del guion (trance al enviarla) y las
+   * respuestas listas entregadas con «Entendido» (markSeen). La lista clásica
+   * de consultas queda tras el enlace discreto «ver mis consultas» (y se
+   * despliega sola al terminar el guion). Modal como el archipiélago: foco al
+   * abrir, Escape/✕/fondo cierran.
    */
   _renderWizard() {
     if (!this.showWizard) return null;
     const islandName = this._currentIslandName();
     const mine = (this.questions ?? []).filter((q) => q.islandId === this.currentIsland);
-    const canAsk = this._canAskWizard;
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeWizard(); }}>
       <section
         class="ficha wizpanel"
@@ -4504,51 +4696,60 @@ export class CareerApp extends LitElement {
           <h3>🧙 El brujo de ${islandName}</h3>
           <button class="close" aria-label="Cerrar el panel del brujo" title="Cerrar (Esc)" @click=${this._closeWizard}>✕</button>
         </header>
-        <p class="wizlead">
-          El brujo escucha tu consulta sobre los temas de la isla y se la hace
-          llegar a tu manager. La respuesta te esperará aquí — su farol se
-          encenderá en turquesa.
-        </p>
         ${this.wizardError ? html`<p class="error" role="alert">${this.wizardError}</p>` : null}
-        ${canAsk
-          ? html`<div class="wizform">
-              <label for="wizard-question">Tu consulta</label>
-              <textarea
-                id="wizard-question"
-                rows="3"
-                placeholder="Cuéntale tu duda al brujo…"
-                ?disabled=${this.wizardBusy}
-              ></textarea>
-              <button class="primary" ?disabled=${this.wizardBusy} @click=${this._askWizard}>
-                Dejar la consulta
-              </button>
-            </div>`
-          : html`<p class="wizreadonly">Solo puedes leer las consultas de esta persona.</p>`}
-        <p class="sub">Consultas en esta isla</p>
-        ${mine.length === 0
-          ? html`<p class="wizempty">Aún no has dejado ninguna consulta al brujo de esta isla.</p>`
-          : html`<ul class="wizlist">
-              ${mine.map(
-                (q) => html`<li class="wizq">
-                  <div class="wmeta">
-                    ${this._renderQuestionBadge(q)}
-                    <span class="when">${formatWizardDate(q.createdAt)}</span>
-                  </div>
-                  <p class="wtext">${q.text}</p>
-                  ${this._renderQuestionAnswer(q)}
-                  ${q.status === 'answered' && canAsk
-                    ? html`<button
-                        class="primary wseen"
-                        ?disabled=${this.wizardBusy}
-                        title="Marcar la respuesta como vista"
-                        @click=${() => this._markSeen(q)}
-                      >Entendido</button>`
-                    : null}
-                </li>`,
-              )}
-            </ul>`}
+        ${this.wizardScript
+          ? html`<game-dialog
+              .character=${CareerApp.WIZARD_CHARACTER}
+              .script=${this.wizardScript}
+              .busy=${this.wizardBusy}
+              @dialog-submit=${this._onWizardSubmit}
+              @dialog-choice=${this._onWizardChoice}
+              @dialog-end=${this._onWizardDialogEnd}
+            ></game-dialog>`
+          : null}
+        <p class="wizlog-link">
+          <button
+            class="linky"
+            aria-expanded=${this.showWizardLog}
+            @click=${this._toggleWizardLog}
+          >${this.showWizardLog ? 'ocultar mis consultas' : 'ver mis consultas'}</button>
+        </p>
+        ${this.showWizardLog ? this._renderWizardLog(mine) : null}
       </section>
     </div>`;
+  }
+
+  /**
+   * Lista clásica de MIS consultas de esta isla (pergamino, MC-22): estado,
+   * respuesta y «Entendido» (markSeen) cuando está respondida — el registro
+   * completo detrás del enlace «ver mis consultas».
+   * @param {import('../../tools/career/domain/wizard.js').WizardQuestion[]} mine
+   */
+  _renderWizardLog(mine) {
+    const canAsk = this._canAskWizard;
+    return html`<p class="sub">Consultas en esta isla</p>
+      ${mine.length === 0
+        ? html`<p class="wizempty">Aún no has dejado ninguna consulta al brujo de esta isla.</p>`
+        : html`<ul class="wizlist">
+            ${mine.map(
+              (q) => html`<li class="wizq">
+                <div class="wmeta">
+                  ${this._renderQuestionBadge(q)}
+                  <span class="when">${formatWizardDate(q.createdAt)}</span>
+                </div>
+                <p class="wtext">${q.text}</p>
+                ${this._renderQuestionAnswer(q)}
+                ${q.status === 'answered' && canAsk
+                  ? html`<button
+                      class="primary wseen"
+                      ?disabled=${this.wizardBusy}
+                      title="Marcar la respuesta como vista"
+                      @click=${() => this._markSeen(q)}
+                    >Entendido</button>`
+                  : null}
+              </li>`,
+            )}
+          </ul>`}`;
   }
 
   /**
@@ -4797,6 +4998,11 @@ export class CareerApp extends LitElement {
   _renderArchipelago() {
     if (!this.showArchipelago) return null;
     const islands = this.archipelago?.islands ?? [];
+    // La luz del brujo (JG-8): islas con alguna respuesta LISTA para la
+    // persona cargada — su mancha del mapa emite el halo violeta.
+    const wizardLit = new Set(
+      (this.questions ?? []).filter((q) => q.status === 'answered').map((q) => q.islandId),
+    );
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeArchipelago(); }}>
       <section
         class="sea"
@@ -4826,16 +5032,18 @@ export class CareerApp extends LitElement {
             const here = island.id === this.currentIsland;
             const built = this.existingIslands?.has(island.id) ?? island.id === DEFAULT_ISLAND_ID;
             const challengeTarget = !here && this._challenge?.routeId === island.id;
+            const lit = wizardLit.has(island.id);
+            const baseTitle = here
+              ? `${island.name} — estás aquí`
+              : built
+                ? `Zarpar hacia ${island.name}`
+                : `Zarpar hacia ${island.name} (en construcción)`;
             return html`<button
               type="button"
               role="listitem"
-              class="isle ${here ? 'here' : ''} ${built ? '' : 'wip'}"
+              class="isle ${here ? 'here' : ''} ${built ? '' : 'wip'} ${lit ? 'wizlit' : ''}"
               style=${`left:${island.x}%; top:${island.y}%`}
-              title=${here
-                ? `${island.name} — estás aquí`
-                : built
-                  ? `Zarpar hacia ${island.name}`
-                  : `Zarpar hacia ${island.name} (en construcción)`}
+              title=${lit ? `${baseTitle} — 🔮 el brujo tiene tu respuesta` : baseTitle}
               @click=${() => this._travelTo(island.id)}
             >
               <span class="isle-dot" aria-hidden="true"></span>

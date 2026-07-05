@@ -14,7 +14,8 @@
  *
  * Estados de una consulta (y del indicador de la cabaña):
  *  - 'pending'  → esperando respuesta del líder (farol ÁMBAR pulsante).
- *  - 'answered' → el líder respondió; el jugador aún no la vio (farol TEAL).
+ *  - 'answered' → el líder respondió; el jugador aún no la vio (luz VIOLETA
+ *                  en la cabaña y halo en el mapa del tesoro, JG-8).
  *  - 'seen'     → el jugador la marcó como vista (la cabaña vuelve a reposo).
  *
  * @typedef {'pending'|'answered'|'seen'} QuestionStatus
