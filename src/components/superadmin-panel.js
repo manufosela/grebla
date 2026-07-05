@@ -35,10 +35,11 @@ const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
  */
 function slugify(text) {
   return String(text ?? '')
-    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .normalize('NFD').replaceAll(/\p{Diacritic}/gu, '')
     .toLowerCase().trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replaceAll(/[^a-z0-9]+/gu, '-')
+    .replace(/^-/u, '')
+    .replace(/-$/u, '');
 }
 
 /**
@@ -123,6 +124,12 @@ export class SuperadminPanel extends LitElement {
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .bar h1 { font-size: 1.4rem; margin: 0; }
+    .gamelink {
+      display: inline-block; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
+      color: var(--rm-text, #111827); border-radius: 8px; padding: 0.45rem 0.9rem;
+      font-size: 0.85rem; font-weight: 600; text-decoration: none;
+    }
+    .gamelink:hover { border-color: var(--rm-accent, #3b82f6); }
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .tab {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
@@ -1027,6 +1034,9 @@ export class SuperadminPanel extends LitElement {
       <div class="bar">
         <h1>Gestión de la organización</h1>
         ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #6b7280)">Modo solo lectura (viewer)</span>` : null}
+        ${this.readOnly
+          ? null
+          : html`<a class="gamelink" href="/admin/juego">🎮 Editor del juego</a>`}
         ${this.isLeader && !this.readOnly
           ? html`<button class="primary" @click=${this._useAsLeader}>Usar como líder →</button>`
           : null}

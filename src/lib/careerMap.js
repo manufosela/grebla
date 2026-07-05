@@ -17,7 +17,7 @@
  * @typedef {import('../tools/career/domain/types.js').CareerMap} CareerMap
  * @typedef {import('../tools/career/domain/types.js').Archipelago} Archipelago
  */
-import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { normalizeCareerMap, serializeCareerMap } from '../tools/career/data/maps.js';
 import { normalizeArchipelago, serializeArchipelago, START_ISLAND_ID } from '../tools/career/data/archipelago.js';
@@ -123,4 +123,63 @@ export async function listCareerRoutes() {
     if (route.active) routes.push(route);
   }
   return routes;
+}
+
+/**
+ * Catálogo COMPLETO de rutas para el editor del juego (JG-16): igual que
+ * listCareerRoutes pero SIN descartar las retiradas (active: false) — el
+ * superadmin necesita verlas para reactivarlas o borrarlas. Los docs que no
+ * pasan el saneo siguen fuera (se avisa por consola).
+ * @returns {Promise<import('../tools/career/domain/careerRoutes.js').CareerRoute[]>}
+ */
+export async function listAllCareerRoutes() {
+  const snap = await getDocs(collection(db, CAREER_ROUTES_COLLECTION));
+  /** @type {import('../tools/career/domain/careerRoutes.js').CareerRoute[]} */
+  const routes = [];
+  for (const d of snap.docs) {
+    const route = normalizeCareerRoute(d.data(), d.id);
+    if (!route) {
+      console.warn(`Editor del juego: el doc /careerRoutes/${d.id} no es una ruta válida y se ignora.`);
+      continue;
+    }
+    routes.push(route);
+  }
+  return routes;
+}
+
+/**
+ * Persiste una ruta de rol completa (solo superadmin por reglas, JG-16).
+ * Sobrescribe el doc /careerRoutes/{routeId} con los campos del ADR JG-14.
+ * @param {import('../tools/career/domain/careerRoutes.js').CareerRoute} route
+ * @returns {Promise<void>}
+ */
+export async function saveCareerRoute(route) {
+  const id = String(route?.routeId ?? '').trim();
+  if (!id || id.includes('/')) throw new Error(`Id de ruta inválido para guardar: "${route?.routeId}".`);
+  await setDoc(
+    doc(db, CAREER_ROUTES_COLLECTION, id),
+    {
+      discipline: route.discipline,
+      levelKey: route.levelKey,
+      name: route.name,
+      description: route.description ?? '',
+      stops: [...route.stops],
+      active: route.active !== false,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: false },
+  );
+}
+
+/**
+ * Borra una ruta de rol del catálogo (solo superadmin por reglas, JG-16).
+ * Es un borrado real, no un `active: false`: para retirarla temporalmente
+ * está el flag active del editor.
+ * @param {string} routeId
+ * @returns {Promise<void>}
+ */
+export async function deleteCareerRoute(routeId) {
+  const id = String(routeId ?? '').trim();
+  if (!id || id.includes('/')) throw new Error(`Id de ruta inválido para borrar: "${routeId}".`);
+  await deleteDoc(doc(db, CAREER_ROUTES_COLLECTION, id));
 }
