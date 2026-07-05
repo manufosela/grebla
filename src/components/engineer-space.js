@@ -608,14 +608,14 @@ export class EngineerSpace extends LitElement {
         .selected=${null}
       ></career-map>
 
-      <p class="sub">Ciudad actual</p>
+      <p class="sub">Casa actual</p>
       ${current
         ? html`<p class="now-city">${current.name}</p>`
-        : html`<p class="empty">Sin ciudad actual marcada.</p>`}
+        : html`<p class="empty">Sin casa actual marcada.</p>`}
 
-      <p class="sub">Ciudades dominadas (${visited.length})</p>
+      <p class="sub">Casas dominadas (${visited.length})</p>
       ${dominatedByArea.length === 0
-        ? html`<p class="empty">Aún no has dominado ninguna ciudad.</p>`
+        ? html`<p class="empty">Aún no has dominado ninguna casa.</p>`
         : html`
             <div class="by-area">
               ${dominatedByArea.map(

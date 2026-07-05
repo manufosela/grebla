@@ -208,7 +208,7 @@ import {
   voyageDuration,
   voyageHeading,
 } from '../../tools/career/domain/voyage.js';
-import { cityStatus, missingPrereqs, progressPct } from '../../tools/career/domain/progress.js';
+import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 import { newAchievements } from '../../tools/career/domain/achievements.js';
 import { wizardState, pendingQuestions } from '../../tools/career/domain/wizard.js';
@@ -402,7 +402,47 @@ export class CareerApp extends LitElement {
     .badge.deprecated { background: var(--rm-danger, #dc2626); color: #fff; }
     .badge.route { border-color: var(--rm-navy, #1e3a5f); color: var(--rm-navy, #1e3a5f); }
     .badge.current { border-color: var(--rm-coral-600, #e26d5e); color: var(--rm-coral-600, #e26d5e); }
-    .blockedby { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
+    /* ── Bloque de prerequisitos de una casa bloqueada (JG-2): sustituye al
+       CTA imposible. Conseguidos en teal; pendientes como botones coral que
+       navegan a la casa correspondiente. ── */
+    .prereqs {
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-left: 4px solid var(--rm-coral-600, #e26d5e);
+      background: color-mix(in srgb, var(--rm-coral, #f2887a) 8%, var(--rm-surface, #fff));
+      border-radius: 10px;
+      padding: 0.7rem 0.85rem;
+      margin: 0 0 0.9rem;
+    }
+    .prereqs h4 { margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--rm-text, #111827); }
+    .prereqs ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .prereqs li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; }
+    .prereqs li.done { color: var(--rm-accent, #2a9d8f); font-weight: 600; }
+    .prereqs li.done .tick { font-weight: 700; }
+    .prereqs .goto {
+      border: 1px solid var(--rm-coral-600, #e26d5e);
+      color: var(--rm-coral-600, #e26d5e);
+      background: var(--rm-surface, #fff);
+      border-radius: 999px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+    }
+    .prereqs .goto:hover { background: var(--rm-coral-600, #e26d5e); color: #fff; }
+    .prereqs .goto:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
+    /* Texto solo para lectores de pantalla (estado «conseguido» del prereq). */
+    .visuallyhidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
     label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
@@ -2219,17 +2259,17 @@ export class CareerApp extends LitElement {
   _cpAddStop() {
     const { islandId, cityId, targetDate, stops } = this.cpDraft;
     if (!islandId || !cityId) {
-      this.carpoolError = 'Elige isla y ciudad para añadir la parada.';
+      this.carpoolError = 'Elige isla y casa para añadir la parada.';
       return;
     }
     if (stops.some((s) => s.cityId === cityId)) {
-      this.carpoolError = 'Esa ciudad ya está en la ruta.';
+      this.carpoolError = 'Esa casa ya está en la ruta.';
       return;
     }
     const map = this._islandMaps.get(islandId);
     const city = map?.cities.find((c) => c.id === cityId);
     if (!map || !city) {
-      this.carpoolError = 'No se encontró la ciudad elegida en el mapa de la isla.';
+      this.carpoolError = 'No se encontró la casa elegida en el mapa de la isla.';
       return;
     }
     this.carpoolError = '';
@@ -2536,13 +2576,13 @@ export class CareerApp extends LitElement {
             )}
           </select>
         </label>
-        <label>Ciudad
+        <label>Casa
           <select
             .value=${draft.cityId}
             ?disabled=${this.carpoolBusy || !draft.islandId}
             @change=${(e) => { this.cpDraft = { ...this.cpDraft, cityId: e.target.value }; }}
           >
-            <option value="" ?selected=${!draft.cityId}>— Ciudad —</option>
+            <option value="" ?selected=${!draft.cityId}>— Casa —</option>
             ${cities.map(
               (c) => html`<option value=${c.id} ?selected=${c.id === draft.cityId}>${c.name}</option>`,
             )}
@@ -2561,7 +2601,7 @@ export class CareerApp extends LitElement {
         </button>
       </div>
       ${draft.stops.length === 0
-        ? html`<p class="wizempty">Aún no hay paradas: añade ciudades o comparte tu ruta planificada.</p>`
+        ? html`<p class="wizempty">Aún no hay paradas: añade casas o comparte tu ruta planificada.</p>`
         : html`<ol class="cpstops">
             ${draft.stops.map(
               (s, i) => html`<li class="cpstop">
@@ -3755,13 +3795,18 @@ export class CareerApp extends LitElement {
           </li>
           <li>
             <strong>A pie:</strong> el botón 🚶 te baja a la isla en primera persona:
-            <kbd>WASD</kbd> + ratón para caminar, <kbd>E</kbd> abre la ciudad cercana
+            <kbd>WASD</kbd> + ratón para caminar, <kbd>E</kbd> abre la casa cercana
             y <kbd>Esc</kbd> vuelve a la vista aérea.
           </li>
           <li>
             <strong>Tu objetivo:</strong> las casas con una baliza de luz coral tienen
             el <strong>visado disponible</strong> — son tu siguiente paso. La ruta
             planificada queda marcada en el suelo.
+          </li>
+          <li>
+            <strong>Casas bloqueadas 🔒:</strong> algunas casas están bloqueadas — su
+            tarjeta te dice qué necesitas conseguir antes; pulsa un requisito
+            para ir a él.
           </li>
         </ul>
         <button class="primary play" @click=${this._closeOnboarding}>¡A jugar!</button>
@@ -3808,11 +3853,14 @@ export class CareerApp extends LitElement {
   // ---- Detalle de ciudad COMPARTIDO entre vistas (grid y panel 3D) -----------
 
   /**
-   * Acciones de journey sobre la ciudad (visitada/actual/ruta). Si la ciudad
-   * está en desuso solo se muestra la nota (no es visitable), como hasta ahora.
+   * Acciones de journey sobre la casa (visitada/actual/ruta). Si la casa está
+   * en desuso solo se muestra la nota (no es visitable), como hasta ahora.
+   * En una casa BLOQUEADA (JG-2) no se ofrecen acciones imposibles (obtener
+   * el certificado o marcarla como actual): solo planificar la ruta.
    * @param {import('../../tools/career/domain/types.js').City} sel
+   * @param {boolean} [blocked] true si la casa está bloqueada por prerequisitos.
    */
-  _renderCityActions(sel) {
+  _renderCityActions(sel, blocked = false) {
     if (sel.deprecated) {
       return html`<p class="dep">Tecnología en desuso — no forma parte de la ruta.</p>`;
     }
@@ -3822,10 +3870,14 @@ export class CareerApp extends LitElement {
     const visited = this.journey.visitedCities ?? [];
     const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
     return html`<div class="actions">
-      <button class="primary" @click=${() => this._act('toggle')}>
-        ${visited.includes(sel.id) ? 'Retirar el certificado' : 'Obtener certificado'}
-      </button>
-      <button @click=${() => this._act('current')}>Marcar como ciudad actual</button>
+      ${blocked
+        ? null
+        : html`
+            <button class="primary" @click=${() => this._act('toggle')}>
+              ${visited.includes(sel.id) ? 'Retirar el certificado' : 'Obtener certificado'}
+            </button>
+            <button @click=${() => this._act('current')}>Marcar como casa actual</button>
+          `}
       <button @click=${() => this._act('route')}>${inRoute ? 'Quitar de la ruta' : 'Añadir a la ruta'}</button>
     </div>`;
   }
@@ -3898,8 +3950,10 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Pestaña «Certificado» (default): insignias de estado, prerequisitos que
-   * faltan para el visado, acciones del journey y evidencias (chips).
+   * Pestaña «Certificado» (default): insignias de estado, acciones del journey
+   * y evidencias (chips). En una casa BLOQUEADA (JG-2) no hay CTA imposible:
+   * en su lugar, el bloque «Para entrar necesitas» lista sus prerequisitos
+   * con su estado y los pendientes son botones que navegan a esa casa.
    * @param {import('../../tools/career/domain/types.js').City} sel
    */
   _renderCityCertificate(sel) {
@@ -3908,21 +3962,73 @@ export class CareerApp extends LitElement {
     const status = st === 'unknown' ? 'blocked' : st;
     const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
     const isCurrent = this.journey.currentCity === sel.id;
-    const missing = missingPrereqs(map, sel.id, this.journey.visitedCities ?? []).map(
-      (id) => map.cities.find((c) => c.id === id)?.name ?? id,
-    );
+    const blocked = status === 'blocked';
     return html`
       <div class="badges">
         <span class="badge ${status}">${CareerApp.STATUS_BADGES[status]}</span>
         ${isCurrent ? html`<span class="badge current">Actual</span>` : null}
         ${inRoute ? html`<span class="badge route">En ruta</span>` : null}
       </div>
-      ${status === 'blocked' && missing.length
-        ? html`<p class="blockedby">Para conseguir el visado te falta: ${missing.join(', ')}.</p>`
-        : null}
-      ${this._renderCityActions(sel)}
+      ${blocked ? this._renderBlockedPrereqs(sel) : null}
+      ${this._renderCityActions(sel, blocked)}
       ${this._renderCityEvidences(sel)}
     `;
+  }
+
+  /**
+   * Bloque «🔒 Para entrar necesitas» de una casa bloqueada (JG-2): TODOS sus
+   * prerequisitos con su estado — ✓ conseguido (teal) o pendiente (coral) — y
+   * cada pendiente es un botón que lleva a esa casa (_goToPrereq). Visible
+   * también para el viewer: orienta aunque no juegue.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderBlockedPrereqs(sel) {
+    const visited = new Set(this.journey.visitedCities ?? []);
+    const prereqs = (sel.prereqs ?? []).map((id) => ({
+      id,
+      name: this._map.cities.find((c) => c.id === id)?.name ?? id,
+      done: visited.has(id),
+    }));
+    if (!prereqs.length) return null;
+    return html`<div class="prereqs">
+      <h4>🔒 Para entrar necesitas</h4>
+      <ul>
+        ${prereqs.map((p) =>
+          p.done
+            ? html`<li class="done">
+                <span class="tick" aria-hidden="true">✓</span>
+                <span>${p.name}</span>
+                <span class="visuallyhidden">— conseguido</span>
+              </li>`
+            : html`<li class="todo">
+                <button
+                  type="button"
+                  class="goto"
+                  title="Ir a ${p.name}"
+                  aria-label="Pendiente: ir a la casa ${p.name}"
+                  @click=${() => this._goToPrereq(p.id)}
+                >${p.name} →</button>
+              </li>`,
+        )}
+      </ul>
+    </div>`;
+  }
+
+  /**
+   * Navega a una casa prerequisito desde la tarjeta de una casa bloqueada
+   * (JG-2): la selecciona — el panel pasa a mostrar SU tarjeta — y, en vista
+   * aérea 3D, la cámara vuela hasta ella (focusCity). A pie la cámara no se
+   * mueve: la tarjeta del prerequisito y su resalte de selección (más su
+   * baliza coral si tiene el visado disponible) orientan al caminante. En la
+   * vista plana el mapa resalta la casa seleccionada.
+   * @param {string} cityId
+   */
+  _goToPrereq(cityId) {
+    this.selected = cityId;
+    this.cityTab = 'certificado';
+    if (this.viewMode === '3d' && this.mode3d === 'aerial') {
+      this.renderRoot.querySelector('career-island-3d')?.focusCity(cityId);
+    }
   }
 
   /**
@@ -4257,11 +4363,11 @@ export class CareerApp extends LitElement {
                 <h3>${sel.name}</h3>
                 <p class="kind">${selAreaName ? html`${selAreaName} · ` : null}${sel.kind} · ${sel.weight} pts</p>
                 ${this._renderCityTabs(sel)}
-                ${(sel.prereqs ?? []).length
+                ${(sel.prereqs ?? []).length && cityStatus(map, sel.id, this.journey) !== 'blocked'
                   ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => map.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
                   : null}
               `
-            : html`<p class="hint">Haz clic en una ciudad de la isla para ver su tarjeta: certificado, qué aprender y recursos.</p>`}
+            : html`<p class="hint">Haz clic en una casa de la isla para ver su tarjeta: certificado, qué aprender y recursos.</p>`}
           <details class="legend-wrap">
             <summary>Leyenda</summary>
             <div class="legend">

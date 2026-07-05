@@ -483,7 +483,7 @@ export class SuperadminPanel extends LitElement {
     const inUse = this._careerMap.cities.filter((c) => c.area === id);
     if (inUse.length) {
       this._confirmArea = null;
-      this._mapError = `No se puede borrar «${id}»: ${inUse.length} ciudad(es) la usan. Reasígnalas antes.`;
+      this._mapError = `No se puede borrar «${id}»: ${inUse.length} casa(s) la usan. Reasígnalas antes.`;
       return;
     }
     this._patchMap({ areas: this._careerMap.areas.filter((a) => a.id !== id) });
@@ -494,8 +494,8 @@ export class SuperadminPanel extends LitElement {
     const id = this._newCity.id.trim();
     const name = this._newCity.name.trim();
     this._mapError = '';
-    if (!id || !name) { this._mapError = 'La ciudad necesita id y nombre.'; return; }
-    if (this._careerMap.cities.some((c) => c.id === id)) { this._mapError = `Ya existe la ciudad «${id}».`; return; }
+    if (!id || !name) { this._mapError = 'La casa necesita id y nombre.'; return; }
+    if (this._careerMap.cities.some((c) => c.id === id)) { this._mapError = `Ya existe la casa «${id}».`; return; }
     const area = this._careerMap.areas[0]?.id ?? '';
     /** @type {import('../tools/career/domain/types.js').City} */
     const city = { id, name, kind: 'tech', area, x: 50, y: 50, weight: 1, prereqs: [] };
@@ -576,11 +576,11 @@ export class SuperadminPanel extends LitElement {
     const areaIds = new Set(areas.map((a) => a.id));
     const cityIds = new Set();
     for (const c of cities) {
-      if (!c.id.trim() || !c.name.trim()) return 'Hay ciudades sin id o sin nombre.';
-      if (cityIds.has(c.id)) return `Ciudad duplicada: «${c.id}».`;
+      if (!c.id.trim() || !c.name.trim()) return 'Hay casas sin id o sin nombre.';
+      if (cityIds.has(c.id)) return `Casa duplicada: «${c.id}».`;
       cityIds.add(c.id);
-      if (c.area && !areaIds.has(c.area)) return `La ciudad «${c.id}» apunta a una comarca inexistente.`;
-      if (c.x < 0 || c.x > 100 || c.y < 0 || c.y > 100) return `La ciudad «${c.id}» tiene una posición fuera de 0..100.`;
+      if (c.area && !areaIds.has(c.area)) return `La casa «${c.id}» apunta a una comarca inexistente.`;
+      if (c.x < 0 || c.x > 100 || c.y < 0 || c.y > 100) return `La casa «${c.id}» tiene una posición fuera de 0..100.`;
     }
     return null;
   }
@@ -1052,7 +1052,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <h2>Mapa de carrera</h2>
-        <p class="ro-note">Edita cada isla del archipiélago: comarcas y ciudades (hitos, skills y tecnologías). Los cambios se aplican al guardar.</p>
+        <p class="ro-note">Edita cada isla del archipiélago: comarcas y casas (hitos, skills y tecnologías). Los cambios se aplican al guardar.</p>
         ${this._mapError ? html`<p class="error">${this._mapError}</p>` : null}
         ${this._mapNotice ? html`<p class="notice">${this._mapNotice}</p>` : null}
         ${this._renderIslandPicker()}
@@ -1164,7 +1164,7 @@ export class SuperadminPanel extends LitElement {
   _renderCities(map) {
     return html`
       <details open>
-      <summary class="sub">Ciudades (${map.cities.length})</summary>
+      <summary class="sub">Casas (${map.cities.length})</summary>
       ${this.readOnly
         ? null
         : html`<div class="toolbar">
@@ -1172,10 +1172,10 @@ export class SuperadminPanel extends LitElement {
               @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
             <input type="text" placeholder="Nombre" .value=${this._newCity.name}
               @input=${(e) => { this._newCity = { ...this._newCity, name: e.target.value }; }} />
-            <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity()}>Añadir ciudad</button>
+            <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity()}>Añadir casa</button>
           </div>`}
       ${map.cities.length === 0
-        ? html`<p class="empty">Aún no hay ciudades.</p>`
+        ? html`<p class="empty">Aún no hay casas.</p>`
         : html`<div class="cities">${map.cities.map((c, idx) => this._renderCity(map, c, idx))}</div>`}
       </details>
     `;
@@ -1195,7 +1195,7 @@ export class SuperadminPanel extends LitElement {
             ${this.readOnly
               ? null
               : this._confirmCity === c.id
-                ? html`<span class="confirm">¿Borrar ciudad?
+                ? html`<span class="confirm">¿Borrar casa?
                     <button class="yes" @click=${() => this._deleteCity(c.id)}>Sí</button>
                     <button @click=${() => { this._confirmCity = null; }}>No</button>
                   </span>`
