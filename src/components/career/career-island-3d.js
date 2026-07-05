@@ -355,6 +355,8 @@ const PROXIMITY_CHECK_MS = 100;
  * para que salga el prompt «[E] Zarpar».
  */
 const BOAT_PROXIMITY_RADIUS = 12;
+/** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
+const AUTOWALK_TIMEOUT_S = 30;
 /** Distancia (unidades) del cartel «En construcción» hacia el interior desde el puerto (MC-14). */
 const SIGN_INLAND_OFFSET = 10;
 /** Distancia (unidades) a la que se aparece frente a la ciudad actual del journey. */
@@ -790,6 +792,7 @@ export class CareerIsland3D extends LitElement {
     carpoolStops: { attribute: false },
     challengeStops: { attribute: false },
     routeStops: { attribute: false },
+    guideCityId: { attribute: false },
     teammates: { attribute: false },
     overlayOpen: { attribute: false },
     wizardState: { attribute: false },
@@ -879,6 +882,40 @@ export class CareerIsland3D extends LitElement {
     }
     /* El prompt de ciudad cercana sube para dejar sitio a la ayuda de controles. */
     .fps-hint.near { bottom: 3.1rem; }
+    /* --- Brújula de objetivo a pie (JG-21): chip arriba-centro con una flecha
+       que apunta hacia la siguiente casa girando según hacia dónde miras. --- */
+    .guide {
+      position: absolute;
+      top: 0.9rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3rem 0.7rem 0.3rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(11, 20, 34, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #e8eef7;
+      font-size: 0.82rem;
+      font-weight: 700;
+      box-shadow: 0 2px 10px rgba(4, 10, 20, 0.45);
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .guide[hidden] { display: none; }
+    .guide-arrow {
+      display: inline-block;
+      font-size: 1.05rem;
+      line-height: 1;
+      color: #f2887a;
+      transition: transform 0.12s linear;
+      will-change: transform;
+    }
+    .guide-label { color: #e8eef7; }
+    .guide-label .dist { color: #a7bad3; font-weight: 600; margin-left: 0.3rem; }
+    @media (prefers-reduced-motion: reduce) { .guide-arrow { transition: none; } }
     /* --- Minimapa a pie (MC-13): disco estilo DOOM, esquina inferior izquierda --- */
     .minimap {
       position: absolute;
@@ -933,6 +970,10 @@ export class CareerIsland3D extends LitElement {
      * @type {{ numbers: Map<string, number>, nextCityId: string|null }|null}
      */
     this.challengeStops = null;
+    /** Casa a la que la brújula de a pie apunta (JG-21): la siguiente parada
+     * del reto o de la ruta, la señala <career-app>. Si hay autopiloto, manda
+     * su objetivo. Solo se usa si la casa está en ESTA isla. */
+    this.guideCityId = null;
     /**
      * Números de la RUTA LIBRE planificada (JG-9), o null sin ruta que numerar
      * (o con un reto activo: sus números mandan). Número de parada GLOBAL de
@@ -1116,6 +1157,10 @@ export class CareerIsland3D extends LitElement {
     /** Fase de zancada acumulada del caminante fps (solo para los pasos). */
     this._fpsPhase = 0;
     this._fpsStepCount = 0;
+    /** Autopiloto a pie (JG-21): id de la casa a la que caminar solo, o null.
+     * Cualquier tecla de movimiento lo cancela; al chocar con la casa se abre
+     * su tarjeta como al llegar andando. */
+    this._autoWalkTargetId = null;
     /** Balizas de «visado disponible» vivas (userData.phase) del build (MC-13). */
     this._beacons = [];
     /** Canvas offscreen con la capa ESTÁTICA del minimapa (isla, senda, casas). */
@@ -1767,6 +1812,8 @@ export class CareerIsland3D extends LitElement {
   _activateFps() {
     this._mode = 'fps';
     this._lastWalkTs = 0;
+    this._autoWalkTargetId = null; // sin autopiloto heredado al entrar a pie
+    this._guideEl = null; // la brújula se recrea con el HUD fps: recachear tras render
     if (!this._plc) {
       const canvas = this.renderRoot.querySelector('canvas');
       this._plc = new this._PointerLockControls(this._camera, canvas);
@@ -1964,6 +2011,7 @@ export class CareerIsland3D extends LitElement {
     }
     if (CareerIsland3D.HELD_CODES.has(event.code)) {
       this._keys.add(event.code);
+      this._autoWalkTargetId = null; // tomar el control cancela el autopiloto (JG-21)
       event.preventDefault(); // ni scroll con las flechas ni paginación con Re/Av Pág
     }
   }
@@ -2055,12 +2103,117 @@ export class CareerIsland3D extends LitElement {
           this._openWizard();
         }
       }
+    } else if (this._autoWalkTargetId) {
+      // Autopiloto (JG-21): sin teclas pulsadas, el avatar camina solo hacia
+      // la casa objetivo. Al chocar con ella se abre su tarjeta (como al
+      // llegar andando); una tecla de movimiento cancela el autopiloto.
+      this._autoWalkStep(dt);
     }
     cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR }) + EYE_HEIGHT;
+    this._updateGuide();
     if (now - this._lastProxTs >= PROXIMITY_CHECK_MS) {
       this._lastProxTs = now;
       this._updateProximity();
     }
+  }
+
+  /**
+   * Brújula de objetivo a pie (JG-21): apunta la flecha del HUD hacia la casa
+   * guía (el objetivo del autopiloto o la siguiente parada, guideCityId) y
+   * muestra su nombre y distancia. La flecha gira según hacia dónde miras: si
+   * la casa está delante apunta arriba; si la tienes detrás, hacia abajo. Solo
+   * si la casa está en ESTA isla; si no, esconde el chip.
+   */
+  _updateGuide() {
+    this._guideEl ??= this.renderRoot.querySelector('.guide');
+    const el = this._guideEl;
+    if (!el) return;
+    const targetId = this._autoWalkTargetId ?? this.guideCityId;
+    const target = targetId ? this._walkCities.find((c) => c.id === targetId) : null;
+    if (!target) {
+      if (!el.hidden) el.hidden = true;
+      return;
+    }
+    const cam = this._camera.position;
+    const dx = target.wx - cam.x;
+    const dz = target.wz - cam.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    const look = this._camera.getWorldDirection(this._walkDirScratch);
+    const flen = Math.hypot(look.x, look.z) || 1;
+    const fx = look.x / flen;
+    const fz = look.z / flen;
+    // Ángulo firmado entre hacia dónde miras y hacia dónde está la casa.
+    const signed = Math.atan2(fx * (dz / dist) - fz * (dx / dist), fx * (dx / dist) + fz * (dz / dist));
+    el.hidden = false;
+    el.querySelector('.guide-arrow').style.transform = `rotate(${(signed * 180) / Math.PI}deg)`;
+    const name = this.map?.cities?.find((c) => c.id === targetId)?.name ?? '';
+    el.querySelector('.gname').textContent = name;
+    el.querySelector('.dist').textContent = `${Math.round(dist)} m`;
+  }
+
+  /**
+   * Camina el avatar (a pie) hacia la casa objetivo (JG-21): gira la vista
+   * hacia ella y avanza en línea hacia su posición, deslizando por la costa y
+   * las casas. Al chocar CON la casa objetivo se entra (abre su tarjeta); si
+   * llega al punto sin choque (raro), se detiene. Un guardián de tiempo evita
+   * quedarse dando vueltas si algo la bloquea.
+   * @param {number} dt Delta de tiempo del frame (s).
+   */
+  _autoWalkStep(dt) {
+    const target = this._walkCities.find((c) => c.id === this._autoWalkTargetId);
+    if (!target) {
+      this._autoWalkTargetId = null;
+      return;
+    }
+    const cam = this._camera.position;
+    const dx = target.wx - cam.x;
+    const dz = target.wz - cam.z;
+    const dist = Math.hypot(dx, dz);
+    const dir = { x: dx / (dist || 1), z: dz / (dist || 1) };
+    // Girar la vista hacia el objetivo: rota el yaw el ángulo firmado entre el
+    // forward actual y la dirección al objetivo, acotado a la velocidad de giro.
+    const look = this._camera.getWorldDirection(this._walkDirScratch);
+    const flen = Math.hypot(look.x, look.z) || 1;
+    const fx = look.x / flen;
+    const fz = look.z / flen;
+    const signed = Math.atan2(fx * dir.z - fz * dir.x, fx * dir.x + fz * dir.z);
+    if (Math.abs(signed) > 1e-3) {
+      this._eulerScratch.setFromQuaternion(this._camera.quaternion);
+      this._eulerScratch.y += Math.max(-TURN_SPEED * dt, Math.min(TURN_SPEED * dt, signed));
+      this._camera.quaternion.setFromEuler(this._eulerScratch);
+    }
+    const next = stepPosition({ x: cam.x, z: cam.z }, dir, dt, WALK_SPEED, { radius: this._walkRadius });
+    const colCities = collideWithCities({ x: cam.x, z: cam.z }, next, this._walkCities, CITY_COLLIDER_RADIUS);
+    const col = this._collideWizard({ x: cam.x, z: cam.z }, colCities);
+    this._fpsPhase += Math.hypot(col.x - cam.x, col.z - cam.z) * AVATAR.stepFreq;
+    const steps = Math.floor(this._fpsPhase / Math.PI);
+    if (steps > this._fpsStepCount) this._audio.step();
+    this._fpsStepCount = steps;
+    cam.x = col.x;
+    cam.z = col.z;
+    this._autoWalkElapsed = (this._autoWalkElapsed ?? 0) + dt;
+    if (colCities.hitCityId === this._autoWalkTargetId && this._insideCityId === null) {
+      this._enterCity(colCities.hitCityId);
+      this._autoWalkTargetId = null;
+    } else if (dist < 1.5 || this._autoWalkElapsed > AUTOWALK_TIMEOUT_S) {
+      this._autoWalkTargetId = null;
+    }
+  }
+
+  /**
+   * Ordena al avatar caminar hasta una casa (JG-21, API pública para
+   * <career-app> desde «Llévame»/enlaces). Solo tiene efecto a pie; en aérea
+   * <career-app> usa focusCity. Arranca el autopiloto (lo cancela cualquier
+   * tecla de movimiento en _onKeyDown).
+   * @param {string} cityId
+   * @returns {boolean} true si la casa existe en esta isla y se inició la marcha.
+   */
+  walkToCity(cityId) {
+    if (this._mode !== 'fps') return false;
+    if (!this._walkCities.some((c) => c.id === cityId)) return false;
+    this._autoWalkTargetId = cityId;
+    this._autoWalkElapsed = 0;
+    return true;
   }
 
   /** Ciudad cercana al caminante, para el resalte emisivo y el prompt «[E] Entrar en». */
@@ -5996,6 +6149,12 @@ export class CareerIsland3D extends LitElement {
           : null}
         ${this._mode === 'fps'
           ? html`<canvas class="minimap" aria-hidden="true"></canvas>`
+          : null}
+        ${this._mode === 'fps'
+          ? html`<div class="guide" hidden aria-hidden="true">
+              <span class="guide-arrow">▲</span>
+              <span class="guide-label"><span class="gname"></span><span class="dist"></span></span>
+            </div>`
           : null}
         ${this._renderFpsHint()}
         ${this._renderAerialHint()}
