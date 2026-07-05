@@ -97,14 +97,14 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'iOS',
   tiers: {
     peritus: {
-      name: 'iOS · Peritus',
+      name: 'iOS · Grumete',
       description:
         'Ejecuta con autonomía: Swift con async/await, ciclo de vida de la app, UI ' +
         'con SwiftUI y su estado, navegación y consumo de APIs desde la app.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'iOS · Veteranus',
+      name: 'iOS · Corsario',
       description:
         'Decide y anticipa: MVVM con testing, accesibilidad e interoperabilidad con ' +
         'UIKit, SwiftData, firma y distribución por TestFlight con CI, code review ' +
@@ -112,7 +112,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'iOS · Magister',
+      name: 'iOS · Capitán',
       description:
         'Transforma: SPM y modularización, Instruments y observabilidad de una app ' +
         'en la App Store, IA en el flujo de trabajo y on-device, más contratos de ' +

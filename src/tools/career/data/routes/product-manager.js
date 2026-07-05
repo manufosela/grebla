@@ -103,7 +103,7 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Product Manager',
   tiers: {
     peritus: {
-      name: 'Product Manager · Peritus',
+      name: 'Product Manager · Grumete',
       description:
         'Ejecuta con autonomía: entrevistas con usuarios, hipótesis y experimentos, ' +
         'priorización por impacto, roadmaps honestos, métricas de activación y ' +
@@ -111,7 +111,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Product Manager · Veteranus',
+      name: 'Product Manager · Corsario',
       description:
         'Decide y anticipa: discovery continuo, decir que no, stakeholders y ' +
         'lanzamientos completos, prototipando con IA (propio y con frontend) y ' +
@@ -119,7 +119,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Product Manager · Magister',
+      name: 'Product Manager · Capitán',
       description:
         'Transforma: experimentación A/B, North Star y árbol de métricas, feedback y ' +
         'decisiones sintetizados con IA, y lenguaje común con ingeniería: atributos ' +

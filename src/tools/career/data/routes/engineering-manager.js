@@ -104,14 +104,14 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Engineering Manager',
   tiers: {
     peritus: {
-      name: 'Engineering Manager · Peritus',
+      name: 'Engineering Manager · Grumete',
       description:
         'Ejecuta con autonomía: suelta el teclado, gestiona tu tiempo, sostiene 1:1s ' +
         'y feedback que funcionan, delega de verdad y mantiene el foco del equipo.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Engineering Manager · Veteranus',
+      name: 'Engineering Manager · Corsario',
       description:
         'Decide y anticipa: seguridad psicológica, dinámicas y burnout, marcos de ' +
         'carrera y conversaciones difíciles, delivery medido sin Goodhart y gestión ' +
@@ -119,7 +119,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Engineering Manager · Magister',
+      name: 'Engineering Manager · Capitán',
       description:
         'Transforma: contrata, hace onboarding y diseña el equipo, lidera equipos ' +
         'aumentados por IA midiendo su impacto real, y cruza a arquitectura, ' +

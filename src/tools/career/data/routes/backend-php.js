@@ -120,21 +120,21 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Backend PHP',
   tiers: {
     peritus: {
-      name: 'Backend PHP · Peritus',
+      name: 'Backend PHP · Grumete',
       description:
         'Ejecuta con autonomía: fundamentos de software, PHP moderno con Composer y POO, ' +
         'una API REST con tests y el SQL imprescindible para tocar datos sin miedo.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Backend PHP · Veteranus',
+      name: 'Backend PHP · Corsario',
       description:
         'Decide y anticipa: Laravel a fondo (DI, ORM, validación, autenticación), APIs ' +
         'listas para producción, code review y seguridad, modelado relacional y Docker.',
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Backend PHP · Magister',
+      name: 'Backend PHP · Capitán',
       description:
         'Transforma: todo el Veteranus más colas, caché, observabilidad, perfilado, ' +
         'análisis estático y legacy con IA, Postgres afinado (índices, EXPLAIN), CI y ' +

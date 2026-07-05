@@ -45,8 +45,9 @@ import { insertRouteAt } from '../../tools/career/domain/route.js';
 
 /** Rótulos humanos del tipo de casa. */
 const KIND_LABEL = Object.freeze({ tech: 'Tecnología', skill: 'Skill', milestone: 'Hito' });
-/** Rótulos humanos de los hitos de ruta. */
-const TIER_LABEL = Object.freeze({ peritus: 'Peritus', veteranus: 'Veteranus', magister: 'Magister' });
+/** Rótulos humanos de los hitos de ruta: los RANGOS PIRATAS del juego (las
+ * keys internas de los docs no cambian). */
+const TIER_LABEL = Object.freeze({ peritus: 'Grumete', veteranus: 'Corsario', magister: 'Capitán' });
 
 /**
  * Genera un slug a partir de un texto: minúsculas, sin acentos, separadores

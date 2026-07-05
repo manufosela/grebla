@@ -108,7 +108,7 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Forward Deployed Engineer',
   tiers: {
     peritus: {
-      name: 'Forward Deployed Engineer · Peritus',
+      name: 'Forward Deployed Engineer · Grumete',
       description:
         'Ejecuta con autonomía: ownership y perfil en T, descubrimiento en terreno, ' +
         'dominio de tu plataforma, prototipos en días con IA, SQL para los datos del ' +
@@ -116,7 +116,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Forward Deployed Engineer · Veteranus',
+      name: 'Forward Deployed Engineer · Corsario',
       description:
         'Decide y anticipa: dominio y datos del cliente, integraciones con lo ' +
         'existente y seguridad en su casa, del prototipo al producto con FastAPI y ' +
@@ -124,7 +124,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Forward Deployed Engineer · Magister',
+      name: 'Forward Deployed Engineer · Capitán',
       description:
         'Transforma: gestiona expectativas y hace de puente cliente-equipo, devuelve ' +
         'feedback a la plataforma y mide el valor entregado, y construye soluciones ' +

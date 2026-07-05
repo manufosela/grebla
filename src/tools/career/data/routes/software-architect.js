@@ -101,7 +101,7 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Software Architect',
   tiers: {
     peritus: {
-      name: 'Software Architect · Peritus',
+      name: 'Software Architect · Grumete',
       description:
         'Ejecuta con autonomía: pensamiento sistémico, decisiones por trade-offs, ' +
         'atributos de calidad, monolito modular bien acoplado, modelado de datos y ' +
@@ -109,7 +109,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Software Architect · Veteranus',
+      name: 'Software Architect · Corsario',
       description:
         'Decide y anticipa: microservicios y event-driven cuando tocan, consistencia ' +
         'y CAP, sistemas intensivos en datos, ADRs por escrito y el terreno operativo ' +
@@ -117,7 +117,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Software Architect · Magister',
+      name: 'Software Architect · Capitán',
       description:
         'Transforma: arquitectura evolutiva con fitness functions, observabilidad, ' +
         'platform engineering y DevEx, liderazgo técnico y diseño de sistemas con ' +

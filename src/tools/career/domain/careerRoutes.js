@@ -55,6 +55,45 @@ export function routeDocId(discipline, levelKey) {
 }
 
 /**
+ * RANGOS PIRATAS de los hitos de ruta (identidad del juego, JG-14): las keys
+ * internas de los docs no cambian; lo que ve el jugador es el rango.
+ * @type {Readonly<Record<'peritus'|'veteranus'|'magister', string>>}
+ */
+export const ROUTE_TIER_LABELS = Object.freeze({
+  peritus: 'Grumete',
+  veteranus: 'Corsario',
+  magister: 'Capitán',
+});
+
+/**
+ * Tramo de niveles L del career framework que corresponde a un hito, como
+ * subtítulo legible («≈ L1–L2», «≈ L5»): el inverso de suggestedTierKey.
+ * Para cada orden del marco se elige el id más corto (l3 antes que l3tl) en
+ * mayúsculas. Sin marco cargado devuelve cadena vacía (sin subtítulo).
+ * @param {'peritus'|'veteranus'|'magister'} tierKey
+ * @param {ReadonlyArray<{id: string, order: number}>} [frameworkLevels]
+ * @returns {string}
+ */
+export function tierLevelRangeLabel(tierKey, frameworkLevels = []) {
+  const fw = (frameworkLevels ?? []).filter(
+    (l) => l && typeof l.id === 'string' && Number.isFinite(Number(l.order)) && Number(l.order) >= 1,
+  );
+  if (fw.length === 0) return '';
+  const maxOrder = Math.max(...fw.map((l) => Number(l.order)));
+  const orders = [...new Set(fw.map((l) => Number(l.order)))]
+    .filter((o) => tierKeyForRelativeOrder(o, maxOrder) === tierKey)
+    .toSorted((a, b) => a - b);
+  if (orders.length === 0) return '';
+  const labelFor = (order) => {
+    const ids = fw.filter((l) => Number(l.order) === order).map((l) => l.id);
+    return ids.toSorted((a, b) => a.length - b.length || a.localeCompare(b)).at(0).toUpperCase();
+  };
+  const lo = labelFor(orders.at(0));
+  const hi = labelFor(orders.at(-1));
+  return lo === hi ? `≈ ${lo}` : `≈ ${lo}–${hi}`;
+}
+
+/**
  * Hito según la POSICIÓN RELATIVA de un nivel dentro de su propio marco:
  * el tramo bajo (≤40% del orden máximo) apunta al primer hito, el medio
  * (≤80%) al segundo y la cima al tercero. Con los niveles L del career

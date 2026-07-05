@@ -101,14 +101,14 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'DevOps',
   tiers: {
     peritus: {
-      name: 'DevOps · Peritus',
+      name: 'DevOps · Grumete',
       description:
         'Ejecuta con autonomía: Linux, shell y redes, contenedores con Docker, un ' +
         'pipeline de CI y un proveedor cloud, con la seguridad básica desde el inicio.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'DevOps · Veteranus',
+      name: 'DevOps · Corsario',
       description:
         'Decide y anticipa: Kubernetes, estrategias de despliegue, Terraform y ' +
         'secretos, logs, métricas y alertas accionables, y backups de datos que ' +
@@ -116,7 +116,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'DevOps · Magister',
+      name: 'DevOps · Capitán',
       description:
         'Transforma: GitOps y Helm, SLOs, incidentes y FinOps hasta una plataforma ' +
         'fiable, IA aplicada a infra y operaciones, y visión de platform engineering ' +
