@@ -211,6 +211,7 @@ import {
 import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/playtime.js';
 import { startPlaytimeTracker } from '../../lib/playtime.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds, listCareerRoutes } from '../../lib/careerMap.js';
+import { getFramework } from '../../lib/careerFramework.js';
 import * as carpoolsIo from '../../lib/carpools.js';
 import {
   DEFAULT_CARPOOL_SEATS,
@@ -267,7 +268,6 @@ import {
   islandOfStop,
   playerRouteDiscipline,
 } from '../../tools/career/domain/careerRoutes.js';
-import { LEVELS } from '../../tools/team/domain/levels.js';
 import {
   routeNumberByCity,
   resolveRouteStops,
@@ -1948,6 +1948,9 @@ export class CareerApp extends LitElement {
      * vez por sesión al abrir el selector (es de la instancia, no de la
      * persona). @type {import('../../tools/career/domain/careerRoutes.js').CareerRoute[]|null} */
     this.careerRoutes = null;
+    /** Niveles del career framework (para mapear careerTargetLevelId → hito
+     * sugerido); se cargan con el catálogo de retos. @type {Array<{id: string, order: number}>|null} */
+    this._frameworkLevels = null;
     this.challengeBusy = false;
     this.challengeError = '';
     this.challengeConfirmAbandon = false;
@@ -2792,6 +2795,11 @@ export class CareerApp extends LitElement {
     try {
       this.archipelago ??= await getArchipelago();
       this.careerRoutes ??= await listCareerRoutes();
+      // Niveles del career framework: careerTargetLevelId apunta a ELLOS y la
+      // sugerencia se mapea por su posición relativa. Si falla, sin insignia.
+      this._frameworkLevels ??= await getFramework()
+        .then((fw) => fw?.levels ?? [])
+        .catch(() => []);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el catálogo de retos.';
       return;
@@ -2960,17 +2968,18 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Ruta SUGERIDA para el jugador (JG-14): su `careerTargetLevelId` declarado
-   * se mapea a un hito de la escala (suggestedTierKey: 1-3 peritus, 4-5
-   * veteranus, 6-7 magister) y su disciplina se INFIERE del juego
-   * (playerRouteDiscipline: reto activo → isla actual → más certificados).
-   * Sin objetivo declarado o sin señal de disciplina no se destaca nada.
+   * Ruta SUGERIDA para el jugador (JG-14): su `careerTargetLevelId` (nivel L
+   * del career framework, lo ÚNICO que declara el plan de carrera) se mapea a
+   * un hito por su posición relativa en el marco (suggestedTierKey) y su
+   * disciplina se INFIERE del juego (playerRouteDiscipline: reto activo →
+   * isla actual → más certificados). Sin objetivo declarado o sin señal de
+   * disciplina no se destaca nada.
    * @param {import('../../tools/career/domain/careerRoutes.js').RoleRouteGroup[]} groups
    * @returns {string|null} routeId de la sugerida, o null.
    */
   _suggestedRouteId(groups) {
     const target = (this.people ?? []).find((p) => p.id === this.personId)?.careerTargetLevelId;
-    const tierKey = suggestedTierKey(target ?? null, LEVELS);
+    const tierKey = suggestedTierKey(target ?? null, this._frameworkLevels ?? []);
     if (!tierKey) return null;
     const disciplines = new Set(groups.map((g) => g.discipline));
     const discipline = playerRouteDiscipline(
@@ -3002,8 +3011,7 @@ export class CareerApp extends LitElement {
    * @param {string|null} suggestedId */
   _renderRouteTier(route, suggestedId) {
     const active = this._challenge?.routeId === route.routeId;
-    const level = LEVELS.find((l) => l.key === route.levelKey);
-    const chipStyle = `--tier-color:${level?.color ?? 'var(--rm-muted, #6b7280)'}`;
+    const chipStyle = `--tier-color:${CareerApp.TIER_COLORS[route.levelKey] ?? 'var(--rm-muted, #6b7280)'}`;
     const islandsCount = new Set(route.stops.map((s) => s.split('/').at(0))).size;
     return html`<li class="reto ${active ? 'active' : ''}">
       <div class="reto-info">
@@ -4529,6 +4537,15 @@ export class CareerApp extends LitElement {
    * (x en % del hueco, y en px sobre el borde) elegidos a mano para que cada
    * nivel se lea de un vistazo (fila suelta → capa → montículo → desborde).
    */
+  /** Colores de los chips de hito del selector de retos (identidad del juego,
+   * cálido→frío con la cima en plata; SIN dependencia de la escala de
+   * lecturas subjetivas del tool Equipo). */
+  static TIER_COLORS = Object.freeze({
+    peritus: '#ffc53d',
+    veteranus: '#3b82f6',
+    magister: '#c7ccd1',
+  });
+
   static COIN_PILES = Object.freeze({
     empty: Object.freeze([]),
     low: Object.freeze([[34, 0], [50, 0], [42, 7]]),

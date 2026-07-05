@@ -2,24 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   ROUTE_TIER_KEYS,
   routeDocId,
-  tierKeyForLevelOrder,
+  tierKeyForRelativeOrder,
   suggestedTierKey,
   normalizeCareerRoute,
   groupRoutesByRole,
   islandOfStop,
   playerRouteDiscipline,
 } from './careerRoutes.js';
-
-/** Escala mínima de prueba (misma forma que LEVELS de la tool Equipo). */
-const SCALE = [
-  { key: 'tiro', order: 1 },
-  { key: 'novicius', order: 2 },
-  { key: 'peritus', order: 3 },
-  { key: 'expertus', order: 4 },
-  { key: 'veteranus', order: 5 },
-  { key: 'primus', order: 6 },
-  { key: 'magister', order: 7 },
-];
 
 /** Índice de islas de prueba (Bases con doc id 'island' y disciplina 'bases'). */
 const ISLANDS = [
@@ -51,39 +40,47 @@ describe('routeDocId', () => {
   });
 });
 
-describe('tierKeyForLevelOrder', () => {
-  it('mapea la escala a los tres hitos: 1-3 peritus, 4-5 veteranus, 6-7 magister', () => {
-    expect([1, 2, 3].map(tierKeyForLevelOrder)).toEqual(['peritus', 'peritus', 'peritus']);
-    expect([4, 5].map(tierKeyForLevelOrder)).toEqual(['veteranus', 'veteranus']);
-    expect([6, 7].map(tierKeyForLevelOrder)).toEqual(['magister', 'magister']);
-  });
-
-  it('fuera de escala no sugiere nada', () => {
-    expect(tierKeyForLevelOrder(0)).toBeNull();
-    expect(tierKeyForLevelOrder(8)).toBeNull();
-    expect(tierKeyForLevelOrder(2.5)).toBeNull();
-    expect(tierKeyForLevelOrder(Number.NaN)).toBeNull();
-  });
-});
-
 describe('suggestedTierKey', () => {
-  it('resuelve el objetivo por key de la escala', () => {
-    expect(suggestedTierKey('expertus', SCALE)).toBe('veteranus');
-    expect(suggestedTierKey('novicius', SCALE)).toBe('peritus');
-    expect(suggestedTierKey('magister', SCALE)).toBe('magister');
+  // careerTargetLevelId apunta SOLO a los niveles L del career framework; la
+  // escala de lecturas subjetivas (Tiro→Magister) no interviene en el juego.
+  const FRAMEWORK = [
+    { id: 'l1', order: 1 },
+    { id: 'l2', order: 2 },
+    { id: 'l3', order: 3 },
+    { id: 'l4', order: 4 },
+    { id: 'l5', order: 5 },
+    { id: 'l3tl', order: 3 },
+    { id: 'l4em', order: 4 },
+    { id: 'l5tl', order: 5 },
+  ];
+
+  it('resuelve los niveles L del framework por posición relativa', () => {
+    expect(suggestedTierKey('l1', FRAMEWORK)).toBe('peritus');
+    expect(suggestedTierKey('l2', FRAMEWORK)).toBe('peritus');
+    expect(suggestedTierKey('l3', FRAMEWORK)).toBe('veteranus');
+    expect(suggestedTierKey('l4', FRAMEWORK)).toBe('veteranus');
+    expect(suggestedTierKey('l5', FRAMEWORK)).toBe('magister');
   });
 
-  it('resuelve el objetivo por order numérico (string o número)', () => {
-    expect(suggestedTierKey('6', SCALE)).toBe('magister');
-    expect(suggestedTierKey(4, SCALE)).toBe('veteranus');
+  it('las variantes de track conservan el orden de su nivel (case-insensitive)', () => {
+    expect(suggestedTierKey('l3tl', FRAMEWORK)).toBe('veteranus');
+    expect(suggestedTierKey('L4EM', FRAMEWORK)).toBe('veteranus');
+    expect(suggestedTierKey('l5tl', FRAMEWORK)).toBe('magister');
   });
 
-  it('sin objetivo o con un id ajeno a la escala no sugiere nada', () => {
-    expect(suggestedTierKey(null, SCALE)).toBeNull();
-    expect(suggestedTierKey(undefined, SCALE)).toBeNull();
-    expect(suggestedTierKey('  ', SCALE)).toBeNull();
-    expect(suggestedTierKey('l3', SCALE)).toBeNull();
-    expect(suggestedTierKey('9', SCALE)).toBeNull();
+  it('sin objetivo, sin marco o con un id ajeno al marco no sugiere nada', () => {
+    expect(suggestedTierKey(null, FRAMEWORK)).toBeNull();
+    expect(suggestedTierKey(undefined, FRAMEWORK)).toBeNull();
+    expect(suggestedTierKey('  ', FRAMEWORK)).toBeNull();
+    expect(suggestedTierKey('peritus', FRAMEWORK)).toBeNull();
+    expect(suggestedTierKey('l3', [])).toBeNull();
+    expect(suggestedTierKey('l3')).toBeNull();
+  });
+
+  it('tierKeyForRelativeOrder acota entradas inválidas', () => {
+    expect(tierKeyForRelativeOrder(0, 5)).toBeNull();
+    expect(tierKeyForRelativeOrder(3, 0)).toBeNull();
+    expect(tierKeyForRelativeOrder(Number.NaN, 5)).toBeNull();
   });
 });
 
