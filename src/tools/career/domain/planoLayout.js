@@ -20,6 +20,12 @@
 export const PLANO_VIEW = 100;
 /** Margen del plano: separación mínima entre un círculo de isla y el borde. */
 export const PLANO_MARGIN = 4;
+/** Banda reservada BAJO cada círculo para su nombre (gap + fuente + descendentes). */
+export const LABEL_BAND = 4;
+/** Separación vertical entre el borde del círculo y la línea base del nombre. */
+export const LABEL_GAP = 3;
+/** Ancho estimado por carácter del nombre (fuente ~3px bold del plano). */
+export const LABEL_CHAR_W = 1.9;
 /** Radio mínimo de un círculo de isla (islas vacías siguen siendo visibles). */
 export const ISLAND_R_MIN = 6;
 /** Radio máximo de un círculo de isla (13 islas deben caber sin ahogarse). */
@@ -74,13 +80,15 @@ const islandRadius = (citiesTotal, { rMin = ISLAND_R_MIN, rMax = ISLAND_R_MAX, k
  * asigna radios acotados y separa DETERMINISTA los solapes (relajación por
  * pares: cada par solapado se empuja a partes iguales por la línea que une
  * sus centros; los coincidentes exactos se abren por el ángulo áureo del
- * índice del par — sin aleatoriedad, misma entrada → mismo layout).
+ * índice del par — sin aleatoriedad, misma entrada → mismo layout). El borde
+ * inferior reserva además la banda de la etiqueta (labelBand): el nombre se
+ * pinta BAJO el círculo y también debe caber en el viewBox (RMR-BUG-0014).
  * @param {ReadonlyArray<IslandRef>|null|undefined} islands
- * @param {{ view?: number, margin?: number, rMin?: number, rMax?: number, k?: number, gap?: number }} [opts]
+ * @param {{ view?: number, margin?: number, rMin?: number, rMax?: number, k?: number, gap?: number, labelBand?: number }} [opts]
  * @returns {IslandCircle[]}
  */
 export function islandCircles(islands, opts = {}) {
-  const { view = PLANO_VIEW, margin = PLANO_MARGIN, gap = ISLAND_GAP } = opts;
+  const { view = PLANO_VIEW, margin = PLANO_MARGIN, gap = ISLAND_GAP, labelBand = LABEL_BAND } = opts;
   const list = (islands ?? []).filter((isle) => isle && typeof isle.id === 'string');
   if (list.length === 0) return [];
 
@@ -90,19 +98,21 @@ export function islandCircles(islands, opts = {}) {
   const ys = list.map((isle) => Number(isle.y) || 0);
   const spanX = Math.max(...xs) - Math.min(...xs);
   const spanY = Math.max(...ys) - Math.min(...ys);
-  const norm = (value, min, span) =>
-    span === 0 ? view / 2 : pad + ((value - min) / span) * (view - 2 * pad);
+  const norm = (value, min, span, lo, hi) =>
+    span === 0 ? (lo + hi) / 2 : lo + ((value - min) / span) * (hi - lo);
 
   const circles = list.map((isle, i) => ({
     id: isle.id,
     name: isle.name ?? isle.id,
-    cx: norm(xs[i], Math.min(...xs), spanX),
-    cy: norm(ys[i], Math.min(...ys), spanY),
+    cx: norm(xs[i], Math.min(...xs), spanX, pad, view - pad),
+    cy: norm(ys[i], Math.min(...ys), spanY, pad, view - pad - labelBand),
     r: radii[i],
   }));
 
   // Relajación de solapes: empuja cada par solapado hasta que ninguno se toca
   // (o se agotan las pasadas: con el clamp al viewBox puede no caber todo).
+  // El clamp vertical respeta la banda de la etiqueta: ningún empuje puede
+  // dejar un círculo cuyo nombre quede fuera del lienzo por abajo.
   for (let pass = 0; pass < OVERLAP_PASSES; pass += 1) {
     let moved = false;
     for (let i = 0; i < circles.length; i += 1) {
@@ -113,11 +123,32 @@ export function islandCircles(islands, opts = {}) {
     }
     for (const c of circles) {
       c.cx = clamp(c.cx, c.r, view - c.r);
-      c.cy = clamp(c.cy, c.r, view - c.r);
+      c.cy = clamp(c.cy, c.r, view - c.r - labelBand);
     }
     if (!moved) break;
   }
   return circles;
+}
+
+/**
+ * Posición de la ETIQUETA (nombre) de un círculo de isla: centrada bajo el
+ * círculo, pero con la X clampada para que el texto ESTIMADO (chars × charW)
+ * no se salga del viewBox por los lados — el nombre puede ser bastante más
+ * ancho que su círculo («Engineering Manager» pegado al borde izquierdo).
+ * La Y cabe siempre gracias a la banda que reserva islandCircles; aun así se
+ * acota por si el círculo viene de otra fuente (modo single, datos legacy).
+ * @param {IslandCircle} circle
+ * @param {{ view?: number, gap?: number, charW?: number }} [opts]
+ * @returns {{ x: number, y: number, halfWidth: number }}
+ */
+export function islandLabel(circle, { view = PLANO_VIEW, gap = LABEL_GAP, charW = LABEL_CHAR_W } = {}) {
+  const name = String(circle.name ?? '');
+  const halfWidth = Math.min((name.length * charW) / 2, view / 2);
+  return {
+    x: clamp(circle.cx, halfWidth, view - halfWidth),
+    y: Math.min(circle.cy + circle.r + gap, view - 1),
+    halfWidth,
+  };
 }
 
 /**
