@@ -2803,6 +2803,17 @@ export class CareerApp extends LitElement {
     return islandOfStop(cityId, this.archipelago?.islands ?? []);
   }
 
+  /**
+   * Casa a la que apunta la brújula de a pie (JG-21): la SIGUIENTE parada del
+   * reto activo o, sin reto, la primera de la ruta libre aún sin certificar.
+   * El componente 3D solo la usa si está en la isla actual (las de otra isla
+   * no le casan y no molestan). @returns {string|null} */
+  get _guideCityId() {
+    if (this._challenge) return challengeProgress(this._challenge, this.journey).nextCityId;
+    const visited = new Set(this.journey?.visitedCities ?? []);
+    return (this.journey?.plannedRoute ?? []).find((id) => !visited.has(id)) ?? null;
+  }
+
   /** Isla de la SIGUIENTE parada del reto activo (adonde apunta el mapa del
    * mar), o null sin reto o completado. @returns {string|null} */
   _challengeTargetIsland() {
@@ -6267,19 +6278,23 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Navega a una casa prerequisito desde la tarjeta de una casa bloqueada
-   * (JG-2): la selecciona — el panel pasa a mostrar SU tarjeta — y, en vista
-   * aérea 3D, la cámara vuela hasta ella (focusCity). A pie la cámara no se
-   * mueve: la tarjeta del prerequisito y su resalte de selección (más su
-   * baliza coral si tiene el visado disponible) orientan al caminante. En la
-   * vista plana el mapa resalta la casa seleccionada.
+   * Navega a una casa (JG-21): el enlace LLEVA a la casa, no abre su tarjeta
+   * (que se abre al LLEGAR). En 3D a pie, autopiloto — el avatar camina solo
+   * hasta ella (walkToCity) y al chocar entra; en 3D aérea, la cámara vuela
+   * hasta ella (focusCity) sin abrir la tarjeta. En la vista plana no hay
+   * recorrido físico: se selecciona para resaltarla en el mapa.
    * @param {string} cityId
    */
   _goToPrereq(cityId) {
-    this.selected = cityId;
-    if (this.viewMode === '3d' && this.mode3d === 'aerial') {
-      this.renderRoot.querySelector('career-island-3d')?.focusCity(cityId);
+    if (this.viewMode !== '3d') {
+      this.selected = cityId;
+      return;
     }
+    // El enlace nunca abre la tarjeta: se cierra la actual y se navega.
+    this.selected = null;
+    const island = this.renderRoot.querySelector('career-island-3d');
+    if (this.mode3d === 'fps') island?.walkToCity(cityId);
+    else island?.focusCity(cityId);
   }
 
   /**
@@ -6606,6 +6621,7 @@ export class CareerApp extends LitElement {
               .carpoolStops=${this.carpoolStops}
               .challengeStops=${this._challenge3d}
               .routeStops=${this._route3d}
+              .guideCityId=${this._guideCityId}
               .overlayOpen=${Boolean(this.selected) ||
               this.showArchipelago ||
               this.showPlayerCard ||
