@@ -18,6 +18,8 @@
  *     (createdBy.uid == auth.uid, nunca como otro) y se une/sale con la
  *     máscara members/memberIds/status; nombre/ruta/aforo siguen siendo del
  *     creador o superadmin.
+ *  7. /careerRoutes (JG-14): el catálogo de rutas de rol y nivel lo lee
+ *     cualquier autenticado; solo lo escribe el superadmin.
  *
  * Uso (arranca el emulador, ejecuta y lo apaga):
  *   firebase emulators:exec --only firestore --project demo-grebla \
@@ -82,6 +84,14 @@ try {
       currentCity: null,
       plannedRoute: [],
       evidences: {},
+    });
+    await setDoc(doc(db, 'careerRoutes', 'backend-php--veteranus'), {
+      discipline: 'backend-php',
+      levelKey: 'veteranus',
+      name: 'Backend PHP · Veteranus',
+      description: 'Decide y anticipa.',
+      stops: ['bases~git', 'backend-php~php-8'],
+      active: true,
     });
     await setDoc(doc(db, 'carpools', 'cp1'), {
       name: 'Ruta Git',
@@ -283,7 +293,19 @@ try {
     assertFails(deleteDoc(doc(eng, 'carpools', 'cp1'))),
   );
 
-  console.log(`\n${passed} comprobaciones de reglas de JG-1/JG-6 pasadas.`);
+  console.log('Rutas de rol y nivel (/careerRoutes, JG-14):');
+  await check(
+    'cualquier autenticado LEE el catálogo de rutas',
+    assertSucceeds(getDoc(doc(eng, 'careerRoutes', 'backend-php--veteranus'))),
+  );
+  await check(
+    'nadie que no sea superadmin ESCRIBE una ruta (ni el vinculado)',
+    assertFails(
+      updateDoc(doc(eng, 'careerRoutes', 'backend-php--veteranus'), { stops: ['bases~git'] }),
+    ),
+  );
+
+  console.log(`\n${passed} comprobaciones de reglas de JG-1/JG-6/JG-14 pasadas.`);
 } finally {
   await env.cleanup();
 }
