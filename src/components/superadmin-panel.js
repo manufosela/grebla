@@ -38,8 +38,8 @@ function slugify(text) {
     .normalize('NFD').replaceAll(/\p{Diacritic}/gu, '')
     .toLowerCase().trim()
     .replaceAll(/[^a-z0-9]+/gu, '-')
-    .replace(/^-+/u, '')
-    .replace(/-+$/u, '');
+    .replace(/^-/u, '')
+    .replace(/-$/u, '');
 }
 
 /**
