@@ -24,9 +24,12 @@
  * @property {string} roleName
  * @property {Partial<Record<'peritus'|'veteranus'|'magister', RouteTier>>} tiers
  */
+import { ROUTE_TIERS as FRONTEND_ROUTE } from './frontend.js';
 import { ROUTE_TIERS as BACKEND_PHP_ROUTE } from './backend-php.js';
 import { ROUTE_TIERS as BACKEND_PYTHON_ROUTE } from './backend-python.js';
 import { ROUTE_TIERS as POSTGRES_ROUTE } from './postgres.js';
+import { ROUTE_TIERS as ANDROID_ROUTE } from './android.js';
+import { ROUTE_TIERS as IOS_ROUTE } from './ios.js';
 import { ROUTE_TIER_KEYS, routeDocId } from '../../domain/careerRoutes.js';
 
 /**
@@ -36,9 +39,12 @@ import { ROUTE_TIER_KEYS, routeDocId } from '../../domain/careerRoutes.js';
  * @type {Readonly<Record<string, RouteTiers>>}
  */
 export const CAREER_ROUTES = Object.freeze({
+  [FRONTEND_ROUTE.discipline]: FRONTEND_ROUTE,
   [BACKEND_PHP_ROUTE.discipline]: BACKEND_PHP_ROUTE,
   [BACKEND_PYTHON_ROUTE.discipline]: BACKEND_PYTHON_ROUTE,
   [POSTGRES_ROUTE.discipline]: POSTGRES_ROUTE,
+  [ANDROID_ROUTE.discipline]: ANDROID_ROUTE,
+  [IOS_ROUTE.discipline]: IOS_ROUTE,
 });
 
 /**
