@@ -30,6 +30,7 @@ import { stopNumberByCity } from '../../tools/career/domain/challenge.js';
 import { routeNumberByCity } from '../../tools/career/domain/route.js';
 import {
   islandCircles,
+  islandLabel,
   themeSpots,
   routePolyline,
   prefixIslandIndex,
@@ -133,6 +134,17 @@ export class CareerMapView extends LitElement {
     .stopbadge.free circle { fill: #f2b632; }
     .stopbadge.free.done circle { fill: #f8e3b0; }
     .stopbadge.free text { fill: #1e3a5f; }
+    .stopdot circle { stroke: var(--rm-surface, #fff); stroke-width: 0.14; pointer-events: none; }
+    .stopdot text {
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+    }
+    .stopdot.challenge circle { fill: #1e3a5f; }
+    .stopdot.challenge text { fill: #fff; }
+    .stopdot.free circle { fill: #f2b632; }
+    .stopdot.free text { fill: #1e3a5f; }
 
     .legend {
       display: flex;
@@ -281,13 +293,16 @@ export class CareerMapView extends LitElement {
       const action = expandedHere ? 'volver al archipiélago' : 'ampliar la isla';
       ariaLabel = `${circle.name}: ${action}`;
     }
+    // La etiqueta se clampa al viewBox con su ancho estimado: los nombres
+    // largos de islas pegadas a un borde no se cortan (RMR-BUG-0014).
+    const label = islandLabel(circle);
     const name =
       expandedHere && !lay.single
         ? nothing
         : svg`<text
             class="iname"
-            x=${circle.cx}
-            y=${circle.cy + circle.r + 3}
+            x=${label.x}
+            y=${label.y}
             text-anchor="middle"
           >${circle.name}</text>`;
     const themes = islandMap
@@ -351,15 +366,19 @@ export class CareerMapView extends LitElement {
   /**
    * La ruta que dibuja el «grafo»: el reto activo manda; sin reto, la ruta
    * libre. Sin ninguna de las dos, el plano queda limpio (solo círculos).
+   * A escala archipiélago los badges numerados se amontonan (23 paradas en
+   * una isla, RMR-BUG-0014): solo con la isla expandida —o en modo single—
+   * se pintan todos (`detailed`); si no, puntos pequeños + badge del SIGUIENTE.
    */
   _renderRoute(lay, ui) {
+    const detailed = lay.single || Boolean(this.expanded);
     const challenge = this.journey?.challenge ?? null;
     if (challenge?.stops?.length) {
-      return this._renderRouteLayer(challenge.stops, 'challenge', stopNumberByCity(challenge), lay, ui);
+      return this._renderRouteLayer(challenge.stops, 'challenge', stopNumberByCity(challenge), lay, ui, detailed);
     }
     const planned = this.journey?.plannedRoute ?? [];
     if (planned.length) {
-      return this._renderRouteLayer(planned, 'free', routeNumberByCity(planned), lay, ui);
+      return this._renderRouteLayer(planned, 'free', routeNumberByCity(planned), lay, ui, detailed);
     }
     return null;
   }
@@ -371,17 +390,19 @@ export class CareerMapView extends LitElement {
   }
 
   /**
-   * Polilínea de una ruta con badges numerados: línea con «casing» (lomo del
-   * color de superficie, legible sobre el mar en claro y oscuro), guiones en
-   * la ruta libre, número de parada en cada badge y ✓ en las ya certificadas.
+   * Polilínea de una ruta: línea con «casing» (lomo del color de superficie,
+   * legible sobre el mar en claro y oscuro) y guiones en la ruta libre. Con
+   * `detailed` (isla expandida o modo single) cada parada lleva su badge
+   * numerado; a escala archipiélago solo lo lleva la SIGUIENTE y el resto
+   * son puntos pequeños del color de la ruta (✓ diminuto si certificada).
    */
-  _renderRouteLayer(stops, kind, numberByCity, lay, ui) {
+  _renderRouteLayer(stops, kind, numberByCity, lay, ui, detailed) {
     const { points } = routePolyline(stops, lay.spotsById, lay.circlesById, {
       islandIdByPrefix: lay.islandIdByPrefix,
     });
     if (points.length === 0) return null;
     const visited = new Set(this.journey?.visitedCities ?? []);
-    const nextId = kind === 'challenge' ? stops.find((id) => !visited.has(id)) : null;
+    const nextId = stops.find((id) => !visited.has(id)) ?? null;
     const path = points.map((p) => `${p.x},${p.y}`).join(' ');
     const dash = kind === 'free' ? `${2 * ui} ${1.3 * ui}` : nothing;
     return svg`
@@ -391,15 +412,42 @@ export class CareerMapView extends LitElement {
         ${points.map((p) => {
           const done = visited.has(p.cityId);
           const state = CareerMapView._stopState(done, p.cityId, nextId);
-          return svg`
-            <g class="stopbadge ${kind} ${state}">
-              <circle cx=${p.x} cy=${p.y} r=${1.7 * ui} />
-              <text x=${p.x} y=${p.y} style="font-size:${(done ? 1.8 : 2) * ui}px">
-                ${done ? '✓' : (numberByCity.get(p.cityId) ?? '·')}
-              </text>
-            </g>
-          `;
+          const asBadge = detailed || state === 'next';
+          return asBadge
+            ? this._renderStopBadge(p, kind, state, numberByCity, ui)
+            : this._renderStopDot(p, kind, done, ui);
         })}
+      </g>
+    `;
+  }
+
+  /** Badge numerado de una parada (✓ si certificada) — escala de detalle. */
+  _renderStopBadge(point, kind, state, numberByCity, ui) {
+    const done = state === 'done';
+    const glyph = done ? '✓' : (numberByCity.get(point.cityId) ?? '·');
+    const fontSize = (done ? 1.8 : 2) * ui;
+    return svg`
+      <g class="stopbadge ${kind} ${state}">
+        <circle cx=${point.x} cy=${point.y} r=${1.7 * ui} />
+        <text x=${point.x} y=${point.y} style="font-size:${fontSize}px">${glyph}</text>
+      </g>
+    `;
+  }
+
+  /**
+   * Punto pequeño de parada a escala archipiélago: relleno del color de la
+   * ruta y ✓ diminuto si certificada — los números individuales solo se ven
+   * al expandir la isla, donde caben sin amontonarse (RMR-BUG-0014).
+   */
+  _renderStopDot(point, kind, done, ui) {
+    const markSize = 1.2 * ui;
+    const mark = done
+      ? svg`<text x=${point.x} y=${point.y} style="font-size:${markSize}px">✓</text>`
+      : nothing;
+    return svg`
+      <g class="stopdot ${kind}">
+        <circle cx=${point.x} cy=${point.y} r=${0.75 * ui} />
+        ${mark}
       </g>
     `;
   }
