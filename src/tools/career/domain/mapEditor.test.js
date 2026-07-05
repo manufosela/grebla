@@ -7,6 +7,7 @@ import {
   activeCitiesTotal,
   CITY_WEIGHT_MIN,
   CITY_WEIGHT_MAX,
+  CITY_SUMMARY_MIN_LENGTH,
 } from './mapEditor.js';
 
 /** Casa mínima válida para la isla de pruebas. */
@@ -105,6 +106,23 @@ describe('validateCity', () => {
     expect(errors).toContain('"demo/zz" no existe');
     expect(errors).toContain('duplicados');
     expect(errors).toContain('sí misma');
+  });
+
+  it('acepta el resumen didáctico opcional (JG-18): sin él o con uno largo, sin avisos', () => {
+    expect(validateCity(city('demo/x'), island()).warnings).toEqual([]);
+    const summary = 'Git es el control de versiones que usarás a diario: guarda la historia del código y permite colaborar sin pisaros.';
+    expect(validateCity(city('demo/x', { summary }), island())).toEqual({ errors: [], warnings: [] });
+  });
+
+  it(`AVISA (sin error) cuando el resumen tiene menos de ${CITY_SUMMARY_MIN_LENGTH} caracteres`, () => {
+    const check = validateCity(city('demo/x', { summary: 'Muy corto.' }), island());
+    expect(check.errors).toEqual([]);
+    expect(check.warnings.join(' ')).toContain('muy corto');
+  });
+
+  it('rechaza un resumen que no sea texto', () => {
+    const check = validateCity(city('demo/x', { summary: 42 }), island());
+    expect(check.errors.join(' ')).toContain('debe ser un texto');
   });
 
   it('detecta el ciclo que crearía editar una casa existente', () => {

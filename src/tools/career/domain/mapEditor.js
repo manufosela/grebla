@@ -100,6 +100,33 @@ function cityAttributeErrors(city, areas) {
   return errors;
 }
 
+/** Longitud mínima orientativa del resumen didáctico de la casa (JG-18). */
+export const CITY_SUMMARY_MIN_LENGTH = 80;
+
+/**
+ * Revisión del resumen didáctico «¿Qué es?» de la casa (JG-18). El campo es
+ * OPCIONAL: sin él la tarjeta pinta su placeholder. Si viene, debe ser un
+ * texto; uno demasiado corto solo AVISA (decisión editorial, no corrupción).
+ * @param {City} city
+ * @returns {EditorCheck}
+ */
+function citySummaryCheck(city) {
+  const summary = city?.summary;
+  if (summary === undefined) return { errors: [], warnings: [] };
+  if (typeof summary !== 'string') {
+    return { errors: ['El resumen «¿Qué es?» debe ser un texto.'], warnings: [] };
+  }
+  if (summary.trim().length < CITY_SUMMARY_MIN_LENGTH) {
+    return {
+      errors: [],
+      warnings: [
+        `El resumen «¿Qué es?» es muy corto (menos de ${CITY_SUMMARY_MIN_LENGTH} caracteres): cuenta qué es y para qué sirve.`,
+      ],
+    };
+  }
+  return { errors: [], warnings: [] };
+}
+
 /** Errores de los prereqs de la casa (existencia, sin duplicados, sin ciclos).
  * @param {City} city @param {ReadonlyArray<City>} others @returns {string[]} */
 function cityPrereqErrors(city, others) {
@@ -129,12 +156,14 @@ function cityPrereqErrors(city, others) {
 export function validateCity(city, island) {
   const others = island?.cities ?? [];
   const areas = island?.areas ?? [];
+  const summaryCheck = citySummaryCheck(city);
   const errors = [
     ...cityIdentityErrors(city, others),
     ...cityAttributeErrors(city, areas),
     ...cityPrereqErrors(city, others),
+    ...summaryCheck.errors,
   ];
-  return { errors, warnings: [] };
+  return { errors, warnings: summaryCheck.warnings };
 }
 
 /**

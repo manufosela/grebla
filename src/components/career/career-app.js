@@ -29,16 +29,17 @@
  * dibujadas con nombre en tinta de mapa y una ✗ ROJA sobre la isla actual.
  *
  * En el modo 3D (MC-6) el detalle es la TARJETA DE LA CASA overlay sobre el
- * canvas (lateral en escritorio, hoja inferior en móvil). Desde MC-15 la
- * tarjeta se organiza en TRES PESTAÑAS (tablist ARIA, estado local, ←/→):
- * «Certificado» (insignia de estado — completar una casa = certificado; la
- * ciudadanía es de la ISLA, MC-20 —, prereqs que faltan, acciones y
- * evidencias), «Qué aprender» (keyPoints con checks + bloque destacado
- * «🤖 Con IA» con el aiFocus) y «Recursos» (resources agrupados por tipo, con
- * fallback a las recommendations legadas). Los renders se COMPARTEN con el
- * detalle de la vista plana (sin duplicar lógica). El zoom al hacer clic lo
- * anima <career-island-3d> por sí solo; aquí solo se invoca `focusOverview()`
- * desde el botón «Isla completa».
+ * canvas (lateral en escritorio, hoja inferior en móvil). Desde JG-18 la
+ * tarjeta es DIDÁCTICA: una sola tarjeta scrolleable sin pestañas, con el
+ * badge de estado en la cabecera junto al título (completar una casa =
+ * certificado; la ciudadanía es de la ISLA, MC-20) y el recorrido de lectura
+ * «¿Qué es?» (summary) → «Qué aprenderás» (keyPoints con checks) → «🤖 En la
+ * era IA» (aiFocus) → «Recursos para el viaje» (plegados, con fallback a las
+ * recommendations legadas) → «El certificado» (el flujo explicado ANTES del
+ * botón; prereqs navegables si está bloqueada, JG-2). Los renders se
+ * COMPARTEN con el detalle de la vista plana (sin duplicar lógica). El zoom
+ * al hacer clic lo anima <career-island-3d> por sí solo; aquí solo se invoca
+ * `focusOverview()` desde el botón «Isla completa».
  *
  * Evidencias (MC-8): las listas (formaciones, cursos) se editan como CHIPS con
  * ✕ para quitar y un input con botón «+» (o Enter) para añadir de una en una —
@@ -307,24 +308,8 @@ const PIRATE_SHIP_SVG = html`<svg viewBox="0 0 64 44" aria-hidden="true">
 </svg>`;
 
 /**
- * Pestañas de la tarjeta de la casa (MC-15): estado/acciones del certificado,
- * qué aprender (con lente IA) y recursos. Patrón ARIA tablist con roving
- * tabindex, como <engineer-space>, pero con estado LOCAL (la pestaña muere con
- * el panel: no toca location.hash).
- * @type {ReadonlyArray<'certificado'|'aprender'|'recursos'>}
- */
-const CITY_TABS = ['certificado', 'aprender', 'recursos'];
-
-/** Etiquetas de la barra de pestañas de la tarjeta. @type {Record<typeof CITY_TABS[number], string>} */
-const CITY_TAB_LABELS = {
-  certificado: 'Certificado',
-  aprender: 'Qué aprender',
-  recursos: 'Recursos',
-};
-
-/**
  * Metadatos de cada tipo de recurso (MC-15): icono y título del grupo en la
- * pestaña «Recursos». El orden del objeto es el orden de pintado.
+ * sección «Recursos para el viaje». El orden del objeto es el orden de pintado.
  * @type {Record<import('../../tools/career/domain/types.js').ResourceKind, { icon: string, title: string }>}
  */
 const RESOURCE_GROUPS = {
@@ -375,7 +360,6 @@ export class CareerApp extends LitElement {
     error: { state: true },
     journey: { state: true },
     selected: { state: true },
-    cityTab: { state: true },
     loading: { state: true },
     map: { state: true },
     viewMode: { state: true },
@@ -1487,6 +1471,33 @@ export class CareerApp extends LitElement {
     .ctabpanel { outline: none; }
     .ctabpanel:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 8px; }
     .placeholder { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; margin: 0.4rem 0 0; }
+    /* ── Tarjeta de casa DIDÁCTICA (JG-18): secciones apiladas en orden de
+       lectura (¿qué es? → aprender → IA → recursos → certificado), con
+       separadores sutiles. h4 = título de sección, h5 = subgrupo. ── */
+    .cardsec { margin: 0.9rem 0 0; padding-top: 0.9rem; border-top: 1px solid var(--rm-border, #e5e7eb); }
+    .cardsec:first-of-type { margin-top: 0.6rem; border-top: none; padding-top: 0; }
+    .cardsec > h4 { margin: 0 0 0.4rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 800; }
+    .summary { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--rm-text, #111827); }
+    /* Badge-sello de estado en la CABECERA (JG-18): separado de los botones. */
+    .headbadge {
+      display: inline-block;
+      margin-top: 0.4rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      padding: 0.16rem 0.6rem;
+      border-radius: 999px;
+      border: 1.5px solid currentColor;
+    }
+    .headbadge.visited { color: var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 16%, transparent); }
+    .headbadge.available { color: #b26a00; background: color-mix(in srgb, #f2887a 22%, transparent); }
+    .headbadge.blocked { color: var(--rm-muted, #6b7280); background: color-mix(in srgb, var(--rm-muted, #6b7280) 14%, transparent); }
+    .headbadge.deprecated { color: var(--rm-danger, #dc2626); text-decoration: line-through; }
+    /* Sección final del certificado: el flujo explicado antes del botón. */
+    .certflow { margin: 0 0 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--rm-muted, #6b7280); }
+    .ressec > summary { cursor: pointer; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 800; }
+    .ressec .resgroup { margin-top: 0.55rem; }
+    .ressec h5 { margin: 0 0 0.25rem; font-size: 0.8rem; color: var(--rm-navy, #1e3a5f); }
     /* Pestaña «Qué aprender»: puntos con check visual y bloque destacado IA. */
     .keypoints { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.85rem; }
     .keypoints li { display: flex; gap: 0.45rem; align-items: baseline; }
@@ -1866,9 +1877,6 @@ export class CareerApp extends LitElement {
     this.error = '';
     this.journey = { visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} };
     this.selected = null;
-    // Pestaña activa de la tarjeta de la casa (MC-15). Cada casa se abre por
-    // la pestaña «Certificado» (se resetea al seleccionar otra ciudad).
-    this.cityTab = 'certificado';
     this.loading = false;
     /** @type {import('../../tools/career/domain/types.js').CareerMap|null} */
     this.map = null;
@@ -2474,7 +2482,6 @@ export class CareerApp extends LitElement {
 
   _onSelect(event) {
     this.selected = event.detail.cityId;
-    this.cityTab = 'certificado'; // cada casa se abre por su pestaña Certificado (MC-15)
     this.teammatePopover = null; // la tarjeta de la casa releva al mini-resumen
     this.routePicker = null; // el selector «¿Dónde?» era de otra casa (JG-9)
   }
@@ -5991,7 +5998,10 @@ export class CareerApp extends LitElement {
             <button class="primary" @click=${() => this._act('toggle')}>
               ${visited.includes(sel.id) ? 'Retirar el certificado' : 'Obtener certificado'}
             </button>
-            <button @click=${() => this._act('current')}>Marcar como casa actual</button>
+            <button
+              title="La fija como tu objetivo: el juego te la señala en el mapa y el minimapa"
+              @click=${() => this._act('current')}
+            >🎯 Centrarme en esta casa</button>
           `}
       ${inRoute
         ? html`<button @click=${() => this._act('route')}>Quitar de la ruta</button>`
@@ -6043,82 +6053,58 @@ export class CareerApp extends LitElement {
     }));
   }
 
-  /** Activa una pestaña de la tarjeta. @param {typeof CITY_TABS[number]} tab */
-  _setCityTab(tab) {
-    this.cityTab = tab;
-  }
-
   /**
-   * Teclado de la barra de pestañas de la tarjeta (patrón ARIA tablist con
-   * activación automática, como <engineer-space>): ←/→ circulan, Home/End
-   * saltan a los extremos y el foco sigue a la pestaña activada.
-   * @param {KeyboardEvent} e
-   */
-  _onCityTabsKeydown(e) {
-    const i = CITY_TABS.indexOf(this.cityTab);
-    let next = i;
-    if (e.key === 'ArrowLeft') next = (i - 1 + CITY_TABS.length) % CITY_TABS.length;
-    else if (e.key === 'ArrowRight') next = (i + 1) % CITY_TABS.length;
-    else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = CITY_TABS.length - 1;
-    else return;
-    e.preventDefault();
-    e.stopPropagation(); // que las flechas no lleguen al canvas (movería el avatar)
-    const tab = CITY_TABS[next];
-    this._setCityTab(tab);
-    this.updateComplete.then(() => {
-      /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#citytab-${tab}`))?.focus();
-    });
-  }
-
-  /**
-   * Barra de pestañas de la tarjeta (roving tabindex: solo la activa tabula).
-   * Compartida por el panel overlay del 3D y el detalle de la vista plana.
-   */
-  _renderCityTabBar() {
-    return html`<div class="ctabs" role="tablist" aria-label="Secciones de la tarjeta" @keydown=${this._onCityTabsKeydown}>
-      ${CITY_TABS.map((tab) => {
-        const selected = this.cityTab === tab;
-        return html`<button
-          id="citytab-${tab}"
-          class="ctab ${selected ? 'active' : ''}"
-          type="button"
-          role="tab"
-          aria-selected=${selected ? 'true' : 'false'}
-          aria-controls="citypanel-${tab}"
-          tabindex=${selected ? '0' : '-1'}
-          @click=${() => this._setCityTab(tab)}
-        >${CITY_TAB_LABELS[tab]}</button>`;
-      })}
-    </div>`;
-  }
-
-  /**
-   * Pestaña «Certificado» (default): insignias de estado, acciones del journey
-   * y evidencias (chips). En una casa BLOQUEADA (JG-2) no hay CTA imposible:
+   * Sección FINAL «El certificado» (JG-18): EXPLICA el flujo antes de ofrecer
+   * el botón — declarar el certificado, aportar una evidencia opcional y el
+   * aval del manager (JG-6). En una casa BLOQUEADA (JG-2) no hay CTA imposible:
    * en su lugar, el bloque «Para entrar necesitas» lista sus prerequisitos
    * con su estado y los pendientes son botones que navegan a esa casa.
    * @param {import('../../tools/career/domain/types.js').City} sel
    */
   _renderCityCertificate(sel) {
-    const map = this._selectedMap;
-    const st = cityStatus(map, sel.id, this.journey);
-    const status = st === 'unknown' ? 'blocked' : st;
+    const status = this._cityCardStatus(sel);
+    const blocked = status === 'blocked';
     const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
     const isCurrent = this.journey.currentCity === sel.id;
-    const blocked = status === 'blocked';
-    return html`
-      <div class="badges">
-        <span class="badge ${status}">${CareerApp.STATUS_BADGES[status]}</span>
-        ${isCurrent ? html`<span class="badge current">Actual</span>` : null}
-        ${inRoute ? html`<span class="badge route">En ruta</span>` : null}
-      </div>
-      ${this._renderEndorsement(sel, status === 'visited')}
+    return html`<section class="cardsec certsec">
+      <h4>El certificado</h4>
+      ${status === 'available'
+        ? html`<p class="certflow">Cuando domines lo de arriba, declara tu certificado. Puedes aportar una evidencia (enlace o nota) y tu manager podrá avalarlo ⭐.</p>`
+        : null}
       ${blocked ? this._renderBlockedPrereqs(sel) : null}
+      ${this._renderEndorsement(sel, status === 'visited')}
+      ${isCurrent || inRoute
+        ? html`<div class="badges">
+            ${isCurrent ? html`<span class="badge current">Actual</span>` : null}
+            ${inRoute ? html`<span class="badge route">En ruta</span>` : null}
+          </div>`
+        : null}
       ${this._renderCityActions(sel, blocked)}
       ${this._renderEvidencePrompt(sel)}
       ${this._renderCityEvidences(sel)}
-    `;
+    </section>`;
+  }
+
+  /**
+   * Estado de juego de la casa para la tarjeta (JG-18): el de cityStatus con
+   * el desconocido plegado a bloqueada (misma casuística que el badge).
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   * @returns {'visited'|'available'|'blocked'|'deprecated'}
+   */
+  _cityCardStatus(sel) {
+    const st = cityStatus(this._selectedMap, sel.id, this.journey);
+    return st === 'unknown' ? 'blocked' : st;
+  }
+
+  /**
+   * Badge-sello del estado de la casa en la CABECERA de la tarjeta (JG-18),
+   * junto al título y separado de cualquier botón — antes se pintaba mezclado
+   * con las acciones y lo primero que se veía era el CTA.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderCityStatusBadge(sel) {
+    const status = this._cityCardStatus(sel);
+    return html`<span class="badge headbadge ${status}">${CareerApp.STATUS_BADGES[status]}</span>`;
   }
 
   /**
@@ -6288,104 +6274,123 @@ export class CareerApp extends LitElement {
    */
   _goToPrereq(cityId) {
     this.selected = cityId;
-    this.cityTab = 'certificado';
     if (this.viewMode === '3d' && this.mode3d === 'aerial') {
       this.renderRoot.querySelector('career-island-3d')?.focusCity(cityId);
     }
   }
 
   /**
-   * Pestaña «Qué aprender» (MC-15): puntos fundamentales con check visual y el
-   * bloque destacado «🤖 Con IA» (aiFocus: qué hace la IA por ti y dónde
-   * profundizar tú). Sin contenido todavía → «Contenido en preparación».
+   * Sección «¿Qué es?» (JG-18): el resumen didáctico de la casa — lo PRIMERO
+   * que se lee, para saber a qué te enfrentas antes de nada. Sin summary aún,
+   * un placeholder honesto en vez de dejar el hueco mudo.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderCityWhat(sel) {
+    const summary = (sel.summary ?? '').trim();
+    return html`<section class="cardsec whatsec">
+      <h4>¿Qué es?</h4>
+      ${summary
+        ? html`<p class="summary">${summary}</p>`
+        : html`<p class="placeholder">Resumen en preparación.</p>`}
+    </section>`;
+  }
+
+  /**
+   * Sección «Qué aprenderás» (JG-18): los puntos fundamentales con check
+   * visual (keyPoints). Se oculta entera si la casa aún no tiene ninguno.
    * @param {import('../../tools/career/domain/types.js').City} sel
    */
   _renderCityLearn(sel) {
     const points = sel.keyPoints ?? [];
-    const focus = sel.aiFocus ?? '';
-    if (!points.length && !focus) {
-      return html`<p class="placeholder">Contenido en preparación.</p>`;
-    }
-    return html`
-      ${points.length
-        ? html`<ul class="keypoints">
-            ${points.map((p) => html`<li><span class="tick" aria-hidden="true">✔</span><span>${p}</span></li>`)}
-          </ul>`
-        : null}
-      ${focus
-        ? html`<div class="aifocus">
-            <h4>🤖 Con IA</h4>
-            <p>${focus}</p>
-          </div>`
-        : null}
-    `;
+    if (!points.length) return null;
+    return html`<section class="cardsec">
+      <h4>Qué aprenderás</h4>
+      <ul class="keypoints">
+        ${points.map(
+          (p) => html`<li><span class="tick" aria-hidden="true">✔</span><span>${p}</span></li>`,
+        )}
+      </ul>
+    </section>`;
   }
 
   /**
-   * Pestaña «Recursos» (MC-15): recursos agrupados por tipo con su icono
-   * (🎓 curso, ✍️ post, 📚 libro con etiqueta papel/online, 📄 doc) y enlace
-   * cuando tienen url. Sin recursos ni recommendations → «Sin recursos todavía».
+   * Sección «🤖 En la era IA» (JG-18): la lente de IA de la casa (aiFocus).
+   * Se oculta si no la tiene.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderCityAiFocus(sel) {
+    const focus = (sel.aiFocus ?? '').trim();
+    if (!focus) return null;
+    return html`<section class="aifocus">
+      <h4>🤖 En la era IA</h4>
+      <p>${focus}</p>
+    </section>`;
+  }
+
+  /**
+   * Sección «Recursos para el viaje» (JG-18): recursos agrupados por tipo con
+   * su icono y enlace. Van dentro de un <details> PLEGADO (la tarjeta no debe
+   * hacerse eterna) con el conteo en el summary. Se oculta si no hay ninguno.
    * @param {import('../../tools/career/domain/types.js').City} sel
    */
   _renderCityResources(sel) {
     const resources = this._cityResources(sel);
-    if (!resources.length) return html`<p class="placeholder">Sin recursos todavía.</p>`;
+    if (!resources.length) return null;
     const groups = Object.entries(RESOURCE_GROUPS)
       .map(([kind, meta]) => ({ meta, items: resources.filter((r) => r.kind === kind) }))
       .filter((g) => g.items.length);
-    return html`${groups.map(
-      ({ meta, items }) => html`<div class="resgroup">
-        <h4>${meta.icon} ${meta.title}</h4>
-        <ul class="res">
-          ${items.map(
-            (r) => html`<li>
-              ${r.url ? html`<a href=${r.url} target="_blank" rel="noopener">${r.label}</a>` : html`<span>${r.label}</span>`}
-              ${r.format ? html`<span class="fmt">${r.format}</span>` : null}
-            </li>`,
-          )}
-        </ul>
-      </div>`,
-    )}`;
+    return html`<details class="cardsec ressec">
+      <summary>Recursos para el viaje (${resources.length})</summary>
+      ${groups.map(
+        ({ meta, items }) => html`<div class="resgroup">
+          <h5>${meta.icon} ${meta.title}</h5>
+          <ul class="res">
+            ${items.map(
+              (r) => html`<li>
+                ${r.url ? html`<a href=${r.url} target="_blank" rel="noopener">${r.label}</a>` : html`<span>${r.label}</span>`}
+                ${r.format ? html`<span class="fmt">${r.format}</span>` : null}
+              </li>`,
+            )}
+          </ul>
+        </div>`,
+      )}
+    </details>`;
   }
 
   /**
-   * Panel lateral de la vista plano con la tarjeta del tema seleccionado:
-   * cabecera (comarca · tipo · puntos), pestañas y prerequisitos si aplican.
+   * Cuerpo DIDÁCTICO de la tarjeta de casa (JG-18): una sola tarjeta
+   * scrolleable, sin pestañas que escondan el contenido tras el botón. Orden:
+   * ¿Qué es? → Qué aprenderás → En la era IA → Recursos (plegados) → El
+   * certificado (el flujo explicado y el botón AL FINAL). COMPARTIDA por el
+   * overlay del 3D y la vista plana.
+   * @param {import('../../tools/career/domain/types.js').City} sel
    */
-  _renderPlanoPanel(sel, selAreaName, selMap) {
-    const area = selAreaName ? html`${selAreaName} · ` : null;
-    const showPrereqs =
-      (sel.prereqs ?? []).length && cityStatus(selMap, sel.id, this.journey) !== 'blocked';
+  _renderCityBody(sel) {
     return html`
-      <h3>${sel.name}</h3>
-      <p class="kind">${area}${sel.kind} · ${sel.weight} pts</p>
-      ${this._renderCityTabs(sel)}
-      ${showPrereqs
-        ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => selMap.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
-        : null}
+      ${this._renderCityWhat(sel)}
+      ${this._renderCityLearn(sel)}
+      ${this._renderCityAiFocus(sel)}
+      ${this._renderCityResources(sel)}
+      ${this._renderCityCertificate(sel)}
     `;
   }
 
   /**
-   * Tarjeta de la casa en pestañas (MC-15): barra tablist + el panel de la
-   * pestaña activa. COMPARTIDA por el overlay del 3D y la vista plana.
-   * @param {import('../../tools/career/domain/types.js').City} sel
+   * Panel lateral de la vista plano con la tarjeta del tema seleccionado:
+   * cabecera (comarca · tipo · puntos) con el badge de estado, y el cuerpo
+   * didáctico compartido.
    */
-  _renderCityTabs(sel) {
-    const content = {
-      certificado: () => this._renderCityCertificate(sel),
-      aprender: () => this._renderCityLearn(sel),
-      recursos: () => this._renderCityResources(sel),
-    }[this.cityTab]();
+  _renderPlanoPanel(sel, selAreaName) {
+    const area = selAreaName ? html`${selAreaName} · ` : null;
     return html`
-      ${this._renderCityTabBar()}
-      <div
-        id="citypanel-${this.cityTab}"
-        class="ctabpanel"
-        role="tabpanel"
-        aria-labelledby="citytab-${this.cityTab}"
-        tabindex="0"
-      >${content}</div>
+      <div class="cityhead">
+        <div>
+          <h3>${sel.name}</h3>
+          <p class="kind">${area}${sel.kind} · ${sel.weight} pts</p>
+        </div>
+        ${this._renderCityStatusBadge(sel)}
+      </div>
+      ${this._renderCityBody(sel)}
     `;
   }
 
@@ -6484,9 +6489,9 @@ export class CareerApp extends LitElement {
   });
 
   /**
-   * Tarjeta de la casa overlay del modo 3D (MC-15): título con el nombre de la
-   * ciudad, subtítulo de comarca y las TRES pestañas (Certificado / Qué
-   * aprender / Recursos) — el mismo render de tabs que la vista plana.
+   * Tarjeta de la casa overlay del modo 3D (JG-18): cabecera con nombre,
+   * comarca · tipo · puntos y el BADGE de estado (separado del cierre), y el
+   * cuerpo didáctico compartido con la vista plana.
    * @param {import('../../tools/career/domain/types.js').City} sel
    */
   _renderCityPanel(sel) {
@@ -6502,10 +6507,11 @@ export class CareerApp extends LitElement {
         <div>
           <h3>${sel.name}</h3>
           <p class="kind">${areaName ? html`${areaName} · ` : null}${sel.kind} · ${sel.weight} pts</p>
+          ${this._renderCityStatusBadge(sel)}
         </div>
         <button class="close" aria-label="Cerrar panel" title="Cerrar (Esc)" @click=${this._closeCityPanel}>✕</button>
       </header>
-      ${this._renderCityTabs(sel)}
+      ${this._renderCityBody(sel)}
     </aside>`;
   }
 
@@ -6655,8 +6661,8 @@ export class CareerApp extends LitElement {
 
         <div class="panel">
           ${sel
-            ? this._renderPlanoPanel(sel, selAreaName, selMap)
-            : html`<p class="hint">Haz clic en una casa de la isla para ver su tarjeta: certificado, qué aprender y recursos.</p>`}
+            ? this._renderPlanoPanel(sel, selAreaName)
+            : html`<p class="hint">Haz clic en una casa de la isla para ver su tarjeta: qué es, qué aprenderás y cómo certificarte.</p>`}
           <details class="legend-wrap">
             <summary>Leyenda</summary>
             <div class="legend">

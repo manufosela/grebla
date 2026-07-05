@@ -4,7 +4,9 @@
  * Carrera deja de cambiarse solo por seeds. Dos pestañas:
  *
  *  - 🏝️ Islas: casas de cada isla del archipiélago (alta, edición y borrado
- *    con todos los campos MC-15: prereqs, keyPoints, aiFocus, recursos). Al
+ *    con todos los campos MC-15 más el resumen didáctico JG-18: prereqs,
+ *    summary, keyPoints, aiFocus, recursos — las etiquetas del formulario
+ *    calcan las secciones de la tarjeta de casa). Al
  *    guardar se sobrescribe el doc /careerMap/{islandId} y, si cambia el nº
  *    de casas no deprecadas, se actualiza `citiesTotal` en _archipelago.
  *  - 🗺️ Rutas: itinerarios de rol y nivel (/careerRoutes, JG-14) agrupados
@@ -77,6 +79,7 @@ function cityDraft(city, discipline) {
       x: '50',
       y: '50',
       prereqs: [],
+      summary: '',
       keyPoints: '',
       aiFocus: '',
       resources: [],
@@ -92,6 +95,7 @@ function cityDraft(city, discipline) {
     x: String(city.x),
     y: String(city.y),
     prereqs: [...(city.prereqs ?? [])],
+    summary: city.summary ?? '',
     keyPoints: (city.keyPoints ?? []).join('\n'),
     aiFocus: city.aiFocus ?? '',
     // El formato de los libros no se edita aquí pero se conserva (no se pierde
@@ -118,6 +122,10 @@ function draftToCity(draft) {
     prereqs: [...draft.prereqs],
   };
   if (draft.deprecated) city.deprecated = true;
+  // Como aiFocus: el resumen vacío se OMITE (no se guarda un '' que la
+  // tarjeta tendría que distinguir del «sin resumen»).
+  const summary = draft.summary.trim();
+  if (summary) city.summary = summary;
   const keyPoints = draft.keyPoints.split('\n').map((p) => p.trim()).filter(Boolean);
   if (keyPoints.length) city.keyPoints = keyPoints;
   const aiFocus = draft.aiFocus.trim();
@@ -697,6 +705,9 @@ export class GameEditor extends LitElement {
     const idLocked = originalId !== null;
     const heading = originalId === null ? 'Añadir casa' : `Editar «${originalId}»`;
     const others = island.cities.filter((c) => c.id !== originalId);
+    // Avisos EN VIVO (no bloquean el guardado), como en el formulario de ruta:
+    // hoy, el resumen didáctico demasiado corto (JG-18).
+    const { warnings } = validateCity(draftToCity(draft), { areas: island.areas, cities: others });
     return html`
       <section>
         <h2>${heading}</h2>
@@ -751,18 +762,23 @@ export class GameEditor extends LitElement {
             </select>
           </div>
           <div class="field field-wide">
-            <label for="c-keypoints">Puntos fundamentales (uno por línea)</label>
+            <label for="c-summary">¿Qué es? (resumen didáctico)</label>
+            <textarea id="c-summary" .value=${draft.summary} @input=${(e) => this._setCityField('summary', e.target.value)}></textarea>
+          </div>
+          <div class="field field-wide">
+            <label for="c-keypoints">Qué aprenderás (uno por línea)</label>
             <textarea id="c-keypoints" .value=${draft.keyPoints} @input=${(e) => this._setCityField('keyPoints', e.target.value)}></textarea>
           </div>
           <div class="field field-wide">
-            <label for="c-aifocus">Lente era-IA (aiFocus)</label>
+            <label for="c-aifocus">En la era IA</label>
             <textarea id="c-aifocus" .value=${draft.aiFocus} @input=${(e) => this._setCityField('aiFocus', e.target.value)}></textarea>
           </div>
         </div>
-        <h3>Recursos</h3>
+        <h3>Recursos para el viaje</h3>
         ${this._renderResourceRows(draft.resources)}
         <button class="mini" @click=${this._addResource}>+ Añadir recurso</button>
         ${this._renderErrorList(errors)}
+        ${warnings.map((w) => html`<p class="warn">⚠ ${w}</p>`)}
         <div class="form-actions">
           <button class="primary" ?disabled=${this._saving} @click=${this._saveCity}>
             ${this._saving ? 'Guardando…' : 'Guardar casa'}
