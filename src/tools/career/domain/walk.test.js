@@ -13,8 +13,10 @@ import {
   stepPosition,
   turnYaw,
   tiltPitch,
+  dragLook,
   PITCH_SPEED,
   PITCH_LIMIT,
+  DRAG_LOOK_SENSITIVITY,
   yawToward,
   nearestCityWithin,
   collideWithCities,
@@ -244,6 +246,49 @@ describe('tiltPitch', () => {
     expect(() => tiltPitch(0, 1, 0.016, PITCH_SPEED, 0)).toThrow();
     expect(() => tiltPitch(0, 1, 0.016, PITCH_SPEED, Math.PI)).toThrow();
     expect(() => tiltPitch(0, 1, 0.016, PITCH_SPEED, Number.NaN)).toThrow();
+  });
+});
+
+describe('dragLook', () => {
+  it('agarra el mundo: arrastrar a la derecha gira a la izquierda (yaw +), abajo mira arriba (pitch +)', () => {
+    const next = dragLook(0, 0, 100, 60, DRAG_LOOK_SENSITIVITY, PITCH_LIMIT);
+    expect(next.yaw).toBeCloseTo(100 * DRAG_LOOK_SENSITIVITY);
+    expect(next.pitch).toBeCloseTo(60 * DRAG_LOOK_SENSITIVITY);
+    const back = dragLook(0, 0, -100, -60, DRAG_LOOK_SENSITIVITY, PITCH_LIMIT);
+    expect(back.yaw).toBeCloseTo(-100 * DRAG_LOOK_SENSITIVITY);
+    expect(back.pitch).toBeCloseTo(-60 * DRAG_LOOK_SENSITIVITY);
+  });
+
+  it('sin arrastre no se mueve', () => {
+    const next = dragLook(0.7, -0.3, 0, 0, DRAG_LOOK_SENSITIVITY, PITCH_LIMIT);
+    expect(next.yaw).toBe(0.7);
+    expect(next.pitch).toBe(-0.3);
+  });
+
+  it('normaliza el yaw a (-π, π] en arrastres largos (como turnYaw)', () => {
+    const next = dragLook(Math.PI - 0.01, 0, 0.02 / DRAG_LOOK_SENSITIVITY, 0, DRAG_LOOK_SENSITIVITY, PITCH_LIMIT);
+    expect(next.yaw).toBeCloseTo(-Math.PI + 0.01);
+    expect(next.yaw).toBeGreaterThan(-Math.PI);
+    expect(next.yaw).toBeLessThanOrEqual(Math.PI);
+  });
+
+  it('acota el pitch a ±limit (mismos topes que teclado y pointer lock)', () => {
+    expect(dragLook(0, 0, 0, 1e6, DRAG_LOOK_SENSITIVITY, PITCH_LIMIT).pitch).toBe(PITCH_LIMIT);
+    expect(dragLook(0, 0, 0, -1e6, DRAG_LOOK_SENSITIVITY, PITCH_LIMIT).pitch).toBe(-PITCH_LIMIT);
+    // Un pitch fuera de rango heredado se reencaja, como en tiltPitch.
+    expect(dragLook(0, 2, 0, 1, DRAG_LOOK_SENSITIVITY, PITCH_LIMIT).pitch).toBe(PITCH_LIMIT);
+  });
+
+  it('falla en alto con sensibilidad o límite inválidos', () => {
+    expect(() => dragLook(0, 0, 1, 1, 0, PITCH_LIMIT)).toThrow();
+    expect(() => dragLook(0, 0, 1, 1, Number.NaN, PITCH_LIMIT)).toThrow();
+    expect(() => dragLook(0, 0, 1, 1, DRAG_LOOK_SENSITIVITY, 0)).toThrow();
+    expect(() => dragLook(0, 0, 1, 1, DRAG_LOOK_SENSITIVITY, Math.PI)).toThrow();
+  });
+
+  it('la sensibilidad por defecto es suave (giro completo requiere un arrastre largo)', () => {
+    expect(DRAG_LOOK_SENSITIVITY).toBeGreaterThan(0);
+    expect(DRAG_LOOK_SENSITIVITY).toBeLessThan(0.02);
   });
 });
 
