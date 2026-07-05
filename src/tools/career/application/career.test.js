@@ -19,6 +19,8 @@ import {
   getPlaytime,
   recordPlaytime,
   prunePlaytime,
+  startChallenge,
+  clearChallenge,
   stats,
 } from './usecases.js';
 import { PLAYTIME, dayKey } from '../domain/playtime.js';
@@ -42,7 +44,7 @@ describe('career — casos de uso', () => {
 
   it('el journey de una persona nueva está vacío', async () => {
     const j = await getJourney(store, 'p1');
-    expect(j).toMatchObject({ visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} });
+    expect(j).toMatchObject({ visitedCities: [], currentCity: null, plannedRoute: [], evidences: {}, challenge: null });
   });
 
   it('toggleVisited respeta los prerequisitos y actualiza el progreso', async () => {
@@ -139,6 +141,40 @@ describe('career — casos de uso', () => {
     expect(saved.visitedCities).toContain('git'); // el journey es GLOBAL: nada se pierde al zarpar
     // Destino vacío: error alto, sin fallbacks silenciosos.
     await expect(setCurrentIsland(store, 'p1', saved, '  ')).rejects.toThrow();
+  });
+
+  it('startChallenge persiste el reto con fecha y clearChallenge lo retira (JG-5)', async () => {
+    const now = new Date('2026-07-05T10:00:00Z');
+    const route = { routeId: 'frontend', name: 'Reto: Frontend', stops: ['frontend/a', 'frontend/b'], startedAt: null };
+    let j = await getJourney(store, 'p1');
+    j = await startChallenge(store, 'p1', j, route, now);
+    expect(j.challenge).toEqual({
+      routeId: 'frontend',
+      name: 'Reto: Frontend',
+      stops: ['frontend/a', 'frontend/b'],
+      startedAt: now.toISOString(),
+    });
+    const saved = await getJourney(store, 'p1');
+    expect(saved.challenge).toEqual(j.challenge);
+    // Abandonar (o completar) vuelve al modo Libre sin tocar lo demás.
+    j = await clearChallenge(store, 'p1', saved);
+    expect(j.challenge).toBeNull();
+    expect((await getJourney(store, 'p1')).challenge).toBeNull();
+    // Una ruta sin paradas no es un reto: error alto.
+    await expect(startChallenge(store, 'p1', j, { routeId: 'x', name: 'X', stops: [] })).rejects.toThrow();
+  });
+
+  it('un challenge corrupto persistido se normaliza a null (JG-5)', async () => {
+    await store.journeys.save('p2', {
+      visitedCities: [],
+      currentCity: null,
+      plannedRoute: [],
+      currentIsland: 'island',
+      evidences: {},
+      challenge: { routeId: '', stops: 'no-array' },
+    });
+    const j = await getJourney(store, 'p2');
+    expect(j.challenge).toBeNull();
   });
 
   it('los logros se registran de solo-añadir y no re-escriben fechas (MC-21)', async () => {

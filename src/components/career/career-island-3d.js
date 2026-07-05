@@ -470,6 +470,28 @@ const BEACON = Object.freeze({
   speedHz: 0.35,
 });
 /**
+ * Rango de opacidad REFORZADO de la baliza cuando la casa es la SIGUIENTE
+ * parada del reto activo (JG-5): la misma baliza de «visado disponible», con
+ * más presencia — el camino señala claramente a dónde ir. Solo cambia el
+ * rango; velocidad y fase son las de BEACON.
+ */
+const BEACON_NEXT = Object.freeze({ opacityMin: 0.2, opacityMax: 0.5 });
+/**
+ * Badge circular con el NÚMERO de parada de la ruta de reto (JG-5), pintado
+ * en un canvas cuadrado (sprite): tamaño del lienzo en px de textura, alto
+ * APARENTE objetivo en pantalla (px CSS, vía el muestreo de etiquetas MC-17)
+ * y colores de la médula del juego por estado de la parada.
+ */
+const CHALLENGE_BADGE = Object.freeze({
+  canvasPx: 96,
+  targetPx: 26,
+  colors: Object.freeze({
+    next: '#e26d5e', // coral-600: la SIGUIENTE casa del camino
+    pending: '#1e3a5f', // navy: paradas aún pendientes
+    done: '#2a9d8f', // teal: paradas ya certificadas (✓)
+  }),
+});
+/**
  * Presencia de la ruta planificada en el suelo (MC-13): cinta navy translúcida
  * bajo la línea discontinua (ribbonStrip, el mismo mecanismo que la senda),
  * elevada entre la senda (PATH_LIFT) y la línea (ROUTE_LIFT) contra el
@@ -594,6 +616,7 @@ export class CareerIsland3D extends LitElement {
     reachable: { attribute: false },
     selected: { attribute: false },
     carpoolStops: { attribute: false },
+    challengeStops: { attribute: false },
     teammates: { attribute: false },
     overlayOpen: { attribute: false },
     wizardState: { attribute: false },
@@ -729,6 +752,14 @@ export class CareerIsland3D extends LitElement {
      * @type {string[]}
      */
     this.carpoolStops = [];
+    /**
+     * Ruta de RETO activa en ESTA isla (JG-5), o null en modo Libre (o con el
+     * reto en otra isla): número de parada por casa y la SIGUIENTE casa del
+     * camino. La pone <career-app> con identidad ESTABLE (solo cambia al
+     * cambiar el journey/isla: este grupo no se rehace en cada render).
+     * @type {{ numbers: Map<string, number>, nextCityId: string|null }|null}
+     */
+    this.challengeStops = null;
     /**
      * Compañeros del equipo a pintar junto a su casa actual (MC-12). SOLO
      * nombre, ciudad y % de progreso: el contenedor no pasa nada más.
@@ -956,7 +987,8 @@ export class CareerIsland3D extends LitElement {
       changed.has('journey') ||
       changed.has('reachable') ||
       changed.has('selected') ||
-      changed.has('carpoolStops') // señalización del carpool (CP-1)
+      changed.has('carpoolStops') || // señalización del carpool (CP-1)
+      changed.has('challengeStops') // números de la ruta de reto (JG-5)
     ) {
       this._rebuildCities();
     }
@@ -2725,6 +2757,8 @@ export class CareerIsland3D extends LitElement {
     // Señalización del CARPOOL (CP-1): anillo exterior + banderola navy+coral
     // en las paradas del grupo. Geometrías compartidas por todas las paradas.
     const carpool = new Set(this.carpoolStops ?? []);
+    // Ruta de RETO activa en esta isla (JG-5), o null en modo Libre.
+    const challenge = this.challengeStops ?? null;
     const carpoolRingGeo = new THREE.TorusGeometry(3.55, 0.24, 8, 30);
     const carpoolPoleGeo = new THREE.CylinderGeometry(0.09, 0.09, CARPOOL_FLAG.poleH, 8);
     const carpoolPennantGeo = new THREE.PlaneGeometry(CARPOOL_FLAG.pennantW, CARPOOL_FLAG.pennantH);
@@ -2904,19 +2938,25 @@ export class CareerIsland3D extends LitElement {
       // Baliza de «visado disponible» (MC-13): haz coral sutil y PULSANTE en
       // las ciudades alcanzables no visitadas. La ciudad actual no la lleva
       // (su haz intenso manda). Fase determinista por id: no palpitan a la vez.
+      // La SIGUIENTE parada del reto activo (JG-5) la lleva REFORZADA (rango
+      // de opacidad mayor y algo más ancha): el camino señala a dónde ir.
       if (status === 'available' && current !== city.id) {
+        const isChallengeNext = challenge?.nextCityId === city.id;
+        const range = isChallengeNext ? BEACON_NEXT : BEACON;
         const beacon = new THREE.Mesh(
           beaconGeo,
           new THREE.MeshBasicMaterial({
             color: STATUS_COLORS.available,
             transparent: true,
-            opacity: BEACON.opacityMin,
+            opacity: range.opacityMin,
             depthWrite: false,
             side: THREE.DoubleSide,
           }),
         );
         beacon.position.y = BEACON.height / 2;
+        if (isChallengeNext) beacon.scale.set(1.35, 1, 1.35);
         beacon.userData.phase = hashUnit(hashId(city.id), 13) * Math.PI * 2;
+        beacon.userData.range = range;
         this._beacons.push(beacon);
         node.add(beacon);
       }
@@ -2966,6 +3006,24 @@ export class CareerIsland3D extends LitElement {
       label.visible = labelsVisible;
       this._cityLabels.push(label);
       node.add(label);
+
+      // Número de parada de la RUTA DE RETO (JG-5): badge circular sobre la
+      // casa — coral la SIGUIENTE, navy las pendientes, teal con ✓ las ya
+      // certificadas. Vive en el sistema de etiquetas (tamaño aparente
+      // constante + declutter) con la prioridad MÁXIMA: el camino siempre se
+      // lee, aunque para ello ceda su hueco el nombre de la casa.
+      const stopNumber = challenge?.numbers?.get(city.id);
+      if (stopNumber !== undefined) {
+        const stopState =
+          status === 'visited' ? 'done' : challenge.nextCityId === city.id ? 'next' : 'pending';
+        const badge = this._makeChallengeBadge(stopNumber, stopState, {
+          y: bodyH + CITY_ROOF.h + 4.7,
+          id: `challenge:${city.id}`,
+        });
+        badge.visible = labelsVisible;
+        this._cityLabels.push(badge);
+        node.add(badge);
+      }
 
       group.add(node);
     }
@@ -3084,7 +3142,9 @@ export class CareerIsland3D extends LitElement {
     const t = (now / 1000) * Math.PI * 2 * BEACON.speedHz;
     for (const beacon of this._beacons) {
       const k = 0.5 + 0.5 * Math.sin(t + beacon.userData.phase);
-      beacon.material.opacity = BEACON.opacityMin + (BEACON.opacityMax - BEACON.opacityMin) * k;
+      // Rango por baliza: la SIGUIENTE parada del reto pulsa reforzada (JG-5).
+      const range = beacon.userData.range ?? BEACON;
+      beacon.material.opacity = range.opacityMin + (range.opacityMax - range.opacityMin) * k;
     }
   }
 
@@ -4737,6 +4797,56 @@ export class CareerIsland3D extends LitElement {
     // Metadatos del muestreo de etiquetas (MC-17): identidad y prioridad para
     // el declutter, alto objetivo en px y proporción de la caja pintada.
     sprite.userData.label = { id, kind, targetPx, priority, aspect: canvas.width / canvas.height };
+    return sprite;
+  }
+
+  /**
+   * Badge circular con el NÚMERO de parada de la ruta de reto (JG-5): círculo
+   * relleno con anillo blanco y el número (o ✓ en las paradas ya
+   * certificadas) en el centro. Entra en el sistema de etiquetas (MC-17) con
+   * kind 'challenge': tamaño aparente constante, prioridad máxima en el
+   * declutter y SIN fundido por distancia — el camino se lee a cualquier zoom
+   * mientras la casa esté a la vista.
+   * @param {number} stopNumber Número de parada (1-based).
+   * @param {'next'|'pending'|'done'} state Estado de la parada en el camino.
+   * @param {{ y: number, id: string }} opts Altura sobre la casa e identidad declutter.
+   * @returns {import('three').Sprite}
+   */
+  _makeChallengeBadge(stopNumber, state, { y, id }) {
+    const THREE = this._THREE;
+    const canvas = document.createElement('canvas');
+    const size = CHALLENGE_BADGE.canvasPx;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const center = size / 2;
+    const radius = center - 6;
+    // Círculo de estado con anillo blanco (el halo que lo separa del paisaje).
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fillStyle = CHALLENGE_BADGE.colors[state];
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.stroke();
+    // El número de parada (✓ en las ya certificadas: parada superada).
+    const text = state === 'done' ? '✓' : String(stopNumber);
+    ctx.font = `800 ${text.length > 2 ? 38 : 48}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, center, center + 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+    sprite.position.set(0, y, 0);
+    sprite.scale.set(2.2, 2.2, 1);
+    sprite.userData.label = {
+      id,
+      kind: 'challenge',
+      targetPx: CHALLENGE_BADGE.targetPx,
+      priority: LABEL_PRIORITY.challenge,
+      aspect: 1,
+    };
     return sprite;
   }
 

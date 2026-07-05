@@ -25,6 +25,8 @@ export function createMemoryCareerStore(seed = {}) {
     visitedCities: [...(j.visitedCities ?? [])],
     plannedRoute: [...(j.plannedRoute ?? [])],
     evidences: structuredClone(j.evidences ?? {}),
+    // Reto activo (JG-5): copia profunda — el store no comparte referencias.
+    challenge: j.challenge ? structuredClone(j.challenge) : null,
   });
   return {
     journeys: {

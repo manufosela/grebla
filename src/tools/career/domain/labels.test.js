@@ -149,6 +149,7 @@ describe('declutterLabels', () => {
 
   it('la jerarquía documentada mantiene el orden esperado', () => {
     const p = LABEL_PRIORITY;
+    expect(p.challenge).toBeGreaterThan(p.selected); // el camino del reto siempre se lee (JG-5)
     expect(p.selected).toBeGreaterThan(p.current);
     expect(p.current).toBeGreaterThan(p.area);
     expect(p.area).toBeGreaterThan(p.available);

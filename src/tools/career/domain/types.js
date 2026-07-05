@@ -68,6 +68,16 @@
  * @property {string[]} [cursos]
  * @property {string[]} [titulos]
  *
+ * Reto ACTIVO del modo Reto (JG-5): una ruta por las casas de UNA isla en un
+ * orden fijo (topológico por prerequisitos). El modo de juego es DERIVADO:
+ * con challenge se juega en modo Reto, con null en modo Libre. Es
+ * independiente de `plannedRoute` (la ruta personal no se pisa).
+ * @typedef {Object} Challenge
+ * @property {string} routeId        id de la isla de la ruta (una ruta por isla)
+ * @property {string} name           rótulo del reto («Reto: Backend PHP»)
+ * @property {string[]} stops        ids de las casas EN ORDEN de visita
+ * @property {string|null} startedAt fecha ISO de inicio (null si aún no arrancó)
+ *
  * @typedef {Object} Journey    GLOBAL por persona (abarca todo el archipiélago, MC-14)
  * @property {string[]} visitedCities          ids de ciudades visitadas
  * @property {string|null} currentCity         ciudad actual (donde está la persona)
@@ -75,6 +85,7 @@
  * @property {string} currentIsland            isla actual del archipiélago (default 'island')
  * @property {string[]} visitedIslands         ids de islas PISADAS (incluye la actual, MC-20)
  * @property {Record<string, CityEvidence>} evidences  evidencias por ciudad
+ * @property {Challenge|null} challenge        reto activo del modo Reto (JG-5), o null
  */
 
 /** Isla del archipiélago en la que arranca todo journey (el doc actual). */
@@ -93,6 +104,7 @@ export const EMPTY_JOURNEY = Object.freeze({
   currentIsland: DEFAULT_ISLAND_ID,
   visitedIslands: [DEFAULT_ISLAND_ID],
   evidences: {},
+  challenge: null,
 });
 
 export {};
