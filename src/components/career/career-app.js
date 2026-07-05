@@ -15,6 +15,19 @@
  * con cabeceras oscuras (.sea-head y el header de la tarjeta de casa). De
  * cara al jugador, quien responde consultas es su «manager».
  *
+ * UI PERGAMINO (JG-7, estética Monkey Island): DENTRO del chasis de consola,
+ * los overlays del juego (archipiélago, ficha, retos, mi ruta, brujo,
+ * carpools, coins, tiempo, onboarding, tarjeta de casa y popover) son papel
+ * envejecido — gradientes y manchas CSS, bordes irregulares con quemado
+ * interior, nada de imágenes externas — con cabecera de TABLÓN de madera y
+ * títulos en serif del sistema con small-caps (el proyecto no carga fuentes
+ * externas: decisión documentada). El re-tinte se hace re-declarando los
+ * tokens --rm-* dentro de cada superficie (heredan al subárbol, shadow DOM
+ * de <player-card> incluido): chips, inputs y botones interiores se ajustan
+ * solos manteniendo contraste AA. El mapa del mar pasa a MAPA DEL TESORO:
+ * aguada sobre papel, rosa de los vientos SVG inline, islas como manchas
+ * dibujadas con nombre en tinta de mapa y una ✗ ROJA sobre la isla actual.
+ *
  * En el modo 3D (MC-6) el detalle es la TARJETA DE LA CASA overlay sobre el
  * canvas (lateral en escritorio, hoja inferior en móvil). Desde MC-15 la
  * tarjeta se organiza en TRES PESTAÑAS (tablist ARIA, estado local, ←/→):
@@ -420,6 +433,24 @@ export class CareerApp extends LitElement {
       --game-accent: #3dd6c3;
       --game-accent-ink: #06231f;
       --game-focus: #8be9dd;
+      /* ── UI PERGAMINO (JG-7): papel envejecido y madera de los overlays del
+         juego (mapa del tesoro, ficha, retos, ruta, brujo, carpools, coins,
+         tiempo, onboarding y tarjeta de casa). Solo gradientes/sombras CSS,
+         nada de imágenes externas. Tinta marrón MUY oscura sobre papel claro:
+         contraste AA holgado (>9:1). ── */
+      --parch-bg: #f3e6c8;
+      --parch-bg-2: #ead6a8;
+      --parch-ink: #33240f;
+      --parch-muted: #6b5433;
+      --parch-edge: #b98f56;
+      --parch-burn: rgba(92, 58, 20, 0.35);
+      --wood-1: #7a5a33;
+      --wood-2: #55391c;
+      --wood-edge: #3a2712;
+      --wood-text: #f6e8c9;
+      /* Display serif del SISTEMA para títulos: el proyecto no carga fuentes
+         externas (decisión JG-7) — el carácter lo dan small-caps + tracking. */
+      --parch-title: Georgia, 'Palatino Linotype', 'Book Antiqua', 'Times New Roman', serif;
       display: flex;
       flex-direction: column;
       min-height: 0;
@@ -1336,6 +1367,129 @@ export class CareerApp extends LitElement {
     .res .fmt {
       font-size: 0.66rem; font-weight: 700; padding: 0.08rem 0.45rem; border-radius: 999px;
       background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    /* ═══ UI PERGAMINO (JG-7) — va al FINAL a propósito: mismas selecciones,
+       última palabra en la cascada. Los overlays del juego pasan a papel
+       envejecido re-declarando también los tokens --rm-* DENTRO de cada
+       superficie: chips, inputs, bordes y botones interiores se re-tiñen
+       solos (todos usan var(--rm-*) con fallback) sin tocar su CSS. La
+       consola navy (JG-4) queda como chasis; el pergamino vive DENTRO. ═══ */
+    .sea, .ficha, .retos, .ruta, .onboard, .citypanel, .matepop {
+      /* Re-tinte de los tokens claros hacia el papel (hereda al subárbol,
+         shadow DOM de <player-card> incluido). */
+      --rm-surface: #f9efd8;
+      --rm-border: #cdb183;
+      --rm-track: #e9d9af;
+      --rm-muted: var(--parch-muted, #6b5433);
+      --rm-text: var(--parch-ink, #33240f);
+      color: var(--parch-ink, #33240f);
+      background:
+        radial-gradient(ellipse at 12% 8%, rgba(122, 90, 51, 0.14), transparent 42%),
+        radial-gradient(ellipse at 88% 92%, rgba(122, 90, 51, 0.16), transparent 40%),
+        radial-gradient(ellipse at 78% 18%, rgba(255, 250, 232, 0.5), transparent 46%),
+        linear-gradient(160deg, var(--parch-bg, #f3e6c8) 0%, #efdfba 55%, var(--parch-bg-2, #ead6a8) 100%);
+      border: 1px solid var(--parch-edge, #b98f56);
+      /* Bordes irregulares del pliego: radios asimétricos + quemado interior. */
+      border-radius: 16px 10px 18px 9px / 11px 17px 9px 15px;
+      box-shadow:
+        inset 0 0 22px var(--parch-burn, rgba(92, 58, 20, 0.35)),
+        inset 0 0 3px rgba(70, 42, 12, 0.4),
+        0 14px 40px rgba(17, 24, 39, 0.28);
+    }
+    /* Cabeceras como TABLÓN de madera claveteado (sustituyen el navy del
+       marco dentro del pergamino); título en serif del sistema con
+       small-caps — crema sobre madera oscura: AA holgado. */
+    .sea-head,
+    .citypanel header {
+      background:
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 46px, rgba(30, 16, 4, 0.22) 46px 48px),
+        linear-gradient(180deg, var(--wood-1, #7a5a33) 0%, var(--wood-2, #55391c) 100%);
+      border-bottom: 3px solid var(--wood-edge, #3a2712);
+      border-radius: 12px 8px 3px 3px / 9px 12px 3px 3px;
+      box-shadow: inset 0 1px 0 rgba(255, 240, 210, 0.22), inset 0 -3px 8px rgba(20, 10, 2, 0.35);
+    }
+    .sea-head h3,
+    .citypanel header h3 {
+      font-family: var(--parch-title, Georgia, serif);
+      font-variant: small-caps;
+      letter-spacing: 0.06em;
+      color: var(--wood-text, #f6e8c9);
+      text-shadow: 0 1px 2px rgba(20, 10, 2, 0.65);
+    }
+    .citypanel header .kind { color: #d9c294; }
+    .sea-head .close,
+    .citypanel header .close { color: #e8d5ab; }
+    .sea-head .close:hover,
+    .citypanel header .close:hover { color: #fff; background: rgba(255, 240, 210, 0.16); }
+    .sea-head .close:focus-visible,
+    .citypanel header .close:focus-visible { outline: 2px solid var(--wood-text, #f6e8c9); outline-offset: 2px; }
+    /* Títulos interiores de las superficies pergamino: la misma serif. */
+    .onboard h3, .cphead h4, .reto-info strong, .ruta-info strong, .wmeta strong {
+      font-family: var(--parch-title, Georgia, serif);
+      letter-spacing: 0.02em;
+    }
+    /* ── MAPA DEL TESORO (JG-7): el mar del archipiélago es una AGUADA sobre
+       el papel (verdigris con vetas de oleaje) con viñeta sepia; las islas,
+       manchas dibujadas con contorno de plumilla y nombre en tinta de mapa. ── */
+    .sea-map {
+      border: 2px solid var(--parch-edge, #b98f56);
+      border-radius: 12px 7px 14px 8px / 8px 13px 7px 12px;
+      background:
+        radial-gradient(ellipse at 50% 50%, transparent 56%, rgba(92, 58, 20, 0.24) 100%),
+        repeating-linear-gradient(178deg, rgba(46, 84, 96, 0.08) 0 3px, transparent 3px 14px),
+        radial-gradient(circle at 24% 30%, rgba(255, 252, 240, 0.25), transparent 36%),
+        linear-gradient(160deg, #b9d3c6 0%, #a8c8bf 45%, #93b7ad 100%);
+      box-shadow: inset 0 0 26px rgba(70, 42, 12, 0.28);
+    }
+    .isle-dot {
+      box-shadow:
+        0 0 0 2px rgba(74, 46, 18, 0.55),
+        0 0 0 5px rgba(246, 238, 214, 0.35),
+        0 4px 8px rgba(40, 30, 10, 0.3);
+    }
+    .isle.here .isle-dot {
+      box-shadow:
+        0 0 0 2px var(--rm-coral-600, #e26d5e),
+        0 0 0 5px rgba(246, 238, 214, 0.45),
+        0 4px 8px rgba(40, 30, 10, 0.3);
+    }
+    .isle:hover { background: rgba(255, 250, 232, 0.28); }
+    .isle:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: -2px; }
+    .isle-name {
+      font-family: var(--parch-title, Georgia, serif);
+      font-style: italic;
+      color: #33240f;
+      text-shadow:
+        0 0 3px rgba(246, 238, 214, 0.95),
+        0 1px 2px rgba(246, 238, 214, 0.95);
+    }
+    /* Rosa de los vientos (SVG inline, decorativa) y ✗ ROJA del tesoro sobre
+       la isla actual («estás aquí»: el mapa marca el sitio). */
+    .compass {
+      position: absolute;
+      right: 3.5%;
+      bottom: 5%;
+      width: clamp(52px, 13cqi, 88px);
+      height: auto;
+      opacity: 0.82;
+      pointer-events: none;
+    }
+    .isle-x {
+      position: absolute;
+      top: -0.4rem;
+      left: 50%;
+      transform: translateX(-50%) rotate(-8deg);
+      font-size: 1.7rem;
+      font-weight: 900;
+      line-height: 1;
+      color: #b3261e;
+      text-shadow: 0 0 3px rgba(246, 238, 214, 0.9), 0 1px 2px rgba(40, 20, 5, 0.35);
+      pointer-events: none;
+    }
+    /* Latón/madera SUTIL en la botonera de la consola (JG-7): solo un matiz
+       en el borde — el chasis JG-4 no cambia de carácter. */
+    .controls > button {
+      border-color: color-mix(in srgb, #c9a24b 30%, var(--game-line, rgba(255, 255, 255, 0.14)));
     }
   `;
 
@@ -4657,6 +4811,16 @@ export class CareerApp extends LitElement {
           <button class="close" aria-label="Cerrar el mapa del archipiélago" title="Cerrar (Esc)" @click=${this._closeArchipelago}>✕</button>
         </header>
         <div class="sea-map" role="list" aria-label="Islas del archipiélago">
+          <!-- Rosa de los vientos (JG-7): decorativa, tinta sepia de mapa. -->
+          <svg class="compass" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="55" r="27" fill="none" stroke="#4a2e12" stroke-width="1.6" opacity="0.75" />
+            <circle cx="50" cy="55" r="21" fill="none" stroke="#4a2e12" stroke-width="0.8" opacity="0.5" />
+            <path d="M50 17 L55 50 L50 55 L45 50 Z" fill="#b3261e" stroke="#4a2e12" stroke-width="1" />
+            <path d="M50 93 L55 60 L50 55 L45 60 Z" fill="#f6eed6" stroke="#4a2e12" stroke-width="1" />
+            <path d="M12 55 L45 50 L50 55 L45 60 Z" fill="#f6eed6" stroke="#4a2e12" stroke-width="1" />
+            <path d="M88 55 L55 50 L50 55 L55 60 Z" fill="#f6eed6" stroke="#4a2e12" stroke-width="1" />
+            <text x="50" y="11" text-anchor="middle" font-size="11" font-family="Georgia, serif" font-weight="700" fill="#4a2e12">N</text>
+          </svg>
           ${this._renderSeaRoute(islands)}
           ${islands.map((island) => {
             const here = island.id === this.currentIsland;
@@ -4675,6 +4839,7 @@ export class CareerApp extends LitElement {
               @click=${() => this._travelTo(island.id)}
             >
               <span class="isle-dot" aria-hidden="true"></span>
+              ${here ? html`<span class="isle-x" aria-hidden="true">✗</span>` : null}
               <span class="isle-name">${island.name}</span>
               ${here
                 ? html`<span class="isle-tag here">Estás aquí</span>`

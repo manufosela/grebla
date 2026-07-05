@@ -190,6 +190,31 @@
  * entran en las exclusiones de la vegetación. Decorativas: sin colisión ni
  * picking, visibles en vista aérea y a pie.
  *
+ * Dirección de arte PIRATA (JG-7, espíritu Monkey Island), todo procedural y
+ * determinista (hashUnit/hashId, sin Math.random ni assets externos):
+ *  - terreno más rico: hierba tropical con moteado multi-tono y briznas, arena
+ *    con conchas y ondas de marea (las MISMAS CanvasTexture compartidas de
+ *    MC-10, repintadas), y un camino de tierra insinuado del muelle hacia el
+ *    interior (ribbonStrip, como la senda, por debajo de senda y ruta)
+ *  - PALMERAS como variante estrella de la costa: tronco curvado en segmentos
+ *    y corona de hojas arqueadas low-poly, cada conjunto FUSIONADO
+ *    (mergeGeometries de three/addons) en una única geometría → TODAS las
+ *    palmeras de la isla son 2 draw calls (InstancedMesh); coníferas y
+ *    frondosos quedan para el interior. Matas de hierba instanciadas (+1).
+ *  - puerto pirata: barriles con duelas (InstancedMesh + textura 'barrel') y
+ *    cajas apiladas junto al arranque del muelle, norays de amarre con una
+ *    cuerda vencida, y la BANDERA PIRATA en lo alto del faro — paño con
+ *    calavera (CanvasTexture 'jollyroger') que ondea por vértices en el loop,
+ *    la misma mecánica que el agua
+ *  - carteles de MADERA por comarca: poste con brazo y tablón colgante con el
+ *    nombre QUEMADO en la madera (textura cacheada por nombre). El cartel da
+ *    el topónimo DE CERCA (a pie las etiquetas flotantes se ocultan) y el
+ *    sprite flotante SE CONSERVA para la lectura aérea y su declutter (MC-17):
+ *    poste de cerca + sprite de lejos es más limpio que retirar el sprite
+ *  - atardecer caribeño SUAVE: el horizonte del gradiente del cielo (y la
+ *    niebla, que es su mismo color) vira a un melocotón cálido sin tocar el
+ *    cénit — la legibilidad de casas y etiquetas no cambia
+ *
  * Sonido (MC-11, islandAudio.js): ambiente de olas + gaviota ocasional, un
  * tick de paso por ZANCADA (fase ∝ distancia: el rate sigue a la velocidad,
  * tanto del avatar aéreo como del caminante fps) y la fanfarria de ciudadanía.
@@ -373,9 +398,19 @@ const ENV_COLORS = {
   stem: 0x59915b,
   flowerCoral: 0xf2887a,
   flowerWarm: 0xf4c96b,
+  // Arte pirata (JG-7): palmeras, camino de tierra y cuerdas del muelle.
+  palmTrunk: 0xa9814f,
+  palmLeaf: 0x4e9a4e,
+  dirt: 0xb08a55,
+  rope: 0xcbb287,
 };
-/** Gradiente de la cúpula de cielo (MC-10); el horizonte es también el color de la niebla. */
-const SKY_COLORS = Object.freeze({ zenith: 0x8fcdea, horizon: 0xf1f8fb });
+/**
+ * Gradiente de la cúpula de cielo (MC-10); el horizonte es también el color de
+ * la niebla. Desde JG-7 el horizonte vira a un melocotón CÁLIDO (atardecer
+ * caribeño suave): el cénit sigue azul y el contraste de casas/etiquetas no
+ * cambia — solo la franja baja del cielo y el fundido de la niebla.
+ */
+const SKY_COLORS = Object.freeze({ zenith: 0x8fcdea, horizon: 0xf8e6cd });
 /**
  * Sombras suaves (MC-10): shadow map PCF SOLO en el sol direccional, con
  * resolución contenida y borde difuminado vía shadow.radius (PCFSoftShadowMap
@@ -624,6 +659,125 @@ const TRIBBU_BRAND = Object.freeze({
   dark: '#1f7268',
   coral: '#f2887a',
   white: '#ffffff',
+});
+
+/**
+ * Palmeras de costa (JG-7): tronco CURVADO en `segments` tramos (cilindros
+ * cortos con deriva lateral cuadrática horneada en la geometría) y corona de
+ * `leaves` hojas arqueadas low-poly (planos doblados a lo largo). Tronco y
+ * corona se FUSIONAN (mergeGeometries) en una geometría cada uno: todas las
+ * palmeras de la isla suman 2 draw calls (InstancedMesh). `coastBand` es la
+ * fracción del radio de dispersión a partir de la cual un árbol es palmera
+ * (la franja costera) en vez de conífera/frondoso (el interior).
+ */
+const PALM = Object.freeze({
+  segments: 4,
+  segmentH: 1.05,
+  baseR: 0.22,
+  topR: 0.13,
+  /** Deriva lateral total (unidades) de la punta del tronco (+x local). */
+  lean: 0.55,
+  leaves: 6,
+  leafLen: 2.3,
+  leafW: 0.5,
+  /** Subdivisiones a lo largo de cada hoja (el arco se dobla por vértices). */
+  leafSteps: 4,
+  /** Caída (unidades) de la punta de la hoja: sube un poco y luego se vence. */
+  droop: 1.15,
+  coastBand: 0.68,
+});
+/** Matas de hierba (JG-7): manojo de conos finos fusionados, instanciado. */
+const TUFT = Object.freeze({ blades: 3, h: 0.42, r: 0.045, spread: 0.09 });
+/**
+ * Camino de tierra insinuado (JG-7): cinta translúcida del arranque del
+ * muelle hacia el interior (ribbonStrip, como la senda), con una comba
+ * lateral determinista para que no sea una regla. Va por DEBAJO de senda y
+ * ruta (lift menor que PATH_LIFT) y de las plataformas de comarca.
+ */
+const DIRT_PATH = Object.freeze({
+  width: 1.6,
+  opacity: 0.45,
+  lift: 0.07,
+  /** Longitud como fracción de la distancia puerto→centro. */
+  lenFactor: 0.6,
+  steps: 6,
+  /** Amplitud máxima (unidades) de la comba lateral. */
+  swayAmp: 3,
+});
+/**
+ * Atrezzo pirata del muelle (JG-7): barriles y cajas apilados en dos grupos a
+ * los lados del ARRANQUE del muelle (coordenadas locales del puerto, +z hacia
+ * el mar; lz negativos = tierra adentro), y dos norays de amarre en el borde
+ * del tablero con una cuerda vencida entre ellos. Posiciones fijas y
+ * deterministas; decorativo (sin colisión ni picking) y barato: 4 draw calls.
+ */
+const PORT_PROPS = Object.freeze({
+  barrelR: 0.42,
+  barrelH: 0.85,
+  /** Barriles: posición local, giro y escala; `stacked` = encima de otros. */
+  barrels: Object.freeze([
+    Object.freeze({ lx: 2.5, lz: -0.9, ry: 0.3, s: 1 }),
+    Object.freeze({ lx: 3.35, lz: -0.4, ry: 1.8, s: 0.92 }),
+    Object.freeze({ lx: 2.9, lz: -0.6, ry: 0.9, s: 0.9, stacked: true }),
+    Object.freeze({ lx: -2.6, lz: -1.7, ry: 2.4, s: 1 }),
+    Object.freeze({ lx: -3.3, lz: -1, ry: 0.6, s: 0.9 }),
+  ]),
+  crateS: 0.78,
+  crates: Object.freeze([
+    Object.freeze({ lx: 1.9, lz: -2.1, ry: 0.2, s: 1 }),
+    Object.freeze({ lx: 2.75, lz: -2.4, ry: 0.7, s: 0.85 }),
+    Object.freeze({ lx: 2.25, lz: -2.2, ry: 1.2, s: 0.78, stacked: true }),
+  ]),
+  /** Norays: postes bajos de amarre en el borde del muelle (lx fijo). */
+  bollardR: 0.14,
+  bollardH: 0.55,
+  bollardLx: 1.45,
+  bollardsLz: Object.freeze([2.2, 7.4]),
+  /** Cuerda entre norays: comba (unidades) y radio del tubo. */
+  ropeSag: 0.5,
+  ropeR: 0.045,
+});
+/**
+ * Bandera pirata (JG-7): mástil fino sobre la cúpula del faro y paño con
+ * calavera (CanvasTexture 'jollyroger'). El paño es un plano subdividido
+ * cuyos vértices ondean con un seno en _tickEnvironment — la MISMA mecánica
+ * que el agua — con amplitud creciente hacia el borde libre (el lado del
+ * mástil no se mueve).
+ */
+const PIRATE_FLAG = Object.freeze({
+  poleH: 1.5,
+  poleR: 0.05,
+  w: 1.5,
+  h: 0.95,
+  segX: 8,
+  segY: 3,
+  waveAmp: 0.09,
+  waveFreq: 4.2,
+  waveSpeed: 3.1,
+});
+/**
+ * Cartel de comarca (JG-7): poste de madera con brazo y tablón COLGANTE (dos
+ * cadenitas) con el nombre QUEMADO en la madera (textura cacheada por
+ * nombre en _plateTextures). Da el topónimo DE CERCA — a pie las etiquetas
+ * flotantes van ocultas —; el sprite flotante se conserva para la vista
+ * aérea y su declutter (MC-17). `inset` sitúa el poste hacia el borde de la
+ * plataforma de la comarca, mirando al puerto. Decorativo: sin colisión.
+ */
+const AREA_SIGN = Object.freeze({
+  postH: 3.3,
+  postR: 0.11,
+  armLen: 1.7,
+  armR: 0.07,
+  armY: 3.05,
+  plankW: 1.9,
+  plankH: 0.62,
+  plankD: 0.08,
+  /** Caída (unidades) de las cadenitas entre el brazo y el tablón. */
+  chainDrop: 0.32,
+  /** Posición radial del poste dentro de la plataforma (fracción del radio). */
+  inset: 0.62,
+  /** Holgura con casas/brujo al elegir el punto (barrido de yaws si choca). */
+  clearance: 1.2,
 });
 
 export class CareerIsland3D extends LitElement {
@@ -932,6 +1086,14 @@ export class CareerIsland3D extends LitElement {
     this._waterMesh = null;
     /** Sprites de nube con deriva (userData.drift) del mapa actual. */
     this._clouds = [];
+    /** Paños que ondean por vértices (JG-7): la bandera pirata del faro. */
+    this._flags = [];
+    /** Puntos de los carteles de comarca (JG-7) por areaId: build + exclusiones.
+     * @type {Map<string, { wx: number, wz: number, yaw: number, name: string }>} */
+    this._areaSignSpots = new Map();
+    /** mergeGeometries de three/addons (import dinámico, JG-7): fusiona el
+     * tronco y la corona de las palmeras en una geometría cada uno. */
+    this._mergeGeometries = null;
     this._lastEnvTs = 0;
     /**
      * Celebración en curso (certificado MC-11 o ciudadanía de isla MC-20), o
@@ -1053,12 +1215,14 @@ export class CareerIsland3D extends LitElement {
     let THREE;
     let OrbitControls;
     let PointerLockControls;
+    let mergeGeometries;
     try {
       // Import dinámico: three solo se descarga al montar la vista 3D.
-      [THREE, { OrbitControls }, { PointerLockControls }] = await Promise.all([
+      [THREE, { OrbitControls }, { PointerLockControls }, { mergeGeometries }] = await Promise.all([
         import('three'),
         import('three/addons/controls/OrbitControls.js'),
         import('three/addons/controls/PointerLockControls.js'),
+        import('three/addons/utils/BufferGeometryUtils.js'),
       ]);
     } catch (err) {
       this._phase = 'error';
@@ -1067,6 +1231,7 @@ export class CareerIsland3D extends LitElement {
     if (!this.isConnected || this._renderer) return;
     this._THREE = THREE;
     this._PointerLockControls = PointerLockControls;
+    this._mergeGeometries = mergeGeometries;
     this._walkDirScratch = new THREE.Vector3();
     this._lookScratch = new THREE.Vector3();
     this._eulerScratch = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -2136,6 +2301,9 @@ export class CareerIsland3D extends LitElement {
         },
       ],
     });
+    // Carteles de comarca (JG-7): sus puntos se calculan ANTES del grupo
+    // estático (la vegetación los excluye), esquivando casas y brujo.
+    this._areaSignSpots = this._computeAreaSignSpots();
     // La barca vive en el grupo estático: sus referencias se rehacen con él
     // (y quedan null en un mapa sin puerto, MC-14).
     this._boatGroup = null;
@@ -2215,6 +2383,8 @@ export class CareerIsland3D extends LitElement {
     const THREE = this._THREE;
     const R = this._islandR;
     const group = new THREE.Group();
+    // Las banderas de paño (JG-7) viven en este grupo: se rehacen con él.
+    this._flags = [];
 
     // Agua VIVA (MC-10): plano subdividido alrededor de la isla cuyos vértices
     // ondulan con un seno en el loop (_tickEnvironment). El plano llega más
@@ -2268,6 +2438,10 @@ export class CareerIsland3D extends LitElement {
     grass.receiveShadow = SHADOWS.enabled;
     group.add(grass);
 
+    // Camino de tierra insinuado (JG-7): del arranque del muelle hacia el
+    // interior, con comba determinista — por debajo de senda y ruta.
+    if (this.map.startPort) group.add(this._buildDirtPath());
+
     // Ambiente (MC-10): cúpula de cielo con gradiente, nubes con deriva y
     // vegetación/rocas instanciadas y deterministas.
     group.add(this._buildSky());
@@ -2312,6 +2486,10 @@ export class CareerIsland3D extends LitElement {
       label.visible = labelsVisible;
       this._areaLabels.push(label);
       group.add(label);
+      // Cartel de madera colgante (JG-7): el topónimo de cerca; el sprite de
+      // arriba sigue haciendo la lectura aérea/lejana con su declutter.
+      const signSpot = this._areaSignSpots.get(area.id);
+      if (signSpot) group.add(this._buildAreaSign(signSpot));
     }
 
     // Vallas TRIBBU (MC-23): decorativas y deterministas, flanqueando la
@@ -2397,6 +2575,213 @@ export class CareerIsland3D extends LitElement {
     face.position.set(0, 2.5, 0.08);
     group.add(face);
     return group;
+  }
+
+  /**
+   * Camino de tierra insinuado (JG-7): cinta translúcida (ribbonStrip, el
+   * mecanismo de la senda) desde unos pasos tierra adentro del muelle hacia
+   * el interior de la isla, con una comba lateral DETERMINISTA (una única
+   * amplitud por isla, hashUnit) para que no sea una regla. Decal del suelo:
+   * elevación mínima + polygonOffset, por debajo de senda y ruta.
+   */
+  _buildDirtPath() {
+    const { wx, wz } = worldFromMap(this.map.startPort.x, this.map.startPort.y);
+    const d = Math.hypot(wx, wz);
+    const ux = d > 0.001 ? wx / d : 0;
+    const uz = d > 0.001 ? wz / d : 1;
+    // Perpendicular a la dirección puerto→centro: el eje de la comba.
+    const px = -uz;
+    const pz = ux;
+    const seed = hashId(`dirt:${this.map.id}`);
+    const sway = (hashUnit(seed, 1) - 0.5) * 2 * DIRT_PATH.swayAmp;
+    const len = Math.min(d * DIRT_PATH.lenFactor, this._islandR * 0.6);
+    const points = [];
+    for (let i = 0; i <= DIRT_PATH.steps; i += 1) {
+      const t = i / DIRT_PATH.steps;
+      const along = 2 + len * t; // arranca unos pasos tierra adentro del muelle
+      const side = Math.sin(t * Math.PI) * sway; // comba en arco, extremos fijos
+      points.push({ wx: wx - ux * along + px * side, wz: wz - uz * along + pz * side });
+    }
+    return this._buildGroundRibbon(points, {
+      width: DIRT_PATH.width,
+      color: ENV_COLORS.dirt,
+      opacity: DIRT_PATH.opacity,
+      y: GROUND_Y + DIRT_PATH.lift,
+    });
+  }
+
+  /**
+   * Punto del cartel de cada comarca (JG-7), determinista: hacia el borde de
+   * su plataforma en dirección al puerto (el viajero lo lee al llegar), con
+   * un barrido de yaws si el candidato cae encima de una casa o de la cabaña
+   * del brujo (mismo espíritu que wizardSpot). Una comarca sin hueco libre se
+   * queda sin cartel: su sprite flotante basta.
+   * @returns {Map<string, { wx: number, wz: number, yaw: number, name: string }>}
+   */
+  _computeAreaSignSpots() {
+    const spots = new Map();
+    if (!this.map) return spots;
+    const portW = this.map.startPort
+      ? worldFromMap(this.map.startPort.x, this.map.startPort.y)
+      : null;
+    const clearance = CITY_COLLIDER_RADIUS + AREA_SIGN.clearance;
+    for (const { area, center, radius } of areaLayout(this.map)) {
+      // Objetivo al que mira el tablón: el puerto (o el centro sin puerto).
+      const tx = portW?.wx ?? 0;
+      const tz = portW?.wz ?? 0;
+      const base = Math.atan2(tx - center.wx, tz - center.wz);
+      for (const off of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, Math.PI]) {
+        const a = base + off;
+        const wx = center.wx + Math.sin(a) * radius * AREA_SIGN.inset;
+        const wz = center.wz + Math.cos(a) * radius * AREA_SIGN.inset;
+        const hitsCity = this._walkCities.some(
+          (c) => Math.hypot(c.wx - wx, c.wz - wz) < clearance,
+        );
+        const hitsWizard = this._wizardSpotW
+          ? Math.hypot(this._wizardSpotW.wx - wx, this._wizardSpotW.wz - wz) <
+            WIZARD.colliderRadius + AREA_SIGN.clearance
+          : false;
+        if (!hitsCity && !hitsWizard) {
+          spots.set(area.id, {
+            wx,
+            wz,
+            yaw: facadeYawToward({ wx, wz }, { wx: tx, wz: tz }),
+            name: area.name,
+          });
+          break;
+        }
+      }
+    }
+    return spots;
+  }
+
+  /**
+   * Cartel de MADERA de comarca (JG-7): poste con brazo, dos cadenitas y
+   * tablón colgante con el nombre quemado (textura cacheada, _signTexture).
+   * Cara delantera y trasera con la MISMA textura (legible desde ambos
+   * lados). Decorativo: sin colisión ni picking, como las vallas TRIBBU.
+   * @param {{ wx: number, wz: number, yaw: number, name: string }} spot
+   */
+  _buildAreaSign(spot) {
+    const THREE = this._THREE;
+    const group = new THREE.Group();
+    group.position.set(
+      spot.wx,
+      groundHeightAt(spot.wx, spot.wz, { radius: this._islandR }),
+      spot.wz,
+    );
+    group.rotation.y = spot.yaw;
+    const woodMat = new THREE.MeshLambertMaterial({
+      color: ENV_COLORS.post,
+      flatShading: true,
+      map: this._envTexture('wood'),
+    });
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(AREA_SIGN.postR, AREA_SIGN.postR + 0.03, AREA_SIGN.postH, 6),
+      woodMat,
+    );
+    post.position.y = AREA_SIGN.postH / 2;
+    post.castShadow = SHADOWS.enabled;
+    group.add(post);
+    // Brazo horizontal del que cuelga el tablón (+x local).
+    const arm = new THREE.Mesh(
+      new THREE.CylinderGeometry(AREA_SIGN.armR, AREA_SIGN.armR, AREA_SIGN.armLen, 6),
+      woodMat,
+    );
+    arm.rotation.z = Math.PI / 2;
+    arm.position.set(AREA_SIGN.armLen / 2 - AREA_SIGN.postR, AREA_SIGN.armY, 0);
+    arm.castShadow = SHADOWS.enabled;
+    group.add(arm);
+    const plankX = AREA_SIGN.armLen * 0.55;
+    const plankTop = AREA_SIGN.armY - AREA_SIGN.chainDrop;
+    // Cadenitas: dos cilindros finos del brazo al canto superior del tablón.
+    const chainGeo = new THREE.CylinderGeometry(0.02, 0.02, AREA_SIGN.chainDrop, 4);
+    const chainMat = new THREE.MeshLambertMaterial({ color: 0x4a4a4a, flatShading: true });
+    for (const lx of [plankX - AREA_SIGN.plankW / 2 + 0.18, plankX + AREA_SIGN.plankW / 2 - 0.18]) {
+      const chain = new THREE.Mesh(chainGeo, chainMat);
+      chain.position.set(lx, plankTop + AREA_SIGN.chainDrop / 2, 0);
+      group.add(chain);
+    }
+    const plank = new THREE.Mesh(
+      new THREE.BoxGeometry(AREA_SIGN.plankW, AREA_SIGN.plankH, AREA_SIGN.plankD),
+      new THREE.MeshLambertMaterial({
+        color: ENV_COLORS.plank,
+        flatShading: true,
+        map: this._envTexture('wood'),
+      }),
+    );
+    plank.position.set(plankX, plankTop - AREA_SIGN.plankH / 2, 0);
+    plank.castShadow = SHADOWS.enabled;
+    group.add(plank);
+    // Cara del nombre por delante Y por detrás (cada plano mira a su lado:
+    // el texto se lee bien desde ambos, sin espejos).
+    const faceGeo = new THREE.PlaneGeometry(AREA_SIGN.plankW - 0.12, AREA_SIGN.plankH - 0.08);
+    const faceMat = new THREE.MeshBasicMaterial({ map: this._signTexture(spot.name) });
+    for (const side of [1, -1]) {
+      const face = new THREE.Mesh(faceGeo, faceMat);
+      face.position.set(plankX, plankTop - AREA_SIGN.plankH / 2, side * (AREA_SIGN.plankD / 2 + 0.01));
+      if (side === -1) face.rotation.y = Math.PI;
+      group.add(face);
+    }
+    return group;
+  }
+
+  /**
+   * Textura del tablón de comarca (JG-7): madera clara con veta determinista
+   * y el nombre QUEMADO (halo de quemado ancho + tinta marrón muy oscura,
+   * serif del sistema). Cacheada por nombre en _plateTextures (clave
+   * "sign:", userData.shared): se libera con la caché al cambiar de isla.
+   * @param {string} name
+   */
+  _signTexture(name) {
+    const key = `sign:${name}`;
+    let texture = this._plateTextures.get(key);
+    if (texture) return texture;
+    const THREE = this._THREE;
+    const seed = hashId(`sign:${name}`);
+    const rnd = (i) => hashUnit(seed, i);
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 104;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#c19a63';
+    ctx.fillRect(0, 0, 320, 104);
+    // Veta de la madera del tablón.
+    for (let i = 0; i < 9; i += 1) {
+      const y = rnd(i * 4) * 104;
+      ctx.strokeStyle = `rgba(90, 58, 25, ${(0.12 + rnd(i * 4 + 1) * 0.14).toFixed(3)})`;
+      ctx.lineWidth = 1 + rnd(i * 4 + 2) * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.bezierCurveTo(106, y + rnd(i * 4 + 3) * 8 - 4, 212, y - (rnd(i * 4 + 1) * 8 - 4), 320, y);
+      ctx.stroke();
+    }
+    // Borde quemado del tablón.
+    ctx.strokeStyle = 'rgba(52, 30, 10, 0.65)';
+    ctx.lineWidth = 7;
+    ctx.strokeRect(3.5, 3.5, 313, 97);
+    // Nombre quemado: halo ancho de quemado + tinta oscura encima. La fuente
+    // se encoge hasta que quepan también los nombres largos.
+    let fontSize = 40;
+    const font = (px) => `700 ${px}px Georgia, 'Times New Roman', serif`;
+    ctx.font = font(fontSize);
+    while (fontSize > 16 && ctx.measureText(name).width > 284) {
+      fontSize -= 2;
+      ctx.font = font(fontSize);
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(70, 38, 12, 0.4)';
+    ctx.lineWidth = 5;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(name, 160, 54);
+    ctx.fillStyle = '#3a2008';
+    ctx.fillText(name, 160, 54);
+    texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.userData.shared = true;
+    this._plateTextures.set(key, texture);
+    return texture;
   }
 
   /**
@@ -2650,6 +3035,9 @@ export class CareerIsland3D extends LitElement {
       }
     }
 
+    // Atrezzo pirata del muelle (JG-7): barriles, cajas, norays y cuerda.
+    harbor.add(this._buildPortProps(materialFor, { wx, wz, seaYaw, deckY: DECK_Y }));
+
     // Barca low-poly amarrada al costado del muelle, flotando en el agua:
     // casco blanco con borda de madera, banco y proa apuntada. Es la puerta
     // del ARCHIPIÉLAGO (MC-14): clicable en vista aérea (raycast, como las
@@ -2737,6 +3125,36 @@ export class CareerIsland3D extends LitElement {
     dome.position.y = towerTop + 1.07;
     lighthouse.add(dome);
 
+    // Bandera pirata (JG-7) en lo alto del faro: mástil fino y paño con
+    // calavera que ondea por vértices en _tickEnvironment (como el agua).
+    const poleBase = towerTop + 1.35;
+    const flagPole = new THREE.Mesh(
+      new THREE.CylinderGeometry(PIRATE_FLAG.poleR, PIRATE_FLAG.poleR, PIRATE_FLAG.poleH, 5),
+      materialFor(ENV_COLORS.post),
+    );
+    flagPole.position.y = poleBase + PIRATE_FLAG.poleH / 2;
+    lighthouse.add(flagPole);
+    const flagGeo = new THREE.PlaneGeometry(
+      PIRATE_FLAG.w,
+      PIRATE_FLAG.h,
+      PIRATE_FLAG.segX,
+      PIRATE_FLAG.segY,
+    );
+    flagGeo.translate(PIRATE_FLAG.w / 2, 0, 0); // el borde izquierdo, fijo al mástil
+    const flag = new THREE.Mesh(
+      flagGeo,
+      new THREE.MeshLambertMaterial({
+        map: this._envTexture('jollyroger'),
+        side: THREE.DoubleSide,
+      }),
+    );
+    flag.position.y = poleBase + PIRATE_FLAG.poleH - PIRATE_FLAG.h / 2 - 0.06;
+    flag.rotation.y = Math.PI / 5; // el paño no queda plano de cara al mar
+    // Posiciones base del paño: el ondeo del loop parte SIEMPRE de ellas.
+    flag.userData.basePos = Float32Array.from(flagGeo.attributes.position.array);
+    this._flags.push(flag);
+    lighthouse.add(flag);
+
     // Cartel «Puerto» discreto (la etiqueta flotante existente).
     const label = this._makeLabel('Puerto', {
       x: 0,
@@ -2752,6 +3170,109 @@ export class CareerIsland3D extends LitElement {
     label.visible = labelVisible;
     this._areaLabels.push(label);
     group.add(label);
+    return group;
+  }
+
+  /**
+   * Atrezzo pirata del muelle (JG-7): barriles con duelas (InstancedMesh y
+   * textura 'barrel' a color), cajas de madera apiladas, dos norays en el
+   * borde del tablero y una cuerda vencida entre ellos (tubo sobre una Bézier
+   * cuadrática). Coordenadas locales del puerto (+z hacia el mar); lo apoyado
+   * en tierra se pega al MISMO suelo del caminante (groundHeightAt, rotando
+   * el offset local a mundo como los postes del muelle). 4 draw calls.
+   * @param {(color: number, texKey?: string|null) => object} materialFor
+   * @param {{ wx: number, wz: number, seaYaw: number, deckY: number }} at
+   */
+  _buildPortProps(materialFor, { wx, wz, seaYaw, deckY }) {
+    const THREE = this._THREE;
+    const group = new THREE.Group();
+    const R = this._islandR;
+    const cosY = Math.cos(seaYaw);
+    const sinY = Math.sin(seaYaw);
+    /** Altura LOCAL del suelo bajo un punto local del puerto. */
+    const groundLocalY = (lx, lz) => {
+      const px = wx + lx * cosY + lz * sinY;
+      const pz = wz - lx * sinY + lz * cosY;
+      return groundHeightAt(px, pz, { radius: R }) - GROUND_Y;
+    };
+    const dummy = new THREE.Object3D();
+    /** InstancedMesh con una matriz por pieza del atrezzo (fija, determinista). */
+    const instanced = (geo, material, items, place) => {
+      const mesh = new THREE.InstancedMesh(geo, material, items.length);
+      items.forEach((item, i) => {
+        dummy.position.set(0, 0, 0);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        place(dummy, item);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = SHADOWS.enabled;
+      group.add(mesh);
+    };
+
+    // Barriles: cilindro ligeramente troncocónico con la textura de duelas y
+    // flejes (a color: el material no tinta). Los `stacked` van encima.
+    instanced(
+      new THREE.CylinderGeometry(PORT_PROPS.barrelR * 0.86, PORT_PROPS.barrelR, PORT_PROPS.barrelH, 9),
+      new THREE.MeshLambertMaterial({ map: this._envTexture('barrel'), flatShading: true }),
+      PORT_PROPS.barrels,
+      (d, b) => {
+        const y =
+          groundLocalY(b.lx, b.lz) +
+          (PORT_PROPS.barrelH * b.s) / 2 +
+          (b.stacked ? PORT_PROPS.barrelH * 0.92 : 0);
+        d.position.set(b.lx, y, b.lz);
+        d.rotation.y = b.ry;
+        d.scale.setScalar(b.s);
+      },
+    );
+
+    // Cajas de madera: cubos con veta tintada del color de tablón claro.
+    instanced(
+      new THREE.BoxGeometry(PORT_PROPS.crateS, PORT_PROPS.crateS, PORT_PROPS.crateS),
+      materialFor(ENV_COLORS.plank, 'wood'),
+      PORT_PROPS.crates,
+      (d, c) => {
+        const y =
+          groundLocalY(c.lx, c.lz) +
+          (PORT_PROPS.crateS * c.s) / 2 +
+          (c.stacked ? PORT_PROPS.crateS * 0.82 : 0);
+        d.position.set(c.lx, y, c.lz);
+        d.rotation.y = c.ry;
+        d.scale.setScalar(c.s);
+      },
+    );
+
+    // Norays de amarre en el borde del tablero del muelle.
+    instanced(
+      new THREE.CylinderGeometry(PORT_PROPS.bollardR, PORT_PROPS.bollardR + 0.04, PORT_PROPS.bollardH, 6),
+      materialFor(ENV_COLORS.post),
+      PORT_PROPS.bollardsLz,
+      (d, lz) => {
+        d.position.set(PORT_PROPS.bollardLx, deckY + PORT_PROPS.bollardH / 2, lz);
+      },
+    );
+
+    // Cuerda vencida entre los dos norays (tubo sobre Bézier cuadrática).
+    const top1 = new THREE.Vector3(
+      PORT_PROPS.bollardLx,
+      deckY + PORT_PROPS.bollardH,
+      PORT_PROPS.bollardsLz[0],
+    );
+    const top2 = new THREE.Vector3(
+      PORT_PROPS.bollardLx,
+      deckY + PORT_PROPS.bollardH,
+      PORT_PROPS.bollardsLz[1],
+    );
+    const mid = top1.clone().add(top2).multiplyScalar(0.5);
+    mid.y -= PORT_PROPS.ropeSag;
+    const rope = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(top1, mid, top2), 12, PORT_PROPS.ropeR, 5),
+      materialFor(ENV_COLORS.rope),
+    );
+    group.add(rope);
     return group;
   }
 
@@ -3540,6 +4061,9 @@ export class CareerIsland3D extends LitElement {
     wood: Object.freeze({ size: 128, repeat: [1, 1] }),
     cloud: Object.freeze({ size: 128, repeat: [1, 1] }),
     wizard: Object.freeze({ size: 128, repeat: [3, 1] }),
+    // Arte pirata (JG-7): duelas de barril y paño de la bandera (a color).
+    barrel: Object.freeze({ size: 128, repeat: [1, 1] }),
+    jollyroger: Object.freeze({ size: 128, repeat: [1, 1] }),
   });
 
   /**
@@ -3582,21 +4106,144 @@ export class CareerIsland3D extends LitElement {
   static _paintEnvCanvas(key, ctx, size) {
     const seed = hashId(`env:${key}`);
     const rnd = (i) => hashUnit(seed, i);
-    if (key === 'grass' || key === 'sand') {
-      // Moteado/granulado en 3 tonos sobre el color base del terreno.
-      const base = key === 'grass' ? '#9cc98c' : '#e9dcae';
-      const tones =
-        key === 'grass'
-          ? ['#8fbf7f', '#a9d699', '#85b275']
-          : ['#dfcf9c', '#f2e8c4', '#d6c48e'];
-      const dots = key === 'grass' ? 900 : 1300;
-      const maxDot = key === 'grass' ? 2.4 : 1.4;
-      ctx.fillStyle = base;
+    if (key === 'grass') {
+      // Hierba TROPICAL (JG-7): moteado en 5 tonos (antes 3, con un verde
+      // hondo y otro amarillento) + briznas cortas dibujadas — de cerca deja
+      // de ser un moteado uniforme y parece manto vegetal.
+      const tones = ['#8fbf7f', '#a9d699', '#85b275', '#b9de9e', '#79a468'];
+      ctx.fillStyle = '#9cc98c';
       ctx.fillRect(0, 0, size, size);
-      for (let i = 0; i < dots; i += 1) {
+      for (let i = 0; i < 1000; i += 1) {
         ctx.fillStyle = tones[i % tones.length];
-        const s = 1 + rnd(i * 3 + 2) * maxDot;
+        const s = 1 + rnd(i * 3 + 2) * 2.4;
         ctx.fillRect(rnd(i * 3) * size, rnd(i * 3 + 1) * size, s, s);
+      }
+      // Briznas: trazos cortos casi verticales en verde hondo translúcido.
+      ctx.strokeStyle = 'rgba(62, 105, 66, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 90; i += 1) {
+        const x = rnd(10_000 + i * 4) * size;
+        const y = rnd(10_001 + i * 4) * size;
+        const len = 3 + rnd(10_002 + i * 4) * 4;
+        const tilt = (rnd(10_003 + i * 4) - 0.5) * 3;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + tilt, y - len);
+        ctx.stroke();
+      }
+      return;
+    }
+    if (key === 'sand') {
+      // Arena con detalle (JG-7): granulado de siempre + ondas de marea
+      // claras (bandas onduladas translúcidas) y conchas puntuales (abanicos
+      // diminutos con varillas).
+      const tones = ['#dfcf9c', '#f2e8c4', '#d6c48e'];
+      ctx.fillStyle = '#e9dcae';
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 1300; i += 1) {
+        ctx.fillStyle = tones[i % tones.length];
+        const s = 1 + rnd(i * 3 + 2) * 1.4;
+        ctx.fillRect(rnd(i * 3) * size, rnd(i * 3 + 1) * size, s, s);
+      }
+      // Ondas de marea: líneas onduladas claras, casi lavadas.
+      ctx.strokeStyle = 'rgba(255, 252, 236, 0.35)';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < 4; i += 1) {
+        const y = (0.14 + i * 0.24 + rnd(20_000 + i * 5) * 0.08) * size;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(
+          size * 0.33,
+          y + rnd(20_001 + i * 5) * 7 - 3.5,
+          size * 0.66,
+          y - (rnd(20_002 + i * 5) * 7 - 3.5),
+          size,
+          y,
+        );
+        ctx.stroke();
+      }
+      // Conchas: abanico (arco + varillas radiales) en tonos claros/rosados.
+      for (let i = 0; i < 7; i += 1) {
+        const cx = rnd(21_000 + i * 6) * size;
+        const cy = rnd(21_001 + i * 6) * size;
+        const r = 2.2 + rnd(21_002 + i * 6) * 2.4;
+        const a0 = rnd(21_003 + i * 6) * Math.PI * 2;
+        ctx.fillStyle = i % 2 === 0 ? '#f6efdd' : '#efd4c4';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, a0, a0 + Math.PI);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(160, 120, 90, 0.55)';
+        ctx.lineWidth = 0.7;
+        for (const k of [0.25, 0.5, 0.75]) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          const a = a0 + Math.PI * k;
+          ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+          ctx.stroke();
+        }
+      }
+      return;
+    }
+    if (key === 'barrel') {
+      // Barril (JG-7): duelas verticales sobre madera media y dos flejes
+      // oscuros. A COLOR: el material del barril no tinta (map sin color).
+      ctx.fillStyle = '#8a6437';
+      ctx.fillRect(0, 0, size, size);
+      const staves = 7;
+      const w = size / staves;
+      for (let s = 0; s < staves; s += 1) {
+        ctx.fillStyle = `rgba(50, 30, 10, ${(0.08 + rnd(s * 3) * 0.1).toFixed(3)})`;
+        ctx.fillRect(s * w, 0, w, size);
+        ctx.fillStyle = 'rgba(40, 22, 8, 0.4)';
+        ctx.fillRect(s * w, 0, 1.5, size);
+      }
+      ctx.fillStyle = '#3d2f1c';
+      ctx.fillRect(0, size * 0.16, size, size * 0.09);
+      ctx.fillRect(0, size * 0.75, size, size * 0.09);
+      return;
+    }
+    if (key === 'jollyroger') {
+      // Bandera pirata (JG-7): paño negro con veladuras y calavera con
+      // tibias cruzadas — todo paths de canvas. A COLOR, como 'wizard'.
+      ctx.fillStyle = '#181a1f';
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 5; i += 1) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.02 + rnd(i * 3) * 0.04).toFixed(3)})`;
+        ctx.fillRect(0, rnd(i * 3 + 1) * size, size, 3 + rnd(i * 3 + 2) * 6);
+      }
+      const cx = size / 2;
+      const cy = size * 0.4;
+      const r = size * 0.17;
+      ctx.fillStyle = '#f2efe4';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(cx - r * 0.55, cy + r * 0.7, r * 1.1, r * 0.55); // mandíbula
+      ctx.fillStyle = '#181a1f';
+      ctx.beginPath(); // cuencas
+      ctx.arc(cx - r * 0.42, cy - r * 0.1, r * 0.26, 0, Math.PI * 2);
+      ctx.arc(cx + r * 0.42, cy - r * 0.1, r * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath(); // nariz
+      ctx.moveTo(cx, cy + r * 0.18);
+      ctx.lineTo(cx - r * 0.14, cy + r * 0.52);
+      ctx.lineTo(cx + r * 0.14, cy + r * 0.52);
+      ctx.closePath();
+      ctx.fill();
+      // Tibias cruzadas bajo el cráneo.
+      ctx.strokeStyle = '#f2efe4';
+      ctx.lineWidth = size * 0.055;
+      ctx.lineCap = 'round';
+      const by = cy + r * 1.75;
+      const bl = r * 1.3;
+      for (const sgn of [1, -1]) {
+        ctx.beginPath();
+        ctx.moveTo(cx - bl * sgn, by - r * 0.45);
+        ctx.lineTo(cx + bl * sgn, by + r * 0.45);
+        ctx.stroke();
       }
       return;
     }
@@ -3897,6 +4544,10 @@ export class CareerIsland3D extends LitElement {
     for (const spot of this._billboardSpotsW) {
       exclusions.push({ x: spot.wx, z: spot.wz, r: BILLBOARD.clearance });
     }
+    // Carteles de comarca (JG-7): que la vegetación no tape el tablón.
+    for (const spot of this._areaSignSpots.values()) {
+      exclusions.push({ x: spot.wx, z: spot.wz, r: 2.2 });
+    }
     const pathIds = [
       ...(this.journey?.visitedCities ?? []),
       ...(this.journey?.plannedRoute ?? []),
@@ -3923,9 +4574,14 @@ export class CareerIsland3D extends LitElement {
     /** @type {{x: number, z: number}[]} */
     const conifers = [];
     const leafies = [];
+    const palms = [];
     const rocks = [];
+    // Reparto (JG-7): la franja COSTERA es de las palmeras (la estrella de la
+    // isla pirata); coníferas y frondosos se quedan con el interior.
+    const coastR = maxR * PALM.coastBand;
     spots.forEach((p, i) => {
       if (i >= treeCount) rocks.push(p);
+      else if (Math.hypot(p.x, p.z) > coastR) palms.push(p);
       else if (hashUnit(seed, 5000 + i) < 0.55) conifers.push(p);
       else leafies.push(p);
     });
@@ -3986,6 +4642,99 @@ export class CareerIsland3D extends LitElement {
     leafyCrown.translate(0, 2.05, 0);
     instanced(leafyTrunk, trunkMat, leafies, leafyPlace);
     instanced(leafyCrown, mat(ENV_COLORS.leafy), leafies, leafyPlace);
+
+    // PALMERA (JG-7): tronco curvado — segmentos cortos con deriva lateral
+    // cuadrática horneada — y corona de hojas arqueadas (planos doblados por
+    // vértices). Cada conjunto se FUSIONA en una geometría (mergeGeometries):
+    // todas las palmeras de la isla suman 2 draw calls.
+    const merge = this._mergeGeometries;
+    const palmPlace = (d, p, i) => {
+      d.position.set(p.x, groundY(p) - 0.05, p.z);
+      d.rotation.y = hashUnit(seed, 6500 + i * 3) * Math.PI * 2;
+      d.scale.setScalar(0.85 + hashUnit(seed, 6501 + i * 3) * 0.5);
+    };
+    const trunkParts = [];
+    for (let s = 0; s < PALM.segments; s += 1) {
+      const t0 = s / PALM.segments;
+      const t1 = (s + 1) / PALM.segments;
+      const part = new THREE.CylinderGeometry(
+        PALM.baseR + (PALM.topR - PALM.baseR) * t1,
+        PALM.baseR + (PALM.topR - PALM.baseR) * t0,
+        PALM.segmentH,
+        5,
+      );
+      const mid = (t0 + t1) / 2;
+      part.translate(PALM.lean * mid * mid, PALM.segmentH * (s + 0.5), 0);
+      trunkParts.push(part);
+    }
+    const palmTrunkGeo = merge(trunkParts);
+    for (const part of trunkParts) part.dispose();
+    // Hoja: plano a lo largo de +z con arco por vértices (sube un poco y la
+    // punta se vence, droop cuadrático); la corona reparte `leaves` copias.
+    const leafBase = new THREE.PlaneGeometry(PALM.leafW, PALM.leafLen, 1, PALM.leafSteps);
+    leafBase.translate(0, PALM.leafLen / 2, 0); // la base de la hoja, en el origen
+    leafBase.rotateX(Math.PI / 2); // tumbada, apuntando a +z
+    const lp = leafBase.attributes.position;
+    for (let i = 0; i < lp.count; i += 1) {
+      const t = lp.getZ(i) / PALM.leafLen;
+      lp.setY(i, lp.getY(i) + 0.35 * t - PALM.droop * t * t);
+    }
+    leafBase.computeVertexNormals();
+    const trunkTop = PALM.segments * PALM.segmentH;
+    const fronds = [];
+    for (let l = 0; l < PALM.leaves; l += 1) {
+      const frond = leafBase.clone();
+      frond.rotateY((l / PALM.leaves) * Math.PI * 2 + 0.4);
+      frond.translate(PALM.lean, trunkTop, 0); // la corona nace donde acaba el tronco
+      fronds.push(frond);
+    }
+    const palmCrownGeo = merge(fronds);
+    leafBase.dispose();
+    for (const frond of fronds) frond.dispose();
+    instanced(palmTrunkGeo, mat(ENV_COLORS.palmTrunk), palms, palmPlace);
+    instanced(
+      palmCrownGeo,
+      new THREE.MeshLambertMaterial({
+        color: ENV_COLORS.palmLeaf,
+        flatShading: true,
+        side: THREE.DoubleSide,
+      }),
+      palms,
+      palmPlace,
+    );
+
+    // Matas de hierba (JG-7): manojos de conos finos fusionados, repartidos
+    // con las MISMAS exclusiones y semilla propia (no pisan árboles ni props).
+    const tuftCount = Math.min(Math.max(Math.round(R * 1.3), 30), 110);
+    const tuftSpots = scatterPositions(
+      tuftCount,
+      maxR,
+      exclusions,
+      hashId(`tuft:${this.map?.id ?? 'seed'}`),
+    );
+    const tuftParts = [];
+    for (let b = 0; b < TUFT.blades; b += 1) {
+      const blade = new THREE.ConeGeometry(TUFT.r, TUFT.h, 4);
+      blade.translate(0, TUFT.h / 2, 0);
+      const a = (b / TUFT.blades) * Math.PI * 2;
+      blade.rotateX(0.28); // cada brizna, vencida…
+      blade.rotateY(a); // …hacia un tercio del abanico
+      blade.translate(Math.cos(a) * TUFT.spread, 0, Math.sin(a) * TUFT.spread);
+      tuftParts.push(blade);
+    }
+    const tuftGeo = merge(tuftParts);
+    for (const part of tuftParts) part.dispose();
+    instanced(
+      tuftGeo,
+      mat(ENV_COLORS.stem),
+      tuftSpots,
+      (d, p, i) => {
+        d.position.set(p.x, groundY(p), p.z);
+        d.rotation.y = hashUnit(seed, 9800 + i) * Math.PI * 2;
+        d.scale.setScalar(0.8 + hashUnit(seed, 9801 + i) * 0.6);
+      },
+      false,
+    );
 
     // Rocas: icosaedros a escala NO uniforme (cada roca es distinta sin
     // deformar vértices: barato y determinista).
@@ -4428,8 +5177,10 @@ export class CareerIsland3D extends LitElement {
 
   /**
    * Ambiente animado (MC-10), en TODOS los modos: ondulación senoidal de los
-   * vértices del agua (con renormalizado barato: la malla es gruesa) y deriva
-   * lentísima de las nubes con envoltura en los bordes del mundo.
+   * vértices del agua (con renormalizado barato: la malla es gruesa), deriva
+   * lentísima de las nubes con envoltura en los bordes del mundo, y el ondeo
+   * de la bandera pirata (JG-7): seno sobre las posiciones BASE del paño con
+   * amplitud creciente hacia el borde libre (el lado del mástil, quieto).
    * @param {DOMHighResTimeStamp} now
    */
   _tickEnvironment(now) {
@@ -4452,6 +5203,18 @@ export class CareerIsland3D extends LitElement {
     for (const cloud of this._clouds) {
       cloud.position.x += cloud.userData.drift * dt;
       if (cloud.position.x > wrap) cloud.position.x = -wrap;
+    }
+    // Bandera pirata (JG-7): ondeo por vértices desde las posiciones base.
+    const flagT = (now / 1000) * PIRATE_FLAG.waveSpeed;
+    for (const flag of this._flags) {
+      const pos = flag.geometry.attributes.position;
+      const base = flag.userData.basePos;
+      for (let i = 0; i < pos.count; i += 1) {
+        const x = base[i * 3];
+        const k = x / PIRATE_FLAG.w; // 0 en el mástil, 1 en el borde libre
+        pos.setZ(i, Math.sin(x * PIRATE_FLAG.waveFreq + flagT) * PIRATE_FLAG.waveAmp * k);
+      }
+      pos.needsUpdate = true;
     }
   }
 
@@ -5200,6 +5963,8 @@ export class CareerIsland3D extends LitElement {
     this._sun = null;
     this._waterMesh = null;
     this._clouds = [];
+    this._flags = [];
+    this._areaSignSpots = new Map();
   }
 
   render() {
