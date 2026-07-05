@@ -5334,6 +5334,17 @@ export class CareerApp extends LitElement {
     >🧭 Archipiélago</button>`;
   }
 
+  /** Botón HUD «🚶 Explorar a pie»: deshabilitado (y abreviado) en táctil. */
+  _renderWalkButton() {
+    const coarse = this._coarsePointer;
+    const title = coarse
+      ? 'Modo de escritorio: requiere ratón y teclado'
+      : 'Recorre la isla a pie en primera persona: cursor libre, arrastra para mirar (WASD/flechas para andar)';
+    return html`<button @click=${this._enterFps} ?disabled=${coarse} title=${title}>
+      🚶 ${coarse ? 'A pie (escritorio)' : 'Explorar a pie'}
+    </button>`;
+  }
+
   /** Botón HUD «👥 Equipo» (MC-12): muestra/oculta los avatares del equipo. */
   _renderTeamButton() {
     return html`<button
@@ -6135,13 +6146,7 @@ export class CareerApp extends LitElement {
                       @click=${this._focusOverview}
                       title="Volver a la vista aérea de toda la isla"
                     >Isla completa</button>
-                    <button
-                      @click=${this._enterFps}
-                      ?disabled=${this._coarsePointer}
-                      title=${this._coarsePointer
-                        ? 'Modo de escritorio: requiere ratón y teclado'
-                        : 'Recorre la isla a pie en primera persona: cursor libre, arrastra para mirar (WASD/flechas para andar)'}
-                    >🚶 ${this._coarsePointer ? 'A pie (escritorio)' : 'Explorar a pie'}</button>
+                    ${this._renderWalkButton()}
                     ${this._renderTeamButton()}
                     ${this._renderAudioButton()}
                     <button
