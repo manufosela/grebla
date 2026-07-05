@@ -34,6 +34,7 @@
  * @property {string[]} prereqs ids de ciudades prerequisito
  * @property {boolean} [deprecated]            Tecnología/skill en desuso: no visitable
  * @property {Recommendation[]} [recommendations] Material recomendado (legado, compat)
+ * @property {string} [summary]     Resumen didáctico «¿Qué es?» de la tarjeta (JG-18)
  * @property {string[]} [keyPoints]  Puntos fundamentales a aprender (MC-15)
  * @property {string} [aiFocus]      Lente era-IA: qué hace la IA por ti y dónde profundizar tú (MC-15)
  * @property {Resource[]} [resources] Recursos curados de la pestaña «Recursos» (MC-15)
