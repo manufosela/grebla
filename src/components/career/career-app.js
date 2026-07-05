@@ -6073,16 +6073,19 @@ export class CareerApp extends LitElement {
         : null}
       ${blocked ? this._renderBlockedPrereqs(sel) : null}
       ${this._renderEndorsement(sel, status === 'visited')}
-      ${isCurrent || inRoute
-        ? html`<div class="badges">
-            ${isCurrent ? html`<span class="badge current">Actual</span>` : null}
-            ${inRoute ? html`<span class="badge route">En ruta</span>` : null}
-          </div>`
-        : null}
+      ${this._renderCityFlags(isCurrent, inRoute)}
       ${this._renderCityActions(sel, blocked)}
       ${this._renderEvidencePrompt(sel)}
       ${this._renderCityEvidences(sel)}
     </section>`;
+  }
+
+  /** Chips «Actual» / «En ruta» de la casa (JG-18), o nada si no aplican. */
+  _renderCityFlags(isCurrent, inRoute) {
+    if (!isCurrent && !inRoute) return null;
+    const current = isCurrent ? html`<span class="badge current">Actual</span>` : null;
+    const route = inRoute ? html`<span class="badge route">En ruta</span>` : null;
+    return html`<div class="badges">${current}${route}</div>`;
   }
 
   /**

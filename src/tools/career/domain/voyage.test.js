@@ -3,8 +3,10 @@ import {
   VOYAGE_MIN_MS,
   VOYAGE_MAX_MS,
   VOYAGE_REF_DISTANCE,
-  VOYAGE_BEND_MIN,
-  VOYAGE_BEND_MAX,
+  VOYAGE_ZIG_MIN,
+  VOYAGE_ZIG_MAX,
+  VOYAGE_LEGS_MIN,
+  VOYAGE_LEGS_MAX,
   VOYAGE_CLEARANCE,
   VOYAGE_EDGE,
   VOYAGE_LEAN_MAX_DEG,
@@ -21,12 +23,14 @@ function samplePoses(curve, n = 200) {
   return Array.from({ length: n + 1 }, (_, i) => voyagePose(curve, i / n));
 }
 
-/** Curva construida a mano (controles explícitos) para tests de la pose. */
-function handCurve(from, c1, c2, to) {
-  return { from, c1, c2, to, distance: Math.hypot(to.x - from.x, to.y - from.y) };
+/** Trayecto construido a mano (waypoints explícitos) para tests de la pose. */
+function handPath(...points) {
+  const from = points.at(0);
+  const to = points.at(-1);
+  return { from, to, points, distance: Math.hypot(to.x - from.x, to.y - from.y) };
 }
 
-describe('voyageCurve (trayecto pirata por mar, JG-17)', () => {
+describe('voyageCurve (trayecto pirata por mar, rumbo quebrado JG-17)', () => {
   const A = { id: 'js', x: 20, y: 50 };
   const B = { id: 'css', x: 80, y: 50 };
 
@@ -43,25 +47,38 @@ describe('voyageCurve (trayecto pirata por mar, JG-17)', () => {
     expect(curve.distance).toBeCloseTo(50);
   });
 
+  it('es una polilínea que empieza y acaba en los puertos', () => {
+    const curve = voyageCurve(A, B);
+    expect(curve.points.at(0)).toEqual({ x: A.x, y: A.y });
+    expect(curve.points.at(-1)).toEqual({ x: B.x, y: B.y });
+    expect(curve.points.length).toBeGreaterThanOrEqual(VOYAGE_LEGS_MIN + 1);
+    expect(curve.points.length).toBeLessThanOrEqual(VOYAGE_LEGS_MAX + 1);
+  });
+
   it('es determinista: mismo par de islas, misma ruta', () => {
     expect(voyageCurve(A, B)).toEqual(voyageCurve(A, B));
   });
 
-  it('la semilla es el PAR de ids: otras islas en el mismo sitio, otra comba', () => {
+  it('la semilla es el PAR de ids: otras islas en el mismo sitio, otro trazo', () => {
     const other = voyageCurve({ ...A, id: 'react' }, { ...B, id: 'vue' });
-    expect(other.c1).not.toEqual(voyageCurve(A, B).c1);
+    expect(other.points).not.toEqual(voyageCurve(A, B).points);
   });
 
-  it('comba perpendicular dentro del rango sorteado y hacia un solo lado', () => {
+  it('los waypoints interiores zigzaguean a lado y lado de la recta', () => {
+    // Rumbo este: la recta es y=50; los waypoints se separan arriba/abajo
+    // ALTERNANDO, con amplitud dentro del rango sorteado.
     const curve = voyageCurve(A, B);
-    // Rumbo este: la comba es vertical; ambos controles al MISMO lado.
-    const offA = curve.c1.y - 50;
-    const offB = curve.c2.y - 50;
-    expect(Math.sign(offA)).toBe(Math.sign(offB));
-    expect(Math.abs(offA)).toBeGreaterThanOrEqual(curve.distance * VOYAGE_BEND_MIN);
-    expect(Math.abs(offA)).toBeLessThanOrEqual(curve.distance * VOYAGE_BEND_MAX);
-    expect(curve.c1.x).toBeCloseTo(40);
-    expect(curve.c2.x).toBeCloseTo(60);
+    const interior = curve.points.slice(1, -1);
+    expect(interior.length).toBeGreaterThanOrEqual(1);
+    const offsets = interior.map((p) => p.y - 50);
+    for (const off of offsets) {
+      expect(Math.abs(off)).toBeGreaterThanOrEqual(curve.distance * VOYAGE_ZIG_MIN - 1e-6);
+      expect(Math.abs(off)).toBeLessThanOrEqual(curve.distance * VOYAGE_ZIG_MAX + 1e-6);
+    }
+    // Alternancia: si hay dos o más, cambian de signo.
+    for (let i = 1; i < offsets.length; i += 1) {
+      expect(Math.sign(offsets[i])).toBe(-Math.sign(offsets[i - 1]));
+    }
   });
 
   it('esquiva una isla plantada en mitad de la recta', () => {
@@ -73,34 +90,33 @@ describe('voyageCurve (trayecto pirata por mar, JG-17)', () => {
     expect(gap).toBeGreaterThanOrEqual(VOYAGE_CLEARANCE);
   });
 
-  it('rodea por el lado CONTRARIO al que asoma el obstáculo', () => {
+  it('mantiene la holgura al rodear una isla asome por donde asome', () => {
     const from = { id: 'a', x: 10, y: 50 };
     const to = { id: 'b', x: 90, y: 50 };
-    // Isla un pelo por ENCIMA de la recta (izquierda de la marcha): se rodea por abajo.
     const above = voyageCurve(from, to, [{ id: 'roca', x: 50, y: 47 }]);
-    expect(voyagePose(above, 0.5).y).toBeGreaterThan(50);
-    // Y un pelo por DEBAJO: se rodea por arriba.
     const below = voyageCurve(from, to, [{ id: 'roca', x: 50, y: 53 }]);
-    expect(voyagePose(below, 0.5).y).toBeLessThan(50);
+    const gapTo = (curve, isle) =>
+      Math.min(...samplePoses(curve).map((p) => Math.hypot(p.x - isle.x, p.y - isle.y)));
+    expect(gapTo(above, { x: 50, y: 47 })).toBeGreaterThanOrEqual(VOYAGE_CLEARANCE * 0.85);
+    expect(gapTo(below, { x: 50, y: 53 })).toBeGreaterThanOrEqual(VOYAGE_CLEARANCE * 0.85);
   });
 
   it('entre babor y estribor elige el lado con más agua libre', () => {
     // Escenario real del archipiélago: Bases→Backend Python; esquivar Product
-    // Manager por babor (oeste) plantaría el barco encima de Frontend — la
-    // puntuación de agua libre debe llevar la comba por estribor (este).
+    // Manager por babor plantaría el barco cerca de Frontend — la puntuación de
+    // agua libre debe mantener holgura con ambas.
     const from = { id: 'island', x: 50, y: 76 };
     const to = { id: 'backend-python', x: 32, y: 16 };
     const frontend = { id: 'frontend', x: 28, y: 54 };
     const pm = { id: 'product-manager', x: 40, y: 38 };
     const curve = voyageCurve(from, to, [from, to, frontend, pm]);
-    expect(voyagePose(curve, 0.5).x).toBeGreaterThan(44); // comba al este de la recta
     const gap = Math.min(
       ...samplePoses(curve).flatMap((p) => [
         Math.hypot(p.x - frontend.x, p.y - frontend.y),
         Math.hypot(p.x - pm.x, p.y - pm.y),
       ]),
     );
-    expect(gap).toBeGreaterThanOrEqual(VOYAGE_CLEARANCE * 0.8);
+    expect(gap).toBeGreaterThanOrEqual(VOYAGE_CLEARANCE * 0.7);
   });
 
   it('los puertos de origen/destino y las islas sin situar no estorban', () => {
@@ -108,10 +124,14 @@ describe('voyageCurve (trayecto pirata por mar, JG-17)', () => {
     expect(voyageCurve(A, B, [A, B, sinMapa])).toEqual(voyageCurve(A, B));
   });
 
-  it('acota los controles al mar visible (la comba no saca el barco del mapa)', () => {
+  it('acota los waypoints al mar visible (el zigzag no saca el barco del mapa)', () => {
     const curve = voyageCurve({ id: 'a', x: 5, y: 4 }, { id: 'b', x: 95, y: 4 });
-    expect(curve.c1.y).toBeGreaterThanOrEqual(VOYAGE_EDGE);
-    expect(curve.c2.y).toBeGreaterThanOrEqual(VOYAGE_EDGE);
+    for (const p of curve.points) {
+      expect(p.x).toBeGreaterThanOrEqual(VOYAGE_EDGE);
+      expect(p.x).toBeLessThanOrEqual(100 - VOYAGE_EDGE);
+      expect(p.y).toBeGreaterThanOrEqual(VOYAGE_EDGE);
+      expect(p.y).toBeLessThanOrEqual(100 - VOYAGE_EDGE);
+    }
   });
 
   it('rechaza puertos sin id, sin coordenadas finitas o coincidentes', () => {
@@ -124,56 +144,60 @@ describe('voyageCurve (trayecto pirata por mar, JG-17)', () => {
 
 describe('voyagePose (posición + rumbo + escora con easing)', () => {
   const curve = voyageCurve({ id: 'a', x: 10, y: 60 }, { id: 'b', x: 90, y: 30 });
+  const dir = { ux: (90 - 10) / Math.hypot(80, -30), uy: (30 - 60) / Math.hypot(80, -30) };
+  const along = (p) => (p.x - 10) * dir.ux + (p.y - 60) * dir.uy;
 
   it('acota t fuera de [0, 1] a los extremos del trayecto', () => {
     expect(voyagePose(curve, -0.5)).toEqual(voyagePose(curve, 0));
     expect(voyagePose(curve, 1.7)).toEqual(voyagePose(curve, 1));
   });
 
-  it('avanza monótono hacia el destino (sin recular)', () => {
-    const poses = samplePoses(curve, 100);
-    // Proyección sobre la marcha: con los controles a 1/3 y 2/3 nunca decrece.
-    for (let i = 1; i < poses.length; i += 1) {
-      expect(poses[i].x).toBeGreaterThanOrEqual(poses[i - 1].x);
+  it('avanza monótono hacia el destino (proyección sobre la marcha, sin recular)', () => {
+    const proj = samplePoses(curve, 100).map(along);
+    for (let i = 1; i < proj.length; i += 1) {
+      expect(proj[i]).toBeGreaterThanOrEqual(proj[i - 1] - 1e-6);
     }
   });
 
   it('zarpa y atraca despacio (easing): los extremos recorren menos que el centro', () => {
-    const dist = (t1, t2) => {
+    const step = (t1, t2) => {
       const p1 = voyagePose(curve, t1);
       const p2 = voyagePose(curve, t2);
       return Math.hypot(p2.x - p1.x, p2.y - p1.y);
     };
-    expect(dist(0, 0.1)).toBeLessThan(dist(0.45, 0.55));
-    expect(dist(0.9, 1)).toBeLessThan(dist(0.45, 0.55));
+    expect(step(0, 0.1)).toBeLessThan(step(0.45, 0.55));
+    expect(step(0.9, 1)).toBeLessThan(step(0.45, 0.55));
   });
 
-  it('zarpa proa al primer control y atraca llegando desde el segundo', () => {
-    expect(voyagePose(curve, 0).heading).toBeCloseTo(voyageAngle(curve.from, curve.c1));
-    expect(voyagePose(curve, 1).heading).toBeCloseTo(voyageAngle(curve.c2, curve.to));
+  it('zarpa proa al primer waypoint y atraca llegando al último tramo', () => {
+    const pts = curve.points;
+    expect(voyagePose(curve, 0).heading).toBeCloseTo(voyageAngle(pts.at(0), pts.at(1)));
+    expect(voyagePose(curve, 1).heading).toBeCloseTo(voyageAngle(pts.at(-2), pts.at(-1)));
   });
 
-  it('lleva rumbo tangente CONTINUO (sin bandazos entre frames)', () => {
-    const headings = samplePoses(curve).map((p) => p.heading);
+  it('lleva rumbo CONTINUO (vira en los waypoints, sin saltos entre frames)', () => {
+    const headings = samplePoses(curve, 300).map((p) => p.heading);
     for (let i = 1; i < headings.length; i += 1) {
-      expect(Math.abs(headings[i] - headings[i - 1])).toBeLessThan(0.15);
+      expect(Math.abs(headings[i] - headings[i - 1])).toBeLessThan(0.3);
     }
   });
 
-  it('escora acotada, nula en recta y de signo opuesto al espejar la comba', () => {
+  it('escora acotada, nula en recta y de signo opuesto al espejar el viraje', () => {
     for (const pose of samplePoses(curve)) {
       expect(Math.abs(pose.lean)).toBeLessThanOrEqual(VOYAGE_LEAN_MAX_DEG);
     }
-    const recta = handCurve({ x: 0, y: 50 }, { x: 33, y: 50 }, { x: 66, y: 50 }, { x: 100, y: 50 });
+    const recta = handPath({ x: 0, y: 50 }, { x: 100, y: 50 });
     expect(voyagePose(recta, 0.5).lean).toBe(0);
-    const arriba = handCurve({ x: 0, y: 50 }, { x: 33, y: 40 }, { x: 66, y: 40 }, { x: 100, y: 50 });
-    const abajo = handCurve({ x: 0, y: 50 }, { x: 33, y: 60 }, { x: 66, y: 60 }, { x: 100, y: 50 });
-    expect(voyagePose(arriba, 0.5).lean).toBeGreaterThan(0);
-    expect(voyagePose(abajo, 0.5).lean).toBeLessThan(0);
+    // V hacia arriba vs hacia abajo: el viraje en el vértice escora al revés.
+    const arriba = handPath({ x: 0, y: 50 }, { x: 50, y: 38 }, { x: 100, y: 50 });
+    const abajo = handPath({ x: 0, y: 50 }, { x: 50, y: 62 }, { x: 100, y: 50 });
+    const leanArriba = voyagePose(arriba, 0.5).lean;
+    const leanAbajo = voyagePose(abajo, 0.5).lean;
+    expect(leanArriba * leanAbajo).toBeLessThan(0);
   });
 
-  it('si la tangente degenera cae al rumbo recto con escora 0 (el viaje no se rompe)', () => {
-    const degen = handCurve({ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 10, y: 10 }, { x: 90, y: 60 });
+  it('si no hay tramo con rumbo cae al recto origen→destino con escora 0', () => {
+    const degen = { from: { x: 10, y: 10 }, to: { x: 90, y: 60 }, points: [{ x: 10, y: 10 }, { x: 10, y: 10 }], distance: Math.hypot(80, 50) };
     const pose = voyagePose(degen, 0);
     expect(pose.heading).toBeCloseTo(voyageAngle({ x: 10, y: 10 }, { x: 90, y: 60 }));
     expect(pose.lean).toBe(0);

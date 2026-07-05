@@ -9,25 +9,27 @@
  * es 16/10, así que la distancia en unidades de mapa es un proxy razonable
  * (no exacto) de la distancia visual: sobra para modular duración y comba.
  *
- * El trayecto (JG-17) es una Bézier CÚBICA determinista por PAR de islas: la
- * semilla es hashId("from→to") con mulberry32 (el mismo patrón que
- * islandShape/islandLayout), y decide el lado y el tamaño de la comba lateral
- * (perpendicular a la marcha, 8–18 % de la distancia). Si la recta pasa
- * rozando otra isla, la comba crece y se orienta para RODEARLA — una sola
- * pasada sobre el obstáculo más centrado: es una esquiva heurística, NO
+ * El trayecto (JG-17, rumbo quebrado) es una POLILÍNEA determinista por PAR de
+ * islas: la semilla es hashId("from→to") con mulberry32 (el mismo patrón que
+ * islandShape/islandLayout). En vez de una curva suave, son 2–4 TRAMOS RECTOS
+ * cuyos waypoints interiores zigzaguean a lado y lado de la recta (como quien
+ * navega a vela virando), con amplitud 5–10 % de la distancia. Si un tramo
+ * pasa rozando otra isla, el zigzag arranca hacia el lado contrario y crece
+ * para RODEARLA — esquiva heurística sobre el obstáculo más centrado, NO
  * pathfinding (dos islas flanqueando el rumbo por ambos lados podrían seguir
  * quedando cerca; con el archipiélago real no pasa).
  *
- * El barco tampoco lleva velocidad constante: voyagePose aplica
- * easeInOutCubic (zarpa y atraca despacio) y devuelve, además de la posición,
- * el rumbo tangente y la ESCORA (lean) derivada de la curvatura del giro.
+ * El barco tampoco lleva velocidad constante: voyagePose aplica easeInOutCubic
+ * (zarpa y atraca despacio) recorriendo la polilínea por longitud de arco, y
+ * en cada waypoint VIRA suavemente (mezcla el rumbo del tramo con el del
+ * vecino en una ventana VOYAGE_TURN_FRAC) con una ESCORA (lean) hacia el giro.
  * voyageBoatOrientation traduce la pose a la transformación del SPRITE
  * LATERAL: volteo horizontal + cabeceo acotado (un barco de perfil nunca rota
  * 90° aunque el rumbo sea vertical).
  *
  * @typedef {{ x: number, y: number }} SeaPoint  Punto del mapa del mar (0..100).
  * @typedef {{ id: string, x: number, y: number }} SeaIsland  Isla del índice (id + posición).
- * @typedef {{ from: SeaPoint, c1: SeaPoint, c2: SeaPoint, to: SeaPoint, distance: number }} VoyageCurve
+ * @typedef {{ from: SeaPoint, to: SeaPoint, points: SeaPoint[], distance: number }} VoyageCurve
  * @typedef {{ x: number, y: number, heading: number, lean: number }} VoyagePose
  */
 
@@ -35,31 +37,35 @@ import { hashId } from './islandLayout.js';
 import { mulberry32 } from './islandShape.js';
 
 /** Duración mínima del viaje (ms): islas vecinas, trayecto cortito. */
-export const VOYAGE_MIN_MS = 1600;
+export const VOYAGE_MIN_MS = 3400;
 /** Duración máxima del viaje (ms): punta a punta del archipiélago. */
-export const VOYAGE_MAX_MS = 3200;
+export const VOYAGE_MAX_MS = 7200;
 /** Distancia (unidades de mapa) a partir de la cual la duración ya es la máxima. */
 export const VOYAGE_REF_DISTANCE = 90;
-/** Comba mínima de la curva: desvío lateral como fracción de la distancia. */
-export const VOYAGE_BEND_MIN = 0.08;
-/** Comba máxima de la curva (sin esquiva): el sorteo del par cae entre ambas. */
-export const VOYAGE_BEND_MAX = 0.18;
+/** Distancia (unidades) que cubre cada TRAMO recto: define cuántos virajes tiene el trayecto. */
+export const VOYAGE_LEG_SPAN = 16;
+/** Nº mínimo/máximo de tramos rectos del zigzag (2 = un solo viraje). */
+export const VOYAGE_LEGS_MIN = 2;
+export const VOYAGE_LEGS_MAX = 4;
+/** Amplitud del zigzag: desvío lateral de cada waypoint como fracción de la distancia. */
+export const VOYAGE_ZIG_MIN = 0.05;
+export const VOYAGE_ZIG_MAX = 0.1;
 /** Holgura de esquiva (unidades de mapa): radio visual de una isla + margen. */
 export const VOYAGE_CLEARANCE = 10;
-/** Margen (unidades de mapa) al que se acotan los controles: la comba no saca el barco del mar. */
+/** Margen (unidades de mapa) al que se acotan los waypoints: el zigzag no saca el barco del mar. */
 export const VOYAGE_EDGE = 3;
 /** Cadencia (ms) con la que el barco va soltando puntos de estela. */
-export const WAKE_INTERVAL_MS = 110;
+export const WAKE_INTERVAL_MS = 150;
 /** Escora máxima (grados) del barco al girar. */
-export const VOYAGE_LEAN_MAX_DEG = 12;
+export const VOYAGE_LEAN_MAX_DEG = 14;
 /** Cabeceo máximo (grados) del sprite lateral: el rumbo vertical no lo pone de proa al cielo. */
 export const VOYAGE_PITCH_MAX_DEG = 20;
+/** Fracción de cada tramo (junto a un waypoint) en la que el barco VIRA de un rumbo al siguiente. */
+export const VOYAGE_TURN_FRAC = 0.16;
 /** Tramo central de la recta en el que un obstáculo cuenta (los puertos no se esquivan a sí mismos). */
 const AVOID_SPAN = { min: 0.12, max: 0.88 };
-/** Fracción conservadora del desvío de control que la curva alcanza de verdad (≈0.75 en el centro). */
-const CURVE_OFFSET_FACTOR = 0.55;
-/** Ganancia curvatura→escora: un giro típico del mapa (~1/60 de radio) escora ~10°. */
-const LEAN_GAIN = 600;
+/** Ganancia desviación-de-rumbo→escora: durante un viraje el barco se inclina hacia el giro. */
+const LEAN_GAIN = 26;
 
 /** Valida que un punto del mapa tenga coordenadas finitas. @param {SeaPoint} point @param {string} label */
 function assertSeaPoint(point, label) {
@@ -133,32 +139,30 @@ function worstBlocker(from, obstacles, frame) {
   return worst;
 }
 
-/** Punto de la Bézier cúbica SIN easing (para puntuar candidatos). @param {VoyageCurve} curve @param {number} k */
-function cubicPointAt(curve, k) {
-  const u = 1 - k;
-  return {
-    x: u ** 3 * curve.from.x + 3 * u * u * k * curve.c1.x + 3 * u * k * k * curve.c2.x + k ** 3 * curve.to.x,
-    y: u ** 3 * curve.from.y + 3 * u * u * k * curve.c1.y + 3 * u * k * k * curve.c2.y + k ** 3 * curve.to.y,
-  };
-}
-
-/** Muestras con las que se puntúa el agua libre de cada candidato. */
-const GAP_SAMPLES = 32;
+/** Muestras por tramo con las que se puntúa el agua libre de un candidato. */
+const GAP_SAMPLES_PER_LEG = 10;
 
 /**
- * Agua libre de un candidato: mínima distancia entre la curva muestreada y
- * cualquier isla que estorbe. Sin obstáculos, Infinity (cualquier lado vale).
+ * Agua libre de un candidato: mínima distancia entre la POLILÍNEA muestreada
+ * (cada tramo recto interpolado) y cualquier isla que estorbe. Sin obstáculos,
+ * Infinity (cualquier lado vale).
  *
- * @param {VoyageCurve} curve Candidato a puntuar.
+ * @param {SeaPoint[]} points Waypoints del candidato (origen … destino).
  * @param {SeaIsland[]} obstacles Islas de seaObstacles.
  * @returns {number}
  */
-function openWater(curve, obstacles) {
+function openWater(points, obstacles) {
   let gap = Infinity;
-  for (let i = 0; i <= GAP_SAMPLES; i += 1) {
-    const point = cubicPointAt(curve, i / GAP_SAMPLES);
-    for (const island of obstacles) {
-      gap = Math.min(gap, Math.hypot(point.x - island.x, point.y - island.y));
+  for (let s = 0; s < points.length - 1; s += 1) {
+    const a = points[s];
+    const b = points[s + 1];
+    for (let i = 0; i <= GAP_SAMPLES_PER_LEG; i += 1) {
+      const k = i / GAP_SAMPLES_PER_LEG;
+      const x = a.x + (b.x - a.x) * k;
+      const y = a.y + (b.y - a.y) * k;
+      for (const island of obstacles) {
+        gap = Math.min(gap, Math.hypot(x - island.x, y - island.y));
+      }
     }
   }
   return gap;
@@ -198,38 +202,44 @@ export function voyageCurve(from, to, islands = []) {
   // Perpendicular IZQUIERDA de la marcha: con +y abajo, rumbo este → arriba.
   const px = uy;
   const py = -ux;
-  // Sorteo determinista del par: lado preferido y tamaño de cada control.
+  // Tramos rectos según la distancia: los cortos, un solo viraje; los largos,
+  // hasta VOYAGE_LEGS_MAX. Los waypoints interiores zigzaguean a lado y lado
+  // de la recta (rumbo QUEBRADO, como quien navega a vela), con amplitud
+  // sorteada por el par de islas (determinista: misma travesía, mismo trazo).
+  const legs = Math.min(
+    VOYAGE_LEGS_MAX,
+    Math.max(VOYAGE_LEGS_MIN, Math.round(distance / VOYAGE_LEG_SPAN)),
+  );
   const rand = mulberry32(hashId(`${from.id}→${to.id}`));
-  let side = rand() < 0.5 ? 1 : -1;
-  let bendA = distance * (VOYAGE_BEND_MIN + rand() * (VOYAGE_BEND_MAX - VOYAGE_BEND_MIN));
-  let bendB = distance * (VOYAGE_BEND_MIN + rand() * (VOYAGE_BEND_MAX - VOYAGE_BEND_MIN));
+  let baseSide = rand() < 0.5 ? 1 : -1;
   const obstacles = seaObstacles(from, to, islands);
   const blocker = worstBlocker(from, obstacles, { ux, uy, px, py, distance });
-  if (blocker) {
-    // Lado preferido: el contrario al que asoma la isla (sobre la propia
-    // recta, babor); la comba crece hasta librar la holgura.
-    side = blocker.lateral > 0 ? -1 : 1;
-    const needed = (VOYAGE_CLEARANCE - Math.abs(blocker.lateral)) / CURVE_OFFSET_FACTOR;
-    bendA = Math.max(bendA, needed);
-    bendB = Math.max(bendB, needed);
-  }
-  const candidate = (s) => ({
-    from: { x: from.x, y: from.y },
-    c1: {
-      x: clampToSea(from.x + ux * (distance / 3) + px * s * bendA),
-      y: clampToSea(from.y + uy * (distance / 3) + py * s * bendA),
-    },
-    c2: {
-      x: clampToSea(from.x + ux * ((2 * distance) / 3) + px * s * bendB),
-      y: clampToSea(from.y + uy * ((2 * distance) / 3) + py * s * bendB),
-    },
-    to: { x: to.x, y: to.y },
-    distance,
-  });
-  const preferred = candidate(side);
+  // Con una isla estorbando, el zigzag arranca hacia el lado contrario.
+  if (blocker) baseSide = blocker.lateral > 0 ? -1 : 1;
+  // Amplitud extra si hay que librar holgura sobre la isla más centrada. Con
+  // obstáculo la comba va a UN SOLO lado (rodea la isla); sin él, zigzaguea a
+  // lado y lado (el trazo de virada). La esquiva manda sobre la estética.
+  const clearBoost = blocker ? VOYAGE_CLEARANCE - Math.abs(blocker.lateral) + distance * VOYAGE_ZIG_MIN : 0;
+  const waypoints = (startSide) => {
+    const pts = [{ x: from.x, y: from.y }];
+    for (let i = 1; i < legs; i += 1) {
+      const along = i / legs;
+      const zig = VOYAGE_ZIG_MIN + rand() * (VOYAGE_ZIG_MAX - VOYAGE_ZIG_MIN);
+      const altSign = i % 2 === 1 ? 1 : -1;
+      const side = blocker ? startSide : startSide * altSign;
+      const amp = blocker ? clearBoost : distance * zig;
+      pts.push({
+        x: clampToSea(from.x + ux * distance * along + px * side * amp),
+        y: clampToSea(from.y + uy * distance * along + py * side * amp),
+      });
+    }
+    pts.push({ x: to.x, y: to.y });
+    return pts;
+  };
+  const preferred = { from: { x: from.x, y: from.y }, to: { x: to.x, y: to.y }, points: waypoints(baseSide), distance };
   if (obstacles.length === 0) return preferred;
-  const opposite = candidate(-side);
-  return openWater(opposite, obstacles) > openWater(preferred, obstacles) ? opposite : preferred;
+  const opposite = { from: preferred.from, to: preferred.to, points: waypoints(-baseSide), distance };
+  return openWater(opposite.points, obstacles) > openWater(preferred.points, obstacles) ? opposite : preferred;
 }
 
 /**
@@ -258,29 +268,55 @@ export function voyagePose(curve, t) {
   if (!Number.isFinite(t)) {
     throw new TypeError(`Progreso inválido para voyagePose: "${t}"`);
   }
-  const k = Math.min(Math.max(t, 0), 1);
-  const e = easeInOutCubic(k);
-  const u = 1 - e;
-  const { from, c1, c2, to } = curve;
-  const x = u ** 3 * from.x + 3 * u * u * e * c1.x + 3 * u * e * e * c2.x + e ** 3 * to.x;
-  const y = u ** 3 * from.y + 3 * u * u * e * c1.y + 3 * u * e * e * c2.y + e ** 3 * to.y;
-  // Derivada B'(e): la tangente que orienta la proa.
-  const dX = 3 * u * u * (c1.x - from.x) + 6 * u * e * (c2.x - c1.x) + 3 * e * e * (to.x - c2.x);
-  const dY = 3 * u * u * (c1.y - from.y) + 6 * u * e * (c2.y - c1.y) + 3 * e * e * (to.y - c2.y);
-  const speed = Math.hypot(dX, dY);
-  if (speed < 1e-9) {
-    return { x, y, heading: voyageAngle(curve.from, curve.to), lean: 0 };
+  const pts = curve.points ?? [curve.from, curve.to];
+  // Tramos rectos con su longitud y su rumbo (unitario). Los de longitud nula
+  // (waypoints coincidentes) se descartan: no aportan rumbo.
+  const segs = [];
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const ax = pts[i].x;
+    const ay = pts[i].y;
+    const dx = pts[i + 1].x - ax;
+    const dy = pts[i + 1].y - ay;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) continue;
+    segs.push({ ax, ay, dx, dy, len, ux: dx / len, uy: dy / len });
   }
-  // Segunda derivada B''(e) → curvatura firmada → escora del giro.
-  const sX = 6 * u * (c2.x - 2 * c1.x + from.x) + 6 * e * (to.x - 2 * c2.x + c1.x);
-  const sY = 6 * u * (c2.y - 2 * c1.y + from.y) + 6 * e * (to.y - 2 * c2.y + c1.y);
-  const curvature = (dX * sY - dY * sX) / speed ** 3;
-  return {
-    x,
-    y,
-    heading: Math.atan2(dY, dX),
-    lean: clampAbs(curvature * LEAN_GAIN, VOYAGE_LEAN_MAX_DEG),
-  };
+  const e = easeInOutCubic(Math.min(Math.max(t, 0), 1));
+  if (segs.length === 0) {
+    return { x: curve.from.x, y: curve.from.y, heading: voyageAngle(curve.from, curve.to), lean: 0 };
+  }
+  const total = segs.reduce((sum, s) => sum + s.len, 0);
+  let target = e * total;
+  let i = 0;
+  while (i < segs.length - 1 && target > segs[i].len) {
+    target -= segs[i].len;
+    i += 1;
+  }
+  const seg = segs[i];
+  const f = seg.len < 1e-9 ? 0 : Math.min(target / seg.len, 1);
+  const x = seg.ax + seg.dx * f;
+  const y = seg.ay + seg.dy * f;
+
+  // Rumbo QUEBRADO con viraje suave: en el tramo recto, el rumbo es el del
+  // tramo; cerca de un waypoint (VOYAGE_TURN_FRAC) se mezcla con el rumbo del
+  // tramo vecino promediando los unitarios, así el barco VIRA en vez de saltar.
+  let vx = seg.ux;
+  let vy = seg.uy;
+  const turn = VOYAGE_TURN_FRAC;
+  if (f > 1 - turn && i < segs.length - 1) {
+    const w = 0.5 * ((f - (1 - turn)) / turn);
+    vx += w * (segs[i + 1].ux - seg.ux);
+    vy += w * (segs[i + 1].uy - seg.uy);
+  } else if (f < turn && i > 0) {
+    const w = 0.5 * ((turn - f) / turn);
+    vx += w * (segs[i - 1].ux - seg.ux);
+    vy += w * (segs[i - 1].uy - seg.uy);
+  }
+  const heading = Math.atan2(vy, vx);
+  // Escora: cuánto se desvía el rumbo mezclado del rumbo recto del tramo — 0
+  // en la recta, un pico hacia el giro durante el viraje.
+  const drift = Math.atan2(seg.ux * vy - seg.uy * vx, seg.ux * vx + seg.uy * vy);
+  return { x, y, heading, lean: clampAbs(drift * LEAN_GAIN, VOYAGE_LEAN_MAX_DEG) };
 }
 
 /**
