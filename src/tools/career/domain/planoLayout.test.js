@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   PLANO_VIEW,
   PLANO_MARGIN,
+  LABEL_BAND,
   ISLAND_R_MIN,
   ISLAND_R_MAX,
   islandCircles,
+  islandLabel,
   themeSpots,
   routePolyline,
   prefixIslandIndex,
@@ -17,6 +19,26 @@ const ISLANDS = [
   { id: 'frontend', name: 'Isla Frontend', discipline: 'frontend', x: 28, y: 54, citiesTotal: 24 },
   { id: 'devops', name: 'Isla DevOps', discipline: 'devops', x: 88, y: 48, citiesTotal: 24 },
   { id: 'ios', name: 'Isla iOS', discipline: 'ios', x: 70, y: 16, citiesTotal: 22 },
+];
+
+/**
+ * Caso de producción de RMR-BUG-0014: 13 islas apretadas, varias forzadas a
+ * los bordes por la relajación de solapes y con nombres largos.
+ */
+const CROWDED_ISLANDS = [
+  { id: 'island', name: 'Bases de software', discipline: 'bases', x: 50, y: 100, citiesTotal: 25 },
+  { id: 'backend-php', name: 'Isla Backend PHP', discipline: 'backend-php', x: 0, y: 55, citiesTotal: 23 },
+  { id: 'em', name: 'Engineering Manager', discipline: 'em', x: 1, y: 22, citiesTotal: 9 },
+  { id: 'frontend', name: 'Isla Frontend', discipline: 'frontend', x: 28, y: 54, citiesTotal: 24 },
+  { id: 'devops', name: 'Isla DevOps', discipline: 'devops', x: 88, y: 48, citiesTotal: 24 },
+  { id: 'ios', name: 'Isla iOS', discipline: 'ios', x: 70, y: 16, citiesTotal: 22 },
+  { id: 'ai', name: 'Isla AI Engineer', discipline: 'ai', x: 86, y: 26, citiesTotal: 17 },
+  { id: 'android', name: 'Isla Android', discipline: 'android', x: 60, y: 34, citiesTotal: 18 },
+  { id: 'qa', name: 'Isla QA', discipline: 'qa', x: 18, y: 8, citiesTotal: 14 },
+  { id: 'data', name: 'Isla Data Engineer', discipline: 'data', x: 42, y: 6, citiesTotal: 16 },
+  { id: 'security', name: 'Isla Security', discipline: 'security', x: 98, y: 82, citiesTotal: 12 },
+  { id: 'sre', name: 'Isla SRE', discipline: 'sre', x: 74, y: 72, citiesTotal: 15 },
+  { id: 'tech-lead', name: 'Isla Tech Lead', discipline: 'tech-lead', x: 26, y: 88, citiesTotal: 11 },
 ];
 
 const dist = (a, b) => Math.hypot(a.cx - b.cx, a.cy - b.cy);
@@ -74,15 +96,62 @@ describe('islandCircles', () => {
     expect(islandCircles(overlapping)).toEqual(circles);
   });
 
-  it('una sola isla queda centrada (rango de posiciones cero)', () => {
+  it('una sola isla queda centrada en la zona útil (rango de posiciones cero)', () => {
     const [only] = islandCircles([{ id: 'a', name: 'A', x: 33, y: 77, citiesTotal: 10 }]);
     expect(only.cx).toBeCloseTo(PLANO_VIEW / 2);
-    expect(only.cy).toBeCloseTo(PLANO_VIEW / 2);
+    // El centro vertical descuenta la banda de la etiqueta bajo el círculo.
+    expect(only.cy).toBeCloseTo((PLANO_VIEW - LABEL_BAND) / 2);
+  });
+
+  it('reserva la banda de la etiqueta: cy + r + LABEL_BAND nunca excede el viewBox', () => {
+    const circles = islandCircles(CROWDED_ISLANDS);
+    for (const c of circles) {
+      expect(c.cy + c.r + LABEL_BAND).toBeLessThanOrEqual(PLANO_VIEW + 1e-9);
+      expect(c.cy - c.r).toBeGreaterThanOrEqual(0);
+      expect(c.cx - c.r).toBeGreaterThanOrEqual(0);
+      expect(c.cx + c.r).toBeLessThanOrEqual(PLANO_VIEW);
+    }
   });
 
   it('sin islas devuelve lista vacía', () => {
     expect(islandCircles([])).toEqual([]);
     expect(islandCircles(null)).toEqual([]);
+  });
+});
+
+describe('islandLabel', () => {
+  it('centra la etiqueta bajo el círculo cuando el nombre cabe', () => {
+    const label = islandLabel({ id: 'a', name: 'Isla QA', cx: 50, cy: 40, r: 8 });
+    expect(label.x).toBeCloseTo(50);
+    expect(label.y).toBeCloseTo(51);
+  });
+
+  it('clampa la X con el ancho estimado: la etiqueta no se sale por los lados', () => {
+    const left = islandLabel({ id: 'a', name: 'Engineering Manager', cx: 7, cy: 40, r: 7 });
+    expect(left.x - left.halfWidth).toBeGreaterThanOrEqual(0);
+    const right = islandLabel({ id: 'b', name: 'Isla Backend PHP', cx: 94, cy: 40, r: 6 });
+    expect(right.x + right.halfWidth).toBeLessThanOrEqual(PLANO_VIEW);
+  });
+
+  it('un nombre más ancho que el plano no invierte el clamp (halfWidth acotado)', () => {
+    const label = islandLabel({ id: 'a', name: 'x'.repeat(80), cx: 10, cy: 40, r: 6 });
+    expect(label.halfWidth).toBe(PLANO_VIEW / 2);
+    expect(label.x).toBe(PLANO_VIEW / 2);
+  });
+
+  it('la Y queda dentro del lienzo incluso con círculos legacy pegados al fondo', () => {
+    const label = islandLabel({ id: 'a', name: 'A', cx: 50, cy: 95, r: 6 });
+    expect(label.y).toBeLessThanOrEqual(PLANO_VIEW - 1);
+  });
+
+  it('ninguna etiqueta estimada del caso apretado sale de [0, 100]', () => {
+    for (const circle of islandCircles(CROWDED_ISLANDS)) {
+      const label = islandLabel(circle);
+      expect(label.x - label.halfWidth).toBeGreaterThanOrEqual(0);
+      expect(label.x + label.halfWidth).toBeLessThanOrEqual(PLANO_VIEW);
+      expect(label.y).toBeGreaterThanOrEqual(0);
+      expect(label.y).toBeLessThanOrEqual(PLANO_VIEW - 1);
+    }
   });
 });
 
