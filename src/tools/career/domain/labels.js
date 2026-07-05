@@ -25,12 +25,14 @@
 
 /**
  * Jerarquía de prioridad del declutter (mayor gana el hueco):
- * ciudad seleccionada > ciudad actual del journey > comarcas y puerto
- * (topónimos que estructuran la vista general) > ciudades con visado
- * disponible (las accionables) > resto de ciudades > nombres de compañeros
- * (rótulos personales: nunca deben tapar un topónimo).
+ * números de la ruta de reto (JG-5: el camino siempre se lee) > ciudad
+ * seleccionada > ciudad actual del journey > comarcas y puerto (topónimos que
+ * estructuran la vista general) > ciudades con visado disponible (las
+ * accionables) > resto de ciudades > nombres de compañeros (rótulos
+ * personales: nunca deben tapar un topónimo).
  */
 export const LABEL_PRIORITY = Object.freeze({
+  challenge: 6,
   selected: 5,
   current: 4,
   area: 3,

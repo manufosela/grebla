@@ -15,6 +15,7 @@ import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, lev
 import { normalizeAchievements, mergeAchievements } from '../domain/achievements.js';
 import { normalizeQuestion, sortQuestionsByDateDesc } from '../domain/wizard.js';
 import { dayKey, normalizePlaytime, staleDayKeys } from '../domain/playtime.js';
+import { normalizeChallenge } from '../domain/challenge.js';
 
 /** @returns {ReadonlyArray<CareerMap>} */
 export function getMaps() {
@@ -45,6 +46,7 @@ function normalizeJourney(j) {
       plannedRoute: [],
       visitedIslands: [DEFAULT_ISLAND_ID],
       evidences: {},
+      challenge: null,
     };
   }
   const island = typeof j.currentIsland === 'string' ? j.currentIsland.trim() : '';
@@ -67,6 +69,9 @@ function normalizeJourney(j) {
     currentIsland,
     visitedIslands,
     evidences: { ...(j.evidences ?? {}) },
+    // Reto activo del modo Reto (JG-5): saneado; corrupto o ausente → null
+    // (modo Libre). Journeys previos a JG-5 no traen el campo.
+    challenge: normalizeChallenge(j.challenge),
   };
 }
 
@@ -136,6 +141,40 @@ export async function toggleRoute(store, personId, journey, cityId) {
     ...journey,
     plannedRoute: route.includes(cityId) ? route.filter((id) => id !== cityId) : [...route, cityId],
   };
+  await store.journeys.save(personId, next);
+  return next;
+}
+
+/**
+ * Arranca un RETO (JG-5): persiste la ruta como reto activo del journey con la
+ * fecha ISO del momento. La ruta llega generada del contenido
+ * (challengeRouteForIsland); una ruta inválida falla en alto — un reto sin
+ * paradas no es un reto. El reto anterior, si lo había, se sustituye.
+ * @param {CareerStore} store @param {string} personId @param {Journey} journey
+ * @param {import('../domain/types.js').Challenge} route Ruta del catálogo (startedAt se ignora).
+ * @param {Date} [now] Reloj de referencia del arranque (por defecto, ahora).
+ * @returns {Promise<Journey>}
+ */
+export async function startChallenge(store, personId, journey, route, now = new Date()) {
+  const challenge = normalizeChallenge({ ...route, startedAt: now.toISOString() });
+  if (!challenge) throw new Error('El reto requiere una ruta con isla y paradas.');
+  const next = { ...journey, challenge };
+  await store.journeys.save(personId, next);
+  return next;
+}
+
+/**
+ * Retira el reto activo (JG-5): abandono o completado, el journey vuelve al
+ * modo Libre. Los certificados conseguidos se quedan (viven en
+ * visitedCities): abandonar el camino no borra lo andado. Decisión JG-5: al
+ * COMPLETAR también se limpia (challenge → null) en vez de guardar un
+ * completedAt — el histórico de retos completados es YAGNI mientras no haya
+ * UI que lo muestre, y los certificados ya son el registro real del logro.
+ * @param {CareerStore} store @param {string} personId @param {Journey} journey
+ * @returns {Promise<Journey>}
+ */
+export async function clearChallenge(store, personId, journey) {
+  const next = { ...journey, challenge: null };
   await store.journeys.save(personId, next);
   return next;
 }
