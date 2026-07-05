@@ -173,6 +173,9 @@ import {
   setEvidence,
   getAchievements,
   recordAchievements,
+  getEndorsements,
+  endorseCity,
+  unendorseCity,
   listQuestions,
   askQuestion,
   answerQuestion,
@@ -223,7 +226,8 @@ import {
 } from '../../tools/career/domain/voyage.js';
 import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
-import { newAchievements } from '../../tools/career/domain/achievements.js';
+import { newAchievements, formatAchievedAt } from '../../tools/career/domain/achievements.js';
+import { endorsementFor } from '../../tools/career/domain/endorsements.js';
 import { wizardState, pendingQuestions } from '../../tools/career/domain/wizard.js';
 import {
   challengeRouteForIsland,
@@ -299,6 +303,9 @@ export class CareerApp extends LitElement {
     voyage: { state: true },
     announcement: { state: true },
     achievements: { state: true },
+    endorsements: { state: true },
+    endorseBusy: { state: true },
+    evidencePrompt: { state: true },
     showPlayerCard: { state: true },
     questions: { state: true },
     showWizard: { state: true },
@@ -494,6 +501,45 @@ export class CareerApp extends LitElement {
     .badge.deprecated { background: var(--rm-danger, #dc2626); color: #fff; }
     .badge.route { border-color: var(--rm-navy, #1e3a5f); color: var(--rm-navy, #1e3a5f); }
     .badge.current { border-color: var(--rm-coral-600, #e26d5e); color: var(--rm-coral-600, #e26d5e); }
+    /* Aval del manager (JG-6): sello dorado (misma familia que los badges
+       grandes de la ficha) y acciones del manager en la tarjeta. */
+    .endorse { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 0.75rem; }
+    .endorse .seal {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.28rem 0.75rem; border-radius: 999px;
+      background: linear-gradient(135deg, #f6d365 0%, #e8b931 100%); color: #5b4300;
+      font-size: 0.78rem; font-weight: 800;
+      box-shadow: 0 1px 4px rgba(17, 24, 39, 0.18);
+    }
+    .endorse .seal .tick { font-weight: 900; }
+    .endorse .seal .when { font-size: 0.7rem; font-weight: 600; opacity: 0.85; }
+    .endorse .endorse-btn {
+      border: 1.5px solid var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f);
+      background: transparent; border-radius: 999px; font-weight: 700;
+    }
+    .endorse .endorse-btn:hover:not(:disabled) { background: var(--rm-accent, #2a9d8f); color: #fff; }
+    .endorse .unendorse {
+      border: none; background: transparent; padding: 0.15rem 0.35rem;
+      font-size: 0.72rem; font-weight: 600; color: var(--rm-muted, #6b7280);
+      text-decoration: underline; border-radius: 6px;
+    }
+    .endorse .unendorse:hover:not(:disabled) { color: var(--rm-danger, #dc2626); }
+    .endorse button:disabled { opacity: 0.6; cursor: default; }
+    /* Sugerencia de evidencia tras certificar (JG-6): invitación descartable. */
+    .evprompt {
+      display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+      margin: 0.75rem 0 0; padding: 0.55rem 0.75rem;
+      border: 1px solid color-mix(in srgb, var(--rm-accent, #2a9d8f) 45%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 10%, var(--rm-surface, #fff));
+    }
+    .evprompt p { margin: 0; flex: 1 1 12rem; font-size: 0.82rem; color: var(--rm-text, #111827); font-weight: 600; }
+    .evprompt .evlater {
+      flex: 0 0 auto; border: none; background: transparent; padding: 0.2rem 0.4rem;
+      font-size: 0.75rem; font-weight: 600; color: var(--rm-muted, #6b7280);
+      text-decoration: underline; border-radius: 6px;
+    }
+    .evprompt .evlater:hover { color: var(--rm-navy, #1e3a5f); }
     /* ── Bloque de prerequisitos de una casa bloqueada (JG-2): sustituye al
        CTA imposible. Conseguidos en teal; pendientes como botones coral que
        navegan a la casa correspondiente. ── */
@@ -1257,6 +1303,17 @@ export class CareerApp extends LitElement {
     // visibilidad del overlay «🏅 Ficha».
     /** @type {import('../../tools/career/domain/achievements.js').Achievements|null} */
     this.achievements = null;
+    // Avales del manager (JG-6): sellos ✓ de la persona cargada. null hasta
+    // que _load() los trae (gatea el botón «Avalar»: sin avales cargados no
+    // se firma a ciegas).
+    /** @type {import('../../tools/career/domain/endorsements.js').Endorsements|null} */
+    this.endorsements = null;
+    this.endorseBusy = false;
+    // Sugerencia de evidencia (JG-6): id de la casa cuyo certificado se acaba
+    // de obtener — su tarjeta abre las evidencias con un prompt amable y
+    // descartable («Ahora no»). Nunca bloquea: el certificado ya vale.
+    /** @type {string|null} */
+    this.evidencePrompt = null;
     this.showPlayerCard = false;
     // El brujo (MC-22): rol del usuario (canEdit habilita la cola del líder),
     // login para la autoría, consultas de la persona cargada (TODAS las islas;
@@ -1451,6 +1508,8 @@ export class CareerApp extends LitElement {
       this._clearAnnouncements(); // los avisos encolados también (MC-20)
       this.showPlayerCard = false; // la ficha abierta era de otra persona (MC-21)
       this.achievements = null;
+      this.endorsements = null; // los avales mostrados eran de otra persona (JG-6)
+      this.evidencePrompt = null; // la sugerencia de evidencia también
       this.showWizard = false; // el panel del brujo abierto era de otra persona (MC-22)
       this.questions = null;
       this.wizardError = '';
@@ -1586,17 +1645,19 @@ export class CareerApp extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      // Journey, logros registrados (MC-21), consultas al brujo (MC-22) y
-      // tiempo de juego (MC-23) en paralelo: viven juntos en el subárbol
-      // career de la persona.
-      const [journey, achievements, questions, playtime] = await Promise.all([
+      // Journey, logros registrados (MC-21), avales del manager (JG-6),
+      // consultas al brujo (MC-22) y tiempo de juego (MC-23) en paralelo:
+      // viven juntos en el subárbol career de la persona.
+      const [journey, achievements, endorsements, questions, playtime] = await Promise.all([
         getJourney(this.store, this.personId),
         getAchievements(this.store, this.personId),
+        getEndorsements(this.store, this.personId),
         listQuestions(this.store, this.personId),
         getPlaytime(this.store, this.personId),
       ]);
       this.journey = journey;
       this.achievements = achievements;
+      this.endorsements = endorsements;
       this.questions = questions;
       this.playtime = playtime;
       await this._prunePlaytime();
@@ -1766,6 +1827,13 @@ export class CareerApp extends LitElement {
       if (action === 'toggle') {
         const prev = this.journey;
         this.journey = await toggleVisited(this.store, this.personId, map, prev, this.selected);
+        // Sugerencia de evidencia (JG-6): certificado recién OBTENIDO → la
+        // tarjeta abre las evidencias con el prompt amable (descartable, sin
+        // obligar: el certificado ya vale). Al retirarlo, el prompt se va.
+        const obtained =
+          !(prev.visitedCities ?? []).includes(this.selected) &&
+          this.journey.visitedCities.includes(this.selected);
+        this.evidencePrompt = obtained ? this.selected : null;
         // Progresión (MC-20): si este certificado cruza el % objetivo de la
         // isla, celebración MAYOR y avisos encadenados (isla → badges).
         await this._queueCitizenshipCelebrations(prev, this.journey, this.selected);
@@ -2406,6 +2474,7 @@ export class CareerApp extends LitElement {
           .playerName=${name}
           .progress=${prog}
           .achievements=${this.achievements}
+          .endorsements=${this.endorsements}
           .visitedIslands=${this.journey?.visitedIslands ?? []}
           .questions=${this.questions ?? []}
           .carpools=${carpools}
@@ -4597,10 +4666,129 @@ export class CareerApp extends LitElement {
         ${isCurrent ? html`<span class="badge current">Actual</span>` : null}
         ${inRoute ? html`<span class="badge route">En ruta</span>` : null}
       </div>
+      ${this._renderEndorsement(sel, status === 'visited')}
       ${blocked ? this._renderBlockedPrereqs(sel) : null}
       ${this._renderCityActions(sel, blocked)}
+      ${this._renderEvidencePrompt(sel)}
       ${this._renderCityEvidences(sel)}
     `;
+  }
+
+  /**
+   * Aval del manager sobre el certificado (JG-6). Solo en casas CERTIFICADAS:
+   *  - Con aval: el sello «✓ Avalado por {name} · {fecha}» — lo ve TODO el
+   *    mundo (jugador incluido); quien lo firmó puede retirarlo.
+   *  - Sin aval y el usuario es manager (canEdit) de OTRA persona: el botón
+   *    «✓ Avalar certificado». El jugador nunca ve botones de aval (no puede
+   *    auto-avalarse: la UI lo oculta y las reglas de Firestore lo prohíben).
+   * El aval es reconocimiento, nunca bloqueo: el certificado ya vale.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   * @param {boolean} certified true si la casa tiene el certificado.
+   */
+  _renderEndorsement(sel, certified) {
+    if (!certified) return null;
+    const record = endorsementFor(this.endorsements, sel.id);
+    if (record) {
+      const when = formatAchievedAt(record.at);
+      const mine = this._canEndorse && record.by.uid === this.currentUser?.uid;
+      return html`<div class="endorse">
+        <span class="seal">
+          <span class="tick" aria-hidden="true">✓</span>
+          Avalado por ${record.by.name}${when ? html` <span class="when">· ${when}</span>` : null}
+        </span>
+        ${mine
+          ? html`<button
+              type="button"
+              class="unendorse"
+              ?disabled=${this.endorseBusy}
+              title="Retirar tu aval de este certificado"
+              @click=${this._unendorseSelected}
+            >Retirar aval</button>`
+          : null}
+      </div>`;
+    }
+    if (!this._canEndorse) return null;
+    return html`<div class="endorse">
+      <button
+        type="button"
+        class="endorse-btn"
+        ?disabled=${this.endorseBusy}
+        title="Sella este certificado con tu aval: un reconocimiento, nunca un requisito"
+        @click=${this._endorseSelected}
+      >✓ Avalar certificado</button>
+    </div>`;
+  }
+
+  /**
+   * true si el usuario puede AVALAR/retirar avales de la persona cargada
+   * (JG-6): manager (canEdit) con login, avales ya cargados y — clave — la
+   * persona NO es la suya (el jugador no se auto-avala, ni siquiera un líder
+   * sobre su propia persona vinculada).
+   */
+  get _canEndorse() {
+    const uid = this.currentUser?.uid;
+    return Boolean(
+      this.canEdit && uid && this.endorsements && this._selectedPerson?.uid !== uid,
+    );
+  }
+
+  /** El manager firma el sello de la casa seleccionada (JG-6). */
+  async _endorseSelected() {
+    if (!this._canEndorse || !this.personId || !this.selected) return;
+    this.endorseBusy = true;
+    this.error = '';
+    try {
+      const { uid, name } = /** @type {{ uid: string, name: string }} */ (this.currentUser);
+      this.endorsements = await endorseCity(
+        this.store,
+        this.personId,
+        this.selected,
+        { uid, name },
+        this.endorsements,
+      );
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo avalar el certificado.';
+    } finally {
+      this.endorseBusy = false;
+    }
+  }
+
+  /** Quien firmó el aval lo retira (JG-6): la única corrección posible. */
+  async _unendorseSelected() {
+    if (!this._canEndorse || !this.personId || !this.selected) return;
+    this.endorseBusy = true;
+    this.error = '';
+    try {
+      this.endorsements = await unendorseCity(
+        this.store,
+        this.personId,
+        this.selected,
+        this.endorsements,
+      );
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo retirar el aval.';
+    } finally {
+      this.endorseBusy = false;
+    }
+  }
+
+  /**
+   * Prompt de evidencia tras certificar (JG-6): invitación amable y
+   * DESCARTABLE a contar cómo se logró — nunca un requisito. Solo en la casa
+   * cuyo certificado se acaba de obtener; «Ahora no» lo retira.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderEvidencePrompt(sel) {
+    if (this.evidencePrompt !== sel.id) return null;
+    return html`<div class="evprompt" role="status">
+      <p>🎉 ¡Certificado! ¿Cómo lo lograste? Añade una evidencia (opcional).</p>
+      <button type="button" class="evlater" @click=${this._dismissEvidencePrompt}>Ahora no</button>
+    </div>`;
+  }
+
+  /** «Ahora no»: descarta la sugerencia de evidencia (JG-6). */
+  _dismissEvidencePrompt() {
+    this.evidencePrompt = null;
   }
 
   /**
@@ -4747,7 +4935,9 @@ export class CareerApp extends LitElement {
     const editable = this._canPlayJourney;
     const ev = this.journey.evidences?.[sel.id] ?? {};
     const cursos = [...(ev.cursos ?? []), ...(ev.titulos ?? [])];
-    return html`<details class="ev">
+    // Certificado recién obtenido (JG-6): las evidencias se abren solas, de la
+    // mano del prompt — la invitación es opcional, no un formulario obligado.
+    return html`<details class="ev" ?open=${this.evidencePrompt === sel.id}>
       <summary>Evidencias</summary>
       <label>Experiencia previa (años)
         <input

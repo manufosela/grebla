@@ -13,6 +13,7 @@ import { SAMPLE_MAPS, ISLAND } from '../data/maps.js';
 import { EMPTY_JOURNEY, DEFAULT_ISLAND_ID } from '../domain/types.js';
 import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from '../domain/progress.js';
 import { normalizeAchievements, mergeAchievements } from '../domain/achievements.js';
+import { normalizeEndorsements, addEndorsement, removeEndorsement } from '../domain/endorsements.js';
 import { normalizeQuestion, sortQuestionsByDateDesc } from '../domain/wizard.js';
 import { dayKey, normalizePlaytime, staleDayKeys } from '../domain/playtime.js';
 import { normalizeChallenge } from '../domain/challenge.js';
@@ -215,6 +216,61 @@ export async function recordAchievements(store, personId, achievements, patch) {
   if (!patch) return achievements;
   await store.achievements.save(personId, patch);
   return mergeAchievements(achievements, patch);
+}
+
+// ---- Avales del manager (JG-6) ------------------------------------------------
+
+/** @typedef {import('../domain/endorsements.js').Endorsements} Endorsements */
+/** @typedef {import('../domain/endorsements.js').EndorsementAuthor} EndorsementAuthor */
+
+/**
+ * Avales de la persona (JG-6), normalizados. Sin documento todavía devuelve
+ * avales vacíos (nadie ha sellado nada).
+ * @param {CareerStore} store @param {string} personId
+ * @returns {Promise<Endorsements>}
+ */
+export async function getEndorsements(store, personId) {
+  return normalizeEndorsements(await store.endorsements.get(personId));
+}
+
+/**
+ * El manager AVALA el certificado de una casa (JG-6): firma el sello con su
+ * cuenta y la fecha ISO del momento, persiste SOLO esa clave y devuelve los
+ * avales actualizados para el estado local. Si la casa ya tiene aval no
+ * escribe nada (el primer sello no se re-escribe, lo garantiza el dominio).
+ * Quién puede llamar lo deciden las reglas de Firestore (el doc queda fuera
+ * de las excepciones del jugador vinculado) y la UI.
+ * @param {CareerStore} store @param {string} personId
+ * @param {string} cityId Casa cuyo certificado se avala.
+ * @param {EndorsementAuthor} by Manager que firma.
+ * @param {Endorsements} endorsements Avales actuales en memoria.
+ * @param {Date} [now] Reloj de referencia del gesto (por defecto, ahora).
+ * @returns {Promise<Endorsements>}
+ */
+export async function endorseCity(store, personId, cityId, by, endorsements, now = new Date()) {
+  requireText(personId, 'la persona (personId)');
+  const next = addEndorsement(endorsements, cityId, by, now.toISOString());
+  if (next === endorsements) return endorsements; // ya avalada: sin escritura
+  await store.endorsements.endorse(personId, cityId, next.byCity[cityId]);
+  return next;
+}
+
+/**
+ * Retira el aval de una casa (JG-6): borra SOLO esa clave y devuelve los
+ * avales actualizados. Sin aval que retirar no escribe. La restricción de
+ * negocio (solo quien lo dio se desdice) la aplica la UI; las reglas ya
+ * acotan la escritura al manager de la persona.
+ * @param {CareerStore} store @param {string} personId
+ * @param {string} cityId
+ * @param {Endorsements} endorsements Avales actuales en memoria.
+ * @returns {Promise<Endorsements>}
+ */
+export async function unendorseCity(store, personId, cityId, endorsements) {
+  requireText(personId, 'la persona (personId)');
+  const next = removeEndorsement(endorsements, cityId);
+  if (next === endorsements) return endorsements; // sin aval: sin escritura
+  await store.endorsements.unendorse(personId, cityId);
+  return next;
 }
 
 // ---- Consultas al brujo (MC-22) ---------------------------------------------

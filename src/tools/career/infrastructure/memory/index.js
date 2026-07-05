@@ -2,6 +2,7 @@
  * Persistencia in-memory del Mapa de Carrera (tests/prototipos).
  * @typedef {import('../../domain/ports.js').CareerStore} CareerStore
  * @typedef {import('../../domain/achievements.js').Achievements} Achievements
+ * @typedef {import('../../domain/endorsements.js').Endorsements} Endorsements
  */
 import { mergeAchievements, normalizeAchievements } from '../../domain/achievements.js';
 
@@ -14,6 +15,8 @@ export function createMemoryCareerStore(seed = {}) {
   const store = new Map(Object.entries(seed));
   /** Logros por persona (MC-21), misma semántica merge que Firestore. @type {Map<string, Achievements>} */
   const achievements = new Map();
+  /** Avales del manager por persona (JG-6). @type {Map<string, Endorsements>} */
+  const endorsements = new Map();
   /** Consultas al brujo por persona (MC-22): personId → (id → consulta). @type {Map<string, Map<string, Record<string, unknown>>>} */
   const questions = new Map();
   /** Tiempo de juego por persona (MC-23). @type {Map<string, { totalMinutes: number, byDay: Record<string, number> }>} */
@@ -48,6 +51,25 @@ export function createMemoryCareerStore(seed = {}) {
       async save(personId, patch) {
         const current = achievements.get(personId) ?? normalizeAchievements(null);
         achievements.set(personId, structuredClone(mergeAchievements(current, patch)));
+      },
+    },
+    // Avales del manager (JG-6): mismo contrato que la persistencia Firestore
+    // (repos tontos por casa; la garantía de no re-escribir vive en el caso
+    // de uso endorseCity, vía addEndorsement).
+    endorsements: {
+      async get(personId) {
+        const e = endorsements.get(personId);
+        return e ? structuredClone(e) : null;
+      },
+      async endorse(personId, cityId, record) {
+        const current = endorsements.get(personId) ?? { byCity: {} };
+        current.byCity[cityId] = structuredClone(record);
+        endorsements.set(personId, current);
+      },
+      async unendorse(personId, cityId) {
+        const current = endorsements.get(personId);
+        if (!current) return;
+        delete current.byCity[cityId];
       },
     },
     // Consultas al brujo (MC-22): mismo contrato que la persistencia Firestore

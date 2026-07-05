@@ -26,15 +26,22 @@
  *  - playerName: string                       nombre a pintar en la cabecera
  *  - progress: ArchipelagoProgress|null       progresión derivada del journey
  *  - achievements: Achievements|null          logros registrados (fechas)
+ *  - endorsements: Endorsements|null          avales del manager (JG-6): el contador «N avalados ✓»
  *  - visitedIslands: string[]                 ids de islas pisadas (journey)
  *  - questions: WizardQuestion[]              consultas al brujo (MC-22, ya ordenadas)
  *
+ * La ficha lista islas (no certificados individuales, por ADR): del aval solo
+ * cabe el CONTADOR en los totales — el sello casa a casa vive en la tarjeta
+ * de cada casa del juego.
+ *
  * @typedef {import('../../tools/career/domain/citizenship.js').ArchipelagoProgress} ArchipelagoProgress
  * @typedef {import('../../tools/career/domain/achievements.js').Achievements} Achievements
+ * @typedef {import('../../tools/career/domain/endorsements.js').Endorsements} Endorsements
  * @typedef {import('../../tools/career/domain/wizard.js').WizardQuestion} WizardQuestion
  */
 import { LitElement, html, css } from 'lit';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
+import { endorsedCount } from '../../tools/career/domain/endorsements.js';
 import { sortQuestionsByDateDesc } from '../../tools/career/domain/wizard.js';
 
 /** Etiquetas de estado de una consulta al brujo (MC-22). */
@@ -65,6 +72,7 @@ export class PlayerCard extends LitElement {
     playerName: { attribute: false },
     progress: { attribute: false },
     achievements: { attribute: false },
+    endorsements: { attribute: false },
     visitedIslands: { attribute: false },
     questions: { attribute: false },
     carpools: { attribute: false },
@@ -90,6 +98,9 @@ export class PlayerCard extends LitElement {
     /* Totales (ciudadanías / islas pisadas / certificados). */
     .totals { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.75rem 0 0; padding: 0; list-style: none; }
     .totals li { font-size: 0.85rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; }
+    /* Certificados avalados por el manager (JG-6): dorado, familia del sello. */
+    .totals li.endorsed { color: #8a6400; }
+    .totals li.endorsed .tick { font-weight: 900; }
     /* Tabla de islas: una fila por isla del índice, en su orden. */
     .sub { margin: 1.1rem 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 700; }
     .isles { list-style: none; margin: 0; padding: 0; }
@@ -186,6 +197,12 @@ export class PlayerCard extends LitElement {
     this.progress = null;
     /** @type {Achievements|null} */
     this.achievements = null;
+    /**
+     * Avales del manager (JG-6): alimenta el contador «N avalados ✓» de los
+     * totales. null = el contenedor no los aporta y el contador no se pinta.
+     * @type {Endorsements|null}
+     */
+    this.endorsements = null;
     /** @type {string[]} */
     this.visitedIslands = [];
     /** @type {WizardQuestion[]} */
@@ -282,6 +299,7 @@ export class PlayerCard extends LitElement {
         <li title="Ciudadanías de isla conseguidas">🛂 ${prog.citizenships} ciudadanía${prog.citizenships === 1 ? '' : 's'}</li>
         <li title="Islas del archipiélago pisadas">🏝️ ${prog.islandsVisited}/${prog.islands.length} islas</li>
         <li title="Certificados conseguidos en total">📜 ${certificates} certificado${certificates === 1 ? '' : 's'}</li>
+        ${this._renderEndorsedTotal()}
       </ul>
       <p class="sub">Por isla</p>
       <ul class="isles">
@@ -292,6 +310,21 @@ export class PlayerCard extends LitElement {
       <p class="sub">Consultas al brujo</p>
       ${this._renderQuestions()}
     `;
+  }
+
+  /**
+   * Contador «N avalados ✓» de los totales (JG-6): certificados con el sello
+   * del manager. Solo se pinta si el contenedor aporta los avales (null = la
+   * sección de totales queda como estaba). La ficha lista islas, no
+   * certificados individuales: el sello casa a casa vive en la tarjeta de
+   * cada casa del juego.
+   */
+  _renderEndorsedTotal() {
+    if (this.endorsements === null) return null;
+    const n = endorsedCount(this.endorsements);
+    return html`<li class="endorsed" title="Certificados avalados por el manager">
+      <span class="tick" aria-hidden="true">✓</span> ${n} avalado${n === 1 ? '' : 's'}
+    </li>`;
   }
 
   /**

@@ -12,6 +12,9 @@ import {
   setEvidence,
   getAchievements,
   recordAchievements,
+  getEndorsements,
+  endorseCity,
+  unendorseCity,
   listQuestions,
   askQuestion,
   answerQuestion,
@@ -196,6 +199,30 @@ describe('career — casos de uso', () => {
     expect(saved.badges.legend).toEqual({ achievedAt: null });
     // Parche null: no escribe nada y devuelve lo que había.
     expect(await recordAchievements(store, 'p1', a, null)).toBe(a);
+  });
+
+  it('el manager avala y retira el aval de un certificado (JG-6)', async () => {
+    const manager = { uid: 'lead-1', name: 'Grace' };
+    const now = new Date('2026-07-05T12:00:00Z');
+    // Persona sin documento: avales vacíos.
+    let e = await getEndorsements(store, 'p1');
+    expect(e).toEqual({ byCity: {} });
+    // El manager sella una casa: persiste con su firma y la fecha del gesto.
+    e = await endorseCity(store, 'p1', 'html', manager, e, now);
+    expect(e.byCity.html).toEqual({ by: manager, at: now.toISOString() });
+    expect((await getEndorsements(store, 'p1')).byCity.html.by.name).toBe('Grace');
+    // Un segundo aval sobre la misma casa NO re-escribe el primero (ni escribe).
+    const other = await endorseCity(store, 'p1', 'html', { uid: 'lead-2', name: 'Otra' }, e, new Date('2030-01-01T00:00:00Z'));
+    expect(other).toBe(e);
+    expect((await getEndorsements(store, 'p1')).byCity.html.by.uid).toBe('lead-1');
+    // Retirar el aval borra SOLO esa clave; sin aval que retirar, sin escritura.
+    e = await endorseCity(store, 'p1', 'css', manager, e, now);
+    e = await unendorseCity(store, 'p1', 'html', e);
+    expect(Object.keys(e.byCity)).toEqual(['css']);
+    expect(Object.keys((await getEndorsements(store, 'p1')).byCity)).toEqual(['css']);
+    expect(await unendorseCity(store, 'p1', 'html', e)).toBe(e);
+    // Los avales son por persona: p2 sigue sin sellos.
+    expect(await getEndorsements(store, 'p2')).toEqual({ byCity: {} });
   });
 
   it('el brujo: preguntar, responder y marcar vista recorren el ciclo completo (MC-22)', async () => {
