@@ -96,6 +96,64 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         --rm-success: #16a34a;
         --rm-radius: 14px;
         --rm-max: 1100px;
+
+        color-scheme: light;
+      }
+
+      /* Tema oscuro (RMR-TSK-0151). Redefine los tokens semánticos --rm-* y la
+         paleta --gr-* derivándolos de la marca: mismos matices, luminosidad
+         ajustada para contraste AA sobre fondo oscuro. El juego del Mapa de
+         Carrera NO cambia: su overlay pergamino re-declara los --rm-* dentro
+         de su Shadow DOM. Los tokens que los componentes consumen solo vía
+         fallback (--rm-navy, --rm-coral…, --rm-on-accent…) se definen SOLO
+         aquí: en claro sigue aplicando el fallback y nada cambia. */
+      html[data-theme='dark'] {
+        color-scheme: dark;
+
+        /* Paleta GREBLA sobre oscuro */
+        --gr-navy: #aec6e8;
+        --gr-navy-700: #c4d6ef;
+        --gr-teal: #45c8b6;
+        --gr-teal-600: #5fd3c3;
+        --gr-teal-soft: #17302c;
+        --gr-coral: #f2887a;
+        --gr-coral-600: #e8796b;
+        --gr-coral-soft: #3b211d;
+
+        /* Tokens semánticos */
+        --rm-bg: #12161d;
+        --rm-surface: #1a202a;
+        --rm-surface-hover: #232b38;
+        --rm-text: #e8eaf0;
+        --rm-muted: #9fadbf;
+        --rm-border: #2b3442;
+        --rm-track: #222a36;
+        --rm-danger: #f47c74;
+        --rm-success: #57c877;
+
+        /* Tokens consumidos vía fallback en los componentes */
+        --rm-navy: var(--gr-navy);
+        --rm-coral: var(--gr-coral);
+        --rm-coral-600: var(--gr-coral-600);
+        --rm-coral-soft: var(--gr-coral-soft);
+        --rm-teal-600: var(--gr-teal-600);
+        --rm-teal-soft: var(--gr-teal-soft);
+        --rm-accent-soft: var(--gr-teal-soft);
+        --rm-accent-700: #7adccd;
+
+        /* Sobre acento brillante el texto va en tinta oscura (AA) */
+        --rm-on-accent: #10141a;
+        --rm-overlay: rgba(0, 0, 0, 0.65);
+        --rm-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        --rm-dot-border: rgba(255, 255, 255, 0.2);
+
+        /* Píldoras de estado (fondo tintado + texto claro) */
+        --rm-success-soft: #15321f;
+        --rm-success-strong: #7ee2a0;
+        --rm-danger-soft: #3a1e1e;
+        --rm-danger-strong: #f9968f;
+        --rm-warning-soft: #382912;
+        --rm-warning-strong: #f0b263;
       }
 
       * { box-sizing: border-box; }
