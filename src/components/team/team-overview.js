@@ -75,7 +75,7 @@ export class TeamOverview extends LitElement {
     ul.gaps li { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.4rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); font-size: 0.88rem; }
     .sev { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
     .sev.crit { background: var(--rm-coral-soft, #fdecea); color: var(--rm-danger, #dc2626); }
-    .sev.med { background: #fff4e5; color: #b25e09; }
+    .sev.med { background: var(--rm-warning-soft, #fff4e5); color: var(--rm-warning-strong, #b25e09); }
     .sev.low { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
     .gap-text { flex: 1; min-width: 12ch; }
     .lever { color: var(--rm-accent, #2a9d8f); font-weight: 600; }

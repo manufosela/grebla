@@ -111,7 +111,7 @@ export class DoraRepos extends LitElement {
     label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
     input { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-    button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #6b7280); font-weight: 600; }
@@ -150,8 +150,8 @@ export class DoraRepos extends LitElement {
     .deploy-list .by { color: var(--rm-muted, #6b7280); }
     .deploy-list code { font-size: 0.8rem; }
     .pill { display: inline-block; border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 0.72rem; font-weight: 700; }
-    .pill.success { background: #dcfce7; color: #15803d; }
-    .pill.failed { background: #fee2e2; color: #b91c1c; }
+    .pill.success { background: var(--rm-success-soft, #dcfce7); color: var(--rm-success-strong, #15803d); }
+    .pill.failed { background: var(--rm-danger-soft, #fee2e2); color: var(--rm-danger-strong, #b91c1c); }
     .spacer { flex: 1; }
     .deploy-empty { color: var(--rm-muted, #9ca3af); font-size: 0.82rem; }
   `, levelStyles];

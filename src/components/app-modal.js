@@ -31,7 +31,7 @@ export class AppModal extends LitElement {
     .backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(17, 24, 39, 0.5);
+      background: var(--rm-overlay, rgba(17, 24, 39, 0.5));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -43,7 +43,7 @@ export class AppModal extends LitElement {
       color: var(--rm-text, #111827);
       border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--rm-shadow, 0 10px 30px rgba(0, 0, 0, 0.2));
       width: min(32rem, 100%);
       max-height: calc(100vh - 2rem);
       overflow: auto;

@@ -117,7 +117,7 @@ export class TeamPeople extends LitElement {
       color: var(--rm-text, #111827); border-radius: 8px; padding: 0.5rem 0.9rem;
       font-size: 0.85rem; font-weight: 600; cursor: pointer;
     }
-    button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }

@@ -51,7 +51,7 @@ export class TeamApp extends LitElement {
       font-weight: 600;
       cursor: pointer;
     }
-    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     .back {
       border: 0; background: none; color: var(--rm-accent, #2a9d8f);
