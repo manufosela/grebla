@@ -2846,9 +2846,11 @@ export class CareerIsland3D extends LitElement {
   }
 
   /**
-   * Textura de la marca TRIBBU (MC-23): pin de mapa redondeado + logotipo con
-   * tipografía redondeada, teal sobre blanco con un guiño coral — todo paths
-   * de canvas, sin assets externos. Se pinta UNA vez y se cachea en
+   * Textura de la marca TRIBBU (MC-23 + JG-20): la valla se pinta al momento
+   * con el emblema procedural (pin de mapa) como base, y en cuanto carga el
+   * LOGO OFICIAL local (/img/tribbu-logo-pink.svg, versionado en el repo) se
+   * repinta esa zona con él (needsUpdate). Si la imagen falla, la valla se
+   * queda con el pin — nunca en blanco. Se pinta UNA vez y se cachea en
    * _envTextures ('tribbu', userData.shared): todas las vallas la comparten y
    * la libera _clearEnvTextures en el teardown, no _disposeSubtree.
    */
@@ -2921,6 +2923,18 @@ export class CareerIsland3D extends LitElement {
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.userData.shared = true;
     this._envTextures.set('tribbu', texture);
+
+    // Logo oficial (JG-20): al cargar sustituye el pin procedural. El SVG es
+    // el icono cuadrado redondeado de la app; se centra en el hueco del pin.
+    const logo = new Image();
+    logo.decoding = 'async';
+    logo.addEventListener('load', () => {
+      ctx.fillStyle = TRIBBU_BRAND.white;
+      ctx.fillRect(20, 20, 138, 192);
+      ctx.drawImage(logo, 32, 52, 128, 128);
+      texture.needsUpdate = true;
+    });
+    logo.src = '/img/tribbu-logo-pink.svg';
     return texture;
   }
 
