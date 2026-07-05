@@ -173,7 +173,7 @@
  * candidatos con holgura a todas las casas) y entra en las exclusiones de la
  * vegetación. La prop `wizardState` pinta el INDICADOR de estado: 'none' =
  * humo gris tenue saliendo de la chimenea; 'pending' = farol ÁMBAR pulsante;
- * 'ready' = farol TEAL brillante con un destello. Todo barato: materiales
+ * 'ready' = farol VIOLETA brillante con un destello (JG-8). Todo barato: materiales
  * emisivos y tres esferitas de humo animadas en el loop, sin partículas. La
  * interacción calca la de las casas: clic en vista aérea (raycast, como la
  * barca), prompt «[E] El brujo» y choque frontal a pie/avatar — todas las vías
@@ -598,9 +598,10 @@ const MINIMAP = Object.freeze({
  * indicador y humo de reposo. `colliderRadius` cubre la planta (radio del
  * tejado) más holgura del caminante, como CITY_COLLIDER_RADIUS; el radio de
  * proximidad a pie es el mismo de las ciudades (PROXIMITY_RADIUS). Colores
- * del indicador: reposo gris, pendiente ÁMBAR, respuesta lista TEAL (paleta
- * GREBLA). El pulso del farol y el humo se animan en _tickWizard (barato:
- * emisivos y tres esferitas).
+ * del indicador: reposo gris, pendiente ÁMBAR, respuesta lista VIOLETA
+ * místico (JG-8: la «luz» que el brujo promete encender — coherente con el
+ * halo del mapa del tesoro). El pulso del farol y el humo se animan en
+ * _tickWizard (barato: emisivos y tres esferitas).
  */
 const WIZARD = Object.freeze({
   bodyR: 1.7,
@@ -615,14 +616,14 @@ const WIZARD = Object.freeze({
     star: 0xf4c96b,
     none: 0x8a8f98,
     pending: 0xf4a53b,
-    ready: 0x2a9d8f,
+    ready: 0x9d4edd,
     smoke: 0xb7bcc2,
   }),
   /** Farol junto a la puerta: radio, altura y poste. */
   lantern: Object.freeze({ r: 0.3, y: 2.1, postX: 1.9 }),
   /** Pulso del farol ÁMBAR (Hz) e intensidades emisivas por estado. */
   pulseHz: 0.9,
-  emissive: Object.freeze({ none: 0.12, pendingMin: 0.25, pendingMax: 1, ready: 1.1 }),
+  emissive: Object.freeze({ none: 0.12, pendingMin: 0.25, pendingMax: 1, ready: 1.3 }),
   /** Humo de reposo: esferitas que suben riseS segundos hasta height unidades. */
   smoke: Object.freeze({ count: 3, riseS: 3.6, height: 2.8, r: 0.22, maxOpacity: 0.35 }),
   /** Destello del estado «respuesta lista»: tamaño y pulso del sprite. */
@@ -3728,7 +3729,8 @@ export class CareerIsland3D extends LitElement {
    * cartel «El brujo», chimenea trasera y un farol en un poste junto a la
    * puerta — el INDICADOR de estado (wizardState): reposo = farol gris y humo
    * tenue en la chimenea; 'pending' = farol ÁMBAR pulsante; 'ready' = farol
-   * TEAL brillante con un destello. Distinta a las casas a propósito (planta
+   * VIOLETA brillante con un destello (JG-8: la luz prometida por el brujo).
+   * Distinta a las casas a propósito (planta
    * redonda, otro tejado, otra paleta): es LA edificación singular de la isla.
    * La fachada mira al puerto, como las casas (facadeYawToward).
    */
@@ -3869,9 +3871,9 @@ export class CareerIsland3D extends LitElement {
       glowCanvas.height = 64;
       const gctx = glowCanvas.getContext('2d');
       const glow = gctx.createRadialGradient(32, 32, 2, 32, 32, 32);
-      glow.addColorStop(0, 'rgba(120, 255, 235, 0.95)');
-      glow.addColorStop(0.4, 'rgba(42, 157, 143, 0.5)');
-      glow.addColorStop(1, 'rgba(42, 157, 143, 0)');
+      glow.addColorStop(0, 'rgba(230, 190, 255, 0.95)');
+      glow.addColorStop(0.4, 'rgba(157, 78, 221, 0.55)');
+      glow.addColorStop(1, 'rgba(157, 78, 221, 0)');
       gctx.fillStyle = glow;
       gctx.fillRect(0, 0, 64, 64);
       const sparkle = new THREE.Sprite(
@@ -3932,7 +3934,7 @@ export class CareerIsland3D extends LitElement {
 
   /**
    * Un frame del indicador de la cabaña del brujo (MC-22), en cualquier modo:
-   * farol ÁMBAR pulsante ('pending'), destello TEAL respirando ('ready') y
+   * farol ÁMBAR pulsante ('pending'), destello VIOLETA respirando ('ready') y
    * humo de reposo subiendo en bucle ('none'). Barato: un emisivo, un sprite y
    * tres esferitas.
    * @param {DOMHighResTimeStamp} now
