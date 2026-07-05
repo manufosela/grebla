@@ -138,7 +138,7 @@ export function validateCity(city, island) {
 }
 
 /**
- * Índice casa → isla de TODO el contenido cargado: resuelve una parada de
+ * Índice casa → isla del contenido completo cargado: resuelve una parada de
  * ruta a su casa y al id del doc de su isla (ojo: la isla de Bases tiene doc
  * id 'island' pero sus casas llevan prefijo 'bases/'; por eso se indexa por
  * id de casa, no por prefijo).

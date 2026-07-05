@@ -35,10 +35,11 @@ const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
  */
 function slugify(text) {
   return String(text ?? '')
-    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .normalize('NFD').replaceAll(/\p{Diacritic}/gu, '')
     .toLowerCase().trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replaceAll(/[^a-z0-9]+/gu, '-')
+    .replace(/^-+/u, '')
+    .replace(/-+$/u, '');
 }
 
 /**

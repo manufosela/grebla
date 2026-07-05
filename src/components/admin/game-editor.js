@@ -54,10 +54,11 @@ const TIER_LABEL = Object.freeze({ peritus: 'Peritus', veteranus: 'Veteranus', m
  */
 function slugify(text) {
   return String(text ?? '')
-    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .normalize('NFD').replaceAll(/\p{Diacritic}/gu, '')
     .toLowerCase().trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replaceAll(/[^a-z0-9]+/gu, '-')
+    .replace(/^-+/u, '')
+    .replace(/-+$/u, '');
 }
 
 /** Borrador del formulario de casa a partir de una casa existente (o vacío).
@@ -692,6 +693,7 @@ export class GameEditor extends LitElement {
   _renderCityForm(island) {
     if (!island || !this._cityForm) return null;
     const { originalId, draft, errors } = this._cityForm;
+    const idLocked = originalId !== null;
     const heading = originalId === null ? 'Añadir casa' : `Editar «${originalId}»`;
     const others = island.cities.filter((c) => c.id !== originalId);
     return html`
@@ -706,8 +708,8 @@ export class GameEditor extends LitElement {
             <label for="c-id">Id (disciplina/slug)</label>
             <input
               id="c-id" type="text" .value=${draft.id}
-              ?disabled=${originalId !== null}
-              title=${originalId !== null ? 'El id no se cambia: lo referencian prereqs, rutas y journeys.' : ''}
+              ?disabled=${idLocked}
+              title=${idLocked ? 'El id no se cambia: lo referencian prereqs, rutas y journeys.' : ''}
               @input=${(e) => { this._cityIdTouched = true; this._setCityField('id', e.target.value); }}
             />
           </div>
@@ -759,9 +761,7 @@ export class GameEditor extends LitElement {
         <h3>Recursos</h3>
         ${this._renderResourceRows(draft.resources)}
         <button class="mini" @click=${this._addResource}>+ Añadir recurso</button>
-        ${errors.length > 0
-          ? html`<ul class="plain">${errors.map((e) => html`<li class="error">${e}</li>`)}</ul>`
-          : null}
+        ${this._renderErrorList(errors)}
         <div class="form-actions">
           <button class="primary" ?disabled=${this._saving} @click=${this._saveCity}>
             ${this._saving ? 'Guardando…' : 'Guardar casa'}
@@ -773,6 +773,13 @@ export class GameEditor extends LitElement {
   }
 
   /** @param {Array<{kind: string, label: string, url?: string}>} resources */
+  /** Lista de errores de validación de un formulario (vacía → nada). */
+  _renderErrorList(errors) {
+    if (errors.length === 0) return null;
+    const items = errors.map((e) => html`<li class="error">${e}</li>`);
+    return html`<ul class="plain">${items}</ul>`;
+  }
+
   _renderResourceRows(resources) {
     if (resources.length === 0) return html`<p class="empty">Sin recursos: añade el primero.</p>`;
     return html`
@@ -924,9 +931,7 @@ export class GameEditor extends LitElement {
         ${warnings.map((w) => html`<p class="warn">⚠ ${w}</p>`)}
         ${this._renderStopsList(draft.stops)}
         ${this._renderAddStop()}
-        ${errors.length > 0
-          ? html`<ul class="plain">${errors.map((e) => html`<li class="error">${e}</li>`)}</ul>`
-          : null}
+        ${this._renderErrorList(errors)}
         <div class="form-actions">
           <button class="primary" ?disabled=${this._saving} @click=${this._saveRoute}>
             ${this._saving ? 'Guardando…' : 'Guardar ruta'}
