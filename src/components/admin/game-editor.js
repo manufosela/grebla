@@ -224,6 +224,15 @@ export class GameEditor extends LitElement {
       box-sizing: border-box;
     }
     textarea { width: 100%; min-height: 4.5rem; resize: vertical; }
+    /* Las opciones del multiselect no heredan el fondo del select en Chrome:
+       sin esto quedan blancas en tema oscuro. El gradiente en :checked es el
+       truco necesario para que Chrome respete el resaltado de seleccionadas. */
+    option { background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+    option:checked {
+      background: linear-gradient(var(--rm-accent, #3b82f6), var(--rm-accent, #3b82f6));
+      color: var(--rm-on-accent, #fff);
+      font-weight: 700;
+    }
     label { font-size: 0.8rem; font-weight: 600; color: var(--rm-muted, #6b7280); display: block; margin-bottom: 0.25rem; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem 1rem; margin-bottom: 0.75rem; }
     .field-wide { grid-column: 1 / -1; }
