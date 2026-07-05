@@ -235,6 +235,7 @@ import { COINS_PUBLIC_KEY_PEM } from '../../lib/coinsPublicKey.js';
 import {
   verifyLedger as verifyCoinsLedger,
   entryLabel as coinsEntryLabel,
+  coinsFillLevel,
 } from '../../tools/career/domain/coins.js';
 import { DEFAULT_ISLAND_ID } from '../../tools/career/domain/types.js';
 import {
@@ -731,6 +732,8 @@ export class CareerApp extends LitElement {
       /* Los hijos no se encogen: la fila se desplaza, no se aplasta. */
       .controls > *,
       .hudline > * { flex: 0 0 auto; }
+      /* El botón-cofre (JG-13) no engorda la fila-scroll de la consola. */
+      .coinsbtn .chesticon { width: 17px; height: 14px; }
     }
     label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
@@ -1458,8 +1461,144 @@ export class CareerApp extends LitElement {
     @keyframes coinspulse { 50% { opacity: 0.55; } }
     @media (prefers-reduced-motion: reduce) { .hudbadge.coinsalert { animation: none; } }
     .coinshead { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0.2rem 0 0.6rem; }
-    .coinsbal { font-size: 1.25rem; font-weight: 800; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; }
-    .coinsbal small { font-size: 0.75rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
+    /* ── JG-13: el COFRE de tribbu-coins (100% CSS/SVG procedural, JG-7) ── */
+    /* Botón-cofre de la barra: mini cofre cerrado + saldo al lado. */
+    .coinsbtn { display: inline-flex; align-items: center; gap: 0.35rem; font-variant-numeric: tabular-nums; }
+    .coinsbtn .chesticon { display: block; width: 20px; height: 17px; flex: 0 0 auto; }
+    .coinsbtn.forced { border-color: var(--rm-danger, #dc2626); }
+    .coinsbtn.forced .chesticon { filter: drop-shadow(0 0 3px rgba(220, 38, 38, 0.85)); }
+    /* Cofre grande del overlay: la tapa gira sobre la bisagra trasera (rotateX
+       con origin en el borde inferior + perspective) y queda DETRÁS de la
+       caja; el estado base ya es «abierto» para que prefers-reduced-motion
+       (animation: none) lo muestre abierto sin animar. */
+    .chest { position: relative; z-index: 1; width: min(250px, 100%); margin: 0.3rem auto 0; }
+    .chest-scene { position: relative; height: 150px; perspective: 480px; }
+    .chest-lid {
+      position: absolute; left: 10px; right: 10px; bottom: 78px; height: 60px;
+      background:
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 34px, rgba(30, 16, 4, 0.22) 34px 36px),
+        linear-gradient(180deg, var(--wood-1, #7a5a33) 0%, var(--wood-2, #55391c) 100%);
+      border: 2px solid var(--wood-edge, #3a2712);
+      border-radius: 52% 52% 6px 6px / 92% 92% 4px 4px;
+      box-shadow: inset 0 2px 0 rgba(255, 240, 210, 0.18);
+      transform-origin: 50% 100%;
+      transform: rotateX(108deg);
+      animation: chest-open 0.5s ease-out;
+      z-index: 0;
+    }
+    @keyframes chest-open { from { transform: rotateX(0deg); } }
+    @media (prefers-reduced-motion: reduce) { .chest-lid { animation: none; } }
+    .chest-lid-band {
+      position: absolute; left: 50%; top: -2px; bottom: -2px; width: 26px;
+      transform: translateX(-50%);
+      background: linear-gradient(180deg, #e0b45c 0%, #c9973f 55%, #a87826 100%);
+      border: 1px solid #7c5a18; border-radius: 8px 8px 2px 2px;
+      box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.5);
+    }
+    /* El hueco oscuro tras el borde y las monedas asomando sobre él. */
+    .chest-cavity {
+      position: absolute; left: 18px; right: 18px; bottom: 72px; height: 18px;
+      background: linear-gradient(180deg, #1c0f04 0%, #3a2712 100%);
+      border-radius: 7px 7px 0 0;
+      box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.6);
+      z-index: 1;
+    }
+    .chest-coins { position: absolute; left: 22px; right: 22px; bottom: 74px; height: 52px; z-index: 2; }
+    .chest-spill { position: absolute; left: 4px; right: 4px; bottom: -3px; height: 16px; z-index: 4; }
+    .coin {
+      position: absolute; width: 24px; height: 13px; border-radius: 50%;
+      background: radial-gradient(ellipse at 38% 32%, #ffe9a3 0%, #f0c145 45%, #c9973f 78%, #a87826 100%);
+      border: 1px solid #8a5f1d;
+      box-shadow: inset 0 -2px 2px rgba(122, 80, 16, 0.55), 0 1px 1px rgba(20, 10, 2, 0.35);
+    }
+    .chest-base {
+      position: absolute; left: 12px; right: 12px; bottom: 0; height: 80px;
+      background:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0) 0 24px, rgba(30, 16, 4, 0.28) 24px 26px),
+        linear-gradient(180deg, #8a6a3f 0%, var(--wood-1, #7a5a33) 40%, var(--wood-2, #55391c) 100%);
+      border: 2px solid var(--wood-edge, #3a2712);
+      border-radius: 6px 6px 12px 12px;
+      box-shadow:
+        inset 0 2px 0 rgba(255, 240, 210, 0.18),
+        inset 0 -6px 12px rgba(20, 10, 2, 0.4),
+        0 6px 14px rgba(20, 10, 2, 0.35);
+      z-index: 3;
+    }
+    /* Esquineras de latón de la caja. */
+    .chest-base::before, .chest-base::after {
+      content: ''; position: absolute; bottom: -2px; width: 18px; height: 22px;
+      background: linear-gradient(180deg, #d9a441 0%, #a87826 100%);
+      border: 1px solid #7c5a18;
+    }
+    .chest-base::before { left: -2px; border-radius: 4px 0 0 10px; }
+    .chest-base::after { right: -2px; border-radius: 0 4px 10px 0; }
+    .chest-band {
+      position: absolute; left: 50%; top: -2px; bottom: -2px; width: 26px;
+      transform: translateX(-50%);
+      background: linear-gradient(180deg, #e0b45c 0%, #c9973f 55%, #a87826 100%);
+      border: 1px solid #7c5a18; border-radius: 2px 2px 6px 6px;
+      box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.5);
+    }
+    .chest-lock {
+      position: absolute; left: 50%; top: 6px; width: 18px; height: 20px;
+      transform: translateX(-50%);
+      background: radial-gradient(circle at 40% 30%, #e8c268 0%, #c9973f 55%, #96691c 100%);
+      border: 1px solid #7c5a18; border-radius: 5px;
+      box-shadow: 0 1px 2px rgba(20, 10, 2, 0.5);
+    }
+    .chest-lock::after {
+      content: ''; position: absolute; left: 50%; top: 5px; width: 4px; height: 9px;
+      transform: translateX(-50%);
+      background: #4a3208; border-radius: 2px 2px 1px 1px;
+    }
+    /* Rótulo de latón con el número del saldo «grabado». */
+    .chest-plaque {
+      position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+      z-index: 5; padding: 0.16rem 0.9rem;
+      background: linear-gradient(180deg, #e8c268 0%, #c9973f 45%, #a87826 100%);
+      border: 1px solid #7c5a18; border-radius: 7px;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 245, 210, 0.65),
+        inset 0 -2px 3px rgba(90, 60, 10, 0.45),
+        0 2px 5px rgba(20, 10, 2, 0.4);
+      font-size: 1.2rem; font-weight: 900; color: #4a3208;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+      text-shadow: 0 1px 0 rgba(255, 240, 200, 0.55);
+    }
+    .chest-plaque small { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #5d4210; }
+    .chest-plaque::before, .chest-plaque::after {
+      content: ''; position: absolute; top: 50%; width: 5px; height: 5px;
+      transform: translateY(-50%); border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ffe9a3, #96691c);
+    }
+    .chest-plaque::before { left: 4px; }
+    .chest-plaque::after { right: 4px; }
+    /* Cofre FORZADO (misma señal que la alerta 🚨 del HUD): tapa torcida a
+       medio abrir, herraje suelto y tinte rojizo con brillo de peligro. */
+    .chest.forced .chest-scene { filter: sepia(0.35) hue-rotate(-24deg) saturate(1.5) drop-shadow(0 0 10px rgba(220, 38, 38, 0.5)); }
+    .chest.forced .chest-lid { transform: rotateX(38deg) rotateZ(-7deg); animation: none; }
+    .chest.forced .chest-band { transform: translateX(-50%) rotate(13deg) translateY(6px); }
+    .chest.forced .chest-lock { transform: translateX(-30%) rotate(-18deg); top: 12px; }
+    /* El libro mayor: pergamino desplegable que sale de DEBAJO del cofre. */
+    .ledgerscroll {
+      position: relative; z-index: 0;
+      margin: -10px 6px 0; padding: 0 0.85rem 0.85rem;
+      border: 1px solid var(--parch-edge, #b98f56);
+      border-radius: 4px 4px 16px 12px / 4px 4px 12px 16px;
+      background: linear-gradient(180deg, #f7ecd0 0%, #efdfba 100%);
+      box-shadow: inset 0 0 16px rgba(92, 58, 20, 0.22), 0 4px 10px rgba(17, 24, 39, 0.18);
+    }
+    .ledgerscroll > summary {
+      cursor: pointer; list-style: none;
+      padding: 0.85rem 0.15rem 0.5rem;
+      font-family: var(--parch-title, Georgia, serif);
+      font-weight: 700; letter-spacing: 0.03em;
+      color: var(--parch-ink, #33240f);
+    }
+    .ledgerscroll > summary::-webkit-details-marker { display: none; }
+    .ledgerscroll > summary::before { content: '▸ '; color: var(--parch-muted, #6b5433); }
+    .ledgerscroll[open] > summary::before { content: '▾ '; }
+    .ledgerscroll > summary:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
     .vsummary { margin: 0.4rem 0; font-size: 0.9rem; font-weight: 700; }
     .vsummary.good { color: var(--rm-accent, #2a9d8f); }
     .vsummary.warn { color: #8a5a00; }
@@ -4226,12 +4365,93 @@ export class CareerApp extends LitElement {
     this._closeCoins();
   }
 
-  /** Botón «🪙 Tribbu-coins» de la barra. */
+  /**
+   * Montones de monedas del cofre por nivel de llenado (JG-13): pares [x, y]
+   * (x en % del hueco, y en px sobre el borde) elegidos a mano para que cada
+   * nivel se lea de un vistazo (fila suelta → capa → montículo → desborde).
+   */
+  static COIN_PILES = Object.freeze({
+    empty: Object.freeze([]),
+    low: Object.freeze([[34, 0], [50, 0], [42, 7]]),
+    mid: Object.freeze([[14, 0], [32, 0], [50, 0], [68, 0], [23, 8], [41, 8], [59, 8]]),
+    high: Object.freeze([
+      [8, 0], [26, 0], [44, 0], [62, 0], [80, 0],
+      [17, 9], [35, 9], [53, 9], [71, 9],
+      [26, 18], [44, 18], [62, 18],
+    ]),
+    overflow: Object.freeze([
+      [4, 0], [22, 0], [40, 0], [58, 0], [76, 0], [92, 0],
+      [13, 9], [31, 9], [49, 9], [67, 9], [85, 9],
+      [22, 18], [40, 18], [58, 18], [76, 18],
+      [31, 27], [49, 27], [67, 27],
+    ]),
+  });
+
+  /** Monedas caídas DELANTE del cofre cuando el saldo desborda (nivel 'overflow'). */
+  static COIN_SPILL = Object.freeze([[6, 0], [18, 4], [84, 2], [94, 0]]);
+
+  /** Botón-cofre de tribbu-coins de la barra (JG-13): cofre cerrado dibujado + saldo. */
   _renderCoinsButton() {
+    const balance = this.coinsBalance ?? '—';
+    const cls = this.coinsAlert ? 'coinsbtn forced' : 'coinsbtn';
     return html`<button
+      class=${cls}
       @click=${this._openCoins}
+      aria-label="Tribbu-coins: saldo ${balance}. Abre el cofre con el libro mayor firmado"
       title="Tribbu-coins: saldo, historial y verificación del libro mayor firmado"
-    >🪙 Tribbu-coins</button>`;
+    >
+      <svg class="chesticon" viewBox="0 0 24 20" aria-hidden="true">
+        <path d="M2 9 V7.5 A10 7 0 0 1 22 7.5 V9 Z" fill="#7a5a33" stroke="#3a2712" stroke-width="1" />
+        <rect x="2" y="9" width="20" height="9.5" rx="1.5" fill="#8a6a3f" stroke="#3a2712" stroke-width="1" />
+        <line x1="2.6" y1="13.8" x2="21.4" y2="13.8" stroke="#3a2712" stroke-opacity="0.35" />
+        <rect x="10" y="1.4" width="4" height="17" rx="1" fill="#c9973f" stroke="#7c5a18" stroke-width="0.8" />
+        <circle cx="12" cy="10.6" r="1.3" fill="#5d4210" />
+      </svg>
+      ${balance}
+    </button>`;
+  }
+
+  /**
+   * Monedas doradas del cofre (JG-13): el montón del nivel de llenado dentro
+   * del hueco y, si desborda, unas monedas caídas delante de la caja.
+   * @param {'empty'|'low'|'mid'|'high'|'overflow'} level
+   */
+  _renderChestCoins(level) {
+    const pile = CareerApp.COIN_PILES[level] ?? [];
+    if (pile.length === 0) return null;
+    const spill = level === 'overflow' ? CareerApp.COIN_SPILL : [];
+    const coin = ([x, y]) => html`<span class="coin" style=${`left:${x}%;bottom:${y}px`}></span>`;
+    return html`<div class="chest-coins">${pile.map(coin)}</div>
+      ${spill.length > 0 ? html`<div class="chest-spill">${spill.map(coin)}</div>` : null}`;
+  }
+
+  /**
+   * Cofre grande del overlay (JG-13), 100% CSS procedural (decisión JG-7):
+   * tapa que se levanta al abrir (bisagra trasera; con prefers-reduced-motion
+   * aparece ya abierto), montón de monedas según coinsFillLevel y rótulo de
+   * latón con el número del saldo. Si la última verificación detectó trampa
+   * (la misma señal que la alerta 🚨 del HUD), el cofre se pinta forzado:
+   * tapa torcida, herraje suelto y tinte rojizo.
+   * @param {string} name Nombre de la persona cargada (para el título).
+   */
+  _renderChest(name) {
+    const balance = this.coinsBalance;
+    const level = coinsFillLevel(balance ?? 0);
+    const cls = this.coinsAlert ? 'chest forced' : 'chest';
+    return html`<div class=${cls}>
+      <div class="chest-scene" aria-hidden="true">
+        <div class="chest-lid"><span class="chest-lid-band"></span></div>
+        <div class="chest-cavity"></div>
+        ${this._renderChestCoins(level)}
+        <div class="chest-base">
+          <span class="chest-band"></span>
+          <span class="chest-lock"></span>
+        </div>
+      </div>
+      <span class="chest-plaque" title="Saldo materializado de ${name}">
+        ${balance ?? '—'} <small>tribbu-coins</small>
+      </span>
+    </div>`;
   }
 
   /**
@@ -4324,15 +4544,40 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Overlay «🪙 Tribbu-coins» (CP-2): saldo de la persona, verificación del
-   * libro mayor (botón + resultado detallado) e historial completo de sus
-   * transacciones. Modal hermano de la ficha: foco al abrir, Escape/✕/fondo
-   * cierran.
+   * Historial de apuntes de la persona en el pergamino (o su estado de
+   * carga/vacío). El contenido es el bloque CP-2 de siempre, intacto.
+   * @param {import('../../tools/career/domain/coins.js').CoinsEntry[]|null} entries
+   */
+  _renderCoinsHistory(entries) {
+    if (entries === null) return html`<p class="wizempty">Cargando el libro mayor…</p>`;
+    if (entries.length === 0) {
+      return html`<p class="wizempty">Sin transacciones todavía: los coins llegan con certificados, ciudadanías, badges y carpools completados.</p>`;
+    }
+    return html`<ul class="coinslist">
+      ${entries.map(
+        (e) => html`<li>
+          <span class="what">${coinsEntryLabel(e)}${e.unsigned ? html` <span class="unsigned" title="Apunte emitido sin clave KMS configurada">sin firma</span>` : null}</span>
+          <span class="when">${formatWizardDate(e.ts)}</span>
+          <span class="delta">+${e.delta} 🪙</span>
+        </li>`,
+      )}
+    </ul>`;
+  }
+
+  /**
+   * Overlay «🪙 Tribbu-coins» (CP-2 + JG-13): el cofre con las monedas y el
+   * rótulo del saldo arriba y, colgando de él, el pergamino desplegable con
+   * la verificación del libro mayor (botón + resultado detallado) y el
+   * historial completo. Modal hermano de la ficha: foco al abrir,
+   * Escape/✕/fondo cierran.
    */
   _renderCoins() {
     if (!this.showCoins) return null;
     const name = (this.people ?? []).find((p) => p.id === this.personId)?.name ?? '';
     const entries = this._personCoinsEntries;
+    // El pergamino del libro mayor sale abierto si la última verificación
+    // falló (la trampa no se esconde); el resto de veces decide el jugador.
+    const ledgerOpen = Boolean(this.coinsVerify && !this.coinsVerify.ok);
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeCoins(); }}>
       <section
         class="ficha coinspanel"
@@ -4351,30 +4596,19 @@ export class CareerApp extends LitElement {
           mayor firmado y encadenado que cualquiera puede auditar: si alguien
           tocase la base de datos, aquí se vería.
         </p>
-        <div class="coinshead">
-          <span class="coinsbal" title="Saldo materializado de ${name}">
-            🪙 ${this.coinsBalance ?? '—'} <small>de ${name}</small>
-          </span>
-          <button @click=${this._runCoinsVerification} ?disabled=${this.coinsBusy}>
-            ${this.coinsBusy ? 'Verificando…' : '🪙 Verificar libro mayor'}
-          </button>
-        </div>
-        ${this.coinsError ? html`<p class="error" role="alert">${this.coinsError}</p>` : null}
-        ${this._renderCoinsVerifyResult()}
-        <p class="sub-coins">Historial de ${name}</p>
-        ${entries === null
-          ? html`<p class="wizempty">Cargando el libro mayor…</p>`
-          : entries.length === 0
-            ? html`<p class="wizempty">Sin transacciones todavía: los coins llegan con certificados, ciudadanías, badges y carpools completados.</p>`
-            : html`<ul class="coinslist">
-                ${entries.map(
-                  (e) => html`<li>
-                    <span class="what">${coinsEntryLabel(e)}${e.unsigned ? html` <span class="unsigned" title="Apunte emitido sin clave KMS configurada">sin firma</span>` : null}</span>
-                    <span class="when">${formatWizardDate(e.ts)}</span>
-                    <span class="delta">+${e.delta} 🪙</span>
-                  </li>`,
-                )}
-              </ul>`}
+        ${this._renderChest(name)}
+        <details class="ledgerscroll" ?open=${ledgerOpen}>
+          <summary>📜 Libro mayor firmado y verificación</summary>
+          <div class="coinshead">
+            <button @click=${this._runCoinsVerification} ?disabled=${this.coinsBusy}>
+              ${this.coinsBusy ? 'Verificando…' : '🪙 Verificar libro mayor'}
+            </button>
+          </div>
+          ${this.coinsError ? html`<p class="error" role="alert">${this.coinsError}</p>` : null}
+          ${this._renderCoinsVerifyResult()}
+          <p class="sub-coins">Historial de ${name}</p>
+          ${this._renderCoinsHistory(entries)}
+        </details>
       </section>
     </div>`;
   }
