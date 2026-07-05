@@ -83,11 +83,13 @@
  * placeholder tiene playa, puerto y cartel). Elegir destino persiste
  * `currentIsland` (setCurrentIsland), recarga el mapa con un fundido de
  * travesía y el avatar aparece en el puerto de la isla nueva. Desde MC-19 el
- * viaje se VE antes del fundido: un barquito ⛵ navega la curva puerto→puerto
- * sobre el mapa del mar (estela incluida, proa al rumbo, duración según la
- * distancia — domain/voyage.js, puro). Escape salta la animación (el viaje
- * sigue), otros clics se ignoran (un viaje a la vez) y con
- * `prefers-reduced-motion` se zarpa directo al fundido. Los compañeros
+ * viaje se VE antes del fundido, y desde JG-17 lo navega un barco PIRATA
+ * (SVG lateral de carta náutica, estilo JG-7): curva Bézier determinista por
+ * par de islas que ESQUIVA las islas que pisaría la recta, easing de
+ * zarpa/atraque, proa al rumbo con escora en los giros y balanceo de oleaje
+ * (estela incluida, duración según la distancia — domain/voyage.js, puro).
+ * Escape salta la animación (el viaje sigue), otros clics se ignoran (un
+ * viaje a la vez) y con `prefers-reduced-motion` se zarpa directo al fundido. Los compañeros
  * (MC-12) solo se pintan si su journey está en la MISMA isla; el progreso del
  * HUD sigue siendo el de la isla cargada.
  *
@@ -241,11 +243,10 @@ import {
 import { DEFAULT_ISLAND_ID } from '../../tools/career/domain/types.js';
 import {
   WAKE_INTERVAL_MS,
-  voyagePath,
-  voyagePointAt,
-  voyageTangentAngle,
+  voyageCurve,
+  voyagePose,
+  voyageBoatOrientation,
   voyageDuration,
-  voyageHeading,
 } from '../../tools/career/domain/voyage.js';
 import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
@@ -277,6 +278,33 @@ import {
   formatStopRanges,
 } from '../../tools/career/domain/route.js';
 import { islandBlobPath } from '../../tools/career/domain/islandShape.js';
+
+/**
+ * Barco PIRATA del viaje entre islas (JG-17): SVG procedural lateral de carta
+ * náutica, con la paleta de tinta y pergamino del mapa JG-7 (sin imágenes).
+ * CONVENCIÓN: la proa mira a la DERECHA (+x, este) — los rumbos al oeste se
+ * resuelven con scaleX(-1) en _boatStyleAt, sin el XOR de espejos que
+ * necesitaba el glifo ⛵ (que miraba a la izquierda). Casco de madera con
+ * franja roja y troneras, castillo de popa, dos velas de pergamino (la mayor
+ * con costuras y parche) y gallardete negro con calavera ondeando a popa.
+ */
+const PIRATE_SHIP_SVG = html`<svg viewBox="0 0 64 44" aria-hidden="true">
+  <path d="M27 3.2 L16 4.8 L27 6.6 Z" fill="#221a12" stroke="#4a2e12" stroke-width="0.6" />
+  <circle cx="23.6" cy="4.9" r="1.05" fill="#f6eed6" />
+  <path d="M27 3 L27 29" stroke="#4a2e12" stroke-width="1.6" />
+  <path d="M45 9 L45 28" stroke="#4a2e12" stroke-width="1.4" />
+  <path d="M55 27 L63 20.5" stroke="#4a2e12" stroke-width="1.4" stroke-linecap="round" />
+  <path d="M27 7.5 Q39.5 9.5 40.5 17 Q39.5 24.5 27 26.5 Z" fill="#f6eed6" stroke="#4a2e12" stroke-width="1" />
+  <path d="M29 10 Q37.5 12 38.5 17 M29 24 Q37.5 22 38.5 17" fill="none" stroke="#4a2e12" stroke-width="0.5" opacity="0.55" />
+  <rect x="31.6" y="13.8" width="4.6" height="4.6" rx="0.8" transform="rotate(8 33.9 16.1)" fill="#d9c9a3" stroke="#4a2e12" stroke-width="0.55" />
+  <path d="M45 11 Q53.5 13 54.5 19 Q53.5 24 45 26 Z" fill="#f6eed6" stroke="#4a2e12" stroke-width="0.9" />
+  <path d="M5 26.5 L11 27.5 L52 27.5 Q57 27 60.5 23.5 L56.5 33 Q53.5 37.5 46 38 L17 38 Q10 37.5 7 33 Z" fill="#8a5a2b" stroke="#4a2e12" stroke-width="1.1" stroke-linejoin="round" />
+  <path d="M5.5 27 L7 22.5 L14.5 22.5 L14.5 27.4 Z" fill="#6b4423" stroke="#4a2e12" stroke-width="1" />
+  <path d="M9 31.5 Q30 33.8 54.5 30.4" fill="none" stroke="#b3261e" stroke-width="1.6" opacity="0.9" />
+  <circle cx="22" cy="30.3" r="1" fill="#221a12" />
+  <circle cx="32" cy="30.7" r="1" fill="#221a12" />
+  <circle cx="42" cy="30.4" r="1" fill="#221a12" />
+</svg>`;
 
 /**
  * Pestañas de la tarjeta de la casa (MC-15): estado/acciones del certificado,
@@ -1368,17 +1396,36 @@ export class CareerApp extends LitElement {
       stroke-linejoin: round;
       vector-effect: non-scaling-stroke;
     }
-    /* Barco animado puerto→puerto (MC-19): capa del viaje sobre el mar. El
-       bucle de rAF recoloca el barco (left/top/transform inline) y va soltando
-       puntos de estela que se desvanecen solos. */
+    /* Barco animado puerto→puerto (MC-19, pirata JG-17): capa del viaje sobre
+       el mar. El bucle de rAF recoloca el barco (left/top/transform inline con
+       la pose de la curva) y va soltando puntos de estela que se desvanecen
+       solos. */
     .voyage-layer { position: absolute; inset: 0; pointer-events: none; }
     .boat {
       position: absolute;
       z-index: 2; /* la proa por delante de su propia estela */
-      font-size: 1.45rem;
-      line-height: 1;
+      width: 42px;
+      height: 29px;
       filter: drop-shadow(0 2px 3px rgba(10, 30, 50, 0.45));
       will-change: left, top, transform;
+    }
+    /* Balanceo de oleaje (JG-17): rotación sutil ±1.5° en un wrapper INTERNO —
+       el transform del span externo lo pisa el rAF con la pose de cada frame.
+       Con prefers-reduced-motion ni siquiera se navega (se zarpa directo al
+       fundido), pero el balanceo se apaga igualmente por si acaso. */
+    .boat-bob {
+      display: block;
+      width: 100%;
+      height: 100%;
+      animation: boat-bob 2.4s ease-in-out infinite;
+    }
+    .boat-bob svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    @keyframes boat-bob {
+      0%, 100% { transform: rotate(-1.5deg); }
+      50% { transform: rotate(1.5deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .boat-bob { animation: none; }
     }
     .wake {
       position: absolute;
@@ -2014,7 +2061,7 @@ export class CareerApp extends LitElement {
     this._announceTimer = 0;
     // Barco animado (MC-19): viaje en curso sobre el mapa del mar, o null.
     // El rAF y sus relojes son privados: solo `voyage` re-renderiza.
-    /** @type {{ toId: string, toName: string, path: import('../../tools/career/domain/voyage.js').VoyagePath, duration: number }|null} */
+    /** @type {{ toId: string, toName: string, path: import('../../tools/career/domain/voyage.js').VoyageCurve, duration: number }|null} */
     this.voyage = null;
     this._voyageRaf = 0;
     this._voyageStart = 0;
@@ -5437,18 +5484,20 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Arranca la animación del barco (MC-19): calcula el trayecto y su duración
-   * (puras, domain/voyage.js), publica el estado `voyage` (pinta el barco, la
-   * capa de estela y el aviso aria-live «Zarpando hacia…») y lanza el bucle de
-   * rAF. Si los dos puertos del índice coincidieran (trayecto imposible), se
-   * zarpa sin animación: el viaje NUNCA se pierde por la parte visual.
+   * Arranca la animación del barco (MC-19): calcula el trayecto — desde JG-17
+   * la curva pirata determinista del par, esquivando el resto de islas del
+   * índice — y su duración (puras, domain/voyage.js), publica el estado
+   * `voyage` (pinta el barco, la capa de estela y el aviso aria-live
+   * «Zarpando hacia…») y lanza el bucle de rAF. Si los dos puertos del índice
+   * coincidieran (trayecto imposible), se zarpa sin animación: el viaje NUNCA
+   * se pierde por la parte visual.
    * @param {import('../../tools/career/domain/types.js').IslandRef} from
    * @param {import('../../tools/career/domain/types.js').IslandRef} to
    */
   async _startVoyage(from, to) {
     let path;
     try {
-      path = voyagePath(from, to);
+      path = voyageCurve(from, to, this.archipelago?.islands ?? []);
     } catch {
       await this._departTo(to.id);
       return;
@@ -5461,11 +5510,12 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Un frame del viaje: t = tiempo/duración, el barco se recoloca sobre la
-   * curva con la proa al rumbo tangente y suelta estela cada WAKE_INTERVAL_MS.
-   * Al llegar (t = 1) desemboca en _finishVoyage → _departTo. Se manipula el
-   * DOM directamente (fuera de Lit): re-renderizar el overlay entero a 60 fps
-   * sería tirar el resto del mapa por un left/top.
+   * Un frame del viaje: t = tiempo/duración, la pose (posición con easing,
+   * rumbo tangente y escora — JG-17) recoloca el barco sobre la curva y suelta
+   * estela cada WAKE_INTERVAL_MS. Al llegar (t = 1) desemboca en
+   * _finishVoyage → _departTo. Se manipula el DOM directamente (fuera de
+   * Lit): re-renderizar el overlay entero a 60 fps sería tirar el resto del
+   * mapa por un left/top.
    * @param {number} now Reloj del rAF (ms).
    */
   _voyageFrame(now) {
@@ -5475,11 +5525,12 @@ export class CareerApp extends LitElement {
     const t = Math.min((now - this._voyageStart) / voyage.duration, 1);
     const boat = this.renderRoot.querySelector('.boat');
     if (boat) {
-      boat.style.cssText = this._boatStyleAt(voyage.path, t);
+      const pose = voyagePose(voyage.path, t);
+      boat.style.cssText = this._boatStyleAt(pose);
       const layer = this.renderRoot.querySelector('.voyage-layer');
       if (layer && now - this._voyageWakeAt >= WAKE_INTERVAL_MS && t < 1) {
         this._voyageWakeAt = now;
-        this._spawnWake(layer, voyagePointAt(voyage.path, t));
+        this._spawnWake(layer, pose);
       }
     }
     if (t >= 1) {
@@ -5490,21 +5541,20 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Estilo inline del barco en el instante t: posición sobre la curva y
-   * transform con la proa al rumbo tangente. voyageHeading asume un sprite con
-   * la proa a +x (este), pero el glifo ⛵ (Noto/Twemoji) mira a la IZQUIERDA:
-   * hace falta un espejo base a proa-este que se ANULA con el espejo de los
-   * rumbos al oeste — un XOR. El mástil nunca queda boca abajo (|rotate| ≤ 90).
-   * El scaleX va DESPUÉS del rotate: se aplica primero al glifo.
-   * @param {import('../../tools/career/domain/voyage.js').VoyagePath} path
-   * @param {number} t
+   * Estilo inline del barco para una pose (JG-17): posición sobre la curva y
+   * transform del sprite LATERAL. CONVENCIÓN: el barco pirata se dibuja con
+   * la proa a la DERECHA (+x, la misma que asume voyageBoatOrientation), así
+   * que a rumbo oeste basta un scaleX(-1) — se acabó el espejo base y el XOR
+   * que necesitaba el glifo ⛵, que miraba a la izquierda. El rotate es el
+   * transform MÁS EXTERNO (gira en pantalla): trae el cabeceo acotado a ±20°
+   * y la escora del giro ya sumados.
+   * @param {import('../../tools/career/domain/voyage.js').VoyagePose} pose
    * @returns {string}
    */
-  _boatStyleAt(path, t) {
-    const p = voyagePointAt(path, t);
-    const heading = voyageHeading(voyageTangentAngle(path, t));
-    const mirror = heading.mirrored ? '' : ' scaleX(-1)';
-    return `left:${p.x}%; top:${p.y}%; transform: translate(-50%, -50%) rotate(${heading.rotateDeg}deg)${mirror}`;
+  _boatStyleAt(pose) {
+    const heading = voyageBoatOrientation(pose);
+    const mirror = heading.mirrored ? ' scaleX(-1)' : '';
+    return `left:${pose.x}%; top:${pose.y}%; transform: translate(-50%, -50%) rotate(${heading.rotateDeg}deg)${mirror}`;
   }
 
   /**
@@ -5639,7 +5689,9 @@ export class CareerApp extends LitElement {
           })}
           ${this.voyage
             ? html`<div class="voyage-layer" aria-hidden="true">
-                <span class="boat" style=${this._boatStyleAt(this.voyage.path, 0)}>⛵</span>
+                <span class="boat" style=${this._boatStyleAt(voyagePose(this.voyage.path, 0))}>
+                  <span class="boat-bob">${PIRATE_SHIP_SVG}</span>
+                </span>
               </div>`
             : null}
         </div>
