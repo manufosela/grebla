@@ -25,6 +25,9 @@ import Career from '../../../layouts/Career.astro';
   body {
     display: flex;
     flex-direction: column;
+    /* Viewport dinámico: en móvil el 100% clásico no sigue a la barra de URL
+       del navegador y regala altura; dvh sí (fallback: el height de arriba). */
+    height: 100dvh;
   }
   .site-main {
     flex: 1 1 auto;
@@ -35,10 +38,19 @@ import Career from '../../../layouts/Career.astro';
     width: 100%;
     padding: 0 1rem 0.75rem;
   }
-  /* En móvil la consola de juego (JG-4) ocupa casi todo el ancho. */
+  /* En móvil la consola de juego (JG-4) ocupa casi todo el ancho, y el cromo
+     del sitio se ENCOGE para regalar altura al juego: la cabecera pierde los
+     enlaces de sección (queda «← Volver» en la barra de la tool) y la barra
+     de la tool pega con la consola. */
   @media (max-width: 760px) {
     .site-main {
       padding: 0 0.4rem 0.5rem;
+    }
+    .site-header {
+      padding: 0.4rem 0.75rem;
+    }
+    .site-nav > a {
+      display: none;
     }
   }
   /* Sin pie en esta página: cada píxel vertical es para el mapa. */

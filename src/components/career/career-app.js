@@ -509,6 +509,11 @@ export class CareerApp extends LitElement {
     }
     .hud button:focus-visible { outline: 2px solid var(--game-focus, #8be9dd); outline-offset: 2px; }
     .hud button:disabled { opacity: 0.6; cursor: not-allowed; }
+    /* En móvil el HUD sobre el canvas se hace chip: roba menos escena. */
+    @media (max-width: 760px) {
+      .hud { top: 0.5rem; left: 0.5rem; gap: 0.35rem; }
+      .hud button { padding: 0.32rem 0.5rem; font-size: 0.78rem; }
+    }
     .citypanel {
       position: absolute;
       z-index: 3;
@@ -684,6 +689,27 @@ export class CareerApp extends LitElement {
       flex-wrap: wrap;
       border-top: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
       padding-top: 0.55rem;
+    }
+    /* En móvil la botonera NO envuelve (comería la mitad de la pantalla al
+       juego): cada línea es UNA fila con scroll horizontal, patrón consola. */
+    @media (max-width: 760px) {
+      .bar { padding: 0.4rem 0.5rem; gap: 0.4rem; margin-bottom: 0.45rem; }
+      .controls,
+      .hudline {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        padding-bottom: 0.1rem;
+      }
+      .controls::-webkit-scrollbar,
+      .hudline::-webkit-scrollbar { display: none; }
+      .controls > button,
+      .viewswitch button { white-space: nowrap; padding: 0.35rem 0.55rem; font-size: 0.78rem; }
+      .hudline { padding-top: 0.45rem; }
+      /* Los hijos no se encogen: la fila se desplaza, no se aplasta. */
+      .controls > *,
+      .hudline > * { flex: 0 0 auto; }
     }
     label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
@@ -1158,6 +1184,11 @@ export class CareerApp extends LitElement {
         radial-gradient(circle at 22% 28%, rgba(255, 255, 255, 0.14), transparent 34%),
         radial-gradient(circle at 76% 68%, rgba(255, 255, 255, 0.1), transparent 30%),
         linear-gradient(165deg, #3f7fb4 0%, #4d90c4 45%, #2f6a9c 100%);
+    }
+    /* En móvil vertical el mar 16/10 quedaría enano (~230px): formato retrato.
+       Las islas van en % (translate -50%,-50%), así que se re-reparten solas. */
+    @media (max-width: 760px) {
+      .sea-map { aspect-ratio: 4 / 5; }
     }
     .isle {
       position: absolute;
@@ -6067,7 +6098,7 @@ export class CareerApp extends LitElement {
                       title=${this._coarsePointer
                         ? 'Modo de escritorio: requiere ratón y teclado'
                         : 'Recorre la isla a pie en primera persona: cursor libre, arrastra para mirar (WASD/flechas para andar)'}
-                    >🚶 Explorar a pie${this._coarsePointer ? ' (modo de escritorio)' : ''}</button>
+                    >🚶 ${this._coarsePointer ? 'A pie (escritorio)' : 'Explorar a pie'}</button>
                     ${this._renderTeamButton()}
                     ${this._renderAudioButton()}
                     <button
