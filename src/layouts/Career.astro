@@ -26,4 +26,11 @@ const { title = 'Mapa de Carrera' } = Astro.props;
     border-bottom: 1px solid var(--rm-border);
   }
   .tool-name { font-weight: 800; color: var(--rm-accent); }
+  /* En móvil cada píxel vertical es para el juego: barra mínima. */
+  @media (max-width: 760px) {
+    .tool-nav {
+      margin-bottom: 0.4rem;
+      padding-bottom: 0.35rem;
+    }
+  }
 </style>
