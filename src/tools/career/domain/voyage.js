@@ -87,27 +87,41 @@ function clampAbs(value, limit) {
 }
 
 /**
- * Obstáculo MÁS centrado sobre la recta origen→destino: isla (ni origen ni
- * destino) cuya distancia lateral a la recta baja de VOYAGE_CLEARANCE dentro
- * del tramo central del trayecto. Las entradas del índice sin id o sin
- * posición no pueden estorbar (no están pintadas en el mar) y se ignoran.
+ * Islas del índice que pueden estorbar el trayecto: todas menos el origen, el
+ * destino y las entradas sin id o sin situar (una isla que no está pintada en
+ * el mar no puede estorbar — no es un dato roto, es que aún no tiene sitio).
  *
  * @param {SeaIsland} from
  * @param {SeaIsland} to
  * @param {SeaIsland[]} islands Islas del índice (puede incluir origen y destino).
+ * @returns {SeaIsland[]}
+ */
+function seaObstacles(from, to, islands) {
+  return islands.filter(
+    (island) =>
+      typeof island?.id === 'string' &&
+      island.id.length > 0 &&
+      Number.isFinite(island.x) &&
+      Number.isFinite(island.y) &&
+      island.id !== from.id &&
+      island.id !== to.id,
+  );
+}
+
+/**
+ * Obstáculo MÁS centrado sobre la recta origen→destino: isla cuya distancia
+ * lateral a la recta baja de VOYAGE_CLEARANCE dentro del tramo central del
+ * trayecto.
+ *
+ * @param {SeaIsland} from
+ * @param {SeaIsland[]} obstacles Islas candidatas (las de seaObstacles).
  * @param {{ ux: number, uy: number, px: number, py: number, distance: number }} frame
  *   Marco de la recta: unitario de la marcha (u), perpendicular izquierda (p) y longitud.
  * @returns {{ lateral: number }|null} Desvío lateral firmado (+ = izquierda de la marcha) o null.
  */
-function worstBlocker(from, to, islands, frame) {
+function worstBlocker(from, obstacles, frame) {
   let worst = null;
-  for (const island of islands) {
-    const placed =
-      typeof island?.id === 'string' &&
-      island.id.length > 0 &&
-      Number.isFinite(island.x) &&
-      Number.isFinite(island.y);
-    if (!placed || island.id === from.id || island.id === to.id) continue;
+  for (const island of obstacles) {
     const relX = island.x - from.x;
     const relY = island.y - from.y;
     const along = (relX * frame.ux + relY * frame.uy) / frame.distance;
@@ -119,16 +133,51 @@ function worstBlocker(from, to, islands, frame) {
   return worst;
 }
 
+/** Punto de la Bézier cúbica SIN easing (para puntuar candidatos). @param {VoyageCurve} curve @param {number} k */
+function cubicPointAt(curve, k) {
+  const u = 1 - k;
+  return {
+    x: u ** 3 * curve.from.x + 3 * u * u * k * curve.c1.x + 3 * u * k * k * curve.c2.x + k ** 3 * curve.to.x,
+    y: u ** 3 * curve.from.y + 3 * u * u * k * curve.c1.y + 3 * u * k * k * curve.c2.y + k ** 3 * curve.to.y,
+  };
+}
+
+/** Muestras con las que se puntúa el agua libre de cada candidato. */
+const GAP_SAMPLES = 32;
+
+/**
+ * Agua libre de un candidato: mínima distancia entre la curva muestreada y
+ * cualquier isla que estorbe. Sin obstáculos, Infinity (cualquier lado vale).
+ *
+ * @param {VoyageCurve} curve Candidato a puntuar.
+ * @param {SeaIsland[]} obstacles Islas de seaObstacles.
+ * @returns {number}
+ */
+function openWater(curve, obstacles) {
+  let gap = Infinity;
+  for (let i = 0; i <= GAP_SAMPLES; i += 1) {
+    const point = cubicPointAt(curve, i / GAP_SAMPLES);
+    for (const island of obstacles) {
+      gap = Math.min(gap, Math.hypot(point.x - island.x, point.y - island.y));
+    }
+  }
+  return gap;
+}
+
 /**
  * Trayecto del viaje (JG-17): Bézier CÚBICA de `from` a `to` con los dos
  * controles sobre la recta (a 1/3 y 2/3) desviados en perpendicular una comba
  * sorteada con la semilla del par (hashId("from→to") + mulberry32): mismo par
  * de islas, misma ruta SIEMPRE; el viaje de vuelta es otro par y otra ruta.
- * Esquiva heurística: si la recta pasa a menos de VOYAGE_CLEARANCE de otra
- * isla, la comba se orienta hacia el lado CONTRARIO al que asoma el obstáculo
- * más centrado y crece lo justo para librar la holgura (una sola pasada, no
- * es pathfinding). Los controles se acotan al mar visible: pegado al borde la
- * holgura efectiva puede quedar algo por debajo — asumido.
+ * Esquiva heurística en una pasada: si la recta pasa a menos de
+ * VOYAGE_CLEARANCE de otra isla, la comba crece lo justo para librar la
+ * holgura (la curva solo alcanza ≈CURVE_OFFSET_FACTOR del desvío de control)
+ * y, entre los DOS candidatos (babor/estribor), se queda el que deja más agua
+ * libre respecto a TODAS las islas muestreando la curva — con empate, el lado
+ * preferido (el sorteado, o el contrario al obstáculo). NO es pathfinding:
+ * con islas flanqueando ambos lados el mejor candidato puede seguir pasando
+ * cerca, y los controles acotados al mar (bordes) también recortan holgura —
+ * asumido, en el archipiélago real no llega a pasar.
  *
  * @param {SeaIsland} from Puerto de origen (isla actual, con su id).
  * @param {SeaIsland} to Puerto de destino (isla pulsada, con su id).
@@ -149,30 +198,38 @@ export function voyageCurve(from, to, islands = []) {
   // Perpendicular IZQUIERDA de la marcha: con +y abajo, rumbo este → arriba.
   const px = uy;
   const py = -ux;
-  // Sorteo determinista del par: lado de la comba y tamaño de cada control.
+  // Sorteo determinista del par: lado preferido y tamaño de cada control.
   const rand = mulberry32(hashId(`${from.id}→${to.id}`));
   let side = rand() < 0.5 ? 1 : -1;
   let bendA = distance * (VOYAGE_BEND_MIN + rand() * (VOYAGE_BEND_MAX - VOYAGE_BEND_MIN));
   let bendB = distance * (VOYAGE_BEND_MIN + rand() * (VOYAGE_BEND_MAX - VOYAGE_BEND_MIN));
-  const blocker = worstBlocker(from, to, islands, { ux, uy, px, py, distance });
+  const obstacles = seaObstacles(from, to, islands);
+  const blocker = worstBlocker(from, obstacles, { ux, uy, px, py, distance });
   if (blocker) {
-    // Rodear por el lado contrario al que asoma la isla (en la propia recta
-    // se rodea por la izquierda); la comba crece hasta que la curva — que
-    // solo alcanza ≈CURVE_OFFSET_FACTOR del desvío de control — libra la holgura.
+    // Lado preferido: el contrario al que asoma la isla (sobre la propia
+    // recta, babor); la comba crece hasta librar la holgura.
     side = blocker.lateral > 0 ? -1 : 1;
     const needed = (VOYAGE_CLEARANCE - Math.abs(blocker.lateral)) / CURVE_OFFSET_FACTOR;
     bendA = Math.max(bendA, needed);
     bendB = Math.max(bendB, needed);
   }
-  const c1 = {
-    x: clampToSea(from.x + ux * (distance / 3) + px * side * bendA),
-    y: clampToSea(from.y + uy * (distance / 3) + py * side * bendA),
-  };
-  const c2 = {
-    x: clampToSea(from.x + ux * ((2 * distance) / 3) + px * side * bendB),
-    y: clampToSea(from.y + uy * ((2 * distance) / 3) + py * side * bendB),
-  };
-  return { from: { x: from.x, y: from.y }, c1, c2, to: { x: to.x, y: to.y }, distance };
+  const candidate = (s) => ({
+    from: { x: from.x, y: from.y },
+    c1: {
+      x: clampToSea(from.x + ux * (distance / 3) + px * s * bendA),
+      y: clampToSea(from.y + uy * (distance / 3) + py * s * bendA),
+    },
+    c2: {
+      x: clampToSea(from.x + ux * ((2 * distance) / 3) + px * s * bendB),
+      y: clampToSea(from.y + uy * ((2 * distance) / 3) + py * s * bendB),
+    },
+    to: { x: to.x, y: to.y },
+    distance,
+  });
+  const preferred = candidate(side);
+  if (obstacles.length === 0) return preferred;
+  const opposite = candidate(-side);
+  return openWater(opposite, obstacles) > openWater(preferred, obstacles) ? opposite : preferred;
 }
 
 /**
@@ -199,7 +256,7 @@ function easeInOutCubic(k) {
  */
 export function voyagePose(curve, t) {
   if (!Number.isFinite(t)) {
-    throw new Error(`Progreso inválido para voyagePose: "${t}"`);
+    throw new TypeError(`Progreso inválido para voyagePose: "${t}"`);
   }
   const k = Math.min(Math.max(t, 0), 1);
   const e = easeInOutCubic(k);
@@ -277,7 +334,9 @@ export function voyageDuration(distance) {
  */
 export function voyageBoatOrientation(pose) {
   if (!Number.isFinite(pose?.heading) || !Number.isFinite(pose?.lean)) {
-    throw new Error(`Pose inválida para voyageBoatOrientation: (${pose?.heading}, ${pose?.lean})`);
+    throw new TypeError(
+      `Pose inválida para voyageBoatOrientation: (${pose?.heading}, ${pose?.lean})`,
+    );
   }
   // Rumbo normalizado a (-180, 180]: atan2 ya lo cumple, pero un ángulo con
   // vueltas de más no debe producir rotaciones absurdas.

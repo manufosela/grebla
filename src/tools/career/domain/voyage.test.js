@@ -84,6 +84,25 @@ describe('voyageCurve (trayecto pirata por mar, JG-17)', () => {
     expect(voyagePose(below, 0.5).y).toBeLessThan(50);
   });
 
+  it('entre babor y estribor elige el lado con más agua libre', () => {
+    // Escenario real del archipiélago: Bases→Backend Python; esquivar Product
+    // Manager por babor (oeste) plantaría el barco encima de Frontend — la
+    // puntuación de agua libre debe llevar la comba por estribor (este).
+    const from = { id: 'island', x: 50, y: 76 };
+    const to = { id: 'backend-python', x: 32, y: 16 };
+    const frontend = { id: 'frontend', x: 28, y: 54 };
+    const pm = { id: 'product-manager', x: 40, y: 38 };
+    const curve = voyageCurve(from, to, [from, to, frontend, pm]);
+    expect(voyagePose(curve, 0.5).x).toBeGreaterThan(44); // comba al este de la recta
+    const gap = Math.min(
+      ...samplePoses(curve).flatMap((p) => [
+        Math.hypot(p.x - frontend.x, p.y - frontend.y),
+        Math.hypot(p.x - pm.x, p.y - pm.y),
+      ]),
+    );
+    expect(gap).toBeGreaterThanOrEqual(VOYAGE_CLEARANCE * 0.8);
+  });
+
   it('los puertos de origen/destino y las islas sin situar no estorban', () => {
     const sinMapa = { id: 'wip' }; // isla del índice aún sin x/y
     expect(voyageCurve(A, B, [A, B, sinMapa])).toEqual(voyageCurve(A, B));
