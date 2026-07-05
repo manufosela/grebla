@@ -37,6 +37,7 @@ export const FDE_ISLAND = {
       x: 50,
       y: 72,
       weight: 3,
+      summary: 'Qué es un FDE es entender el rol: un ingeniero desplegado con el cliente que descubre el problema en terreno y lo resuelve de punta a punta. Consiste en mezclar ingeniería, producto y trato con cliente. Te capacita para entender a qué te enfrentas en el rol más transversal que existe.',
       prereqs: [],
       keyPoints: [
         'El FDE es un ingeniero desplegado con el cliente: resuelve SU problema con TU plataforma, en su terreno.',
@@ -60,6 +61,7 @@ export const FDE_ISLAND = {
       x: 36,
       y: 64,
       weight: 3,
+      summary: 'El ownership extremo es sentir el problema del cliente como tuyo y no parar hasta resolverlo, sin escudarte en «eso no es lo mío». Consiste en asumir el resultado completo, no tu trozo. Te capacita para ser la persona en quien el cliente confía porque se hace cargo de verdad.',
       prereqs: ['fde/que-es-un-fde'],
       keyPoints: [
         'El problema del cliente es TU problema de punta a punta: no hay «eso es de otro equipo».',
@@ -83,6 +85,7 @@ export const FDE_ISLAND = {
       x: 64,
       y: 64,
       weight: 2,
+      summary: 'El perfil generalista en T combina profundidad en una especialidad con amplitud en las vecinas: sabes de todo lo suficiente para moverte solo, y de lo tuyo, mucho. Es la forma del FDE, porque en casa del cliente no hay equipos por especialidad. Te capacita para resolver de punta a punta sin esperar a nadie.',
       prereqs: ['fde/que-es-un-fde'],
       keyPoints: [
         'Anchura fullstack funcional: montar UI, API, datos y despliegue tú solo, aunque nada sea perfecto.',
@@ -108,6 +111,7 @@ export const FDE_ISLAND = {
       x: 24,
       y: 54,
       weight: 3,
+      summary: 'El descubrimiento en terreno es entender el problema real observando al cliente en su sitio, no leyendo un brief. Consiste en mirar, preguntar y detectar lo que nadie te contó. Te capacita para construir lo que de verdad hace falta, que casi nunca es lo que pidieron literalmente.',
       prereqs: ['fde/mentalidad-ownership'],
       keyPoints: [
         'Ve donde está el trabajo real: la sala de reuniones miente, el puesto de trabajo del usuario no.',
@@ -131,6 +135,7 @@ export const FDE_ISLAND = {
       x: 12,
       y: 42,
       weight: 2,
+      summary: 'Aprender el dominio del cliente es hacerte experto rápido en un negocio que no es el tuyo (banca, salud, logística). Consiste en absorber su jerga, sus reglas y sus restricciones. Te capacita para hablar de igual a igual y construir soluciones que encajan en su mundo real.',
       prereqs: ['fde/descubrimiento-en-terreno'],
       keyPoints: [
         'Aprende el vocabulario del sector en la primera semana: hablar su idioma compra credibilidad.',
@@ -154,6 +159,7 @@ export const FDE_ISLAND = {
       x: 28,
       y: 40,
       weight: 2,
+      summary: 'Mapear procesos y sistemas es dibujar cómo trabaja el cliente hoy y qué herramientas usa. Consiste en entender el flujo actual antes de proponer cambiarlo. Te capacita para insertar tu solución donde de verdad ayuda en vez de imponer algo que no encaja.',
       prereqs: ['fde/descubrimiento-en-terreno'],
       keyPoints: [
         'Dibuja el proceso as-is completo: personas, sistemas, ficheros y los huecos que se cruzan a mano.',
@@ -177,6 +183,7 @@ export const FDE_ISLAND = {
       x: 40,
       y: 48,
       weight: 2,
+      summary: 'Los datos del cliente son entender, acceder y respetar la información con la que vas a trabajar, que suele ser un caos. Consiste en explorarla, limpiarla y tratarla con cuidado legal. Te capacita para construir sobre los datos reales del cliente sin meterte en un lío.',
       prereqs: ['fde/descubrimiento-en-terreno'],
       keyPoints: [
         'Los datos reales siempre están peor de lo prometido: audita calidad, huecos y duplicados el primer día.',
@@ -202,6 +209,7 @@ export const FDE_ISLAND = {
       x: 62,
       y: 48,
       weight: 3,
+      summary: 'Dominar tu plataforma es conocer al dedillo las herramientas de tu empresa que despliegas en el cliente. Consiste en exprimir la plataforma propia para resolver rápido sin construir todo a mano. Te capacita para entregar en días apoyándote en lo que ya existe.',
       prereqs: ['fde/generalista-t'],
       keyPoints: [
         'Conoce tu plataforma mejor que nadie: sus primitivas, sus límites y sus caminos rápidos.',
@@ -225,6 +233,7 @@ export const FDE_ISLAND = {
       x: 52,
       y: 36,
       weight: 3,
+      summary: 'Los prototipos en días son montar algo funcional velozmente para validar con el cliente en su terreno. Consiste en priorizar velocidad y aprendizaje sobre pulido. Te capacita para demostrar valor pronto y ganarte la confianza del cliente con hechos, no con promesas.',
       prereqs: ['fde/plataforma-propia'],
       keyPoints: [
         'Enseña algo funcionando la primera semana: con datos del cliente, aunque sea un flujo mínimo.',
@@ -248,6 +257,7 @@ export const FDE_ISLAND = {
       x: 76,
       y: 40,
       weight: 2,
+      summary: 'Las integraciones con lo existente son conectar tu solución con los sistemas que el cliente ya tiene y no va a tirar. Consiste en manejar sus APIs, formatos y limitaciones. Te capacita para que lo que construyes viva dentro de su ecosistema en vez de quedar aislado.',
       prereqs: ['fde/plataforma-propia'],
       keyPoints: [
         'Integra por el camino más estable disponible: API oficial > export programado > scraping desesperado.',
@@ -271,6 +281,7 @@ export const FDE_ISLAND = {
       x: 88,
       y: 50,
       weight: 3,
+      summary: 'La seguridad en casa del cliente es respetar sus reglas, sus datos y su cumplimiento cuando trabajas en su entorno. Consiste en no crear riesgos y ganarte su confianza técnica. Te capacita para operar dentro de organizaciones exigentes sin ser el que abre un agujero.',
       prereqs: ['fde/integraciones'],
       keyPoints: [
         'Mínimo privilegio siempre: pide los accesos justos, documéntalos y devuélvelos al terminar.',
@@ -296,6 +307,7 @@ export const FDE_ISLAND = {
       x: 14,
       y: 26,
       weight: 3,
+      summary: 'Comunicar con el cliente es traducir lo técnico a su idioma y escuchar lo que de verdad necesita. Consiste en explicar, alinear y generar confianza sin jerga. Te capacita para que el cliente te vea como un socio que entiende su problema, no como un proveedor más.',
       prereqs: ['fde/entender-el-dominio'],
       keyPoints: [
         'Traduce siempre a valor de negocio: el cliente no compra endpoints, compra horas ahorradas y riesgo evitado.',
@@ -319,6 +331,7 @@ export const FDE_ISLAND = {
       x: 28,
       y: 16,
       weight: 2,
+      summary: 'Gestionar expectativas es dejar claro qué se va a entregar y cuándo, sin prometer de más para quedar bien. Consiste en ser honesto sobre lo posible y comunicar los cambios a tiempo. Te capacita para mantener al cliente contento con la realidad en vez de decepcionarlo con la fantasía.',
       prereqs: ['fde/comunicar-con-cliente'],
       keyPoints: [
         'Promete menos y entrega más: la reputación del FDE se construye en la dirección correcta del asombro.',
@@ -342,6 +355,7 @@ export const FDE_ISLAND = {
       x: 42,
       y: 22,
       weight: 2,
+      summary: 'El puente cliente-equipo es conectar lo que ves en terreno con el equipo de plataforma que está lejos. Consiste en trasladar necesidades reales y traer soluciones. Te capacita para que la empresa entienda al cliente a través de ti y construya lo correcto.',
       prereqs: ['fde/comunicar-con-cliente'],
       keyPoints: [
         'Eres el canal de doble sentido: contexto del cliente hacia dentro, avances del equipo hacia fuera.',
@@ -367,6 +381,7 @@ export const FDE_ISLAND = {
       x: 64,
       y: 26,
       weight: 3,
+      summary: 'Del prototipo al producto es convertir ese apaño que funcionó en algo sólido, mantenible y de fiar. Consiste en endurecer lo que empezó rápido sin perder lo que lo hacía valioso. Te capacita para entregar valor duradero, no solo una demo que se cae a la semana.',
       prereqs: ['fde/prototipos-rapidos'],
       keyPoints: [
         'Decide temprano qué prototipo merece endurecerse: no todo lo que funcionó en demo debe vivir para siempre.',
@@ -390,6 +405,7 @@ export const FDE_ISLAND = {
       x: 78,
       y: 18,
       weight: 2,
+      summary: 'El feedback hacia la plataforma es devolver a tu empresa lo que aprendes en cada cliente para que el producto mejore. Consiste en detectar lo que se repite y empujarlo como mejora general. Te capacita para que tu trabajo en un cliente beneficie a todos los demás.',
       prereqs: ['fde/del-prototipo-al-producto'],
       keyPoints: [
         'Cada solución custom repetida en dos clientes es una feature de plataforma esperando a nacer.',
@@ -413,6 +429,7 @@ export const FDE_ISLAND = {
       x: 90,
       y: 30,
       weight: 2,
+      summary: 'Medir el valor entregado es demostrar con números el impacto que has tenido en el cliente. Consiste en definir qué mejora y medirla antes y después. Te capacita para justificar el trabajo, renovar contratos y saber tú mismo si de verdad ayudaste.',
       prereqs: ['fde/del-prototipo-al-producto'],
       keyPoints: [
         'Define la métrica de éxito CON el cliente antes de construir: horas ahorradas, errores evitados, ingresos.',
@@ -438,6 +455,7 @@ export const FDE_ISLAND = {
       x: 52,
       y: 10,
       weight: 3,
+      summary: 'Entregar valor en días con IA es usar el modelo para prototipar, integrar y resolver a la velocidad que exige el terreno. Consiste en apoyarte en la IA para hacer en días lo que costaba semanas. Te capacita para el superpoder del FDE moderno: soluciones a medida casi al instante.',
       prereqs: ['fde/prototipos-rapidos'],
       keyPoints: [
         'Redefine tu unidad de entrega: con IA, el ciclo descubrir→construir→demostrar cabe en una semana.',
@@ -461,6 +479,7 @@ export const FDE_ISLAND = {
       x: 66,
       y: 10,
       weight: 2,
+      summary: 'La calidad y seguridad con IA es entregar rápido con IA sin bajar el listón en casa de un cliente exigente. Consiste en verificar todo lo generado y no comprometer sus datos ni su cumplimiento. Te capacita para ir veloz sin que la prisa te haga romper la confianza del cliente.',
       prereqs: ['fde/entregar-en-dias-con-ia'],
       keyPoints: [
         'Revisa TODO el código generado antes de que toque el entorno del cliente: tú firmas, tú respondes.',
@@ -484,6 +503,7 @@ export const FDE_ISLAND = {
       x: 90,
       y: 10,
       weight: 3,
+      summary: 'Ser un FDE de confianza es el hito de que un cliente te quiera a TI en su próximo proyecto. Consiste en juntar todo lo de la isla: ownership, dominio, entrega y trato. Te capacita para ser el ingeniero desplegado que las empresas de IA se rifan porque resuelve y da confianza.',
       prereqs: [
         'fde/calidad-con-ia-en-cliente',
         'fde/medir-valor-entregado',

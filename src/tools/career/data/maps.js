@@ -203,6 +203,8 @@ function normalizeCity(city) {
   if (recs.length) out.recommendations = recs;
   // Contenido de la tarjeta (MC-15): keyPoints, aiFocus y resources. Los campos
   // vacíos NO viajan en el objeto (mismo criterio que recommendations).
+  const summary = String(city?.summary ?? '').trim();
+  if (summary) out.summary = summary;
   const keyPoints = normalizeKeyPoints(city?.keyPoints);
   if (keyPoints.length) out.keyPoints = keyPoints;
   const aiFocus = String(city?.aiFocus ?? '').trim();
@@ -271,6 +273,8 @@ export function serializeCareerMap(map) {
     if (recs.length) city.recommendations = recs;
     // Contenido de la tarjeta (MC-15): mismo saneo que la lectura (normalize*),
     // así lo que se escribe en Firestore ya va limpio y sin `undefined`.
+    const summary = String(c.summary ?? '').trim();
+    if (summary) city.summary = summary;
     const keyPoints = normalizeKeyPoints(c.keyPoints);
     if (keyPoints.length) city.keyPoints = keyPoints;
     const aiFocus = String(c.aiFocus ?? '').trim();

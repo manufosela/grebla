@@ -33,6 +33,7 @@ export const FRONTEND_ISLAND = {
       x: 50,
       y: 74,
       weight: 3,
+      summary: 'El HTML semántico es marcar el contenido con etiquetas que dicen qué ES cada cosa (cabecera, artículo, botón), no cómo se ve. Consiste en usar el elemento correcto para cada propósito. Te capacita para construir webs accesibles y sólidas sobre las que todo lo demás se apoya.',
       prereqs: [],
       keyPoints: [
         'Usa el elemento correcto para cada cosa: nav, main, article, button, form — no todo es un div.',
@@ -57,6 +58,7 @@ export const FRONTEND_ISLAND = {
       x: 38,
       y: 66,
       weight: 3,
+      summary: 'El CSS moderno es dar estilo y disposición con las herramientas actuales: flexbox, grid, variables y capas. Consiste en maquetar de forma robusta sin los trucos frágiles de antaño. Te capacita para construir interfaces que se ven bien y aguantan el cambio.',
       prereqs: ['frontend/html-semantico'],
       keyPoints: [
         'Domina el modelo mental: cascada, especificidad, herencia y box model — sin esto todo CSS es prueba y error.',
@@ -81,6 +83,7 @@ export const FRONTEND_ISLAND = {
       x: 62,
       y: 66,
       weight: 3,
+      summary: 'El JavaScript moderno es el lenguaje que da vida a la web con su sintaxis y APIs actuales (ES2025). Consiste en manejar módulos, async, y las estructuras del lenguaje sin recurrir a lo deprecado. Te capacita para programar el navegador con soltura y buenas prácticas.',
       prereqs: [],
       keyPoints: [
         'El lenguaje de verdad: closures, this, prototipos, módulos ES — no solo la sintaxis que autocompleta el editor.',
@@ -105,6 +108,7 @@ export const FRONTEND_ISLAND = {
       x: 50,
       y: 58,
       weight: 2,
+      summary: 'TypeScript es JavaScript con tipos: el editor y el compilador te avisan de errores antes de ejecutar. Consiste en modelar tus datos y funciones para que el propio lenguaje te proteja. Te capacita para trabajar en proyectos grandes sin que un cambio rompa cosas por sorpresa.',
       prereqs: ['frontend/javascript-moderno'],
       keyPoints: [
         'Tipa las fronteras: props, respuestas de API y estado — es donde los tipos pagan el peaje.',
@@ -129,6 +133,7 @@ export const FRONTEND_ISLAND = {
       x: 70,
       y: 76,
       weight: 2,
+      summary: 'El DOM y las Web APIs son la caja de herramientas del navegador: manipular la página, eventos, fetch, almacenamiento. Consiste en conocer qué te da la plataforma antes de meter una librería. Te capacita para hacer más con menos dependencias.',
       prereqs: ['frontend/javascript-moderno'],
       keyPoints: [
         'Eventos de verdad: burbujeo, delegación, preventDefault — la base de toda interacción.',
@@ -152,6 +157,7 @@ export const FRONTEND_ISLAND = {
       x: 68,
       y: 54,
       weight: 2,
+      summary: 'El diseño responsive es que la interfaz funcione igual de bien en un móvil que en una pantalla grande. Consiste en pensar mobile-first, con medidas fluidas y puntos de ruptura. Te capacita para llegar a todos los usuarios sin mantener dos versiones separadas.',
       prereqs: ['frontend/css-moderno'],
       keyPoints: [
         'Mobile-first: diseña para la pantalla pequeña y añade complejidad hacia arriba.',
@@ -177,6 +183,7 @@ export const FRONTEND_ISLAND = {
       x: 28,
       y: 74,
       weight: 3,
+      summary: 'Los componentes son piezas de interfaz reutilizables que encapsulan su estructura, estilo y comportamiento. Consiste en descomponer la UI en bloques con una responsabilidad clara. Te capacita para construir interfaces complejas sin repetirte y mantenerlas por partes.',
       prereqs: ['frontend/html-semantico', 'frontend/javascript-moderno'],
       keyPoints: [
         'Divide la UI en piezas con una responsabilidad: props hacia abajo, eventos hacia arriba.',
@@ -200,6 +207,7 @@ export const FRONTEND_ISLAND = {
       x: 16,
       y: 64,
       weight: 3,
+      summary: 'React es la librería más extendida para construir interfaces a base de componentes que reaccionan a los datos. Consiste en describir cómo se ve la UI para cada estado y dejar que React actualice. Te capacita para trabajar en la mayor parte del ecosistema frontend actual.',
       prereqs: ['frontend/componentes'],
       keyPoints: [
         'Domina UN framework a fondo (React como referencia del mercado; Vue/Svelte valen igual).',
@@ -224,6 +232,7 @@ export const FRONTEND_ISLAND = {
       x: 6,
       y: 54,
       weight: 2,
+      summary: 'La gestión de estado es decidir dónde vive cada dato de tu interfaz y cómo fluye. Consiste en distinguir estado local, compartido y del servidor, y elegir la herramienta justa. Te capacita para que las apps grandes no se conviertan en un caos de datos descoordinados.',
       prereqs: ['frontend/react'],
       keyPoints: [
         'Clasifica antes de elegir herramienta: estado de UI, de servidor, de formulario y de URL son problemas distintos.',
@@ -247,6 +256,7 @@ export const FRONTEND_ISLAND = {
       x: 20,
       y: 48,
       weight: 1,
+      summary: 'La reactividad con signals es el modelo moderno en el que la interfaz se actualiza sola cuando cambia un dato, con precisión quirúrgica. Consiste en declarar dependencias en vez de refrescar a mano. Te capacita para escribir UI eficiente sin re-renders innecesarios.',
       prereqs: ['frontend/componentes'],
       keyPoints: [
         'Entiende el espectro: re-render por árbol (React) vs reactividad fina con signals (Solid, Vue, Svelte 5, Angular).',
@@ -269,6 +279,7 @@ export const FRONTEND_ISLAND = {
       x: 30,
       y: 40,
       weight: 2,
+      summary: 'Trabajar con datos remotos es traer información del servidor y mostrarla gestionando carga, error y caché. Consiste en manejar los estados de una petición y no dejar la UI colgada. Te capacita para conectar el frontend con el backend sin pantallazos en blanco.',
       prereqs: ['frontend/react'],
       keyPoints: [
         'Todo fetch tiene tres estados como mínimo: cargando, error y éxito — diséñalos los tres.',
@@ -295,6 +306,7 @@ export const FRONTEND_ISLAND = {
       x: 42,
       y: 36,
       weight: 3,
+      summary: 'La accesibilidad es que tu web la pueda usar todo el mundo, incluidas personas con lector de pantalla o sin ratón. Consiste en HTML correcto, foco, contraste y ARIA solo cuando hace falta. Te capacita para no dejar fuera a nadie y, de paso, cumplir la ley.',
       prereqs: ['frontend/componentes'],
       keyPoints: [
         'La base es gratis: HTML semántico, labels, alt, orden de foco lógico y contraste suficiente.',
@@ -319,6 +331,7 @@ export const FRONTEND_ISLAND = {
       x: 62,
       y: 36,
       weight: 2,
+      summary: 'Los Core Web Vitals son las métricas con las que se mide si una web carga rápido y responde bien (LCP, INP, CLS). Consiste en medir, encontrar el cuello de botella y optimizarlo. Te capacita para que tu web no espante a los usuarios ni a Google por lenta.',
       prereqs: ['frontend/dom-web-apis'],
       keyPoints: [
         'Conoce las tres métricas y qué miden: LCP (carga), INP (respuesta), CLS (estabilidad visual).',
@@ -343,6 +356,7 @@ export const FRONTEND_ISLAND = {
       x: 50,
       y: 28,
       weight: 3,
+      summary: 'El testing de frontend es comprobar que la interfaz hace lo que debe: unitario de lógica, de componente y de flujo. Consiste en probar como lo haría un usuario, no los detalles internos. Te capacita para cambiar la UI con confianza en vez de a ver si suena la flauta.',
       prereqs: ['frontend/componentes'],
       keyPoints: [
         'Testea comportamiento visible, no implementación: como interactúa el usuario, no como renderiza el framework.',
@@ -367,6 +381,7 @@ export const FRONTEND_ISLAND = {
       x: 66,
       y: 22,
       weight: 2,
+      summary: 'La seguridad de frontend es cerrar los agujeros del lado del navegador: XSS, datos sensibles expuestos, dependencias con fallos. Consiste en no confiar en la entrada y sanear lo que se pinta. Te capacita para entregar interfaces que no comprometan a tus usuarios.',
       prereqs: ['frontend/dom-web-apis'],
       keyPoints: [
         'XSS es EL riesgo frontend: nunca interpoles entrada de usuario en HTML sin escapar/sanear.',
@@ -390,6 +405,7 @@ export const FRONTEND_ISLAND = {
       x: 52,
       y: 12,
       weight: 3,
+      summary: 'Llevar una interfaz a producción es el hito de tener una app frontend pública, rápida, accesible y probada. Consiste en juntar todo lo anterior en algo que aguanta usuarios reales. Te capacita para demostrar que sabes cerrar un frontend completo, no solo maquetar.',
       prereqs: ['frontend/testing-frontend', 'frontend/accesibilidad', 'frontend/core-web-vitals'],
       keyPoints: [
         'Cierra el círculo: una interfaz real desplegada, accesible, medida y con tests que la protegen.',
@@ -414,6 +430,7 @@ export const FRONTEND_ISLAND = {
       x: 80,
       y: 66,
       weight: 2,
+      summary: 'Vite y los bundlers son las herramientas que empaquetan tu código para el navegador y te dan un entorno de desarrollo rápido. Consiste en entender el build, el dev server y la optimización. Te capacita para que tu proyecto arranque en un segundo y salga optimizado.',
       prereqs: ['frontend/javascript-moderno'],
       keyPoints: [
         'Entiende qué hace el build: transformar (TS, JSX), resolver módulos, trocear (code splitting) y minificar.',
@@ -437,6 +454,7 @@ export const FRONTEND_ISLAND = {
       x: 92,
       y: 58,
       weight: 2,
+      summary: 'Manejar npm y las dependencias es traer código ajeno a tu proyecto sin que se te convierta en un lastre. Consiste en elegir bien, fijar versiones y vigilar el tamaño y la seguridad. Te capacita para apoyarte en el ecosistema sin heredar sus problemas.',
       prereqs: ['frontend/javascript-moderno'],
       keyPoints: [
         'package.json a fondo: dependencies vs devDependencies, scripts, versionado semántico y lockfile.',
@@ -460,6 +478,7 @@ export const FRONTEND_ISLAND = {
       x: 82,
       y: 46,
       weight: 2,
+      summary: 'Los design systems son un lenguaje visual compartido: componentes, tokens y reglas que dan coherencia a un producto. Consiste en construir y consumir una biblioteca común en vez de reinventar botones. Te capacita para escalar interfaces entre equipos sin que cada pantalla parezca de otra app.',
       prereqs: ['frontend/componentes', 'frontend/css-moderno'],
       keyPoints: [
         'Tokens primero: colores, espaciado, tipografía y radios como variables con nombre, no valores sueltos.',
@@ -486,6 +505,7 @@ export const FRONTEND_ISLAND = {
       x: 22,
       y: 28,
       weight: 3,
+      summary: 'Generar UI con IA es usar el modelo para pasar de una idea o un boceto a componentes reales en minutos. Consiste en describir bien lo que quieres y quedarte con lo bueno. Te capacita para prototipar interfaces a una velocidad impensable hace nada.',
       prereqs: ['frontend/componentes'],
       keyPoints: [
         'Da contexto de diseño en el prompt: tokens, componentes existentes, framework y ejemplos del proyecto.',
@@ -509,6 +529,7 @@ export const FRONTEND_ISLAND = {
       x: 10,
       y: 20,
       weight: 2,
+      summary: 'El prototipado con IA es montar versiones rápidas y desechables para validar una idea antes de construirla en serio. Consiste en priorizar velocidad sobre pulido y aprender de cada intento. Te capacita para explorar muchas direcciones baratas antes de comprometerte con una.',
       prereqs: ['frontend/generar-ui-con-ia'],
       keyPoints: [
         'Usa la IA para materializar ideas en minutos: tres variantes navegables valen más que un documento.',
@@ -532,6 +553,7 @@ export const FRONTEND_ISLAND = {
       x: 6,
       y: 36,
       weight: 2,
+      summary: 'Revisar el CSS que genera la IA es no tragarte estilos frágiles o enrevesados por venir de un modelo. Consiste en comprobar que la maqueta aguanta, es accesible y no repite. Te capacita para aprovechar la velocidad de la IA sin acumular deuda visual.',
       prereqs: ['frontend/generar-ui-con-ia', 'frontend/css-moderno'],
       keyPoints: [
         'Reconoce el CSS-espagueti de IA: valores mágicos, estilos duplicados, !important y utilidades mezcladas con CSS a mano.',
@@ -555,6 +577,7 @@ export const FRONTEND_ISLAND = {
       x: 18,
       y: 10,
       weight: 2,
+      summary: 'Mantener una UI con ayuda de IA es usar el modelo para evolucionar interfaz existente sin romperla. Consiste en darle contexto del proyecto y verificar cada cambio contra tus tests. Te capacita para que la IA acelere el mantenimiento, la parte menos glamurosa y más real.',
       prereqs: ['frontend/prototipado-ia', 'frontend/testing-frontend'],
       keyPoints: [
         'Refactoriza lo generado hacia tus patrones antes de que eche raíces: nombres, extracción de componentes, tokens.',
@@ -578,6 +601,7 @@ export const FRONTEND_ISLAND = {
       x: 34,
       y: 6,
       weight: 3,
+      summary: 'Ser frontend en la era IA es el hito de dominar el oficio y además dirigir a la IA para ir más lejos. Consiste en juntar criterio de producto, accesibilidad y velocidad con generación asistida. Te capacita para ser el ingeniero de interfaz que las empresas buscan ahora.',
       prereqs: ['frontend/interfaz-produccion', 'frontend/css-generado-revision', 'frontend/mantener-ui-ia'],
       keyPoints: [
         'Integras el ciclo completo: generas UI con IA, la auditas (a11y, vitals, seguridad) y la mantienes consistente.',

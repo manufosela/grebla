@@ -35,6 +35,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 50,
       y: 72,
       weight: 3,
+      summary: 'El rol del PM es descubrir qué construir y por qué, para que el equipo haga lo correcto, no solo mucho. Consiste en representar al usuario y al negocio a la vez. Te capacita para que el esfuerzo de ingeniería se convierta en valor real y no en features que nadie usa.',
       prereqs: [],
       keyPoints: [
         'El PM responde por el valor: producto que merece existir, es usable, viable y construible.',
@@ -59,6 +60,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 36,
       y: 64,
       weight: 3,
+      summary: 'El pensamiento de producto es enfocarse en el problema del usuario antes que en la solución. Consiste en preguntar por qué y para quién antes de decidir el qué. Te capacita para construir cosas que la gente quiere en vez de las que a ti se te ocurrieron.',
       prereqs: ['product-manager/rol-del-pm'],
       keyPoints: [
         'Enamórate del problema, no de tu solución: la solución es una hipótesis, el problema es el ancla.',
@@ -82,6 +84,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 64,
       y: 64,
       weight: 2,
+      summary: 'Conocer el negocio es entender cómo gana dinero tu empresa y qué mueve la aguja de verdad. Consiste en conectar cada decisión de producto con su impacto económico. Te capacita para priorizar lo que importa al negocio y hablar el idioma de quien decide.',
       prereqs: ['product-manager/rol-del-pm'],
       keyPoints: [
         'Entiende el modelo de negocio: cómo entra el dinero, qué lo hace crecer y qué lo pone en riesgo.',
@@ -107,6 +110,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 24,
       y: 54,
       weight: 3,
+      summary: 'Las entrevistas con usuarios son hablar con la gente real para entender sus problemas sin sesgar la respuesta. Consiste en preguntar por comportamientos y no por opiniones. Te capacita para decidir con lo que la gente hace, no con lo que dice que haría.',
       prereqs: ['product-manager/pensamiento-de-producto'],
       keyPoints: [
         'Pregunta por comportamiento pasado, no por intenciones futuras: «¿qué hiciste?» vale, «¿lo usarías?» no.',
@@ -130,6 +134,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 36,
       y: 44,
       weight: 3,
+      summary: 'Las hipótesis y los experimentos son tratar tus ideas como apuestas a validar, no verdades. Consiste en formular qué esperas, probarlo barato y aprender del resultado. Te capacita para reducir el riesgo de construir algo grande que nadie quería.',
       prereqs: ['product-manager/entrevistas-usuarios'],
       keyPoints: [
         'Escribe la hipótesis antes de construir: «creemos que X provocará Y, lo sabremos si Z».',
@@ -153,6 +158,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 14,
       y: 42,
       weight: 2,
+      summary: 'El discovery continuo es hablar con usuarios de forma habitual, no solo al principio de un proyecto. Consiste en mantener un contacto constante con el problema mientras construyes. Te capacita para corregir el rumbo pronto en vez de descubrir el error al lanzar.',
       prereqs: ['product-manager/entrevistas-usuarios'],
       keyPoints: [
         'Discovery no es una fase, es un hábito semanal del trío producto-diseño-ingeniería.',
@@ -176,6 +182,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 26,
       y: 32,
       weight: 2,
+      summary: 'El prototipado es materializar una idea en algo que se pueda ver y tocar antes de construirla. Consiste en hacer versiones rápidas para validar con usuarios y equipo. Te capacita para alinear a todos y detectar problemas cuando cambiarlos aún es barato.',
       prereqs: ['product-manager/hipotesis-experimentos'],
       keyPoints: [
         'Prototipa al nivel de fidelidad que pide la pregunta: papel para flujo, clicable para usabilidad.',
@@ -201,6 +208,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 52,
       y: 50,
       weight: 3,
+      summary: 'Priorizar por impacto vs esfuerzo es decidir qué hacer antes cuando todo parece importante. Consiste en estimar el valor y el coste de cada cosa y elegir con criterio. Te capacita para que el equipo trabaje en lo que más mueve la aguja, no en lo más ruidoso.',
       prereqs: ['product-manager/hipotesis-experimentos'],
       keyPoints: [
         'Estima impacto y esfuerzo en órdenes de magnitud: precisión falsa es peor que rangos honestos.',
@@ -224,6 +232,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 64,
       y: 42,
       weight: 2,
+      summary: 'Decir que no es proteger el foco del producto rechazando lo que no encaja, aunque duela. Consiste en explicar el porqué y ofrecer alternativas sin cerrar puertas. Te capacita para que el producto tenga una dirección clara en vez de ser un cajón de sastre.',
       prereqs: ['product-manager/priorizar-impacto-esfuerzo'],
       keyPoints: [
         'Di no al qué, no al porqué: reconoce el problema aunque rechaces la solución propuesta.',
@@ -247,6 +256,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 78,
       y: 50,
       weight: 2,
+      summary: 'Los roadmaps que no mienten son planes que comunican dirección sin prometer fechas que no puedes cumplir. Consiste en hablar de problemas y resultados, no de una lista de features con calendario. Te capacita para alinear a todos sin quedar como un mentiroso.',
       prereqs: ['product-manager/priorizar-impacto-esfuerzo'],
       keyPoints: [
         'Roadmap por outcomes y horizontes (now/next/later), no lista de features con fechas inventadas.',
@@ -272,6 +282,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 76,
       y: 32,
       weight: 3,
+      summary: 'La activación y la retención son las métricas que dicen si la gente empieza a usar tu producto y se queda. Consiste en medir el momento «ajá» y la vuelta recurrente. Te capacita para saber si tu producto aporta valor de verdad o solo atrae y pierde usuarios.',
       prereqs: ['product-manager/hipotesis-experimentos'],
       keyPoints: [
         'Define el momento de activación: la primera vez que el usuario recibe el valor prometido.',
@@ -295,6 +306,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 88,
       y: 40,
       weight: 2,
+      summary: 'La experimentación y los A/B tests son comparar variantes con datos reales para decidir cuál funciona mejor. Consiste en medir de forma rigurosa y sacar conclusiones válidas. Te capacita para mejorar el producto con evidencia en vez de con opiniones o corazonadas.',
       prereqs: ['product-manager/metricas-activacion-retencion'],
       keyPoints: [
         'Un A/B test necesita hipótesis, métrica primaria y tamaño de muestra decididos ANTES de lanzar.',
@@ -318,6 +330,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 88,
       y: 22,
       weight: 2,
+      summary: 'El North Star y el árbol de métricas son elegir la métrica que resume el valor que entregas y descomponerla en palancas. Consiste en alinear a todo el equipo tras un norte común. Te capacita para que las decisiones diarias remen todas hacia el mismo sitio.',
       prereqs: ['product-manager/metricas-activacion-retencion'],
       keyPoints: [
         'Elige una North Star que capture valor entregado al usuario y correlacione con el negocio.',
@@ -343,6 +356,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 66,
       y: 26,
       weight: 3,
+      summary: 'La gestión de stakeholders es alinear a jefes, ventas, soporte y demás intereses alrededor del producto. Consiste en comunicar, negociar y gestionar expectativas en muchas direcciones. Te capacita para avanzar con la organización a favor en vez de peleándote con ella.',
       prereqs: ['product-manager/roadmaps'],
       keyPoints: [
         'Mapea a tus stakeholders por interés e influencia, y decide la cadencia de comunicación de cada uno.',
@@ -366,6 +380,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 52,
       y: 32,
       weight: 3,
+      summary: 'Trabajar con ingeniería es colaborar con quien construye para tomar mejores decisiones juntos. Consiste en dar contexto y el porqué, no especificaciones cerradas, y escuchar. Te capacita para que ingeniería aporte soluciones y no solo ejecute, y para llegar más lejos.',
       prereqs: ['product-manager/priorizar-impacto-esfuerzo'],
       keyPoints: [
         'Lleva problemas y contexto, no especificaciones cerradas: ingeniería descubre soluciones mejores que tu spec.',
@@ -389,6 +404,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 54,
       y: 18,
       weight: 2,
+      summary: 'Los lanzamientos y el ciclo de vida son sacar algo al mundo bien y acompañarlo después. Consiste en coordinar el go-to-market, medir la adopción y iterar. Te capacita para que un lanzamiento genere valor de verdad y no sea un fuego artificial que se apaga.',
       prereqs: ['product-manager/trabajar-con-ingenieria'],
       keyPoints: [
         'Separa release de launch: desplegar en oscuro y lanzar cuando el negocio esté listo.',
@@ -414,6 +430,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 38,
       y: 22,
       weight: 3,
+      summary: 'Prototipar con IA es usar el modelo para pasar de idea a algo tangible en horas, sin depender de ingeniería. Consiste en generar prototipos rápidos para validar antes de comprometer recursos. Te capacita para explorar muchas más opciones y decidir con evidencia temprana.',
       prereqs: ['product-manager/prototipado'],
       keyPoints: [
         'Aprende una herramienta de prototipado con IA y úsala: el PM que enseña un prototipo gana la discusión del documento.',
@@ -437,6 +454,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 24,
       y: 14,
       weight: 2,
+      summary: 'Sintetizar feedback con IA es usar el modelo para digerir montañas de opiniones de usuarios y sacar patrones. Consiste en apoyarte en la IA para resumir sin perder los matices. Te capacita para escuchar a muchos más usuarios de los que podrías leer a mano.',
       prereqs: ['product-manager/prototipar-con-ia'],
       keyPoints: [
         'Agrega TODAS las fuentes: entrevistas, tickets, reviews, NPS, llamadas de ventas — la IA las cruza por ti.',
@@ -460,6 +478,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 10,
       y: 24,
       weight: 2,
+      summary: 'Decidir con datos y criterio es usar la IA y los números como apoyo sin delegarles el juicio. Consiste en combinar lo que dicen los datos con el contexto que solo tú tienes. Te capacita para decidir mejor y más rápido sin volverte esclavo de una métrica o de un modelo.',
       prereqs: ['product-manager/continuous-discovery'],
       keyPoints: [
         'Datos para decidir, no para justificar lo ya decidido: escribe la pregunta antes de mirar el dashboard.',
@@ -483,6 +502,7 @@ export const PRODUCT_MANAGER_ISLAND = {
       x: 40,
       y: 8,
       weight: 3,
+      summary: 'Ser PM de la era IA es el hito de dirigir producto cuando la IA cambia qué se puede construir y cómo. Consiste en juntar todo lo de la isla y sumarle criterio sobre las posibilidades de la IA. Te capacita para ser el PM que descubre y entrega valor en el nuevo tablero.',
       prereqs: ['product-manager/sintetizar-feedback-ia', 'product-manager/lanzamientos'],
       keyPoints: [
         'Descubres cada semana, prototipas en horas y decides con datos verificados y criterio propio.',

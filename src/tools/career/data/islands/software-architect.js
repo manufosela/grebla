@@ -35,6 +35,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 50,
       y: 72,
       weight: 3,
+      summary: 'El rol del arquitecto es tomar las decisiones técnicas que son caras de cambiar y sostenerlas con criterio. Consiste en pensar en el sistema entero y en el largo plazo, no en una feature. Te capacita para guiar el rumbo técnico de un producto sin dejar de bajar al detalle cuando toca.',
       prereqs: [],
       keyPoints: [
         'Arquitectura es lo caro de cambiar: tu trabajo es decidir tarde lo reversible y pronto lo irreversible.',
@@ -59,6 +60,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 36,
       y: 64,
       weight: 3,
+      summary: 'El pensamiento sistémico es ver el conjunto y cómo se afectan las partes, no cada pieza aislada. Consiste en razonar sobre flujos, dependencias y efectos de segundo orden. Te capacita para anticipar dónde va a doler un cambio antes de hacerlo.',
       prereqs: ['software-architect/rol-del-arquitecto'],
       keyPoints: [
         'Piensa en flujos, cuellos de botella y bucles de realimentación, no en cajas aisladas.',
@@ -82,6 +84,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 64,
       y: 64,
       weight: 3,
+      summary: 'Que todo es un trade-off es la idea de que no hay soluciones perfectas, solo decisiones con coste. Consiste en hacer explícitos los pros, los contras y a quién afectan. Te capacita para elegir con los ojos abiertos y defender la decisión con argumentos, no con moda.',
       prereqs: ['software-architect/rol-del-arquitecto'],
       keyPoints: [
         'Primera ley de la arquitectura: todo es un trade-off; si no lo ves, aún no lo has encontrado.',
@@ -105,6 +108,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 50,
       y: 56,
       weight: 2,
+      summary: 'Los atributos de calidad son las exigencias que no son features: rendimiento, seguridad, disponibilidad, mantenibilidad. Consiste en definirlas de forma medible y diseñar para ellas. Te capacita para construir sistemas que aguantan la realidad, no solo demos bonitas.',
       prereqs: ['software-architect/pensamiento-sistemico'],
       keyPoints: [
         'Extrae los -ilities que importan (disponibilidad, latencia, escalabilidad, seguridad) y priorízalos: no puedes tenerlos todos.',
@@ -130,6 +134,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 24,
       y: 52,
       weight: 3,
+      summary: 'El monolito modular es un sistema en una sola pieza pero bien organizado por dentro, con fronteras claras. Consiste en tener módulos desacoplados sin la complejidad de distribuirlos. Te capacita para empezar simple y crecer ordenado, la opción por defecto sensata.',
       prereqs: ['software-architect/pensamiento-sistemico'],
       keyPoints: [
         'Empieza monolítico y modular: un despliegue, límites internos claros, dolor de red cero.',
@@ -153,6 +158,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 12,
       y: 40,
       weight: 2,
+      summary: 'Los microservicios son partir el sistema en servicios independientes que se despliegan por separado. Consiste en entender cuándo compensan su enorme complejidad y cuándo no. Te capacita para diseñar sistemas distribuidos a sabiendas del precio que pagas por ello.',
       prereqs: ['software-architect/monolito-modular'],
       keyPoints: [
         'Microservicios compran autonomía organizativa a cambio de complejidad operacional: paga solo si la necesitas.',
@@ -176,6 +182,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 26,
       y: 36,
       weight: 2,
+      summary: 'La arquitectura event-driven es que las partes del sistema se comuniquen por eventos en vez de llamarse directamente. Consiste en desacoplar productores y consumidores por mensajes. Te capacita para construir sistemas flexibles que escalan y toleran fallos, con su coste en complejidad.',
       prereqs: ['software-architect/monolito-modular'],
       keyPoints: [
         'Eventos desacoplan en el tiempo: el productor no espera y el consumidor procesa a su ritmo.',
@@ -199,6 +206,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 38,
       y: 44,
       weight: 3,
+      summary: 'El acoplamiento y la cohesión son las dos fuerzas del buen diseño: piezas que dependen poco entre sí y mucho de lo suyo. Consiste en juntar lo que cambia junto y separar lo que no. Te capacita para diseñar sistemas donde un cambio no arrastra a media base de código.',
       prereqs: ['software-architect/monolito-modular'],
       keyPoints: [
         'Alta cohesión dentro, bajo acoplamiento fuera: la regla que sobrevive a todas las modas.',
@@ -224,6 +232,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 62,
       y: 46,
       weight: 3,
+      summary: 'El modelado de datos es diseñar cómo se estructura y relaciona la información que mueve tu sistema. Consiste en elegir el modelo que refleja el dominio y aguanta el crecimiento. Te capacita para acertar en la decisión más cara de deshacer de cualquier sistema.',
       prereqs: ['software-architect/requisitos-no-funcionales'],
       keyPoints: [
         'El modelo de datos sobrevive al código: equivócate en la app y lo arreglas; en el modelo, lo pagas años.',
@@ -247,6 +256,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 74,
       y: 54,
       weight: 3,
+      summary: 'La consistencia y el teorema CAP son las reglas de qué puedes garantizar en un sistema distribuido cuando hay fallos de red. Consiste en elegir entre consistencia y disponibilidad con conocimiento. Te capacita para diseñar sistemas distribuidos sin prometer imposibles.',
       prereqs: ['software-architect/modelado-de-datos'],
       keyPoints: [
         'CAP en la práctica: ante una partición eliges consistencia o disponibilidad — y las particiones ocurren.',
@@ -270,6 +280,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 76,
       y: 38,
       weight: 2,
+      summary: 'Los sistemas intensivos en datos son los que mueven, almacenan y procesan datos a gran escala. Consiste en combinar bases, colas, cachés y streams con las garantías correctas. Te capacita para diseñar la columna vertebral de los productos que viven de sus datos.',
       prereqs: ['software-architect/modelado-de-datos'],
       keyPoints: [
         'Separa OLTP de OLAP: el sistema que atiende usuarios no es el que responde analítica.',
@@ -293,6 +304,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 88,
       y: 46,
       weight: 2,
+      summary: 'Las APIs y los contratos son las fronteras por las que hablan los sistemas, y lo más caro de cambiar mal. Consiste en diseñar interfaces claras, versionadas y estables. Te capacita para que las piezas evolucionen sin romperse entre sí ni a sus consumidores.',
       prereqs: ['software-architect/modelado-de-datos'],
       keyPoints: [
         'Una API es una promesa: diseña contract-first y trata el contrato como código (versionado y testeado).',
@@ -318,6 +330,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 44,
       y: 30,
       weight: 3,
+      summary: 'Los ADRs (decidir por escrito) son registrar las decisiones de arquitectura con su contexto y sus consecuencias. Consiste en dejar por qué se eligió algo, no solo qué. Te capacita para que el equipo entienda las decisiones y no las repita ni las deshaga sin saber.',
       prereqs: ['software-architect/acoplamiento-cohesion'],
       keyPoints: [
         'Un ADR por decisión significativa: contexto, opciones, decisión y consecuencias — una página basta.',
@@ -342,6 +355,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 56,
       y: 24,
       weight: 2,
+      summary: 'Las fitness functions son pruebas automáticas que vigilan que la arquitectura no se degrade con el tiempo. Consiste en codificar las reglas del diseño y comprobarlas en cada cambio. Te capacita para que las buenas decisiones se mantengan solas en vez de erosionarse.',
       prereqs: ['software-architect/adrs'],
       keyPoints: [
         'Una fitness function verifica automáticamente una característica arquitectónica: convierte intención en test.',
@@ -365,6 +379,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 32,
       y: 22,
       weight: 2,
+      summary: 'La arquitectura evolutiva es diseñar para el cambio en vez de intentar acertarlo todo el primer día. Consiste en tomar decisiones reversibles y dejar puertas abiertas. Te capacita para construir sistemas que se adaptan a lo que no sabías cuando empezaste.',
       prereqs: ['software-architect/adrs'],
       keyPoints: [
         'Diseña para el cambio, no para el futuro imaginado: YAGNI también aplica a la arquitectura.',
@@ -388,6 +403,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 68,
       y: 30,
       weight: 2,
+      summary: 'La observabilidad es diseñar el sistema para poder entenderlo desde fuera cuando algo va mal. Consiste en logs, métricas y trazas pensados desde la arquitectura, no añadidos después. Te capacita para operar sistemas complejos sin volverte loco cuando fallan.',
       prereqs: ['software-architect/sistemas-intensivos-datos'],
       keyPoints: [
         'Tres señales — logs, métricas y trazas — correlacionadas por contexto de petición.',
@@ -413,6 +429,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 14,
       y: 24,
       weight: 2,
+      summary: 'El platform engineering es construir la base sobre la que el resto de equipos entregan rápido y seguro. Consiste en tratar la plataforma interna como un producto con usuarios. Te capacita para multiplicar la productividad de toda la organización, no de un equipo.',
       prereqs: ['software-architect/event-driven'],
       keyPoints: [
         'La plataforma interna es un producto: sus clientes son los equipos y se mide en adopción, no en features.',
@@ -436,6 +453,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 22,
       y: 12,
       weight: 2,
+      summary: 'La developer experience es cuánto de fácil o de doloroso es trabajar en tu sistema. Consiste en reducir la fricción: builds rápidos, entornos fáciles, buenas herramientas. Te capacita para que la organización avance rápido porque desarrollar en ella es agradable.',
       prereqs: ['software-architect/platform-engineering'],
       keyPoints: [
         'DevEx son tres cosas: velocidad de feedback, carga cognitiva y estado de flow — mide las tres.',
@@ -459,6 +477,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 10,
       y: 10,
       weight: 2,
+      summary: 'El liderazgo e influencia son conseguir que un rumbo técnico se adopte sin tener autoridad para imponerlo. Consiste en convencer, alinear y construir consenso. Te capacita para que tus buenas decisiones lleguen a implementarse en vez de quedarse en un documento.',
       prereqs: ['software-architect/adrs'],
       keyPoints: [
         'El arquitecto lidera sin autoridad: convences con contexto, datos y prototipos, no con jerarquía.',
@@ -484,6 +503,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 46,
       y: 12,
       weight: 3,
+      summary: 'Diseñar sistemas con LLMs es incorporar la IA como componente de la arquitectura con sus rarezas: latencia, coste, no determinismo. Consiste en tratar el modelo como una pieza más, con sus contratos y fallos. Te capacita para construir productos de IA que aguantan producción.',
       prereqs: ['software-architect/apis-y-contratos'],
       keyPoints: [
         'Trata el LLM como un componente no determinista: latencia variable, salida probabilística, coste por token.',
@@ -508,6 +528,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 60,
       y: 10,
       weight: 2,
+      summary: 'Revisar diseño generado por IA es no adoptar a ciegas la arquitectura que propone un modelo. Consiste en juzgar sus trade-offs, sus supuestos y lo que se calla. Te capacita para usar la IA como aportadora de ideas sin delegarle las decisiones caras de deshacer.',
       prereqs: ['software-architect/disenar-con-llms'],
       keyPoints: [
         'La IA propone arquitecturas plausibles y genéricas: revisa contra TU contexto, no contra el manual.',
@@ -531,6 +552,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 74,
       y: 16,
       weight: 2,
+      summary: 'El coste, riesgo y gobernanza de IA son gestionar lo que la IA implica para la organización: gasto, seguridad, cumplimiento. Consiste en poner límites, políticas y controles. Te capacita para adoptar IA a escala de forma responsable y defendible ante el negocio.',
       prereqs: ['software-architect/disenar-con-llms'],
       keyPoints: [
         'El coste por token es una decisión de arquitectura: caché, modelos por tier y presupuestos por feature.',
@@ -554,6 +576,7 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       x: 88,
       y: 24,
       weight: 3,
+      summary: 'Ser arquitecto de la era IA es el hito de guiar decisiones técnicas cuando la IA cambia las reglas del diseño. Consiste en juntar todo lo de la isla y sumarle criterio sobre la IA. Te capacita para ser la persona que marca el rumbo técnico con la cabeza fría en plena transformación.',
       prereqs: ['software-architect/revisar-arquitecturas-ia', 'software-architect/fitness-functions'],
       keyPoints: [
         'Diseñas sistemas donde humanos e IA producen código dentro de límites verificados automáticamente.',

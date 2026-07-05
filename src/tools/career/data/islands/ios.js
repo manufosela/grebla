@@ -34,6 +34,7 @@ export const IOS_ISLAND = {
       x: 54,
       y: 76,
       weight: 3,
+      summary: 'Swift es el lenguaje de Apple: moderno, seguro y expresivo, base de todo el desarrollo iOS actual. Consiste en escribir Swift idiomático aprovechando su sistema de tipos. Te capacita para construir apps para iPhone y el resto del ecosistema Apple sobre una base sólida.',
       prereqs: [],
       keyPoints: [
         'Optionals a fondo: if let, guard let y por qué el force unwrap (!) es una alarma.',
@@ -58,6 +59,7 @@ export const IOS_ISLAND = {
       x: 42,
       y: 76,
       weight: 2,
+      summary: 'Xcode y el simulador son el entorno de Apple: el IDE, las herramientas y el dispositivo virtual donde pruebas. Consiste en dominar el editor, la depuración y el simulador. Te capacita para desarrollar y probar apps sin necesitar siempre un iPhone físico.',
       prereqs: [],
       keyPoints: [
         'Anatomía del proyecto: targets, schemes, Info.plist y configuraciones de build.',
@@ -81,6 +83,7 @@ export const IOS_ISLAND = {
       x: 66,
       y: 76,
       weight: 1,
+      summary: 'Swift Package Manager es el gestor de dependencias oficial de Apple: añade librerías y organiza tu proyecto. Consiste en declarar paquetes y versiones sin herramientas de terceros. Te capacita para apoyarte en el ecosistema Swift de forma nativa y ordenada.',
       prereqs: ['ios/xcode'],
       keyPoints: [
         'Añadir dependencias: versionado semántico, resolución y el Package.resolved en git.',
@@ -103,6 +106,7 @@ export const IOS_ISLAND = {
       x: 54,
       y: 66,
       weight: 3,
+      summary: 'La concurrencia con async/await es hacer trabajo asíncrono en Swift de forma segura y legible. Consiste en tareas, actores y evitar las condiciones de carrera. Te capacita para cargar datos y trabajar en paralelo sin congelar la interfaz ni corromper estado.',
       prereqs: ['ios/swift'],
       keyPoints: [
         'async/await y Task: structured concurrency, cancelación y jerarquía de tareas.',
@@ -126,6 +130,7 @@ export const IOS_ISLAND = {
       x: 66,
       y: 66,
       weight: 2,
+      summary: 'El ciclo de vida de la app es entender cuándo tu app arranca, pasa a segundo plano y se suspende. Consiste en gestionar estado y recursos según esas fases. Te capacita para que la app se comporte bien al cambiar entre apps, llamadas y notificaciones.',
       prereqs: ['ios/swift'],
       keyPoints: [
         'Estados de la app: activa, inactiva, en background, suspendida — y qué puedes hacer en cada uno.',
@@ -151,6 +156,7 @@ export const IOS_ISLAND = {
       x: 78,
       y: 66,
       weight: 3,
+      summary: 'SwiftUI es la forma moderna de construir interfaces Apple de manera declarativa. Consiste en describir la UI para cada estado y dejar que el framework la actualice. Te capacita para hacer interfaces con menos código y compartidas entre iPhone, iPad y Mac.',
       prereqs: ['ios/swift'],
       keyPoints: [
         'UI declarativa: la vista es función del estado; modificas datos, no vistas.',
@@ -175,6 +181,7 @@ export const IOS_ISLAND = {
       x: 78,
       y: 56,
       weight: 3,
+      summary: 'El estado y el flujo de datos son el corazón de SwiftUI: cómo los datos disparan que la UI se redibuje. Consiste en elegir el contenedor de estado correcto para cada caso. Te capacita para hacer interfaces reactivas sin los bugs sutiles de gestionar mal el estado.',
       prereqs: ['ios/swiftui'],
       keyPoints: [
         '@State para estado local y efímero; @Binding para compartirlo hacia abajo.',
@@ -198,6 +205,7 @@ export const IOS_ISLAND = {
       x: 90,
       y: 56,
       weight: 2,
+      summary: 'La navegación es moverse entre pantallas con pila, rutas y deep links de forma coherente. Consiste en usar los mecanismos de navegación de SwiftUI con cabeza. Te capacita para estructurar apps de varias pantallas sin que la navegación se enrede.',
       prereqs: ['ios/swiftui'],
       keyPoints: [
         'NavigationStack y rutas tipadas: el path como estado navegable y restaurable.',
@@ -221,6 +229,7 @@ export const IOS_ISLAND = {
       x: 90,
       y: 66,
       weight: 2,
+      summary: 'UIKit y la interoperabilidad son convivir con el framework clásico cuando SwiftUI no llega. Consiste en integrar vistas UIKit dentro de SwiftUI y viceversa. Te capacita para trabajar en apps reales, que casi siempre mezclan ambos mundos.',
       prereqs: ['ios/swiftui'],
       keyPoints: [
         'UIKit sigue vivo: casi todo proyecto real tiene capas de UIViewController.',
@@ -244,6 +253,7 @@ export const IOS_ISLAND = {
       x: 90,
       y: 46,
       weight: 2,
+      summary: 'La accesibilidad en iOS es que tu app la pueda usar todo el mundo, con VoiceOver o sin ver bien. Consiste en etiquetas, foco, tamaños dinámicos y contraste. Te capacita para no dejar fuera a nadie y cumplir las exigencias de Apple.',
       prereqs: ['ios/swiftui'],
       keyPoints: [
         'VoiceOver: recorre tu app sin mirar la pantalla al menos una vez por release.',
@@ -269,6 +279,7 @@ export const IOS_ISLAND = {
       x: 66,
       y: 46,
       weight: 3,
+      summary: 'La arquitectura y el MVVM son separar interfaz, lógica y datos para que la app no sea un caos. Consiste en ViewModels, estado observable y capas con responsabilidad clara. Te capacita para construir apps que crecen sin volverse imposibles de mantener.',
       prereqs: ['ios/estado-swiftui', 'ios/ciclo-vida-app'],
       keyPoints: [
         'Capas con frontera: vista, modelo observable y servicios/repositorios detrás de protocolos.',
@@ -293,6 +304,7 @@ export const IOS_ISLAND = {
       x: 54,
       y: 46,
       weight: 3,
+      summary: 'El testing en iOS es probar la app en sus niveles: lógica, UI y flujos completos. Consiste en cubrir lo importante con XCTest o Swift Testing y ejecutarlo a menudo. Te capacita para cambiar la app con confianza en vez de a ver qué pasa en cada release.',
       prereqs: ['ios/arquitectura-mvvm'],
       keyPoints: [
         'Tests unitarios de modelos y servicios con Swift Testing o XCTest: rápidos y sin simulador.',
@@ -316,6 +328,7 @@ export const IOS_ISLAND = {
       x: 42,
       y: 46,
       weight: 1,
+      summary: 'La modularización es partir la app en paquetes independientes que compilan y evolucionan por separado. Consiste en definir fronteras claras entre features. Te capacita para que la app escale en tamaño y equipo sin que el build se eternice.',
       prereqs: ['ios/arquitectura-mvvm', 'ios/spm'],
       keyPoints: [
         'Paquetes SPM locales para cortar el proyecto: features, core, diseño.',
@@ -340,6 +353,7 @@ export const IOS_ISLAND = {
       x: 30,
       y: 66,
       weight: 3,
+      summary: 'La red y las APIs son cómo tu app habla con el servidor gestionando carga, error y datos. Consiste en usar bien URLSession y manejar los estados de una petición. Te capacita para conectar tu app con cualquier backend sin dejar la pantalla en blanco.',
       prereqs: ['ios/concurrencia'],
       keyPoints: [
         'URLSession con async/await: peticiones, subidas y descargas sin dependencias externas.',
@@ -363,6 +377,7 @@ export const IOS_ISLAND = {
       x: 30,
       y: 56,
       weight: 3,
+      summary: 'SwiftData y la persistencia son guardar datos en el dispositivo con la herramienta moderna de Apple. Consiste en modelar entidades y consultarlas de forma declarativa. Te capacita para que tu app funcione offline y recuerde el estado entre sesiones.',
       prereqs: ['ios/concurrencia'],
       keyPoints: [
         'SwiftData: @Model, queries y su integración natural con SwiftUI.',
@@ -389,6 +404,7 @@ export const IOS_ISLAND = {
       x: 42,
       y: 36,
       weight: 2,
+      summary: 'Instruments y el rendimiento son las herramientas de Apple para medir memoria, CPU y fluidez. Consiste en perfilar antes de optimizar y localizar el problema real. Te capacita para entregar apps fluidas que no calientan el teléfono ni se van de memoria.',
       prereqs: ['ios/arquitectura-mvvm'],
       keyPoints: [
         'Mide antes de tocar: Time Profiler para CPU, Allocations y Leaks para memoria.',
@@ -412,6 +428,7 @@ export const IOS_ISLAND = {
       x: 54,
       y: 36,
       weight: 2,
+      summary: 'Las firmas y el provisioning son el laberinto de certificados e identificadores necesario para instalar y publicar. Consiste en entender perfiles, certificados y capacidades. Te capacita para superar el paso que atasca a todo el mundo al llevar una app al dispositivo.',
       prereqs: ['ios/xcode'],
       keyPoints: [
         'El triángulo: certificados, identificadores y provisioning profiles — qué firma qué.',
@@ -435,6 +452,7 @@ export const IOS_ISLAND = {
       x: 66,
       y: 36,
       weight: 3,
+      summary: 'TestFlight y la App Store son distribuir tu app: primero a testers, luego al público. Consiste en gestionar builds, betas y el proceso de revisión de Apple. Te capacita para llevar tu app de tu Mac a manos de usuarios de todo el mundo.',
       prereqs: ['ios/firmas-certificados', 'ios/testing'],
       keyPoints: [
         'TestFlight: builds internas y externas, grupos de testers y feedback integrado.',
@@ -458,6 +476,7 @@ export const IOS_ISLAND = {
       x: 78,
       y: 36,
       weight: 2,
+      summary: 'Los crashes y la observabilidad son enterarte de qué falla a tus usuarios reales y por qué. Consiste en integrar reporte de errores y métricas de uso. Te capacita para arreglar lo que de verdad rompe en producción, no lo que tú supones.',
       prereqs: ['ios/testflight'],
       keyPoints: [
         'Crash reporting desde el primer release: Xcode Organizer, MetricKit o un tercero.',
@@ -481,6 +500,7 @@ export const IOS_ISLAND = {
       x: 54,
       y: 26,
       weight: 3,
+      summary: 'Una app en la App Store es el hito de tener algo real publicado que superó la revisión de Apple. Consiste en juntar todo lo de la isla en un producto que cuidas. Te capacita para demostrar que sabes entregar una app completa, no solo prototipar.',
       prereqs: ['ios/testflight', 'ios/redes', 'ios/swiftdata', 'ios/instruments'],
       keyPoints: [
         'Cierra el ciclo: idea → app → review de Apple → usuarios reales → siguiente versión.',
@@ -505,6 +525,7 @@ export const IOS_ISLAND = {
       x: 18,
       y: 56,
       weight: 2,
+      summary: 'Desarrollar iOS con IA es usar el modelo para generar código, tests y lo repetitivo y así ir más rápido. Consiste en dirigir bien a la IA y verificar lo que produce en tu proyecto. Te capacita para acelerar el desarrollo Apple sin sacrificar calidad.',
       prereqs: ['ios/arquitectura-mvvm'],
       keyPoints: [
         'Asistentes con contexto del proyecto: arquitectura, convenciones y versión mínima de iOS en las reglas.',
@@ -528,6 +549,7 @@ export const IOS_ISLAND = {
       x: 18,
       y: 46,
       weight: 2,
+      summary: 'La IA en el dispositivo es ejecutar modelos en el propio iPhone con Core ML, sin enviar datos fuera. Consiste en integrar modelos con las APIs on-device de Apple. Te capacita para dar funciones inteligentes rápidas, privadas y que funcionan sin conexión.',
       prereqs: ['ios/ia-flujo-trabajo'],
       keyPoints: [
         'On-device vs nube: privacidad, latencia y coste deciden dónde corre cada inferencia.',

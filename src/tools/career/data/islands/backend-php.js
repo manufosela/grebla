@@ -34,6 +34,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 50,
       y: 74,
       weight: 3,
+      summary: 'PHP 8.x moderno es el lenguaje que mueve gran parte de la web, con tipado, atributos y rendimiento muy lejos del PHP de hace años. Consiste en escribir PHP actual y limpio, no el de foros antiguos. Te capacita para construir backends sólidos sobre la base más extendida del sector.',
       prereqs: [],
       keyPoints: [
         'El PHP de hoy no es el de 2010: tipa todo (parámetros, retornos, propiedades) y activa strict_types.',
@@ -58,6 +59,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 38,
       y: 66,
       weight: 3,
+      summary: 'Composer es el gestor de dependencias de PHP: trae librerías, gestiona versiones y organiza el autoload. Consiste en declarar lo que necesitas y dejar que el ecosistema haga el resto. Te capacita para apoyarte en el enorme catálogo de paquetes sin montártelo a mano.',
       prereqs: ['backend-php/php-8'],
       keyPoints: [
         'composer.json a fondo: require vs require-dev, versionado semántico, scripts y el papel del lockfile.',
@@ -81,6 +83,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 62,
       y: 66,
       weight: 3,
+      summary: 'La POO y el diseño en PHP es estructurar el código en objetos con responsabilidades claras. Consiste en clases, interfaces, composición y los principios que evitan el spaghetti. Te capacita para construir aplicaciones que crecen sin volverse imposibles de tocar.',
       prereqs: ['backend-php/php-8'],
       keyPoints: [
         'Clases con una responsabilidad: interfaces para contratos, composición antes que herencia.',
@@ -105,6 +108,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 50,
       y: 58,
       weight: 2,
+      summary: 'Los estándares PSR son las convenciones que hacen que todo el PHP moderno hable el mismo idioma: estilo, autoload, interfaces comunes. Consiste en seguirlos para que tu código encaje con el ecosistema. Te capacita para trabajar en cualquier proyecto sin fricciones de formato.',
       prereqs: ['backend-php/composer'],
       keyPoints: [
         'Conoce los PSR que usarás a diario: PSR-4 (autoload), PSR-12 (estilo), PSR-7/15 (HTTP), PSR-3 (logging).',
@@ -127,6 +131,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 70,
       y: 76,
       weight: 2,
+      summary: 'Manejar errores y excepciones es controlar qué pasa cuando algo sale mal en vez de que el programa reviente. Consiste en lanzar, capturar y decidir dónde se recupera cada fallo. Te capacita para construir servicios que fallan con elegancia y dan mensajes útiles.',
       prereqs: ['backend-php/php-8'],
       keyPoints: [
         'Excepciones para lo excepcional: lanza pronto, captura donde puedas hacer algo útil.',
@@ -152,6 +157,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 28,
       y: 74,
       weight: 3,
+      summary: 'Laravel es el framework PHP más popular: routing, ORM, colas, autenticación y todo lo demás con baterías incluidas. Consiste en aprovechar sus convenciones para ir rápido sin reinventar. Te capacita para construir aplicaciones completas con el stack que más se pide en PHP.',
       prereqs: ['backend-php/poo-php', 'backend-php/composer'],
       keyPoints: [
         'Domina el ciclo de vida: de la petición al response pasando por rutas, middleware y controladores.',
@@ -176,6 +182,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 16,
       y: 64,
       weight: 2,
+      summary: 'Symfony es el framework PHP más robusto y modular, base de medio ecosistema (Laravel incluido). Consiste en componentes reutilizables e inyección de dependencias de primera. Te capacita para construir sistemas grandes y a largo plazo con arquitectura sólida.',
       prereqs: ['backend-php/poo-php', 'backend-php/composer'],
       keyPoints: [
         'Conoce la alternativa seria a Laravel: componentes desacoplados que usan hasta los demás frameworks.',
@@ -198,6 +205,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 20,
       y: 48,
       weight: 2,
+      summary: 'La inyección de dependencias es dar a cada clase lo que necesita desde fuera en vez de que se lo cree ella. Consiste en desacoplar componentes para poder cambiarlos y testearlos. Te capacita para escribir código flexible que no se convierte en un nudo imposible.',
       prereqs: ['backend-php/poo-php'],
       keyPoints: [
         'Las dependencias entran por el constructor: nada de new dentro de la lógica ni estáticos globales.',
@@ -220,6 +228,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 30,
       y: 40,
       weight: 2,
+      summary: 'El routing y el middleware son la puerta de entrada de una API: qué URL va a qué código y qué se ejecuta antes (auth, logs, validación). Consiste en encaminar peticiones y encadenar capas. Te capacita para organizar el flujo de tu servicio con claridad.',
       prereqs: ['backend-php/laravel'],
       keyPoints: [
         'Rutas como mapa de tu API: agrupación, prefijos, nombres y parámetros tipados con model binding.',
@@ -244,6 +253,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 42,
       y: 36,
       weight: 3,
+      summary: 'Una API REST es exponer tus datos y operaciones por HTTP de forma predecible: recursos, métodos y códigos de estado. Consiste en diseñar endpoints coherentes que cualquier cliente entienda. Te capacita para que web, móvil o terceros consuman tu backend.',
       prereqs: ['backend-php/routing-middleware'],
       keyPoints: [
         'Diseña el contrato primero: recursos, verbos, códigos de estado y formato de error coherentes.',
@@ -268,6 +278,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 62,
       y: 36,
       weight: 3,
+      summary: 'La autenticación y autorización son saber quién es el usuario y qué puede hacer. Consiste en login, tokens, sesiones y permisos por rol o recurso. Te capacita para proteger tu API dejando entrar a los tuyos y cerrando la puerta al resto.',
       prereqs: ['backend-php/api-rest'],
       keyPoints: [
         'Distingue authn de authz: quién eres (sesión, token) y qué puedes hacer (roles, policies).',
@@ -291,6 +302,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 36,
       y: 20,
       weight: 3,
+      summary: 'Un ORM como Eloquent o Doctrine es hablar con la base de datos en objetos en vez de SQL a pelo. Consiste en modelar entidades, relaciones y consultas de forma legible. Te capacita para persistir datos rápido sin perder el control de lo que hace la base.',
       prereqs: ['backend-php/laravel'],
       keyPoints: [
         'Modela relaciones con intención: hasMany, belongsToMany y cuándo una tabla pivote merece modelo propio.',
@@ -315,6 +327,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 50,
       y: 28,
       weight: 2,
+      summary: 'La validación de entrada es no fiarte nunca de lo que llega de fuera y comprobar que tiene la forma esperada. Consiste en reglas por campo y respuestas de error claras. Te capacita para blindar tu API contra datos basura y contra atacantes.',
       prereqs: ['backend-php/api-rest'],
       keyPoints: [
         'Valida TODO lo que cruza la frontera: body, query, cabeceras, ficheros — en el servidor, siempre.',
@@ -338,6 +351,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 66,
       y: 22,
       weight: 1,
+      summary: 'Las colas y trabajos en segundo plano son sacar lo pesado (enviar correos, procesar imágenes) fuera de la petición del usuario. Consiste en encolar tareas y procesarlas aparte. Te capacita para que tu API responda al instante aunque el trabajo real tarde.',
       prereqs: ['backend-php/laravel'],
       keyPoints: [
         'Saca del request lo que no necesita respuesta inmediata: correos, informes, llamadas a terceros.',
@@ -360,6 +374,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 52,
       y: 12,
       weight: 3,
+      summary: 'Poner una API PHP en producción es el hito de tener un servicio real: seguro, con datos, desplegado y monitorizado. Consiste en juntar todo lo de la isla en algo que aguanta usuarios. Te capacita para demostrar que sabes operar un backend, no solo escribirlo.',
       prereqs: [
         'backend-php/api-rest',
         'backend-php/autenticacion',
@@ -389,6 +404,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 22,
       y: 28,
       weight: 3,
+      summary: 'El testing en PHP es probar tu backend con PHPUnit o Pest para no romperlo al cambiarlo. Consiste en cubrir la lógica de negocio y los caminos importantes de la API. Te capacita para refactorizar y desplegar con la tranquilidad de una red de seguridad.',
       prereqs: ['backend-php/laravel'],
       keyPoints: [
         'Pest o PHPUnit con soltura: unitarios para el dominio, de feature para los endpoints.',
@@ -413,6 +429,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 10,
       y: 20,
       weight: 2,
+      summary: 'La depuración y el perfilado son encontrar por qué algo falla o va lento con herramientas, no adivinando. Consiste en usar Xdebug, medir tiempos y localizar el cuello real. Te capacita para arreglar bugs y lentitud de raíz en vez de por prueba y error.',
       prereqs: ['backend-php/errores-excepciones'],
       keyPoints: [
         'Xdebug con breakpoints en el editor: ver el estado real vale más que cien dd().',
@@ -435,6 +452,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 6,
       y: 36,
       weight: 2,
+      summary: 'El análisis estático es que una herramienta (PHPStan, Psalm) revise tu código sin ejecutarlo y cace errores de tipos y bugs latentes. Consiste en subir el nivel de rigor poco a poco. Te capacita para pillar fallos antes de producción, gratis y en cada guardado.',
       prereqs: ['backend-php/estandares-psr'],
       keyPoints: [
         'PHPStan (o Psalm) en el CI: bugs de tipos y nulls cazados sin ejecutar nada.',
@@ -460,6 +478,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 80,
       y: 66,
       weight: 2,
+      summary: 'Desplegar PHP es llevar tu aplicación del portátil a un servidor de verdad de forma repetible. Consiste en configurar el entorno, el servidor web y el proceso de release. Te capacita para publicar cambios sin dramas ni pasos manuales que se olvidan.',
       prereqs: ['backend-php/php-8'],
       keyPoints: [
         'Entiende la pila: nginx + PHP-FPM (o FrankenPHP/Octane) y qué hace cada capa.',
@@ -483,6 +502,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 92,
       y: 58,
       weight: 1,
+      summary: 'Los logs y la monitorización son los ojos de tu servicio en producción: qué pasa, qué falla y cuándo. Consiste en registrar lo útil y vigilar métricas y alertas. Te capacita para enterarte de los problemas antes que tus usuarios, no después.',
       prereqs: ['backend-php/despliegue-php'],
       keyPoints: [
         'Logs estructurados (PSR-3/Monolog) con niveles bien usados: debug no es info, warning no es error.',
@@ -505,6 +525,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 82,
       y: 46,
       weight: 2,
+      summary: 'La caché y el rendimiento son hacer que tu API responda rápido guardando lo caro y evitando trabajo repetido. Consiste en cachear con criterio e invalidar bien. Te capacita para escalar sin tirar de más servidores a la primera de cambio.',
       prereqs: ['backend-php/despliegue-php'],
       keyPoints: [
         'Mide primero: el 90% del tiempo suele estar en la base de datos, no en PHP.',
@@ -530,6 +551,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 18,
       y: 10,
       weight: 3,
+      summary: 'Modernizar legacy con IA es usar el modelo para entender y refactorizar código viejo que nadie quiere tocar. Consiste en apoyarte en la IA para leer, documentar y migrar con red de tests. Te capacita para desatascar proyectos heredados sin morir en el intento.',
       prereqs: ['backend-php/analisis-estatico', 'backend-php/testing-php'],
       keyPoints: [
         'Primero el arnés, luego el cambio: tests de caracterización que fijan el comportamiento actual, aunque sea feo.',
@@ -554,6 +576,7 @@ export const BACKEND_PHP_ISLAND = {
       x: 34,
       y: 6,
       weight: 2,
+      summary: 'Revisar migraciones generadas es no aplicar a ciegas los cambios de base de datos que propone la IA. Consiste en comprobar que no pierden datos, no bloquean y son reversibles. Te capacita para aprovechar la velocidad de la IA sin jugarte la integridad de la base.',
       prereqs: ['backend-php/orm-eloquent', 'backend-php/modernizar-legacy-ia'],
       keyPoints: [
         'Toda migración generada se lee línea a línea: el esquema es lo más caro de arreglar después.',
