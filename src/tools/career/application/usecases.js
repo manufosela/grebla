@@ -89,7 +89,7 @@ export async function toggleVisited(store, personId, map, journey, cityId) {
     visited.delete(cityId);
   } else {
     if (!isReachable(map, cityId, journey.visitedCities)) {
-      throw new Error('Ciudad bloqueada: visita antes sus prerequisitos.');
+      throw new Error('Casa bloqueada: visita antes sus prerequisitos.');
     }
     visited.add(cityId);
   }

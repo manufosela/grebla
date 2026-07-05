@@ -123,7 +123,7 @@
  *
  * Compañeros del equipo (MC-12): la prop `teammates` ({personId, name,
  * currentCity, progressPct}, SOLO esos datos: privacidad) pinta un avatar por
- * compañero junto a su ciudad actual — figura del avatar propio con camiseta y
+ * compañero junto a su casa actual — figura del avatar propio con camiseta y
  * gorra deterministas por personId (teammateTint, sin la gorra coral propia),
  * repartidos en arco frente a la fachada (teammateOffsets) para que varios en
  * la misma ciudad no se solapen, mirando hacia fuera. Nombre en sprite sobre
@@ -713,7 +713,7 @@ export class CareerIsland3D extends LitElement {
      */
     this.carpoolStops = [];
     /**
-     * Compañeros del equipo a pintar junto a su ciudad actual (MC-12). SOLO
+     * Compañeros del equipo a pintar junto a su casa actual (MC-12). SOLO
      * nombre, ciudad y % de progreso: el contenedor no pasa nada más.
      * @type {{ personId: string, name: string, currentCity: string, progressPct: number }[]}
      */
@@ -4859,7 +4859,7 @@ export class CareerIsland3D extends LitElement {
   render() {
     return html`
       <div class="wrap">
-        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una ciudad para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Q/E o Re Pág/Av Pág para mirar arriba y abajo, Shift para correr, ratón para mirar y E para entrar en la ciudad cercana — todo el modo a pie se puede jugar solo con el teclado. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su ciudad actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie). La cabaña del brujo, la torre púrpura cerca del puerto, recoge tus consultas para el líder: clic sobre ella, o E al acercarte a pie; su farol indica si hay consultas pendientes (ámbar) o una respuesta lista (turquesa)."></canvas>
+        <canvas aria-label="Isla de carrera en 3D. Arrastra para orbitar, rueda para hacer zoom y haz clic en una casa para abrir su tarjeta. En la vista aérea tu avatar camina con WASD o las flechas (Shift corre) y la cámara lo sigue. En modo a pie: flechas arriba/abajo o W/S para avanzar y retroceder, flechas izquierda/derecha para girar, A/D para desplazarte en lateral, Q/E o Re Pág/Av Pág para mirar arriba y abajo, Shift para correr, ratón para mirar y E para entrar en la casa cercana — todo el modo a pie se puede jugar solo con el teclado. Chocar de frente contra una casa te hace entrar en ella; con su tarjeta abierta, flecha abajo o S salen de nuevo a la isla. Los compañeros del equipo aparecen como avatares junto a su casa actual: haz clic sobre uno (o dispara con la mira a pie) para ver su mini-resumen. La barca del muelle abre el mapa del archipiélago para viajar a otra isla (clic, o E al acercarte a pie). La cabaña del brujo, la torre púrpura cerca del puerto, recoge tus consultas para el líder: clic sobre ella, o E al acercarte a pie; su farol indica si hay consultas pendientes (ámbar) o una respuesta lista (turquesa)."></canvas>
         ${this._mode === 'fps' && this._fpsLocked
           ? html`<div class="crosshair" aria-hidden="true"></div>`
           : null}
