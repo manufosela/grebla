@@ -266,6 +266,7 @@ import {
   routeSeaModel,
   formatStopRanges,
 } from '../../tools/career/domain/route.js';
+import { islandBlobPath } from '../../tools/career/domain/islandShape.js';
 
 /**
  * Pestañas de la tarjeta de la casa (MC-15): estado/acciones del certificado,
@@ -294,6 +295,26 @@ const RESOURCE_GROUPS = {
   libro: { icon: '📚', title: 'Libros' },
   doc: { icon: '📄', title: 'Docs' },
 };
+
+/**
+ * Caché de siluetas de isla del mar (JG-12): islandBlobPath es determinista
+ * (misma id y escala → mismo path), así que se calcula una vez por capa y se
+ * reutiliza en cada re-render del overlay (el barco re-renderiza por rAF).
+ * @type {Map<string, string>}
+ */
+const seaBlobCache = new Map();
+
+/** Path memoizado de la mancha de una isla a una escala dada (JG-12).
+ * @param {string} id @param {number} [scale] */
+function seaBlobPath(id, scale = 1) {
+  const key = `${id}@${scale}`;
+  let d = seaBlobCache.get(key);
+  if (d === undefined) {
+    d = islandBlobPath(id, { scale });
+    seaBlobCache.set(key, d);
+  }
+  return d;
+}
 
 /** Formato de fechas de las consultas al brujo (MC-22). */
 const wizardDateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
@@ -1205,14 +1226,34 @@ export class CareerApp extends LitElement {
     }
     .isle:hover { background: rgba(255, 255, 255, 0.12); }
     .isle:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+    /* Mancha de ISLA (JG-12): la silueta es un SVG inline con la costa
+       irregular DETERMINISTA de cada id (islandShape.js) — nada de círculos.
+       El span solo da tamaño y anclaje; el dibujo son las capas del path:
+       bajío de agua clara, línea de sonda punteada, costa a plumilla con
+       aguada de arena y verde de vegetación interior. */
     .isle-dot {
-      width: 30px;
-      height: 30px;
-      border-radius: 46% 54% 52% 48% / 55% 48% 52% 45%; /* silueta de isla, no un círculo perfecto */
-      background: radial-gradient(circle at 38% 34%, #b7e0a8 0%, #9fce8f 52%, #e9dcae 78%, #dccb96 100%);
-      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 5px 12px rgba(10, 30, 50, 0.35);
+      width: 44px;
+      height: 44px;
+      display: block;
     }
-    .isle.here .isle-dot { box-shadow: 0 0 0 3px var(--rm-coral-600, #e26d5e), 0 5px 12px rgba(10, 30, 50, 0.35); }
+    .isle-dot svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      filter: drop-shadow(0 4px 7px rgba(10, 30, 50, 0.35));
+    }
+    .isle-shoal { fill: rgba(248, 251, 240, 0.38); }
+    .isle-sound {
+      fill: none;
+      stroke: rgba(74, 46, 18, 0.55);
+      stroke-width: 1.2;
+      stroke-dasharray: 3 4.5;
+      stroke-linecap: round;
+    }
+    .isle-coast { fill: #e5d5a4; stroke: #4a2e12; stroke-width: 2.4; stroke-linejoin: round; }
+    .isle-inland { fill: #9dbd8b; }
+    .isle.here .isle-coast { stroke: var(--rm-coral-600, #e26d5e); stroke-width: 3.2; }
     .isle.wip { opacity: 0.55; }
     .isle.wip .isle-dot { filter: grayscale(0.45); }
     /* La LUZ del brujo en el mar (JG-8): la isla con una respuesta lista
@@ -1527,18 +1568,9 @@ export class CareerApp extends LitElement {
         linear-gradient(160deg, #b9d3c6 0%, #a8c8bf 45%, #93b7ad 100%);
       box-shadow: inset 0 0 26px rgba(70, 42, 12, 0.28);
     }
-    .isle-dot {
-      box-shadow:
-        0 0 0 2px rgba(74, 46, 18, 0.55),
-        0 0 0 5px rgba(246, 238, 214, 0.35),
-        0 4px 8px rgba(40, 30, 10, 0.3);
-    }
-    .isle.here .isle-dot {
-      box-shadow:
-        0 0 0 2px var(--rm-coral-600, #e26d5e),
-        0 0 0 5px rgba(246, 238, 214, 0.45),
-        0 4px 8px rgba(40, 30, 10, 0.3);
-    }
+    /* Las manchas de isla (JG-12) ya llevan la plumilla dibujada en su SVG;
+       sobre el pergamino solo se calienta la sombra al tono del papel. */
+    .isle-dot svg { filter: drop-shadow(0 3px 5px rgba(40, 30, 10, 0.35)); }
     .isle:hover { background: rgba(255, 250, 232, 0.28); }
     .isle:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: -2px; }
     .isle-name {
@@ -5150,7 +5182,18 @@ export class CareerApp extends LitElement {
               title=${lit ? `${baseTitle} — 🔮 el brujo tiene tu respuesta` : baseTitle}
               @click=${() => this._travelTo(island.id)}
             >
-              <span class="isle-dot" aria-hidden="true"></span>
+              <span class="isle-dot" aria-hidden="true">
+                <!-- Silueta de ISLA (JG-12): mancha asimétrica determinista por id
+                     (bajío de agua clara, línea de sonda punteada, costa a plumilla
+                     con aguada de arena y verde interior). Solo cambia el dibujo:
+                     el área interactiva sigue siendo el botón completo. -->
+                <svg viewBox="0 0 100 100">
+                  <path class="isle-shoal" d=${seaBlobPath(island.id, 1.22)}></path>
+                  <path class="isle-sound" d=${seaBlobPath(island.id, 1.12)}></path>
+                  <path class="isle-coast" d=${seaBlobPath(island.id)}></path>
+                  <path class="isle-inland" d=${seaBlobPath(island.id, 0.72)}></path>
+                </svg>
+              </span>
               ${here ? html`<span class="isle-x" aria-hidden="true">✗</span>` : null}
               <span class="isle-name">${island.name}</span>
               ${here
@@ -5289,6 +5332,17 @@ export class CareerApp extends LitElement {
       @click=${this._openArchipelago}
       title="Abrir el mapa del archipiélago y viajar a otra isla"
     >🧭 Archipiélago</button>`;
+  }
+
+  /** Botón HUD «🚶 Explorar a pie»: deshabilitado (y abreviado) en táctil. */
+  _renderWalkButton() {
+    const coarse = this._coarsePointer;
+    const title = coarse
+      ? 'Modo de escritorio: requiere ratón y teclado'
+      : 'Recorre la isla a pie en primera persona: cursor libre, arrastra para mirar (WASD/flechas para andar)';
+    return html`<button @click=${this._enterFps} ?disabled=${coarse} title=${title}>
+      🚶 ${coarse ? 'A pie (escritorio)' : 'Explorar a pie'}
+    </button>`;
   }
 
   /** Botón HUD «👥 Equipo» (MC-12): muestra/oculta los avatares del equipo. */
@@ -6092,13 +6146,7 @@ export class CareerApp extends LitElement {
                       @click=${this._focusOverview}
                       title="Volver a la vista aérea de toda la isla"
                     >Isla completa</button>
-                    <button
-                      @click=${this._enterFps}
-                      ?disabled=${this._coarsePointer}
-                      title=${this._coarsePointer
-                        ? 'Modo de escritorio: requiere ratón y teclado'
-                        : 'Recorre la isla a pie en primera persona: cursor libre, arrastra para mirar (WASD/flechas para andar)'}
-                    >🚶 ${this._coarsePointer ? 'A pie (escritorio)' : 'Explorar a pie'}</button>
+                    ${this._renderWalkButton()}
                     ${this._renderTeamButton()}
                     ${this._renderAudioButton()}
                     <button
