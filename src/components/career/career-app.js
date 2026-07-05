@@ -4420,9 +4420,13 @@ export class CareerApp extends LitElement {
     const pile = CareerApp.COIN_PILES[level] ?? [];
     if (pile.length === 0) return null;
     const spill = level === 'overflow' ? CareerApp.COIN_SPILL : [];
-    const coin = ([x, y]) => html`<span class="coin" style=${`left:${x}%;bottom:${y}px`}></span>`;
+    const coin = ([x, y]) => {
+      const at = `left:${x}%;bottom:${y}px`;
+      return html`<span class="coin" style=${at}></span>`;
+    };
+    const spilled = spill.length > 0 ? html`<div class="chest-spill">${spill.map(coin)}</div>` : null;
     return html`<div class="chest-coins">${pile.map(coin)}</div>
-      ${spill.length > 0 ? html`<div class="chest-spill">${spill.map(coin)}</div>` : null}`;
+      ${spilled}`;
   }
 
   /**
