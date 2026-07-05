@@ -8,7 +8,10 @@
  *  - Assets same-origin: cache-first con relleno.
  *  - activate: limpia cachés de versiones anteriores (no se queda pegado a una vieja).
  */
-const VERSION = 'grebla-v2';
+// __BUILD__ se sustituye por el hash corto de git en cada build (scripts/
+// stamp-sw.mjs): cada despliegue activa un SW nuevo cuyo activate purga las
+// cachés anteriores. En dev (sin estampar) vale el literal.
+const VERSION = 'grebla-__BUILD__';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
