@@ -100,21 +100,21 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Backend Python',
   tiers: {
     peritus: {
-      name: 'Backend Python · Peritus',
+      name: 'Backend Python · Grumete',
       description:
         'Ejecuta con autonomía: fundamentos de software, Python moderno tipado con uv, ' +
         'una API REST con FastAPI y pytest, y el SQL imprescindible para tocar datos.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Backend Python · Veteranus',
+      name: 'Backend Python · Corsario',
       description:
         'Decide y anticipa: Pydantic y SQLAlchemy a fondo, autenticación, un servicio ' +
         'en producción con code review y seguridad, modelado relacional y Docker.',
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Backend Python · Magister',
+      name: 'Backend Python · Capitán',
       description:
         'Transforma: async, tareas en segundo plano, contratos OpenAPI, perfilado y ' +
         'dependencias verificadas frente a la IA, Postgres afinado (índices, EXPLAIN), ' +

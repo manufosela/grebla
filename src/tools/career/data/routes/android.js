@@ -99,14 +99,14 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Android',
   tiers: {
     peritus: {
-      name: 'Android · Peritus',
+      name: 'Android · Grumete',
       description:
         'Ejecuta con autonomía: Kotlin idiomático, corrutinas y ciclo de vida, UI con ' +
         'Compose y su estado, navegación y consumo de APIs desde la app.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Android · Veteranus',
+      name: 'Android · Corsario',
       description:
         'Decide y anticipa: MVVM con testing, Material y accesibilidad, persistencia ' +
         'y trabajo en segundo plano, Gradle, firma y publicación en Play Console con ' +
@@ -114,7 +114,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Android · Magister',
+      name: 'Android · Capitán',
       description:
         'Transforma: inyección de dependencias, modularización, rendimiento y ' +
         'observabilidad de una app publicada y mantenida, IA en el flujo de trabajo ' +

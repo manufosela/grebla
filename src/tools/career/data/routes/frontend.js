@@ -98,14 +98,14 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Frontend',
   tiers: {
     peritus: {
-      name: 'Frontend · Peritus',
+      name: 'Frontend · Grumete',
       description:
         'Ejecuta con autonomía: HTML semántico, CSS moderno y responsive, JavaScript ' +
         'actual, componentes con React, datos remotos y tests de lo que construyes.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Frontend · Veteranus',
+      name: 'Frontend · Corsario',
       description:
         'Decide y anticipa: TypeScript, estado y Web APIs, accesibilidad, Core Web ' +
         'Vitals y seguridad del navegador para llevar la interfaz a producción, UI ' +
@@ -113,7 +113,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Frontend · Magister',
+      name: 'Frontend · Capitán',
       description:
         'Transforma: build, dependencias y design systems, el ciclo completo de UI ' +
         'generada y mantenida con IA, y criterio de producto, DevEx y APIs de ' +

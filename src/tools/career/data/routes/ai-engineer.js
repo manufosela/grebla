@@ -105,7 +105,7 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'AI Engineer',
   tiers: {
     peritus: {
-      name: 'AI Engineer · Peritus',
+      name: 'AI Engineer · Grumete',
       description:
         'Ejecuta con autonomía: cómo funciona un LLM y sus límites, APIs de modelos, ' +
         'prompting y context engineering con método, salida estructurada y evals ' +
@@ -113,7 +113,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'AI Engineer · Veteranus',
+      name: 'AI Engineer · Corsario',
       description:
         'Decide y anticipa: embeddings y RAG, tool use y agentes, seguridad de IA y ' +
         'control de coste y latencia, servidos con FastAPI, Pydantic, pgvector y ' +
@@ -121,7 +121,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'AI Engineer · Magister',
+      name: 'AI Engineer · Capitán',
       description:
         'Transforma: orquestación multiagente, MCP, observabilidad de LLMs, ' +
         'fine-tuning con criterio y UX de la incertidumbre hasta producto con IA en ' +

@@ -99,14 +99,14 @@ export const ROUTE_TIERS = Object.freeze({
   roleName: 'Postgres',
   tiers: {
     peritus: {
-      name: 'Postgres · Peritus',
+      name: 'Postgres · Grumete',
       description:
         'Ejecuta con autonomía: SQL sólido con joins y agregaciones, modelado ' +
         'relacional, transacciones e índices, y SQL generado con IA sin tragárselo.',
       stops: PERITUS_STOPS,
     },
     veteranus: {
-      name: 'Postgres · Veteranus',
+      name: 'Postgres · Corsario',
       description:
         'Decide y anticipa: MVCC, bloqueos y EXPLAIN para diagnosticar, backups, roles ' +
         'y seguridad para administrar, planes y migraciones verificados, Docker y ' +
@@ -114,7 +114,7 @@ export const ROUTE_TIERS = Object.freeze({
       stops: VETERANUS_STOPS,
     },
     magister: {
-      name: 'Postgres · Magister',
+      name: 'Postgres · Capitán',
       description:
         'Transforma: optimización y mantenimiento a fondo, replicación y upgrades, ' +
         'JSONB, extensiones y pgvector con sus embeddings, sistemas intensivos en ' +

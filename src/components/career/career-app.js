@@ -265,6 +265,8 @@ import {
   ROUTE_TIER_KEYS,
   groupRoutesByRole,
   suggestedTierKey,
+  ROUTE_TIER_LABELS,
+  tierLevelRangeLabel,
   islandOfStop,
   playerRouteDiscipline,
 } from '../../tools/career/domain/careerRoutes.js';
@@ -1092,6 +1094,14 @@ export class CareerApp extends LitElement {
       border: 1.5px solid var(--tier-color);
       background: color-mix(in srgb, var(--tier-color) 22%, transparent);
       color: var(--rm-text, #111827);
+      white-space: nowrap;
+    }
+    /* Tramo de niveles L del career path al que corresponde el rango. */
+    .tier-range {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--rm-muted, #6b7280);
+      margin-right: 0.35rem;
       white-space: nowrap;
     }
     .reto-sugerida {
@@ -3013,10 +3023,13 @@ export class CareerApp extends LitElement {
     const active = this._challenge?.routeId === route.routeId;
     const chipStyle = `--tier-color:${CareerApp.TIER_COLORS[route.levelKey] ?? 'var(--rm-muted, #6b7280)'}`;
     const islandsCount = new Set(route.stops.map((s) => s.split('/').at(0))).size;
+    const rank = ROUTE_TIER_LABELS[route.levelKey] ?? route.levelKey;
+    const range = tierLevelRangeLabel(route.levelKey, this._frameworkLevels ?? []);
     return html`<li class="reto ${active ? 'active' : ''}">
       <div class="reto-info">
         <strong>
-          <span class="tier-chip" style=${chipStyle}>${level?.name ?? route.levelKey}</span>
+          <span class="tier-chip" style=${chipStyle}>${rank}</span>
+          ${range ? html`<span class="tier-range">${range}</span>` : null}
           ${route.name}
           ${suggestedId === route.routeId
             ? html`<span class="reto-sugerida">✨ Sugerida para ti</span>`
@@ -3088,8 +3101,9 @@ export class CareerApp extends LitElement {
 
   /**
    * Overlay del CATÁLOGO DE RETOS (JG-14): itinerarios de ROL y NIVEL desde
-   * /careerRoutes, agrupados por rol con sus hitos (Peritus/Veteranus/
-   * Magister) y la ruta sugerida destacada. Las rutas por isla de JG-5
+   * /careerRoutes, agrupados por rol con sus rangos piratas (Grumete/Corsario/
+   * Capitán, ROUTE_TIER_LABELS) y el tramo L del career path como subtítulo,
+   * con la ruta sugerida destacada. Las rutas por isla de JG-5
    * desaparecen del selector. Con reto activo, cabecera con el progreso y
    * «Abandonar reto». Modal hermano del mapa del mar: ✕, fondo o Escape lo
    * cierran.
@@ -3117,9 +3131,9 @@ export class CareerApp extends LitElement {
         ${challenge && progress
           ? this._renderActiveChallenge(challenge, progress)
           : html`<p class="reto-lead">
-              Cada ruta es el itinerario de un ROL a un hito de la escala:
-              multi-isla y entrando por Bases. Al lograr cada certificado el
-              juego te señala la siguiente casa.
+              Cada ruta es el itinerario de un ROL a un rango de tu career
+              path: multi-isla y entrando por Bases. Al lograr cada
+              certificado el juego te señala la siguiente casa.
             </p>`}
         ${groups.length === 0
           ? html`<p class="reto-lead">

@@ -3,6 +3,8 @@ import {
   ROUTE_TIER_KEYS,
   routeDocId,
   tierKeyForRelativeOrder,
+  tierLevelRangeLabel,
+  ROUTE_TIER_LABELS,
   suggestedTierKey,
   normalizeCareerRoute,
   groupRoutesByRole,
@@ -75,6 +77,18 @@ describe('suggestedTierKey', () => {
     expect(suggestedTierKey('peritus', FRAMEWORK)).toBeNull();
     expect(suggestedTierKey('l3', [])).toBeNull();
     expect(suggestedTierKey('l3')).toBeNull();
+  });
+
+  it('tierLevelRangeLabel invierte el mapeo como tramo legible', () => {
+    expect(tierLevelRangeLabel('peritus', FRAMEWORK)).toBe('≈ L1–L2');
+    expect(tierLevelRangeLabel('veteranus', FRAMEWORK)).toBe('≈ L3–L4');
+    expect(tierLevelRangeLabel('magister', FRAMEWORK)).toBe('≈ L5');
+    expect(tierLevelRangeLabel('peritus', [])).toBe('');
+    expect(tierLevelRangeLabel('peritus')).toBe('');
+  });
+
+  it('los rangos piratas cubren los tres hitos', () => {
+    expect(ROUTE_TIER_KEYS.map((k) => ROUTE_TIER_LABELS[k])).toEqual(['Grumete', 'Corsario', 'Capitán']);
   });
 
   it('tierKeyForRelativeOrder acota entradas inválidas', () => {
