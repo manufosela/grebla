@@ -8,7 +8,7 @@
  *
  * Consumidores:
  *  - scripts/seed-career-routes.mjs: publica /careerRoutes/{routeId} por hito.
- *  - routes.test.js: valida TODO rol registrado contra la convención (paradas
+ *  - routes.test.js: valida cada rol registrado contra la convención (paradas
  *    existentes en ISLAND_CONTENT, orden por prereqs, tamaños, hitos
  *    crecientes, entrada por Bases).
  *

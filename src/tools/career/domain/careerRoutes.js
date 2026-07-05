@@ -4,10 +4,10 @@
  * Una ruta deja de ser «recórrete la isla» (JG-5) y pasa a ser el ITINERARIO
  * de un ROL a un HITO de la escala GREBLA — multi-isla, siempre entrando por
  * Bases — persistido como doc /careerRoutes/{disciplina}--{hito} y editable
- * por el superadmin (ADR JG-14). Aquí vive todo lo calculable sin Firestore
- * ni DOM: el saneo del doc leído, la agrupación por rol para el selector, el
+ * por el superadmin (ADR JG-14). Aquí vive lo calculable sin Firestore ni
+ * DOM: el saneo del doc leído, la agrupación por rol para el selector, el
  * mapeo nivel → hito de la sugerencia y la resolución parada → isla (los
- * stops son multi-isla). Todo testeable en Vitest.
+ * stops son multi-isla). Puro y testeable en Vitest.
  *
  * @typedef {import('./types.js').IslandRef} IslandRef
  * @typedef {import('./types.js').Journey} Journey

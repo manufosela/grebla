@@ -21,7 +21,7 @@
  *  4. Tamaños orientativos: peritus 8-16, veteranus 16-26, magister 26-40.
  *  5. Rutas CRECIENTES: las paradas del peritus ⊂ veteranus ⊂ magister como
  *     CONJUNTOS (una excepción se documenta en el módulo del rol).
- *  6. routes.test.js valida 1-5 automáticamente para todo rol registrado.
+ *  6. routes.test.js valida 1-5 automáticamente para cada rol registrado.
  *
  * El seed (scripts/seed-career-routes.mjs) publica cada hito como doc
  * /careerRoutes/{disciplina}--{hito}; a partir de ahí la fuente de verdad es
