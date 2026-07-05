@@ -946,9 +946,11 @@ export class CareerApp extends LitElement {
     .sea-head .close { color: var(--game-muted, #a7bad3); }
     .sea-head .close:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
     /* Ficha de ciudadanía del jugador (MC-21): modal hermano del mapa del mar
-       (mismo backdrop y cabecera), algo más estrecho — es una lista, no un mapa. */
+       (mismo backdrop y cabecera). Desde JG-10 es un PASAPORTE con grid de
+       visados por isla: algo más ancho que las listas para que respiren dos
+       columnas de sellos. */
     .ficha {
-      width: min(640px, calc(100% - 2rem));
+      width: min(760px, calc(100% - 2rem));
       max-height: calc(100% - 2rem);
       box-sizing: border-box;
       overflow-y: auto;
@@ -1543,6 +1545,18 @@ export class CareerApp extends LitElement {
     .controls > button {
       border-color: color-mix(in srgb, #c9a24b 30%, var(--game-line, rgba(255, 255, 255, 0.14)));
     }
+    /* ── PASAPORTE (JG-10): el tiempo de juego va como ANOTACIÓN DE BITÁCORA
+       sobre el pasaporte — línea manuscrita con regla punteada, sin caja. ── */
+    .ficha .playblock {
+      background: transparent;
+      border-radius: 0;
+      padding: 0.2rem 0.2rem 0.5rem;
+      border-bottom: 1px dashed var(--parch-edge, #b98f56);
+      font-family: var(--parch-title, Georgia, serif);
+      font-style: italic;
+      color: var(--parch-muted, #6b5433);
+    }
+    .ficha .playblock strong { color: var(--parch-ink, #33240f); }
   `;
 
   constructor() {
@@ -3149,7 +3163,8 @@ export class CareerApp extends LitElement {
 
   /**
    * Bloque de tiempo de juego de la ficha 🏅 (MC-23): hoy / últimos 7 días /
-   * total de la persona cargada, en minutos legibles.
+   * total de la persona cargada, en minutos legibles. Desde JG-10 va como
+   * anotación de bitácora sobre el pasaporte («Días de travesía»).
    */
   _renderPlaytimeBlock() {
     const s = playtimeSummary(this.playtime, new Date());
@@ -3158,7 +3173,7 @@ export class CareerApp extends LitElement {
       class="playblock"
       title="Tiempo de juego activo en el mapa (pestaña visible y jugando)"
     >
-      ⏱ Tiempo de juego — hoy <strong>${fmt(s.today)}</strong> · 7 días
+      ⏱ Días de travesía — hoy <strong>${fmt(s.today)}</strong> · 7 días
       <strong>${fmt(s.last7Days)}</strong> · total <strong>${fmt(s.total)}</strong>
     </p>`;
   }
