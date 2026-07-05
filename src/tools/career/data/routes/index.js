@@ -3,8 +3,8 @@
  *
  * Cada rol vive en su propio módulo de esta carpeta (uno por disciplina; la
  * convención completa está en la cabecera de ./backend-php.js) y se registra
- * aquí. Los roles que aún no aparecen en CAREER_ROUTES simplemente no ofrecen
- * itinerario en el selector (el catálogo de los 13 roles llega en JG-15).
+ * aquí. El catálogo cubre las 12 disciplinas del archipiélago (JG-15); un rol
+ * que se quitara de CAREER_ROUTES dejaría de ofrecer itinerario en el selector.
  *
  * Consumidores:
  *  - scripts/seed-career-routes.mjs: publica /careerRoutes/{routeId} por hito.
@@ -32,6 +32,10 @@ import { ROUTE_TIERS as ANDROID_ROUTE } from './android.js';
 import { ROUTE_TIERS as IOS_ROUTE } from './ios.js';
 import { ROUTE_TIERS as DEVOPS_ROUTE } from './devops.js';
 import { ROUTE_TIERS as AI_ENGINEER_ROUTE } from './ai-engineer.js';
+import { ROUTE_TIERS as ENGINEERING_MANAGER_ROUTE } from './engineering-manager.js';
+import { ROUTE_TIERS as SOFTWARE_ARCHITECT_ROUTE } from './software-architect.js';
+import { ROUTE_TIERS as PRODUCT_MANAGER_ROUTE } from './product-manager.js';
+import { ROUTE_TIERS as FDE_ROUTE } from './fde.js';
 import { ROUTE_TIER_KEYS, routeDocId } from '../../domain/careerRoutes.js';
 
 /**
@@ -49,6 +53,10 @@ export const CAREER_ROUTES = Object.freeze({
   [IOS_ROUTE.discipline]: IOS_ROUTE,
   [DEVOPS_ROUTE.discipline]: DEVOPS_ROUTE,
   [AI_ENGINEER_ROUTE.discipline]: AI_ENGINEER_ROUTE,
+  [ENGINEERING_MANAGER_ROUTE.discipline]: ENGINEERING_MANAGER_ROUTE,
+  [SOFTWARE_ARCHITECT_ROUTE.discipline]: SOFTWARE_ARCHITECT_ROUTE,
+  [PRODUCT_MANAGER_ROUTE.discipline]: PRODUCT_MANAGER_ROUTE,
+  [FDE_ROUTE.discipline]: FDE_ROUTE,
 });
 
 /**
