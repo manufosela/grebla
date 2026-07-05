@@ -5,6 +5,16 @@
  * seleccionada. Igual que Role Mirror, el líder elige a quién edita y el journey
  * se persiste en el subárbol de esa persona.
  *
+ * CONSOLA DE JUEGO (JG-4): el componente ES el marco de consola — :host pinta
+ * el borde grueso redondeado, el fondo navy y el bisel/glow; la página clara
+ * queda fuera como passe-partout. Dentro del marco, la barra superior integra
+ * los controles (viewswitch + botones de juego + selector de persona a la
+ * derecha) y una SEGUNDA LÍNEA con el marcador (HUD de progreso y carpool en
+ * chips oscuros). Los tokens locales `--game-*` viven en :host; las
+ * superficies claras (overlays y paneles) conservan su tinta y se armonizan
+ * con cabeceras oscuras (.sea-head y el header de la tarjeta de casa). De
+ * cara al jugador, quien responde consultas es su «manager».
+ *
  * En el modo 3D (MC-6) el detalle es la TARJETA DE LA CASA overlay sobre el
  * canvas (lateral en escritorio, hoja inferior en móvil). Desde MC-15 la
  * tarjeta se organiza en TRES PESTAÑAS (tablist ARIA, estado local, ←/→):
@@ -360,13 +370,64 @@ export class CareerApp extends LitElement {
   });
 
   static styles = css`
-    :host { display: flex; flex-direction: column; min-height: 0; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
+    /* ── CONSOLA DE JUEGO (JG-4): todo el juego vive dentro de este marco
+       oscuro con look propio, claramente distinto de la página clara (que
+       queda fuera como passe-partout). Tokens locales del marco: ── */
+    :host {
+      --game-bg: #0f1b2d;
+      --game-bg-2: #16283f;
+      --game-edge: #2c4568;
+      --game-text: #e8eef7;
+      --game-muted: #a7bad3;
+      --game-chip: rgba(255, 255, 255, 0.07);
+      --game-line: rgba(255, 255, 255, 0.14);
+      --game-panel: rgba(11, 20, 34, 0.72);
+      --game-accent: #3dd6c3;
+      --game-accent-ink: #06231f;
+      --game-focus: #8be9dd;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      font-family: var(--rm-font, system-ui, sans-serif);
+      color: var(--game-text);
+      background: linear-gradient(180deg, var(--game-bg-2) 0%, var(--game-bg) 55%, #0c1626 100%);
+      border: 3px solid var(--game-edge);
+      border-radius: 22px;
+      padding: 0.85rem;
+      box-sizing: border-box;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.09),
+        inset 0 0 0 1px rgba(6, 12, 22, 0.85),
+        0 0 26px rgba(61, 214, 195, 0.14),
+        0 18px 44px rgba(15, 27, 45, 0.28);
+    }
+    /* En móvil el marco ocupa el ancho con bordes menores. */
+    @media (max-width: 760px) {
+      :host { border-radius: 14px; border-width: 2px; padding: 0.5rem; }
+    }
+    /* Las superficies claras (overlays y paneles) conservan su tinta oscura:
+       el color claro del marco NO debe heredarse dentro de ellas. */
+    .sea, .ficha, .onboard, .citypanel, .panel, .matepop { color: var(--rm-text, #111827); }
     /* En modo 3D el canvas es el protagonista: ocupa todo el alto disponible y
        el panel de ciudadanía y el HUD flotan SOBRE él (overlay). */
-    .stage3d { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
+    .stage3d { position: relative; display: flex; flex: 1 1 auto; min-height: 0; border-radius: 14px; overflow: hidden; }
     career-island-3d.stage { flex: 1 1 auto; min-height: 0; }
     .hud { position: absolute; top: 0.75rem; left: 0.75rem; z-index: 2; display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .hud button { box-shadow: 0 2px 8px rgba(17, 24, 39, 0.12); }
+    /* Botones DENTRO del canvas: oscuros translúcidos, coherentes con el marco. */
+    .hud button {
+      background: var(--game-panel, rgba(11, 20, 34, 0.72));
+      border: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
+      color: var(--game-text, #e8eef7);
+      font-weight: 700;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 2px 10px rgba(4, 10, 20, 0.45);
+    }
+    .hud button:hover:not(:disabled) {
+      border-color: color-mix(in srgb, var(--game-accent, #3dd6c3) 55%, transparent);
+      background: color-mix(in srgb, var(--game-accent, #3dd6c3) 16%, var(--game-panel, rgba(11, 20, 34, 0.72)));
+      box-shadow: 0 0 12px rgba(61, 214, 195, 0.28);
+    }
+    .hud button:focus-visible { outline: 2px solid var(--game-focus, #8be9dd); outline-offset: 2px; }
     .hud button:disabled { opacity: 0.6; cursor: not-allowed; }
     .citypanel {
       position: absolute;
@@ -390,9 +451,24 @@ export class CareerApp extends LitElement {
     @media (max-width: 760px) {
       .citypanel { top: auto; left: 0.5rem; right: 0.5rem; bottom: 0.5rem; width: auto; max-height: 60%; }
     }
-    .citypanel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+    /* Cabecera oscura de la tarjeta: armoniza el panel claro con la consola. */
+    .citypanel header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin: -1rem -1.25rem 0.7rem;
+      padding: 0.6rem 1.1rem;
+      background: linear-gradient(180deg, var(--game-bg-2, #16283f), var(--game-bg, #0f1b2d));
+      border-bottom: 2px solid var(--game-accent, #3dd6c3);
+      border-radius: calc(var(--rm-radius, 12px) - 2px) calc(var(--rm-radius, 12px) - 2px) 0 0;
+    }
     .citypanel h3 { margin: 0; font-size: 1.05rem; }
+    .citypanel header h3 { color: var(--game-text, #e8eef7); }
     .citypanel .kind { margin-bottom: 0; }
+    .citypanel header .kind { color: var(--game-muted, #a7bad3); }
+    .citypanel header .close { color: var(--game-muted, #a7bad3); }
+    .citypanel header .close:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
     .close { border: none; background: transparent; font-size: 1.05rem; line-height: 1; padding: 0.25rem 0.45rem; color: var(--rm-muted, #6b7280); }
     .close:hover { color: var(--rm-text, #111827); background: var(--rm-track, #e9f0f2); }
     .badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0 0.75rem; }
@@ -444,28 +520,93 @@ export class CareerApp extends LitElement {
       white-space: nowrap;
       border: 0;
     }
-    .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    /* ── Barra superior INTEGRADA del marco (JG-4): una banda oscura con los
+       controles del juego en la primera línea y el marcador (HUD) en la
+       segunda — nada de botones blancos sueltos sobre la página. ── */
+    .bar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      margin-bottom: 0.6rem;
+      padding: 0.6rem 0.75rem;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
+      border-radius: 14px;
+    }
+    .controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .controls > button {
+      border: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
+      background: var(--game-chip, rgba(255, 255, 255, 0.07));
+      color: var(--game-text, #e8eef7);
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      border-radius: 10px;
+    }
+    .controls > button:hover {
+      border-color: color-mix(in srgb, var(--game-accent, #3dd6c3) 55%, transparent);
+      background: color-mix(in srgb, var(--game-accent, #3dd6c3) 16%, transparent);
+      box-shadow: 0 0 12px rgba(61, 214, 195, 0.25);
+    }
+    .controls > button:focus-visible { outline: 2px solid var(--game-focus, #8be9dd); outline-offset: 2px; }
+    /* El selector de persona, a la derecha (salvo que sea el único control). */
+    .controls label:not(:first-child) { margin-left: auto; }
+    .controls label { color: var(--game-muted, #a7bad3); }
+    .controls select {
+      background: var(--game-panel, rgba(11, 20, 34, 0.72));
+      border-color: var(--game-line, rgba(255, 255, 255, 0.14));
+      color: var(--game-text, #e8eef7);
+    }
+    .controls select:focus-visible { outline: 2px solid var(--game-focus, #8be9dd); outline-offset: 2px; }
+    /* Segunda línea del marco: el marcador de juego (progresión y carpool). */
+    .hudline {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem 0.9rem;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
+      padding-top: 0.55rem;
+    }
     label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
-    .viewswitch { display: inline-flex; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; overflow: hidden; }
-    .viewswitch button { border: none; border-radius: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); font-size: 0.8rem; font-weight: 700; padding: 0.4rem 0.7rem; cursor: pointer; }
-    .viewswitch button + button { border-left: 1px solid var(--rm-border, #d1d5db); }
-    .viewswitch button.active { background: var(--rm-accent, #2a9d8f); color: #fff; }
-    .viewswitch button:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: -2px; }
+    .viewswitch {
+      display: inline-flex;
+      border: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--game-panel, rgba(11, 20, 34, 0.72));
+    }
+    .viewswitch button { border: none; border-radius: 0; background: transparent; color: var(--game-muted, #a7bad3); font-size: 0.8rem; font-weight: 800; padding: 0.45rem 0.75rem; cursor: pointer; }
+    .viewswitch button + button { border-left: 1px solid var(--game-line, rgba(255, 255, 255, 0.14)); }
+    .viewswitch button:hover:not(.active) { color: var(--game-text, #e8eef7); background: rgba(255, 255, 255, 0.06); }
+    .viewswitch button.active { background: var(--game-accent, #3dd6c3); color: var(--game-accent-ink, #06231f); }
+    .viewswitch button:focus-visible { outline: 2px solid var(--game-focus, #8be9dd); outline-offset: -2px; }
     /* ── HUD superior de progresión (MC-20): ciudadanía de la isla actual,
        islas pisadas, ciudadanías y badge. Compacto y a la derecha de la barra. ── */
-    .hudtop { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-left: auto; }
-    .isle-stat { display: flex; align-items: center; gap: 0.45rem; }
-    .isle-here { font-weight: 800; font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); white-space: nowrap; }
-    .minibar { position: relative; width: 110px; height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; }
+    .hudtop { display: flex; align-items: center; gap: 0.5rem 0.75rem; flex-wrap: wrap; }
+    .isle-stat {
+      display: flex; align-items: center; gap: 0.45rem;
+      background: var(--game-chip, rgba(255, 255, 255, 0.07));
+      border: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
+      border-radius: 999px;
+      padding: 0.22rem 0.75rem;
+    }
+    .isle-here { font-weight: 800; font-size: 0.85rem; color: var(--game-text, #e8eef7); white-space: nowrap; }
+    .minibar { position: relative; width: 110px; height: 8px; background: rgba(255, 255, 255, 0.16); border-radius: 999px; }
     .minibar .fill {
       display: block; height: 100%; max-width: 100%;
-      background: var(--rm-accent, #2a9d8f); border-radius: 999px; transition: width 0.3s ease;
+      background: var(--game-accent, #3dd6c3); border-radius: 999px; transition: width 0.3s ease;
     }
     /* Marca del % objetivo sobre la mini-barra: la meta visible de la ciudadanía. */
-    .minibar .goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--rm-coral-600, #e26d5e); border-radius: 1px; }
-    .pcts { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .hudstat { font-size: 0.85rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .minibar .goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--rm-coral, #f2887a); border-radius: 1px; }
+    .pcts { font-size: 0.8rem; font-weight: 600; color: var(--game-muted, #a7bad3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .hudstat {
+      font-size: 0.82rem; font-weight: 700; color: var(--game-text, #e8eef7);
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+      background: var(--game-chip, rgba(255, 255, 255, 0.07));
+      border: 1px solid var(--game-line, rgba(255, 255, 255, 0.14));
+      border-radius: 999px;
+      padding: 0.22rem 0.7rem;
+    }
     .hudbadge {
       font-size: 0.72rem; font-weight: 800; padding: 0.18rem 0.6rem; border-radius: 999px; white-space: nowrap;
       background: linear-gradient(135deg, #f6d365 0%, #e8b931 100%); color: #5b4300;
@@ -498,7 +639,6 @@ export class CareerApp extends LitElement {
       .cit-toast { animation: none; }
     }
     @media (max-width: 760px) {
-      .hudtop { margin-left: 0; }
       .cit-toast p { white-space: normal; text-align: center; }
     }
     .grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: 1.5rem; align-items: start; }
@@ -521,8 +661,11 @@ export class CareerApp extends LitElement {
     .legend .r { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 2px solid; }
     .legend .r.current { border-color: var(--rm-coral-600, #e26d5e); }
     .legend .r.target { border-color: var(--rm-navy, #1e3a5f); }
-    .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
-    .error { color: var(--rm-danger, #dc2626); }
+    .empty { color: var(--game-muted, #a7bad3); padding: 1rem 0.25rem; }
+    /* Errores: tinta clara sobre el marco oscuro; dentro de las superficies
+       claras (overlays/paneles) conservan el rojo de siempre. */
+    .error { color: #ff9d94; }
+    .sea .error, .ficha .error, .onboard .error, .citypanel .error, .panel .error { color: var(--rm-danger, #dc2626); }
     .ev { margin-top: 1rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.75rem; }
     .ev summary { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
     .ev label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
@@ -575,6 +718,7 @@ export class CareerApp extends LitElement {
       overflow-y: auto;
       background: color-mix(in srgb, var(--rm-surface, #fff) 96%, transparent);
       border: 1px solid var(--rm-border, #e5e7eb);
+      border-top: 4px solid var(--game-accent, #3dd6c3);
       border-radius: var(--rm-radius, 12px);
       padding: 1.25rem 1.5rem;
       box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
@@ -619,8 +763,22 @@ export class CareerApp extends LitElement {
       box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
       outline: none;
     }
-    .sea-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
-    .sea-head h3 { margin: 0; font-size: 1.1rem; color: var(--rm-navy, #1e3a5f); }
+    /* Cabecera oscura compartida por los overlays (archipiélago, ficha, brujo,
+       tiempo, carpools, coins): armoniza cada modal con la consola (JG-4). */
+    .sea-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin: -1rem -1.25rem 0.75rem;
+      padding: 0.65rem 1.1rem;
+      background: linear-gradient(180deg, var(--game-bg-2, #16283f), var(--game-bg, #0f1b2d));
+      border-bottom: 2px solid var(--game-accent, #3dd6c3);
+      border-radius: calc(var(--rm-radius, 12px) - 2px) calc(var(--rm-radius, 12px) - 2px) 0 0;
+    }
+    .sea-head h3 { margin: 0; font-size: 1.1rem; color: var(--game-text, #e8eef7); }
+    .sea-head .close { color: var(--game-muted, #a7bad3); }
+    .sea-head .close:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
     /* Ficha de ciudadanía del jugador (MC-21): modal hermano del mapa del mar
        (mismo backdrop y cabecera), algo más estrecho — es una lista, no un mapa. */
     .ficha {
@@ -3278,7 +3436,7 @@ export class CareerApp extends LitElement {
         </header>
         <p class="wizlead">
           El brujo escucha tu consulta sobre los temas de la isla y se la hace
-          llegar al líder. La respuesta te esperará aquí — su farol se
+          llegar a tu manager. La respuesta te esperará aquí — su farol se
           encenderá en turquesa.
         </p>
         ${this.wizardError ? html`<p class="error" role="alert">${this.wizardError}</p>` : null}
@@ -4243,7 +4401,7 @@ export class CareerApp extends LitElement {
 
     if (!this.personId) {
       return html`
-        <div class="bar">${this._renderPersonSelect()}</div>
+        <div class="bar"><div class="controls">${this._renderPersonSelect()}</div></div>
         ${this.error ? html`<p class="error">${this.error}</p>` : null}
         <p class="empty">Elige una persona de tu equipo para ver y editar su mapa de carrera en la isla.</p>
       `;
@@ -4251,7 +4409,7 @@ export class CareerApp extends LitElement {
 
     if (this.loading || !this.map) {
       return html`
-        <div class="bar">${this._renderPersonSelect()}</div>
+        <div class="bar"><div class="controls">${this._renderPersonSelect()}</div></div>
         <p class="empty">Cargando el mapa de esta persona…</p>
       `;
     }
@@ -4274,16 +4432,22 @@ export class CareerApp extends LitElement {
         ? null
         : html`
             <div class="bar">
-              ${this._renderPersonSelect()}
-              ${this._renderViewSwitch()}
-              ${this._renderArchipelagoButton()}
-              ${this._renderPlayerCardButton()}
-              ${this._renderWizardQueueButton()}
-              ${this._renderPlaytimeButton()}
-              ${this._renderCarpoolButton()}
-              ${this._renderCoinsButton()}
-              ${this._renderCarpoolHudStat()}
-              ${this._renderProgressHud(prog, s)}
+              <div class="controls">
+                ${this._renderViewSwitch()}
+                ${this._renderArchipelagoButton()}
+                ${this._renderPlayerCardButton()}
+                ${this._renderCarpoolButton()}
+                ${this._renderCoinsButton()}
+                ${this._renderWizardQueueButton()}
+                ${this._renderPlaytimeButton()}
+                ${this._renderPersonSelect()}
+              </div>
+              ${prog || this._activeCarpools.at(0)
+                ? html`<div class="hudline">
+                    ${this._renderCarpoolHudStat()}
+                    ${this._renderProgressHud(prog, s)}
+                  </div>`
+                : null}
             </div>
           `}
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
