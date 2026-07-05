@@ -36,6 +36,29 @@ const GOLDEN_ANGLE = 2.399963229728653;
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 /**
+ * Separa un par de círculos solapados empujándolos a partes iguales por la
+ * línea que une sus centros; si coinciden exactamente, la dirección la da el
+ * ángulo áureo del índice del par (determinista). Devuelve si hubo empuje.
+ * @param {IslandCircle} a
+ * @param {IslandCircle} b
+ * @param {number} pairIndex
+ * @param {number} gap
+ * @returns {boolean}
+ */
+function separatePair(a, b, pairIndex, gap) {
+  const need = a.r + b.r + gap;
+  const d = Math.hypot(b.cx - a.cx, b.cy - a.cy);
+  if (d >= need) return false;
+  const angle = d === 0 ? pairIndex * GOLDEN_ANGLE : Math.atan2(b.cy - a.cy, b.cx - a.cx);
+  const push = (need - d) / 2;
+  a.cx -= Math.cos(angle) * push;
+  a.cy -= Math.sin(angle) * push;
+  b.cx += Math.cos(angle) * push;
+  b.cy += Math.sin(angle) * push;
+  return true;
+}
+
+/**
  * Radio de una isla en el plano: proporcional a sqrt(citiesTotal) — el ÁREA
  * crece con el nº de temas — y acotado para que las 13 islas quepan.
  * @param {number} citiesTotal
@@ -84,19 +107,8 @@ export function islandCircles(islands, opts = {}) {
     let moved = false;
     for (let i = 0; i < circles.length; i += 1) {
       for (let j = i + 1; j < circles.length; j += 1) {
-        const a = circles[i];
-        const b = circles[j];
-        const need = a.r + b.r + gap;
-        const d = Math.hypot(b.cx - a.cx, b.cy - a.cy);
-        if (d >= need) continue;
-        // Coincidencia exacta: dirección determinista por el índice del par.
-        const angle = d === 0 ? (i * circles.length + j) * GOLDEN_ANGLE : Math.atan2(b.cy - a.cy, b.cx - a.cx);
-        const push = (need - d) / 2;
-        a.cx -= Math.cos(angle) * push;
-        a.cy -= Math.sin(angle) * push;
-        b.cx += Math.cos(angle) * push;
-        b.cy += Math.sin(angle) * push;
-        moved = true;
+        const pairIndex = i * circles.length + j;
+        if (separatePair(circles[i], circles[j], pairIndex, gap)) moved = true;
       }
     }
     for (const c of circles) {

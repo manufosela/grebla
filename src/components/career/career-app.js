@@ -5780,6 +5780,24 @@ export class CareerApp extends LitElement {
   }
 
   /**
+   * Panel lateral de la vista plano con la tarjeta del tema seleccionado:
+   * cabecera (comarca · tipo · puntos), pestañas y prerequisitos si aplican.
+   */
+  _renderPlanoPanel(sel, selAreaName, selMap) {
+    const area = selAreaName ? html`${selAreaName} · ` : null;
+    const showPrereqs =
+      (sel.prereqs ?? []).length && cityStatus(selMap, sel.id, this.journey) !== 'blocked';
+    return html`
+      <h3>${sel.name}</h3>
+      <p class="kind">${area}${sel.kind} · ${sel.weight} pts</p>
+      ${this._renderCityTabs(sel)}
+      ${showPrereqs
+        ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => selMap.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
+        : null}
+    `;
+  }
+
+  /**
    * Tarjeta de la casa en pestañas (MC-15): barra tablist + el panel de la
    * pestaña activa. COMPARTIDA por el overlay del 3D y la vista plana.
    * @param {import('../../tools/career/domain/types.js').City} sel
@@ -6074,14 +6092,7 @@ export class CareerApp extends LitElement {
 
         <div class="panel">
           ${sel
-            ? html`
-                <h3>${sel.name}</h3>
-                <p class="kind">${selAreaName ? html`${selAreaName} · ` : null}${sel.kind} · ${sel.weight} pts</p>
-                ${this._renderCityTabs(sel)}
-                ${(sel.prereqs ?? []).length && cityStatus(selMap, sel.id, this.journey) !== 'blocked'
-                  ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => selMap.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
-                  : null}
-              `
+            ? this._renderPlanoPanel(sel, selAreaName, selMap)
             : html`<p class="hint">Haz clic en una casa de la isla para ver su tarjeta: certificado, qué aprender y recursos.</p>`}
           <details class="legend-wrap">
             <summary>Leyenda</summary>

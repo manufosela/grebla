@@ -187,22 +187,24 @@ export class CareerMapView extends LitElement {
    */
   _computeLayout() {
     const single = !this.archipelago && Boolean(this.map);
-    const islands = this.archipelago
-      ? (this.archipelago.islands ?? [])
-      : this.map
-        ? [
-            {
-              id: this.map.id ?? 'island',
-              name: this.map.name ?? '',
-              x: 50,
-              y: 50,
-              citiesTotal: (this.map.cities ?? []).length,
-            },
-          ]
-        : [];
-    const mapsById = this.archipelago
-      ? (this.islandMaps ?? new Map())
-      : new Map(this.map ? [[this.map.id ?? 'island', this.map]] : []);
+    let islands = [];
+    let mapsById = new Map();
+    if (this.archipelago) {
+      islands = this.archipelago.islands ?? [];
+      mapsById = this.islandMaps ?? new Map();
+    } else if (this.map) {
+      const id = this.map.id ?? 'island';
+      islands = [
+        {
+          id,
+          name: this.map.name ?? '',
+          x: 50,
+          y: 50,
+          citiesTotal: (this.map.cities ?? []).length,
+        },
+      ];
+      mapsById = new Map([[id, this.map]]);
+    }
     const circles = islandCircles(
       islands,
       single ? { rMin: SINGLE_ISLAND_R, rMax: SINGLE_ISLAND_R } : {},
@@ -274,34 +276,38 @@ export class CareerMapView extends LitElement {
     const expandable = !lay.single;
     const expandedHere = this.expanded === circle.id;
     const total = lay.metaById.get(circle.id)?.citiesTotal ?? 0;
+    let ariaLabel = circle.name;
+    if (expandable) {
+      const action = expandedHere ? 'volver al archipiélago' : 'ampliar la isla';
+      ariaLabel = `${circle.name}: ${action}`;
+    }
+    const name =
+      expandedHere && !lay.single
+        ? nothing
+        : svg`<text
+            class="iname"
+            x=${circle.cx}
+            y=${circle.cy + circle.r + 3}
+            text-anchor="middle"
+          >${circle.name}</text>`;
+    const themes = islandMap
+      ? spots.map((spot) => this._renderTheme(spot, circle, islandMap, labeled || expandedHere, ui))
+      : svg`<text class="count" x=${circle.cx} y=${circle.cy} text-anchor="middle" dominant-baseline="central">${total} temas</text>`;
     return svg`
       <g
         class="island ${expandable ? 'expandable' : ''}"
         role=${expandable ? 'button' : nothing}
         tabindex=${expandable ? 0 : nothing}
         aria-expanded=${expandable ? String(expandedHere) : nothing}
-        aria-label=${expandable
-          ? `${circle.name}: ${expandedHere ? 'volver al archipiélago' : 'ampliar la isla'}`
-          : circle.name}
+        aria-label=${ariaLabel}
         @click=${expandable ? () => this._toggleIsland(circle.id) : nothing}
         @keydown=${expandable
           ? (e) => this._onKeyActivate(e, () => this._toggleIsland(circle.id))
           : nothing}
       >
         <circle class="land" cx=${circle.cx} cy=${circle.cy} r=${circle.r} />
-        ${expandedHere && !lay.single
-          ? nothing
-          : svg`<text
-              class="iname"
-              x=${circle.cx}
-              y=${circle.cy + circle.r + 3}
-              text-anchor="middle"
-            >${circle.name}</text>`}
-        ${islandMap
-          ? spots.map((spot) =>
-              this._renderTheme(spot, circle, islandMap, labeled || expandedHere, ui),
-            )
-          : svg`<text class="count" x=${circle.cx} y=${circle.cy} text-anchor="middle" dominant-baseline="central">${total} temas</text>`}
+        ${name}
+        ${themes}
       </g>
     `;
   }
@@ -355,7 +361,13 @@ export class CareerMapView extends LitElement {
     if (planned.length) {
       return this._renderRouteLayer(planned, 'free', routeNumberByCity(planned), lay, ui);
     }
-    return nothing;
+    return null;
+  }
+
+  /** Estado visual de una parada de la ruta: certificada, siguiente o pendiente. */
+  static _stopState(done, cityId, nextId) {
+    if (done) return 'done';
+    return cityId === nextId ? 'next' : 'pending';
   }
 
   /**
@@ -367,7 +379,7 @@ export class CareerMapView extends LitElement {
     const { points } = routePolyline(stops, lay.spotsById, lay.circlesById, {
       islandIdByPrefix: lay.islandIdByPrefix,
     });
-    if (points.length === 0) return nothing;
+    if (points.length === 0) return null;
     const visited = new Set(this.journey?.visitedCities ?? []);
     const nextId = kind === 'challenge' ? stops.find((id) => !visited.has(id)) : null;
     const path = points.map((p) => `${p.x},${p.y}`).join(' ');
@@ -378,7 +390,7 @@ export class CareerMapView extends LitElement {
         <polyline class="line" points=${path} stroke-width=${0.6 * ui} stroke-dasharray=${dash} />
         ${points.map((p) => {
           const done = visited.has(p.cityId);
-          const state = done ? 'done' : p.cityId === nextId ? 'next' : 'pending';
+          const state = CareerMapView._stopState(done, p.cityId, nextId);
           return svg`
             <g class="stopbadge ${kind} ${state}">
               <circle cx=${p.x} cy=${p.y} r=${1.7 * ui} />
