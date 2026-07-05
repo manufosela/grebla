@@ -55,36 +55,43 @@ export function routeDocId(discipline, levelKey) {
 }
 
 /**
- * Hito de ruta que corresponde a un ORDEN de la escala GREBLA (1..7): los
- * niveles intermedios juegan el hito superior más cercano (ADR JG-14) —
- * 1-3 → peritus, 4-5 → veteranus, 6-7 → magister. Fuera de escala → null.
+ * Hito según la POSICIÓN RELATIVA de un nivel dentro de su propio marco:
+ * el tramo bajo (≤40% del orden máximo) apunta al primer hito, el medio
+ * (≤80%) al segundo y la cima al tercero. Con los niveles L del career
+ * framework (l1..l5) queda l1-l2 → peritus, l3-l4 → veteranus, l5 → magister.
  * @param {number} order
+ * @param {number} maxOrder
  * @returns {'peritus'|'veteranus'|'magister'|null}
  */
-export function tierKeyForLevelOrder(order) {
-  if (!Number.isInteger(order) || order < 1 || order > 7) return null;
-  if (order >= 6) return 'magister';
-  return order >= 4 ? 'veteranus' : 'peritus';
+export function tierKeyForRelativeOrder(order, maxOrder) {
+  if (!Number.isFinite(order) || !Number.isFinite(maxOrder) || maxOrder < 1 || order < 1) return null;
+  const ratio = order / maxOrder;
+  if (ratio <= 0.4) return 'peritus';
+  return ratio <= 0.8 ? 'veteranus' : 'magister';
 }
 
 /**
  * Hito sugerido a partir del `careerTargetLevelId` declarado por la persona.
- * El objetivo se resuelve contra la escala de 7 niveles: por `key` del nivel
- * ('peritus', 'expertus'…) o por su `order` numérico ('5' o 5). Un id que no
- * casa con la escala (p. ej. un nivel de un framework de carrera propio) no
- * sugiere nada — degradación documentada: la insignia es una pista, no un
- * dato crítico.
+ * El objetivo se resuelve ÚNICAMENTE contra los niveles del career framework
+ * (`/careerFramework/engineering`: ids tipo 'l4', 'l3tl'…, cada uno con su
+ * `order`), que es lo ÚNICO a lo que apunta careerTargetLevelId: el hito sale
+ * de la posición relativa del nivel en su marco (tierKeyForRelativeOrder).
+ * La escala de 7 niveles de las lecturas subjetivas (Tiro→Magister) NO pinta
+ * nada aquí: es una taxonomía del tool Equipo, no del career path. Un id que
+ * no casa con el marco no sugiere — la insignia es una pista, no un dato.
  * @param {string|number|null|undefined} targetLevelId
- * @param {ReadonlyArray<{key: string, order: number}>} levels Escala GREBLA (LEVELS).
+ * @param {ReadonlyArray<{id: string, order: number}>} [frameworkLevels] Niveles del career framework.
  * @returns {'peritus'|'veteranus'|'magister'|null}
  */
-export function suggestedTierKey(targetLevelId, levels) {
+export function suggestedTierKey(targetLevelId, frameworkLevels = []) {
   if (targetLevelId === null || targetLevelId === undefined) return null;
   const raw = String(targetLevelId).trim().toLowerCase();
   if (!raw) return null;
-  const byKey = (levels ?? []).find((l) => l.key === raw);
-  if (byKey) return tierKeyForLevelOrder(byKey.order);
-  return /^[1-7]$/.test(raw) ? tierKeyForLevelOrder(Number(raw)) : null;
+  const fw = (frameworkLevels ?? []).filter((l) => l && typeof l.id === 'string');
+  const byFramework = fw.find((l) => l.id.toLowerCase() === raw);
+  if (!byFramework) return null;
+  const maxOrder = Math.max(...fw.map((l) => Number(l.order) || 0));
+  return tierKeyForRelativeOrder(Number(byFramework.order), maxOrder);
 }
 
 /**
