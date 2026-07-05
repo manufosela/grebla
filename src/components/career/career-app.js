@@ -185,6 +185,7 @@ import {
   prunePlaytime,
   startChallenge,
   clearChallenge,
+  insertRouteStop,
   stats,
 } from '../../tools/career/application/usecases.js';
 import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/playtime.js';
@@ -235,6 +236,12 @@ import {
   stopNumberByCity,
   challengeEvents,
 } from '../../tools/career/domain/challenge.js';
+import {
+  routeNumberByCity,
+  resolveRouteStops,
+  routeSeaModel,
+  formatStopRanges,
+} from '../../tools/career/domain/route.js';
 
 /**
  * Pestañas de la tarjeta de la casa (MC-15): estado/acciones del certificado,
@@ -329,6 +336,12 @@ export class CareerApp extends LitElement {
     challengeBusy: { state: true },
     challengeError: { state: true },
     challengeConfirmAbandon: { state: true },
+    routePicker: { state: true },
+    showRoute: { state: true },
+    routeView: { state: true },
+    routeBusy: { state: true },
+    routeError: { state: true },
+    routeSea: { state: true },
     showCoins: { state: true },
     coinsBalance: { state: true },
     coinsLedger: { state: true },
@@ -741,6 +754,21 @@ export class CareerApp extends LitElement {
     .panel h3 { margin: 0 0 0.2rem; }
     .kind { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; text-transform: capitalize; }
     .actions { display: flex; flex-direction: column; gap: 0.5rem; }
+    /* Selector «¿Dónde en tu ruta?» (JG-9): plegado inline bajo «Añadir a la
+       ruta…», con el acento ámbar de la ruta libre. */
+    .routepick {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-top: 0.25rem;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid color-mix(in srgb, #f2b632 55%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, #f2b632 12%, transparent);
+    }
+    .routepick-lead { margin: 0; font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
+    .routepick button { text-align: left; }
+    .routepick .routepick-cancel { color: var(--rm-muted, #6b7280); }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.5rem 0.8rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
     .pre { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0.75rem 0 0; }
@@ -942,6 +970,52 @@ export class CareerApp extends LitElement {
       white-space: nowrap;
     }
     .reto > button, .reto-abandonar { flex: 0 0 auto; }
+    /* ── Gestor «🧭 Mi ruta» (JG-9): modal hermano del catálogo de retos. La
+       ruta libre completa en orden — número global (ámbar; ✓ certificada),
+       casa, isla y estado — con subir/bajar y quitar. ── */
+    .ruta {
+      width: min(640px, calc(100% - 2rem));
+      max-height: calc(100% - 2rem);
+      box-sizing: border-box;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: color-mix(in srgb, var(--rm-surface, #fff) 96%, transparent);
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: var(--rm-radius, 12px);
+      padding: 1rem 1.25rem 1.1rem;
+      box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
+      outline: none;
+    }
+    .ruta .error { color: var(--rm-danger, #dc2626); }
+    .ruta-lead { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .ruta-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+    .ruta-stop {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--rm-border, #e5e7eb);
+      border-radius: 10px;
+      background: var(--rm-surface, #fff);
+    }
+    .ruta-stop.done { background: color-mix(in srgb, #f2b632 10%, transparent); }
+    .ruta-n {
+      flex: 0 0 auto;
+      width: 1.7rem;
+      height: 1.7rem;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #f2b632;
+      color: var(--rm-navy, #1e3a5f);
+      font-weight: 800;
+      font-size: 0.85rem;
+    }
+    .ruta-stop.done .ruta-n { background: #f8e3b0; }
+    .ruta-info { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; flex: 1; }
+    .ruta-info strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
+    .ruta-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    .ruta-actions { display: flex; gap: 0.3rem; flex: 0 0 auto; }
     /* ── Tiempo de juego (MC-23): bloque de la ficha y tabla del líder. ── */
     .playblock {
       margin: 0 0 0.75rem;
@@ -1070,6 +1144,21 @@ export class CareerApp extends LitElement {
     .isle-tag.here { background: var(--rm-coral-600, #e26d5e); color: #fff; }
     /* Isla objetivo del reto activo (JG-5): el mapa del mar «apunta» a ella. */
     .isle-tag.target { background: var(--rm-navy, #1e3a5f); color: #fff; }
+    /* Ruta LIBRE en el mar (JG-9): etiqueta ámbar en cada isla que la ruta
+       toca (con sus números de parada)… */
+    .isle-tag.route { background: #f2b632; color: var(--rm-navy, #1e3a5f); }
+    /* …y trazo punteado ámbar uniendo las islas EN ORDEN (estilo mapa de
+       travesías), bajo los botones de isla y sin robar clics. */
+    .route-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .route-lines polyline {
+      fill: none;
+      stroke: #f2b632;
+      stroke-width: 2.5px;
+      stroke-dasharray: 7 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
     /* Barco animado puerto→puerto (MC-19): capa del viaje sobre el mar. El
        bucle de rAF recoloca el barco (left/top/transform inline) y va soltando
        puntos de estela que se desvanecen solos. */
@@ -1388,6 +1477,25 @@ export class CareerApp extends LitElement {
     this.challengeConfirmAbandon = false;
     /** @type {{ numbers: Map<string, number>, nextCityId: string|null }|null} */
     this._challenge3d = null;
+    // Ruta LIBRE (JG-9): selector de posición de la tarjeta, gestor «🧭 Mi
+    // ruta» y marca de la ruta en el mapa del mar. `_route3d` es el paquete
+    // ESTABLE de números ámbar para la isla (memoizado en willUpdate, como
+    // _challenge3d); con reto activo va null — los números del reto mandan.
+    /** Selector inline «¿Dónde?» de la tarjeta: casa a insertar y paradas con
+     * nombre, o null cerrado. @type {{ cityId: string, stops: { cityId: string, name: string }[] }|null} */
+    this.routePicker = null;
+    this.showRoute = false;
+    /** Paradas de la ruta RESUELTAS (nombre, isla, estado) para el gestor, o
+     * null mientras cargan. @type {{ n: number, cityId: string, cityName: string, islandName: string, visited: boolean }[]|null} */
+    this.routeView = null;
+    this.routeBusy = false;
+    this.routeError = '';
+    /** Marca de la ruta libre en el MAPA DEL MAR: islas EN ORDEN y números de
+     * parada por isla, o null sin ruta (o sin resolver).
+     * @type {{ hops: string[], byIsland: Map<string, number[]> }|null} */
+    this.routeSea = null;
+    /** @type {Map<string, number>|null} */
+    this._route3d = null;
     // Tribbu-coins (CP-2): saldo de la persona cargada, ledger cacheado,
     // resultado de la verificación y alerta roja del HUD (historia vista
     // traicionada / cadena rota / firma inválida).
@@ -1497,6 +1605,7 @@ export class CareerApp extends LitElement {
     // nueva en cada render obligaría a la isla a rehacer sus casas sin motivo).
     if (changed.has('journey') || changed.has('currentIsland')) {
       this._challenge3d = this._computeChallenge3d();
+      this._route3d = this._computeRoute3d();
     }
   }
 
@@ -1530,6 +1639,13 @@ export class CareerApp extends LitElement {
       this.showChallenges = false;
       this.challengeError = '';
       this.challengeConfirmAbandon = false;
+      // El selector «¿Dónde?», el gestor de la ruta y la marca del mar eran
+      // de otra persona (JG-9); su ruta llega con el journey en _load().
+      this.routePicker = null;
+      this.showRoute = false;
+      this.routeView = null;
+      this.routeError = '';
+      this.routeSea = null;
     }
     // Nombre de la siguiente casa cuando el reto es de OTRA isla (JG-5): su
     // mapa se carga bajo demanda (cacheado por sesión, _islandMaps).
@@ -1618,6 +1734,10 @@ export class CareerApp extends LitElement {
     // El catálogo de retos recibe el foco al abrirse (JG-5): Escape cierra.
     if (changed.has('showChallenges') && this.showChallenges) {
       this.renderRoot.querySelector('.retos')?.focus();
+    }
+    // El gestor de la ruta libre recibe el foco al abrirse (JG-9): Escape cierra.
+    if (changed.has('showRoute') && this.showRoute) {
+      this.renderRoot.querySelector('.ruta')?.focus();
     }
   }
 
@@ -1796,6 +1916,7 @@ export class CareerApp extends LitElement {
     this.selected = event.detail.cityId;
     this.cityTab = 'certificado'; // cada casa se abre por su pestaña Certificado (MC-15)
     this.teammatePopover = null; // la tarjeta de la casa releva al mini-resumen
+    this.routePicker = null; // el selector «¿Dónde?» era de otra casa (JG-9)
   }
 
   /**
@@ -2036,7 +2157,10 @@ export class CareerApp extends LitElement {
    * Abre el mapa del archipiélago (botón «🧭 Archipiélago» del HUD o la barca
    * del muelle vía `open-archipelago`). Antes de abrir se asegura el índice y
    * qué islas tienen ya doc (una consulta, cacheada para la sesión): las que
-   * no lo tienen se atenúan como «En construcción».
+   * no lo tienen se atenúan como «En construcción». La ruta LIBRE (JG-9) se
+   * resuelve aquí a su modelo del mar (islas en orden + paradas por isla):
+   * mientras el mapa está abierto la ruta no puede cambiar (la tarjeta y el
+   * gestor viven en otros overlays), así que calcularla al abrir basta.
    */
   async _openArchipelago() {
     if (!this.personId || this.traveling) return;
@@ -2044,6 +2168,8 @@ export class CareerApp extends LitElement {
     try {
       this.archipelago ??= await getArchipelago();
       this.existingIslands ??= await getExistingIslandIds();
+      const { stops } = await this._resolveRoute();
+      this.routeSea = stops.length > 0 ? routeSeaModel(stops) : null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el archipiélago.';
       return;
@@ -2382,6 +2508,275 @@ export class CareerApp extends LitElement {
         </ul>
       </section>
     </div>`;
+  }
+
+  // ---- Ruta libre: posición elegida, gestor y marca en el mar (JG-9) -----------
+
+  /**
+   * Números ámbar de la ruta LIBRE para <career-island-3d> (JG-9): número de
+   * parada GLOBAL por casa (la isla solo pinta las suyas). Congelado y con
+   * identidad estable (lo memoiza willUpdate, como _challenge3d). DECISIÓN
+   * JG-9: con un RETO activo devuelve null — dos numeraciones a la vez
+   * saturan la isla y el camino guiado manda; la presencia de la ruta libre
+   * (anillo navy y línea discontinua) sí se queda.
+   * @returns {Map<string, number>|null}
+   */
+  _computeRoute3d() {
+    if (this._challenge) return null;
+    const planned = this.journey?.plannedRoute ?? [];
+    return planned.length > 0 ? Object.freeze(routeNumberByCity(planned)) : null;
+  }
+
+  /**
+   * Resuelve la ruta planificada a paradas con nombre e isla cargando los
+   * mapas del archipiélago BAJO DEMANDA (solo hasta resolver todas las
+   * ciudades, cacheados por sesión — el mismo patrón que _cpSharePlanned).
+   * @returns {Promise<ReturnType<typeof resolveRouteStops>>}
+   */
+  async _resolveRoute() {
+    const planned = this.journey?.plannedRoute ?? [];
+    if (planned.length === 0) return { stops: [], missing: [] };
+    this.archipelago ??= await getArchipelago();
+    const maps = [];
+    const pending = new Set(planned);
+    for (const isle of this.archipelago.islands) {
+      if (pending.size === 0) break;
+      const map = await this._ensureIslandMap(isle.id);
+      maps.push(map);
+      for (const city of map.cities) pending.delete(city.id);
+    }
+    return resolveRouteStops(planned, maps);
+  }
+
+  /**
+   * Abre/cierra el selector «¿Dónde en tu ruta?» de la tarjeta (JG-9): solo
+   * aparece al AÑADIR con la ruta no vacía — las paradas actuales se resuelven
+   * a nombre para ofrecer «Antes de N. {casa}» además del «Al final» por
+   * defecto. Volver a pulsar el botón lo pliega.
+   * @param {string} cityId Casa que se quiere añadir.
+   */
+  async _toggleRoutePicker(cityId) {
+    if (!this._canPlayJourney) return;
+    if (this.routePicker?.cityId === cityId) {
+      this.routePicker = null;
+      return;
+    }
+    this.error = '';
+    try {
+      const { stops } = await this._resolveRoute();
+      this.routePicker = {
+        cityId,
+        stops: stops.map((s) => ({ cityId: s.cityId, n: s.n, name: s.cityName })),
+      };
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo leer tu ruta.';
+    }
+  }
+
+  /**
+   * Inserta la casa del selector en la posición elegida (JG-9) y lo cierra.
+   * @param {number} [index] Posición 0-based; al final si se omite.
+   */
+  async _insertRouteAt(index) {
+    if (!this._canPlayJourney || !this.routePicker) return;
+    const { cityId } = this.routePicker;
+    this.error = '';
+    try {
+      this.journey = await insertRouteStop(this.store, this.personId, this.journey, cityId, index);
+      this.routePicker = null;
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo actualizar la ruta.';
+    }
+  }
+
+  /** Botón «🧭 Mi ruta» de la barra: abre el gestor de la ruta libre (JG-9). */
+  _renderRouteButton() {
+    const count = (this.journey?.plannedRoute ?? []).length;
+    return html`<button
+      @click=${this._openRouteManager}
+      title="Abrir tu ruta libre: paradas en orden, reordenar y quitar"
+    >🧭 Mi ruta${count > 0 ? ` (${count})` : ''}</button>`;
+  }
+
+  /** Abre el gestor «🧭 Mi ruta» y resuelve las paradas (nombre, isla, estado). */
+  async _openRouteManager() {
+    if (!this.personId) return;
+    this.routeError = '';
+    this.routeView = null;
+    this.showRoute = true;
+    await this._refreshRouteView();
+  }
+
+  /** Cierra el gestor de la ruta y devuelve el foco al HUD. */
+  _closeRouteManager() {
+    this.showRoute = false;
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro del gestor de la ruta lo cierra. @param {KeyboardEvent} event */
+  _onRouteKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeRouteManager();
+  }
+
+  /**
+   * (Re)construye la vista del gestor: paradas resueltas con su estado
+   * (✓ certificada / pendiente). Las casas que no estén en ningún mapa se
+   * cuentan en el canal de error del gestor — nunca se inventan.
+   */
+  async _refreshRouteView() {
+    try {
+      const { stops, missing } = await this._resolveRoute();
+      const visited = new Set(this.journey?.visitedCities ?? []);
+      this.routeView = stops.map((s) => ({
+        n: s.n,
+        cityId: s.cityId,
+        cityName: s.cityName,
+        islandName: s.islandName,
+        visited: visited.has(s.cityId),
+      }));
+      if (missing.length > 0) {
+        this.routeError = `${missing.length} parada${missing.length === 1 ? '' : 's'} de tu ruta no está${missing.length === 1 ? '' : 'n'} en ningún mapa (contenido retirado).`;
+      }
+    } catch (err) {
+      this.routeError = err instanceof Error ? err.message : 'No se pudo leer tu ruta.';
+      this.routeView = [];
+    }
+  }
+
+  /**
+   * Sube/baja una parada del gestor (JG-9): recoloca la casa con
+   * insertRouteStop (mover = quitar + insertar, sin duplicados) y refresca.
+   * @param {string} cityId @param {-1|1} delta
+   */
+  async _moveRouteStop(cityId, delta) {
+    if (!this._canPlayJourney || this.routeBusy) return;
+    const planned = this.journey?.plannedRoute ?? [];
+    const from = planned.indexOf(cityId);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= planned.length) return;
+    this.routeBusy = true;
+    this.routeError = '';
+    try {
+      this.journey = await insertRouteStop(this.store, this.personId, this.journey, cityId, to);
+      await this._refreshRouteView();
+    } catch (err) {
+      this.routeError = err instanceof Error ? err.message : 'No se pudo reordenar la ruta.';
+    } finally {
+      this.routeBusy = false;
+    }
+  }
+
+  /** Quita una parada desde el gestor (toggleRoute de siempre) y refresca.
+   * @param {string} cityId */
+  async _removeRouteStop(cityId) {
+    if (!this._canPlayJourney || this.routeBusy) return;
+    this.routeBusy = true;
+    this.routeError = '';
+    try {
+      this.journey = await toggleRoute(this.store, this.personId, this.journey, cityId);
+      await this._refreshRouteView();
+    } catch (err) {
+      this.routeError = err instanceof Error ? err.message : 'No se pudo quitar la parada.';
+    } finally {
+      this.routeBusy = false;
+    }
+  }
+
+  /**
+   * Overlay del GESTOR «🧭 Mi ruta» (JG-9): la ruta libre completa en orden —
+   * número global, casa, isla y estado (✓ certificada / pendiente) — con
+   * subir/bajar y quitar para quien JUEGA (el viewer la ve de solo lectura).
+   * Modal hermano del catálogo de retos: ✕, fondo o Escape lo cierran.
+   */
+  _renderRouteManager() {
+    if (!this.showRoute) return null;
+    const stops = this.routeView;
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeRouteManager(); }}>
+      <section
+        class="ruta"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Mi ruta libre"
+        tabindex="-1"
+        @keydown=${this._onRouteKeydown}
+      >
+        <header class="sea-head">
+          <h3>🧭 Mi ruta</h3>
+          <button class="close" aria-label="Cerrar mi ruta" title="Cerrar (Esc)" @click=${this._closeRouteManager}>✕</button>
+        </header>
+        ${this.routeError ? html`<p class="error">${this.routeError}</p>` : null}
+        ${stops === null
+          ? html`<p class="ruta-lead">Leyendo tu ruta…</p>`
+          : stops.length === 0
+            ? html`<p class="ruta-lead">
+                Aún no tienes paradas. Abre la tarjeta de una casa y pulsa
+                «Añadir a la ruta» para planificar tu camino.
+              </p>`
+            : html`<ol class="ruta-list">
+                ${stops.map((stop, i) => html`<li class="ruta-stop ${stop.visited ? 'done' : ''}">
+                  <span class="ruta-n" aria-hidden="true">${stop.visited ? '✓' : stop.n}</span>
+                  <span class="ruta-info">
+                    <strong>${stop.cityName}</strong>
+                    <span class="ruta-meta">${stop.islandName} · ${stop.visited ? 'certificada ✓' : 'pendiente'}</span>
+                  </span>
+                  ${this._canPlayJourney
+                    ? html`<span class="ruta-actions">
+                        <button
+                          ?disabled=${this.routeBusy || i === 0}
+                          aria-label=${`Subir ${stop.cityName} en la ruta`}
+                          title="Subir"
+                          @click=${() => this._moveRouteStop(stop.cityId, -1)}
+                        >↑</button>
+                        <button
+                          ?disabled=${this.routeBusy || i === stops.length - 1}
+                          aria-label=${`Bajar ${stop.cityName} en la ruta`}
+                          title="Bajar"
+                          @click=${() => this._moveRouteStop(stop.cityId, 1)}
+                        >↓</button>
+                        <button
+                          ?disabled=${this.routeBusy}
+                          aria-label=${`Quitar ${stop.cityName} de la ruta`}
+                          title="Quitar de la ruta"
+                          @click=${() => this._removeRouteStop(stop.cityId)}
+                        >Quitar</button>
+                      </span>`
+                    : null}
+                </li>`)}
+              </ol>`}
+      </section>
+    </div>`;
+  }
+
+  /**
+   * Trazo de la ruta libre sobre el MAPA DEL MAR (JG-9): polilínea punteada
+   * ámbar uniendo las islas de la ruta EN ORDEN (estilo mapa de travesías).
+   * Decorativa (aria-hidden): la información accesible va en las etiquetas
+   * «🧭 Tu ruta» de cada isla. Con la ruta en una sola isla no hay tramos.
+   * @param {ReadonlyArray<{ id: string, x: number, y: number }>} islands
+   */
+  _renderSeaRoute(islands) {
+    const hops = this.routeSea?.hops ?? [];
+    if (hops.length < 2) return null;
+    const points = hops
+      .map((id) => islands.find((i) => i.id === id))
+      .filter((isle) => isle !== undefined)
+      .map((isle) => `${isle.x},${isle.y}`);
+    if (points.length < 2) return null;
+    return html`<svg class="route-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points=${points.join(' ')} />
+    </svg>`;
+  }
+
+  /** Etiqueta «🧭 Tu ruta (paradas i–j)» de una isla del mar, o null si la
+   * ruta no la toca. @param {string} islandId */
+  _renderSeaRouteTag(islandId) {
+    const numbers = this.routeSea?.byIsland.get(islandId);
+    if (!numbers || numbers.length === 0) return null;
+    return html`<span class="isle-tag route">
+      🧭 Tu ruta (${numbers.length === 1 ? 'parada' : 'paradas'} ${formatStopRanges(numbers)})
+    </span>`;
   }
 
   // ---- Ficha del jugador (MC-21) ----------------------------------------------
@@ -4262,6 +4657,7 @@ export class CareerApp extends LitElement {
           <button class="close" aria-label="Cerrar el mapa del archipiélago" title="Cerrar (Esc)" @click=${this._closeArchipelago}>✕</button>
         </header>
         <div class="sea-map" role="list" aria-label="Islas del archipiélago">
+          ${this._renderSeaRoute(islands)}
           ${islands.map((island) => {
             const here = island.id === this.currentIsland;
             const built = this.existingIslands?.has(island.id) ?? island.id === DEFAULT_ISLAND_ID;
@@ -4287,6 +4683,7 @@ export class CareerApp extends LitElement {
                   : built
                     ? null
                     : html`<span class="isle-tag">En construcción</span>`}
+              ${this._renderSeaRouteTag(island.id)}
             </button>`;
           })}
           ${this.voyage
@@ -4554,6 +4951,10 @@ export class CareerApp extends LitElement {
    * en desuso solo se muestra la nota (no es visitable), como hasta ahora.
    * En una casa BLOQUEADA (JG-2) no se ofrecen acciones imposibles (obtener
    * el certificado o marcarla como actual): solo planificar la ruta.
+   *
+   * «Añadir a la ruta» (JG-9): con la ruta VACÍA añade directo (no hay orden
+   * que elegir); con paradas abre el selector inline «¿Dónde en tu ruta?»
+   * (al final por defecto, o antes de cualquier parada).
    * @param {import('../../tools/career/domain/types.js').City} sel
    * @param {boolean} [blocked] true si la casa está bloqueada por prerequisitos.
    */
@@ -4565,7 +4966,9 @@ export class CareerApp extends LitElement {
     // (antes veía botones que Firestore rechazaba después).
     if (!this._canPlayJourney) return null;
     const visited = this.journey.visitedCities ?? [];
-    const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
+    const planned = this.journey.plannedRoute ?? [];
+    const inRoute = planned.includes(sel.id);
+    const pickerOpen = this.routePicker?.cityId === sel.id;
     return html`<div class="actions">
       ${blocked
         ? null
@@ -4575,7 +4978,36 @@ export class CareerApp extends LitElement {
             </button>
             <button @click=${() => this._act('current')}>Marcar como casa actual</button>
           `}
-      <button @click=${() => this._act('route')}>${inRoute ? 'Quitar de la ruta' : 'Añadir a la ruta'}</button>
+      ${inRoute
+        ? html`<button @click=${() => this._act('route')}>Quitar de la ruta</button>`
+        : planned.length === 0
+          ? html`<button @click=${() => this._act('route')}>Añadir a la ruta</button>`
+          : html`<button
+              aria-expanded=${pickerOpen ? 'true' : 'false'}
+              @click=${() => this._toggleRoutePicker(sel.id)}
+            >Añadir a la ruta…</button>`}
+      ${pickerOpen ? this._renderRoutePicker() : null}
+    </div>`;
+  }
+
+  /**
+   * Selector inline «¿Dónde en tu ruta?» (JG-9): al final (por defecto) o
+   * antes de cualquiera de las paradas actuales, listadas con su número
+   * global y su nombre. «Antes de N» inserta en el índice N-1 (el número es
+   * 1-based sobre la plannedRoute, missing incluidas: los índices no bailan).
+   */
+  _renderRoutePicker() {
+    const picker = this.routePicker;
+    if (!picker) return null;
+    return html`<div class="routepick" role="group" aria-label="¿Dónde en tu ruta?">
+      <p class="routepick-lead">¿Dónde en tu ruta?</p>
+      <button class="primary" @click=${() => this._insertRouteAt()}>Al final</button>
+      ${picker.stops.map(
+        (stop) => html`<button @click=${() => this._insertRouteAt(stop.n - 1)}>
+          Antes de ${stop.n}. ${stop.name}
+        </button>`,
+      )}
+      <button class="routepick-cancel" @click=${() => { this.routePicker = null; }}>Cancelar</button>
     </div>`;
   }
 
@@ -5098,6 +5530,7 @@ export class CareerApp extends LitElement {
               <div class="controls">
                 ${this._renderViewSwitch()}
                 ${this._renderChallengeModeButton()}
+                ${this._renderRouteButton()}
                 ${this._renderArchipelagoButton()}
                 ${this._renderPlayerCardButton()}
                 ${this._renderCarpoolButton()}
@@ -5127,6 +5560,7 @@ export class CareerApp extends LitElement {
               .selected=${this.selected}
               .carpoolStops=${this.carpoolStops}
               .challengeStops=${this._challenge3d}
+              .routeStops=${this._route3d}
               .overlayOpen=${Boolean(this.selected) ||
               this.showArchipelago ||
               this.showPlayerCard ||
@@ -5135,6 +5569,7 @@ export class CareerApp extends LitElement {
               this.showPlaytime ||
               this.showCarpools ||
               this.showChallenges ||
+              this.showRoute ||
               this.showCoins}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               .wizardState=${hutState}
@@ -5214,6 +5649,7 @@ export class CareerApp extends LitElement {
       </div>`}
       ${this._renderArchipelago()}
       ${this._renderChallenges()}
+      ${this._renderRouteManager()}
       ${this._renderPlayerCard()}
       ${this._renderWizard()}
       ${this._renderWizardQueue()}

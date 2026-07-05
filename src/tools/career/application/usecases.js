@@ -17,6 +17,7 @@ import { normalizeEndorsements, addEndorsement, removeEndorsement } from '../dom
 import { normalizeQuestion, sortQuestionsByDateDesc } from '../domain/wizard.js';
 import { dayKey, normalizePlaytime, staleDayKeys } from '../domain/playtime.js';
 import { normalizeChallenge } from '../domain/challenge.js';
+import { insertRouteAt } from '../domain/route.js';
 
 /** @returns {ReadonlyArray<CareerMap>} */
 export function getMaps() {
@@ -142,6 +143,23 @@ export async function toggleRoute(store, personId, journey, cityId) {
     ...journey,
     plannedRoute: route.includes(cityId) ? route.filter((id) => id !== cityId) : [...route, cityId],
   };
+  await store.journeys.save(personId, next);
+  return next;
+}
+
+/**
+ * Inserta una casa en la POSICIÓN elegida de la ruta planificada (JG-9), o la
+ * MUEVE si ya era parada — la ruta nunca lleva duplicados, así que el mismo
+ * caso de uso sirve al selector «¿Dónde?» de la tarjeta y al reordenar del
+ * gestor. La semántica del índice (acotado; al final si se omite) es la del
+ * dominio (insertRouteAt). Quitar una parada sigue siendo toggleRoute.
+ * @param {CareerStore} store @param {string} personId @param {Journey} journey
+ * @param {string} cityId Casa a insertar o recolocar.
+ * @param {number} [index] Posición destino (0-based); al final si se omite.
+ * @returns {Promise<Journey>}
+ */
+export async function insertRouteStop(store, personId, journey, cityId, index) {
+  const next = { ...journey, plannedRoute: insertRouteAt(journey.plannedRoute ?? [], cityId, index) };
   await store.journeys.save(personId, next);
   return next;
 }

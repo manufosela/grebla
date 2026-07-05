@@ -30,9 +30,15 @@
  * estructuran la vista general) > ciudades con visado disponible (las
  * accionables) > resto de ciudades > nombres de compañeros (rótulos
  * personales: nunca deben tapar un topónimo).
+ *
+ * Los números de la ruta LIBRE (JG-9) comparten rango con los del reto: nunca
+ * conviven en pantalla (con reto activo la numeración libre se oculta — la
+ * decisión vive en <career-app>), así que no compiten entre sí y ambos deben
+ * leerse siempre por encima de cualquier nombre.
  */
 export const LABEL_PRIORITY = Object.freeze({
   challenge: 6,
+  route: 6,
   selected: 5,
   current: 4,
   area: 3,

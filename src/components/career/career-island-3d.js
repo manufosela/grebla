@@ -492,6 +492,23 @@ const CHALLENGE_BADGE = Object.freeze({
   }),
 });
 /**
+ * Badge circular con el número de parada de la RUTA LIBRE (JG-9): mismo
+ * mecanismo que el del reto pero con acento PROPIO — fondo ámbar/dorado con
+ * tinta navy (el reto usa fondos coral/navy/teal con tinta blanca), para que
+ * ambos caminos no se confundan. El número es el orden GLOBAL de la ruta en el
+ * archipiélago; las paradas ya certificadas llevan ✓ sobre ámbar claro. Con un
+ * reto activo estos números NO se pintan (<career-app> pasa routeStops null):
+ * los del reto mandan y la isla no se satura.
+ */
+const ROUTE_BADGE = Object.freeze({
+  targetPx: 24,
+  ink: '#1e3a5f', // navy: la tinta de la ruta personal
+  colors: Object.freeze({
+    pending: '#f2b632', // ámbar: paradas planificadas pendientes
+    done: '#f8e3b0', // ámbar claro: paradas de la ruta ya certificadas (✓)
+  }),
+});
+/**
  * Presencia de la ruta planificada en el suelo (MC-13): cinta navy translúcida
  * bajo la línea discontinua (ribbonStrip, el mismo mecanismo que la senda),
  * elevada entre la senda (PATH_LIFT) y la línea (ROUTE_LIFT) contra el
@@ -617,6 +634,7 @@ export class CareerIsland3D extends LitElement {
     selected: { attribute: false },
     carpoolStops: { attribute: false },
     challengeStops: { attribute: false },
+    routeStops: { attribute: false },
     teammates: { attribute: false },
     overlayOpen: { attribute: false },
     wizardState: { attribute: false },
@@ -760,6 +778,15 @@ export class CareerIsland3D extends LitElement {
      * @type {{ numbers: Map<string, number>, nextCityId: string|null }|null}
      */
     this.challengeStops = null;
+    /**
+     * Números de la RUTA LIBRE planificada (JG-9), o null sin ruta que numerar
+     * (o con un reto activo: sus números mandan). Número de parada GLOBAL de
+     * la ruta por casa — aquí solo se pintan las casas de ESTA isla, pero el
+     * número conserva el orden del archipiélago. La pone <career-app> con
+     * identidad ESTABLE (memoizada en su willUpdate, como challengeStops).
+     * @type {Map<string, number>|null}
+     */
+    this.routeStops = null;
     /**
      * Compañeros del equipo a pintar junto a su casa actual (MC-12). SOLO
      * nombre, ciudad y % de progreso: el contenedor no pasa nada más.
@@ -988,7 +1015,8 @@ export class CareerIsland3D extends LitElement {
       changed.has('reachable') ||
       changed.has('selected') ||
       changed.has('carpoolStops') || // señalización del carpool (CP-1)
-      changed.has('challengeStops') // números de la ruta de reto (JG-5)
+      changed.has('challengeStops') || // números de la ruta de reto (JG-5)
+      changed.has('routeStops') // números de la ruta libre (JG-9)
     ) {
       this._rebuildCities();
     }
@@ -3025,6 +3053,22 @@ export class CareerIsland3D extends LitElement {
         node.add(badge);
       }
 
+      // Número de parada de la RUTA LIBRE (JG-9): badge ámbar con tinta navy
+      // sobre la casa, con el orden GLOBAL de la ruta (✓ en las ya
+      // certificadas). Con reto activo routeStops llega null desde
+      // <career-app> (sus números mandan); la guarda extra evita pintar dos
+      // badges si alguna vez convivieran.
+      const routeNumber = stopNumber === undefined ? this.routeStops?.get(city.id) : undefined;
+      if (routeNumber !== undefined) {
+        const badge = this._makeRouteBadge(routeNumber, status === 'visited' ? 'done' : 'pending', {
+          y: bodyH + CITY_ROOF.h + 4.7,
+          id: `route:${city.id}`,
+        });
+        badge.visible = labelsVisible;
+        this._cityLabels.push(badge);
+        node.add(badge);
+      }
+
       group.add(node);
     }
 
@@ -4813,6 +4857,54 @@ export class CareerIsland3D extends LitElement {
    * @returns {import('three').Sprite}
    */
   _makeChallengeBadge(stopNumber, state, { y, id }) {
+    return this._makeStopBadge(state === 'done' ? '✓' : String(stopNumber), {
+      fill: CHALLENGE_BADGE.colors[state],
+      ink: '#ffffff',
+      y,
+      id,
+      kind: 'challenge',
+      targetPx: CHALLENGE_BADGE.targetPx,
+      priority: LABEL_PRIORITY.challenge,
+    });
+  }
+
+  /**
+   * Badge circular con el NÚMERO de parada de la RUTA LIBRE (JG-9): el
+   * hermano ámbar del badge de reto — fondo ámbar (claro con ✓ en las ya
+   * certificadas) y tinta navy, para que la ruta personal no se confunda con
+   * un reto. Mismo sistema de etiquetas: kind 'route' (sin fundido por
+   * distancia) y prioridad máxima — nunca convive con los números de reto
+   * (career-app oculta la numeración libre con reto activo).
+   * @param {number} stopNumber Número GLOBAL de parada en la ruta (1-based).
+   * @param {'pending'|'done'} state Estado de la parada.
+   * @param {{ y: number, id: string }} opts Altura sobre la casa e identidad declutter.
+   * @returns {import('three').Sprite}
+   */
+  _makeRouteBadge(stopNumber, state, { y, id }) {
+    return this._makeStopBadge(state === 'done' ? '✓' : String(stopNumber), {
+      fill: ROUTE_BADGE.colors[state],
+      ink: ROUTE_BADGE.ink,
+      y,
+      id,
+      kind: 'route',
+      targetPx: ROUTE_BADGE.targetPx,
+      priority: LABEL_PRIORITY.route,
+    });
+  }
+
+  /**
+   * Sprite de badge circular de parada, compartido por la ruta de reto (JG-5)
+   * y la ruta libre (JG-9): círculo `fill` con anillo blanco (el halo que lo
+   * separa del paisaje) y el texto (número o ✓) en tinta `ink`. Entra en el
+   * sistema de etiquetas (MC-17) con tamaño aparente constante y sin fundido
+   * por distancia — el camino se lee a cualquier zoom mientras la casa esté a
+   * la vista.
+   * @param {string} text Número de parada o ✓.
+   * @param {{ fill: string, ink: string, y: number, id: string, kind: string,
+   *   targetPx: number, priority: number }} opts
+   * @returns {import('three').Sprite}
+   */
+  _makeStopBadge(text, { fill, ink, y, id, kind, targetPx, priority }) {
     const THREE = this._THREE;
     const canvas = document.createElement('canvas');
     const size = CHALLENGE_BADGE.canvasPx;
@@ -4824,29 +4916,22 @@ export class CareerIsland3D extends LitElement {
     // Círculo de estado con anillo blanco (el halo que lo separa del paisaje).
     ctx.beginPath();
     ctx.arc(center, center, radius, 0, Math.PI * 2);
-    ctx.fillStyle = CHALLENGE_BADGE.colors[state];
+    ctx.fillStyle = fill;
     ctx.fill();
     ctx.lineWidth = 5;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.stroke();
     // El número de parada (✓ en las ya certificadas: parada superada).
-    const text = state === 'done' ? '✓' : String(stopNumber);
     ctx.font = `800 ${text.length > 2 ? 38 : 48}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = ink;
     ctx.fillText(text, center, center + 2);
     const texture = new THREE.CanvasTexture(canvas);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
     sprite.position.set(0, y, 0);
     sprite.scale.set(2.2, 2.2, 1);
-    sprite.userData.label = {
-      id,
-      kind: 'challenge',
-      targetPx: CHALLENGE_BADGE.targetPx,
-      priority: LABEL_PRIORITY.challenge,
-      aspect: 1,
-    };
+    sprite.userData.label = { id, kind, targetPx, priority, aspect: 1 };
     return sprite;
   }
 

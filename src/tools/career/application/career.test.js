@@ -9,6 +9,7 @@ import {
   setCurrent,
   setCurrentIsland,
   toggleRoute,
+  insertRouteStop,
   setEvidence,
   getAchievements,
   recordAchievements,
@@ -84,6 +85,31 @@ describe('career — casos de uso', () => {
     // toggleRoute de nuevo lo quita
     j = await toggleRoute(store, 'p1', saved, 'arch-fe');
     expect(j.plannedRoute).not.toContain('arch-fe');
+  });
+
+  it('insertRouteStop inserta en la posición elegida y persiste (JG-9)', async () => {
+    let j = await getJourney(store, 'p1');
+    j = await insertRouteStop(store, 'p1', j, 'html'); // sin índice: al final
+    j = await insertRouteStop(store, 'p1', j, 'react');
+    j = await insertRouteStop(store, 'p1', j, 'css', 1); // «antes de react»
+    expect(j.plannedRoute).toEqual(['html', 'css', 'react']);
+    const saved = await getJourney(store, 'p1');
+    expect(saved.plannedRoute).toEqual(['html', 'css', 'react']);
+  });
+
+  it('insertRouteStop mueve una parada existente sin duplicarla (JG-9)', async () => {
+    let j = await getJourney(store, 'p1');
+    j = await insertRouteStop(store, 'p1', j, 'html');
+    j = await insertRouteStop(store, 'p1', j, 'css');
+    j = await insertRouteStop(store, 'p1', j, 'react');
+    // Reordenar del gestor: react sube a la cabeza; nada se duplica.
+    j = await insertRouteStop(store, 'p1', j, 'react', 0);
+    expect(j.plannedRoute).toEqual(['react', 'html', 'css']);
+    expect((await getJourney(store, 'p1')).plannedRoute).toEqual(['react', 'html', 'css']);
+    // Índice fuera de rango se acota; casa sin id falla en alto.
+    j = await insertRouteStop(store, 'p1', j, 'css', -9);
+    expect(j.plannedRoute).toEqual(['css', 'react', 'html']);
+    await expect(insertRouteStop(store, 'p1', j, '  ', 0)).rejects.toThrow();
   });
 
   it('setEvidence guarda evidencias por ciudad', async () => {
