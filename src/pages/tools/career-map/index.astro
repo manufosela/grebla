@@ -35,6 +35,12 @@ import Career from '../../../layouts/Career.astro';
     width: 100%;
     padding: 0 1rem 0.75rem;
   }
+  /* En móvil la consola de juego (JG-4) ocupa casi todo el ancho. */
+  @media (max-width: 760px) {
+    .site-main {
+      padding: 0 0.4rem 0.5rem;
+    }
+  }
   /* Sin pie en esta página: cada píxel vertical es para el mapa. */
   .site-footer {
     display: none;
