@@ -173,7 +173,7 @@
  *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
- *  - people: { id: string, name: string, uid?: string|null }[]   personas visibles (equipo del líder; solo la propia con canPlay)
+ *  - people: { id: string, name: string, uid?: string|null, careerTargetLevelId?: string|null }[]   personas visibles (equipo del líder; solo la propia con canPlay); el objetivo de carrera alimenta la ruta sugerida (JG-14)
  *  - canEdit: boolean                          líder/superadmin: juega Y gestiona el equipo (cola del brujo, tiempo agregado, selector)
  *  - canPlay: boolean                          ingeniero vinculado (JG-1): juega SU plan, sin gestión de equipo
  *  - currentUser: { uid: string, name: string }|null   login (autoría de consultas/respuestas)
@@ -210,7 +210,7 @@ import {
 } from '../../tools/career/application/usecases.js';
 import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/playtime.js';
 import { startPlaytimeTracker } from '../../lib/playtime.js';
-import { getCareerMap, getArchipelago, getExistingIslandIds } from '../../lib/careerMap.js';
+import { getCareerMap, getArchipelago, getExistingIslandIds, listCareerRoutes } from '../../lib/careerMap.js';
 import * as carpoolsIo from '../../lib/carpools.js';
 import {
   DEFAULT_CARPOOL_SEATS,
@@ -256,11 +256,18 @@ import {
   sortQuestionsByDateDesc,
 } from '../../tools/career/domain/wizard.js';
 import {
-  challengeRouteForIsland,
   challengeProgress,
   stopNumberByCity,
   challengeEvents,
 } from '../../tools/career/domain/challenge.js';
+import {
+  ROUTE_TIER_KEYS,
+  groupRoutesByRole,
+  suggestedTierKey,
+  islandOfStop,
+  playerRouteDiscipline,
+} from '../../tools/career/domain/careerRoutes.js';
+import { LEVELS } from '../../tools/team/domain/levels.js';
 import {
   routeNumberByCity,
   resolveRouteStops,
@@ -382,6 +389,7 @@ export class CareerApp extends LitElement {
     cpDraft: { state: true },
     carpoolStops: { state: true },
     showChallenges: { state: true },
+    careerRoutes: { state: true },
     challengeBusy: { state: true },
     challengeError: { state: true },
     challengeConfirmAbandon: { state: true },
@@ -1013,9 +1021,10 @@ export class CareerApp extends LitElement {
       box-shadow: 0 14px 40px rgba(17, 24, 39, 0.28);
       outline: none;
     }
-    /* ── Catálogo de RETOS (JG-5): modal hermano de la ficha (mismo backdrop
-       y cabecera). Una ruta por isla; con reto activo, cabecera de progreso
-       y abandono con confirmación in-place. ── */
+    /* ── Catálogo de RETOS (JG-14): modal hermano de la ficha (mismo backdrop
+       y cabecera). Itinerarios de ROL y NIVEL agrupados por rol, con chips de
+       hito en los colores de la escala y la ruta sugerida destacada; con reto
+       activo, cabecera de progreso y abandono con confirmación in-place. ── */
     .retos {
       width: min(640px, calc(100% - 2rem));
       max-height: calc(100% - 2rem);
@@ -1067,6 +1076,35 @@ export class CareerApp extends LitElement {
       white-space: nowrap;
     }
     .reto > button, .reto-abandonar { flex: 0 0 auto; }
+    /* Grupos por ROL del catálogo (JG-14): rótulo del rol y sus hitos. */
+    .reto-roles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.85rem; }
+    .rol-name { margin: 0 0 0.35rem; font-size: 0.95rem; color: var(--rm-navy, #1e3a5f); }
+    /* Chip del HITO con el color de la escala GREBLA (levels.js): tinte de
+       fondo + borde sólido para mantener contraste AA sobre pergamino. */
+    .tier-chip {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      padding: 0.1rem 0.5rem;
+      margin-right: 0.35rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--tier-color);
+      background: color-mix(in srgb, var(--tier-color) 22%, transparent);
+      color: var(--rm-text, #111827);
+      white-space: nowrap;
+    }
+    .reto-sugerida {
+      display: inline-block;
+      margin-left: 0.35rem;
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      background: var(--rm-navy, #1e3a5f);
+      color: #fff;
+      white-space: nowrap;
+    }
     /* ── Gestor «🧭 Mi ruta» (JG-9): modal hermano del catálogo de retos. La
        ruta libre completa en orden — número global (ámbar; ✓ certificada),
        casa, isla y estado — con subir/bajar y quitar. ── */
@@ -1690,7 +1728,7 @@ export class CareerApp extends LitElement {
     .sea-head .close:focus-visible,
     .citypanel header .close:focus-visible { outline: 2px solid var(--wood-text, #f6e8c9); outline-offset: 2px; }
     /* Títulos interiores de las superficies pergamino: la misma serif. */
-    .onboard h3, .cphead h4, .reto-info strong, .ruta-info strong, .wmeta strong {
+    .onboard h3, .cphead h4, .rol-name, .reto-info strong, .ruta-info strong, .wmeta strong {
       font-family: var(--parch-title, Georgia, serif);
       letter-spacing: 0.02em;
     }
@@ -1906,6 +1944,10 @@ export class CareerApp extends LitElement {
     // abandono. `_challenge3d` es el paquete ESTABLE de números para la isla
     // (se recalcula en willUpdate, no en cada render).
     this.showChallenges = false;
+    /** Catálogo de rutas de ROL y NIVEL (/careerRoutes, JG-14), cargado una
+     * vez por sesión al abrir el selector (es de la instancia, no de la
+     * persona). @type {import('../../tools/career/domain/careerRoutes.js').CareerRoute[]|null} */
+    this.careerRoutes = null;
     this.challengeBusy = false;
     this.challengeError = '';
     this.challengeConfirmAbandon = false;
@@ -2081,9 +2123,11 @@ export class CareerApp extends LitElement {
       this.routeError = '';
       this.routeSea = null;
     }
-    // Nombre de la siguiente casa cuando el reto es de OTRA isla (JG-5): su
-    // mapa se carga bajo demanda (cacheado por sesión, _islandMaps).
-    if (changed.has('journey')) this._ensureChallengeMapLoaded();
+    // Nombre de la siguiente casa cuando la PARADA del reto es de OTRA isla
+    // (JG-5/JG-14): su mapa se carga bajo demanda (cacheado por sesión,
+    // _islandMaps). El índice del archipiélago también dispara (resolver
+    // parada → isla lo necesita y puede llegar después del journey).
+    if (changed.has('journey') || changed.has('archipelago')) this._ensureChallengeMapLoaded();
     // Vista PLANO (JG-11): al entrar se aseguran el índice del archipiélago y
     // los mapas de todas las islas (cacheados, en paralelo, una vez).
     if (this.viewMode === 'flat' && this.store && !this._planoStarted) {
@@ -2670,61 +2714,86 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Paquete de números de la ruta para <career-island-3d> (JG-5): número de
-   * parada por casa y la SIGUIENTE del camino, SOLO si el reto es de la isla
-   * cargada. Congelado y con identidad estable (lo memoiza willUpdate).
+   * Paquete de números de la ruta para <career-island-3d> (JG-5/JG-14):
+   * número de parada GLOBAL por casa y la SIGUIENTE del camino. Las rutas son
+   * multi-isla: la isla solo pinta las casas suyas (como los números ámbar de
+   * la ruta libre, JG-9) — los ids de otras islas no le casan y no molestan.
+   * Congelado y con identidad estable (lo memoiza willUpdate).
    * @returns {{ numbers: Map<string, number>, nextCityId: string|null }|null}
    */
   _computeChallenge3d() {
     const challenge = this._challenge;
-    if (!challenge || challenge.routeId !== this.currentIsland) return null;
+    if (!challenge) return null;
     return Object.freeze({
       numbers: stopNumberByCity(challenge),
       nextCityId: challengeProgress(challenge, this.journey).nextCityId,
     });
   }
 
+  /** Isla de una parada del reto (los ids van prefijados por disciplina), o
+   * null si no casa con el índice. @param {string|null} cityId */
+  _challengeStopIsland(cityId) {
+    return islandOfStop(cityId, this.archipelago?.islands ?? []);
+  }
+
+  /** Isla de la SIGUIENTE parada del reto activo (adonde apunta el mapa del
+   * mar), o null sin reto o completado. @returns {string|null} */
+  _challengeTargetIsland() {
+    const challenge = this._challenge;
+    if (!challenge) return null;
+    const { nextCityId } = challengeProgress(challenge, this.journey);
+    return nextCityId ? this._challengeStopIsland(nextCityId) : null;
+  }
+
   /**
-   * Con el reto en OTRA isla, su mapa se carga bajo demanda (cacheado por
-   * sesión) para poder nombrar la siguiente casa en el chip y los avisos.
-   * Mientras llega (o si falla) el chip degrada a «casa N» — degradación
-   * documentada, no un fallback silencioso de datos críticos.
+   * Con la SIGUIENTE parada del reto en OTRA isla, su mapa se carga bajo
+   * demanda (cacheado por sesión) para poder nombrar la casa en el chip y los
+   * avisos. Mientras llega (o si falla) el chip degrada a «casa N» —
+   * degradación documentada, no un fallback silencioso de datos críticos.
    */
   _ensureChallengeMapLoaded() {
-    const challenge = this._challenge;
-    if (!challenge || challenge.routeId === this.currentIsland) return;
-    if (this._islandMaps.has(challenge.routeId)) return;
-    this._ensureIslandMap(challenge.routeId)
+    const islandId = this._challengeTargetIsland();
+    if (!islandId || islandId === this.currentIsland) return;
+    if (this._islandMaps.has(islandId)) return;
+    this._ensureIslandMap(islandId)
       .then(() => this.requestUpdate())
       .catch((err) =>
         console.warn('Modo reto: no se pudo cargar el mapa de la isla del reto.', err),
       );
   }
 
-  /** Nombre de una casa de la ISLA DEL RETO (mapa actual o cacheado), o null
-   * si aún no se conoce. @param {string} cityId @returns {string|null} */
+  /** Nombre de una casa del RETO buscando en el mapa actual y en los cacheados
+   * (la ruta es multi-isla), o null si aún no se conoce.
+   * @param {string} cityId @returns {string|null} */
   _challengeCityName(cityId) {
-    const challenge = this._challenge;
-    if (!challenge) return null;
-    const map =
-      challenge.routeId === this.currentIsland
-        ? this.map
-        : this._islandMaps.get(challenge.routeId);
-    return map?.cities.find((c) => c.id === cityId)?.name ?? null;
+    for (const map of [this.map, ...this._islandMaps.values()]) {
+      const name = map?.cities.find((c) => c.id === cityId)?.name;
+      if (name) return name;
+    }
+    return null;
+  }
+
+  /** Coletilla « (Isla X)» para la siguiente parada del reto cuando NO está en
+   * la isla actual (o '' si es de aquí / no se conoce). @param {string|null} cityId */
+  _challengeIslandSuffix(cityId) {
+    const islandId = this._challengeStopIsland(cityId);
+    if (!islandId || islandId === this.currentIsland) return '';
+    const name = this._islandName(islandId);
+    return name ? ` (${name})` : '';
   }
 
   /** Abre el catálogo de retos (botón «🎯 Modo» de la barra). Asegura el
-   * índice del archipiélago y qué islas tienen doc (las «en construcción» no
-   * ofrecen reto: sin casas no hay ruta). */
+   * índice del archipiélago (nombres de isla, sugerencia) y el catálogo de
+   * rutas de ROL y NIVEL de /careerRoutes (JG-14), cacheado por sesión. */
   async _openChallenges() {
     if (!this.personId) return;
     this.challengeError = '';
     this.challengeConfirmAbandon = false;
     try {
       this.archipelago ??= await getArchipelago();
-      this.existingIslands ??= await getExistingIslandIds();
+      this.careerRoutes ??= await listCareerRoutes();
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo cargar el archipiélago.';
+      this.error = err instanceof Error ? err.message : 'No se pudo cargar el catálogo de retos.';
       return;
     }
     this.showChallenges = true;
@@ -2745,22 +2814,28 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Elige un reto del catálogo: genera la ruta de la isla (orden topológico
-   * por prerequisitos, challengeRouteForIsland), la persiste como reto activo
-   * del journey y, si el jugador está en OTRA isla, zarpa hacia la del reto
-   * (el fundido de travesía de siempre). Solo quien JUEGA (JG-1).
-   * @param {string} islandId
+   * Elige una ruta del catálogo (JG-14): persiste el itinerario del rol+hito
+   * como reto activo del journey — mismo modelo {routeId, name, stops} de
+   * siempre, con paradas multi-isla — y, si la primera parada PENDIENTE está
+   * en otra isla, zarpa hacia ella (el fundido de travesía de siempre; el
+   * progreso ya certificado se conserva: las paradas visitadas cuentan).
+   * Solo quien JUEGA (JG-1).
+   * @param {import('../../tools/career/domain/careerRoutes.js').CareerRoute} route
    */
-  async _chooseChallenge(islandId) {
+  async _chooseChallenge(route) {
     if (!this._canPlayJourney || !this.personId || this.challengeBusy || this.traveling) return;
     this.challengeBusy = true;
     this.challengeError = '';
     try {
-      const map = await this._ensureIslandMap(islandId);
-      const route = challengeRouteForIsland(map);
-      this.journey = await startChallenge(this.store, this.personId, this.journey, route);
+      this.journey = await startChallenge(this.store, this.personId, this.journey, {
+        routeId: route.routeId,
+        name: route.name,
+        stops: [...route.stops],
+        startedAt: null,
+      });
       this.showChallenges = false;
-      if (islandId !== this.currentIsland) await this._departTo(islandId);
+      const islandId = this._challengeTargetIsland();
+      if (islandId && islandId !== this.currentIsland) await this._departTo(islandId);
     } catch (err) {
       this.challengeError = err instanceof Error ? err.message : 'No se pudo empezar el reto.';
     } finally {
@@ -2822,19 +2897,20 @@ export class CareerApp extends LitElement {
     if (!challenge) return;
     const { nextCityId } = challengeProgress(challenge, this.journey);
     if (!nextCityId) return;
-    this._goToChallengeStop(nextCityId, challenge.routeId);
+    this._goToChallengeStop(nextCityId);
   }
 
   /**
    * Lleva al jugador a una parada del reto: en la isla actual, foco de cámara
    * y tarjeta de la casa (el mismo gesto que los prerequisitos, JG-2); si la
-   * parada está en OTRA isla, abre el mapa del mar apuntando a ella (la isla
-   * del reto va señalada con «🎯 Tu reto»).
-   * @param {string} cityId @param {string} islandId Isla de la parada.
+   * parada está en OTRA isla (su id lleva la disciplina delante, JG-14), abre
+   * el mapa del mar apuntando a ella (la isla va señalada con «🎯 Tu reto»).
+   * @param {string} cityId
    */
-  _goToChallengeStop(cityId, islandId) {
+  _goToChallengeStop(cityId) {
     if (this.announcement?.kind === 'challenge-next') this._nextAnnouncement();
-    if (islandId !== this.currentIsland) {
+    const islandId = this._challengeStopIsland(cityId);
+    if (islandId && islandId !== this.currentIsland) {
       this._openArchipelago();
       return;
     }
@@ -2854,42 +2930,168 @@ export class CareerApp extends LitElement {
     >🎯 Modo: ${active ? 'Reto' : 'Libre'}</button>`;
   }
 
+  /** Rótulo «{casa}» de la siguiente parada del reto, con su isla entre
+   * paréntesis si NO es la actual (JG-14): «PHP 8.x moderno (Isla Backend
+   * PHP)». Sin nombre conocido degrada a «casa N».
+   * @param {import('../../tools/career/domain/challenge.js').ChallengeProgress} progress */
+  _challengeNextLabel(progress) {
+    if (!progress.nextCityId) return '';
+    const name = this._challengeCityName(progress.nextCityId) ?? `casa ${progress.nextIndex + 1}`;
+    return `${name}${this._challengeIslandSuffix(progress.nextCityId)}`;
+  }
+
   /**
-   * Chip HUD del reto activo (JG-5): «🎯 {nombre}: X/Y · siguiente: {casa}».
-   * Clic → foco a la siguiente casa (o mapa del mar si es de otra isla).
+   * Chip HUD del reto activo (JG-5): «🎯 {nombre}: X/Y · siguiente: {casa}»
+   * — con la ISLA de la siguiente casa si no es la actual (JG-14). Clic →
+   * foco a la siguiente casa (o mapa del mar si es de otra isla).
    */
   _renderChallengeHudChip() {
     const challenge = this._challenge;
     if (!challenge) return null;
     const progress = challengeProgress(challenge, this.journey);
-    const nextName = progress.nextCityId
-      ? (this._challengeCityName(progress.nextCityId) ?? `casa ${progress.nextIndex + 1}`)
-      : '';
+    const nextLabel = this._challengeNextLabel(progress);
     return html`<button
       class="hudstat challenge"
       @click=${this._focusChallengeNext}
       title="Ir a la siguiente casa del reto"
-    >🎯 ${challenge.name}: ${progress.done}/${progress.total}${nextName
-      ? ` · siguiente: ${nextName}`
+    >🎯 ${challenge.name}: ${progress.done}/${progress.total}${nextLabel
+      ? ` · siguiente: ${nextLabel}`
       : ''}</button>`;
   }
 
   /**
-   * Overlay del CATÁLOGO DE RETOS (JG-5): una ruta por isla, generada del
-   * contenido (orden topológico por prerequisitos). Las islas «en
-   * construcción» (sin doc o sin casas) no ofrecen reto. Con reto activo,
-   * cabecera con el progreso y «Abandonar reto» con confirmación in-place.
-   * Modal hermano del mapa del mar: ✕, fondo o Escape lo cierran.
+   * Ruta SUGERIDA para el jugador (JG-14): su `careerTargetLevelId` declarado
+   * se mapea a un hito de la escala (suggestedTierKey: 1-3 peritus, 4-5
+   * veteranus, 6-7 magister) y su disciplina se INFIERE del juego
+   * (playerRouteDiscipline: reto activo → isla actual → más certificados).
+   * Sin objetivo declarado o sin señal de disciplina no se destaca nada.
+   * @param {import('../../tools/career/domain/careerRoutes.js').RoleRouteGroup[]} groups
+   * @returns {string|null} routeId de la sugerida, o null.
+   */
+  _suggestedRouteId(groups) {
+    const target = (this.people ?? []).find((p) => p.id === this.personId)?.careerTargetLevelId;
+    const tierKey = suggestedTierKey(target ?? null, LEVELS);
+    if (!tierKey) return null;
+    const disciplines = new Set(groups.map((g) => g.discipline));
+    const discipline = playerRouteDiscipline(
+      this.journey,
+      this.archipelago?.islands ?? [],
+      disciplines,
+    );
+    if (!discipline) return null;
+    return groups.find((g) => g.discipline === discipline)?.tiers[tierKey]?.routeId ?? null;
+  }
+
+  /** Grupo de un ROL del catálogo: rótulo del rol y sus hitos disponibles.
+   * @param {import('../../tools/career/domain/careerRoutes.js').RoleRouteGroup} group
+   * @param {string|null} suggestedId */
+  _renderRouteGroup(group, suggestedId) {
+    return html`<li class="reto-rol">
+      <h4 class="rol-name">${group.roleName}</h4>
+      <ul class="reto-list">
+        ${ROUTE_TIER_KEYS.filter((key) => group.tiers[key]).map((key) =>
+          this._renderRouteTier(group.tiers[key], suggestedId),
+        )}
+      </ul>
+    </li>`;
+  }
+
+  /** Una ruta (rol + hito) del catálogo: chip del hito con el color de la
+   * escala, paradas/islas, la insignia «Sugerida para ti» y su acción.
+   * @param {import('../../tools/career/domain/careerRoutes.js').CareerRoute} route
+   * @param {string|null} suggestedId */
+  _renderRouteTier(route, suggestedId) {
+    const active = this._challenge?.routeId === route.routeId;
+    const level = LEVELS.find((l) => l.key === route.levelKey);
+    const chipStyle = `--tier-color:${level?.color ?? 'var(--rm-muted, #6b7280)'}`;
+    const islandsCount = new Set(route.stops.map((s) => s.split('/').at(0))).size;
+    return html`<li class="reto ${active ? 'active' : ''}">
+      <div class="reto-info">
+        <strong>
+          <span class="tier-chip" style=${chipStyle}>${level?.name ?? route.levelKey}</span>
+          ${route.name}
+          ${suggestedId === route.routeId
+            ? html`<span class="reto-sugerida">✨ Sugerida para ti</span>`
+            : null}
+        </strong>
+        <span class="reto-meta">${route.stops.length} paradas · ${islandsCount} islas${route.description ? ` — ${route.description}` : ''}</span>
+      </div>
+      ${this._renderRouteTierAction(route, active)}
+    </li>`;
+  }
+
+  /** Acción de una ruta del catálogo: «En curso» si es el reto activo,
+   * Empezar/Cambiar si se puede jugar, nada en solo lectura.
+   * @param {import('../../tools/career/domain/careerRoutes.js').CareerRoute} route
+   * @param {boolean} active */
+  _renderRouteTierAction(route, active) {
+    if (active) return html`<span class="reto-tag">En curso</span>`;
+    if (!this._canPlayJourney) return null;
+    const hasChallenge = Boolean(this._challenge);
+    const title = hasChallenge
+      ? `Cambiar a «${route.name}» (sustituye al reto actual; lo certificado se queda)`
+      : `Empezar «${route.name}»`;
+    return html`<button
+      class="primary"
+      ?disabled=${this.challengeBusy}
+      title=${title}
+      @click=${() => this._chooseChallenge(route)}
+    >${hasChallenge ? 'Cambiar' : 'Empezar'}</button>`;
+  }
+
+  /** Cabecera del reto ACTIVO del catálogo: progreso, siguiente parada (con
+   * su isla si no es la actual) y «Abandonar reto» con confirmación in-place.
+   * @param {import('../../tools/career/domain/types.js').Challenge} challenge
+   * @param {import('../../tools/career/domain/challenge.js').ChallengeProgress} progress */
+  _renderActiveChallenge(challenge, progress) {
+    const nextLabel = this._challengeNextLabel(progress);
+    return html`<div class="reto-activo">
+      <p class="reto-nombre">
+        <strong>${challenge.name}</strong> · ${progress.done}/${progress.total} casas
+        ${nextLabel ? html` · siguiente: <strong>${nextLabel}</strong>` : null}
+      </p>
+      ${this._renderAbandonControls()}
+    </div>`;
+  }
+
+  /** Botón «Abandonar reto» y su confirmación in-place (solo quien juega). */
+  _renderAbandonControls() {
+    if (!this._canPlayJourney) return null;
+    if (!this.challengeConfirmAbandon) {
+      return html`<button
+        class="reto-abandonar"
+        ?disabled=${this.challengeBusy}
+        @click=${() => { this.challengeConfirmAbandon = true; }}
+      >Abandonar reto</button>`;
+    }
+    return html`<p class="reto-confirm">
+      ¿Abandonar el reto? Los certificados conseguidos se quedan.
+      <button
+        class="danger"
+        ?disabled=${this.challengeBusy}
+        @click=${this._abandonChallenge}
+      >Sí, abandonar</button>
+      <button
+        ?disabled=${this.challengeBusy}
+        @click=${() => { this.challengeConfirmAbandon = false; }}
+      >Seguir con el reto</button>
+    </p>`;
+  }
+
+  /**
+   * Overlay del CATÁLOGO DE RETOS (JG-14): itinerarios de ROL y NIVEL desde
+   * /careerRoutes, agrupados por rol con sus hitos (Peritus/Veteranus/
+   * Magister) y la ruta sugerida destacada. Las rutas por isla de JG-5
+   * desaparecen del selector. Con reto activo, cabecera con el progreso y
+   * «Abandonar reto». Modal hermano del mapa del mar: ✕, fondo o Escape lo
+   * cierran.
    */
   _renderChallenges() {
     if (!this.showChallenges) return null;
     const challenge = this._challenge;
     const progress = challenge ? challengeProgress(challenge, this.journey) : null;
-    const islands = (this.archipelago?.islands ?? []).filter(
-      (island) =>
-        (this.existingIslands?.has(island.id) ?? island.id === DEFAULT_ISLAND_ID) &&
-        (island.citiesTotal ?? 0) > 0,
-    );
+    const groups = groupRoutesByRole(this.careerRoutes ?? []);
+    const suggestedId = this._suggestedRouteId(groups);
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeChallenges(); }}>
       <section
         class="retos"
@@ -2905,63 +3107,20 @@ export class CareerApp extends LitElement {
         </header>
         ${this.challengeError ? html`<p class="error">${this.challengeError}</p>` : null}
         ${challenge && progress
-          ? html`<div class="reto-activo">
-              <p class="reto-nombre">
-                <strong>${challenge.name}</strong> · ${progress.done}/${progress.total} casas
-                ${progress.nextCityId
-                  ? html` · siguiente:
-                      <strong>${this._challengeCityName(progress.nextCityId) ?? `casa ${progress.nextIndex + 1}`}</strong>`
-                  : null}
-              </p>
-              ${this._canPlayJourney
-                ? this.challengeConfirmAbandon
-                  ? html`<p class="reto-confirm">
-                      ¿Abandonar el reto? Los certificados conseguidos se quedan.
-                      <button
-                        class="danger"
-                        ?disabled=${this.challengeBusy}
-                        @click=${this._abandonChallenge}
-                      >Sí, abandonar</button>
-                      <button
-                        ?disabled=${this.challengeBusy}
-                        @click=${() => { this.challengeConfirmAbandon = false; }}
-                      >Seguir con el reto</button>
-                    </p>`
-                  : html`<button
-                      class="reto-abandonar"
-                      ?disabled=${this.challengeBusy}
-                      @click=${() => { this.challengeConfirmAbandon = true; }}
-                    >Abandonar reto</button>`
-                : null}
-            </div>`
+          ? this._renderActiveChallenge(challenge, progress)
           : html`<p class="reto-lead">
-              Una ruta por isla: las casas, numeradas en el orden del camino
-              (sus prerequisitos, de la mano). Al lograr cada certificado el
+              Cada ruta es el itinerario de un ROL a un hito de la escala:
+              multi-isla y entrando por Bases. Al lograr cada certificado el
               juego te señala la siguiente casa.
             </p>`}
-        <ul class="reto-list">
-          ${islands.map((island) => {
-            const isActive = challenge?.routeId === island.id;
-            return html`<li class="reto ${isActive ? 'active' : ''}">
-              <div class="reto-info">
-                <strong>Reto: ${island.name}</strong>
-                <span class="reto-meta">${island.citiesTotal} casas · ruta completa de la isla</span>
-              </div>
-              ${isActive
-                ? html`<span class="reto-tag">En curso</span>`
-                : this._canPlayJourney
-                  ? html`<button
-                      class="primary"
-                      ?disabled=${this.challengeBusy}
-                      title=${challenge
-                        ? `Cambiar al reto de ${island.name} (sustituye al actual)`
-                        : `Empezar el reto de ${island.name}`}
-                      @click=${() => this._chooseChallenge(island.id)}
-                    >${challenge ? 'Cambiar' : 'Empezar'}</button>`
-                  : null}
-            </li>`;
-          })}
-        </ul>
+        ${groups.length === 0
+          ? html`<p class="reto-lead">
+              El catálogo de rutas aún no está publicado en esta instancia.
+              Pídele al superadmin que lo siembre (o que active alguna ruta).
+            </p>`
+          : html`<ul class="reto-roles">
+              ${groups.map((group) => this._renderRouteGroup(group, suggestedId))}
+            </ul>`}
       </section>
     </div>`;
   }
@@ -5377,6 +5536,9 @@ export class CareerApp extends LitElement {
     const wizardLit = new Set(
       (this.questions ?? []).filter((q) => q.status === 'answered').map((q) => q.islandId),
     );
+    // Isla de la SIGUIENTE parada del reto (JG-14, rutas multi-isla): el mapa
+    // del mar «apunta» a ella con «🎯 Tu reto».
+    const challengeIsland = this._challengeTargetIsland();
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeArchipelago(); }}>
       <section
         class="sea"
@@ -5405,7 +5567,7 @@ export class CareerApp extends LitElement {
           ${islands.map((island) => {
             const here = island.id === this.currentIsland;
             const built = this.existingIslands?.has(island.id) ?? island.id === DEFAULT_ISLAND_ID;
-            const challengeTarget = !here && this._challenge?.routeId === island.id;
+            const challengeTarget = !here && challengeIsland === island.id;
             const lit = wizardLit.has(island.id);
             const baseTitle = here
               ? `${island.name} — estás aquí`
@@ -5527,16 +5689,17 @@ export class CareerApp extends LitElement {
     const a = this.announcement;
     if (!a) return null;
     // Modo Reto (JG-5): «Siguiente: {casa} — {isla}» con botón «Llévame» (el
-    // único aviso INTERACTIVO: recibe punteros, el resto son pasivos).
+    // único aviso INTERACTIVO: recibe punteros, el resto son pasivos). La
+    // isla es la de la PARADA (las rutas son multi-isla, JG-14).
     if (a.kind === 'challenge-next') {
       const cityName = this._challengeCityName(a.nextCityId) ?? `casa ${a.stopNumber}`;
-      const islandName = this._islandName(a.routeId) || a.routeId;
+      const islandName = this._islandName(this._challengeStopIsland(a.nextCityId) ?? '');
       return html`<div class="cit-toast challenge" role="status" aria-live="assertive">
         <p>
-          🎯 Siguiente: <strong>${cityName}</strong> — ${islandName}
+          🎯 Siguiente: <strong>${cityName}</strong>${islandName ? ` — ${islandName}` : ''}
           <button
             class="golead"
-            @click=${() => this._goToChallengeStop(a.nextCityId, a.routeId)}
+            @click=${() => this._goToChallengeStop(a.nextCityId)}
             title="Ir a la siguiente casa del reto"
           >Llévame</button>
         </p>

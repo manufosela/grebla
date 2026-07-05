@@ -1,12 +1,10 @@
 /**
  * Modo RETO del juego (JG-5): lógica PURA de las rutas de reto.
  *
- * Un reto es una RUTA por las casas de UNA isla en un orden fijo: el orden
- * topológico de sus prerequisitos (ninguna casa aparece antes que sus
- * prerequisitos de la misma isla). El catálogo no se persiste: cada ruta se
- * GENERA del contenido con `challengeRouteForIsland(map)` — determinista, así
- * que la ruta guardada en el journey y la regenerada coinciden siempre que el
- * mapa no cambie.
+ * Desde JG-14 un reto es el ITINERARIO de un ROL a un HITO de la escala
+ * (multi-isla, persistido en /careerRoutes y elegido del catálogo —
+ * careerRoutes.js): las rutas derivadas por isla de JG-5
+ * (`challengeRouteForIsland`) quedan @deprecated y fuera del selector.
  *
  * La ruta ACTIVA vive en el journey (`journey.challenge`); el modo de juego es
  * DERIVADO: con challenge activo se juega en modo Reto, sin él en modo Libre
@@ -60,6 +58,10 @@ export function normalizeChallenge(raw) {
  * Falla en alto si los prerequisitos forman un ciclo: una ruta imposible no
  * se degrada en silencio, es un error del contenido.
  *
+ * @deprecated JG-14: el selector del Modo Reto ya no deriva rutas por isla —
+ * usa el catálogo persistido de itinerarios de ROL y NIVEL (/careerRoutes,
+ * careerRoutes.js). Se conserva como utilidad de dominio (orden topológico
+ * determinista de una isla) mientras tenga tests que la respalden.
  * @param {CareerMap} map
  * @returns {Challenge} Reto sin arrancar (startedAt null; lo fija startChallenge).
  */
