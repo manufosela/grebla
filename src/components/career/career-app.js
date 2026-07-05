@@ -328,6 +328,7 @@ export class CareerApp extends LitElement {
     showOnboarding: { state: true },
     currentIsland: { state: true },
     archipelago: { state: true },
+    planoMaps: { state: true },
     existingIslands: { state: true },
     showArchipelago: { state: true },
     traveling: { state: true },
@@ -1688,6 +1689,12 @@ export class CareerApp extends LitElement {
     /** Mapas de isla cacheados para el constructor de rutas (CP-1).
      * @type {Map<string, import('../../tools/career/domain/types.js').CareerMap>} */
     this._islandMaps = new Map();
+    /** Copia REACTIVA de la caché de mapas para el plano del archipiélago
+     * (JG-11): cada mapa que llega renueva la identidad del Map y re-renderiza
+     * <career-map> con datos parciales. @type {Map<string, import('../../tools/career/domain/types.js').CareerMap>} */
+    this.planoMaps = new Map();
+    /** La carga del plano (índice + 13 mapas) se lanza UNA vez por sesión. */
+    this._planoStarted = false;
     /** Miembros de mis carpools cuyo journey NO se pudo leer (privacidad
      * entre líderes): su avance se muestra como «sin datos». @type {Set<string>} */
     this._carpoolJourneysMissing = new Set();
@@ -1875,6 +1882,12 @@ export class CareerApp extends LitElement {
     // Nombre de la siguiente casa cuando el reto es de OTRA isla (JG-5): su
     // mapa se carga bajo demanda (cacheado por sesión, _islandMaps).
     if (changed.has('journey')) this._ensureChallengeMapLoaded();
+    // Vista PLANO (JG-11): al entrar se aseguran el índice del archipiélago y
+    // los mapas de todas las islas (cacheados, en paralelo, una vez).
+    if (this.viewMode === 'flat' && this.store && !this._planoStarted) {
+      this._planoStarted = true;
+      this._ensurePlanoMaps();
+    }
     // Paradas del carpool a señalizar (CP-1): dependen de mis carpools y de la
     // isla cargada. Se recalculan con guarda de igualdad (no re-dispara).
     if (changed.has('myCarpools') || changed.has('currentIsland')) {
@@ -2132,6 +2145,22 @@ export class CareerApp extends LitElement {
     return this.map;
   }
 
+  /**
+   * Mapa que CONTIENE la casa seleccionada: el de la isla actual o, si la
+   * selección viene del plano del archipiélago (JG-11) y es de OTRA isla, el
+   * mapa cacheado que la tenga. Sin selección o sin mapa que la contenga, el
+   * de la isla actual — el comportamiento de siempre. Con él, la tarjeta
+   * (estado, prerequisitos, acciones) funciona para casas de cualquier isla.
+   */
+  get _selectedMap() {
+    const id = this.selected;
+    if (!id || !this.map || this.map.cities.some((c) => c.id === id)) return this.map;
+    for (const islandMap of this._islandMaps.values()) {
+      if (islandMap.cities.some((c) => c.id === id)) return islandMap;
+    }
+    return this.map;
+  }
+
   _changePerson(event) {
     this.personId = event.target.value || null;
     this.error = '';
@@ -2167,7 +2196,7 @@ export class CareerApp extends LitElement {
 
   async _act(action) {
     if (!this._canPlayJourney || !this.personId || !this.selected) return;
-    const map = this._map;
+    const map = this._selectedMap;
     this.error = '';
     try {
       if (action === 'toggle') {
@@ -3537,6 +3566,35 @@ export class CareerApp extends LitElement {
     const map = await getCareerMap(islandId, this._islandName(islandId));
     this._islandMaps.set(islandId, map);
     return map;
+  }
+
+  /**
+   * Vista PLANO (JG-11): asegura el índice del archipiélago y lanza la carga
+   * (cacheada, en paralelo) de los mapas de TODAS las islas. `planoMaps` es
+   * la copia reactiva de la caché: cada mapa que llega re-renderiza el plano,
+   * que pinta con datos parciales (isla sin mapa = contador «n temas»). Una
+   * isla que falla queda como contador — degradación visible, con aviso en
+   * consola; el resto del plano no se cae.
+   */
+  async _ensurePlanoMaps() {
+    try {
+      this.archipelago ??= await getArchipelago();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo cargar el archipiélago.';
+      this._planoStarted = false; // reintentable en el siguiente render de la vista
+      return;
+    }
+    this.planoMaps = new Map(this._islandMaps);
+    await Promise.all(
+      this.archipelago.islands.map(async (isle) => {
+        try {
+          await this._ensureIslandMap(isle.id);
+          this.planoMaps = new Map(this._islandMaps);
+        } catch (err) {
+          console.warn(`Plano: no se pudo cargar el mapa de la isla "${isle.id}".`, err);
+        }
+      }),
+    );
   }
 
   /** Cambio de isla en el constructor de rutas: carga su mapa para el selector
@@ -5474,7 +5532,7 @@ export class CareerApp extends LitElement {
    * @param {import('../../tools/career/domain/types.js').City} sel
    */
   _renderCityCertificate(sel) {
-    const map = this._map;
+    const map = this._selectedMap;
     const st = cityStatus(map, sel.id, this.journey);
     const status = st === 'unknown' ? 'blocked' : st;
     const inRoute = (this.journey.plannedRoute ?? []).includes(sel.id);
@@ -5622,7 +5680,7 @@ export class CareerApp extends LitElement {
     const visited = new Set(this.journey.visitedCities ?? []);
     const prereqs = (sel.prereqs ?? []).map((id) => ({
       id,
-      name: this._map.cities.find((c) => c.id === id)?.name ?? id,
+      name: this._selectedMap.cities.find((c) => c.id === id)?.name ?? id,
       done: visited.has(id),
     }));
     if (!prereqs.length) return null;
@@ -5719,6 +5777,24 @@ export class CareerApp extends LitElement {
         </ul>
       </div>`,
     )}`;
+  }
+
+  /**
+   * Panel lateral de la vista plano con la tarjeta del tema seleccionado:
+   * cabecera (comarca · tipo · puntos), pestañas y prerequisitos si aplican.
+   */
+  _renderPlanoPanel(sel, selAreaName, selMap) {
+    const area = selAreaName ? html`${selAreaName} · ` : null;
+    const showPrereqs =
+      (sel.prereqs ?? []).length && cityStatus(selMap, sel.id, this.journey) !== 'blocked';
+    return html`
+      <h3>${sel.name}</h3>
+      <p class="kind">${area}${sel.kind} · ${sel.weight} pts</p>
+      ${this._renderCityTabs(sel)}
+      ${showPrereqs
+        ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => selMap.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
+        : null}
+    `;
   }
 
   /**
@@ -5845,7 +5921,7 @@ export class CareerApp extends LitElement {
    * @param {import('../../tools/career/domain/types.js').City} sel
    */
   _renderCityPanel(sel) {
-    const areaName = this._map.areas.find((a) => a.id === sel.area)?.name;
+    const areaName = this._selectedMap.areas.find((a) => a.id === sel.area)?.name;
     return html`<aside
       class="citypanel"
       role="dialog"
@@ -5902,8 +5978,11 @@ export class CareerApp extends LitElement {
     // Progresión del archipiélago (MC-20): del journey global y el índice ya
     // cargado para el mapa del mar (nada de leer los 13 docs de isla).
     const prog = this.archipelago ? archipelagoProgress(this.journey, this.archipelago.islands) : null;
-    const sel = this.selected ? map.cities.find((c) => c.id === this.selected) : null;
-    const selAreaName = sel ? map.areas.find((a) => a.id === sel.area)?.name : null;
+    // La selección puede venir del plano y ser de OTRA isla (JG-11): su
+    // tarjeta se resuelve contra el mapa que la contiene, no el actual.
+    const selMap = this._selectedMap;
+    const sel = this.selected ? selMap.cities.find((c) => c.id === this.selected) : null;
+    const selAreaName = sel ? selMap.areas.find((a) => a.id === sel.area)?.name : null;
     const fps = this.viewMode === '3d' && this.mode3d === 'fps';
     // Estado de la cabaña del brujo (MC-22): derivado en puro de las consultas
     // de la persona cargada EN la isla actual.
@@ -6004,23 +6083,16 @@ export class CareerApp extends LitElement {
           </div>`
         : html`<div class="grid">
         <career-map
-          .map=${map}
+          .archipelago=${this.archipelago}
+          .islandMaps=${this.planoMaps}
           .journey=${this.journey}
-          .reachable=${s.reachable}
           .selected=${this.selected}
           @select-city=${this._onSelect}
         ></career-map>
 
         <div class="panel">
           ${sel
-            ? html`
-                <h3>${sel.name}</h3>
-                <p class="kind">${selAreaName ? html`${selAreaName} · ` : null}${sel.kind} · ${sel.weight} pts</p>
-                ${this._renderCityTabs(sel)}
-                ${(sel.prereqs ?? []).length && cityStatus(map, sel.id, this.journey) !== 'blocked'
-                  ? html`<p class="pre">Requiere: ${sel.prereqs.map((p) => map.cities.find((c) => c.id === p)?.name).join(', ')}</p>`
-                  : null}
-              `
+            ? this._renderPlanoPanel(sel, selAreaName, selMap)
             : html`<p class="hint">Haz clic en una casa de la isla para ver su tarjeta: certificado, qué aprender y recursos.</p>`}
           <details class="legend-wrap">
             <summary>Leyenda</summary>

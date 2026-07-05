@@ -608,7 +608,6 @@ export class EngineerSpace extends LitElement {
       <career-map
         .map=${island}
         .journey=${journey}
-        .reachable=${s.reachable}
         .selected=${null}
       ></career-map>
 
