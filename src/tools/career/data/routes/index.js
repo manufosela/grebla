@@ -25,16 +25,20 @@
  * @property {Partial<Record<'peritus'|'veteranus'|'magister', RouteTier>>} tiers
  */
 import { ROUTE_TIERS as BACKEND_PHP_ROUTE } from './backend-php.js';
+import { ROUTE_TIERS as BACKEND_PYTHON_ROUTE } from './backend-python.js';
+import { ROUTE_TIERS as POSTGRES_ROUTE } from './postgres.js';
 import { ROUTE_TIER_KEYS, routeDocId } from '../../domain/careerRoutes.js';
 
 /**
  * Itinerarios por rol, indexados por disciplina (la misma del índice del
- * archipiélago). En JG-14 solo Backend PHP (el rol ejemplo del ADR); el resto
- * de los 13 roles se diseña en JG-15.
+ * archipiélago), en el orden del archipiélago. Backend PHP fue el rol ejemplo
+ * del ADR (JG-14); el resto del catálogo se diseña en JG-15.
  * @type {Readonly<Record<string, RouteTiers>>}
  */
 export const CAREER_ROUTES = Object.freeze({
   [BACKEND_PHP_ROUTE.discipline]: BACKEND_PHP_ROUTE,
+  [BACKEND_PYTHON_ROUTE.discipline]: BACKEND_PYTHON_ROUTE,
+  [POSTGRES_ROUTE.discipline]: POSTGRES_ROUTE,
 });
 
 /**
