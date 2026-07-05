@@ -225,7 +225,8 @@ export function voyageCurve(from, to, islands = []) {
     for (let i = 1; i < legs; i += 1) {
       const along = i / legs;
       const zig = VOYAGE_ZIG_MIN + rand() * (VOYAGE_ZIG_MAX - VOYAGE_ZIG_MIN);
-      const side = blocker ? startSide : startSide * (i % 2 === 1 ? 1 : -1);
+      const altSign = i % 2 === 1 ? 1 : -1;
+      const side = blocker ? startSide : startSide * altSign;
       const amp = blocker ? clearBoost : distance * zig;
       pts.push({
         x: clampToSea(from.x + ux * distance * along + px * side * amp),
