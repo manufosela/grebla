@@ -43,7 +43,14 @@ onUserChanged(async (user) => {
         app.error = 'No se encontró tu persona vinculada. Habla con tu líder.';
         return;
       }
-      app.people = [{ id: person.id, name: person.name, uid: person.uid ?? null }];
+      // El objetivo de carrera declarado viaja con la persona: el catálogo de
+      // retos (JG-14) sugiere con él la ruta de su hito.
+      app.people = [{
+        id: person.id,
+        name: person.name,
+        uid: person.uid ?? null,
+        careerTargetLevelId: person.careerTargetLevelId ?? null,
+      }];
       app.canPlay = true;
       app.canEdit = false;
       app.personId = person.id;
@@ -54,8 +61,14 @@ onUserChanged(async (user) => {
     const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid });
     const people = await listActivePeople(persistence);
     // El uid vinculado viaja con la persona: el panel del brujo (MC-22) decide
-    // con él si el usuario logado es el jugador vinculado.
-    app.people = people.map((p) => ({ id: p.id, name: p.name, uid: p.uid ?? null }));
+    // con él si el usuario logado es el jugador vinculado. El objetivo de
+    // carrera alimenta la ruta sugerida del catálogo de retos (JG-14).
+    app.people = people.map((p) => ({
+      id: p.id,
+      name: p.name,
+      uid: p.uid ?? null,
+      careerTargetLevelId: p.careerTargetLevelId ?? null,
+    }));
     // Rol para el brujo (MC-22) y la gestión de equipo: canEdit habilita la
     // cola del líder, el tiempo agregado y el selector de persona.
     app.canEdit = role === 'leader' || role === 'superadmin';

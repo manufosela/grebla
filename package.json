@@ -19,7 +19,8 @@
     "seed:leaders": "node scripts/seed-leaders.mjs",
     "seed:career-content": "node scripts/seed-career-content.mjs",
     "seed:archipelago": "node scripts/seed-archipelago.mjs",
-    "seed:islands": "node scripts/seed-islands.mjs"
+    "seed:islands": "node scripts/seed-islands.mjs",
+    "seed:career-routes": "node scripts/seed-career-routes.mjs"
   },
   "dependencies": {
     "@astrojs/lit": "^4.3.0",

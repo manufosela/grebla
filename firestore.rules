@@ -326,6 +326,15 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Rutas de ROL y NIVEL del Modo Reto (JG-14): un doc por hito
+    // /careerRoutes/{disciplina}--{hito} con {discipline, levelKey, name,
+    // description, stops, active}. Las leen los autenticados (el selector de
+    // retos); solo las edita el superadmin (editor de juego en /admin).
+    match /careerRoutes/{routeId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // Framework de Carrera (catálogo global): documento único
     // /careerFramework/engineering con tracks, niveles, disciplinas y
     // dimensiones. Lo leen los autenticados; solo lo edita el superadmin.

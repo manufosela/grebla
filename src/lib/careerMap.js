@@ -21,8 +21,11 @@ import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'fireb
 import { db } from './firebase.js';
 import { normalizeCareerMap, serializeCareerMap } from '../tools/career/data/maps.js';
 import { normalizeArchipelago, serializeArchipelago, START_ISLAND_ID } from '../tools/career/data/archipelago.js';
+import { normalizeCareerRoute } from '../tools/career/domain/careerRoutes.js';
 
 const CAREER_MAP_COLLECTION = 'careerMap';
+/** Colección de rutas de rol y nivel del Modo Reto (JG-14). */
+const CAREER_ROUTES_COLLECTION = 'careerRoutes';
 /** Documento del índice del archipiélago (un doc más de la colección). */
 const ARCHIPELAGO_DOC = '_archipelago';
 
@@ -96,4 +99,28 @@ export async function saveArchipelago(arch) {
 export async function getExistingIslandIds() {
   const snap = await getDocs(collection(db, CAREER_MAP_COLLECTION));
   return new Set(snap.docs.map((d) => d.id).filter((id) => id !== ARCHIPELAGO_DOC));
+}
+
+/**
+ * Catálogo de RUTAS DE ROL Y NIVEL del Modo Reto (JG-14): lee la colección
+ * /careerRoutes completa (decenas de docs como mucho: 13 roles × 3 hitos),
+ * sanea cada doc y descarta las rutas retiradas (active: false) o corruptas —
+ * un doc que no pasa el saneo se avisa por consola, no se lista a medias.
+ * Las leen los autenticados; solo las escribe el superadmin (editor /admin).
+ * Cachear el resultado por sesión en el caller (career-app lo hace).
+ * @returns {Promise<import('../tools/career/domain/careerRoutes.js').CareerRoute[]>}
+ */
+export async function listCareerRoutes() {
+  const snap = await getDocs(collection(db, CAREER_ROUTES_COLLECTION));
+  /** @type {import('../tools/career/domain/careerRoutes.js').CareerRoute[]} */
+  const routes = [];
+  for (const d of snap.docs) {
+    const route = normalizeCareerRoute(d.data(), d.id);
+    if (!route) {
+      console.warn(`Modo Reto: el doc /careerRoutes/${d.id} no es una ruta válida y se ignora.`);
+      continue;
+    }
+    if (route.active) routes.push(route);
+  }
+  return routes;
 }

@@ -68,14 +68,14 @@
  * @property {string[]} [cursos]
  * @property {string[]} [titulos]
  *
- * Reto ACTIVO del modo Reto (JG-5): una ruta por las casas de UNA isla en un
- * orden fijo (topológico por prerequisitos). El modo de juego es DERIVADO:
- * con challenge se juega en modo Reto, con null en modo Libre. Es
+ * Reto ACTIVO del modo Reto (JG-5; itinerarios de rol y nivel desde JG-14):
+ * una ruta de casas EN ORDEN de visita, multi-isla. El modo de juego es
+ * DERIVADO: con challenge se juega en modo Reto, con null en modo Libre. Es
  * independiente de `plannedRoute` (la ruta personal no se pisa).
  * @typedef {Object} Challenge
- * @property {string} routeId        id de la isla de la ruta (una ruta por isla)
- * @property {string} name           rótulo del reto («Reto: Backend PHP»)
- * @property {string[]} stops        ids de las casas EN ORDEN de visita
+ * @property {string} routeId        id del doc /careerRoutes ({disciplina}--{hito}; retos JG-5 legados llevan el id de su isla)
+ * @property {string} name           rótulo del reto («Backend PHP · Veteranus»)
+ * @property {string[]} stops        ids de las casas EN ORDEN de visita (multi-isla)
  * @property {string|null} startedAt fecha ISO de inicio (null si aún no arrancó)
  *
  * @typedef {Object} Journey    GLOBAL por persona (abarca todo el archipiélago, MC-14)
