@@ -9,7 +9,7 @@
  */
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { getMyPerson } from './engineer.js';
+import { getMyPerson, sealInvite } from './engineer.js';
 
 /** @typedef {'superadmin'|'viewer'|'leader'|'engineer'|null} AccessRole */
 
@@ -31,5 +31,11 @@ export async function resolveAccess(user) {
   if (leaderSnap.exists()) return { role: 'leader', uid: user.uid };
   const person = await getMyPerson(user.uid);
   if (person) return { role: 'engineer', uid: user.uid, personId: person.id };
+  // Sin persona por uid: quizá esté pre-invitado por email (RMR-TSK-0167). Se
+  // intenta sellar la invitación (Cloud Function) y, si engancha, se reintenta.
+  if (await sealInvite()) {
+    const linked = await getMyPerson(user.uid);
+    if (linked) return { role: 'engineer', uid: user.uid, personId: linked.id };
+  }
   return { role: null, uid: user.uid };
 }

@@ -103,6 +103,31 @@ export const manageAccess = onCall({ region: 'europe-west1' }, async (request) =
   return { ok: true, action, role, uid: user.uid };
 });
 
+/**
+ * Sella la invitación de una persona pre-invitada por email (RMR-TSK-0167). El
+ * propio usuario, ya logado, la llama: busca una persona con
+ * `pendingEmail == su-email` y `uid == null`, le escribe su uid y borra
+ * pendingEmail — así hereda el plan/equipo preparados por adelantado. Admin SDK
+ * (las reglas no dejan al cliente escribirse su propio uid). Idempotente: sin
+ * invitación pendiente devuelve { sealed: false } sin tocar nada; solo sella la
+ * PRIMERA coincidencia (una colisión de emails no reparte accesos a ciegas).
+ */
+export const sealInvite = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const email = typeof caller.token?.email === 'string' ? caller.token.email.trim().toLowerCase() : '';
+  if (!email) return { sealed: false, reason: 'no-email' };
+
+  const snap = await getFirestore().collection('people').where('pendingEmail', '==', email).get();
+  // Filtra en código las ya vinculadas (evita un índice compuesto por dos
+  // campos): solo sella una persona que siga SIN uid.
+  const pending = snap.docs.find((d) => !d.data().uid);
+  if (!pending) return { sealed: false };
+
+  await pending.ref.set({ uid: caller.uid, pendingEmail: FieldValue.delete() }, { merge: true });
+  return { sealed: true, personId: pending.id };
+});
+
 // ── DORA ───────────────────────────────────────────────────────────────────
 const MS_HOUR = 3_600_000;
 const toMs = (d) => new Date(d).getTime();

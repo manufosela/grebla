@@ -12,6 +12,7 @@ export {
   unsharePerson,
   transferOwnership,
   normalizePerson,
+  normalizeInviteEmail,
   getTurnover,
 } from './people.js';
 export { addArea, listAreas, removeArea } from './areas.js';

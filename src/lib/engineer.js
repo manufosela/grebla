@@ -36,6 +36,26 @@ export async function getMyPerson(uid) {
 }
 
 /**
+ * Sella la invitación por email de la persona pre-invitada (RMR-TSK-0167): si el
+ * usuario recién logado tiene una persona con `pendingEmail == su-email`, la
+ * Cloud Function le escribe el uid (Admin SDK, las reglas no dejan al cliente
+ * escribirse su propio uid). Devuelve true si selló una persona. Nunca lanza al
+ * caller — un fallo del sellado no debe tumbar la resolución de acceso.
+ * @returns {Promise<boolean>}
+ */
+export async function sealInvite() {
+  try {
+    const { app } = await import('./firebase.js');
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const fns = getFunctions(app, 'europe-west1');
+    const res = await httpsCallable(fns, 'sealInvite')();
+    return Boolean(/** @type {any} */ (res.data)?.sealed);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Perfil COMPLETO de Role Mirror de la persona vinculada, en solo lectura.
  *
  * El resumen persistido (`/people/{id}/rolemirror/summary`, vía `getPersonProfile`)

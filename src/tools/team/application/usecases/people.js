@@ -28,21 +28,40 @@ export function normalizeGithubLogin(v) {
 }
 
 /**
+ * Normaliza el email de invitación de una persona pre-invitada: recortado y en
+ * minúsculas (así el matching con el token del primer login es estable), o null
+ * si vacío. No valida el formato — un typo se detecta al no vincular nunca (la
+ * ficha lo muestra como pendiente y deja corregirlo).
+ * @param {string} [v]
+ * @returns {string|null}
+ */
+export function normalizeInviteEmail(v) {
+  return String(v ?? '').trim().toLowerCase() || null;
+}
+
+/**
  * Alta de una persona (activa por defecto). `guilds` es un array de nombres de
  * gremio del catálogo (puede ir vacío). `githubLogin` es opcional (para DORA).
  * `uid` vincula la cuenta que accederá a su ficha en solo lectura (o null).
+ * `pendingEmail` PRE-INVITA por email a alguien que aún no se ha logado: la
+ * persona se prepara con uid null y su primer login (con ese email) sella el
+ * uid vía Cloud Function. uid y pendingEmail son excluyentes (si viene uid, no
+ * hay invitación pendiente).
  * @param {PersistencePort} persistence
  * @param {{ name: string, guilds?: string[], disciplines?: string[], levelId?: string|null,
  *           labels?: string[], startDate: string, active?: boolean, githubLogin?: string,
- *           uid?: string|null }} input
+ *           uid?: string|null, pendingEmail?: string|null }} input
  * @returns {Promise<string>}
  */
 export function addPerson(persistence, input) {
-  const { guilds = [], githubLogin, ...rest } = input;
+  const { guilds = [], githubLogin, pendingEmail, uid, ...rest } = input;
+  const invite = uid ? null : normalizeInviteEmail(pendingEmail);
   return persistence.people.create({
     active: true,
     guilds,
     githubLogin: normalizeGithubLogin(githubLogin),
+    uid: uid ?? null,
+    pendingEmail: invite,
     ...rest,
   });
 }
