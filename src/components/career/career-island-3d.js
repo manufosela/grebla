@@ -359,8 +359,8 @@ const BOAT_PROXIMITY_RADIUS = 12;
 const PARCH_SAIL = 0xf1e4c3;
 /** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
 const AUTOWALK_TIMEOUT_S = 30;
-/** El autopiloto solo AVANZA cuando el rumbo al objetivo está dentro de este ángulo (rad): gira primero. */
-const AUTOWALK_FACING = 0.35;
+/** El autopiloto solo AVANZA cuando el rumbo al objetivo está dentro de este ángulo (rad): gira primero. Arco abierto (~34°) para que no se atasque girando al llegar (RMR-BUG-0016). */
+const AUTOWALK_FACING = 0.6;
 /** Distancia (unidades) del cartel «En construcción» hacia el interior desde el puerto (MC-14). */
 const SIGN_INLAND_OFFSET = 10;
 /** Distancia (unidades) a la que se aparece frente a la ciudad actual del journey. */
@@ -376,6 +376,10 @@ const EXIT_LOOK_AHEAD = 30;
 const CITY_COLLIDER_RADIUS = Math.hypot(CITY_BODY.w, CITY_BODY.w) / 2 + 0.65;
 /** Distancia (unidades) delante de la puerta a la que el autopiloto se coloca antes de entrar (JG-25 fix). Depende de CITY_COLLIDER_RADIUS: declarar DESPUÉS (evita el TDZ). */
 const AUTOWALK_APPROACH = CITY_COLLIDER_RADIUS + 2.5;
+/** Distancia (unidades) al punto de aproximación a la que el autopiloto se «engancha» a la puerta (latch): a partir de aquí va a la casa y no vuelve a alternar de objetivo (mata el bucle, RMR-BUG-0016). */
+const AUTOWALK_APPROACH_REACHED = 1.5;
+/** Holgura (unidades) sobre el radio de colisión a la que el autopiloto, pegado y de frente a la puerta, entra en la casa. */
+const AUTOWALK_ENTER_MARGIN = 0.6;
 /**
  * Escala del yaw extra determinista de cityVariant (±0.3 rad) al orientar las
  * fachadas hacia el puerto (MC-9): la variación queda en ±0.15 rad — las casas
@@ -1180,6 +1184,8 @@ export class CareerIsland3D extends LitElement {
      * Cualquier tecla de movimiento lo cancela; al chocar con la casa se abre
      * su tarjeta como al llegar andando. */
     this._autoWalkTargetId = null;
+    /** ¿El autopiloto ya se enganchó a la puerta? (latch de fase, RMR-BUG-0016). */
+    this._autoAtDoor = false;
     /** Balizas de «visado disponible» vivas (userData.phase) del build (MC-13). */
     this._beacons = [];
     /** Canvas offscreen con la capa ESTÁTICA del minimapa (isla, senda, casas). */
@@ -1832,6 +1838,7 @@ export class CareerIsland3D extends LitElement {
     this._mode = 'fps';
     this._lastWalkTs = 0;
     this._autoWalkTargetId = null; // sin autopiloto heredado al entrar a pie
+    this._autoAtDoor = false;
     this._guideEl = null; // la brújula se recrea con el HUD fps: recachear tras render
     if (!this._plc) {
       const canvas = this.renderRoot.querySelector('canvas');
@@ -2031,6 +2038,7 @@ export class CareerIsland3D extends LitElement {
     if (CareerIsland3D.HELD_CODES.has(event.code)) {
       this._keys.add(event.code);
       this._autoWalkTargetId = null; // tomar el control cancela el autopiloto (JG-21)
+      this._autoAtDoor = false;
       event.preventDefault(); // ni scroll con las flechas ni paginación con Re/Av Pág
     }
   }
@@ -2186,19 +2194,24 @@ export class CareerIsland3D extends LitElement {
     const target = this._walkCities.find((c) => c.id === this._autoWalkTargetId);
     if (!target) {
       this._autoWalkTargetId = null;
+      this._autoAtDoor = false;
       return;
     }
     const cam = this._camera.position;
     // La puerta mira al puerto: normal de la puerta y punto de aproximación
-    // DELANTE de ella. El autopiloto va primero a ese punto (para entrar de
+    // DELANTE de ella. El autopiloto va PRIMERO a ese punto (para entrar de
     // frente, no por un lateral) y solo entonces embiste la puerta.
     const nx = Math.sin(target.doorYaw ?? 0);
     const nz = Math.cos(target.doorYaw ?? 0);
     const approach = { x: target.wx + nx * AUTOWALK_APPROACH, z: target.wz + nz * AUTOWALK_APPROACH };
-    const nearApproach = Math.hypot(approach.x - cam.x, approach.z - cam.z) < AUTOWALK_APPROACH * 0.6;
-    // Sub-objetivo: el punto frente a la puerta hasta llegar a él; después, la
-    // propia casa (embestir la puerta de frente para entrar).
-    const goal = nearApproach ? { x: target.wx, z: target.wz } : approach;
+    // LATCH de fase: al ALCANZAR el punto de aproximación se «engancha» a la
+    // puerta y ya NO vuelve a alternar de objetivo. Sin esto, cerca del approach
+    // el objetivo hacía ping-pong (approach↔casa) cada frame y el avatar oscilaba
+    // «entre los 2 últimos pasos» (RMR-BUG-0016).
+    if (!this._autoAtDoor && Math.hypot(approach.x - cam.x, approach.z - cam.z) < AUTOWALK_APPROACH_REACHED) {
+      this._autoAtDoor = true;
+    }
+    const goal = this._autoAtDoor ? { x: target.wx, z: target.wz } : approach;
     const dx = goal.x - cam.x;
     const dz = goal.z - cam.z;
     const dist = Math.hypot(dx, dz) || 1;
@@ -2219,29 +2232,79 @@ export class CareerIsland3D extends LitElement {
     this._autoQuat.setFromRotationMatrix(this._autoMat);
     this._camera.quaternion.rotateTowards(this._autoQuat, TURN_SPEED * dt);
     this._autoWalkElapsed = (this._autoWalkElapsed ?? 0) + dt;
+    // ENTRAR: enganchado a la puerta, pegado a la casa y de FRENTE → abre la
+    // card. Comprobar el frontal (doorYaw, _isFrontalApproach) evita entrar por
+    // un lateral (RMR-BUG-0016 punto 2). Es el objetivo del autopiloto.
+    if (
+      this._autoAtDoor &&
+      this._insideCityId === null &&
+      Math.hypot(target.wx - cam.x, target.wz - cam.z) <= CITY_COLLIDER_RADIUS + AUTOWALK_ENTER_MARGIN &&
+      this._isFrontalApproach(target.id, cam)
+    ) {
+      this._enterCity(target.id);
+      this._autoWalkTargetId = null;
+      this._autoAtDoor = false;
+      return;
+    }
     // ¿mira ya al objetivo? coseno del ángulo entre el forward (plano) y la
-    // dirección al objetivo. AVANZA solo cuando lo tiene DELANTE: así sale de
-    // espaldas, GIRA sobre sí mismo, y camina de FRENTE — nunca de lado.
+    // dirección al objetivo. AVANZA solo cuando lo tiene DELANTE (arco abierto
+    // AUTOWALK_FACING): así sale de espaldas, GIRA y camina de FRENTE. El paso
+    // se limita a la distancia restante (anti-overshoot) para no pasarse del
+    // punto y que la dirección se invierta 180° (la otra fuente del bucle).
     const look = this._camera.getWorldDirection(this._walkDirScratch);
     const flen = Math.hypot(look.x, look.z) || 1;
     const facing = (look.x / flen) * dirx + (look.z / flen) * dirz;
     if (facing > Math.cos(AUTOWALK_FACING)) {
-      const next = stepPosition({ x: cam.x, z: cam.z }, { x: dirx, z: dirz }, dt, WALK_SPEED, { radius: this._walkRadius });
-      const colCities = collideWithCities({ x: cam.x, z: cam.z }, next, this._walkCities, CITY_COLLIDER_RADIUS);
-      const col = this._collideWizard({ x: cam.x, z: cam.z }, colCities);
-      this._fpsPhase += Math.hypot(col.x - cam.x, col.z - cam.z) * AVATAR.stepFreq;
+      const speed = Math.min(WALK_SPEED, dist / dt);
+      const px0 = cam.x;
+      const pz0 = cam.z;
+      const next = stepPosition({ x: cam.x, z: cam.z }, { x: dirx, z: dirz }, dt, speed, { radius: this._walkRadius });
+      const col = this._collideWizard({ x: cam.x, z: cam.z }, collideWithCities({ x: cam.x, z: cam.z }, next, this._walkCities, CITY_COLLIDER_RADIUS));
+      cam.x = col.x;
+      cam.z = col.z;
+      // ANTI-ATASCO: yendo al punto de aproximación con el objetivo JUSTO detrás
+      // de la casa, empujar de frente contra ella no desliza (roza el centro) y
+      // el avatar se clava. Si apenas avanzó, rodea la casa por la tangente.
+      if (!this._autoAtDoor && Math.hypot(cam.x - px0, cam.z - pz0) < speed * dt * 0.2) {
+        this._slideAroundTarget(cam, target, dirx, dirz, dt);
+      }
+      this._fpsPhase += Math.hypot(cam.x - px0, cam.z - pz0) * AVATAR.stepFreq;
       const steps = Math.floor(this._fpsPhase / Math.PI);
       if (steps > this._fpsStepCount) this._audio.step();
       this._fpsStepCount = steps;
-      cam.x = col.x;
-      cam.z = col.z;
-      if (colCities.hitCityId === this._autoWalkTargetId && this._insideCityId === null) {
-        this._enterCity(colCities.hitCityId);
-        this._autoWalkTargetId = null;
-        return;
-      }
     }
-    if (this._autoWalkElapsed > AUTOWALK_TIMEOUT_S) this._autoWalkTargetId = null;
+    if (this._autoWalkElapsed > AUTOWALK_TIMEOUT_S) {
+      this._autoWalkTargetId = null;
+      this._autoAtDoor = false;
+    }
+  }
+
+  /**
+   * Desliza al caminante por la TANGENTE de la casa objetivo cuando quedó
+   * encajado empujando de frente contra ella con el destino detrás (RMR-BUG-0016).
+   * Elige el lado de la tangente que sigue la intención de movimiento. Determinista.
+   * @param {{x:number,z:number}} cam Posición actual (se muta).
+   * @param {{wx:number,wz:number}} target Casa objetivo.
+   * @param {number} dirx @param {number} dirz Dirección deseada (elige el lado).
+   * @param {number} dt Delta de tiempo del frame (s).
+   */
+  _slideAroundTarget(cam, target, dirx, dirz, dt) {
+    const rx = target.wx - cam.x;
+    const rz = target.wz - cam.z;
+    const rl = Math.hypot(rx, rz) || 1;
+    let tx = -rz / rl;
+    let tz = rx / rl;
+    if (tx * dirx + tz * dirz < 0) {
+      tx = -tx;
+      tz = -tz;
+    }
+    const slide = stepPosition({ x: cam.x, z: cam.z }, { x: tx, z: tz }, dt, WALK_SPEED, { radius: this._walkRadius });
+    const slid = this._collideWizard(
+      { x: cam.x, z: cam.z },
+      collideWithCities({ x: cam.x, z: cam.z }, slide, this._walkCities, CITY_COLLIDER_RADIUS),
+    );
+    cam.x = slid.x;
+    cam.z = slid.z;
   }
 
   /**
@@ -2256,6 +2319,7 @@ export class CareerIsland3D extends LitElement {
     if (this._mode !== 'fps') return false;
     if (!this._walkCities.some((c) => c.id === cityId)) return false;
     this._autoWalkTargetId = cityId;
+    this._autoAtDoor = false; // arranca en fase «ir al punto de aproximación»
     this._autoWalkElapsed = 0;
     return true;
   }
@@ -2274,10 +2338,11 @@ export class CareerIsland3D extends LitElement {
     const pz = fromPos.z - city.wz;
     const plen = Math.hypot(px, pz) || 1;
     // Normal de la puerta (cara +z local girada por doorYaw) y coseno del ángulo
-    // con la dirección casa→jugador: > cos(~75°) = está delante de la puerta.
+    // con la dirección casa→jugador: > cos(60°) = está delante de la puerta. Arco
+    // estrecho (60°, antes 75°) para no entrar por un roce lateral (RMR-BUG-0016).
     const nx = Math.sin(city.doorYaw ?? 0);
     const nz = Math.cos(city.doorYaw ?? 0);
-    return (px * nx + pz * nz) / plen > 0.26;
+    return (px * nx + pz * nz) / plen > 0.5;
   }
 
   /** Ciudad cercana al caminante, para el resalte emisivo y el prompt «[E] Entrar en». */
