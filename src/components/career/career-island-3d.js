@@ -359,6 +359,10 @@ const BOAT_PROXIMITY_RADIUS = 12;
 const PARCH_SAIL = 0xf1e4c3;
 /** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
 const AUTOWALK_TIMEOUT_S = 30;
+/** Distancia (unidades) delante de la puerta a la que el autopiloto se coloca antes de entrar (JG-25 fix). */
+const AUTOWALK_APPROACH = CITY_COLLIDER_RADIUS + 2.5;
+/** El autopiloto solo AVANZA cuando el rumbo al objetivo está dentro de este ángulo (rad): gira primero. */
+const AUTOWALK_FACING = 0.35;
 /** Distancia (unidades) del cartel «En construcción» hacia el interior desde el puerto (MC-14). */
 const SIGN_INLAND_OFFSET = 10;
 /** Distancia (unidades) a la que se aparece frente a la ciudad actual del journey. */
@@ -2112,10 +2116,12 @@ export class CareerIsland3D extends LitElement {
         this._fpsStepCount = steps;
         cam.x = col.x;
         cam.z = col.z;
-        // Entrar en la casa SOLO al chocar AVANZANDO (JG-21): dar hacia atrás
-        // contra una casa a tu espalda no abre su tarjeta (fwd > 0 = avanzas).
-        if (colCities.hitCityId !== null && this._insideCityId === null && fwd > 0) {
-          this._enterCity(colCities.hitCityId);
+        // Entrar en la casa SOLO al chocar AVANZANDO (fwd > 0) y por el FRONTAL
+        // (la puerta, JG-25 fix): chocar por un lateral o la trasera no abre la
+        // tarjeta — hay que rodear hasta la puerta, como en una casa de verdad.
+        const hit = colCities.hitCityId;
+        if (hit !== null && this._insideCityId === null && fwd > 0 && this._isFrontalApproach(hit, cam)) {
+          this._enterCity(hit);
         } else if (col.hitWizard && fwd > 0) {
           this._openWizard();
         }
@@ -2183,38 +2189,59 @@ export class CareerIsland3D extends LitElement {
       return;
     }
     const cam = this._camera.position;
-    const dx = target.wx - cam.x;
-    const dz = target.wz - cam.z;
-    const dist = Math.hypot(dx, dz);
-    const dir = { x: dx / (dist || 1), z: dz / (dist || 1) };
-    // Girar la vista hacia el objetivo: rota el yaw el ángulo firmado entre el
-    // forward actual y la dirección al objetivo, acotado a la velocidad de giro.
+    // La puerta mira al puerto: normal de la puerta y punto de aproximación
+    // DELANTE de ella. El autopiloto va primero a ese punto (para entrar de
+    // frente, no por un lateral) y solo entonces embiste la puerta.
+    const nx = Math.sin(target.doorYaw ?? 0);
+    const nz = Math.cos(target.doorYaw ?? 0);
+    const approach = { x: target.wx + nx * AUTOWALK_APPROACH, z: target.wz + nz * AUTOWALK_APPROACH };
+    const nearApproach = Math.hypot(approach.x - cam.x, approach.z - cam.z) < AUTOWALK_APPROACH * 0.6;
+    // Sub-objetivo: el punto frente a la puerta hasta llegar a él; después, la
+    // propia casa (embestir la puerta de frente para entrar).
+    const goal = nearApproach ? { x: target.wx, z: target.wz } : approach;
+    const dx = goal.x - cam.x;
+    const dz = goal.z - cam.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    const dirx = dx / dist;
+    const dirz = dz / dist;
+    // GIRA la cámara HACIA el objetivo con rotateTowards (robusto, nivela el
+    // cabeceo al mirar a la misma altura) — nada de aritmética de euler
+    // compartido: gira suave y sin NaN. Matrix4.lookAt(ojo, objetivo, up) da la
+    // orientación en convención de CÁMARA (−z hacia el objetivo); un Object3D
+    // normal orientaría el +z y saldría de espaldas.
+    const THREE = this._THREE;
+    this._autoMat ??= new THREE.Matrix4();
+    this._autoQuat ??= new THREE.Quaternion();
+    this._autoUp ??= new THREE.Vector3(0, 1, 0);
+    this._autoGoal ??= new THREE.Vector3();
+    this._autoGoal.set(goal.x, cam.y, goal.z);
+    this._autoMat.lookAt(cam, this._autoGoal, this._autoUp);
+    this._autoQuat.setFromRotationMatrix(this._autoMat);
+    this._camera.quaternion.rotateTowards(this._autoQuat, TURN_SPEED * dt);
+    this._autoWalkElapsed = (this._autoWalkElapsed ?? 0) + dt;
+    // ¿mira ya al objetivo? coseno del ángulo entre el forward (plano) y la
+    // dirección al objetivo. AVANZA solo cuando lo tiene DELANTE: así sale de
+    // espaldas, GIRA sobre sí mismo, y camina de FRENTE — nunca de lado.
     const look = this._camera.getWorldDirection(this._walkDirScratch);
     const flen = Math.hypot(look.x, look.z) || 1;
-    const fx = look.x / flen;
-    const fz = look.z / flen;
-    const signed = Math.atan2(fx * dir.z - fz * dir.x, fx * dir.x + fz * dir.z);
-    if (Math.abs(signed) > 1e-3) {
-      this._eulerScratch.setFromQuaternion(this._camera.quaternion);
-      this._eulerScratch.y += Math.max(-TURN_SPEED * dt, Math.min(TURN_SPEED * dt, signed));
-      this._camera.quaternion.setFromEuler(this._eulerScratch);
+    const facing = (look.x / flen) * dirx + (look.z / flen) * dirz;
+    if (facing > Math.cos(AUTOWALK_FACING)) {
+      const next = stepPosition({ x: cam.x, z: cam.z }, { x: dirx, z: dirz }, dt, WALK_SPEED, { radius: this._walkRadius });
+      const colCities = collideWithCities({ x: cam.x, z: cam.z }, next, this._walkCities, CITY_COLLIDER_RADIUS);
+      const col = this._collideWizard({ x: cam.x, z: cam.z }, colCities);
+      this._fpsPhase += Math.hypot(col.x - cam.x, col.z - cam.z) * AVATAR.stepFreq;
+      const steps = Math.floor(this._fpsPhase / Math.PI);
+      if (steps > this._fpsStepCount) this._audio.step();
+      this._fpsStepCount = steps;
+      cam.x = col.x;
+      cam.z = col.z;
+      if (colCities.hitCityId === this._autoWalkTargetId && this._insideCityId === null) {
+        this._enterCity(colCities.hitCityId);
+        this._autoWalkTargetId = null;
+        return;
+      }
     }
-    const next = stepPosition({ x: cam.x, z: cam.z }, dir, dt, WALK_SPEED, { radius: this._walkRadius });
-    const colCities = collideWithCities({ x: cam.x, z: cam.z }, next, this._walkCities, CITY_COLLIDER_RADIUS);
-    const col = this._collideWizard({ x: cam.x, z: cam.z }, colCities);
-    this._fpsPhase += Math.hypot(col.x - cam.x, col.z - cam.z) * AVATAR.stepFreq;
-    const steps = Math.floor(this._fpsPhase / Math.PI);
-    if (steps > this._fpsStepCount) this._audio.step();
-    this._fpsStepCount = steps;
-    cam.x = col.x;
-    cam.z = col.z;
-    this._autoWalkElapsed = (this._autoWalkElapsed ?? 0) + dt;
-    if (colCities.hitCityId === this._autoWalkTargetId && this._insideCityId === null) {
-      this._enterCity(colCities.hitCityId);
-      this._autoWalkTargetId = null;
-    } else if (dist < 1.5 || this._autoWalkElapsed > AUTOWALK_TIMEOUT_S) {
-      this._autoWalkTargetId = null;
-    }
+    if (this._autoWalkElapsed > AUTOWALK_TIMEOUT_S) this._autoWalkTargetId = null;
   }
 
   /**
@@ -2231,6 +2258,26 @@ export class CareerIsland3D extends LitElement {
     this._autoWalkTargetId = cityId;
     this._autoWalkElapsed = 0;
     return true;
+  }
+
+  /**
+   * ¿El caminante se acerca a la casa por su FRONTAL (la puerta)? (JG-25 fix).
+   * La puerta mira al puerto (doorYaw): se entra solo si el jugador está en el
+   * arco frontal — su posición, respecto al eje de la casa, cae del lado de la
+   * puerta. Rodear a un lateral o la trasera no abre la tarjeta.
+   * @param {string} cityId @param {{x:number,z:number}} fromPos
+   */
+  _isFrontalApproach(cityId, fromPos) {
+    const city = this._walkCities.find((c) => c.id === cityId);
+    if (!city) return false;
+    const px = fromPos.x - city.wx;
+    const pz = fromPos.z - city.wz;
+    const plen = Math.hypot(px, pz) || 1;
+    // Normal de la puerta (cara +z local girada por doorYaw) y coseno del ángulo
+    // con la dirección casa→jugador: > cos(~75°) = está delante de la puerta.
+    const nx = Math.sin(city.doorYaw ?? 0);
+    const nz = Math.cos(city.doorYaw ?? 0);
+    return (px * nx + pz * nz) / plen > 0.26;
   }
 
   /** Ciudad cercana al caminante, para el resalte emisivo y el prompt «[E] Entrar en». */
@@ -2451,8 +2498,17 @@ export class CareerIsland3D extends LitElement {
     this._islandR = islandRadius(this.map);
     this._walkRadius = walkableRadius(this._islandR);
     // Posiciones de mundo de las ciudades para la marcha: colisión por frame y
-    // muestreo de proximidad comparten esta lista (se rehace con el mapa).
-    this._walkCities = (this.map.cities ?? []).map((c) => ({ id: c.id, ...worldFromMap(c.x, c.y) }));
+    // muestreo de proximidad comparten esta lista (se rehace con el mapa). Cada
+    // casa guarda el yaw de su PUERTA (mira al puerto, facadeYawToward): sirve
+    // para entrar SOLO por el frontal (JG-25 fix) y para que el autopiloto se
+    // coloque delante de la puerta antes de entrar.
+    const portForDoor = this.map.startPort
+      ? worldFromMap(this.map.startPort.x, this.map.startPort.y)
+      : { wx: 0, wz: 0 };
+    this._walkCities = (this.map.cities ?? []).map((c) => {
+      const w = worldFromMap(c.x, c.y);
+      return { id: c.id, ...w, doorYaw: facadeYawToward(w, portForDoor) };
+    });
     if (this.map.id !== this._lastMapId) this._clearPlateCache(); // otra isla, otras placas
     // La cabaña del brujo (MC-22): posición determinista ANTES del grupo
     // estático (la vegetación la excluye). Acotada al radio caminable para que
