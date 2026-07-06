@@ -5,7 +5,6 @@
  * @typedef {import('../../domain/endorsements.js').Endorsements} Endorsements
  */
 import { mergeAchievements, normalizeAchievements } from '../../domain/achievements.js';
-import { normalizeLogbook } from '../../domain/logbook.js';
 
 /**
  * @param {Record<string, import('../../domain/types.js').Journey>} [seed]

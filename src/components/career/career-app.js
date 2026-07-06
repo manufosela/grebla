@@ -3735,25 +3735,32 @@ export class CareerApp extends LitElement {
           <h3>📖 Bitácora</h3>
           <button class="close" aria-label="Cerrar la bitácora" title="Cerrar (Esc)" @click=${this._closeLogbook}>✕</button>
         </header>
-        ${this.logbook === null
-          ? html`<p class="lb-empty">Leyendo tu bitácora…</p>`
-          : entries.length === 0
-            ? html`<p class="lb-empty">Tu travesía acaba de empezar: aquí quedará constancia de cada certificado que logres y cada reto que emprendas.</p>`
-            : html`<ol class="lb-list">
-                ${entries.map((e) => {
-                  const meta = CareerApp.LOG_META[e.kind] ?? { icon: '•', verb: '' };
-                  const when = formatAchievedAt(e.at);
-                  return html`<li class="lb-item">
-                    <span class="lb-ico" aria-hidden="true">${meta.icon}</span>
-                    <span class="lb-body">
-                      <span class="lb-what"><strong>${meta.verb}</strong> ${e.label}</span>
-                      ${when ? html`<span class="lb-when">${when}</span>` : null}
-                    </span>
-                  </li>`;
-                })}
-              </ol>`}
+        ${this._renderLogbookBody(entries)}
       </section>
     </div>`;
+  }
+
+  /** Cuerpo de la bitácora (JG-23): cargando, vacía, o la lista de apuntes. */
+  _renderLogbookBody(entries) {
+    if (this.logbook === null) {
+      return html`<p class="lb-empty">Leyendo tu bitácora…</p>`;
+    }
+    if (entries.length === 0) {
+      return html`<p class="lb-empty">Tu travesía acaba de empezar: aquí quedará constancia de cada certificado que logres y cada reto que emprendas.</p>`;
+    }
+    return html`<ol class="lb-list">
+      ${entries.map((e) => {
+        const meta = CareerApp.LOG_META[e.kind] ?? { icon: '•', verb: '' };
+        const when = formatAchievedAt(e.at);
+        return html`<li class="lb-item">
+          <span class="lb-ico" aria-hidden="true">${meta.icon}</span>
+          <span class="lb-body">
+            <span class="lb-what"><strong>${meta.verb}</strong> ${e.label}</span>
+            ${when ? html`<span class="lb-when">${when}</span>` : null}
+          </span>
+        </li>`;
+      })}
+    </ol>`;
   }
 
   /**

@@ -125,8 +125,12 @@ export function appendLogbook(logbook, additions) {
  * @returns {LogEntry[]}
  */
 export function logbookView(logbook) {
+  const compare = (a, b) => {
+    if (a.entry.at === b.entry.at) return b.i - a.i; // empate: el añadido después va antes
+    return a.entry.at < b.entry.at ? 1 : -1; // fecha mayor primero
+  };
   return logbook.entries
     .map((entry, i) => ({ entry, i }))
-    .toSorted((a, b) => (a.entry.at === b.entry.at ? b.i - a.i : a.entry.at < b.entry.at ? 1 : -1))
+    .toSorted(compare)
     .map((x) => x.entry);
 }
