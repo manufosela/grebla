@@ -925,9 +925,10 @@ export class CareerIsland3D extends LitElement {
     .guide[hidden] { display: none; }
     .guide-arrow {
       display: inline-block;
-      font-size: 1.05rem;
+      font-size: 1.3rem;
       line-height: 1;
       color: #f2887a;
+      transform: rotate(-90deg); /* ➤ apunta arriba en reposo; _updateGuide lo gira al objetivo */
       transition: transform 0.12s linear;
       will-change: transform;
     }
@@ -2178,7 +2179,9 @@ export class CareerIsland3D extends LitElement {
     // Ángulo firmado entre hacia dónde miras y hacia dónde está la casa.
     const signed = Math.atan2(fx * (dz / dist) - fz * (dx / dist), fx * (dx / dist) + fz * (dz / dist));
     el.hidden = false;
-    el.querySelector('.guide-arrow').style.transform = `rotate(${(signed * 180) / Math.PI}deg)`;
+    // El glifo ➤ apunta a la DERECHA en reposo; −90° lo lleva a apuntar ARRIBA
+    // (hacia delante) cuando la casa está justo en tu rumbo (signed = 0).
+    el.querySelector('.guide-arrow').style.transform = `rotate(${(signed * 180) / Math.PI - 90}deg)`;
     const name = this.map?.cities?.find((c) => c.id === targetId)?.name ?? '';
     el.querySelector('.gname').textContent = name;
     el.querySelector('.dist').textContent = `${Math.round(dist)} m`;
@@ -6411,7 +6414,7 @@ export class CareerIsland3D extends LitElement {
           : null}
         ${this._mode === 'fps'
           ? html`<div class="guide" hidden aria-hidden="true">
-              <span class="guide-arrow">▲</span>
+              <span class="guide-arrow">➤</span>
               <span class="guide-label"><span class="gname"></span><span class="dist"></span></span>
             </div>`
           : null}
