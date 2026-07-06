@@ -410,6 +410,7 @@ export class CareerApp extends LitElement {
     routePicker: { state: true },
     showRoute: { state: true },
     routeView: { state: true },
+    routeIsChallenge: { state: true },
     routeBusy: { state: true },
     routeError: { state: true },
     routeSea: { state: true },
@@ -1091,6 +1092,28 @@ export class CareerApp extends LitElement {
     }
     .reto > button, .reto-abandonar { flex: 0 0 auto; }
     /* Grupos por ROL del catálogo (JG-14): rótulo del rol y sus hitos. */
+    /* Opción «Mi propia ruta» (JG-22): el default del selector, arriba del todo. */
+    .reto-libre {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      width: 100%;
+      text-align: left;
+      margin: 0 0 0.85rem;
+      padding: 0.7rem 0.85rem;
+      border-radius: var(--rm-radius, 12px);
+      border: 1.5px solid var(--parch-edge, #b98f56);
+      background: var(--parch-bg-2, #ead6a8);
+      color: var(--parch-ink, #33240f);
+      cursor: pointer;
+      font: inherit;
+    }
+    .reto-libre.sel { border-color: var(--rm-accent, #2a9d8f); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rm-accent, #2a9d8f) 40%, transparent); cursor: default; }
+    .reto-libre:not(.sel):hover { border-color: var(--rm-accent, #2a9d8f); }
+    .reto-libre-ico { font-size: 1.3rem; line-height: 1; }
+    .reto-libre-info { display: flex; flex-direction: column; gap: 0.1rem; }
+    .reto-libre-info strong { font-size: 0.95rem; }
+    .reto-libre-meta { font-size: 0.78rem; color: var(--parch-muted, #6b5433); }
     .reto-roles { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.85rem; }
     .rol-name { margin: 0 0 0.35rem; font-size: 0.95rem; color: var(--rm-navy, #1e3a5f); }
     /* Chip del HITO con el color de la escala GREBLA (levels.js): tinte de
@@ -2032,6 +2055,8 @@ export class CareerApp extends LitElement {
     /** Paradas de la ruta RESUELTAS (nombre, isla, estado) para el gestor, o
      * null mientras cargan. @type {{ n: number, cityId: string, cityName: string, islandName: string, visited: boolean }[]|null} */
     this.routeView = null;
+    /** «Mi ruta» está mostrando la ruta de un RETO (solo lectura), no la libre. */
+    this.routeIsChallenge = false;
     this.routeBusy = false;
     this.routeError = '';
     /** Marca de la ruta libre en el MAPA DEL MAR: islas EN ORDEN y números de
@@ -3008,9 +3033,9 @@ export class CareerApp extends LitElement {
       @click=${this._openChallenges}
       aria-pressed=${active}
       title=${active
-        ? 'Modo Reto: sigues una ruta con casas numeradas. Abrir el catálogo (ver progreso o abandonar)'
-        : 'Modo Libre: eliges tu camino (con prerequisitos). Abrir el catálogo de retos para jugar una ruta guiada'}
-    >🎯 Modo: ${active ? 'Reto' : 'Libre'}</button>`;
+        ? 'Estás jugando un reto (ruta guiada con casas numeradas). Abre el selector para cambiarlo o volver a tu propia ruta'
+        : 'Estás en tu propia ruta (modo libre). Abre el selector para elegir un reto: una ruta de rol y nivel guiada'}
+    >🎯 ${active ? 'Cambiar reto' : 'Elegir reto'}</button>`;
   }
 
   /** Rótulo «{casa}» de la siguiente parada del reto, con su isla entre
@@ -3129,6 +3154,39 @@ export class CareerApp extends LitElement {
    * su isla si no es la actual) y «Abandonar reto» con confirmación in-place.
    * @param {import('../../tools/career/domain/types.js').Challenge} challenge
    * @param {import('../../tools/career/domain/challenge.js').ChallengeProgress} progress */
+  /**
+   * Opción «Mi propia ruta» del selector (JG-22): el modo LIBRE, primera de la
+   * lista y marcada ✓ cuando no hay reto — el default explícito que pedía el
+   * usuario. Con un reto activo, es el botón para volver a tu ruta (abandona
+   * el reto; los certificados se quedan).
+   * @param {boolean} challengeActive
+   */
+  _renderFreeRouteOption(challengeActive) {
+    const selected = !challengeActive;
+    return html`<button
+      class="reto-libre ${selected ? 'sel' : ''}"
+      ?disabled=${selected || this.challengeBusy || !this._canPlayJourney}
+      aria-pressed=${selected}
+      title=${selected
+        ? 'Estás en tu propia ruta: eliges tú el camino, casa a casa'
+        : 'Volver a tu propia ruta (abandona el reto; los certificados se quedan)'}
+      @click=${this._chooseFreeRoute}
+    >
+      <span class="reto-libre-ico" aria-hidden="true">🧭</span>
+      <span class="reto-libre-info">
+        <strong>Mi propia ruta${selected ? ' ✓' : ''}</strong>
+        <span class="reto-libre-meta">${selected ? 'Modo libre — eliges tú el camino' : 'Volver al modo libre'}</span>
+      </span>
+    </button>`;
+  }
+
+  /** Vuelve a la propia ruta desde el selector (JG-22): abandona el reto si lo
+   * hay. Sin reto no hace nada (ya estás libre). */
+  async _chooseFreeRoute() {
+    if (!this._challenge) return;
+    await this._abandonChallenge();
+  }
+
   _renderActiveChallenge(challenge, progress) {
     const nextLabel = this._challengeNextLabel(progress);
     return html`<div class="reto-activo">
@@ -3200,6 +3258,7 @@ export class CareerApp extends LitElement {
               path: multi-isla y entrando por Bases. Al lograr cada
               certificado el juego te señala la siguiente casa.
             </p>`}
+        ${this._renderFreeRouteOption(Boolean(challenge))}
         ${groups.length === 0
           ? html`<p class="reto-lead">
               El catálogo de rutas aún no está publicado en esta instancia.
@@ -3236,18 +3295,27 @@ export class CareerApp extends LitElement {
    * @returns {Promise<ReturnType<typeof resolveRouteStops>>}
    */
   async _resolveRoute() {
-    const planned = this.journey?.plannedRoute ?? [];
-    if (planned.length === 0) return { stops: [], missing: [] };
+    return this._resolveStops(this.journey?.plannedRoute ?? []);
+  }
+
+  /**
+   * Resuelve una lista de casas (ruta libre o paradas de reto) a paradas con
+   * nombre e isla, cargando los mapas del archipiélago bajo demanda.
+   * @param {ReadonlyArray<string>} cityIds
+   * @returns {Promise<ReturnType<typeof resolveRouteStops>>}
+   */
+  async _resolveStops(cityIds) {
+    if (cityIds.length === 0) return { stops: [], missing: [] };
     this.archipelago ??= await getArchipelago();
     const maps = [];
-    const pending = new Set(planned);
+    const pending = new Set(cityIds);
     for (const isle of this.archipelago.islands) {
       if (pending.size === 0) break;
       const map = await this._ensureIslandMap(isle.id);
       maps.push(map);
       for (const city of map.cities) pending.delete(city.id);
     }
-    return resolveRouteStops(planned, maps);
+    return resolveRouteStops(cityIds, maps);
   }
 
   /**
@@ -3293,10 +3361,15 @@ export class CareerApp extends LitElement {
 
   /** Botón «🧭 Mi ruta» de la barra: abre el gestor de la ruta libre (JG-9). */
   _renderRouteButton() {
-    const count = (this.journey?.plannedRoute ?? []).length;
+    // «Mi ruta» refleja la ruta ACTIVA (JG-22): las paradas del reto si lo hay,
+    // o la ruta libre. El contador acompaña.
+    const challenge = this._challenge;
+    const count = challenge ? challenge.stops.length : (this.journey?.plannedRoute ?? []).length;
     return html`<button
       @click=${this._openRouteManager}
-      title="Abrir tu ruta libre: paradas en orden, reordenar y quitar"
+      title=${challenge
+        ? 'Abrir la ruta del reto activo: sus paradas en orden'
+        : 'Abrir tu ruta libre: paradas en orden, reordenar y quitar'}
     >🧭 Mi ruta${count > 0 ? ` (${count})` : ''}</button>`;
   }
 
@@ -3329,7 +3402,12 @@ export class CareerApp extends LitElement {
    */
   async _refreshRouteView() {
     try {
-      const { stops, missing } = await this._resolveRoute();
+      // «Mi ruta» muestra la ruta ACTIVA (JG-22): las paradas del reto si hay
+      // uno (solo lectura), o la ruta libre editable si no.
+      const challenge = this._challenge;
+      this.routeIsChallenge = Boolean(challenge);
+      const cityIds = challenge ? challenge.stops : (this.journey?.plannedRoute ?? []);
+      const { stops, missing } = await this._resolveStops(cityIds);
       const visited = new Set(this.journey?.visitedCities ?? []);
       this.routeView = stops.map((s) => ({
         n: s.n,
@@ -3395,19 +3473,25 @@ export class CareerApp extends LitElement {
   _renderRouteManager() {
     if (!this.showRoute) return null;
     const stops = this.routeView;
+    const isChallenge = this.routeIsChallenge;
+    const editable = !isChallenge && this._canPlayJourney;
+    const title = isChallenge ? 'Ruta del reto' : 'Mi ruta';
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeRouteManager(); }}>
       <section
         class="ruta"
         role="dialog"
         aria-modal="true"
-        aria-label="Mi ruta libre"
+        aria-label=${isChallenge ? 'Ruta del reto activo' : 'Mi ruta libre'}
         tabindex="-1"
         @keydown=${this._onRouteKeydown}
       >
         <header class="sea-head">
-          <h3>🧭 Mi ruta</h3>
+          <h3>🧭 ${title}</h3>
           <button class="close" aria-label="Cerrar mi ruta" title="Cerrar (Esc)" @click=${this._closeRouteManager}>✕</button>
         </header>
+        ${isChallenge
+          ? html`<p class="ruta-lead">Sigues el reto <strong>${this._challenge?.name ?? ''}</strong>: sus paradas en orden. Para editar tu propio camino, vuelve a «Mi propia ruta».</p>`
+          : null}
         ${this.routeError ? html`<p class="error">${this.routeError}</p>` : null}
         ${stops === null
           ? html`<p class="ruta-lead">Leyendo tu ruta…</p>`
@@ -3423,7 +3507,7 @@ export class CareerApp extends LitElement {
                     <strong>${stop.cityName}</strong>
                     <span class="ruta-meta">${stop.islandName} · ${stop.visited ? 'certificada ✓' : 'pendiente'}</span>
                   </span>
-                  ${this._canPlayJourney
+                  ${editable
                     ? html`<span class="ruta-actions">
                         <button
                           ?disabled=${this.routeBusy || i === 0}
