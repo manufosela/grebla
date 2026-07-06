@@ -17,6 +17,7 @@
  * @property {string|null} [deactivatedAt]  ISO date de la baja (null/ausente si activa)
  * @property {string|null} [githubLogin]    Usuario de GitHub, para mapear la contribución DORA a la persona.
  * @property {string|null} [uid]            Cuenta vinculada (acceso de solo lectura de la persona). Se vincula al dar acceso.
+ * @property {string|null} [pendingEmail]   Invitación por email a alguien que aún no se ha logado: la persona se prepara con uid null y, en su primer login con ese email, una Cloud Function sella el uid y limpia este campo.
  * @property {string[]} [labels]            Etiquetas libres (gremios/equipos) asignadas a la persona.
  * @property {string} [ownerLeaderUid]      Líder dueño de la persona (la gestiona y comparte).
  * @property {Record<string, SharePermission>} [sharedWith]   Compartición con otros líderes: uid → permiso.

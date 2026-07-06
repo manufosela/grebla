@@ -7,6 +7,7 @@ import {
   deactivatePerson,
   getTurnover,
   normalizePerson,
+  normalizeInviteEmail,
   addGuild,
   listGuilds,
   removeGuild,
@@ -86,6 +87,26 @@ describe('Fase 2b — casos de uso', () => {
   it('normalizePerson garantiza guilds como array', () => {
     expect(normalizePerson({ guilds: ['A', 'B'] }).guilds).toEqual(['A', 'B']);
     expect(normalizePerson({}).guilds).toEqual([]);
+  });
+
+  it('addPerson pre-invita por email (pendingEmail normalizado; uid null)', async () => {
+    await addPerson(p, { name: 'Nuevo', guilds: [], startDate: '2025-01-01', pendingEmail: '  Nuevo@Empresa.COM ' });
+    const person = (await listActivePeople(p)).find((x) => x.name === 'Nuevo');
+    expect(person.pendingEmail).toBe('nuevo@empresa.com');
+    expect(person.uid).toBeNull();
+  });
+
+  it('addPerson con uid NO guarda invitación (son excluyentes)', async () => {
+    await addPerson(p, { name: 'Vinculada', guilds: [], startDate: '2025-01-01', uid: 'uid-123', pendingEmail: 'x@y.com' });
+    const person = (await listActivePeople(p)).find((x) => x.name === 'Vinculada');
+    expect(person.uid).toBe('uid-123');
+    expect(person.pendingEmail).toBeNull();
+  });
+
+  it('normalizeInviteEmail: trim + minúsculas, vacío → null', () => {
+    expect(normalizeInviteEmail('  A@B.com ')).toBe('a@b.com');
+    expect(normalizeInviteEmail('   ')).toBeNull();
+    expect(normalizeInviteEmail(undefined)).toBeNull();
   });
 
   it('catálogo de gremios: add / list / remove', async () => {

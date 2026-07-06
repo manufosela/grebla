@@ -14,6 +14,7 @@ import { LitElement, html, css } from 'lit';
 import '../app-modal.js';
 import {
   addPerson,
+  normalizeInviteEmail,
   listActivePeople,
   deactivatePerson,
   updatePerson,
@@ -52,6 +53,7 @@ export class TeamPeople extends LitElement {
     error: { state: true },
     _name: { state: true },
     _selectedUid: { state: true },
+    _inviteEmail: { state: true },
     _selectedDisciplines: { state: true },
     _levelId: { state: true },
     _selectedGuilds: { state: true },
@@ -73,6 +75,7 @@ export class TeamPeople extends LitElement {
     _editGuilds: { state: true },
     _editLabels: { state: true },
     _editUid: { state: true },
+    _editInviteEmail: { state: true },
   };
 
   static styles = css`
@@ -100,6 +103,9 @@ export class TeamPeople extends LitElement {
     .eje-hint { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0 0 0.6rem; }
     .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
     .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #111827); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
+    /* Invitación pendiente (persona pre-invitada por email, aún sin vincular). */
+    .pending { display: block; margin-top: 0.2rem; font-size: 0.74rem; font-weight: 600; color: #8a5a00; }
+    .invite-field input:disabled { opacity: 0.55; }
     .title { font-weight: 600; color: var(--rm-text, #111827); }
     .muted { color: var(--rm-muted, #9ca3af); }
     .link-inline {
@@ -224,6 +230,10 @@ export class TeamPeople extends LitElement {
     this._name = '';
     /** @type {string} uid de la cuenta a vincular en el alta ('' = sin vincular) */
     this._selectedUid = '';
+    /** @type {string} email de invitación en el alta (persona aún no logada; '' = sin invitación) */
+    this._inviteEmail = '';
+    /** @type {string} email de invitación en edición (mientras la persona sigue sin uid) */
+    this._editInviteEmail = '';
     /** @type {string[]} ids de disciplina seleccionadas para el alta */
     this._selectedDisciplines = [];
     /** @type {string} id de nivel seleccionado para el alta ('' = sin nivel) */
@@ -363,6 +373,33 @@ export class TeamPeople extends LitElement {
     `;
   }
 
+  /**
+   * Campo «Invitar por email»: pre-invita a alguien que AÚN no se ha logado, de
+   * modo que su persona/plan queden listos y su primer login con ese email selle
+   * el vínculo (Cloud Function). Se deshabilita si ya hay una cuenta vinculada
+   * (son excluyentes). Riesgo asumido: un typo deja a la persona sin vincular.
+   * @param {string} value  email actual
+   * @param {(email: string) => void} onChange
+   * @param {boolean} disabled  true si ya hay cuenta vinculada
+   */
+  _renderInviteField(value, onChange, disabled) {
+    return html`
+      <label class="invite-field">
+        Invitar por email (si aún no se ha logado)
+        <input
+          type="email"
+          placeholder="persona@empresa.com"
+          .value=${value ?? ''}
+          ?disabled=${disabled}
+          @input=${(e) => onChange(e.target.value)}
+        />
+        <span class="eje-hint">${disabled
+          ? 'Ya has vinculado una cuenta: la invitación por email no aplica.'
+          : 'La persona se crea con su plan listo; al entrar por primera vez con este email se vincula sola. Cuida la ortografía: un error la dejaría sin vincular.'}</span>
+      </label>
+    `;
+  }
+
   /** @param {string} id @param {boolean} checked */
   _toggleDiscipline(id, checked) {
     this._selectedDisciplines = checked
@@ -432,6 +469,7 @@ export class TeamPeople extends LitElement {
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
         githubLogin: this._github,
         uid: this._selectedUid || null,
+        pendingEmail: this._inviteEmail || null,
       });
       this._name = '';
       this._selectedDisciplines = [];
@@ -443,6 +481,7 @@ export class TeamPeople extends LitElement {
       this._startDate = '';
       this._github = '';
       this._selectedUid = '';
+      this._inviteEmail = '';
       await this._load();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo crear la persona.';
@@ -621,6 +660,7 @@ export class TeamPeople extends LitElement {
     this._editGuilds = [...(person.guilds ?? [])];
     this._editLabels = [...(person.labels ?? [])];
     this._editUid = person.uid ?? '';
+    this._editInviteEmail = person.pendingEmail ?? '';
     this.error = '';
   }
 
@@ -653,12 +693,17 @@ export class TeamPeople extends LitElement {
     if (!person) return;
     this.error = '';
     try {
+      // uid y pendingEmail son excluyentes: si se vincula una cuenta, la
+      // invitación pendiente se limpia; si no, se guarda el email (editable
+      // mientras la persona no tenga uid, para corregir un typo).
+      const linkedUid = this._editUid || null;
       await updatePerson(this.persistence, person.id, {
         disciplines: [...this._editDisciplines],
         levelId: this._editLevelId || null,
         guilds: [...this._editGuilds],
         labels: [...this._editLabels],
-        uid: this._editUid || null,
+        uid: linkedUid,
+        pendingEmail: linkedUid ? null : normalizeInviteEmail(this._editInviteEmail),
       });
       this._editFor = null;
       await this._load();
@@ -839,6 +884,7 @@ export class TeamPeople extends LitElement {
                 ${this._renderDisciplineChecks(this._editDisciplines, (id, checked) => this._toggleEditDiscipline(id, checked))}
                 ${this._renderLevelSelect(this._editLevelId, (id) => { this._editLevelId = id; })}
                 ${this._renderAccountSelect(this._editUid, (uid) => { this._editUid = uid; }, person.uid ?? undefined)}
+                ${this._renderInviteField(this._editInviteEmail, (email) => { this._editInviteEmail = email; }, Boolean(this._editUid))}
                 <fieldset class="roles">
                   <legend>Gremios</legend>
                   <p class="eje-hint">Tecnología o stack que domina la persona (JavaScript, Python, Kubernetes…); no mide nivel.</p>
@@ -912,6 +958,7 @@ export class TeamPeople extends LitElement {
             </label>
           </div>
           ${this._renderAccountSelect(this._selectedUid, (uid) => this._onSelectAltaAccount(uid))}
+          ${this._renderInviteField(this._inviteEmail, (email) => { this._inviteEmail = email; }, Boolean(this._selectedUid))}
           ${this._renderDisciplineChecks(this._selectedDisciplines, (id, checked) => this._toggleDiscipline(id, checked))}
           ${this._renderLevelSelect(this._levelId, (id) => { this._levelId = id; })}
           <fieldset class="roles">
@@ -999,7 +1046,12 @@ export class TeamPeople extends LitElement {
                         const title = composeTitle(this.framework, p.levelId, p.disciplines);
                         return html`
                         <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
-                          <td>${p.name}</td>
+                          <td>
+                            ${p.name}
+                            ${!p.uid && p.pendingEmail
+                              ? html`<span class="pending" title="Aún no se ha logado: se vinculará en su primer login con este email">⏳ Pendiente: ${p.pendingEmail}</span>`
+                              : null}
+                          </td>
                           <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
                           <td>
                             ${(p.guilds ?? []).length === 0
