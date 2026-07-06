@@ -355,6 +355,8 @@ const PROXIMITY_CHECK_MS = 100;
  * para que salga el prompt «[E] Zarpar».
  */
 const BOAT_PROXIMITY_RADIUS = 12;
+/** Color de la vela de pergamino del barquito pirata amarrado (JG-24). */
+const PARCH_SAIL = 0xf1e4c3;
 /** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
 const AUTOWALK_TIMEOUT_S = 30;
 /** Distancia (unidades) del cartel «En construcción» hacia el interior desde el puerto (MC-14). */
@@ -3245,6 +3247,35 @@ export class CareerIsland3D extends LitElement {
     );
     bench.position.y = 0.52;
     boat.add(bench);
+    // Aparejo pirata (JG-24): mástil, verga, vela de pergamino y gallardete con
+    // calavera — la barca amarrada pasa a leerse como un barquito pirata. Vela
+    // y bandera son hijas del grupo: siguen siendo puerta del archipiélago
+    // (raycast al clicar cualquier parte, y prompt «[E] Zarpar» a pie).
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.07, 2.5, 6),
+      materialFor(ENV_COLORS.wood, 'wood'),
+    );
+    mast.position.set(0, 1.55, 0.1);
+    boat.add(mast);
+    const yard = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.045, 1.5, 6),
+      materialFor(ENV_COLORS.wood, 'wood'),
+    );
+    yard.rotation.z = Math.PI / 2;
+    yard.position.set(0, 2.35, 0.1);
+    boat.add(yard);
+    const sail = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.35, 1.25),
+      new THREE.MeshLambertMaterial({ color: PARCH_SAIL, side: THREE.DoubleSide, flatShading: true }),
+    );
+    sail.position.set(0, 1.72, 0.1);
+    boat.add(sail);
+    const pennant = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.6, 0.36),
+      new THREE.MeshBasicMaterial({ map: this._envTexture('jollyroger'), transparent: true, side: THREE.DoubleSide }),
+    );
+    pennant.position.set(0.32, 2.75, 0.1);
+    boat.add(pennant);
     harbor.add(boat);
 
     // Faro a pie de muelle: torre BLANCA troncocónica con dos franjas rojas,
