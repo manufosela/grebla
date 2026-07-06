@@ -359,8 +359,6 @@ const BOAT_PROXIMITY_RADIUS = 12;
 const PARCH_SAIL = 0xf1e4c3;
 /** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
 const AUTOWALK_TIMEOUT_S = 30;
-/** Distancia (unidades) delante de la puerta a la que el autopiloto se coloca antes de entrar (JG-25 fix). */
-const AUTOWALK_APPROACH = CITY_COLLIDER_RADIUS + 2.5;
 /** El autopiloto solo AVANZA cuando el rumbo al objetivo está dentro de este ángulo (rad): gira primero. */
 const AUTOWALK_FACING = 0.35;
 /** Distancia (unidades) del cartel «En construcción» hacia el interior desde el puerto (MC-14). */
@@ -376,6 +374,8 @@ const EXIT_LOOK_AHEAD = 30;
  * cityVariant), así que un único radio vale para todas.
  */
 const CITY_COLLIDER_RADIUS = Math.hypot(CITY_BODY.w, CITY_BODY.w) / 2 + 0.65;
+/** Distancia (unidades) delante de la puerta a la que el autopiloto se coloca antes de entrar (JG-25 fix). Depende de CITY_COLLIDER_RADIUS: declarar DESPUÉS (evita el TDZ). */
+const AUTOWALK_APPROACH = CITY_COLLIDER_RADIUS + 2.5;
 /**
  * Escala del yaw extra determinista de cityVariant (±0.3 rad) al orientar las
  * fachadas hacia el puerto (MC-9): la variación queda en ±0.15 rad — las casas
