@@ -6,9 +6,12 @@ import {
   newCertificateEntries,
   appendLogbook,
   logbookView,
+  completedRoutes,
 } from './logbook.js';
 
 const cert = (ref, at, label = ref) => ({ kind: 'certificate', ref, label, at });
+const start = (ref, at, label = ref) => ({ kind: 'route-start', ref, label, at });
+const complete = (ref, at, label = ref) => ({ kind: 'route-complete', ref, label, at });
 
 describe('normalizeLogbook', () => {
   it('sin datos devuelve una bitácora vacía', () => {
@@ -88,5 +91,75 @@ describe('logbookView', () => {
       ],
     };
     expect(logbookView(logbook).map((e) => e.ref)).toEqual(['c', 'b', 'a']);
+  });
+});
+
+describe('route-complete', () => {
+  it('normaliza el apunte route-complete y su clave lleva la fecha (repetible)', () => {
+    const { entries } = normalizeLogbook({
+      entries: [complete('php--grumete', '2026-07-06T12:00:00Z', 'Backend PHP · Grumete')],
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].kind).toBe('route-complete');
+    expect(logEntryKey(entries[0])).toBe('route-complete:php--grumete:2026-07-06T12:00:00Z');
+  });
+
+  it('completar el mismo reto dos veces son dos apuntes (clave con fecha)', () => {
+    const base = { entries: [complete('php--grumete', '2026-07-01T10:00:00Z')] };
+    const next = appendLogbook(base, [complete('php--grumete', '2026-07-08T10:00:00Z')]);
+    expect(next.entries).toHaveLength(2);
+  });
+});
+
+describe('completedRoutes', () => {
+  it('empareja cada route-complete con su route-start y calcula la duración', () => {
+    const logbook = {
+      entries: [
+        start('php--grumete', '2026-07-01T09:00:00Z', 'Backend PHP · Grumete'),
+        cert('bases/git', '2026-07-02T10:00:00Z'),
+        complete('php--grumete', '2026-07-03T09:00:00Z', 'Backend PHP · Grumete'),
+      ],
+    };
+    const done = completedRoutes(logbook);
+    expect(done).toHaveLength(1);
+    expect(done[0]).toMatchObject({
+      routeId: 'php--grumete',
+      name: 'Backend PHP · Grumete',
+      startedAt: '2026-07-01T09:00:00Z',
+      completedAt: '2026-07-03T09:00:00Z',
+      durationMs: 2 * 24 * 60 * 60 * 1000, // 2 días
+    });
+  });
+
+  it('sin route-start casado, startedAt y durationMs van a null (no inventa)', () => {
+    const done = completedRoutes({ entries: [complete('php--grumete', '2026-07-03T09:00:00Z')] });
+    expect(done[0].startedAt).toBeNull();
+    expect(done[0].durationMs).toBeNull();
+  });
+
+  it('empareja el route-start MÁS RECIENTE anterior (reto repetido)', () => {
+    const logbook = {
+      entries: [
+        start('php--grumete', '2026-06-01T09:00:00Z'),
+        complete('php--grumete', '2026-06-05T09:00:00Z'),
+        start('php--grumete', '2026-07-01T09:00:00Z'), // segunda vez
+        complete('php--grumete', '2026-07-02T09:00:00Z'),
+      ],
+    };
+    const done = completedRoutes(logbook);
+    expect(done).toHaveLength(2);
+    // Más reciente primero: el segundo completado empareja con el segundo inicio.
+    expect(done[0].startedAt).toBe('2026-07-01T09:00:00Z');
+    expect(done[1].startedAt).toBe('2026-06-01T09:00:00Z');
+  });
+
+  it('ordena de la finalización más reciente a la más antigua', () => {
+    const logbook = {
+      entries: [
+        complete('a--x', '2026-07-01T09:00:00Z'),
+        complete('b--y', '2026-07-09T09:00:00Z'),
+      ],
+    };
+    expect(completedRoutes(logbook).map((r) => r.routeId)).toEqual(['b--y', 'a--x']);
   });
 });

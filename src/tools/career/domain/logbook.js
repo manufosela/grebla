@@ -16,7 +16,7 @@
  *    el primero se queda. Los eventos de ruta llevan la fecha en la clave para
  *    poder repetirse (empezar el mismo reto en dos momentos son dos apuntes).
  *
- * @typedef {'certificate'|'route-start'|'route-abandon'} LogKind
+ * @typedef {'certificate'|'route-start'|'route-abandon'|'route-complete'} LogKind
  * @typedef {Object} LogEntry
  * @property {LogKind} kind
  * @property {string} ref  Referencia natural (cityId o routeId).
@@ -26,7 +26,7 @@
 
 /** Tipos de apunte reconocidos (cualquier otro se descarta al normalizar). */
 const LOG_KINDS = /** @type {ReadonlyArray<LogKind>} */ (
-  Object.freeze(['certificate', 'route-start', 'route-abandon'])
+  Object.freeze(['certificate', 'route-start', 'route-abandon', 'route-complete'])
 );
 
 /** Bitácora vacía. @type {{ entries: LogEntry[] }} */
@@ -133,4 +133,39 @@ export function logbookView(logbook) {
     .map((entry, i) => ({ entry, i }))
     .toSorted(compare)
     .map((x) => x.entry);
+}
+
+/**
+ * @typedef {Object} CompletedRoute
+ * @property {string} routeId    Ref del reto (routeId del catálogo).
+ * @property {string} name       Nombre legible del reto.
+ * @property {string|null} startedAt  ISO de inicio (del route-start emparejado), o null.
+ * @property {string} completedAt     ISO de finalización.
+ * @property {number|null} durationMs Duración en ms (fin − inicio), o null si no hay inicio.
+ */
+
+/**
+ * Rutas COMPLETADAS de la bitácora: una por apunte `route-complete`, emparejado
+ * con su `route-start` del mismo reto más reciente ANTERIOR o igual (para la
+ * duración). Ordenadas de la finalización más reciente a la más antigua. Puro:
+ * reutilizable por el panel de logro (F1), «mis rutas» (F2) y la vista del líder
+ * (F3). Sin `route-start` casado, `startedAt`/`durationMs` van a null (no inventa).
+ * @param {{ entries: LogEntry[] }} logbook
+ * @returns {CompletedRoute[]}
+ */
+export function completedRoutes(logbook) {
+  const starts = logbook.entries.filter((e) => e.kind === 'route-start');
+  const done = logbook.entries.filter((e) => e.kind === 'route-complete');
+  const out = done.map((d) => {
+    const startedAt =
+      starts
+        .filter((s) => s.ref === d.ref && s.at <= d.at)
+        .map((s) => s.at)
+        .toSorted((a, b) => a.localeCompare(b))
+        .at(-1) ?? null;
+    const durationMs =
+      startedAt === null ? null : Math.max(0, Date.parse(d.at) - Date.parse(startedAt));
+    return { routeId: d.ref, name: d.label, startedAt, completedAt: d.at, durationMs };
+  });
+  return out.toSorted((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
 }

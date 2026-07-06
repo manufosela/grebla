@@ -254,7 +254,7 @@ import {
 import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 import { newAchievements, formatAchievedAt } from '../../tools/career/domain/achievements.js';
-import { newCertificateEntries, logbookView } from '../../tools/career/domain/logbook.js';
+import { newCertificateEntries, logbookView, completedRoutes, EMPTY_LOGBOOK } from '../../tools/career/domain/logbook.js';
 import { endorsementFor } from '../../tools/career/domain/endorsements.js';
 import {
   wizardState,
@@ -416,6 +416,7 @@ export class CareerApp extends LitElement {
     showRoute: { state: true },
     routeView: { state: true },
     routeIsChallenge: { state: true },
+    routeCompleted: { state: true },
     routeBusy: { state: true },
     routeError: { state: true },
     routeSea: { state: true },
@@ -1176,6 +1177,31 @@ export class CareerApp extends LitElement {
     }
     .ruta .error { color: var(--rm-danger, #dc2626); }
     .ruta-lead { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    /* Panel de logro «🏆 ¡Ruta completada!» (RMR-BUG-0017). */
+    .route-done {
+      position: relative;
+      width: min(440px, calc(100% - 2rem));
+      box-sizing: border-box;
+      text-align: center;
+      background: linear-gradient(160deg, color-mix(in srgb, var(--rm-navy, #1e3a5f) 96%, #000) 0%, var(--rm-accent, #2a9d8f) 150%);
+      color: #fff;
+      border-radius: var(--rm-radius, 14px);
+      padding: 1.6rem 1.4rem 1.2rem;
+      box-shadow: 0 18px 50px rgba(17, 24, 39, 0.42);
+      outline: none;
+    }
+    .route-done .close { position: absolute; top: 0.5rem; right: 0.6rem; background: transparent; border: none; color: rgba(255, 255, 255, 0.85); font-size: 1.1rem; cursor: pointer; }
+    .route-done-badge { font-size: 3rem; line-height: 1; }
+    .route-done h3 { margin: 0.35rem 0 0.15rem; font-size: 1.3rem; }
+    .route-done-name { margin: 0.1rem 0 0.15rem; font-weight: 800; font-size: 1rem; }
+    .route-done-meta { margin: 0; font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); }
+    .route-done-next { margin-top: 1.1rem; }
+    .route-done-next-lead { margin: 0 0 0.4rem; font-size: 0.8rem; color: rgba(255, 255, 255, 0.85); }
+    .route-done-next .primary { width: 100%; background: #fff; color: var(--rm-navy, #1e3a5f); border: none; border-radius: 999px; padding: 0.55rem 0.9rem; font-weight: 800; cursor: pointer; }
+    .route-done-next .primary:hover { filter: brightness(0.96); }
+    .route-done-ok { margin-top: 0.9rem; background: transparent; border: 1px solid rgba(255, 255, 255, 0.5); color: #fff; border-radius: 999px; padding: 0.4rem 1.1rem; font-weight: 700; cursor: pointer; }
+    .ruta-done { text-align: left; }
+    .ruta-hint { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #9ca3af); }
     .ruta-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
     .ruta-stop {
       display: flex;
@@ -2085,6 +2111,11 @@ export class CareerApp extends LitElement {
     this.routeView = null;
     /** «Mi ruta» está mostrando la ruta de un RETO (solo lectura), no la libre. */
     this.routeIsChallenge = false;
+    /** Panel de logro al COMPLETAR un reto (RMR-BUG-0017): resumen + siguiente
+     * ruta si procede por nivel, o null si no hay panel abierto.
+     * @type {{ name: string, stops: number, startedAt: string|null, durationMs: number|null,
+     *          suggested: import('../../tools/career/domain/careerRoutes.js').CareerRoute|null }|null} */
+    this.routeCompleted = null;
     this.routeBusy = false;
     this.routeError = '';
     /** Marca de la ruta libre en el MAPA DEL MAR: islas EN ORDEN y números de
@@ -3061,6 +3092,7 @@ export class CareerApp extends LitElement {
     const event = challengeEvents(prev, next).at(0);
     if (!event) return;
     if (event.kind === 'challenge-done') {
+      const done = next.challenge; // capturar el reto ANTES de limpiarlo
       const citizenship = citizenshipCelebrations(prev, next, this.archipelago?.islands ?? []);
       if (!citizenship.some((e) => e.kind === 'island') && this.viewMode === '3d' && this.selected) {
         await this.updateComplete;
@@ -3070,10 +3102,125 @@ export class CareerApp extends LitElement {
           island.celebrateCitizenship(this.selected);
         }
       }
+      // El HITO queda en la bitácora (persistente) ANTES de limpiar el reto: así
+      // el logro no se pierde aunque el journey vuelva al modo Libre (RMR-BUG-0017).
+      if (done) {
+        await this._recordLogEntry({
+          kind: 'route-complete',
+          ref: done.routeId,
+          label: done.name,
+          at: new Date().toISOString(),
+        });
+      }
       this.journey = await clearChallenge(this.store, this.personId, next);
+      if (done) await this._openRouteComplete(done);
     }
     this._announceQueue.push(event);
     if (!this.announcement) this._nextAnnouncement();
+  }
+
+  /**
+   * Abre el panel de logro «🏆 ¡Ruta completada!» (RMR-BUG-0017): resumen
+   * (nombre, nº de casas, tiempo desde el route-start de la bitácora) y, SOLO si
+   * procede por nivel (_suggestedRouteId da una ruta válida distinta de la
+   * terminada), la propuesta de la SIGUIENTE ruta. Asegura el catálogo y los
+   * niveles del framework para poder sugerir; si fallan, el panel va sin sugerencia.
+   * @param {import('../../tools/career/domain/types.js').Challenge} challenge Reto recién completado.
+   */
+  async _openRouteComplete(challenge) {
+    try {
+      this.careerRoutes ??= await listCareerRoutes();
+      this._frameworkLevels ??= await getFramework()
+        .then((fw) => fw?.levels ?? [])
+        .catch(() => []);
+    } catch {
+      /* sin catálogo el panel va sin sugerencia (no bloquea la celebración) */
+    }
+    const groups = groupRoutesByRole(this.careerRoutes ?? []);
+    const suggestedId = this._suggestedRouteId(groups);
+    const suggested =
+      suggestedId && suggestedId !== challenge.routeId
+        ? (this.careerRoutes ?? []).find((r) => r.routeId === suggestedId) ?? null
+        : null;
+    const record = completedRoutes(this.logbook ?? EMPTY_LOGBOOK).find(
+      (r) => r.routeId === challenge.routeId,
+    );
+    this.routeCompleted = {
+      name: challenge.name,
+      stops: challenge.stops.length,
+      startedAt: record?.startedAt ?? null,
+      durationMs: record?.durationMs ?? null,
+      suggested,
+    };
+  }
+
+  /** Cierra el panel de logro de ruta completada. */
+  _closeRouteComplete() {
+    this.routeCompleted = null;
+  }
+
+  /** Escape cierra el panel de logro. @param {KeyboardEvent} event */
+  _onRouteCompleteKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeRouteComplete();
+  }
+
+  /** Cierra el panel y arranca la ruta sugerida (mismo flujo que el catálogo).
+   * @param {import('../../tools/career/domain/careerRoutes.js').CareerRoute} route */
+  async _chooseNextRoute(route) {
+    this.routeCompleted = null;
+    await this._chooseChallenge(route);
+  }
+
+  /** Formatea una duración en ms a «N d M h» / «M h N min» / «N min» (legible,
+   * sin librerías). Mínimo 1 min para no mostrar «0 min». @param {number} ms */
+  _formatDuration(ms) {
+    const totalMin = Math.max(1, Math.round(ms / 60000));
+    if (totalMin < 60) return `${totalMin} min`;
+    const totalHours = Math.floor(totalMin / 60);
+    const min = totalMin % 60;
+    if (totalHours < 24) return min ? `${totalHours} h ${min} min` : `${totalHours} h`;
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return hours ? `${days} d ${hours} h` : `${days} d`;
+  }
+
+  /**
+   * Panel de logro «🏆 ¡Ruta completada!» (RMR-BUG-0017): modal con el resumen
+   * de la ruta terminada (casas, tiempo) y, si procede por nivel, la propuesta
+   * de la SIGUIENTE ruta. Fondo, ✕ o Escape lo cierran.
+   */
+  _renderRouteComplete() {
+    const rc = this.routeCompleted;
+    if (!rc) return null;
+    const casas = `${rc.stops} casa${rc.stops === 1 ? '' : 's'}`;
+    const tiempo = rc.durationMs === null ? '' : ` · ${this._formatDuration(rc.durationMs)}`;
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeRouteComplete(); }}>
+      <section
+        class="route-done"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ruta completada"
+        tabindex="-1"
+        @keydown=${this._onRouteCompleteKeydown}
+      >
+        <button class="close" aria-label="Cerrar" title="Cerrar (Esc)" @click=${this._closeRouteComplete}>✕</button>
+        <div class="route-done-badge" aria-hidden="true">🏆</div>
+        <h3>¡Ruta completada!</h3>
+        <p class="route-done-name">${rc.name}</p>
+        <p class="route-done-meta">${casas}${tiempo}</p>
+        ${rc.suggested
+          ? html`<div class="route-done-next">
+              <p class="route-done-next-lead">Siguiente por tu nivel:</p>
+              <button class="primary" @click=${() => this._chooseNextRoute(rc.suggested)}>
+                ▶ Elegir siguiente ruta: ${rc.suggested.name}
+              </button>
+            </div>`
+          : null}
+        <button class="route-done-ok" @click=${this._closeRouteComplete}>Cerrar</button>
+      </section>
+    </div>`;
   }
 
   /** Clic en el chip del reto: foco a la SIGUIENTE casa del camino. */
@@ -3570,45 +3717,71 @@ export class CareerApp extends LitElement {
           ? html`<p class="ruta-lead">Sigues el reto <strong>${this._challenge?.name ?? ''}</strong>: sus paradas en orden. Para editar tu propio camino, vuelve a «Mi propia ruta».</p>`
           : null}
         ${this.routeError ? html`<p class="error">${this.routeError}</p>` : null}
-        ${stops === null
-          ? html`<p class="ruta-lead">Leyendo tu ruta…</p>`
-          : stops.length === 0
-            ? html`<p class="ruta-lead">
-                Aún no tienes paradas. Abre la tarjeta de una casa y pulsa
-                «Añadir a la ruta» para planificar tu camino.
-              </p>`
-            : html`<ol class="ruta-list">
-                ${stops.map((stop, i) => html`<li class="ruta-stop ${stop.visited ? 'done' : ''}">
-                  <span class="ruta-n" aria-hidden="true">${stop.visited ? '✓' : stop.n}</span>
-                  <span class="ruta-info">
-                    <strong>${stop.cityName}</strong>
-                    <span class="ruta-meta">${stop.islandName} · ${stop.visited ? 'certificada ✓' : 'pendiente'}</span>
-                  </span>
-                  ${editable
-                    ? html`<span class="ruta-actions">
-                        <button
-                          ?disabled=${this.routeBusy || i === 0}
-                          aria-label=${`Subir ${stop.cityName} en la ruta`}
-                          title="Subir"
-                          @click=${() => this._moveRouteStop(stop.cityId, -1)}
-                        >↑</button>
-                        <button
-                          ?disabled=${this.routeBusy || i === stops.length - 1}
-                          aria-label=${`Bajar ${stop.cityName} en la ruta`}
-                          title="Bajar"
-                          @click=${() => this._moveRouteStop(stop.cityId, 1)}
-                        >↓</button>
-                        <button
-                          ?disabled=${this.routeBusy}
-                          aria-label=${`Quitar ${stop.cityName} de la ruta`}
-                          title="Quitar de la ruta"
-                          @click=${() => this._removeRouteStop(stop.cityId)}
-                        >Quitar</button>
-                      </span>`
-                    : null}
-                </li>`)}
-              </ol>`}
+        ${this._renderRouteStops(stops, editable)}
       </section>
+    </div>`;
+  }
+
+  /**
+   * Cuerpo de «Mi ruta» (JG-9): cargando, la lista de paradas, o —si no hay—
+   * el cuerpo de ruta vacía (_renderRouteEmpty). Early-returns para no anidar.
+   * @param {{ n: number, cityId: string, cityName: string, islandName: string, visited: boolean }[]|null} stops
+   * @param {boolean} editable
+   */
+  _renderRouteStops(stops, editable) {
+    if (stops === null) return html`<p class="ruta-lead">Leyendo tu ruta…</p>`;
+    if (stops.length === 0) return this._renderRouteEmpty();
+    return html`<ol class="ruta-list">
+      ${stops.map((stop, i) => html`<li class="ruta-stop ${stop.visited ? 'done' : ''}">
+        <span class="ruta-n" aria-hidden="true">${stop.visited ? '✓' : stop.n}</span>
+        <span class="ruta-info">
+          <strong>${stop.cityName}</strong>
+          <span class="ruta-meta">${stop.islandName} · ${stop.visited ? 'certificada ✓' : 'pendiente'}</span>
+        </span>
+        ${editable
+          ? html`<span class="ruta-actions">
+              <button
+                ?disabled=${this.routeBusy || i === 0}
+                aria-label=${`Subir ${stop.cityName} en la ruta`}
+                title="Subir"
+                @click=${() => this._moveRouteStop(stop.cityId, -1)}
+              >↑</button>
+              <button
+                ?disabled=${this.routeBusy || i === stops.length - 1}
+                aria-label=${`Bajar ${stop.cityName} en la ruta`}
+                title="Bajar"
+                @click=${() => this._moveRouteStop(stop.cityId, 1)}
+              >↓</button>
+              <button
+                ?disabled=${this.routeBusy}
+                aria-label=${`Quitar ${stop.cityName} de la ruta`}
+                title="Quitar de la ruta"
+                @click=${() => this._removeRouteStop(stop.cityId)}
+              >Quitar</button>
+            </span>`
+          : null}
+      </li>`)}
+    </ol>`;
+  }
+
+  /**
+   * «Mi ruta» sin paradas (RMR-BUG-0017): si ya completaste algún reto, muestra
+   * el último (para no dejar «sin ruta» tras terminarlo); si no, invita a
+   * planificar. El historial completo vive en la bitácora y en «mis rutas» (F2).
+   */
+  _renderRouteEmpty() {
+    const done = completedRoutes(this.logbook ?? EMPTY_LOGBOOK);
+    if (done.length === 0) {
+      return html`<p class="ruta-lead">
+        Aún no tienes paradas. Abre la tarjeta de una casa y pulsa
+        «Añadir a la ruta» para planificar tu camino.
+      </p>`;
+    }
+    const last = done[0];
+    const when = formatAchievedAt(last.completedAt);
+    return html`<div class="ruta-done">
+      <p class="ruta-lead">🏆 <strong>Ruta completada:</strong> ${last.name}${when ? html` · ${when}` : null}.</p>
+      <p class="ruta-hint">Abre «🎯 Elegir reto» para empezar la siguiente, o añade paradas a tu propia ruta.</p>
     </div>`;
   }
 
@@ -3715,6 +3888,7 @@ export class CareerApp extends LitElement {
     certificate: { icon: '📜', verb: 'Certificado' },
     'route-start': { icon: '🎯', verb: 'Empezaste el reto' },
     'route-abandon': { icon: '⚓', verb: 'Dejaste el reto' },
+    'route-complete': { icon: '🏆', verb: 'Completaste el reto' },
   });
 
   /**
@@ -6985,6 +7159,7 @@ export class CareerApp extends LitElement {
       ${this._renderCarpools()}
       ${this._renderCoins()}
       ${this._renderTravelFade()}
+      ${this._renderRouteComplete()}
       ${this._renderAnnouncement()}
     `;
   }
