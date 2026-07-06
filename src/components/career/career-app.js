@@ -894,6 +894,9 @@ export class CareerApp extends LitElement {
     .routepick .routepick-cancel { color: var(--rm-muted, #6b7280); }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.5rem 0.8rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .nextstep { display: block; width: 100%; margin-top: 0.6rem; background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; font-weight: 800; text-align: center; }
+    .nextstep:hover { filter: brightness(1.06); }
+    .nextstep:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     .pre { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0.75rem 0 0; }
     .hint { font-size: 0.85rem; color: var(--rm-muted, #9ca3af); }
     .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin-top: 1rem; font-size: 0.72rem; color: var(--rm-muted, #6b7280); }
@@ -6335,9 +6338,34 @@ export class CareerApp extends LitElement {
       ${this._renderEndorsement(sel, status === 'visited')}
       ${this._renderCityFlags(isCurrent, inRoute)}
       ${this._renderCityActions(sel, blocked)}
+      ${this._renderNextStepLink(sel)}
       ${this._renderEvidencePrompt(sel)}
       ${this._renderCityEvidences(sel)}
     </section>`;
+  }
+
+  /**
+   * Enlace «Ir al siguiente paso» tras certificar (RMR-TSK-0169). Al certificar
+   * una casa, ofrece ir a la SIGUIENTE parada pendiente de la ruta CON MOVIMIENTO
+   * (autopiloto a pie, vuelo en aérea, o mapa del mar si está en otra isla), para
+   * no tener que buscarla a mano. Reutiliza la brújula (_guideCityId, que cubre
+   * modo Reto y Libre) y el mismo gesto de navegación que los prerequisitos
+   * (_goToChallengeStop → _goToPrereq). Solo tras certificar (status «visited») y
+   * si hay una siguiente casa distinta de la abierta.
+   * @param {import('../../tools/career/domain/types.js').City} sel
+   */
+  _renderNextStepLink(sel) {
+    if (!this._canPlayJourney) return null;
+    if (this._cityCardStatus(sel) !== 'visited') return null;
+    const nextId = this._guideCityId;
+    if (!nextId || nextId === sel.id) return null;
+    const label = `${this._challengeCityName(nextId) ?? 'siguiente casa'}${this._challengeIslandSuffix(nextId)}`;
+    return html`<button
+      type="button"
+      class="nextstep"
+      title="Te lleva con movimiento a la siguiente casa de tu ruta"
+      @click=${() => this._goToChallengeStop(nextId)}
+    >Ir al siguiente paso: ${label} →</button>`;
   }
 
   /** Chips «Actual» / «En ruta» de la casa (JG-18), o nada si no aplican. */
