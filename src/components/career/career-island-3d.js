@@ -516,6 +516,12 @@ const BEACON = Object.freeze({
  */
 const BEACON_NEXT = Object.freeze({ opacityMin: 0.2, opacityMax: 0.5 });
 /**
+ * Rango de la baliza VERDE de una casa ya CERTIFICADA (JG-25): más tenue que la
+ * coral de «disponible» — a pie se lee de un vistazo qué está hecho (verde) y
+ * qué falta por hacer (coral); las bloqueadas no llevan baliza (aún no tocan).
+ */
+const BEACON_DONE = Object.freeze({ opacityMin: 0.05, opacityMax: 0.13 });
+/**
  * Badge circular con el NÚMERO de parada de la ruta de reto (JG-5), pintado
  * en un canvas cuadrado (sprite): tamaño del lienzo en px de textura, alto
  * APARENTE objetivo en pantalla (px CSS, vía el muestreo de etiquetas MC-17)
@@ -1106,6 +1112,13 @@ export class CareerIsland3D extends LitElement {
      * @type {Map<string, object>}
      */
     this._plateTextures = new Map();
+    /**
+     * Caché de texturas del número de ruta sobre la puerta (JG-25), por clave
+     * texto+color. Mismo régimen que las placas: userData.shared, liberadas en
+     * _clearPlateCache y el teardown.
+     * @type {Map<string, object>}
+     */
+    this._doorNumTextures = new Map();
     /**
      * Caché de texturas procedurales del entorno (hierba, arena, tablones,
      * tejas, veta de madera, nube), por clave (MC-10). Independientes del mapa:
@@ -3709,6 +3722,24 @@ export class CareerIsland3D extends LitElement {
         beacon.userData.range = range;
         this._beacons.push(beacon);
         node.add(beacon);
+      } else if (status === 'visited' && current !== city.id) {
+        // Baliza VERDE y tenue de casa CERTIFICADA (JG-25): a pie se distingue
+        // lo hecho (verde) de lo que falta (coral) sin abrir nada.
+        const beacon = new THREE.Mesh(
+          beaconGeo,
+          new THREE.MeshBasicMaterial({
+            color: STATUS_COLORS.visited,
+            transparent: true,
+            opacity: BEACON_DONE.opacityMin,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        beacon.position.y = BEACON.height / 2;
+        beacon.userData.phase = hashUnit(hashId(city.id), 13) * Math.PI * 2;
+        beacon.userData.range = BEACON_DONE;
+        this._beacons.push(beacon);
+        node.add(beacon);
       }
 
       // Selección (MC-6) o proximidad a pie (MC-7): resalte emisivo sutil
@@ -3773,6 +3804,15 @@ export class CareerIsland3D extends LitElement {
         badge.visible = labelsVisible;
         this._cityLabels.push(badge);
         node.add(badge);
+        // Número FIJO sobre la puerta (JG-25): a pie no se ve el badge aéreo
+        // (capa de etiquetas oculta), así que este plano marca la casa del reto.
+        const doorBadge = this._doorNumberBadge(
+          stopState === 'done' ? '✓' : String(stopNumber),
+          CHALLENGE_BADGE.colors[stopState],
+          '#ffffff',
+        );
+        doorBadge.position.set(0, CITY_DOOR.h + 1.05, half + 0.05);
+        node.add(doorBadge);
       }
 
       // Número de parada de la RUTA LIBRE (JG-9): badge ámbar con tinta navy
@@ -3782,13 +3822,22 @@ export class CareerIsland3D extends LitElement {
       // badges si alguna vez convivieran.
       const routeNumber = stopNumber === undefined ? this.routeStops?.get(city.id) : undefined;
       if (routeNumber !== undefined) {
-        const badge = this._makeRouteBadge(routeNumber, status === 'visited' ? 'done' : 'pending', {
+        const routeState = status === 'visited' ? 'done' : 'pending';
+        const badge = this._makeRouteBadge(routeNumber, routeState, {
           y: bodyH + CITY_ROOF.h + 4.7,
           id: `route:${city.id}`,
         });
         badge.visible = labelsVisible;
         this._cityLabels.push(badge);
         node.add(badge);
+        // Número FIJO sobre la puerta (JG-25), acento ámbar de la ruta libre.
+        const doorBadge = this._doorNumberBadge(
+          routeState === 'done' ? '✓' : String(routeNumber),
+          ROUTE_BADGE.colors[routeState],
+          ROUTE_BADGE.ink,
+        );
+        doorBadge.position.set(0, CITY_DOOR.h + 1.05, half + 0.05);
+        node.add(doorBadge);
       }
 
       group.add(node);
@@ -4246,6 +4295,8 @@ export class CareerIsland3D extends LitElement {
   _clearPlateCache() {
     for (const texture of this._plateTextures.values()) texture.dispose();
     this._plateTextures.clear();
+    for (const texture of this._doorNumTextures.values()) texture.dispose();
+    this._doorNumTextures.clear();
   }
 
   // ---- Texturas procedurales del entorno (MC-10) --------------------------------
@@ -5898,6 +5949,58 @@ export class CareerIsland3D extends LitElement {
     sprite.scale.set(2.2, 2.2, 1);
     sprite.userData.label = { id, kind, targetPx, priority, aspect: 1 };
     return sprite;
+  }
+
+  /**
+   * Textura del número de ruta SOBRE LA PUERTA (JG-25): mismo disco que el
+   * badge aéreo, pero como textura para un plano de tamaño FIJO en el mundo —
+   * así se ve también a pie (los badges-sprite de la capa de etiquetas se
+   * ocultan en primera persona). Cacheada por texto+color.
+   * @param {string} text @param {string} fill @param {string} ink
+   */
+  _doorNumberTexture(text, fill, ink) {
+    const key = `${text}:${fill}:${ink}`;
+    const cached = this._doorNumTextures.get(key);
+    if (cached) return cached;
+    const THREE = this._THREE;
+    const size = CHALLENGE_BADGE.canvasPx;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const center = size / 2;
+    ctx.beginPath();
+    ctx.arc(center, center, center - 6, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.stroke();
+    ctx.font = `800 ${text.length > 2 ? 38 : 48}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ink;
+    ctx.fillText(text, center, center + 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.userData.shared = true;
+    this._doorNumTextures.set(key, texture);
+    return texture;
+  }
+
+  /**
+   * Badge FIJO con el número de ruta sobre la puerta (JG-25): un plano pequeño
+   * con la textura del número, visible en aérea y a pie (no vive en la capa de
+   * etiquetas ocultable). Se orienta como la placa (frente de la casa).
+   * @param {string} text @param {string} fill @param {string} ink
+   */
+  _doorNumberBadge(text, fill, ink) {
+    const THREE = this._THREE;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.62, 0.62),
+      new THREE.MeshBasicMaterial({ map: this._doorNumberTexture(text, fill, ink), transparent: true }),
+    );
+    return mesh;
   }
 
   // ---- Picking (MC-6) ---------------------------------------------------------

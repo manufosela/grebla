@@ -5740,6 +5740,13 @@ export class CareerApp extends LitElement {
     } finally {
       this.traveling = false;
     }
+    // Desembarco (JG-25): se llega a la nueva isla A PIE, desde el puerto —
+    // mucho más inmersivo que aparecer en la vista aérea. Solo en escritorio
+    // (el modo a pie requiere ratón/teclado); en móvil se queda en aérea.
+    if (!this.error && this._canPlayJourney && !this._coarsePointer) {
+      await this.updateComplete;
+      this.renderRoot.querySelector('career-island-3d')?.enterFirstPerson();
+    }
   }
 
   /**
@@ -6060,12 +6067,13 @@ export class CareerApp extends LitElement {
     </div>`;
   }
 
-  /** Fundido de travesía mientras se cambia de isla (MC-14). */
+  /** Fundido de travesía mientras se cambia de isla (MC-14): al LLEGAR se está
+   * desembarcando en la isla nueva (JG-25), no de camino. */
   _renderTravelFade() {
     if (!this.traveling) return null;
     const name = this._islandName(this.currentIsland) || this.map?.name || '';
     return html`<div class="travel-fade" role="status" aria-live="polite">
-      <p>⛵ Rumbo a ${name}…</p>
+      <p>🌊 Desembarcando en ${name}…</p>
     </div>`;
   }
 
