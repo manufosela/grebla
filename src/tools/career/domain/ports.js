@@ -53,9 +53,17 @@
  * @property {(personId: string, entry: { day: string, minutes: number }) => Promise<void>} increment
  * @property {(personId: string, days: string[]) => Promise<void>} prune
  *
+ * Bitácora (JG-23): /people/{personId}/career/logbook, un doc por persona
+ * { entries: LogEntry[] } de SOLO-AÑADIR (el dominio garantiza que solo crece
+ * y sin duplicados; `save` guarda el array completo).
+ * @typedef {Object} LogbookRepository
+ * @property {(personId: string) => Promise<Record<string, unknown>|null>} get
+ * @property {(personId: string, logbook: { entries: import('./logbook.js').LogEntry[] }) => Promise<void>} save
+ *
  * @typedef {Object} CareerStore
  * @property {JourneyRepository} journeys
  * @property {AchievementsRepository} achievements
+ * @property {LogbookRepository} logbook
  * @property {EndorsementsRepository} endorsements
  * @property {QuestionsRepository} questions
  * @property {PlaytimeRepository} playtime

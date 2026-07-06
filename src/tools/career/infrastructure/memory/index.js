@@ -15,6 +15,8 @@ export function createMemoryCareerStore(seed = {}) {
   const store = new Map(Object.entries(seed));
   /** Logros por persona (MC-21), misma semántica merge que Firestore. @type {Map<string, Achievements>} */
   const achievements = new Map();
+  /** Bitácora por persona (JG-23): array completo de apuntes. @type {Map<string, { entries: unknown[] }>} */
+  const logbooks = new Map();
   /** Avales del manager por persona (JG-6). @type {Map<string, Endorsements>} */
   const endorsements = new Map();
   /** Consultas al brujo por persona (MC-22): personId → (id → consulta). @type {Map<string, Map<string, Record<string, unknown>>>} */
@@ -51,6 +53,17 @@ export function createMemoryCareerStore(seed = {}) {
       async save(personId, patch) {
         const current = achievements.get(personId) ?? normalizeAchievements(null);
         achievements.set(personId, structuredClone(mergeAchievements(current, patch)));
+      },
+    },
+    // Bitácora del jugador (JG-23): guarda el array completo (el dominio ya
+    // garantiza solo-añadir sin duplicados). Mismo contrato que Firestore.
+    logbook: {
+      async get(personId) {
+        const l = logbooks.get(personId);
+        return l ? structuredClone(l) : null;
+      },
+      async save(personId, logbook) {
+        logbooks.set(personId, { entries: structuredClone(logbook.entries) });
       },
     },
     // Avales del manager (JG-6): mismo contrato que la persistencia Firestore
