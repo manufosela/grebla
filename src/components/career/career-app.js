@@ -196,6 +196,8 @@ import {
   setEvidence,
   getAchievements,
   recordAchievements,
+  getLogbook,
+  recordLogbook,
   getEndorsements,
   endorseCity,
   unendorseCity,
@@ -252,6 +254,7 @@ import {
 import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 import { newAchievements, formatAchievedAt } from '../../tools/career/domain/achievements.js';
+import { newCertificateEntries, logbookView } from '../../tools/career/domain/logbook.js';
 import { endorsementFor } from '../../tools/career/domain/endorsements.js';
 import {
   wizardState,
@@ -378,6 +381,8 @@ export class CareerApp extends LitElement {
     voyage: { state: true },
     announcement: { state: true },
     achievements: { state: true },
+    logbook: { state: true },
+    showLogbook: { state: true },
     endorsements: { state: true },
     endorseBusy: { state: true },
     evidencePrompt: { state: true },
@@ -1589,6 +1594,21 @@ export class CareerApp extends LitElement {
     .hudbadge.coinsalert { background: var(--rm-danger, #dc2626); color: #fff; animation: coinspulse 1.2s ease-in-out infinite; }
     @keyframes coinspulse { 50% { opacity: 0.55; } }
     @media (prefers-reduced-motion: reduce) { .hudbadge.coinsalert { animation: none; } }
+    /* ── Bitácora (JG-23): línea temporal de la travesía sobre el pergamino ── */
+    .lb-empty { margin: 0.4rem 0; font-size: 0.9rem; color: var(--parch-muted, #6b5433); }
+    .lb-list { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+    .lb-item {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px dashed var(--parch-edge, #b98f56);
+    }
+    .lb-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .lb-ico { font-size: 1.1rem; line-height: 1; flex: 0 0 auto; }
+    .lb-body { display: flex; flex-direction: column; gap: 0.1rem; }
+    .lb-what { font-size: 0.9rem; color: var(--parch-ink, #33240f); }
+    .lb-when { font-size: 0.76rem; font-style: italic; color: var(--parch-muted, #6b5433); }
     .coinshead { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0.2rem 0 0.6rem; }
     /* ── JG-13: el COFRE de tribbu-coins (100% CSS/SVG procedural, JG-7) ── */
     /* Botón-cofre de la barra: mini cofre cerrado + saldo al lado. */
@@ -1941,6 +1961,11 @@ export class CareerApp extends LitElement {
     // visibilidad del overlay «🏅 Ficha».
     /** @type {import('../../tools/career/domain/achievements.js').Achievements|null} */
     this.achievements = null;
+    /** Bitácora del jugador (JG-23): histórico de certificados y rutas. null hasta cargar.
+     * @type {{ entries: import('../../tools/career/domain/logbook.js').LogEntry[] }|null} */
+    this.logbook = null;
+    /** Overlay «📖 Bitácora» abierto (JG-23). */
+    this.showLogbook = false;
     // Avales del manager (JG-6): sellos ✓ de la persona cargada. null hasta
     // que _load() los trae (gatea el botón «Avalar»: sin avales cargados no
     // se firma a ciegas).
@@ -2186,6 +2211,8 @@ export class CareerApp extends LitElement {
       this._clearAnnouncements(); // los avisos encolados también (MC-20)
       this.showPlayerCard = false; // la ficha abierta era de otra persona (MC-21)
       this.achievements = null;
+      this.logbook = null; // la bitácora mostrada era de otra persona (JG-23)
+      this.showLogbook = false;
       this.endorsements = null; // los avales mostrados eran de otra persona (JG-6)
       this.evidencePrompt = null; // la sugerencia de evidencia también
       this.showWizard = false; // el panel del brujo abierto era de otra persona (MC-22)
@@ -2345,18 +2372,20 @@ export class CareerApp extends LitElement {
       // Journey, logros registrados (MC-21), avales del manager (JG-6),
       // consultas al brujo (MC-22) y tiempo de juego (MC-23) en paralelo:
       // viven juntos en el subárbol career de la persona.
-      const [journey, achievements, endorsements, questions, playtime] = await Promise.all([
+      const [journey, achievements, endorsements, questions, playtime, logbook] = await Promise.all([
         getJourney(this.store, this.personId),
         getAchievements(this.store, this.personId),
         getEndorsements(this.store, this.personId),
         listQuestions(this.store, this.personId),
         getPlaytime(this.store, this.personId),
+        getLogbook(this.store, this.personId),
       ]);
       this.journey = journey;
       this.achievements = achievements;
       this.endorsements = endorsements;
       this.questions = questions;
       this.playtime = playtime;
+      this.logbook = logbook;
       await this._prunePlaytime();
       // El journey es GLOBAL (MC-14): si esta persona está en otra isla del
       // archipiélago, se carga el mapa de SU isla.
@@ -2416,8 +2445,38 @@ export class CareerApp extends LitElement {
     if (!this._canPlayJourney || !this.personId || !this.achievements || !this.archipelago) return;
     const progress = archipelagoProgress(this.journey, this.archipelago.islands);
     const patch = newAchievements(progress, this.achievements, new Date().toISOString());
-    if (!patch) return;
-    this.achievements = await recordAchievements(this.store, this.personId, this.achievements, patch);
+    if (patch) {
+      this.achievements = await recordAchievements(this.store, this.personId, this.achievements, patch);
+    }
+    await this._recordNewCertificates();
+  }
+
+  /**
+   * Anota en la bitácora (JG-23) las casas recién certificadas que aún no
+   * tienen apunte — solo-añadir, con el nombre de la casa y la fecha del
+   * momento. El resolutor de nombre usa el mapa cargado; una casa de otra isla
+   * cae a su id (honesto). Sin nada nuevo no escribe.
+   */
+  async _recordNewCertificates() {
+    if (!this._canPlayJourney || !this.personId || !this.logbook) return;
+    const cityName = (id) =>
+      this._selectedMap?.cities?.find((c) => c.id === id)?.name ??
+      this.map?.cities?.find((c) => c.id === id)?.name ??
+      id;
+    const additions = newCertificateEntries(
+      this.journey.visitedCities ?? [],
+      this.logbook,
+      cityName,
+      new Date().toISOString(),
+    );
+    this.logbook = await recordLogbook(this.store, this.personId, this.logbook, additions);
+  }
+
+  /** Añade UN apunte a la bitácora (JG-23), p.ej. de evento de ruta. Sin
+   * persona o bitácora, no hace nada. @param {import('../../tools/career/domain/logbook.js').LogEntry} entry */
+  async _recordLogEntry(entry) {
+    if (!this._canPlayJourney || !this.personId || !this.logbook) return;
+    this.logbook = await recordLogbook(this.store, this.personId, this.logbook, [entry]);
   }
 
   /**
@@ -2941,6 +3000,12 @@ export class CareerApp extends LitElement {
         stops: [...route.stops],
         startedAt: null,
       });
+      await this._recordLogEntry({
+        kind: 'route-start',
+        ref: route.routeId,
+        label: route.name,
+        at: new Date().toISOString(),
+      });
       this.showChallenges = false;
       const islandId = this._challengeTargetIsland();
       if (islandId && islandId !== this.currentIsland) await this._departTo(islandId);
@@ -2961,7 +3026,16 @@ export class CareerApp extends LitElement {
     this.challengeBusy = true;
     this.challengeError = '';
     try {
+      const abandoned = this._challenge;
       this.journey = await clearChallenge(this.store, this.personId, this.journey);
+      if (abandoned) {
+        await this._recordLogEntry({
+          kind: 'route-abandon',
+          ref: abandoned.routeId,
+          label: abandoned.name,
+          at: new Date().toISOString(),
+        });
+      }
       this.challengeConfirmAbandon = false;
     } catch (err) {
       this.challengeError = err instanceof Error ? err.message : 'No se pudo abandonar el reto.';
@@ -3604,6 +3678,82 @@ export class CareerApp extends LitElement {
       @click=${this._openPlayerCard}
       title="Abrir la ficha de ciudadanía del jugador: sus logros en el archipiélago"
     >🏅 Ficha</button>`;
+  }
+
+  /** Botón «📖 Bitácora» (JG-23): abre el histórico de la travesía del jugador. */
+  _renderLogbookButton() {
+    if (!this._canPlayJourney) return null;
+    return html`<button
+      @click=${this._openLogbook}
+      title="Tu bitácora: el histórico de certificados y rutas de tu travesía"
+    >📖 Bitácora</button>`;
+  }
+
+  /** Abre/cierra el overlay de la bitácora (JG-23). */
+  _openLogbook() {
+    this.showLogbook = true;
+    this.updateComplete.then(() => this.renderRoot.querySelector('.logbook')?.focus());
+  }
+
+  _closeLogbook() {
+    this.showLogbook = false;
+    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
+  }
+
+  /** Escape dentro de la bitácora la cierra. @param {KeyboardEvent} event */
+  _onLogbookKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    this._closeLogbook();
+  }
+
+  /** Icono y verbo del apunte según su tipo (JG-23). @param {string} kind */
+  static LOG_META = Object.freeze({
+    certificate: { icon: '📜', verb: 'Certificado' },
+    'route-start': { icon: '🎯', verb: 'Empezaste el reto' },
+    'route-abandon': { icon: '⚓', verb: 'Dejaste el reto' },
+  });
+
+  /**
+   * Overlay «📖 Bitácora» (JG-23): la línea temporal de la travesía, más
+   * reciente primero — certificados obtenidos y retos empezados/dejados con su
+   * fecha. Modal hermano de la ficha: ✕, fondo o Escape lo cierran.
+   */
+  _renderLogbook() {
+    if (!this.showLogbook) return null;
+    const entries = this.logbook ? logbookView(this.logbook) : [];
+    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeLogbook(); }}>
+      <section
+        class="ficha logbook"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Bitácora de la travesía"
+        tabindex="-1"
+        @keydown=${this._onLogbookKeydown}
+      >
+        <header class="sea-head">
+          <h3>📖 Bitácora</h3>
+          <button class="close" aria-label="Cerrar la bitácora" title="Cerrar (Esc)" @click=${this._closeLogbook}>✕</button>
+        </header>
+        ${this.logbook === null
+          ? html`<p class="lb-empty">Leyendo tu bitácora…</p>`
+          : entries.length === 0
+            ? html`<p class="lb-empty">Tu travesía acaba de empezar: aquí quedará constancia de cada certificado que logres y cada reto que emprendas.</p>`
+            : html`<ol class="lb-list">
+                ${entries.map((e) => {
+                  const meta = CareerApp.LOG_META[e.kind] ?? { icon: '•', verb: '' };
+                  const when = formatAchievedAt(e.at);
+                  return html`<li class="lb-item">
+                    <span class="lb-ico" aria-hidden="true">${meta.icon}</span>
+                    <span class="lb-body">
+                      <span class="lb-what"><strong>${meta.verb}</strong> ${e.label}</span>
+                      ${when ? html`<span class="lb-when">${when}</span>` : null}
+                    </span>
+                  </li>`;
+                })}
+              </ol>`}
+      </section>
+    </div>`;
   }
 
   /**
@@ -6677,6 +6827,7 @@ export class CareerApp extends LitElement {
                 ${this._renderRouteButton()}
                 ${this._renderArchipelagoButton()}
                 ${this._renderPlayerCardButton()}
+                ${this._renderLogbookButton()}
                 ${this._renderCarpoolButton()}
                 ${this._renderCoinsButton()}
                 ${this._renderWizardQueueButton()}
@@ -6715,6 +6866,7 @@ export class CareerApp extends LitElement {
               this.showCarpools ||
               this.showChallenges ||
               this.showRoute ||
+              this.showLogbook ||
               this.showCoins}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               .wizardState=${hutState}
@@ -6783,6 +6935,7 @@ export class CareerApp extends LitElement {
       ${this._renderChallenges()}
       ${this._renderRouteManager()}
       ${this._renderPlayerCard()}
+      ${this._renderLogbook()}
       ${this._renderWizard()}
       ${this._renderWizardQueue()}
       ${this._renderPlaytimeSummary()}

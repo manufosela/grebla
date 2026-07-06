@@ -36,6 +36,7 @@ import {
 
 const journeyDoc = (db, personId) => doc(db, 'people', personId, 'career', 'journey');
 const achievementsDoc = (db, personId) => doc(db, 'people', personId, 'career', 'achievements');
+const logbookDoc = (db, personId) => doc(db, 'people', personId, 'career', 'logbook');
 const endorsementsDoc = (db, personId) => doc(db, 'people', personId, 'career', 'endorsements');
 const questionsCol = (db, personId) =>
   collection(db, 'people', personId, 'career', 'wizard', 'questions');
@@ -75,6 +76,18 @@ export function createFirestoreCareerStore(db) {
         if (Object.keys(patch.badges ?? {}).length > 0) data.badges = patch.badges;
         if (Object.keys(data).length === 0) return;
         await setDoc(achievementsDoc(db, personId), data, { merge: true });
+      },
+    },
+    // Bitácora del jugador (JG-23): histórico solo-añadir de la travesía. Se
+    // guarda el array COMPLETO de apuntes (el dominio garantiza que solo crece
+    // y sin duplicados) — no hay merge de mapas anidados que valga aquí.
+    logbook: {
+      async get(personId) {
+        const d = await getDoc(logbookDoc(db, personId));
+        return d.exists() ? d.data() : null;
+      },
+      async save(personId, logbook) {
+        await setDoc(logbookDoc(db, personId), { entries: logbook.entries }, { merge: true });
       },
     },
     // Avales del manager (JG-6): el doc vive en el subárbol de la persona

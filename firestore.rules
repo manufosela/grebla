@@ -155,6 +155,11 @@ service cloud.firestore {
       match /career/achievements {
         allow create, update: if isLinkedPlayer();
       }
+      //  - career/logbook: su bitácora (histórico solo-añadir de certificados
+      //    y rutas). Que el jugador la escriba es el punto de JG-23.
+      match /career/logbook {
+        allow create, update: if isLinkedPlayer();
+      }
 
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.

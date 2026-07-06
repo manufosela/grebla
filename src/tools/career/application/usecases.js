@@ -13,6 +13,7 @@ import { SAMPLE_MAPS, ISLAND } from '../data/maps.js';
 import { EMPTY_JOURNEY, DEFAULT_ISLAND_ID } from '../domain/types.js';
 import { mapPoints, totalPoints, progressPct, isReachable, reachableCityIds, levelFor } from '../domain/progress.js';
 import { normalizeAchievements, mergeAchievements } from '../domain/achievements.js';
+import { normalizeLogbook, appendLogbook } from '../domain/logbook.js';
 import { normalizeEndorsements, addEndorsement, removeEndorsement } from '../domain/endorsements.js';
 import { normalizeQuestion, sortQuestionsByDateDesc } from '../domain/wizard.js';
 import { dayKey, normalizePlaytime, staleDayKeys } from '../domain/playtime.js';
@@ -234,6 +235,32 @@ export async function recordAchievements(store, personId, achievements, patch) {
   if (!patch) return achievements;
   await store.achievements.save(personId, patch);
   return mergeAchievements(achievements, patch);
+}
+
+// ---- Bitácora del jugador (JG-23) --------------------------------------------
+
+/**
+ * Bitácora de la persona (JG-23), normalizada. Sin documento devuelve vacía.
+ * @param {CareerStore} store @param {string} personId
+ * @returns {Promise<{ entries: import('../domain/logbook.js').LogEntry[] }>}
+ */
+export async function getLogbook(store, personId) {
+  return normalizeLogbook(await store.logbook.get(personId));
+}
+
+/**
+ * Añade apuntes a la bitácora (solo-añadir): si hay alguno nuevo lo persiste y
+ * devuelve la bitácora crecida; si no, devuelve la misma sin escribir.
+ * @param {CareerStore} store @param {string} personId
+ * @param {{ entries: import('../domain/logbook.js').LogEntry[] }} logbook
+ * @param {ReadonlyArray<import('../domain/logbook.js').LogEntry>} additions
+ * @returns {Promise<{ entries: import('../domain/logbook.js').LogEntry[] }>}
+ */
+export async function recordLogbook(store, personId, logbook, additions) {
+  const next = appendLogbook(logbook, additions);
+  if (next === logbook) return logbook;
+  await store.logbook.save(personId, next);
+  return next;
 }
 
 // ---- Avales del manager (JG-6) ------------------------------------------------
