@@ -902,20 +902,22 @@ export class CareerIsland3D extends LitElement {
        que apunta hacia la siguiente casa girando según hacia dónde miras. --- */
     .guide {
       position: absolute;
-      top: 0.9rem;
+      /* Separada del borde superior para que se vea CLARAMENTE dentro del marco
+         (antes a 0.9rem se percibía cortada/fuera del juego, RMR-TSK-0169). */
+      top: 2.4rem;
       left: 50%;
       transform: translateX(-50%);
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.3rem 0.7rem 0.3rem 0.5rem;
+      padding: 0.35rem 0.8rem 0.35rem 0.6rem;
       border-radius: 999px;
-      background: rgba(11, 20, 34, 0.72);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      color: #e8eef7;
-      font-size: 0.82rem;
+      background: rgba(11, 20, 34, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #f3f7fc;
+      font-size: 0.84rem;
       font-weight: 700;
-      box-shadow: 0 2px 10px rgba(4, 10, 20, 0.45);
+      box-shadow: 0 3px 14px rgba(4, 10, 20, 0.55);
       backdrop-filter: blur(4px);
       pointer-events: none;
       white-space: nowrap;
