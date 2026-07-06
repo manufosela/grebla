@@ -2097,9 +2097,11 @@ export class CareerIsland3D extends LitElement {
         this._fpsStepCount = steps;
         cam.x = col.x;
         cam.z = col.z;
-        if (colCities.hitCityId !== null && this._insideCityId === null) {
+        // Entrar en la casa SOLO al chocar AVANZANDO (JG-21): dar hacia atrás
+        // contra una casa a tu espalda no abre su tarjeta (fwd > 0 = avanzas).
+        if (colCities.hitCityId !== null && this._insideCityId === null && fwd > 0) {
           this._enterCity(colCities.hitCityId);
-        } else if (col.hitWizard) {
+        } else if (col.hitWizard && fwd > 0) {
           this._openWizard();
         }
       }
