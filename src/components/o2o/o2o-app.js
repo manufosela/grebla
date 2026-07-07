@@ -7,6 +7,7 @@
  * Recibe `persistence` (inyectada por src/client/o2o.js) y `canEdit` (líder/admin).
  */
 import { LitElement, html, css } from 'lit';
+import './o2o-register.js';
 import { getGuide, getForm } from '../../tools/o2o/application/usecases/index.js';
 import { DEFAULT_GUIDE_ID, DEFAULT_FORM_ID } from '../../tools/o2o/domain/types.js';
 
@@ -14,7 +15,7 @@ import { DEFAULT_GUIDE_ID, DEFAULT_FORM_ID } from '../../tools/o2o/domain/types.
 const VIEWS = [
   { id: 'guia', label: 'Guía', ready: true },
   { id: 'formulario', label: 'Formulario previo', ready: true },
-  { id: 'registrar', label: 'Registrar O2O' },
+  { id: 'registrar', label: 'Registrar O2O', ready: true },
   { id: 'resumen', label: 'Resumen acumulado' },
   { id: 'acciones', label: 'Acciones' },
   { id: 'evolucion', label: 'Evolución' },
@@ -23,6 +24,7 @@ const VIEWS = [
 export class O2OApp extends LitElement {
   static properties = {
     persistence: { attribute: false },
+    people: { attribute: false },
     canEdit: { attribute: false },
     error: { state: true },
     loading: { state: true },
@@ -61,6 +63,7 @@ export class O2OApp extends LitElement {
   constructor() {
     super();
     this.persistence = null;
+    this.people = [];
     this.canEdit = false;
     this.error = '';
     this.loading = true;
@@ -120,7 +123,17 @@ export class O2OApp extends LitElement {
     if (this.loading) return html`<p class="empty">Cargando…</p>`;
     if (this._view === 'guia') return this._renderGuide();
     if (this._view === 'formulario') return this._renderForm();
+    if (this._view === 'registrar') return this._renderRegister();
     return this._renderPlaceholder();
+  }
+
+  _renderRegister() {
+    return html`<o2o-register
+      .persistence=${this.persistence}
+      .people=${this.people}
+      .guide=${this._guide}
+      .canEdit=${this.canEdit}
+    ></o2o-register>`;
   }
 
   _renderGuide() {

@@ -241,6 +241,14 @@ service cloud.firestore {
       allow write: if isSuperAdmin() || isLeader();
     }
 
+    // O2O — SESIONES privadas del líder: transcripción, notas, respuestas de la
+    // guía y resumen. Solo el propio líder dueño (o el superadmin) leen/escriben.
+    // El ingeniero NO tiene ruta aquí; lo que se le comparte se sirve por Cloud
+    // Function (proyección filtrada), nunca leyendo esta colección.
+    match /leaders/{leaderUid}/o2o/{sessionId} {
+      allow read, write: if isSuperAdmin() || (isSignedIn() && request.auth.uid == leaderUid);
+    }
+
     // Configuración: /config/org (Role Mirror, superadmin); /config/settings
     // (ajustes de la tool Equipo, líderes).
     match /config/org {
