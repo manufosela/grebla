@@ -99,6 +99,11 @@ function peopleRepo(db, base, leaderUid, viewAll = false) {
     async deactivate(id) {
       await updateDoc(personDoc(db, base, id), { active: false, deactivatedAt: new Date().toISOString() });
     },
+    async reactivate(id) {
+      // Restaurar una baja errónea: vuelve activa y borra la fecha de baja
+      // (conserva su histórico completo; solo cambia el estado).
+      await updateDoc(personDoc(db, base, id), { active: true, deactivatedAt: deleteField() });
+    },
     async share(id, sharedLeaderUid, permission) {
       // sharedWith (mapa) lleva el permiso; sharedWithUids (array) es su espejo
       // para poder consultar con array-contains en list().

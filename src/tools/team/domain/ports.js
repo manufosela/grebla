@@ -18,6 +18,7 @@
  * @property {(input: Omit<Person,'id'>) => Promise<string>} create
  * @property {(id: string, patch: Partial<Person>) => Promise<void>} update
  * @property {(id: string) => Promise<void>} deactivate
+ * @property {(id: string) => Promise<void>} reactivate   Restaura una baja (active:true, sin deactivatedAt).
  * @property {(id: string, leaderUid: string, permission: SharePermission) => Promise<void>} share   Comparte la persona con otro líder.
  * @property {(id: string, leaderUid: string) => Promise<void>} unshare   Deja de compartir la persona con un líder.
  * @property {(id: string, newLeaderUid: string) => Promise<void>} transfer   Transfiere la propiedad a otro líder (total).

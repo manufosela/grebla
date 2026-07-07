@@ -110,6 +110,17 @@ export function deactivatePerson(persistence, id) {
 }
 
 /**
+ * Restaura (reactiva) una persona dada de baja por error: vuelve activa y se le
+ * quita la fecha de baja. Conserva su histórico completo.
+ * @param {PersistencePort} persistence
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+export function reactivatePerson(persistence, id) {
+  return persistence.people.reactivate(id);
+}
+
+/**
  * @param {PersistencePort} persistence
  * @param {string} id
  * @param {Partial<Person>} patch
