@@ -150,8 +150,6 @@ export class TeamPersonDetail extends LitElement {
     _datosSaving: { state: true },
     _datosError: { state: true },
     _datosSaved: { state: true },
-    _inviteOpen: { state: true },
-    _inviteDraft: { state: true },
     _careerSaving: { state: true },
     _careerError: { state: true },
     _assessment: { state: true },
@@ -247,14 +245,7 @@ export class TeamPersonDetail extends LitElement {
     .datos-actions { display: flex; align-items: center; gap: 0.7rem; }
     .datos-actions .primary { background: var(--rm-accent, #2a9d8f); border: none; color: #fff; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 800; cursor: pointer; }
     .datos-actions .saved { color: var(--rm-accent, #2a9d8f); font-weight: 700; font-size: 0.85rem; }
-    .inv-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(17, 24, 39, 0.45); display: flex; align-items: center; justify-content: center; }
-    .inv-dialog { width: min(420px, calc(100% - 2rem)); background: var(--rm-surface, #fff); border-radius: 12px; padding: 1.1rem 1.2rem; box-shadow: 0 14px 40px rgba(17, 24, 39, 0.3); }
-    .inv-dialog h4 { margin: 0 0 0.4rem; }
-    .inv-dialog .hint { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.7rem; }
-    .inv-dialog input { width: 100%; box-sizing: border-box; font: inherit; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
-    .inv-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
-    .inv-actions .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer; }
-    .inv-actions .primary { background: var(--rm-accent, #2a9d8f); border: none; color: #fff; border-radius: 8px; padding: 0.45rem 0.9rem; font-weight: 800; cursor: pointer; }
+    .datos .fld-hint { font-weight: 400; font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
 
     /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
     .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
@@ -400,9 +391,6 @@ export class TeamPersonDetail extends LitElement {
     this._datosSaving = false;
     this._datosError = '';
     this._datosSaved = false;
-    /** Diálogo «Invitar por email» aparte del formulario (RMR-TSK-0173). */
-    this._inviteOpen = false;
-    this._inviteDraft = '';
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -449,10 +437,10 @@ export class TeamPersonDetail extends LitElement {
       guilds: [...(p?.guilds ?? [])],
       labels: [...(p?.labels ?? [])],
       uid: p?.uid ?? '',
+      pendingEmail: p?.pendingEmail ?? '',
     };
     this._datosError = '';
     this._datosSaved = false;
-    this._inviteOpen = false;
   }
 
   /**
@@ -1567,6 +1555,11 @@ export class TeamPersonDetail extends LitElement {
         guilds: [...this._datos.guilds],
         labels: [...this._datos.labels],
       };
+      // El email SOLO se edita si aún no tiene cuenta (pendingEmail = auto-vínculo
+      // al primer login). Si ya tiene cuenta, su email es el de su login (no se toca).
+      if (!this.person.uid) {
+        patch.pendingEmail = normalizeInviteEmail(this._datos.pendingEmail);
+      }
       await updatePerson(this.persistence, this.person.id, patch);
       this.person = { ...this.person, ...patch }; // refleja en la cabecera sin recargar
       this._datosSaved = true;
@@ -1575,29 +1568,6 @@ export class TeamPersonDetail extends LitElement {
       this._datosError = err instanceof Error ? err.message : 'No se pudo guardar.';
     } finally {
       this._datosSaving = false;
-    }
-  }
-
-  _openInvite() {
-    this._inviteDraft = this.person?.pendingEmail ?? '';
-    this._inviteOpen = true;
-  }
-
-  _closeInvite() {
-    this._inviteOpen = false;
-  }
-
-  /** Guarda la invitación por email (pendingEmail), acción SEPARADA del form. */
-  async _saveInvite() {
-    if (!this.persistence || !this.person) return;
-    const email = normalizeInviteEmail(this._inviteDraft);
-    try {
-      await updatePerson(this.persistence, this.person.id, { pendingEmail: email, uid: null });
-      this.person = { ...this.person, pendingEmail: email, uid: null };
-      this._inviteOpen = false;
-      this.dispatchEvent(new CustomEvent('person-updated', { detail: { id: this.person.id }, bubbles: true, composed: true }));
-    } catch (err) {
-      this._datosError = err instanceof Error ? err.message : 'No se pudo guardar la invitación.';
     }
   }
 
@@ -1616,36 +1586,30 @@ export class TeamPersonDetail extends LitElement {
     </fieldset>`;
   }
 
-  /** Bloque de cuenta: vinculada (solo lectura) o botón «Invitar por email». */
-  _renderAccountBlock() {
+  /**
+   * Bloque de EMAIL/cuenta (RMR-TSK-0175): si la persona ya tiene cuenta, su
+   * email es el de su login (solo lectura); si aún no ha entrado, el email es
+   * editable (pendingEmail) y al entrar por primera vez con él, su cuenta se
+   * vincula sola. Se guarda con el resto de Datos.
+   */
+  _renderEmailBlock() {
     if (this.person?.uid) {
       const u = this._usersCat.find((x) => x.uid === this.person.uid);
-      const who = u ? ` (${u.name ?? u.email ?? u.uid})` : '';
-      return html`<p class="acct">🔗 Cuenta vinculada${who}.</p>`;
+      const suffix = u?.email ? ` · ${u.email}` : '';
+      return html`<div class="acct">
+        <p>🔗 Cuenta vinculada${suffix}.</p>
+        <span class="empty">El email lo toma de su cuenta; no se edita aquí.</span>
+      </div>`;
     }
-    const pending = this.person?.pendingEmail ?? '';
-    const btnLabel = pending ? '✉️ Editar invitación' : '✉️ Invitar por email';
-    return html`<div class="acct">
-      ${pending
-        ? html`<p>⏳ Invitación pendiente: <strong>${pending}</strong></p>`
-        : html`<p class="empty">Sin cuenta vinculada.</p>`}
-      <button type="button" class="act" @click=${() => this._openInvite()}>${btnLabel}</button>
-    </div>`;
-  }
-
-  _renderInviteDialog() {
-    if (!this._inviteOpen) return null;
-    return html`<div class="inv-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeInvite(); }}>
-      <div class="inv-dialog" role="dialog" aria-modal="true" aria-label="Invitar por email">
-        <h4>Invitar por email</h4>
-        <p class="hint">La persona se crea con su plan listo; al entrar por primera vez con este email, su cuenta se vincula sola y entra en la app. Cuida la ortografía: un error la dejaría sin vincular.</p>
-        <input type="email" placeholder="persona@empresa.com" .value=${this._inviteDraft} @input=${(e) => { this._inviteDraft = e.target.value; }} />
-        <div class="inv-actions">
-          <button type="button" class="act" @click=${() => this._closeInvite()}>Cancelar</button>
-          <button type="button" class="primary" @click=${() => this._saveInvite()}>Guardar invitación</button>
-        </div>
-      </div>
-    </div>`;
+    return html`<label class="fld">Email (aún no ha entrado)
+      <input
+        type="email"
+        placeholder="persona@empresa.com"
+        .value=${this._datos.pendingEmail}
+        @input=${(e) => { this._datos = { ...this._datos, pendingEmail: e.target.value }; }}
+      />
+      <span class="fld-hint">Al entrar por primera vez con este email, su cuenta se vincula sola. Cuida la ortografía: un typo la dejaría sin vincular.</span>
+    </label>`;
   }
 
   /** Pestaña «Datos»: identidad editable de la persona en un ÚNICO sitio. */
@@ -1664,7 +1628,7 @@ export class TeamPersonDetail extends LitElement {
         </label>
         ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
         ${this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c))}
-        ${this._renderAccountBlock()}
+        ${this._renderEmailBlock()}
         ${this._datosError ? html`<p class="error">${this._datosError}</p>` : null}
         <div class="datos-actions">
           <button class="primary" type="button" ?disabled=${this._datosSaving} @click=${() => this._saveDatos()}>
@@ -1673,7 +1637,6 @@ export class TeamPersonDetail extends LitElement {
           ${this._datosSaved ? html`<span class="saved">✓ Guardado</span>` : null}
         </div>
       </section>
-      ${this._renderInviteDialog()}
     `;
   }
 
