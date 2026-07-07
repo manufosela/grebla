@@ -254,7 +254,7 @@ import {
 import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 import { newAchievements, formatAchievedAt } from '../../tools/career/domain/achievements.js';
-import { newCertificateEntries, logbookView, completedRoutes, EMPTY_LOGBOOK } from '../../tools/career/domain/logbook.js';
+import { newCertificateEntries, logbookView, completedRoutes, formatDuration, EMPTY_LOGBOOK } from '../../tools/career/domain/logbook.js';
 import { endorsementFor } from '../../tools/career/domain/endorsements.js';
 import {
   wizardState,
@@ -3183,19 +3183,6 @@ export class CareerApp extends LitElement {
     await this._chooseChallenge(route);
   }
 
-  /** Formatea una duración en ms a «N d M h» / «M h N min» / «N min» (legible,
-   * sin librerías). Mínimo 1 min para no mostrar «0 min». @param {number} ms */
-  _formatDuration(ms) {
-    const totalMin = Math.max(1, Math.round(ms / 60000));
-    if (totalMin < 60) return `${totalMin} min`;
-    const totalHours = Math.floor(totalMin / 60);
-    const min = totalMin % 60;
-    if (totalHours < 24) return min ? `${totalHours} h ${min} min` : `${totalHours} h`;
-    const days = Math.floor(totalHours / 24);
-    const hours = totalHours % 24;
-    return hours ? `${days} d ${hours} h` : `${days} d`;
-  }
-
   /**
    * Panel de logro «🏆 ¡Ruta completada!» (RMR-BUG-0017): modal con el resumen
    * de la ruta terminada (casas, tiempo) y, si procede por nivel, la propuesta
@@ -3205,7 +3192,7 @@ export class CareerApp extends LitElement {
     const rc = this.routeCompleted;
     if (!rc) return null;
     const casas = `${rc.stops} casa${rc.stops === 1 ? '' : 's'}`;
-    const tiempo = rc.durationMs === null ? '' : ` · ${this._formatDuration(rc.durationMs)}`;
+    const tiempo = rc.durationMs === null ? '' : ` · ${formatDuration(rc.durationMs)}`;
     return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeRouteComplete(); }}>
       <section
         class="route-done"
@@ -3809,7 +3796,7 @@ export class CareerApp extends LitElement {
    * hay duración). @param {import('../../tools/career/domain/logbook.js').CompletedRoute} r */
   _completedMeta(r) {
     const when = formatAchievedAt(r.completedAt) ?? 'fecha no registrada';
-    const dur = r.durationMs === null ? '' : ` · ${this._formatDuration(r.durationMs)}`;
+    const dur = r.durationMs === null ? '' : ` · ${formatDuration(r.durationMs)}`;
     return `${when}${dur}`;
   }
 

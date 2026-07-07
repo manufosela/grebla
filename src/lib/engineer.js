@@ -16,7 +16,7 @@ import { computeProfile } from './scoring.js';
 import { ITEMS } from '../data/items.js';
 import { ROLES } from '../data/roles.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
-import { getJourney, getAchievements, getEndorsements, listQuestions } from '../tools/career/application/usecases.js';
+import { getJourney, getAchievements, getEndorsements, listQuestions, getLogbook } from '../tools/career/application/usecases.js';
 
 /**
  * Devuelve la persona vinculada a un `uid` (la cuenta del propio ingeniero), o
@@ -53,6 +53,20 @@ export async function sealInvite() {
   } catch {
     return false;
   }
+}
+
+/**
+ * Bitácora (JG-23) de una persona, en SOLO LECTURA — para que su líder vea el
+ * historial de rutas de carrera completadas (F3, RMR-TSK-0171). Las reglas de
+ * Firestore permiten al líder dueño (o admin/viewer) leer
+ * /people/{personId}/career/logbook. Reutiliza el loader del tool career en
+ * modo firestore; no escribe nada.
+ * @param {string} personId
+ * @returns {Promise<{ entries: import('../tools/career/domain/logbook.js').LogEntry[] }>}
+ */
+export async function getPersonLogbook(personId) {
+  const { store } = await createCareerContainer({ mode: 'firestore' });
+  return getLogbook(store, personId);
 }
 
 /**

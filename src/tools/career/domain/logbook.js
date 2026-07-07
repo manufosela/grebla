@@ -169,3 +169,21 @@ export function completedRoutes(logbook) {
   });
   return out.toSorted((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
 }
+
+/**
+ * Formatea una duración en ms a «N d M h» / «M h N min» / «N min» (legible, sin
+ * librerías). Mínimo 1 min para no mostrar «0 min». Compartido por el panel de
+ * logro, «mis rutas» (ingeniero) y la vista del líder.
+ * @param {number} ms
+ * @returns {string}
+ */
+export function formatDuration(ms) {
+  const totalMin = Math.max(1, Math.round(ms / 60000));
+  if (totalMin < 60) return `${totalMin} min`;
+  const totalHours = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (totalHours < 24) return min ? `${totalHours} h ${min} min` : `${totalHours} h`;
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours ? `${days} d ${hours} h` : `${days} d`;
+}
