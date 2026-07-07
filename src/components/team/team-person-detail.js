@@ -40,6 +40,9 @@ import {
   careerSuggestion,
 } from '../../tools/career/data/assessment.js';
 import { getCareerAssessment, saveCareerAssessment } from '../../lib/careerAssessment.js';
+import { getPersonLogbook } from '../../lib/engineer.js';
+import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
+import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -134,6 +137,7 @@ export class TeamPersonDetail extends LitElement {
     _noteText: { state: true },
     _confirmNote: { state: true },
     _career: { state: true },
+    _logbook: { state: true },
     _careerSaving: { state: true },
     _careerError: { state: true },
     _assessment: { state: true },
@@ -211,6 +215,10 @@ export class TeamPersonDetail extends LitElement {
     .career .target-declared { margin: 0.2rem 0 0; font-size: 0.9rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); }
     .career .target-declared .code { font-weight: 800; }
     .career .target-none { margin: 0.2rem 0 0; font-size: 0.83rem; color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .career .routes-done { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .career .route-done-row { display: flex; flex-direction: column; gap: 0.05rem; padding: 0.4rem 0.55rem; border-radius: 8px; background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); }
+    .career .route-done-row .rd-name { font-weight: 700; font-size: 0.85rem; color: var(--rm-text, #111827); }
+    .career .route-done-row .rd-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
 
     /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
     .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
@@ -343,6 +351,9 @@ export class TeamPersonDetail extends LitElement {
     this._assessmentError = '';
     /** @type {boolean} feedback tras guardar la valoración */
     this._assessmentSaved = false;
+    /** @type {{ entries: import('../../tools/career/domain/logbook.js').LogEntry[] }|null}
+     * bitácora de la persona (JG-23) para el historial de rutas completadas (F3) */
+    this._logbook = null;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -561,18 +572,22 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment] = await Promise.all([
+      const [timeline, areas, conversations, notes, assessment, logbook] = await Promise.all([
         getPersonTimeline(this.persistence, this.person.id),
         listAreas(this.persistence),
         listConversations(this.persistence, this.person.id),
         listSupportNotes(this.persistence, this.person.id),
         getCareerAssessment(this.person.id),
+        // Historial de rutas completadas (F3): best-effort, no debe tumbar la
+        // ficha si falla (p. ej. sin permiso o sin bitácora aún).
+        getPersonLogbook(this.person.id).catch(() => ({ entries: [] })),
       ]);
       this.timeline = timeline;
       this.areas = areas;
       this.conversations = conversations;
       this.notes = notes;
       this._assessment = assessment;
+      this._logbook = logbook;
       this._seedAssessmentDraft();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
@@ -1220,6 +1235,8 @@ export class TeamPersonDetail extends LitElement {
 
         ${this._renderDeclaredTarget(fw)}
 
+        ${this._renderCompletedRoutes()}
+
         ${this.isAdmin
           ? html`<p class="fw-admin">
               El framework de carrera (niveles, expectativas…) se edita en el
@@ -1407,6 +1424,39 @@ export class TeamPersonDetail extends LitElement {
         ? html`<p class="target-declared">Declarado por la persona: <span class="code">${target.code}</span> · ${target.title}</p>`
         : html`<p class="target-none">Sin objetivo de carrera declarado.</p>`}
     `;
+  }
+
+  /**
+   * Historial de rutas de carrera COMPLETADAS por la persona (F3, RMR-TSK-0171):
+   * de su bitácora (completedRoutes), con el reto, las fechas inicio→fin y el
+   * tiempo. Solo lectura; las reglas de Firestore ya permiten al líder dueño leer
+   * /people/{id}/career/logbook.
+   */
+  _renderCompletedRoutes() {
+    const done = this._logbook ? completedRoutes(this._logbook) : [];
+    return html`
+      <p class="sub">Rutas de carrera completadas</p>
+      ${done.length === 0
+        ? html`<p class="target-none">Sin rutas completadas todavía.</p>`
+        : html`<ul class="routes-done">
+            ${done.map(
+              (r) => html`<li class="route-done-row">
+                <span class="rd-name">🏆 ${r.name}</span>
+                <span class="rd-meta">${this._routeDoneMeta(r)}</span>
+              </li>`,
+            )}
+          </ul>`}
+    `;
+  }
+
+  /** Meta de una ruta completada para el líder: «Del {inicio} al {fin} · {tiempo}»
+   * (o «Completada el {fin}» si no hay inicio registrado).
+   * @param {import('../../tools/career/domain/logbook.js').CompletedRoute} r */
+  _routeDoneMeta(r) {
+    const end = formatAchievedAt(r.completedAt) ?? 'fecha no registrada';
+    const start = r.startedAt === null ? null : formatAchievedAt(r.startedAt);
+    const dur = r.durationMs === null ? '' : ` · ${formatDuration(r.durationMs)}`;
+    return start ? `Del ${start} al ${end}${dur}` : `Completada el ${end}${dur}`;
   }
 
   render() {

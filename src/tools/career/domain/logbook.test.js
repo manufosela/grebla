@@ -7,6 +7,7 @@ import {
   appendLogbook,
   logbookView,
   completedRoutes,
+  formatDuration,
 } from './logbook.js';
 
 const cert = (ref, at, label = ref) => ({ kind: 'certificate', ref, label, at });
@@ -161,5 +162,17 @@ describe('completedRoutes', () => {
       ],
     };
     expect(completedRoutes(logbook).map((r) => r.routeId)).toEqual(['b--y', 'a--x']);
+  });
+});
+
+describe('formatDuration', () => {
+  const MIN = 60000;
+  it('formatea minutos, horas y días (mínimo 1 min)', () => {
+    expect(formatDuration(30 * 1000)).toBe('1 min');
+    expect(formatDuration(45 * MIN)).toBe('45 min');
+    expect(formatDuration(90 * MIN)).toBe('1 h 30 min');
+    expect(formatDuration(120 * MIN)).toBe('2 h');
+    expect(formatDuration(25 * 60 * MIN)).toBe('1 d 1 h');
+    expect(formatDuration(48 * 60 * MIN)).toBe('2 d');
   });
 });
