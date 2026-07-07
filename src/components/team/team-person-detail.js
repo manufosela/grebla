@@ -235,6 +235,8 @@ export class TeamPersonDetail extends LitElement {
     .datos { display: flex; flex-direction: column; gap: 0.9rem; max-width: 560px; }
     .datos .fld { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .datos .fld input { font: inherit; font-weight: 400; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
+    .datos .fld .chk-loc { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 400; font-size: 0.9rem; color: var(--rm-text, #111827); }
+    .datos .fld .chk-loc input { width: auto; }
     .datos-checks { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.5rem 0.7rem; margin: 0; }
     .datos-checks legend { font-size: 0.8rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); padding: 0 0.3rem; }
     .datos-checks .chk { display: inline-flex; align-items: center; gap: 0.35rem; margin: 0.15rem 0.7rem 0.15rem 0; font-size: 0.82rem; }
@@ -438,6 +440,7 @@ export class TeamPersonDetail extends LitElement {
       labels: [...(p?.labels ?? [])],
       uid: p?.uid ?? '',
       pendingEmail: p?.pendingEmail ?? '',
+      location: p?.location ?? '',
     };
     this._datosError = '';
     this._datosSaved = false;
@@ -1554,6 +1557,7 @@ export class TeamPersonDetail extends LitElement {
         startDate: this._datos.startDate || null,
         guilds: [...this._datos.guilds],
         labels: [...this._datos.labels],
+        location: this._datos.location.trim() || null,
       };
       // El email SOLO se edita si aún no tiene cuenta (pendingEmail = auto-vínculo
       // al primer login). Si ya tiene cuenta, su email es el de su login (no se toca).
@@ -1612,6 +1616,32 @@ export class TeamPersonDetail extends LitElement {
     </label>`;
   }
 
+  /** Marca/desmarca «En Madrid»: al marcar fija location='Madrid'; al desmarcar
+   * la vacía para que se indique dónde. @param {boolean} checked */
+  _setInMadrid(checked) {
+    this._datos = { ...this._datos, location: checked ? 'Madrid' : '' };
+  }
+
+  /** Ubicación (RMR-TSK-0179): «En Madrid» sí/no y, si no, dónde. */
+  _renderLocationBlock() {
+    const inMadrid = this._datos.location === 'Madrid';
+    return html`<div class="fld">
+      <span>Ubicación</span>
+      <label class="chk-loc">
+        <input type="checkbox" .checked=${inMadrid} @change=${(e) => this._setInMadrid(e.target.checked)} />
+        En Madrid
+      </label>
+      ${inMadrid
+        ? null
+        : html`<input
+            type="text"
+            placeholder="¿Dónde? (ciudad / remoto)"
+            .value=${this._datos.location}
+            @input=${(e) => { this._datos = { ...this._datos, location: e.target.value }; }}
+          />`}
+    </div>`;
+  }
+
   /** Pestaña «Datos»: identidad editable de la persona en un ÚNICO sitio. */
   _renderDatos() {
     const d = this._datos;
@@ -1626,6 +1656,7 @@ export class TeamPersonDetail extends LitElement {
         <label class="fld">Fecha de alta
           <input type="date" .value=${d.startDate} @input=${(e) => { this._datos = { ...d, startDate: e.target.value }; }} />
         </label>
+        ${this._renderLocationBlock()}
         ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
         ${this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c))}
         ${this._renderEmailBlock()}
