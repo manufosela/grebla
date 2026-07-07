@@ -6,10 +6,11 @@
  * @typedef {import('../../domain/types.js').O2OGuide} O2OGuide
  * @typedef {import('../../domain/types.js').PreO2OForm} PreO2OForm
  * @typedef {import('../../domain/types.js').O2OSession} O2OSession
+ * @typedef {import('../../domain/types.js').O2OAction} O2OAction
  */
 
 /**
- * @param {{ guides?: O2OGuide[], forms?: PreO2OForm[], sessions?: O2OSession[] }} [seed]
+ * @param {{ guides?: O2OGuide[], forms?: PreO2OForm[], sessions?: O2OSession[], actions?: Array<O2OAction & { personId: string }> }} [seed]
  * @returns {O2OPersistence}
  */
 export function createMemoryO2O(seed = {}) {
@@ -19,7 +20,10 @@ export function createMemoryO2O(seed = {}) {
   const forms = new Map((seed.forms ?? []).map((f) => [f.id, { ...f }]));
   /** @type {Map<string, O2OSession>} */
   const sessions = new Map((seed.sessions ?? []).map((s) => [s.id, { ...s }]));
+  /** @type {Map<string, O2OAction & { personId: string }>} */
+  const actions = new Map((seed.actions ?? []).map((a) => [a.id, { ...a }]));
   let seq = sessions.size;
+  let actionSeq = actions.size;
   const byDateDesc = (a, b) => (a.date < b.date ? 1 : -1);
   return {
     guides: {
@@ -63,6 +67,27 @@ export function createMemoryO2O(seed = {}) {
       },
       async remove(id) {
         sessions.delete(id);
+      },
+    },
+    actions: {
+      async listByPerson(personId) {
+        return [...actions.values()]
+          .filter((a) => a.personId === personId)
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      },
+      async create(personId, input) {
+        actionSeq += 1;
+        const id = input.id ?? `action-${actionSeq}`;
+        actions.set(id, { ...input, id, personId });
+        return id;
+      },
+      async update(personId, id, patch) {
+        const cur = actions.get(id);
+        if (cur) actions.set(id, { ...cur, ...patch, id, personId });
+      },
+      async remove(personId, id) {
+        const cur = actions.get(id);
+        if (cur?.personId === personId) actions.delete(id);
       },
     },
   };

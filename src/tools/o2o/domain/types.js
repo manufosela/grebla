@@ -64,6 +64,25 @@
  * @property {{ uid: string, name: string }} [createdBy]  Autor (del login).
  */
 
+/**
+ * Acción/compromiso derivado de un O2O. Vive bajo la PERSONA
+ * (/people/{personId}/o2oActions) para que el ingeniero pueda verla en su
+ * espacio (hereda las reglas de la persona). No lleva datos sensibles del líder.
+ *
+ * @typedef {'person'|'leader'} ActionOwner  Responsable de la acción.
+ * @typedef {'open'|'done'} ActionStatus
+ *
+ * @typedef {Object} O2OAction
+ * @property {string} id
+ * @property {string} description       Qué hay que hacer.
+ * @property {ActionOwner} owner        Responsable (la persona o el líder).
+ * @property {ActionStatus} status      Abierta o hecha.
+ * @property {string|null} [originSessionId]  Sesión de la que salió (o null).
+ * @property {string} [dueDate]         Fecha objetivo (ISO, opcional).
+ * @property {string} createdAt         ISO de creación.
+ * @property {string|null} [doneAt]     ISO de cierre (o null si abierta).
+ */
+
 /** Ids de los documentos por defecto (sembrados). */
 export const DEFAULT_GUIDE_ID = 'o2o-default';
 export const DEFAULT_FORM_ID = 'preo2o-default';

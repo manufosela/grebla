@@ -8,6 +8,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import './o2o-register.js';
+import './o2o-actions.js';
 import { getGuide, getForm } from '../../tools/o2o/application/usecases/index.js';
 import { DEFAULT_GUIDE_ID, DEFAULT_FORM_ID } from '../../tools/o2o/domain/types.js';
 
@@ -17,7 +18,7 @@ const VIEWS = [
   { id: 'formulario', label: 'Formulario previo', ready: true },
   { id: 'registrar', label: 'Registrar O2O', ready: true },
   { id: 'resumen', label: 'Resumen acumulado' },
-  { id: 'acciones', label: 'Acciones' },
+  { id: 'acciones', label: 'Acciones', ready: true },
   { id: 'evolucion', label: 'Evolución' },
 ];
 
@@ -124,6 +125,7 @@ export class O2OApp extends LitElement {
     if (this._view === 'guia') return this._renderGuide();
     if (this._view === 'formulario') return this._renderForm();
     if (this._view === 'registrar') return this._renderRegister();
+    if (this._view === 'acciones') return this._renderActions();
     return this._renderPlaceholder();
   }
 
@@ -134,6 +136,13 @@ export class O2OApp extends LitElement {
       .guide=${this._guide}
       .canEdit=${this.canEdit}
     ></o2o-register>`;
+  }
+
+  _renderActions() {
+    return html`<o2o-actions
+      .persistence=${this.persistence}
+      .people=${this.people}
+    ></o2o-actions>`;
   }
 
   _renderGuide() {

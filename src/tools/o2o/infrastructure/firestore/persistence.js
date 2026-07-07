@@ -51,6 +51,30 @@ function sessionRepo(db, leaderUid) {
   };
 }
 
+/** Repo de acciones bajo la persona (/people/{id}/o2oActions); hereda sus reglas. */
+function actionRepo(db) {
+  const col = (personId) => collection(db, 'people', personId, 'o2oActions');
+  const ref = (personId, id) => doc(db, 'people', personId, 'o2oActions', id);
+  return {
+    async listByPerson(personId) {
+      const snap = await getDocs(query(col(personId), orderBy('createdAt', 'desc')));
+      return snap.docs.map((d) => /** @type {any} */ ({ id: d.id, ...d.data() }));
+    },
+    async create(personId, input) {
+      const data = { ...input };
+      delete data.id;
+      const created = await addDoc(col(personId), data);
+      return created.id;
+    },
+    async update(personId, id, patch) {
+      await setDoc(ref(personId, id), { ...patch }, { merge: true });
+    },
+    async remove(personId, id) {
+      await deleteDoc(ref(personId, id));
+    },
+  };
+}
+
 /**
  * @param {import('firebase/firestore').Firestore} db
  * @param {string|null} [leaderUid]  Líder autenticado (acota el path de las sesiones).
@@ -79,5 +103,6 @@ export function createFirestoreO2O(db, leaderUid = null) {
       },
     },
     sessions: sessionRepo(db, leaderUid),
+    actions: actionRepo(db),
   };
 }
