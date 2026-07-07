@@ -31,6 +31,11 @@ export function createMemoryLabelRepository(seed = [], viewerLeaderUid = null) {
       store.set(id, label);
       return id;
     },
+    async update(id, patch) {
+      const current = store.get(id);
+      if (!current) throw new Error(`Label ${id} no existe`);
+      store.set(id, { ...current, ...patch });
+    },
     async remove(id) {
       if (!store.delete(id)) throw new Error(`Label ${id} no existe`);
     },

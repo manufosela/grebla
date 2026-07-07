@@ -13,14 +13,17 @@ import {
   listAreas,
   addArea,
   removeArea,
+  renameArea,
   getSettings,
   updateSettings,
   listGuilds,
   addGuild,
   removeGuild,
+  renameGuild,
   listLabels,
   addLabel,
   removeLabel,
+  renameLabel,
 } from '../../tools/team/application/usecases/index.js';
 import { LEVELS } from '../../tools/team/domain/levels.js';
 
@@ -41,8 +44,10 @@ export class TeamSettings extends LitElement {
   static properties = {
     persistence: { attribute: false },
     currentUid: { attribute: false },
+    isAdmin: { attribute: false },
     areas: { state: true },
     guilds: { state: true },
+    labels: { state: true },
     settings: { state: true },
     loading: { state: true },
     error: { state: true },
@@ -52,6 +57,8 @@ export class TeamSettings extends LitElement {
     _confirmGuild: { state: true },
     _newLabel: { state: true },
     _confirmLabel: { state: true },
+    _editingId: { state: true },
+    _editName: { state: true },
     _subtab: { state: true },
   };
 
@@ -73,6 +80,7 @@ export class TeamSettings extends LitElement {
     ul.areas { list-style: none; margin: 0 0 1rem; padding: 0; }
     ul.areas li { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     ul.areas .name { flex: 1; }
+    ul.areas .edit-inline { flex: 1; }
     .link { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.8rem; color: var(--rm-muted, #6b7280); padding: 0 0.2rem; }
     .link.yes { color: var(--rm-danger, #dc2626); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
@@ -113,6 +121,8 @@ export class TeamSettings extends LitElement {
     this.persistence = null;
     /** @type {string|null} uid del líder en sesión (para distinguir sus roles personales) */
     this.currentUid = null;
+    /** @type {boolean} el superadmin puede editar/borrar los catálogos GLOBALES */
+    this.isAdmin = false;
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
     /** @type {import('../../tools/team/domain/types.js').Guild[]} */
@@ -132,6 +142,10 @@ export class TeamSettings extends LitElement {
     this._newLabel = '';
     /** @type {string|null} */
     this._confirmLabel = null;
+    /** @type {string|null} id del ítem de catálogo en edición inline (renombrar) */
+    this._editingId = null;
+    /** @type {string} nombre en edición */
+    this._editName = '';
     /** @type {string} sub-pestaña activa (estado local, no usa el hash de la URL) */
     this._subtab = 'areas';
     this._loaded = false;
@@ -336,6 +350,88 @@ export class TeamSettings extends LitElement {
     `;
   }
 
+  /** Fija la confirmación de borrado del catálogo `kind`. @param {'area'|'guild'|'label'} kind @param {string|null} id */
+  _setConfirm(kind, id) {
+    if (kind === 'area') this._confirmArea = id;
+    else if (kind === 'guild') this._confirmGuild = id;
+    else this._confirmLabel = id;
+  }
+
+  /** Borra el ítem del catálogo `kind`. @param {'area'|'guild'|'label'} kind @param {string} id */
+  _confirmRemove(kind, id) {
+    if (kind === 'area') return this._removeArea(id);
+    if (kind === 'guild') return this._removeGuild(id);
+    return this._removeLabel(id);
+  }
+
+  /** Guarda el renombrado del ítem en edición (con cascada a personas en gremios/labels).
+   * @param {'area'|'guild'|'label'} kind @param {string} id */
+  async _saveRename(kind, id) {
+    const name = this._editName.trim();
+    if (!name) return;
+    this.error = '';
+    try {
+      if (kind === 'area') await renameArea(this.persistence, id, name);
+      else if (kind === 'guild') await renameGuild(this.persistence, id, name);
+      else await renameLabel(this.persistence, id, name);
+      this._editingId = null;
+      await this._load();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo renombrar.';
+    }
+  }
+
+  /**
+   * Un ítem de catálogo (área/gremio/label) con Editar + Eliminar. Los GLOBALES
+   * (sin ownerLeaderUid) solo los gestiona el superadmin; los personales, su
+   * líder dueño. @param {{id:string,name:string,ownerLeaderUid?:string}} item
+   * @param {'area'|'guild'|'label'} kind @param {string|null} confirmId
+   */
+  _renderCatalogItem(item, kind, confirmId) {
+    const isGlobal = !item.ownerLeaderUid;
+    const canManage = isGlobal ? this.isAdmin : true;
+    if (this._editingId === item.id) {
+      return html`<li>
+        <input
+          class="edit-inline"
+          type="text"
+          .value=${this._editName}
+          @input=${(e) => { this._editName = e.target.value; }}
+          @keydown=${(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); this._saveRename(kind, item.id); }
+            else if (e.key === 'Escape') { this._editingId = null; }
+          }}
+        />
+        <button class="link yes" @click=${() => this._saveRename(kind, item.id)}>Guardar</button>
+        <button class="link" @click=${() => { this._editingId = null; }}>Cancelar</button>
+      </li>`;
+    }
+    return html`<li>
+      <span class="name">${item.name}</span>
+      ${isGlobal ? html`<span class="badge">Global</span>` : null}
+      ${canManage ? this._renderItemActions(kind, item, confirmId) : null}
+    </li>`;
+  }
+
+  /** Acciones Editar + Eliminar de un ítem de catálogo. */
+  _renderItemActions(kind, item, confirmId) {
+    return html`
+      <button class="link" @click=${() => { this._editingId = item.id; this._editName = item.name; }}>Editar</button>
+      ${this._renderDeleteControl(kind, item.id, confirmId)}
+    `;
+  }
+
+  /** Botón Eliminar o su confirmación en línea (early-return, sin anidar). */
+  _renderDeleteControl(kind, id, confirmId) {
+    if (confirmId === id) {
+      return html`<span>¿Eliminar?
+        <button class="link yes" @click=${() => this._confirmRemove(kind, id)}>Sí</button>
+        <button class="link" @click=${() => this._setConfirm(kind, null)}>No</button>
+      </span>`;
+    }
+    return html`<button class="link" @click=${() => this._setConfirm(kind, id)}>Eliminar</button>`;
+  }
+
   /**
    * Sub-pestaña «Áreas de conocimiento»: catálogo de áreas técnicas (CRUD).
    * @returns {import('lit').TemplateResult}
@@ -354,22 +450,7 @@ export class TeamSettings extends LitElement {
           ? html`<p class="empty">Aún no hay áreas. Crea las áreas técnicas de tu equipo.</p>`
           : html`
               <ul class="areas">
-                ${this.areas.map((a) => {
-                  const isGlobal = !a.ownerLeaderUid;
-                  return html`
-                    <li>
-                      <span class="name">${a.name}</span>
-                      ${isGlobal
-                        ? html`<span class="badge">Global</span>`
-                        : this._confirmArea === a.id
-                          ? html`<span>¿Eliminar?
-                              <button class="link yes" @click=${() => this._removeArea(a.id)}>Sí</button>
-                              <button class="link" @click=${() => { this._confirmArea = null; }}>No</button>
-                            </span>`
-                          : html`<button class="link" @click=${() => { this._confirmArea = a.id; }}>Eliminar</button>`}
-                    </li>
-                  `;
-                })}
+                ${this.areas.map((a) => this._renderCatalogItem(a, 'area', this._confirmArea))}
               </ul>
             `}
         <div class="row">
@@ -403,22 +484,7 @@ export class TeamSettings extends LitElement {
           ? html`<p class="empty">Aún no hay gremios. Crea los gremios (PHP, Python, Android, iOS…) de tu equipo.</p>`
           : html`
               <ul class="areas">
-                ${this.guilds.map((r) => {
-                  const isGlobal = !r.ownerLeaderUid;
-                  return html`
-                    <li>
-                      <span class="name">${r.name}</span>
-                      ${isGlobal
-                        ? html`<span class="badge">Global</span>`
-                        : this._confirmGuild === r.id
-                          ? html`<span>¿Eliminar?
-                              <button class="link yes" @click=${() => this._removeGuild(r.id)}>Sí</button>
-                              <button class="link" @click=${() => { this._confirmGuild = null; }}>No</button>
-                            </span>`
-                          : html`<button class="link" @click=${() => { this._confirmGuild = r.id; }}>Eliminar</button>`}
-                    </li>
-                  `;
-                })}
+                ${this.guilds.map((r) => this._renderCatalogItem(r, 'guild', this._confirmGuild))}
               </ul>
             `}
         <div class="row">
@@ -452,22 +518,7 @@ export class TeamSettings extends LitElement {
           ? html`<p class="empty">Aún no hay labels. Crea los que necesites para agrupar a tu equipo.</p>`
           : html`
               <ul class="areas">
-                ${this.labels.map((l) => {
-                  const isGlobal = !l.ownerLeaderUid;
-                  return html`
-                    <li>
-                      <span class="name">${l.name}</span>
-                      ${isGlobal
-                        ? html`<span class="badge">Global</span>`
-                        : this._confirmLabel === l.id
-                          ? html`<span>¿Eliminar?
-                              <button class="link yes" @click=${() => this._removeLabel(l.id)}>Sí</button>
-                              <button class="link" @click=${() => { this._confirmLabel = null; }}>No</button>
-                            </span>`
-                          : html`<button class="link" @click=${() => { this._confirmLabel = l.id; }}>Eliminar</button>`}
-                    </li>
-                  `;
-                })}
+                ${this.labels.map((l) => this._renderCatalogItem(l, 'label', this._confirmLabel))}
               </ul>
             `}
         <div class="row">
