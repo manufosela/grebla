@@ -5,6 +5,7 @@
  * @typedef {import('./types.js').O2OGuide} O2OGuide
  * @typedef {import('./types.js').PreO2OForm} PreO2OForm
  * @typedef {import('./types.js').O2OSession} O2OSession
+ * @typedef {import('./types.js').O2OAction} O2OAction
  *
  * @typedef {Object} GuideRepository
  * @property {(id: string) => Promise<O2OGuide|null>} get
@@ -24,8 +25,16 @@
  * @property {(id: string, patch: Partial<O2OSession>) => Promise<void>} update
  * @property {(id: string) => Promise<void>} remove
  *
+ * Acciones colgadas de la persona (heredan sus reglas; el ingeniero las ve).
+ * @typedef {Object} ActionRepository
+ * @property {(personId: string) => Promise<O2OAction[]>} listByPerson
+ * @property {(personId: string, input: O2OAction) => Promise<string>} create
+ * @property {(personId: string, id: string, patch: Partial<O2OAction>) => Promise<void>} update
+ * @property {(personId: string, id: string) => Promise<void>} remove
+ *
  * @typedef {Object} O2OPersistence
  * @property {GuideRepository} guides
  * @property {FormRepository} forms
  * @property {SessionRepository} sessions
+ * @property {ActionRepository} actions
  */
