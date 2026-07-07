@@ -7,6 +7,7 @@ export {
   listActivePeople,
   listDepartedPeople,
   deactivatePerson,
+  reactivatePerson,
   updatePerson,
   sharePerson,
   unsharePerson,

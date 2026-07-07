@@ -8,7 +8,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
-import { listDepartedPeople, getTurnover } from '../../tools/team/application/usecases/index.js';
+import { listDepartedPeople, getTurnover, reactivatePerson } from '../../tools/team/application/usecases/index.js';
 import { deletePerson } from '../../lib/people.js';
 
 const MS_YEAR = 365 * 86_400_000;
@@ -57,7 +57,9 @@ export class TeamDepartures extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .hint { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
-    .act-cell { text-align: right; }
+    .act-cell { text-align: right; white-space: nowrap; display: flex; gap: 0.4rem; justify-content: flex-end; }
+    button.restore { border: 1px solid var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); background: var(--rm-surface, #fff); border-radius: 999px; padding: 0.3rem 0.7rem; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+    button.restore:hover { background: var(--rm-accent, #2a9d8f); color: #fff; }
     button.danger { border: 1px solid var(--rm-danger, #dc2626); color: var(--rm-danger, #dc2626); background: var(--rm-surface, #fff); border-radius: 999px; padding: 0.3rem 0.7rem; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
     button.danger:hover:not(:disabled) { background: var(--rm-danger, #dc2626); color: #fff; }
     button.danger:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -111,6 +113,18 @@ export class TeamDepartures extends LitElement {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar las bajas.';
     } finally {
       this.loading = false;
+    }
+  }
+
+  /** Restaura (reactiva) una baja errónea: vuelve activa y se le quita la fecha
+   * de baja; reaparece en la lista de personas activas. Conserva su histórico. */
+  async _restore(person) {
+    this.error = '';
+    try {
+      await reactivatePerson(this.persistence, person.id);
+      await this._load();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo restaurar la persona.';
     }
   }
 
@@ -186,6 +200,7 @@ export class TeamDepartures extends LitElement {
                         <td>${formatDate(p.startDate)}</td>
                         <td>${formatDate(p.deactivatedAt)}</td>
                         <td class="act-cell">
+                          <button class="restore" type="button" title="Vuelve a activarla (corrige una baja errónea)" @click=${() => this._restore(p)}>↩ Restaurar</button>
                           <button class="danger" type="button" @click=${() => this._openConfirm(p)}>🗑 Borrar definitivamente</button>
                         </td>
                       </tr>
