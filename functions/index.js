@@ -128,6 +128,39 @@ export const sealInvite = onCall({ region: 'europe-west1' }, async (request) => 
   return { sealed: true, personId: pending.id };
 });
 
+/**
+ * Borra DEFINITIVAMENTE a una persona con su subárbol completo (plan de carrera,
+ * valoraciones, lecturas, conversaciones, notas, sesiones de Role Mirror…) con
+ * `recursiveDelete` del Admin SDK — el cliente Web no puede borrar subcolecciones
+ * en cascada. Distinto de la baja (active:false, que CONSERVA los datos y solo la
+ * saca de las estadísticas activas): esto la elimina por completo, para gente
+ * creada por error. Solo el dueño (ownerLeaderUid) o un superadmin, y SOLO si la
+ * persona ya está dada de baja (precondición de seguridad).
+ */
+export const deletePerson = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const personId = typeof request.data?.personId === 'string' ? request.data.personId.trim() : '';
+  if (!personId) throw new HttpsError('invalid-argument', 'Falta el personId a borrar.');
+
+  const db = getFirestore();
+  const ref = db.doc(`people/${personId}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', `Persona ${personId} no encontrada.`);
+
+  const person = snap.data();
+  const canDelete = person.ownerLeaderUid === caller.uid || (await isAdmin(caller.uid));
+  if (!canDelete) {
+    throw new HttpsError('permission-denied', 'Solo el dueño o un superadmin pueden borrar una persona.');
+  }
+  if (person.active !== false) {
+    throw new HttpsError('failed-precondition', 'Da de baja a la persona antes de borrarla definitivamente.');
+  }
+
+  await db.recursiveDelete(ref); // borra el doc y TODAS sus subcolecciones
+  return { ok: true, deletedPersonId: personId };
+});
+
 // ── DORA ───────────────────────────────────────────────────────────────────
 const MS_HOUR = 3_600_000;
 const toMs = (d) => new Date(d).getTime();
