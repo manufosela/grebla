@@ -117,7 +117,7 @@ const SUBTABS = [
   { id: 'emotional', label: 'Emocional' },
   { id: 'knowledge', label: 'Conocimiento' },
   { id: 'contribution', label: 'Contribución' },
-  { id: 'conversations', label: 'Conversaciones' },
+  { id: 'conversations', label: 'O2O' },
   { id: 'notes', label: 'Notas' },
 ];
 

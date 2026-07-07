@@ -21,7 +21,8 @@
     "seed:archipelago": "node scripts/seed-archipelago.mjs",
     "seed:islands": "node scripts/seed-islands.mjs",
     "seed:career-routes": "node scripts/seed-career-routes.mjs",
-    "seed:areas": "node scripts/seed-areas.mjs"
+    "seed:areas": "node scripts/seed-areas.mjs",
+    "seed:o2o": "node scripts/seed-o2o.mjs"
   },
   "dependencies": {
     "@astrojs/lit": "^4.3.0",

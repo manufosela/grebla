@@ -227,6 +227,20 @@ service cloud.firestore {
         || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
     }
 
+    // O2O (One-to-Ones) — plantillas de catálogo: la guía de temas y el
+    // formulario previo. Lectura a cualquier firmado; escritura a líder o
+    // superadmin. Las SESIONES privadas del líder (transcripción, notas, resumen)
+    // NO cuelgan de aquí ni de la persona: irán bajo /leaders/{uid}/o2o en fases
+    // siguientes, invisibles para el ingeniero.
+    match /o2oGuides/{guideId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin() || isLeader();
+    }
+    match /o2oForms/{formId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin() || isLeader();
+    }
+
     // Configuración: /config/org (Role Mirror, superadmin); /config/settings
     // (ajustes de la tool Equipo, líderes).
     match /config/org {
