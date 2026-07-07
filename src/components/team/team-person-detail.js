@@ -22,7 +22,11 @@ import {
   listSupportNotes,
   removeSupportNote,
   updatePerson,
+  listLabels,
+  listGuilds,
+  normalizeInviteEmail,
 } from '../../tools/team/application/usecases/index.js';
+import { listUsers } from '../../lib/users.js';
 import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
 import { sparkline, sparklineTrend, SPARK_MAX } from '../../tools/team/domain/services/sparkline.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
@@ -107,6 +111,7 @@ const DIMENSIONS = [
  * @type {ReadonlyArray<{ id: string, label: string }>}
  */
 const SUBTABS = [
+  { id: 'datos', label: 'Datos' },
   { id: 'carrera', label: 'Carrera' },
   { id: 'seniority', label: 'Seniority' },
   { id: 'emotional', label: 'Emocional' },
@@ -138,6 +143,15 @@ export class TeamPersonDetail extends LitElement {
     _confirmNote: { state: true },
     _career: { state: true },
     _logbook: { state: true },
+    _datos: { state: true },
+    _guildsCat: { state: true },
+    _labelsCat: { state: true },
+    _usersCat: { state: true },
+    _datosSaving: { state: true },
+    _datosError: { state: true },
+    _datosSaved: { state: true },
+    _inviteOpen: { state: true },
+    _inviteDraft: { state: true },
     _careerSaving: { state: true },
     _careerError: { state: true },
     _assessment: { state: true },
@@ -219,6 +233,28 @@ export class TeamPersonDetail extends LitElement {
     .career .route-done-row { display: flex; flex-direction: column; gap: 0.05rem; padding: 0.4rem 0.55rem; border-radius: 8px; background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); }
     .career .route-done-row .rd-name { font-weight: 700; font-size: 0.85rem; color: var(--rm-text, #111827); }
     .career .route-done-row .rd-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    /* Pestaña «Datos» (RMR-TSK-0173). */
+    .datos { display: flex; flex-direction: column; gap: 0.9rem; max-width: 560px; }
+    .datos .fld { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
+    .datos .fld input { font: inherit; font-weight: 400; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
+    .datos-checks { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.5rem 0.7rem; margin: 0; }
+    .datos-checks legend { font-size: 0.8rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); padding: 0 0.3rem; }
+    .datos-checks .chk { display: inline-flex; align-items: center; gap: 0.35rem; margin: 0.15rem 0.7rem 0.15rem 0; font-size: 0.82rem; }
+    .datos-checks .empty { font-size: 0.8rem; color: var(--rm-muted, #9ca3af); }
+    .datos .acct { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 0.85rem; margin: 0; }
+    .datos .acct .empty { color: var(--rm-muted, #9ca3af); }
+    .datos .acct .act { border: 1px solid var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); background: var(--rm-surface, #fff); border-radius: 999px; padding: 0.35rem 0.8rem; font-weight: 700; cursor: pointer; }
+    .datos-actions { display: flex; align-items: center; gap: 0.7rem; }
+    .datos-actions .primary { background: var(--rm-accent, #2a9d8f); border: none; color: #fff; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 800; cursor: pointer; }
+    .datos-actions .saved { color: var(--rm-accent, #2a9d8f); font-weight: 700; font-size: 0.85rem; }
+    .inv-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(17, 24, 39, 0.45); display: flex; align-items: center; justify-content: center; }
+    .inv-dialog { width: min(420px, calc(100% - 2rem)); background: var(--rm-surface, #fff); border-radius: 12px; padding: 1.1rem 1.2rem; box-shadow: 0 14px 40px rgba(17, 24, 39, 0.3); }
+    .inv-dialog h4 { margin: 0 0 0.4rem; }
+    .inv-dialog .hint { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.7rem; }
+    .inv-dialog input { width: 100%; box-sizing: border-box; font: inherit; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
+    .inv-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
+    .inv-actions .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer; }
+    .inv-actions .primary { background: var(--rm-accent, #2a9d8f); border: none; color: #fff; border-radius: 8px; padding: 0.45rem 0.9rem; font-weight: 800; cursor: pointer; }
 
     /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
     .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
@@ -333,8 +369,8 @@ export class TeamPersonDetail extends LitElement {
     this.isAdmin = false;
     /** @type {string|null} sub-pestaña con la que abrir la ficha (p. ej. al saltar desde una dimensión del Mapa) */
     this.initialSubtab = null;
-    /** @type {string} sub-pestaña activa de la ficha */
-    this._subtab = 'carrera';
+    /** @type {string} sub-pestaña activa de la ficha (arranca en Datos) */
+    this._subtab = 'datos';
     /** @type {{ levelId: string, disciplines: string[] }} edición inline de carrera (nivel + disciplinas) */
     this._career = { levelId: '', disciplines: [] };
     /** @type {boolean} guardado de carrera en curso */
@@ -354,6 +390,19 @@ export class TeamPersonDetail extends LitElement {
     /** @type {{ entries: import('../../tools/career/domain/logbook.js').LogEntry[] }|null}
      * bitácora de la persona (JG-23) para el historial de rutas completadas (F3) */
     this._logbook = null;
+    /** Borrador editable de la pestaña «Datos» (RMR-TSK-0173). Se siembra desde
+     * la persona al abrirla. @type {{ name: string, githubLogin: string, startDate: string, guilds: string[], labels: string[], uid: string }} */
+    this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], labels: [], uid: '' };
+    /** Catálogos para los selectores de Datos (gremios, labels, cuentas). */
+    this._guildsCat = [];
+    this._labelsCat = [];
+    this._usersCat = [];
+    this._datosSaving = false;
+    this._datosError = '';
+    this._datosSaved = false;
+    /** Diálogo «Invitar por email» aparte del formulario (RMR-TSK-0173). */
+    this._inviteOpen = false;
+    this._inviteDraft = '';
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -385,8 +434,25 @@ export class TeamPersonDetail extends LitElement {
         this._subtab = this.initialSubtab;
       }
       this._seedCareer();
+      this._seedDatos();
       this._load();
     }
+  }
+
+  /** Siembra el borrador de «Datos» desde la persona (RMR-TSK-0173). */
+  _seedDatos() {
+    const p = this.person;
+    this._datos = {
+      name: p?.name ?? '',
+      githubLogin: p?.githubLogin ?? '',
+      startDate: p?.startDate ?? '',
+      guilds: [...(p?.guilds ?? [])],
+      labels: [...(p?.labels ?? [])],
+      uid: p?.uid ?? '',
+    };
+    this._datosError = '';
+    this._datosSaved = false;
+    this._inviteOpen = false;
   }
 
   /**
@@ -572,22 +638,30 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook] = await Promise.all([
-        getPersonTimeline(this.persistence, this.person.id),
-        listAreas(this.persistence),
-        listConversations(this.persistence, this.person.id),
-        listSupportNotes(this.persistence, this.person.id),
-        getCareerAssessment(this.person.id),
-        // Historial de rutas completadas (F3): best-effort, no debe tumbar la
-        // ficha si falla (p. ej. sin permiso o sin bitácora aún).
-        getPersonLogbook(this.person.id).catch(() => ({ entries: [] })),
-      ]);
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat] =
+        await Promise.all([
+          getPersonTimeline(this.persistence, this.person.id),
+          listAreas(this.persistence),
+          listConversations(this.persistence, this.person.id),
+          listSupportNotes(this.persistence, this.person.id),
+          getCareerAssessment(this.person.id),
+          // Historial de rutas completadas (F3): best-effort, no debe tumbar la
+          // ficha si falla (p. ej. sin permiso o sin bitácora aún).
+          getPersonLogbook(this.person.id).catch(() => ({ entries: [] })),
+          // Catálogos de la pestaña Datos (RMR-TSK-0173), best-effort.
+          listLabels(this.persistence).catch(() => []),
+          listGuilds(this.persistence).catch(() => []),
+          listUsers().catch(() => []),
+        ]);
       this.timeline = timeline;
       this.areas = areas;
       this.conversations = conversations;
       this.notes = notes;
       this._assessment = assessment;
       this._logbook = logbook;
+      this._labelsCat = labelsCat;
+      this._guildsCat = guildsCat;
+      this._usersCat = usersCat;
       this._seedAssessmentDraft();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
@@ -1459,6 +1533,150 @@ export class TeamPersonDetail extends LitElement {
     return start ? `Del ${start} al ${end}${dur}` : `Completada el ${end}${dur}`;
   }
 
+  // ---- Pestaña «Datos» (identidad de la persona, RMR-TSK-0173) --------------
+
+  /** @param {string} name @param {boolean} checked */
+  _toggleDatosGuild(name, checked) {
+    const guilds = checked ? [...this._datos.guilds, name] : this._datos.guilds.filter((g) => g !== name);
+    this._datos = { ...this._datos, guilds };
+  }
+
+  /** @param {string} name @param {boolean} checked */
+  _toggleDatosLabel(name, checked) {
+    const labels = checked ? [...this._datos.labels, name] : this._datos.labels.filter((l) => l !== name);
+    this._datos = { ...this._datos, labels };
+  }
+
+  /** Guarda los datos personales (nombre, github, fecha de alta, gremios, labels).
+   * No toca uid/pendingEmail (eso es la acción «Invitar», aparte). */
+  async _saveDatos() {
+    if (!this.persistence || !this.person) return;
+    const name = this._datos.name.trim();
+    if (!name) {
+      this._datosError = 'El nombre es obligatorio.';
+      return;
+    }
+    this._datosSaving = true;
+    this._datosError = '';
+    this._datosSaved = false;
+    try {
+      const patch = {
+        name,
+        githubLogin: this._datos.githubLogin.trim() || null,
+        startDate: this._datos.startDate || null,
+        guilds: [...this._datos.guilds],
+        labels: [...this._datos.labels],
+      };
+      await updatePerson(this.persistence, this.person.id, patch);
+      this.person = { ...this.person, ...patch }; // refleja en la cabecera sin recargar
+      this._datosSaved = true;
+      this.dispatchEvent(new CustomEvent('person-updated', { detail: { id: this.person.id }, bubbles: true, composed: true }));
+    } catch (err) {
+      this._datosError = err instanceof Error ? err.message : 'No se pudo guardar.';
+    } finally {
+      this._datosSaving = false;
+    }
+  }
+
+  _openInvite() {
+    this._inviteDraft = this.person?.pendingEmail ?? '';
+    this._inviteOpen = true;
+  }
+
+  _closeInvite() {
+    this._inviteOpen = false;
+  }
+
+  /** Guarda la invitación por email (pendingEmail), acción SEPARADA del form. */
+  async _saveInvite() {
+    if (!this.persistence || !this.person) return;
+    const email = normalizeInviteEmail(this._inviteDraft);
+    try {
+      await updatePerson(this.persistence, this.person.id, { pendingEmail: email, uid: null });
+      this.person = { ...this.person, pendingEmail: email, uid: null };
+      this._inviteOpen = false;
+      this.dispatchEvent(new CustomEvent('person-updated', { detail: { id: this.person.id }, bubbles: true, composed: true }));
+    } catch (err) {
+      this._datosError = err instanceof Error ? err.message : 'No se pudo guardar la invitación.';
+    }
+  }
+
+  /** Fieldset de checkboxes (gremios/labels) desde su catálogo. */
+  _renderDatosChecks(legend, catalog, selected, onToggle) {
+    return html`<fieldset class="datos-checks">
+      <legend>${legend}</legend>
+      ${catalog.length === 0
+        ? html`<span class="empty">Aún no hay ${legend.toLowerCase()} (se gestionan en Ajustes).</span>`
+        : catalog.map(
+            (c) => html`<label class="chk">
+              <input type="checkbox" .checked=${selected.includes(c.name)} @change=${(e) => onToggle(c.name, e.target.checked)} />
+              <span>${c.name}</span>
+            </label>`,
+          )}
+    </fieldset>`;
+  }
+
+  /** Bloque de cuenta: vinculada (solo lectura) o botón «Invitar por email». */
+  _renderAccountBlock() {
+    if (this.person?.uid) {
+      const u = this._usersCat.find((x) => x.uid === this.person.uid);
+      const who = u ? ` (${u.name ?? u.email ?? u.uid})` : '';
+      return html`<p class="acct">🔗 Cuenta vinculada${who}.</p>`;
+    }
+    const pending = this.person?.pendingEmail ?? '';
+    const btnLabel = pending ? '✉️ Editar invitación' : '✉️ Invitar por email';
+    return html`<div class="acct">
+      ${pending
+        ? html`<p>⏳ Invitación pendiente: <strong>${pending}</strong></p>`
+        : html`<p class="empty">Sin cuenta vinculada.</p>`}
+      <button type="button" class="act" @click=${() => this._openInvite()}>${btnLabel}</button>
+    </div>`;
+  }
+
+  _renderInviteDialog() {
+    if (!this._inviteOpen) return null;
+    return html`<div class="inv-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closeInvite(); }}>
+      <div class="inv-dialog" role="dialog" aria-modal="true" aria-label="Invitar por email">
+        <h4>Invitar por email</h4>
+        <p class="hint">La persona se crea con su plan listo; al entrar por primera vez con este email, su cuenta se vincula sola y entra en la app. Cuida la ortografía: un error la dejaría sin vincular.</p>
+        <input type="email" placeholder="persona@empresa.com" .value=${this._inviteDraft} @input=${(e) => { this._inviteDraft = e.target.value; }} />
+        <div class="inv-actions">
+          <button type="button" class="act" @click=${() => this._closeInvite()}>Cancelar</button>
+          <button type="button" class="primary" @click=${() => this._saveInvite()}>Guardar invitación</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  /** Pestaña «Datos»: identidad editable de la persona en un ÚNICO sitio. */
+  _renderDatos() {
+    const d = this._datos;
+    return html`
+      <section class="datos">
+        <label class="fld">Nombre
+          <input type="text" .value=${d.name} @input=${(e) => { this._datos = { ...d, name: e.target.value }; }} />
+        </label>
+        <label class="fld">GitHub (login)
+          <input type="text" placeholder="usuario-github" .value=${d.githubLogin} @input=${(e) => { this._datos = { ...d, githubLogin: e.target.value }; }} />
+        </label>
+        <label class="fld">Fecha de alta
+          <input type="date" .value=${d.startDate} @input=${(e) => { this._datos = { ...d, startDate: e.target.value }; }} />
+        </label>
+        ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
+        ${this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c))}
+        ${this._renderAccountBlock()}
+        ${this._datosError ? html`<p class="error">${this._datosError}</p>` : null}
+        <div class="datos-actions">
+          <button class="primary" type="button" ?disabled=${this._datosSaving} @click=${() => this._saveDatos()}>
+            ${this._datosSaving ? 'Guardando…' : 'Guardar datos'}
+          </button>
+          ${this._datosSaved ? html`<span class="saved">✓ Guardado</span>` : null}
+        </div>
+      </section>
+      ${this._renderInviteDialog()}
+    `;
+  }
+
   render() {
     if (!this.person) return null;
     const title = composeTitle(this.framework, this.person.levelId, this.person.disciplines);
@@ -1502,6 +1720,7 @@ export class TeamPersonDetail extends LitElement {
    */
   _renderActivePanel() {
     const panel = {
+      datos: () => this._renderDatos(),
       carrera: () => this._renderCareer(),
       seniority: () => this._renderDimension(DIMENSIONS[0]),
       emotional: () => this._renderDimension(DIMENSIONS[1]),

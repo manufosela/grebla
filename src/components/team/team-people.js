@@ -14,10 +14,8 @@ import { LitElement, html, css } from 'lit';
 import '../app-modal.js';
 import {
   addPerson,
-  normalizeInviteEmail,
   listActivePeople,
   deactivatePerson,
-  updatePerson,
   sharePerson,
   unsharePerson,
   transferOwnership,
@@ -53,7 +51,6 @@ export class TeamPeople extends LitElement {
     error: { state: true },
     _name: { state: true },
     _selectedUid: { state: true },
-    _inviteEmail: { state: true },
     _selectedDisciplines: { state: true },
     _levelId: { state: true },
     _selectedGuilds: { state: true },
@@ -69,13 +66,6 @@ export class TeamPeople extends LitElement {
     _transferFor: { state: true },
     _transferSel: { state: true },
     _confirmTransfer: { state: true },
-    _editFor: { state: true },
-    _editDisciplines: { state: true },
-    _editLevelId: { state: true },
-    _editGuilds: { state: true },
-    _editLabels: { state: true },
-    _editUid: { state: true },
-    _editInviteEmail: { state: true },
   };
 
   static styles = css`
@@ -230,10 +220,6 @@ export class TeamPeople extends LitElement {
     this._name = '';
     /** @type {string} uid de la cuenta a vincular en el alta ('' = sin vincular) */
     this._selectedUid = '';
-    /** @type {string} email de invitación en el alta (persona aún no logada; '' = sin invitación) */
-    this._inviteEmail = '';
-    /** @type {string} email de invitación en edición (mientras la persona sigue sin uid) */
-    this._editInviteEmail = '';
     /** @type {string[]} ids de disciplina seleccionadas para el alta */
     this._selectedDisciplines = [];
     /** @type {string} id de nivel seleccionado para el alta ('' = sin nivel) */
@@ -260,18 +246,6 @@ export class TeamPeople extends LitElement {
     this._transferSel = '';
     /** @type {boolean} confirmación de transferencia */
     this._confirmTransfer = false;
-    /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Editar */
-    this._editFor = null;
-    /** @type {string[]} ids de disciplina seleccionadas en el modal Editar */
-    this._editDisciplines = [];
-    /** @type {string} id de nivel seleccionado en el modal Editar ('' = sin nivel) */
-    this._editLevelId = '';
-    /** @type {string[]} gremios seleccionados en el modal Editar */
-    this._editGuilds = [];
-    /** @type {string[]} labels seleccionados en el modal Editar */
-    this._editLabels = [];
-    /** @type {string} uid vinculado en el modal Editar ('' = sin vincular) */
-    this._editUid = '';
     this._loaded = false;
   }
 
@@ -373,33 +347,6 @@ export class TeamPeople extends LitElement {
     `;
   }
 
-  /**
-   * Campo «Invitar por email»: pre-invita a alguien que AÚN no se ha logado, de
-   * modo que su persona/plan queden listos y su primer login con ese email selle
-   * el vínculo (Cloud Function). Se deshabilita si ya hay una cuenta vinculada
-   * (son excluyentes). Riesgo asumido: un typo deja a la persona sin vincular.
-   * @param {string} value  email actual
-   * @param {(email: string) => void} onChange
-   * @param {boolean} disabled  true si ya hay cuenta vinculada
-   */
-  _renderInviteField(value, onChange, disabled) {
-    return html`
-      <label class="invite-field">
-        Invitar por email (si aún no se ha logado)
-        <input
-          type="email"
-          placeholder="persona@empresa.com"
-          .value=${value ?? ''}
-          ?disabled=${disabled}
-          @input=${(e) => onChange(e.target.value)}
-        />
-        <span class="eje-hint">${disabled
-          ? 'Ya has vinculado una cuenta: la invitación por email no aplica.'
-          : 'La persona se crea con su plan listo; al entrar por primera vez con este email se vincula sola. Cuida la ortografía: un error la dejaría sin vincular.'}</span>
-      </label>
-    `;
-  }
-
   /** @param {string} id @param {boolean} checked */
   _toggleDiscipline(id, checked) {
     this._selectedDisciplines = checked
@@ -469,7 +416,6 @@ export class TeamPeople extends LitElement {
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
         githubLogin: this._github,
         uid: this._selectedUid || null,
-        pendingEmail: this._inviteEmail || null,
       });
       this._name = '';
       this._selectedDisciplines = [];
@@ -481,16 +427,17 @@ export class TeamPeople extends LitElement {
       this._startDate = '';
       this._github = '';
       this._selectedUid = '';
-      this._inviteEmail = '';
       await this._load();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo crear la persona.';
     }
   }
 
-  _openPerson(person) {
+  /** Abre la ficha de la persona; opcionalmente en una sub-pestaña concreta
+   * (p. ej. «datos» desde el botón Editar, RMR-TSK-0173). */
+  _openPerson(person, subtab) {
     this.dispatchEvent(
-      new CustomEvent('open-person', { detail: { person }, bubbles: true, composed: true }),
+      new CustomEvent('open-person', { detail: { person, subtab }, bubbles: true, composed: true }),
     );
   }
 
@@ -546,7 +493,7 @@ export class TeamPeople extends LitElement {
     const manage = this._canManage(person);
     return html`
       <div class="row-actions">
-        <button class="act" type="button" @click=${() => this._openEdit(person)}>Editar</button>
+        <button class="act" type="button" @click=${() => this._openPerson(person, 'datos')}>Editar</button>
         ${manage
           ? html`
               <button class="act" type="button" @click=${() => this._openShare(person)}>Compartir</button>
@@ -652,65 +599,6 @@ export class TeamPeople extends LitElement {
     }
   }
 
-  // ---- Editar disciplinas / nivel / labels ----
-  _openEdit(person) {
-    this._editFor = person;
-    this._editDisciplines = [...(person.disciplines ?? [])];
-    this._editLevelId = person.levelId ?? '';
-    this._editGuilds = [...(person.guilds ?? [])];
-    this._editLabels = [...(person.labels ?? [])];
-    this._editUid = person.uid ?? '';
-    this._editInviteEmail = person.pendingEmail ?? '';
-    this.error = '';
-  }
-
-  _closeEdit() {
-    this._editFor = null;
-    this.error = '';
-  }
-
-  /** @param {string} id @param {boolean} checked */
-  _toggleEditDiscipline(id, checked) {
-    this._editDisciplines = checked
-      ? [...this._editDisciplines, id]
-      : this._editDisciplines.filter((d) => d !== id);
-  }
-
-  _toggleEditLabel(name, checked) {
-    this._editLabels = checked
-      ? [...this._editLabels, name]
-      : this._editLabels.filter((l) => l !== name);
-  }
-
-  _toggleEditGuild(name, checked) {
-    this._editGuilds = checked
-      ? [...this._editGuilds, name]
-      : this._editGuilds.filter((g) => g !== name);
-  }
-
-  async _saveEdit() {
-    const person = this._editFor;
-    if (!person) return;
-    this.error = '';
-    try {
-      // uid y pendingEmail son excluyentes: si se vincula una cuenta, la
-      // invitación pendiente se limpia; si no, se guarda el email (editable
-      // mientras la persona no tenga uid, para corregir un typo).
-      const linkedUid = this._editUid || null;
-      await updatePerson(this.persistence, person.id, {
-        disciplines: [...this._editDisciplines],
-        levelId: this._editLevelId || null,
-        guilds: [...this._editGuilds],
-        labels: [...this._editLabels],
-        uid: linkedUid,
-        pendingEmail: linkedUid ? null : normalizeInviteEmail(this._editInviteEmail),
-      });
-      this._editFor = null;
-      await this._load();
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo guardar los cambios.';
-    }
-  }
 
   // ---- Selectores del framework de carrera (reutilizados en alta y edición) ----
 
@@ -872,73 +760,6 @@ export class TeamPeople extends LitElement {
     `;
   }
 
-  _renderEditModal() {
-    const person = this._editFor;
-    const heading = person ? `Editar · ${person.name}` : 'Editar';
-    return html`
-      <app-modal .open=${!!person} heading=${heading} @close=${() => this._closeEdit()}>
-        ${person
-          ? html`
-              <div class="modal-body">
-                <p>Disciplinas, nivel, gremios, labels y cuenta vinculada de esta persona.</p>
-                ${this._renderDisciplineChecks(this._editDisciplines, (id, checked) => this._toggleEditDiscipline(id, checked))}
-                ${this._renderLevelSelect(this._editLevelId, (id) => { this._editLevelId = id; })}
-                ${this._renderAccountSelect(this._editUid, (uid) => { this._editUid = uid; }, person.uid ?? undefined)}
-                ${this._renderInviteField(this._editInviteEmail, (email) => { this._editInviteEmail = email; }, Boolean(this._editUid))}
-                <fieldset class="roles">
-                  <legend>Gremios</legend>
-                  <p class="eje-hint">Tecnología o stack que domina la persona (JavaScript, Python, Kubernetes…); no mide nivel.</p>
-                  <div class="edit-checks">
-                    ${this.guilds.length === 0
-                      ? html`<span class="muted">Aún no hay gremios.
-                          <button type="button" class="link-inline" @click=${() => this._gotoTab('settings')}>Gestiónalos en Ajustes</button>.</span>`
-                      : this.guilds.map(
-                          (g) => html`
-                            <label class="role-check">
-                              <input
-                                type="checkbox"
-                                .checked=${this._editGuilds.includes(g.name)}
-                                @change=${(e) => this._toggleEditGuild(g.name, e.target.checked)}
-                              />
-                              <span>${g.name}</span>
-                            </label>
-                          `,
-                        )}
-                  </div>
-                </fieldset>
-                <fieldset class="roles">
-                  <legend>Labels</legend>
-                  <p class="eje-hint">Agrupación libre por equipo, squad o guardia.</p>
-                  <div class="edit-checks">
-                    ${this.labels.length === 0
-                      ? html`<span class="muted">Aún no hay labels.
-                          <button type="button" class="link-inline" @click=${() => this._gotoTab('settings')}>Gestiónalos en Ajustes</button>.</span>`
-                      : this.labels.map(
-                          (l) => html`
-                            <label class="role-check">
-                              <input
-                                type="checkbox"
-                                .checked=${this._editLabels.includes(l.name)}
-                                @change=${(e) => this._toggleEditLabel(l.name, e.target.checked)}
-                              />
-                              <span>${l.name}</span>
-                            </label>
-                          `,
-                        )}
-                  </div>
-                </fieldset>
-                ${this.error ? html`<p class="error">${this.error}</p>` : null}
-                <div class="actions-row">
-                  <button class="act" type="button" @click=${() => this._closeEdit()}>Cancelar</button>
-                  <button class="primary" type="button" @click=${() => this._saveEdit()}>Guardar</button>
-                </div>
-              </div>
-            `
-          : null}
-      </app-modal>
-    `;
-  }
-
   render() {
     return html`
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
@@ -958,7 +779,6 @@ export class TeamPeople extends LitElement {
             </label>
           </div>
           ${this._renderAccountSelect(this._selectedUid, (uid) => this._onSelectAltaAccount(uid))}
-          ${this._renderInviteField(this._inviteEmail, (email) => { this._inviteEmail = email; }, Boolean(this._selectedUid))}
           ${this._renderDisciplineChecks(this._selectedDisciplines, (id, checked) => this._toggleDiscipline(id, checked))}
           ${this._renderLevelSelect(this._levelId, (id) => { this._levelId = id; })}
           <fieldset class="roles">
@@ -1077,7 +897,6 @@ export class TeamPeople extends LitElement {
 
       ${this._renderShareModal()}
       ${this._renderTransferModal()}
-      ${this._renderEditModal()}
     `;
   }
 }
