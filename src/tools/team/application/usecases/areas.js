@@ -32,3 +32,17 @@ export function listAreas(persistence) {
 export function removeArea(persistence, id) {
   return persistence.areas.remove(id);
 }
+
+/**
+ * Renombra un área. Las lecturas de conocimiento referencian el área por `areaId`
+ * (no por nombre), así que no hace falta cascada.
+ * @param {PersistencePort} persistence
+ * @param {string} id
+ * @param {string} newName
+ * @returns {Promise<void>}
+ */
+export function renameArea(persistence, id, newName) {
+  const name = String(newName ?? '').trim();
+  if (!name) throw new Error('El nombre del área es obligatorio');
+  return persistence.areas.update(id, { name });
+}

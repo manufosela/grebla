@@ -31,17 +31,20 @@
  * @typedef {Object} AreaRepository   Catálogo de áreas de conocimiento con ámbito (personal/global).
  * @property {() => Promise<Area[]>} list   Globales + las del líder que mira.
  * @property {(name: string) => Promise<string>} create   Crea un área PERSONAL del líder.
+ * @property {(id: string, patch: Partial<Area>) => Promise<void>} update   Renombra un área.
  * @property {(id: string) => Promise<void>} remove
  *
  * @typedef {Object} GuildRepository   Catálogo de gremios con ámbito (personal/global).
  * @property {() => Promise<Guild[]>} list   Globales + los del líder que mira.
  * @property {(name: string) => Promise<string>} create   Crea un gremio PERSONAL del líder.
+ * @property {(id: string, patch: Partial<Guild>) => Promise<void>} update   Renombra un gremio.
  * @property {(id: string) => Promise<void>} remove
  *
  * @typedef {import('./types.js').Label} Label
  * @typedef {Object} LabelRepository   Catálogo de labels con ámbito (mismo modelo que Guild).
  * @property {() => Promise<Label[]>} list   Globales + los del líder que mira.
  * @property {(name: string) => Promise<string>} create   Crea un label PERSONAL del líder.
+ * @property {(id: string, patch: Partial<Label>) => Promise<void>} update   Renombra un label.
  * @property {(id: string) => Promise<void>} remove
  *
  * @typedef {Object} ConversationRepository

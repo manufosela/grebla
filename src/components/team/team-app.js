@@ -264,7 +264,7 @@ export class TeamApp extends LitElement {
       case 'team':
         return html`<team-overview .persistence=${this.persistence}></team-overview>`;
       case 'settings':
-        return html`<team-settings .persistence=${this.persistence}></team-settings>`;
+        return html`<team-settings .persistence=${this.persistence} .isAdmin=${this.isAdmin}></team-settings>`;
       default:
         return null;
     }

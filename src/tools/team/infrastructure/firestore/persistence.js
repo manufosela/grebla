@@ -159,6 +159,9 @@ function areaRepo(db, base, leaderUid) {
       const ref = await addDoc(areaCol(db, base), { name, ownerLeaderUid: leaderUid });
       return ref.id;
     },
+    async update(id, patch) {
+      await updateDoc(areaDoc(db, base, id), { ...patch });
+    },
     async remove(id) {
       await deleteDoc(areaDoc(db, base, id));
     },
@@ -178,6 +181,9 @@ function guildRepo(db, tbase, leaderUid) {
       const ref = await addDoc(guildCol(db, tbase), { name, ownerLeaderUid: leaderUid });
       return ref.id;
     },
+    async update(id, patch) {
+      await updateDoc(guildDoc(db, tbase, id), { ...patch });
+    },
     async remove(id) {
       await deleteDoc(guildDoc(db, tbase, id));
     },
@@ -194,6 +200,9 @@ function labelRepo(db, tbase, leaderUid) {
     async create(name) {
       const ref = await addDoc(labelCol(db, tbase), { name, ownerLeaderUid: leaderUid });
       return ref.id;
+    },
+    async update(id, patch) {
+      await updateDoc(labelDoc(db, tbase, id), { ...patch });
     },
     async remove(id) {
       await deleteDoc(labelDoc(db, tbase, id));

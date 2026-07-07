@@ -32,6 +32,11 @@ export function createMemoryGuildRepository(seed = [], viewerLeaderUid = null) {
       store.set(id, guild);
       return id;
     },
+    async update(id, patch) {
+      const current = store.get(id);
+      if (!current) throw new Error(`Guild ${id} no existe`);
+      store.set(id, { ...current, ...patch });
+    },
     async remove(id) {
       if (!store.delete(id)) throw new Error(`Guild ${id} no existe`);
     },
