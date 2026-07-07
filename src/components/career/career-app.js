@@ -1202,6 +1202,16 @@ export class CareerApp extends LitElement {
     .route-done-ok { margin-top: 0.9rem; background: transparent; border: 1px solid rgba(255, 255, 255, 0.5); color: #fff; border-radius: 999px; padding: 0.4rem 1.1rem; font-weight: 700; cursor: pointer; }
     .ruta-done { text-align: left; }
     .ruta-hint { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #9ca3af); }
+    /* Historial «🏆 Mis rutas» (RMR-TSK-0170). */
+    .mis-rutas { margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--rm-border, #e5e7eb); }
+    .mis-rutas h4 { margin: 0 0 0.6rem; font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
+    .mis-rutas-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .mis-rutas-item { display: flex; flex-direction: column; gap: 0.05rem; padding: 0.4rem 0.55rem; border-radius: 8px; background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); }
+    .mis-rutas-item .mr-name { font-weight: 700; font-size: 0.85rem; color: var(--rm-text, #111827); }
+    .mis-rutas-item .mr-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    .mis-rutas-next { margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; }
+    .mis-rutas-next .mr-next-lead { font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
+    .mis-rutas-next .primary { align-self: flex-start; }
     .ruta-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
     .ruta-stop {
       display: flex;
@@ -3604,6 +3614,17 @@ export class CareerApp extends LitElement {
     this.routeView = null;
     this.showRoute = true;
     await this._refreshRouteView();
+    // Catálogo, archipiélago y niveles para la sugerencia de la SIGUIENTE ruta
+    // en «Mis rutas» (F2). Best-effort: si falla, la sección va sin sugerencia.
+    try {
+      this.careerRoutes ??= await listCareerRoutes();
+      this.archipelago ??= await getArchipelago();
+      this._frameworkLevels ??= await getFramework()
+        .then((fw) => fw?.levels ?? [])
+        .catch(() => []);
+    } catch {
+      /* sin catálogo, «Mis rutas» solo muestra el historial */
+    }
   }
 
   /** Cierra el gestor de la ruta y devuelve el foco al HUD. */
@@ -3718,6 +3739,7 @@ export class CareerApp extends LitElement {
           : null}
         ${this.routeError ? html`<p class="error">${this.routeError}</p>` : null}
         ${this._renderRouteStops(stops, editable)}
+        ${this._renderCompletedRoutes()}
       </section>
     </div>`;
   }
@@ -3765,24 +3787,65 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * «Mi ruta» sin paradas (RMR-BUG-0017): si ya completaste algún reto, muestra
-   * el último (para no dejar «sin ruta» tras terminarlo); si no, invita a
-   * planificar. El historial completo vive en la bitácora y en «mis rutas» (F2).
+   * «Mi ruta» sin paradas: invita a planificar o a elegir un reto. El historial
+   * de rutas completadas ya no vive aquí, sino en la sección «Mis rutas» (F2).
    */
   _renderRouteEmpty() {
+    return html`<p class="ruta-lead">
+      Aún no tienes paradas planificadas. Abre la tarjeta de una casa y pulsa
+      «Añadir a la ruta», o elige un reto guiado con «🎯».
+    </p>`;
+  }
+
+  /** La CareerRoute SUGERIDA por rol×nivel (F2), o null si no procede o si ya
+   * es el reto en curso. @returns {import('../../tools/career/domain/careerRoutes.js').CareerRoute|null} */
+  _nextSuggestedRoute() {
+    const id = this._suggestedRouteId(groupRoutesByRole(this.careerRoutes ?? []));
+    if (!id || id === this._challenge?.routeId) return null;
+    return (this.careerRoutes ?? []).find((r) => r.routeId === id) ?? null;
+  }
+
+  /** Meta de una ruta completada: «{fecha} · {duración}» (o solo fecha si no
+   * hay duración). @param {import('../../tools/career/domain/logbook.js').CompletedRoute} r */
+  _completedMeta(r) {
+    const when = formatAchievedAt(r.completedAt) ?? 'fecha no registrada';
+    const dur = r.durationMs === null ? '' : ` · ${this._formatDuration(r.durationMs)}`;
+    return `${when}${dur}`;
+  }
+
+  /**
+   * Sección «🏆 Mis rutas» (F2, RMR-TSK-0170): historial de TODAS las rutas
+   * completadas (bitácora → completedRoutes: nombre, fecha, duración) y, si
+   * procede por tu nivel, la SIGUIENTE ruta sugerida con botón para empezarla.
+   * No aparece si no hay historial NI sugerencia (no ensucia «Mi ruta»).
+   */
+  _renderCompletedRoutes() {
     const done = completedRoutes(this.logbook ?? EMPTY_LOGBOOK);
-    if (done.length === 0) {
-      return html`<p class="ruta-lead">
-        Aún no tienes paradas. Abre la tarjeta de una casa y pulsa
-        «Añadir a la ruta» para planificar tu camino.
-      </p>`;
-    }
-    const last = done[0];
-    const when = formatAchievedAt(last.completedAt);
-    return html`<div class="ruta-done">
-      <p class="ruta-lead">🏆 <strong>Ruta completada:</strong> ${last.name}${when ? html` · ${when}` : null}.</p>
-      <p class="ruta-hint">Abre «🎯 Elegir reto» para empezar la siguiente, o añade paradas a tu propia ruta.</p>
-    </div>`;
+    const suggested = this._nextSuggestedRoute();
+    if (done.length === 0 && !suggested) return null;
+    return html`<section class="mis-rutas">
+      <h4>🏆 Mis rutas</h4>
+      ${done.length === 0
+        ? html`<p class="ruta-hint">Aún no has completado ninguna ruta entera.</p>`
+        : html`<ul class="mis-rutas-list">
+            ${done.map(
+              (r) => html`<li class="mis-rutas-item">
+                <span class="mr-name">${r.name}</span>
+                <span class="mr-meta">${this._completedMeta(r)}</span>
+              </li>`,
+            )}
+          </ul>`}
+      ${suggested && this._canPlayJourney
+        ? html`<div class="mis-rutas-next">
+            <span class="mr-next-lead">Siguiente por tu nivel:</span>
+            <button
+              class="primary"
+              ?disabled=${this.challengeBusy}
+              @click=${() => this._chooseChallenge(suggested)}
+            >▶ Empezar: ${suggested.name}</button>
+          </div>`
+        : null}
+    </section>`;
   }
 
   /**
