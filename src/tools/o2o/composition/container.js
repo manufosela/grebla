@@ -12,11 +12,12 @@ import { createFirestoreO2O } from '../infrastructure/firestore/persistence.js';
  * @param {Object} [options]
  * @param {'memory'|'firestore'} [options.mode]
  * @param {import('firebase/firestore').Firestore|null} [options.db]
+ * @param {string|null} [options.leaderUid]  Líder autenticado (acota las sesiones).
  * @param {object} [options.seed]  Solo para mode 'memory'.
  * @returns {Promise<{ mode: string, persistence: O2OPersistence }>}
  */
 export async function createO2OContainer(options = {}) {
-  const { mode = 'firestore', db = null, seed } = options;
+  const { mode = 'firestore', db = null, leaderUid = null, seed } = options;
   if (mode === 'memory') {
     return { mode, persistence: createMemoryO2O(seed) };
   }
@@ -26,7 +27,7 @@ export async function createO2OContainer(options = {}) {
       const firebase = await import('../../../lib/firebase.js');
       database = firebase.db;
     }
-    return { mode, persistence: createFirestoreO2O(database) };
+    return { mode, persistence: createFirestoreO2O(database, leaderUid) };
   }
   throw new Error(`Modo de container O2O desconocido: ${mode}`);
 }
