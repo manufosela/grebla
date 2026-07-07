@@ -161,6 +161,44 @@ export const deletePerson = onCall({ region: 'europe-west1' }, async (request) =
   return { ok: true, deletedPersonId: personId };
 });
 
+/**
+ * getMyO2O: proyección COMPARTIDA de los O2O de la persona vinculada al llamante.
+ * Deriva el personId de su uid (no lo acepta como input, para que solo obtenga lo
+ * suyo), busca las sesiones en los líderes que le corresponden (dueño + líderes
+ * con los que está compartida) y devuelve SOLO {date, sharedSummary} de las que el
+ * líder marcó como compartidas — nunca transcripción, notas ni el resumen privado.
+ * Añade sus acciones (que ya puede leer por reglas) para resolverlo en un viaje.
+ */
+export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+
+  const db = getFirestore();
+  const personSnap = await db.collection('people').where('uid', '==', caller.uid).limit(1).get();
+  const personDoc = personSnap.docs.at(0);
+  if (!personDoc) throw new HttpsError('not-found', 'No hay ninguna persona vinculada a tu cuenta.');
+  const personId = personDoc.id;
+  const person = personDoc.data();
+
+  const leaderUids = [...new Set([person.ownerLeaderUid, ...(person.sharedWithUids ?? [])].filter(Boolean))];
+  const perLeader = await Promise.all(
+    leaderUids.map((luid) =>
+      db.collection('leaders').doc(luid).collection('o2o').where('personId', '==', personId).get(),
+    ),
+  );
+  const sessions = perLeader
+    .flatMap((snap) => snap.docs)
+    .map((d) => d.data())
+    .filter((s) => s.sharedWithPerson && s.sharedSummary)
+    .map((s) => ({ date: s.date, sharedSummary: s.sharedSummary }))
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  const actionsSnap = await db.collection('people').doc(personId).collection('o2oActions').get();
+  const actions = actionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  return { sessions, actions };
+});
+
 // ── DORA ───────────────────────────────────────────────────────────────────
 const MS_HOUR = 3_600_000;
 const toMs = (d) => new Date(d).getTime();
