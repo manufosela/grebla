@@ -10,6 +10,7 @@ import '../components/engineer-space.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap } from '../lib/engineer.js';
+import { getMyO2O } from '../lib/o2o.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { composeTitle } from '../tools/career/data/framework.js';
 import { ROLES } from '../data/roles.js';
@@ -34,14 +35,17 @@ onUserChanged(async (user) => {
       location.replace('/');
       return;
     }
-    // Carga en paralelo del contenido de las tres secciones (todo solo lectura).
-    const [framework, profile, career] = await Promise.all([
+    // Carga en paralelo del contenido de las secciones (de solo lectura). El
+    // O2O va por Cloud Function y es NO crítico: si falla, la vista sigue con el
+    // resto y «Mis O2O» queda vacío (no tumba «Mi espacio»).
+    const [framework, profile, career, o2o] = await Promise.all([
       getFramework(),
       getMyRoleMirrorProfile(person.id),
       getMyCareerMap(person.id),
+      getMyO2O().catch(() => null),
     ]);
     renderIdentity(person, framework);
-    renderSpace(person, framework, profile, career);
+    renderSpace(person, framework, profile, career, o2o);
   } catch {
     showError('No se pudo cargar tu espacio. Vuelve a intentarlo en unos minutos.');
   }
@@ -54,9 +58,10 @@ onUserChanged(async (user) => {
  * @param {import('../tools/career/data/framework.js').CareerFramework} framework
  * @param {import('../lib/scoring.js').Profile|null} profile
  * @param {Awaited<ReturnType<import('../lib/engineer.js').getMyCareerMap>>} career
+ * @param {import('../lib/o2o.js').MyO2O|null} o2o  proyección compartida de mis O2O (o null si falló)
  * @returns {void}
  */
-function renderSpace(person, framework, profile, career) {
+function renderSpace(person, framework, profile, career, o2o) {
   if (!space) return;
   space.person = person;
   space.framework = framework;
@@ -71,6 +76,8 @@ function renderSpace(person, framework, profile, career) {
   space.endorsements = career.endorsements;
   // Consultas al brujo (MC-22): la ficha las lista como Q&A (solo lectura).
   space.questions = career.questions;
+  // Mis O2O (F4): resúmenes compartidos + mis acciones (proyección de getMyO2O).
+  space.o2o = o2o;
 }
 
 /**

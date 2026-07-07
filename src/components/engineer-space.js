@@ -49,9 +49,9 @@ import { setCareerTarget } from '../lib/engineer.js';
  * Pestañas de «Mi espacio». El id (clave) sincroniza con `location.hash`
  * (#carrera / #rolemirror / #mapa) para conservar la pestaña activa al recargar
  * o navegar atrás/adelante, igual que el patrón de <superadmin-panel>.
- * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'>}
+ * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'|'o2o'>}
  */
-const TABS = ['carrera', 'rolemirror', 'mapa'];
+const TABS = ['carrera', 'rolemirror', 'mapa', 'o2o'];
 
 /**
  * Metadatos de cada pestaña: etiqueta de la barra, encabezado del panel y clase
@@ -62,6 +62,7 @@ const TAB_META = {
   carrera: { label: 'Mi carrera', heading: 'Mi carrera', cls: 'career' },
   rolemirror: { label: 'Mi Role Mirror', heading: 'Mi Role Mirror', cls: 'rolemirror' },
   mapa: { label: 'Mi mapa', heading: 'Mi mapa de carrera', cls: 'map' },
+  o2o: { label: 'Mis O2O', heading: 'Mis O2O', cls: 'o2o' },
 };
 
 export class EngineerSpace extends LitElement {
@@ -76,6 +77,7 @@ export class EngineerSpace extends LitElement {
     achievements: { attribute: false },
     endorsements: { attribute: false },
     questions: { attribute: false },
+    o2o: { attribute: false },
     _tab: { state: true },
     _targetError: { state: true },
     _targetSaving: { state: true },
@@ -106,6 +108,16 @@ export class EngineerSpace extends LitElement {
     section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.rolemirror { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
+    section.o2o { border-left: 4px solid var(--rm-navy, #1e3a5f); }
+
+    /* ── Sección Mis O2O (solo lo compartido por el líder) ── */
+    .o2o-list { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+    .o2o-card { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem; }
+    .o2o-card .date { font-weight: 700; font-size: 0.88rem; }
+    .o2o-card .body { font-size: 0.88rem; margin: 0.35rem 0 0; white-space: pre-wrap; }
+    .o2o-act { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; padding: 0.15rem 0; }
+    .o2o-act.done { color: var(--rm-muted, #9ca3af); text-decoration: line-through; }
+    .o2o-note { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0.25rem 0 1rem; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; margin: 0; }
     .playlink { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; margin-left: 0.35rem; }
     .playlink:hover { text-decoration: underline; }
@@ -213,6 +225,8 @@ export class EngineerSpace extends LitElement {
     this.endorsements = null;
     /** @type {import('../tools/career/domain/wizard.js').WizardQuestion[]} consultas al brujo (ficha MC-22) */
     this.questions = [];
+    /** @type {import('../lib/o2o.js').MyO2O|null} proyección compartida de mis O2O (F4) */
+    this.o2o = null;
     /** @type {string|null} aviso in-place si falla la escritura del objetivo */
     this._targetError = null;
     /** @type {boolean} true mientras se persiste el objetivo (deshabilita controles) */
@@ -645,6 +659,50 @@ export class EngineerSpace extends LitElement {
     `;
   }
 
+  /**
+   * Sección «Mis O2O»: SOLO lo que el líder decidió compartir (resúmenes) y mis
+   * acciones. Nunca notas privadas, transcripción ni el resumen privado del
+   * líder — eso lo filtra la Cloud Function `getMyO2O` (fuente única bajo el
+   * líder). De solo lectura.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderO2O() {
+    const data = this.o2o;
+    const sessions = data?.sessions ?? [];
+    const actions = data?.actions ?? [];
+    if (!sessions.length && !actions.length) {
+      return html`<p class="empty">Aún no hay O2O compartidos contigo. Cuando tu líder comparta un resumen o te asigne acciones, aparecerán aquí.</p>`;
+    }
+    return html`
+      <p class="sub">Resúmenes compartidos</p>
+      ${sessions.length
+        ? html`<ul class="o2o-list">${sessions.map((s) => this._renderSharedSession(s))}</ul>`
+        : html`<p class="empty">Tu líder aún no ha compartido ningún resumen.</p>`}
+      <p class="sub">Mis acciones</p>
+      ${actions.length
+        ? html`<ul class="o2o-list">${actions.map((a) => this._renderMyAction(a))}</ul>`
+        : html`<p class="empty">No tienes acciones asignadas.</p>`}
+      <p class="o2o-note">Solo ves lo que tu líder ha marcado como compartido; sus notas privadas no son visibles.</p>
+    `;
+  }
+
+  /** Una sesión compartida (fecha + resumen). @returns {import('lit').TemplateResult} */
+  _renderSharedSession(s) {
+    return html`<li class="o2o-card">
+      <div class="date">${s.date?.slice(0, 10)}</div>
+      <p class="body">${s.sharedSummary}</p>
+    </li>`;
+  }
+
+  /** Una acción del ingeniero (marcada hecha o no). @returns {import('lit').TemplateResult} */
+  _renderMyAction(a) {
+    const done = a.status === 'done';
+    const who = a.owner === 'leader' ? '(líder)' : '';
+    return html`<li class="o2o-act ${done ? 'done' : ''}">
+      ${done ? '✓' : '○'} <span>${a.description}</span> <span class="track">${who}</span>
+    </li>`;
+  }
+
   render() {
     const meta = TAB_META[this._tab];
     // Cada pestaña reutiliza su método de render existente (sin duplicar lógica).
@@ -652,6 +710,7 @@ export class EngineerSpace extends LitElement {
       carrera: () => this._renderCareer(),
       rolemirror: () => this._renderRoleMirror(),
       mapa: () => this._renderMap(),
+      o2o: () => this._renderO2O(),
     }[this._tab];
 
     return html`
