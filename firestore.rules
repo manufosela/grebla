@@ -259,6 +259,13 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isLeader() || isSuperAdmin();
     }
+    // Versión desplegada de la app (para detectar clientes con caché vieja). La
+    // lee cualquiera (incluida la pantalla de login, sin sesión); solo la escribe
+    // el script de deploy vía Admin SDK (nunca desde el cliente).
+    match /config/appVersion {
+      allow read: if true;
+      allow write: if false;
+    }
 
     // DORA: config de entrega owner-scoped (mismo modelo que /guilds). Cada repo
     // lleva ownerLeaderUid (el líder que lo añadió). Un mismo repo puede coincidir
