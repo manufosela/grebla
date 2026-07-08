@@ -25,6 +25,13 @@ export class DoraApp extends LitElement {
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     .loading { padding: 2rem; text-align: center; color: var(--rm-muted, #6b7280); border: 1px dashed var(--rm-border, #d1d5db); border-radius: var(--rm-radius, 12px); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }
+    .disclaimer {
+      display: flex; gap: 0.5rem; align-items: baseline;
+      background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f);
+      border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f);
+      border-radius: 10px; padding: 0.55rem 0.85rem; margin-bottom: 1rem; font-size: 0.85rem;
+    }
+    .disclaimer strong { font-weight: 700; }
   `;
 
   constructor() {
@@ -45,6 +52,10 @@ export class DoraApp extends LitElement {
         <button class="tab ${this.view === 'repos' ? 'active' : ''}" @click=${() => { this.view = 'repos'; }}>Repos</button>
         <button class="tab ${this.view === 'metrics' ? 'active' : ''}" @click=${() => { this.view = 'metrics'; }}>Métricas</button>
       </nav>
+      <p class="disclaimer">
+        <span aria-hidden="true">👥</span>
+        <span>Las métricas DORA miden la <strong>salud de la entrega del equipo/sistema</strong>, no el rendimiento de personas concretas. No las uses para evaluar a ingenieros individuales: para eso están la carrera, las dimensiones y los O2O.</span>
+      </p>
       ${this.view === 'repos'
         ? html`<dora-repos .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh}></dora-repos>`
         : html`<dora-metrics .persistence=${this.persistence}></dora-metrics>`}
