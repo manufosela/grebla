@@ -1,24 +1,28 @@
 /**
- * <o2o-app> — raíz de la herramienta O2O (One-to-Ones). Router de 6 vistas.
- * FASE 1 (sin IA): «Guía» y «Formulario previo» en solo lectura (contenido
- * sembrado); «Registrar», «Resumen», «Acciones» y «Evolución» son placeholders
- * «próximamente». La edición de guía/formulario y la IA llegan en fases siguientes.
+ * <o2o-app> — raíz de la herramienta O2O, organizada por PERIODOS (campañas, p.
+ * ej. «Periodo Julio 2026»). Landing = lista de periodos + «Crear periodo». Al
+ * entrar en un periodo se ven sus vistas (Guía y Formulario EDITABLES, Registrar,
+ * Resumen, Acciones, Evolución) scoped a ese periodo. La guía/formulario viven en
+ * el periodo; crear un periodo lo genera EN BLANCO (se rellena a mano, con .md o,
+ * en el futuro, con IA).
  *
- * Recibe `persistence` (inyectada por src/client/o2o.js) y `canEdit` (líder/admin).
+ * Recibe `persistence` (inyectada por src/client/o2o.js), `people` y `canEdit`.
  */
 import { LitElement, html, css } from 'lit';
 import './o2o-register.js';
 import './o2o-actions.js';
 import './o2o-summary.js';
-import { getGuide, getForm } from '../../tools/o2o/application/usecases/index.js';
-import { DEFAULT_GUIDE_ID, DEFAULT_FORM_ID } from '../../tools/o2o/domain/types.js';
+import './o2o-questions-editor.js';
+import {
+  listPeriods, getPeriod, createPeriod, removePeriod, defaultPeriodName,
+} from '../../tools/o2o/application/usecases/periods.js';
 
 /** @type {ReadonlyArray<{ id: string, label: string, ready?: boolean }>} */
 const VIEWS = [
   { id: 'guia', label: 'Guía', ready: true },
   { id: 'formulario', label: 'Formulario previo', ready: true },
   { id: 'registrar', label: 'Registrar O2O', ready: true },
-  { id: 'resumen', label: 'Resumen acumulado', ready: true },
+  { id: 'resumen', label: 'Resumen', ready: true },
   { id: 'acciones', label: 'Acciones', ready: true },
   { id: 'evolucion', label: 'Evolución' },
 ];
@@ -30,9 +34,12 @@ export class O2OApp extends LitElement {
     canEdit: { attribute: false },
     error: { state: true },
     loading: { state: true },
+    _periods: { state: true },
+    _period: { state: true },
     _view: { state: true },
-    _guide: { state: true },
-    _form: { state: true },
+    _newName: { state: true },
+    _busy: { state: true },
+    _confirmDelete: { state: true },
   };
 
   static styles = css`
@@ -49,17 +56,24 @@ export class O2OApp extends LitElement {
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem;
     }
-    h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
+    h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
     .lead { font-size: 0.88rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
-    .block { margin: 0 0 1.25rem; }
-    .block h3 { font-size: 0.95rem; margin: 0 0 0.35rem; color: var(--rm-navy, #1e3a5f); }
-    .block .intro { font-size: 0.85rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.5rem; }
-    ol.qs { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.3rem; }
-    ol.qs li { font-size: 0.9rem; }
+    .btn {
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
+      border-radius: 8px; padding: 0.4rem 0.85rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    }
+    .btn.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
+    .btn.danger { color: var(--rm-danger, #dc2626); border-color: var(--rm-danger, #dc2626); }
+    .btn.link { border: 0; background: none; color: var(--rm-accent, #2a9d8f); font-weight: 700; padding: 0; }
+    .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; }
+    input[type='text'] { font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); min-width: 16rem; }
+    ul.periods { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+    ul.periods li { display: flex; align-items: center; gap: 0.6rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.55rem 0.85rem; }
+    ul.periods .name { flex: 1; font-weight: 600; }
+    .head { display: flex; align-items: center; gap: 0.75rem; margin: 0 0 1rem; }
     .placeholder { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; padding: 1.5rem 0; text-align: center; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }
     .empty { color: var(--rm-muted, #9ca3af); }
-    .ver { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
   `;
 
   constructor() {
@@ -69,44 +83,134 @@ export class O2OApp extends LitElement {
     this.canEdit = false;
     this.error = '';
     this.loading = true;
+    /** @type {import('../../tools/o2o/domain/types.js').O2OPeriod[]} */
+    this._periods = [];
+    /** @type {import('../../tools/o2o/domain/types.js').O2OPeriod|null} */
+    this._period = null;
     this._view = 'guia';
-    /** @type {import('../../tools/o2o/domain/types.js').O2OGuide|null} */
-    this._guide = null;
-    /** @type {import('../../tools/o2o/domain/types.js').PreO2OForm|null} */
-    this._form = null;
+    this._newName = '';
+    this._busy = false;
+    this._confirmDelete = null;
     this._loaded = false;
   }
 
   updated() {
     if (this.persistence && !this._loaded) {
       this._loaded = true;
-      this._load();
+      this._loadPeriods();
     }
   }
 
-  async _load() {
+  async _loadPeriods() {
     this.loading = true;
     this.error = '';
     try {
-      const [guide, form] = await Promise.all([
-        getGuide(this.persistence, DEFAULT_GUIDE_ID),
-        getForm(this.persistence, DEFAULT_FORM_ID),
-      ]);
-      this._guide = guide;
-      this._form = form;
+      this._periods = await listPeriods(this.persistence);
+      this._newName = defaultPeriodName();
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo cargar el O2O.';
+      this.error = err instanceof Error ? err.message : 'No se pudieron cargar los periodos.';
     } finally {
       this.loading = false;
     }
   }
 
+  async _create() {
+    const name = this._newName.trim();
+    if (!name) return;
+    this._busy = true;
+    this.error = '';
+    try {
+      const id = await createPeriod(this.persistence, { name });
+      this._periods = await listPeriods(this.persistence);
+      await this._enter(id); // entra directo al periodo recién creado
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo crear el periodo.';
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  async _enter(id) {
+    this.error = '';
+    try {
+      this._period = await getPeriod(this.persistence, id);
+      this._view = 'guia';
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo abrir el periodo.';
+    }
+  }
+
+  async _back() {
+    this._period = null;
+    this._confirmDelete = null;
+    await this._loadPeriods();
+  }
+
+  async _remove(id) {
+    this.error = '';
+    try {
+      await removePeriod(this.persistence, id);
+      this._confirmDelete = null;
+      this._periods = await listPeriods(this.persistence);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo borrar el periodo.';
+    }
+  }
+
+  /** Refresca la guía/formulario del periodo tras editar (para que Registrar use la última). */
+  _onEditorSaved(e) {
+    if (!this._period) return;
+    const { kind, value } = e.detail;
+    this._period = { ...this._period, [kind === 'form' ? 'form' : 'guide']: value };
+  }
+
   render() {
-    if (this.error) return html`<p class="error">${this.error}</p>`;
+    if (this.error && !this._period) return html`<section class="panel"><p class="error">${this.error}</p></section>`;
+    if (this.loading) return html`<section class="panel"><p class="empty">Cargando…</p></section>`;
+    return this._period ? this._renderWorkspace() : this._renderPeriodsList();
+  }
+
+  // ── Landing: lista de periodos ─────────────────────────────────────────────
+  _renderPeriodsList() {
     return html`
-      <div class="tabs" role="tablist" aria-label="Secciones de O2O">
+      <section class="panel">
+        <h2>Periodos de O2O</h2>
+        <p class="lead">Cada periodo (p. ej. mensual) tiene su propia guía y formulario de preguntas. Crea uno y edítalo, o registra los O2O dentro de él.</p>
+        <div class="row">
+          <input type="text" .value=${this._newName} @input=${(e) => { this._newName = e.target.value; }} placeholder="Nombre del periodo" />
+          <button class="btn primary" ?disabled=${this._busy || !this._newName.trim()} @click=${() => this._create()}>
+            ${this._busy ? 'Creando…' : '+ Crear periodo de O2O'}
+          </button>
+        </div>
+        ${this._periods.length ? html`<ul class="periods">${this._periods.map((p) => this._renderPeriodItem(p))}</ul>`
+          : html`<p class="empty">Aún no hay periodos. Crea el primero.</p>`}
+      </section>
+    `;
+  }
+
+  _renderPeriodItem(p) {
+    const del = this._confirmDelete === p.id
+      ? html`<button class="btn danger" @click=${() => this._remove(p.id)}>Confirmar</button>
+             <button class="btn" @click=${() => { this._confirmDelete = null; }}>Cancelar</button>`
+      : html`<button class="btn" @click=${() => this._enter(p.id)}>Abrir</button>
+             <button class="btn danger" @click=${() => { this._confirmDelete = p.id; }}>Borrar</button>`;
+    return html`<li>
+      <span class="name">${p.name}</span>
+      ${del}
+    </li>`;
+  }
+
+  // ── Workspace de un periodo ────────────────────────────────────────────────
+  _renderWorkspace() {
+    return html`
+      <div class="head">
+        <button class="btn link" @click=${() => this._back()}>← Periodos</button>
+        <h2 style="margin:0">${this._period.name}</h2>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Secciones del periodo de O2O">
         ${VIEWS.map((v) => this._renderTab(v))}
       </div>
+      ${this.error ? html`<p class="error">${this.error}</p>` : null}
       <section class="panel">${this._renderView()}</section>
     `;
   }
@@ -122,20 +226,31 @@ export class O2OApp extends LitElement {
   }
 
   _renderView() {
-    if (this.loading) return html`<p class="empty">Cargando…</p>`;
-    if (this._view === 'guia') return this._renderGuide();
-    if (this._view === 'formulario') return this._renderForm();
+    const period = this._period;
+    if (this._view === 'guia') return this._renderEditor('guide', period.guide);
+    if (this._view === 'formulario') return this._renderEditor('form', period.form);
     if (this._view === 'registrar') return this._renderRegister();
     if (this._view === 'acciones') return this._renderActions();
     if (this._view === 'resumen') return this._renderSummary();
     return this._renderPlaceholder();
   }
 
+  _renderEditor(kind, value) {
+    return html`<o2o-questions-editor
+      .persistence=${this.persistence}
+      .periodId=${this._period.id}
+      .kind=${kind}
+      .value=${value}
+      @saved=${(e) => this._onEditorSaved(e)}
+    ></o2o-questions-editor>`;
+  }
+
   _renderRegister() {
     return html`<o2o-register
       .persistence=${this.persistence}
       .people=${this.people}
-      .guide=${this._guide}
+      .guide=${this._period.guide}
+      .periodId=${this._period.id}
       .canEdit=${this.canEdit}
     ></o2o-register>`;
   }
@@ -144,6 +259,7 @@ export class O2OApp extends LitElement {
     return html`<o2o-actions
       .persistence=${this.persistence}
       .people=${this.people}
+      .periodId=${this._period.id}
     ></o2o-actions>`;
   }
 
@@ -151,55 +267,13 @@ export class O2OApp extends LitElement {
     return html`<o2o-summary
       .persistence=${this.persistence}
       .people=${this.people}
+      .periodId=${this._period.id}
     ></o2o-summary>`;
-  }
-
-  _renderGuide() {
-    const g = this._guide;
-    if (!g) return html`<p class="empty">Aún no hay guía. Ejecuta el seed (<code>pnpm seed:o2o</code>) para cargar la guía por defecto.</p>`;
-    return html`
-      <h2>Guía del O2O <span class="ver">v${g.version}</span></h2>
-      <p class="lead">Temas y preguntas para conducir un O2O. En esta fase es de solo lectura; la edición llega en la siguiente.</p>
-      ${g.blocks.map((b) => this._renderGuideBlock(b))}
-    `;
-  }
-
-  /** Lista ordenada de preguntas (compartida por guía y formulario). */
-  _renderQuestions(questions) {
-    if (!questions.length) return null;
-    const items = questions.map((q) => html`<li>${q.text}</li>`);
-    return html`<ol class="qs">${items}</ol>`;
-  }
-
-  _renderGuideBlock(b) {
-    const intro = b.intro ? html`<p class="intro">${b.intro}</p>` : null;
-    return html`<div class="block">
-      <h3>${b.title}</h3>
-      ${intro}
-      ${this._renderQuestions(b.questions)}
-    </div>`;
-  }
-
-  _renderForm() {
-    const f = this._form;
-    if (!f) return html`<p class="empty">Aún no hay formulario previo. Ejecuta el seed (<code>pnpm seed:o2o</code>).</p>`;
-    return html`
-      <h2>Formulario previo <span class="ver">v${f.version}</span></h2>
-      <p class="lead">${f.intro}</p>
-      ${f.sections.map((s) => this._renderFormSection(s))}
-    `;
-  }
-
-  _renderFormSection(s) {
-    return html`<div class="block">
-      <h3>${s.title}</h3>
-      ${this._renderQuestions(s.questions)}
-    </div>`;
   }
 
   _renderPlaceholder() {
     const v = VIEWS.find((x) => x.id === this._view);
-    return html`<p class="placeholder">🚧 «${v?.label}» — próximamente. Esta vista llega en una fase siguiente (registro con IA, acciones, evolución).</p>`;
+    return html`<p class="placeholder">🚧 «${v?.label}» — próximamente (estadísticas y evolución por periodo).</p>`;
   }
 }
 

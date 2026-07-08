@@ -22,6 +22,7 @@ export class O2ORegister extends LitElement {
     persistence: { attribute: false },
     people: { attribute: false },
     guide: { attribute: false },
+    periodId: { attribute: false },
     canEdit: { attribute: false },
     _personId: { state: true },
     _sessions: { state: true },
@@ -75,6 +76,7 @@ export class O2ORegister extends LitElement {
     this.persistence = null;
     this.people = [];
     this.guide = null;
+    this.periodId = null;
     this.canEdit = false;
     this._personId = '';
     this._sessions = [];
@@ -100,7 +102,7 @@ export class O2ORegister extends LitElement {
     }
     this._loadingList = true;
     try {
-      this._sessions = await listSessions(this.persistence, personId);
+      this._sessions = await listSessions(this.persistence, personId, this.periodId);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los O2O.';
     } finally {
@@ -152,6 +154,7 @@ export class O2ORegister extends LitElement {
     this._error = '';
     const payload = {
       personId: this._personId,
+      periodId: this.periodId,
       date: d.date,
       guideVersion: this.guide?.version,
       answers: this._buildAnswers(),
@@ -165,7 +168,7 @@ export class O2ORegister extends LitElement {
       if (d.id) await updateSession(this.persistence, d.id, payload);
       else await createSession(this.persistence, payload);
       this._draft = null;
-      this._sessions = await listSessions(this.persistence, this._personId);
+      this._sessions = await listSessions(this.persistence, this._personId, this.periodId);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo guardar el O2O.';
     } finally {

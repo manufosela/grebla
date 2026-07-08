@@ -16,6 +16,7 @@ export class O2OSummary extends LitElement {
   static properties = {
     persistence: { attribute: false },
     people: { attribute: false },
+    periodId: { attribute: false },
     _personId: { state: true },
     _sessions: { state: true },
     _actions: { state: true },
@@ -51,6 +52,7 @@ export class O2OSummary extends LitElement {
     super();
     this.persistence = null;
     this.people = [];
+    this.periodId = null;
     this._personId = '';
     this._sessions = [];
     this._actions = [];
@@ -73,11 +75,11 @@ export class O2OSummary extends LitElement {
     this._loading = true;
     try {
       const [sessions, actions] = await Promise.all([
-        listSessions(this.persistence, personId),
+        listSessions(this.persistence, personId, this.periodId),
         listActions(this.persistence, personId),
       ]);
       this._sessions = sessions;
-      this._actions = actions;
+      this._actions = actions.filter((a) => !this.periodId || a.periodId === this.periodId);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cargar el resumen.';
     } finally {

@@ -17,6 +17,7 @@ export class O2OActions extends LitElement {
   static properties = {
     persistence: { attribute: false },
     people: { attribute: false },
+    periodId: { attribute: false },
     _personId: { state: true },
     _actions: { state: true },
     _loading: { state: true },
@@ -60,6 +61,7 @@ export class O2OActions extends LitElement {
     super();
     this.persistence = null;
     this.people = [];
+    this.periodId = null;
     this._personId = '';
     this._actions = [];
     this._loading = false;
@@ -84,7 +86,7 @@ export class O2OActions extends LitElement {
     }
     this._loading = true;
     try {
-      this._actions = await listActions(this.persistence, personId);
+      await this._reload();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las acciones.';
     } finally {
@@ -92,14 +94,20 @@ export class O2OActions extends LitElement {
     }
   }
 
+  /** Recarga las acciones de la persona filtradas por el periodo actual. */
+  async _reload() {
+    const all = await listActions(this.persistence, this._personId);
+    this._actions = all.filter((a) => !this.periodId || a.periodId === this.periodId);
+  }
+
   async _add() {
     if (!this._desc.trim()) return;
     this._saving = true;
     this._error = '';
     try {
-      await createAction(this.persistence, this._personId, { description: this._desc, owner: this._owner });
+      await createAction(this.persistence, this._personId, { description: this._desc, owner: this._owner, periodId: this.periodId });
       this._desc = '';
-      this._actions = await listActions(this.persistence, this._personId);
+      await this._reload();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo crear la acción.';
     } finally {
@@ -111,7 +119,7 @@ export class O2OActions extends LitElement {
     this._error = '';
     try {
       await toggleAction(this.persistence, this._personId, action);
-      this._actions = await listActions(this.persistence, this._personId);
+      await this._reload();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo actualizar la acción.';
     }
@@ -122,7 +130,7 @@ export class O2OActions extends LitElement {
     try {
       await removeAction(this.persistence, this._personId, id);
       this._confirmDelete = '';
-      this._actions = await listActions(this.persistence, this._personId);
+      await this._reload();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo borrar la acción.';
     }
