@@ -39,5 +39,12 @@ export function createMemoryAreaRepository(seed = [], viewerLeaderUid = null) {
     async remove(id) {
       if (!store.delete(id)) throw new Error(`Area ${id} no existe`);
     },
+    async promote(id) {
+      const current = store.get(id);
+      if (!current) throw new Error(`Area ${id} no existe`);
+      const next = { ...current };
+      delete next.ownerLeaderUid;
+      store.set(id, next);
+    },
   };
 }

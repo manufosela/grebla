@@ -29,23 +29,26 @@
  * @property {(personId: string) => Promise<object|null>} latest      // estado actual = última lectura
  *
  * @typedef {Object} AreaRepository   Catálogo de áreas de conocimiento con ámbito (personal/global).
- * @property {() => Promise<Area[]>} list   Globales + las del líder que mira.
- * @property {(name: string) => Promise<string>} create   Crea un área PERSONAL del líder.
+ * @property {() => Promise<Area[]>} list   Globales + las del líder (o TODAS si superadmin/viewAll).
+ * @property {(name: string) => Promise<string>} create   Personal del líder, o GLOBAL si superadmin.
  * @property {(id: string, patch: Partial<Area>) => Promise<void>} update   Renombra un área.
  * @property {(id: string) => Promise<void>} remove
+ * @property {(id: string) => Promise<void>} promote   Personal → global (quita ownerLeaderUid).
  *
  * @typedef {Object} GuildRepository   Catálogo de gremios con ámbito (personal/global).
- * @property {() => Promise<Guild[]>} list   Globales + los del líder que mira.
- * @property {(name: string) => Promise<string>} create   Crea un gremio PERSONAL del líder.
+ * @property {() => Promise<Guild[]>} list   Globales + los del líder (o TODAS si superadmin/viewAll).
+ * @property {(name: string) => Promise<string>} create   Personal del líder, o GLOBAL si superadmin.
  * @property {(id: string, patch: Partial<Guild>) => Promise<void>} update   Renombra un gremio.
  * @property {(id: string) => Promise<void>} remove
+ * @property {(id: string) => Promise<void>} promote   Personal → global (quita ownerLeaderUid).
  *
  * @typedef {import('./types.js').Label} Label
  * @typedef {Object} LabelRepository   Catálogo de labels con ámbito (mismo modelo que Guild).
- * @property {() => Promise<Label[]>} list   Globales + los del líder que mira.
- * @property {(name: string) => Promise<string>} create   Crea un label PERSONAL del líder.
+ * @property {() => Promise<Label[]>} list   Globales + los del líder (o TODAS si superadmin/viewAll).
+ * @property {(name: string) => Promise<string>} create   Personal del líder, o GLOBAL si superadmin.
  * @property {(id: string, patch: Partial<Label>) => Promise<void>} update   Renombra un label.
  * @property {(id: string) => Promise<void>} remove
+ * @property {(id: string) => Promise<void>} promote   Personal → global (quita ownerLeaderUid).
  *
  * @typedef {Object} ConversationRepository
  * @property {(personId: string) => Promise<Conversation[]>} listByPerson

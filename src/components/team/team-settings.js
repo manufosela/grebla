@@ -9,23 +9,9 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
-import {
-  listAreas,
-  addArea,
-  removeArea,
-  renameArea,
-  getSettings,
-  updateSettings,
-  listGuilds,
-  addGuild,
-  removeGuild,
-  renameGuild,
-  listLabels,
-  addLabel,
-  removeLabel,
-  renameLabel,
-} from '../../tools/team/application/usecases/index.js';
+import { getSettings, updateSettings } from '../../tools/team/application/usecases/index.js';
 import { LEVELS } from '../../tools/team/domain/levels.js';
+import '../catalog-manager.js';
 
 /**
  * Sub-pestañas de la sección Ajustes. El orden define el recorrido con las
@@ -45,20 +31,9 @@ export class TeamSettings extends LitElement {
     persistence: { attribute: false },
     currentUid: { attribute: false },
     isAdmin: { attribute: false },
-    areas: { state: true },
-    guilds: { state: true },
-    labels: { state: true },
     settings: { state: true },
     loading: { state: true },
     error: { state: true },
-    _newArea: { state: true },
-    _confirmArea: { state: true },
-    _newGuild: { state: true },
-    _confirmGuild: { state: true },
-    _newLabel: { state: true },
-    _confirmLabel: { state: true },
-    _editingId: { state: true },
-    _editName: { state: true },
     _subtab: { state: true },
   };
 
@@ -123,29 +98,10 @@ export class TeamSettings extends LitElement {
     this.currentUid = null;
     /** @type {boolean} el superadmin puede editar/borrar los catálogos GLOBALES */
     this.isAdmin = false;
-    /** @type {import('../../tools/team/domain/types.js').Area[]} */
-    this.areas = [];
-    /** @type {import('../../tools/team/domain/types.js').Guild[]} */
-    this.guilds = [];
-    /** @type {import('../../tools/team/domain/types.js').Label[]} */
-    this.labels = [];
     /** @type {import('../../tools/team/domain/types.js').OrgSettings|null} */
     this.settings = null;
     this.loading = true;
     this.error = '';
-    this._newArea = '';
-    /** @type {string|null} */
-    this._confirmArea = null;
-    this._newGuild = '';
-    /** @type {string|null} */
-    this._confirmGuild = null;
-    this._newLabel = '';
-    /** @type {string|null} */
-    this._confirmLabel = null;
-    /** @type {string|null} id del ítem de catálogo en edición inline (renombrar) */
-    this._editingId = null;
-    /** @type {string} nombre en edición */
-    this._editName = '';
     /** @type {string} sub-pestaña activa (estado local, no usa el hash de la URL) */
     this._subtab = 'areas';
     this._loaded = false;
@@ -162,94 +118,13 @@ export class TeamSettings extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [areas, guilds, labels, settings] = await Promise.all([
-        listAreas(this.persistence),
-        listGuilds(this.persistence),
-        listLabels(this.persistence),
-        getSettings(this.persistence),
-      ]);
-      this.areas = areas;
-      this.guilds = guilds;
-      this.labels = labels;
-      this.settings = settings;
+      // Los catálogos (áreas/gremios/labels) los carga y gestiona <catalog-manager>;
+      // aquí solo se cargan los ajustes de la organización.
+      this.settings = await getSettings(this.persistence);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la configuración.';
     } finally {
       this.loading = false;
-    }
-  }
-
-  async _addArea() {
-    const name = this._newArea.trim();
-    if (!name) return;
-    this.error = '';
-    try {
-      await addArea(this.persistence, name);
-      this._newArea = '';
-      this.areas = await listAreas(this.persistence);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo añadir el área.';
-    }
-  }
-
-  async _removeArea(id) {
-    this._confirmArea = null;
-    this.error = '';
-    try {
-      await removeArea(this.persistence, id);
-      this.areas = await listAreas(this.persistence);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo eliminar el área.';
-    }
-  }
-
-  async _addGuild() {
-    const name = this._newGuild.trim();
-    if (!name) return;
-    this.error = '';
-    try {
-      await addGuild(this.persistence, name);
-      this._newGuild = '';
-      this.guilds = await listGuilds(this.persistence);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo añadir el gremio.';
-    }
-  }
-
-  /** @param {string} id */
-  async _removeGuild(id) {
-    this._confirmGuild = null;
-    this.error = '';
-    try {
-      await removeGuild(this.persistence, id);
-      this.guilds = await listGuilds(this.persistence);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo eliminar el gremio.';
-    }
-  }
-
-  async _addLabel() {
-    const name = this._newLabel.trim();
-    if (!name) return;
-    this.error = '';
-    try {
-      await addLabel(this.persistence, name);
-      this._newLabel = '';
-      this.labels = await listLabels(this.persistence);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo añadir el label.';
-    }
-  }
-
-  /** @param {string} id */
-  async _removeLabel(id) {
-    this._confirmLabel = null;
-    this.error = '';
-    try {
-      await removeLabel(this.persistence, id);
-      this.labels = await listLabels(this.persistence);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo eliminar el label.';
     }
   }
 
@@ -350,189 +225,55 @@ export class TeamSettings extends LitElement {
     `;
   }
 
-  /** Fija la confirmación de borrado del catálogo `kind`. @param {'area'|'guild'|'label'} kind @param {string|null} id */
-  _setConfirm(kind, id) {
-    if (kind === 'area') this._confirmArea = id;
-    else if (kind === 'guild') this._confirmGuild = id;
-    else this._confirmLabel = id;
-  }
-
-  /** Borra el ítem del catálogo `kind`. @param {'area'|'guild'|'label'} kind @param {string} id */
-  _confirmRemove(kind, id) {
-    if (kind === 'area') return this._removeArea(id);
-    if (kind === 'guild') return this._removeGuild(id);
-    return this._removeLabel(id);
-  }
-
-  /** Guarda el renombrado del ítem en edición (con cascada a personas en gremios/labels).
-   * @param {'area'|'guild'|'label'} kind @param {string} id */
-  async _saveRename(kind, id) {
-    const name = this._editName.trim();
-    if (!name) return;
-    this.error = '';
-    try {
-      if (kind === 'area') await renameArea(this.persistence, id, name);
-      else if (kind === 'guild') await renameGuild(this.persistence, id, name);
-      else await renameLabel(this.persistence, id, name);
-      this._editingId = null;
-      await this._load();
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo renombrar.';
-    }
-  }
-
-  /**
-   * Un ítem de catálogo (área/gremio/label) con Editar + Eliminar. Los GLOBALES
-   * (sin ownerLeaderUid) solo los gestiona el superadmin; los personales, su
-   * líder dueño. @param {{id:string,name:string,ownerLeaderUid?:string}} item
-   * @param {'area'|'guild'|'label'} kind @param {string|null} confirmId
-   */
-  _renderCatalogItem(item, kind, confirmId) {
-    const isGlobal = !item.ownerLeaderUid;
-    const canManage = isGlobal ? this.isAdmin : true;
-    if (this._editingId === item.id) {
-      return html`<li>
-        <input
-          class="edit-inline"
-          type="text"
-          .value=${this._editName}
-          @input=${(e) => { this._editName = e.target.value; }}
-          @keydown=${(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); this._saveRename(kind, item.id); }
-            else if (e.key === 'Escape') { this._editingId = null; }
-          }}
-        />
-        <button class="link yes" @click=${() => this._saveRename(kind, item.id)}>Guardar</button>
-        <button class="link" @click=${() => { this._editingId = null; }}>Cancelar</button>
-      </li>`;
-    }
-    return html`<li>
-      <span class="name">${item.name}</span>
-      ${isGlobal ? html`<span class="badge">Global</span>` : null}
-      ${canManage ? this._renderItemActions(kind, item, confirmId) : null}
-    </li>`;
-  }
-
-  /** Acciones Editar + Eliminar de un ítem de catálogo. */
-  _renderItemActions(kind, item, confirmId) {
+  /** Sección de un catálogo (áreas/gremios/labels): hint + el componente único. */
+  _renderCatalogSection(kind, heading, hint, placeholder) {
     return html`
-      <button class="link" @click=${() => { this._editingId = item.id; this._editName = item.name; }}>Editar</button>
-      ${this._renderDeleteControl(kind, item.id, confirmId)}
+      <section>
+        <h2>${heading}</h2>
+        <p class="hint">${hint}</p>
+        <catalog-manager
+          .kind=${kind}
+          .placeholder=${placeholder}
+          .persistence=${this.persistence}
+          .isAdmin=${this.isAdmin}
+          .currentUid=${this.currentUid}
+        ></catalog-manager>
+      </section>
     `;
   }
 
-  /** Botón Eliminar o su confirmación en línea (early-return, sin anidar). */
-  _renderDeleteControl(kind, id, confirmId) {
-    if (confirmId === id) {
-      return html`<span>¿Eliminar?
-        <button class="link yes" @click=${() => this._confirmRemove(kind, id)}>Sí</button>
-        <button class="link" @click=${() => this._setConfirm(kind, null)}>No</button>
-      </span>`;
-    }
-    return html`<button class="link" @click=${() => this._setConfirm(kind, id)}>Eliminar</button>`;
-  }
-
-  /**
-   * Sub-pestaña «Áreas de conocimiento»: catálogo de áreas técnicas (CRUD).
-   * @returns {import('lit').TemplateResult}
-   */
   _renderAreas() {
-    return html`
-      <section>
-        <h2>Áreas de conocimiento</h2>
-        <p class="hint">
-          Unidad de dominio sobre la que mides el nivel (1–7) de cada persona y calculas el
-          <em>bus factor</em> (el riesgo si el experto se va). Ejemplos: Arquitectura, Frontend,
-          Infra/Cloud, Backend de pagos, Base de datos. Las <strong>globales</strong> las define
-          la organización y las ve todo el mundo; las que crees aquí son <strong>tuyas</strong>.
-        </p>
-        ${this.areas.length === 0
-          ? html`<p class="empty">Aún no hay áreas. Crea las áreas técnicas de tu equipo.</p>`
-          : html`
-              <ul class="areas">
-                ${this.areas.map((a) => this._renderCatalogItem(a, 'area', this._confirmArea))}
-              </ul>
-            `}
-        <div class="row">
-          <input
-            type="text"
-            placeholder="Nueva área (p. ej. Pagos)"
-            .value=${this._newArea}
-            @input=${(e) => { this._newArea = e.target.value; }}
-            @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addArea(); } }}
-          />
-          <button class="primary" @click=${this._addArea}>Añadir área</button>
-        </div>
-      </section>
-    `;
+    return this._renderCatalogSection(
+      'areas',
+      'Áreas de conocimiento',
+      html`Unidad de dominio sobre la que mides el nivel (1–7) de cada persona y calculas el
+        <em>bus factor</em> (el riesgo si el experto se va). Ejemplos: Arquitectura, Frontend,
+        Infra/Cloud, Backend de pagos, Base de datos. Las <strong>globales</strong> las define
+        la organización; las que crees aquí son <strong>tuyas</strong>.`,
+      'Nueva área (p. ej. Pagos)',
+    );
   }
 
-  /**
-   * Sub-pestaña «Gremios»: gremios de la organización y los propios del líder.
-   * @returns {import('lit').TemplateResult}
-   */
   _renderGuilds() {
-    return html`
-      <section>
-        <h2>Gremios</h2>
-        <p class="hint">
-          Tecnología o stack como etiqueta transversal: no se mide nivel, solo se asigna a la
-          persona. Ejemplos: JavaScript, PHP, Python, Kubernetes, React. Los <strong>globales</strong>
-          los define la organización y los ve todo el mundo; los que crees aquí son <strong>tuyos</strong>.
-        </p>
-        ${this.guilds.length === 0
-          ? html`<p class="empty">Aún no hay gremios. Crea los gremios (PHP, Python, Android, iOS…) de tu equipo.</p>`
-          : html`
-              <ul class="areas">
-                ${this.guilds.map((r) => this._renderCatalogItem(r, 'guild', this._confirmGuild))}
-              </ul>
-            `}
-        <div class="row">
-          <input
-            type="text"
-            placeholder="Nuevo gremio (p. ej. Python)"
-            .value=${this._newGuild}
-            @input=${(e) => { this._newGuild = e.target.value; }}
-            @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addGuild(); } }}
-          />
-          <button class="primary" @click=${this._addGuild}>Añadir gremio</button>
-        </div>
-      </section>
-    `;
+    return this._renderCatalogSection(
+      'guilds',
+      'Gremios',
+      html`Tecnología o stack como etiqueta transversal: no se mide nivel, solo se asigna a la
+        persona. Ejemplos: JavaScript, PHP, Python, Kubernetes, React. Los <strong>globales</strong>
+        los define la organización; los que crees aquí son <strong>tuyos</strong>.`,
+      'Nuevo gremio (p. ej. Python)',
+    );
   }
 
-  /**
-   * Sub-pestaña «Labels»: etiquetas libres (globales y propias del líder).
-   * @returns {import('lit').TemplateResult}
-   */
   _renderLabels() {
-    return html`
-      <section>
-        <h2>Labels</h2>
-        <p class="hint">
-          Etiqueta libre para agrupar personas, por ejemplo por equipo o squad. Ejemplos:
-          Equipo Web, Squad Pagos, Guardia. Las <strong>globales</strong> las define la
-          organización; las que crees aquí son <strong>tuyas</strong>.
-        </p>
-        ${this.labels.length === 0
-          ? html`<p class="empty">Aún no hay labels. Crea los que necesites para agrupar a tu equipo.</p>`
-          : html`
-              <ul class="areas">
-                ${this.labels.map((l) => this._renderCatalogItem(l, 'label', this._confirmLabel))}
-              </ul>
-            `}
-        <div class="row">
-          <input
-            type="text"
-            placeholder="Nuevo label (p. ej. Gremio Frontend)"
-            .value=${this._newLabel}
-            @input=${(e) => { this._newLabel = e.target.value; }}
-            @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); this._addLabel(); } }}
-          />
-          <button class="primary" @click=${this._addLabel}>Añadir label</button>
-        </div>
-      </section>
-    `;
+    return this._renderCatalogSection(
+      'labels',
+      'Labels',
+      html`Etiqueta libre para agrupar personas, por ejemplo por equipo o squad. Ejemplos:
+        Equipo Web, Squad Pagos, Guardia. Las <strong>globales</strong> las define la
+        organización; las que crees aquí son <strong>tuyas</strong>.`,
+      'Nuevo label (p. ej. Squad Pagos)',
+    );
   }
 
   /**

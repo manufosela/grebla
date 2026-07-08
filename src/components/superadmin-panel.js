@@ -16,7 +16,7 @@ import { LitElement, html, css } from 'lit';
 import './app-modal.js';
 import { listLeaders, addLeaderByEmail, removeLeader } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
-import { listCatalog, createGlobal, promoteToGlobal, removeFromCatalog } from '../lib/catalog.js';
+import './catalog-manager.js';
 import { listAllUsers, setUserRole, listLinkedUids, assignUserToLeader } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
@@ -79,6 +79,8 @@ export class SuperadminPanel extends LitElement {
     ready: { attribute: false },
     isLeader: { attribute: false },
     readOnly: { attribute: false },
+    persistence: { attribute: false },
+    currentUid: { attribute: false },
     _tab: { state: true },
     leaders: { state: true },
     selected: { state: true },
@@ -86,10 +88,6 @@ export class SuperadminPanel extends LitElement {
     teamLoading: { state: true },
     _email: { state: true },
     _error: { state: true },
-    _areas: { state: true },
-    _guilds: { state: true },
-    _labels: { state: true },
-    _newCat: { state: true },
     _careerMap: { state: true },
     _archipelago: { state: true },
     _mapIsland: { state: true },
@@ -235,13 +233,10 @@ export class SuperadminPanel extends LitElement {
     this.teamLoading = false;
     this._email = '';
     this._error = '';
-    /** @type {import('../lib/catalog.js').CatalogItem[]} */
-    this._areas = [];
-    /** @type {import('../lib/catalog.js').CatalogItem[]} */
-    this._guilds = [];
-    /** @type {import('../lib/catalog.js').CatalogItem[]} */
-    this._labels = [];
-    this._newCat = { areas: '', guilds: '', labels: '' };
+    /** @type {import('../tools/team/domain/ports.js').PersistencePort|null} persistencia del superadmin (viewAll) para los catálogos */
+    this.persistence = null;
+    /** @type {string|null} uid del superadmin (para <catalog-manager>) */
+    this.currentUid = null;
     /** @type {import('../tools/career/domain/types.js').CareerMap|null} */
     this._careerMap = null;
     /** @type {import('../tools/career/domain/types.js').Archipelago|null} índice de islas (MC-14) */
@@ -308,7 +303,6 @@ export class SuperadminPanel extends LitElement {
     if (this.ready && !this._loaded) {
       this._loaded = true;
       this._loadLeaders();
-      this._loadCatalogs();
       this._loadCareerMap();
       this._loadFramework();
       // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
@@ -316,56 +310,6 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
-  async _loadCatalogs() {
-    try {
-      const [areas, guilds, labels] = await Promise.all([
-        listCatalog('areas'),
-        listCatalog('guilds'),
-        listCatalog('labels'),
-      ]);
-      this._areas = areas;
-      this._guilds = guilds;
-      this._labels = labels;
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudieron cargar los catálogos.';
-    }
-  }
-
-  /** @param {import('../lib/catalog.js').CatalogKind} kind */
-  async _createGlobalItem(kind) {
-    const name = (this._newCat[kind] || '').trim();
-    if (!name) return;
-    this._error = '';
-    try {
-      await createGlobal(kind, name);
-      this._newCat = { ...this._newCat, [kind]: '' };
-      await this._loadCatalogs();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo crear.';
-    }
-  }
-
-  /** @param {import('../lib/catalog.js').CatalogKind} kind @param {string} id */
-  async _promote(kind, id) {
-    this._error = '';
-    try {
-      await promoteToGlobal(kind, id);
-      await this._loadCatalogs();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo promover.';
-    }
-  }
-
-  /** @param {import('../lib/catalog.js').CatalogKind} kind @param {string} id */
-  async _removeCatalogItem(kind, id) {
-    this._error = '';
-    try {
-      await removeFromCatalog(kind, id);
-      await this._loadCatalogs();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo eliminar.';
-    }
-  }
 
   // ── Mapa de carrera (editor, multi-isla MC-14) ─────────────────────────────
 
@@ -785,12 +729,6 @@ export class SuperadminPanel extends LitElement {
     this._patchFramework({ addendums: next });
   }
 
-  /** @param {string} uid */
-  _leaderLabel(uid) {
-    const l = this.leaders.find((x) => x.uid === uid);
-    return l?.displayName ?? l?.email ?? uid;
-  }
-
   async _loadLeaders() {
     this._error = '';
     try {
@@ -946,64 +884,21 @@ export class SuperadminPanel extends LitElement {
     location.assign('/');
   }
 
-  /**
-   * @param {import('../lib/catalog.js').CatalogKind} kind
-   * @param {import('../lib/catalog.js').CatalogItem[]} items
-   * @param {string} title @param {string} placeholder
-   */
-  _renderCatalog(kind, items, title, placeholder) {
-    const globals = items.filter((i) => !i.ownerLeaderUid);
-    const personals = items.filter((i) => i.ownerLeaderUid);
+  /** Un catálogo (áreas/gremios/labels) del superadmin: el componente ÚNICO
+   * <catalog-manager> (mismo que en Ajustes). isAdmin=true salvo viewer. */
+  _renderCatalogTab(kind, title) {
     return html`
       <section>
         <h2>${title}</h2>
-        ${this.readOnly
-          ? null
-          : html`<div class="toolbar">
-              <input
-                type="text"
-                placeholder=${placeholder}
-                .value=${this._newCat[kind]}
-                @input=${(e) => { this._newCat = { ...this._newCat, [kind]: e.target.value }; }}
-              />
-              <button class="primary" ?disabled=${!this._newCat[kind].trim()} @click=${() => this._createGlobalItem(kind)}>Crear global</button>
-            </div>`}
-        ${globals.length === 0
-          ? html`<p class="empty">Aún no hay globales.</p>`
-          : html`<table>
-              <thead><tr><th>Global</th><th></th></tr></thead>
-              <tbody>
-                ${globals.map(
-                  (i) => html`<tr>
-                    <td>${i.name}</td>
-                    <td>${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button>`}</td>
-                  </tr>`,
-                )}
-              </tbody>
-            </table>`}
-        ${personals.length === 0
-          ? null
-          : html`
-              <p class="ro-note">Personales de líderes — promuévelos a global para compartirlos con todos:</p>
-              <table>
-                <thead><tr><th>Nombre</th><th>Líder</th><th></th></tr></thead>
-                <tbody>
-                  ${personals.map(
-                    (i) => html`<tr>
-                      <td>${i.name}</td>
-                      <td class="muted">${this._leaderLabel(i.ownerLeaderUid)}</td>
-                      <td>
-                        ${this.readOnly
-                          ? null
-                          : html`
-                              <button @click=${() => this._promote(kind, i.id)}>Promover a global</button>
-                              <button class="del-btn" @click=${() => this._removeCatalogItem(kind, i.id)}>Borrar</button>
-                            `}
-                      </td>
-                    </tr>`,
-                  )}
-                </tbody>
-              </table>`}
+        <catalog-manager
+          .kind=${kind}
+          .persistence=${this.persistence}
+          .isAdmin=${!this.readOnly}
+          .readOnly=${this.readOnly}
+          .currentUid=${this.currentUid}
+          .leaders=${this.leaders}
+          placeholder="Nuevo global…"
+        ></catalog-manager>
       </section>
     `;
   }
@@ -1013,11 +908,11 @@ export class SuperadminPanel extends LitElement {
       case 'leaders':
         return html`${this._renderLeaders()} ${this.selected ? this._renderTeam() : null}`;
       case 'areas':
-        return this._renderCatalog('areas', this._areas, 'Áreas de conocimiento (organización)', 'Nueva área global…');
+        return this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)');
       case 'guilds':
-        return this._renderCatalog('guilds', this._guilds, 'Gremios (organización)', 'Nuevo gremio global…');
+        return this._renderCatalogTab('guilds', 'Gremios (organización)');
       case 'labels':
-        return this._renderCatalog('labels', this._labels, 'Labels (organización)', 'Nuevo label global…');
+        return this._renderCatalogTab('labels', 'Labels (organización)');
       case 'careerMap':
         return this._renderCareerMap();
       case 'careerFramework':

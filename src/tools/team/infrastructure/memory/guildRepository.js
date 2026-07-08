@@ -40,5 +40,12 @@ export function createMemoryGuildRepository(seed = [], viewerLeaderUid = null) {
     async remove(id) {
       if (!store.delete(id)) throw new Error(`Guild ${id} no existe`);
     },
+    async promote(id) {
+      const current = store.get(id);
+      if (!current) throw new Error(`Guild ${id} no existe`);
+      const next = { ...current };
+      delete next.ownerLeaderUid;
+      store.set(id, next);
+    },
   };
 }
