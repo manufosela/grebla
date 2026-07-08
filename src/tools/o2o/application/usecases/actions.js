@@ -29,6 +29,7 @@ export async function createAction(persistence, personId, input) {
     description,
     owner: input.owner === 'leader' ? 'leader' : 'person',
     status: 'open',
+    periodId: input.periodId ?? null,
     originSessionId: input.originSessionId ?? null,
     dueDate: input.dueDate,
     createdAt: new Date().toISOString(),

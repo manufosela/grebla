@@ -36,6 +36,17 @@
  * @property {string} [updatedAt]
  * @property {string} intro           Mensaje de cabecera del formulario.
  * @property {FormSection[]} sections
+ *
+ * @typedef {Object} O2OPeriod   Campaña de O2O (p. ej. «Periodo Julio 2026»). Vive
+ *   bajo el líder (/leaders/{uid}/o2oPeriods) con su PROPIA guía y formulario
+ *   EMBEBIDOS (editables por periodo). Las sesiones/acciones se ligan por periodId.
+ * @property {string} id
+ * @property {string} name            Nombre («Periodo Julio 2026»), editable.
+ * @property {'open'|'closed'} [status]
+ * @property {O2OGuide} guide         Guía propia del periodo (editable).
+ * @property {PreO2OForm} form        Formulario previo propio del periodo (editable).
+ * @property {string} createdAt       ISO de creación.
+ * @property {string} [updatedAt]     ISO de la última edición.
  */
 
 /**
@@ -50,6 +61,7 @@
  *
  * @typedef {Object} O2OSession
  * @property {string} id
+ * @property {string} [periodId]      Periodo de O2O al que pertenece.
  * @property {string} personId        Persona con la que fue el O2O.
  * @property {string} date            Fecha del O2O (ISO).
  * @property {number} [guideVersion]  Versión de la guía usada al registrarlo.
@@ -74,6 +86,7 @@
  *
  * @typedef {Object} O2OAction
  * @property {string} id
+ * @property {string} [periodId]        Periodo de O2O del que salió.
  * @property {string} description       Qué hay que hacer.
  * @property {ActionOwner} owner        Responsable (la persona o el líder).
  * @property {ActionStatus} status      Abierta o hecha.

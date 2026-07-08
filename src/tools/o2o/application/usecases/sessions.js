@@ -8,20 +8,22 @@
  */
 
 /**
- * Lista las sesiones de una persona (más recientes primero).
- * @param {O2OPersistence} persistence @param {string} personId @returns {Promise<O2OSession[]>}
+ * Lista las sesiones de una persona (más recientes primero), opcionalmente de un
+ * periodo concreto.
+ * @param {O2OPersistence} persistence @param {string} personId @param {string} [periodId]
+ * @returns {Promise<O2OSession[]>}
  */
-export function listSessions(persistence, personId) {
+export function listSessions(persistence, personId, periodId) {
   if (!personId) throw new Error('Falta la persona para listar sus O2O.');
-  return persistence.sessions.listByPerson(personId);
+  return persistence.sessions.listByPerson(personId, periodId);
 }
 
 /**
- * Lista TODAS las sesiones del líder (para vistas de resumen).
- * @param {O2OPersistence} persistence @returns {Promise<O2OSession[]>}
+ * Lista TODAS las sesiones del líder (o las de un periodo) para vistas de resumen.
+ * @param {O2OPersistence} persistence @param {string} [periodId] @returns {Promise<O2OSession[]>}
  */
-export function listAllSessions(persistence) {
-  return persistence.sessions.list();
+export function listAllSessions(persistence, periodId) {
+  return persistence.sessions.list(periodId);
 }
 
 /**

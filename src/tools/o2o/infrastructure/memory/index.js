@@ -7,13 +7,16 @@
  * @typedef {import('../../domain/types.js').PreO2OForm} PreO2OForm
  * @typedef {import('../../domain/types.js').O2OSession} O2OSession
  * @typedef {import('../../domain/types.js').O2OAction} O2OAction
+ * @typedef {import('../../domain/types.js').O2OPeriod} O2OPeriod
  */
 
 /**
- * @param {{ guides?: O2OGuide[], forms?: PreO2OForm[], sessions?: O2OSession[], actions?: Array<O2OAction & { personId: string }> }} [seed]
+ * @param {{ periods?: O2OPeriod[], guides?: O2OGuide[], forms?: PreO2OForm[], sessions?: O2OSession[], actions?: Array<O2OAction & { personId: string }> }} [seed]
  * @returns {O2OPersistence}
  */
 export function createMemoryO2O(seed = {}) {
+  /** @type {Map<string, O2OPeriod>} */
+  const periods = new Map((seed.periods ?? []).map((p) => [p.id, { ...p }]));
   /** @type {Map<string, O2OGuide>} */
   const guides = new Map((seed.guides ?? []).map((g) => [g.id, { ...g }]));
   /** @type {Map<string, PreO2OForm>} */
@@ -22,10 +25,35 @@ export function createMemoryO2O(seed = {}) {
   const sessions = new Map((seed.sessions ?? []).map((s) => [s.id, { ...s }]));
   /** @type {Map<string, O2OAction & { personId: string }>} */
   const actions = new Map((seed.actions ?? []).map((a) => [a.id, { ...a }]));
+  let periodSeq = periods.size;
   let seq = sessions.size;
   let actionSeq = actions.size;
   const byDateDesc = (a, b) => (a.date < b.date ? 1 : -1);
   return {
+    periods: {
+      async list() {
+        return [...periods.values()]
+          .map((p) => ({ ...p }))
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      },
+      async get(id) {
+        const p = periods.get(id);
+        return p ? { ...p } : null;
+      },
+      async create(input) {
+        periodSeq += 1;
+        const id = input.id ?? `period-${periodSeq}`;
+        periods.set(id, { ...input, id });
+        return id;
+      },
+      async update(id, patch) {
+        const cur = periods.get(id);
+        if (cur) periods.set(id, { ...cur, ...patch, id });
+      },
+      async remove(id) {
+        periods.delete(id);
+      },
+    },
     guides: {
       async get(id) {
         const g = guides.get(id);
@@ -45,11 +73,15 @@ export function createMemoryO2O(seed = {}) {
       },
     },
     sessions: {
-      async listByPerson(personId) {
-        return [...sessions.values()].filter((s) => s.personId === personId).sort(byDateDesc);
+      async listByPerson(personId, periodId) {
+        return [...sessions.values()]
+          .filter((s) => s.personId === personId && (!periodId || s.periodId === periodId))
+          .sort(byDateDesc);
       },
-      async list() {
-        return [...sessions.values()].sort(byDateDesc);
+      async list(periodId) {
+        return [...sessions.values()]
+          .filter((s) => !periodId || s.periodId === periodId)
+          .sort(byDateDesc);
       },
       async get(id) {
         const s = sessions.get(id);
