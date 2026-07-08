@@ -8,6 +8,7 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -225,31 +226,52 @@ function computeRepoMetrics(mergedPrs, from, to) {
   };
 }
 
-const GH_HEADERS = { Accept: 'application/vnd.github+json', 'User-Agent': 'grebla-dora' };
+/**
+ * Token de GitHub (secreto de la instancia). GREBLA es 1 instancia por
+ * organización (multi-leader), así que este secreto es de la org y NO acopla el
+ * código a ninguna en concreto: cada instancia configura su valor con
+ * `firebase functions:secrets:set DORA_GITHUB_TOKEN`. Con token, la API sube de
+ * 60/h públicos a 5000/h y accede a repos PRIVADOS; sin él, se cae a la pública.
+ */
+const DORA_GITHUB_TOKEN = defineSecret('DORA_GITHUB_TOKEN');
+
+/** Cabeceras de GitHub; añade `Authorization: Bearer` si hay token (repos privados). */
+function ghHeaders(token) {
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'grebla-dora' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
 
 /** Mensaje legible según el código de estado de GitHub. */
-function githubError(status, fullName) {
-  if (status === 404) return new Error(`Repo no encontrado o privado: ${fullName} (los privados necesitan token).`);
-  if (status === 401 || status === 403) {
-    return new Error('Sin acceso o límite de la API pública de GitHub (60/h sin token). Si es privado, requiere token.');
+function githubError(status, fullName, hasToken) {
+  if (status === 404) {
+    return new Error(hasToken
+      ? `Repo no encontrado o el token no tiene acceso: ${fullName}.`
+      : `Repo no encontrado o privado: ${fullName} (los privados necesitan token).`);
+  }
+  if (status === 401) return new Error('Token de GitHub inválido o caducado (DORA_GITHUB_TOKEN).');
+  if (status === 403) {
+    return new Error(hasToken
+      ? `Sin permiso o límite de la API de GitHub para ${fullName} (revisa el scope del token).`
+      : 'Límite de la API pública de GitHub (60/h sin token). Configura DORA_GITHUB_TOKEN.');
   }
   return new Error(`GitHub respondió ${status} para ${fullName}.`);
 }
 
 /** Fecha de creación del repo (para medir "desde el principio" cuando no hay fecha). */
-async function fetchRepoCreatedAt(fullName) {
-  const res = await fetch(`https://api.github.com/repos/${fullName}`, { headers: GH_HEADERS });
-  if (!res.ok) throw githubError(res.status, fullName);
+async function fetchRepoCreatedAt(fullName, headers) {
+  const res = await fetch(`https://api.github.com/repos/${fullName}`, { headers });
+  if (!res.ok) throw githubError(res.status, fullName, Boolean(headers.Authorization));
   const data = await res.json();
   return data.created_at || '2008-01-01T00:00:00Z';
 }
 
-/** PRs mergeados a `baseBranch` de un repo público desde `sinceMs` (API pública de GitHub, sin token). */
-async function fetchMergedPrs(fullName, sinceMs, baseBranch) {
+/** PRs mergeados a `baseBranch` de un repo desde `sinceMs`. Con token lee privados. */
+async function fetchMergedPrs(fullName, sinceMs, baseBranch, headers) {
   const base = encodeURIComponent(baseBranch || 'main');
   const url = `https://api.github.com/repos/${fullName}/pulls?state=closed&base=${base}&per_page=100&sort=updated&direction=desc`;
-  const res = await fetch(url, { headers: GH_HEADERS });
-  if (!res.ok) throw githubError(res.status, fullName);
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw githubError(res.status, fullName, Boolean(headers.Authorization));
   const arr = await res.json();
   return (Array.isArray(arr) ? arr : [])
     .filter((p) => p.merged_at && toMs(p.merged_at) >= sinceMs)
@@ -266,12 +288,12 @@ async function fetchMergedPrs(fullName, sinceMs, baseBranch) {
  * @param {number} prNumber
  * @returns {Promise<string>}  fecha ISO del primer commit ('' si no se obtiene)
  */
-async function fetchFirstCommitDate(fullName, prNumber) {
+async function fetchFirstCommitDate(fullName, prNumber, headers) {
   const res = await fetch(
     `https://api.github.com/repos/${fullName}/pulls/${prNumber}/commits?per_page=1`,
-    { headers: GH_HEADERS },
+    { headers },
   );
-  if (!res.ok) throw githubError(res.status, fullName);
+  if (!res.ok) throw githubError(res.status, fullName, Boolean(headers.Authorization));
   const arr = await res.json();
   const commit = (Array.isArray(arr) ? arr[0] : null)?.commit;
   return commit?.committer?.date ?? commit?.author?.date ?? '';
@@ -386,10 +408,10 @@ function computeMeanTimeToRecovery(incidents, from, to) {
 /** Tope de PRs por repo a los que pedimos el primer commit (mitiga el rate-limit 60/h sin token). */
 const MAX_COMMIT_LOOKUPS = 50;
 
-/** Nº de releases publicados de un repo público en [sinceMs, toMs2] (despliegue real). */
-async function fetchReleaseCount(fullName, sinceMs, toMs2) {
-  const res = await fetch(`https://api.github.com/repos/${fullName}/releases?per_page=100`, { headers: GH_HEADERS });
-  if (!res.ok) throw githubError(res.status, fullName);
+/** Nº de releases publicados de un repo en [sinceMs, toMs2] (despliegue real). */
+async function fetchReleaseCount(fullName, sinceMs, toMs2, headers) {
+  const res = await fetch(`https://api.github.com/repos/${fullName}/releases?per_page=100`, { headers });
+  if (!res.ok) throw githubError(res.status, fullName, Boolean(headers.Authorization));
   const arr = await res.json();
   return (Array.isArray(arr) ? arr : []).filter((r) => {
     if (!r.published_at) return false;
@@ -400,12 +422,21 @@ async function fetchReleaseCount(fullName, sinceMs, toMs2) {
 
 /**
  * Calcula y guarda las métricas DORA de los repos de la instancia (modelo
- * multi-leader). Acceso: superadmin o líder. Lee la API pública de GitHub (repos
- * públicos, sin token; rate-limit 60/h por IP). Privados requerirán token.
+ * multi-leader). Acceso: superadmin o líder. Usa el token DORA_GITHUB_TOKEN si
+ * está configurado (repos privados, 5000/h); si no, la API pública (60/h, solo
+ * públicos).
  */
-export const refreshDora = onCall({ region: 'europe-west1' }, async (request) => {
+export const refreshDora = onCall(
+  { region: 'europe-west1', secrets: [DORA_GITHUB_TOKEN] },
+  async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+
+  // Token de la org (opcional): con él se leen privados y sube el rate-limit.
+  const token = DORA_GITHUB_TOKEN.value() || '';
+  const headers = ghHeaders(token);
+  // Con token (5000/h) podemos pedir el primer commit de muchos más PRs.
+  const maxLookups = token ? 200 : MAX_COMMIT_LOOKUPS;
 
   const db = getFirestore();
   // Acceso: superadmin o líder de la instancia.
@@ -425,15 +456,15 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
     const repo = docSnap.data();
     try {
       // Sin fecha → desde la creación del repo en GitHub.
-      const from = repo.startDate || (await fetchRepoCreatedAt(repo.fullName));
+      const from = repo.startDate || (await fetchRepoCreatedAt(repo.fullName, headers));
       // Lead time y personas siempre desde los PR mergeados a la rama base.
-      const prs = await fetchMergedPrs(repo.fullName, toMs(from), repo.baseBranch || 'main');
+      const prs = await fetchMergedPrs(repo.fullName, toMs(from), repo.baseBranch || 'main', headers);
       const metrics = computeRepoMetrics(prs, from, now);
       // Frecuencia de despliegue: por releases si la señal del repo es 'release',
       // si no, por merges a la rama base (lo que ya calcula computeRepoMetrics).
       const signal = repo.deploySignal === 'release' ? 'release' : 'branch';
       if (signal === 'release') {
-        const releases = await fetchReleaseCount(repo.fullName, toMs(from), toMs(now));
+        const releases = await fetchReleaseCount(repo.fullName, toMs(from), toMs(now), headers);
         const weeks = Math.max(1, (toMs(now) - toMs(from)) / (7 * 24 * MS_HOUR));
         metrics.deployments = releases;
         metrics.deployFrequencyPerWeek = round1(releases / weeks);
@@ -454,9 +485,9 @@ export const refreshDora = onCall({ region: 'europe-west1' }, async (request) =>
       const changes = [];
       for (const [i, pr] of prs.entries()) {
         let firstCommitAt = pr.createdAt; // aproximación por defecto
-        if (i < MAX_COMMIT_LOOKUPS) {
+        if (i < maxLookups) {
           try {
-            const commitDate = await fetchFirstCommitDate(repo.fullName, pr.number);
+            const commitDate = await fetchFirstCommitDate(repo.fullName, pr.number, headers);
             if (commitDate) firstCommitAt = commitDate;
             else leadTimeApproxCount += 1; // respuesta sin fecha → aproximado
           } catch {
