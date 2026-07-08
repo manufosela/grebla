@@ -11,7 +11,8 @@
 import { LitElement, html, css } from 'lit';
 import './o2o-register.js';
 import './o2o-actions.js';
-import './o2o-summary.js';
+import './o2o-period-summary.js';
+import './o2o-evolution.js';
 import './o2o-questions-editor.js';
 import {
   listPeriods, getPeriod, createPeriod, removePeriod, defaultPeriodName,
@@ -24,7 +25,7 @@ const VIEWS = [
   { id: 'registrar', label: 'Registrar O2O', ready: true },
   { id: 'resumen', label: 'Resumen', ready: true },
   { id: 'acciones', label: 'Acciones', ready: true },
-  { id: 'evolucion', label: 'Evolución' },
+  { id: 'evolucion', label: 'Evolución', ready: true },
 ];
 
 export class O2OApp extends LitElement {
@@ -232,6 +233,7 @@ export class O2OApp extends LitElement {
     if (this._view === 'registrar') return this._renderRegister();
     if (this._view === 'acciones') return this._renderActions();
     if (this._view === 'resumen') return this._renderSummary();
+    if (this._view === 'evolucion') return this._renderEvolution();
     return this._renderPlaceholder();
   }
 
@@ -264,11 +266,18 @@ export class O2OApp extends LitElement {
   }
 
   _renderSummary() {
-    return html`<o2o-summary
+    return html`<o2o-period-summary
       .persistence=${this.persistence}
       .people=${this.people}
       .periodId=${this._period.id}
-    ></o2o-summary>`;
+    ></o2o-period-summary>`;
+  }
+
+  _renderEvolution() {
+    return html`<o2o-evolution
+      .persistence=${this.persistence}
+      .people=${this.people}
+    ></o2o-evolution>`;
   }
 
   _renderPlaceholder() {
