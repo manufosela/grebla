@@ -8,6 +8,7 @@ import '../components/superadmin-panel.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { getLeader } from '../lib/leaders.js';
+import { createTeamContainer } from '../tools/team/composition/container.js';
 
 const el = document.querySelector('superadmin-panel');
 
@@ -27,6 +28,11 @@ onUserChanged(async (user) => {
     // "Usar como líder" solo aplica a un superadmin que también sea líder; un
     // viewer nunca gestiona personas propias.
     el.isLeader = role === 'superadmin' && (await getLeader(user.uid)) != null;
+    // Persistencia (viewAll) para <catalog-manager>: el superadmin ve TODOS los
+    // catálogos (globales + personales de cualquier líder) y crea globales.
+    const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid, viewAll: true });
+    el.persistence = persistence;
+    el.currentUid = user.uid;
     el.ready = true;
   } catch {
     location.replace('/');

@@ -44,14 +44,6 @@ const peopleCol = (db, base) => collection(db, ...base, 'people');
 const personDoc = (db, base, id) => doc(db, ...base, 'people', id);
 const readingCol = (db, base, personId, dim) =>
   collection(db, ...base, 'people', personId, dim);
-const areaCol = (db, base) => collection(db, ...base, 'areas');
-const areaDoc = (db, base, id) => doc(db, ...base, 'areas', id);
-// Catálogo de gremios a nivel de tenant (compartido por sus líderes).
-const guildCol = (db, tbase) => collection(db, ...tbase, 'guilds');
-const guildDoc = (db, tbase, id) => doc(db, ...tbase, 'guilds', id);
-// Catálogo de labels con ámbito, mismo modelo que guilds.
-const labelCol = (db, tbase) => collection(db, ...tbase, 'labels');
-const labelDoc = (db, tbase, id) => doc(db, ...tbase, 'labels', id);
 const convCol = (db, base, personId) =>
   collection(db, ...base, 'people', personId, 'conversations');
 const convDoc = (db, base, personId, id) =>
@@ -146,66 +138,35 @@ function readingRepo(db, base, dim) {
   };
 }
 
-function areaRepo(db, base, leaderUid) {
+/**
+ * Repo genérico de un catálogo con ámbito (areas|guilds|labels). El catálogo es
+ * pequeño: se lee entero y se filtra en cliente (no hay OR en Firestore).
+ *  - list(): superadmin (viewAll) ve TODOS (incl. personales de otros líderes);
+ *    el líder ve globales + los suyos.
+ *  - create(): superadmin crea GLOBAL (sin ownerLeaderUid); el líder, PERSONAL.
+ *  - promote(): personal → global (quita ownerLeaderUid).
+ */
+function catalogRepo(db, base, kind, leaderUid, viewAll = false) {
+  const col = () => collection(db, ...base, kind);
+  const ref = (id) => doc(db, ...base, kind, id);
   return {
     async list() {
-      // Globales (sin ownerLeaderUid) + las personales de este líder. El catálogo
-      // es pequeño: se lee entero y se filtra en cliente (no hay OR en Firestore).
-      const all = mapDocs(await getDocs(areaCol(db, base)));
-      return all.filter((a) => !a.ownerLeaderUid || a.ownerLeaderUid === leaderUid);
+      const all = mapDocs(await getDocs(col()));
+      return viewAll ? all : all.filter((i) => !i.ownerLeaderUid || i.ownerLeaderUid === leaderUid);
     },
     async create(name) {
-      // El líder crea áreas PERSONALES (el superadmin gestiona las globales aparte).
-      const ref = await addDoc(areaCol(db, base), { name, ownerLeaderUid: leaderUid });
-      return ref.id;
+      const data = viewAll ? { name } : { name, ownerLeaderUid: leaderUid };
+      const created = await addDoc(col(), data);
+      return created.id;
     },
     async update(id, patch) {
-      await updateDoc(areaDoc(db, base, id), { ...patch });
+      await updateDoc(ref(id), { ...patch });
     },
     async remove(id) {
-      await deleteDoc(areaDoc(db, base, id));
+      await deleteDoc(ref(id));
     },
-  };
-}
-
-function guildRepo(db, tbase, leaderUid) {
-  return {
-    async list() {
-      // Globales (sin ownerLeaderUid) + los personales de este líder. El catálogo
-      // es pequeño: se lee entero y se filtra en cliente (no hay OR en Firestore).
-      const all = mapDocs(await getDocs(guildCol(db, tbase)));
-      return all.filter((r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid);
-    },
-    async create(name) {
-      // El líder crea gremios PERSONALES (el superadmin gestiona los globales aparte).
-      const ref = await addDoc(guildCol(db, tbase), { name, ownerLeaderUid: leaderUid });
-      return ref.id;
-    },
-    async update(id, patch) {
-      await updateDoc(guildDoc(db, tbase, id), { ...patch });
-    },
-    async remove(id) {
-      await deleteDoc(guildDoc(db, tbase, id));
-    },
-  };
-}
-
-function labelRepo(db, tbase, leaderUid) {
-  return {
-    async list() {
-      // Globales (sin ownerLeaderUid) + los personales de este líder.
-      const all = mapDocs(await getDocs(labelCol(db, tbase)));
-      return all.filter((l) => !l.ownerLeaderUid || l.ownerLeaderUid === leaderUid);
-    },
-    async create(name) {
-      const ref = await addDoc(labelCol(db, tbase), { name, ownerLeaderUid: leaderUid });
-      return ref.id;
-    },
-    async update(id, patch) {
-      await updateDoc(labelDoc(db, tbase, id), { ...patch });
-    },
-    async remove(id) {
-      await deleteDoc(labelDoc(db, tbase, id));
+    async promote(id) {
+      await updateDoc(ref(id), { ownerLeaderUid: deleteField() });
     },
   };
 }
@@ -280,9 +241,9 @@ export function createFirestorePersistence(db, leaderUid, options = {}) {
   return {
     people: peopleRepo(db, base, leaderUid, viewAll),
     readings,
-    areas: areaRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
-    guilds: guildRepo(db, base, leaderUid), // catálogo con ámbito (global + personal del líder)
-    labels: labelRepo(db, base, leaderUid),
+    areas: catalogRepo(db, base, 'areas', leaderUid, viewAll), // catálogo con ámbito
+    guilds: catalogRepo(db, base, 'guilds', leaderUid, viewAll),
+    labels: catalogRepo(db, base, 'labels', leaderUid, viewAll),
     conversations: conversationRepo(db, base),
     supportNotes: supportNoteRepo(db, base),
     config: configRepo(db, base),
