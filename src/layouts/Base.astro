@@ -11,9 +11,11 @@
 import pkg from '../../package.json';
 
 const { title = 'GREBLA', requireAuth = false, requireAdmin = false } = Astro.props;
-// Versión semántica incrustada al compilar (para bumpear: cambia package.json).
-// Estática en el HTML: si el pie muestra una versión vieja, estás cacheado.
+// Versión semántica (package.json, se bumpea a mano) + hash de build (cambia en
+// CADA deploy). Ambos incrustados al compilar: si el pie muestra un hash viejo,
+// estás cacheado. El hash es el útil para detectar caché a simple vista.
 const appVersion = pkg.version;
+const buildHash = import.meta.env.PUBLIC_APP_VERSION || 'dev';
 
 const ogDescription =
   'GREBLA — Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo. Herramientas para entender y desarrollar equipos y personas.';
@@ -102,7 +104,7 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       <slot />
     </main>
     <footer class="site-footer">
-      <p>GREBLA · Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo · versión {appVersion}</p>
+      <p>GREBLA · Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo · versión {appVersion} · {buildHash}</p>
     </footer>
 
     <style is:global>
