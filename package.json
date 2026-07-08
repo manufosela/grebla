@@ -6,7 +6,8 @@
   "description": "GREBLA — Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo. Framework de herramientas para equipos y personas (primera: Role Mirror).",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && node scripts/stamp-sw.mjs",
+    "build": "PUBLIC_APP_VERSION=$(git rev-parse --short HEAD) astro build && node scripts/stamp-sw.mjs",
+    "publish:version": "node scripts/publish-version.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "test": "vitest run",
