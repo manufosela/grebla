@@ -472,7 +472,7 @@ async function fetchTagCount(fullName, sinceMs, toMs2, pattern, headers) {
  * públicos).
  */
 export const refreshDora = onCall(
-  { region: 'europe-west1', secrets: [DORA_GITHUB_TOKEN] },
+  { region: 'europe-west1', secrets: [DORA_GITHUB_TOKEN], timeoutSeconds: 300 },
   async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
@@ -545,22 +545,36 @@ export const refreshDora = onCall(
       // updated desc); el resto aproxima con `createdAt`. (2) Cada llamada va en
       // try/catch: si falla (403/límite u otro), se aproxima con `createdAt`.
       // `leadTimeApproxCount` cuenta cuántos primeros commits son aproximados.
+      //
+      // OPTIMIZACIÓN: el lead time real solo se puede calcular si hay despliegues
+      // 'success' registrados con los que casar los cambios; sin ellos TODO queda
+      // pendiente. Por eso, si el repo no tiene despliegues registrados, NO pedimos
+      // el primer commit de cada PR (serían decenas de llamadas por repo, tiradas):
+      // evita agotar el rate-limit y el timeout de la function.
+      const hasSuccessEvents = deployEvents.some((e) => e?.status === 'success');
       let leadTimeApproxCount = 0;
       const changes = [];
-      for (const [i, pr] of prs.entries()) {
-        let firstCommitAt = pr.createdAt; // aproximación por defecto
-        if (i < maxLookups) {
-          try {
-            const commitDate = await fetchFirstCommitDate(repo.fullName, pr.number, headers);
-            if (commitDate) firstCommitAt = commitDate;
-            else leadTimeApproxCount += 1; // respuesta sin fecha → aproximado
-          } catch {
-            leadTimeApproxCount += 1; // rate-limit u otro error → aproximado
+      if (hasSuccessEvents) {
+        for (const [i, pr] of prs.entries()) {
+          let firstCommitAt = pr.createdAt; // aproximación por defecto
+          if (i < maxLookups) {
+            try {
+              const commitDate = await fetchFirstCommitDate(repo.fullName, pr.number, headers);
+              if (commitDate) firstCommitAt = commitDate;
+              else leadTimeApproxCount += 1; // respuesta sin fecha → aproximado
+            } catch {
+              leadTimeApproxCount += 1; // rate-limit u otro error → aproximado
+            }
+          } else {
+            leadTimeApproxCount += 1; // por encima del tope → aproximado
           }
-        } else {
-          leadTimeApproxCount += 1; // por encima del tope → aproximado
+          changes.push({ firstCommitAt, mergedAt: pr.mergedAt });
         }
-        changes.push({ firstCommitAt, mergedAt: pr.mergedAt });
+      } else {
+        // Sin despliegues registrados: no hay lead time real (todo pendiente). Se
+        // aproxima el inicio con createdAt sin gastar llamadas.
+        for (const pr of prs) changes.push({ firstCommitAt: pr.createdAt, mergedAt: pr.mergedAt });
+        leadTimeApproxCount = prs.length;
       }
 
       // Lead time real usa los eventos ya cargados arriba (deployEvents).
