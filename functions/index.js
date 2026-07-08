@@ -420,6 +420,51 @@ async function fetchReleaseCount(fullName, sinceMs, toMs2, headers) {
   }).length;
 }
 
+/** Señal de deploy normalizada (espejo de normalizeDeploySignal de usecases.js). */
+function normalizeSignal(v) {
+  return ['release', 'tag', 'manual'].includes(v) ? v : 'branch';
+}
+
+/** Tope de tags a los que resolvemos la fecha del commit (mitiga el rate-limit). */
+const MAX_TAG_LOOKUPS = 100;
+
+/**
+ * Nº de tags que casan `pattern` cuyo commit cae en [sinceMs, toMs2] (despliegue
+ * real por tag: hoop-api `YYYY.MM.DD.N`, tribbu-infra `prod-*`). Los tags de
+ * GitHub NO llevan fecha, así que se resuelve la del commit apuntado (1 llamada
+ * por tag, hasta el tope). Sin patrón → 0 (no se cuentan tags indiscriminados).
+ * Solo la primera página de 100 tags: en repos con muchísimos tags los más
+ * antiguos pueden quedar fuera (aproximación documentada, como leadTimeApproxCount).
+ */
+async function fetchTagCount(fullName, sinceMs, toMs2, pattern, headers) {
+  if (!pattern) return 0;
+  let re;
+  try {
+    re = new RegExp(pattern);
+  } catch {
+    return 0;
+  }
+  const res = await fetch(`https://api.github.com/repos/${fullName}/tags?per_page=100`, { headers });
+  if (!res.ok) throw githubError(res.status, fullName, Boolean(headers.Authorization));
+  const arr = await res.json();
+  const matching = (Array.isArray(arr) ? arr : []).filter((t) => re.test(t.name)).slice(0, MAX_TAG_LOOKUPS);
+  let count = 0;
+  for (const tag of matching) {
+    const sha = tag.commit?.sha;
+    if (!sha) continue;
+    try {
+      const cRes = await fetch(`https://api.github.com/repos/${fullName}/commits/${sha}`, { headers });
+      if (!cRes.ok) continue;
+      const commit = (await cRes.json()).commit;
+      const at = toMs(commit?.committer?.date ?? commit?.author?.date);
+      if (Number.isFinite(at) && at >= sinceMs && at <= toMs2) count += 1;
+    } catch {
+      // tag no resoluble (borrado, rate-limit puntual…): se omite del recuento
+    }
+  }
+  return count;
+}
+
 /**
  * Calcula y guarda las métricas DORA de los repos de la instancia (modelo
  * multi-leader). Acceso: superadmin o líder. Usa el token DORA_GITHUB_TOKEN si
@@ -460,14 +505,33 @@ export const refreshDora = onCall(
       // Lead time y personas siempre desde los PR mergeados a la rama base.
       const prs = await fetchMergedPrs(repo.fullName, toMs(from), repo.baseBranch || 'main', headers);
       const metrics = computeRepoMetrics(prs, from, now);
-      // Frecuencia de despliegue: por releases si la señal del repo es 'release',
-      // si no, por merges a la rama base (lo que ya calcula computeRepoMetrics).
-      const signal = repo.deploySignal === 'release' ? 'release' : 'branch';
+
+      // Eventos de despliegue reales del repo (Admin SDK). Fuente para la señal
+      // 'manual' y para lead time real, CFR y MTTR (se reutiliza más abajo).
+      const deploySnap = await docSnap.ref.collection('deployments').get();
+      const deployEvents = deploySnap.docs.map((d) => d.data());
+
+      // Frecuencia de despliegue según la señal REAL del repo (no ramas de entorno):
+      //  branch  → merges a la rama base (lo que ya calcula computeRepoMetrics)
+      //  release → GitHub Releases · tag → tags que casan tagPattern
+      //  manual  → deploy fuera de GitHub: solo eventos 'success' registrados
+      const signal = normalizeSignal(repo.deploySignal);
+      const weeks = Math.max(1, (toMs(now) - toMs(from)) / (7 * 24 * MS_HOUR));
       if (signal === 'release') {
         const releases = await fetchReleaseCount(repo.fullName, toMs(from), toMs(now), headers);
-        const weeks = Math.max(1, (toMs(now) - toMs(from)) / (7 * 24 * MS_HOUR));
         metrics.deployments = releases;
         metrics.deployFrequencyPerWeek = round1(releases / weeks);
+      } else if (signal === 'tag') {
+        const tags = await fetchTagCount(repo.fullName, toMs(from), toMs(now), repo.tagPattern || '', headers);
+        metrics.deployments = tags;
+        metrics.deployFrequencyPerWeek = round1(tags / weeks);
+      } else if (signal === 'manual') {
+        const successInWindow = deployEvents.filter((e) => {
+          const at = toMs(e?.at);
+          return e?.status === 'success' && Number.isFinite(at) && at >= toMs(from) && at <= toMs(now);
+        }).length;
+        metrics.deployments = successInWindow;
+        metrics.deployFrequencyPerWeek = round1(successInWindow / weeks);
       }
       metrics.deploySignal = signal;
 
@@ -499,9 +563,7 @@ export const refreshDora = onCall(
         changes.push({ firstCommitAt, mergedAt: pr.mergedAt });
       }
 
-      // Eventos de despliegue reales del repo (Admin SDK). El helper filtra success.
-      const deploySnap = await docSnap.ref.collection('deployments').get();
-      const deployEvents = deploySnap.docs.map((d) => d.data());
+      // Lead time real usa los eventos ya cargados arriba (deployEvents).
       const realLead = computeLeadTimeCommitDeploy(changes, deployEvents);
       metrics.leadTimeCommitDeployHoursAvg = realLead.leadTimeHoursAvg;
       metrics.leadTimeCommitDeployHoursMedian = realLead.leadTimeHoursMedian;

@@ -35,17 +35,41 @@ export function normalizeBaseBranch(v) {
   return String(v ?? '').trim() || DEFAULT_BASE_BRANCH;
 }
 
-/** Señales de despliegue válidas para la frecuencia DORA. */
-export const DEPLOY_SIGNALS = Object.freeze(['branch', 'release']);
+/**
+ * Señales de despliegue válidas para la frecuencia DORA. Cubren el modelo real
+ * (no ramas de entorno dev→staging→main): la mayoría de repos despliegan por
+ * push/merge a una rama ('branch'); algunos por GitHub Release ('release') o por
+ * tag que casa un patrón ('tag', p. ej. hoop-api `YYYY.MM.DD.N` o tribbu-infra
+ * `prod-*`); y los que despliegan fuera de GitHub (cron/Forge/móvil) no tienen
+ * señal observable ('manual'): su frecuencia sale solo de eventos registrados.
+ */
+export const DEPLOY_SIGNALS = Object.freeze(['branch', 'release', 'tag', 'manual']);
 
 /**
- * Normaliza la señal de despliegue: 'branch' (merges a la rama base) o 'release'
- * (releases/tags de GitHub). Default 'branch'.
+ * Normaliza la señal de despliegue a una de DEPLOY_SIGNALS. Default 'branch'.
  * @param {string} [v]
- * @returns {'branch'|'release'}
+ * @returns {'branch'|'release'|'tag'|'manual'}
  */
 export function normalizeDeploySignal(v) {
-  return v === 'release' ? 'release' : 'branch';
+  return DEPLOY_SIGNALS.includes(v) ? v : 'branch';
+}
+
+/**
+ * Normaliza el patrón de tag (regex) usado cuando la señal es 'tag'. Recortado;
+ * cadena vacía si no aplica. Valida que sea una regex compilable.
+ * @param {string} [v]
+ * @returns {string}
+ */
+export function normalizeTagPattern(v) {
+  const pattern = String(v ?? '').trim();
+  if (!pattern) return '';
+  try {
+    // eslint-disable-next-line no-new
+    new RegExp(pattern);
+  } catch {
+    throw new Error(`Patrón de tag inválido (no es una expresión regular): ${pattern}`);
+  }
+  return pattern;
 }
 
 /**
@@ -63,6 +87,7 @@ export function addRepo(persistence, input) {
     ...normalizeGrouping(input),
     baseBranch: normalizeBaseBranch(input.baseBranch),
     deploySignal: normalizeDeploySignal(input.deploySignal),
+    tagPattern: normalizeTagPattern(input.tagPattern),
     startDate: input.startDate || null,
     createdAt: new Date().toISOString(),
   });
@@ -74,7 +99,7 @@ export function addRepo(persistence, input) {
  * configuración, normalizada igual que en addRepo.
  * @param {DoraPersistence} persistence
  * @param {string} id
- * @param {{ team?: string|null, guilds?: string[], baseBranch?: string }} input
+ * @param {{ team?: string|null, guilds?: string[], baseBranch?: string, deploySignal?: string, tagPattern?: string }} input
  * @returns {Promise<void>}
  */
 export function updateRepoConfig(persistence, id, input) {
@@ -82,6 +107,7 @@ export function updateRepoConfig(persistence, id, input) {
     ...normalizeGrouping(input),
     baseBranch: normalizeBaseBranch(input.baseBranch),
     deploySignal: normalizeDeploySignal(input.deploySignal),
+    tagPattern: normalizeTagPattern(input.tagPattern),
   });
 }
 
