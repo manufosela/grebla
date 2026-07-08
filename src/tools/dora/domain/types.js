@@ -11,7 +11,11 @@
  * @property {string|null} [team] Equipo al que pertenece el repo.
  * @property {string[]} guilds    Gremios (cross-team) del repo.
  * @property {string} baseBranch  Rama base para lead time y, si la señal es "branch", la frecuencia.
- * @property {'branch'|'release'} deploySignal  Qué cuenta como despliegue (default "branch").
+ * @property {'branch'|'release'|'tag'|'manual'} deploySignal  Qué cuenta como despliegue (default "branch"):
+ *   'branch' = merges a baseBranch; 'release' = GitHub Releases; 'tag' = tags que
+ *   casan tagPattern; 'manual' = deploy fuera de GitHub (cron/Forge/móvil), la
+ *   frecuencia sale solo de los eventos registrados en /deployments.
+ * @property {string} [tagPattern]  Regex de nombre de tag cuando deploySignal='tag' (p. ej. "^prod-").
  * @property {string} startDate   ISO date desde la que medir.
  * @property {string} [createdAt]
  */

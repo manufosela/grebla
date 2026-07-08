@@ -16,7 +16,51 @@ import {
   listIncidents,
   resolveIncident,
   removeIncident,
+  normalizeDeploySignal,
+  normalizeTagPattern,
+  DEPLOY_SIGNALS,
 } from './usecases.js';
+
+describe('DORA — taxonomía de señal de despliegue', () => {
+  /** @type {ReturnType<typeof createMemoryDoraPersistence>} */
+  let p;
+  beforeEach(() => {
+    p = createMemoryDoraPersistence();
+  });
+
+  it('DEPLOY_SIGNALS cubre el modelo real (branch/release/tag/manual)', () => {
+    expect([...DEPLOY_SIGNALS]).toEqual(['branch', 'release', 'tag', 'manual']);
+  });
+
+  it('normalizeDeploySignal acepta los válidos y cae a branch en lo demás', () => {
+    expect(normalizeDeploySignal('release')).toBe('release');
+    expect(normalizeDeploySignal('tag')).toBe('tag');
+    expect(normalizeDeploySignal('manual')).toBe('manual');
+    expect(normalizeDeploySignal('branch')).toBe('branch');
+    expect(normalizeDeploySignal('cualquiera')).toBe('branch');
+    expect(normalizeDeploySignal(undefined)).toBe('branch');
+  });
+
+  it('normalizeTagPattern recorta, admite vacío y rechaza regex inválida', () => {
+    expect(normalizeTagPattern('  ^prod-  ')).toBe('^prod-');
+    expect(normalizeTagPattern('')).toBe('');
+    expect(normalizeTagPattern(undefined)).toBe('');
+    expect(() => normalizeTagPattern('[')).toThrow(/inválido/i);
+  });
+
+  it('addRepo persiste deploySignal y tagPattern normalizados', async () => {
+    await addRepo(p, { fullName: 'org/infra', deploySignal: 'tag', tagPattern: ' ^prod- ' });
+    const repo = (await listRepos(p))[0];
+    expect(repo.deploySignal).toBe('tag');
+    expect(repo.tagPattern).toBe('^prod-');
+  });
+
+  it('updateRepoConfig cambia la señal a manual', async () => {
+    const id = await addRepo(p, { fullName: 'org/mobile' });
+    await updateRepoConfig(p, id, { deploySignal: 'manual' });
+    expect((await listRepos(p))[0].deploySignal).toBe('manual');
+  });
+});
 
 describe('DORA — configuración de repos', () => {
   /** @type {ReturnType<typeof createMemoryDoraPersistence>} */

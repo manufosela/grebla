@@ -76,6 +76,7 @@ export class DoraRepos extends LitElement {
     _editGuilds: { state: true },
     _editBranch: { state: true },
     _editSignal: { state: true },
+    _editTagPattern: { state: true },
     _deployOpen: { state: true },
     _deployEvents: { state: true },
     _deployLoading: { state: true },
@@ -180,6 +181,7 @@ export class DoraRepos extends LitElement {
     this._editGuilds = '';
     this._editBranch = '';
     this._editSignal = 'branch';
+    this._editTagPattern = '';
     /** @type {string|null} id del repo con el panel de despliegues abierto */
     this._deployOpen = null;
     /** @type {import('../../tools/dora/domain/types.js').Deployment[]} */
@@ -260,6 +262,7 @@ export class DoraRepos extends LitElement {
     this._editGuilds = (repo.guilds ?? []).join(', ');
     this._editBranch = repo.baseBranch || 'main';
     this._editSignal = repo.deploySignal || 'branch';
+    this._editTagPattern = repo.tagPattern || '';
   }
 
   _cancelEdit() {
@@ -268,6 +271,7 @@ export class DoraRepos extends LitElement {
     this._editGuilds = '';
     this._editBranch = '';
     this._editSignal = 'branch';
+    this._editTagPattern = '';
   }
 
   async _saveEdit(id) {
@@ -278,6 +282,7 @@ export class DoraRepos extends LitElement {
         guilds: this._editGuilds.split(',').map((g) => g.trim()).filter(Boolean),
         baseBranch: this._editBranch,
         deploySignal: this._editSignal,
+        tagPattern: this._editTagPattern,
       });
       this._cancelEdit();
       await this._load();
@@ -739,11 +744,16 @@ export class DoraRepos extends LitElement {
           .value=${this._editGuilds} @input=${(e) => { this._editGuilds = e.target.value; }} /></td>
         <td>
           <select class="edit-in" @change=${(e) => { this._editSignal = e.target.value; }}>
-            <option value="branch" ?selected=${this._editSignal !== 'release'}>rama</option>
-            <option value="release" ?selected=${this._editSignal === 'release'}>release/tag</option>
+            <option value="branch" ?selected=${this._editSignal === 'branch'}>rama (merge)</option>
+            <option value="release" ?selected=${this._editSignal === 'release'}>GitHub Release</option>
+            <option value="tag" ?selected=${this._editSignal === 'tag'}>tag (patrón)</option>
+            <option value="manual" ?selected=${this._editSignal === 'manual'}>manual (eventos)</option>
           </select>
-          ${this._editSignal !== 'release'
+          ${this._editSignal === 'branch'
             ? html`<input class="edit-in" placeholder="main" .value=${this._editBranch} @input=${(e) => { this._editBranch = e.target.value; }} />`
+            : null}
+          ${this._editSignal === 'tag'
+            ? html`<input class="edit-in" placeholder="regex, p. ej. ^prod-" .value=${this._editTagPattern} @input=${(e) => { this._editTagPattern = e.target.value; }} />`
             : null}
         </td>
       `;
@@ -752,10 +762,17 @@ export class DoraRepos extends LitElement {
     return html`
       <td>${repo.team || html`<span class="muted">—</span>`}</td>
       <td>${guilds.length ? guilds.map((g) => html`<span class="tag">${g}</span>`) : html`<span class="muted">—</span>`}</td>
-      <td>${repo.deploySignal === 'release'
-        ? html`<span class="tag">releases</span>`
-        : html`<code>${repo.baseBranch || 'main'}</code>`}</td>
+      <td>${this._signalDisplay(repo)}</td>
     `;
+  }
+
+  /** Celda de solo lectura de la señal de despliegue (evita ternarios anidados). */
+  _signalDisplay(repo) {
+    const signal = repo.deploySignal || 'branch';
+    if (signal === 'release') return html`<span class="tag">releases</span>`;
+    if (signal === 'tag') return html`<span class="tag">tag: <code>${repo.tagPattern || '—'}</code></span>`;
+    if (signal === 'manual') return html`<span class="tag">manual</span>`;
+    return html`<code>${repo.baseBranch || 'main'}</code>`;
   }
 
   render() {
