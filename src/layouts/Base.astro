@@ -8,7 +8,12 @@
  *  - requireAuth?: boolean   redirige a /login si no hay sesión
  *  - requireAdmin?: boolean  redirige a / si hay sesión pero no es admin
  */
+import pkg from '../../package.json';
+
 const { title = 'GREBLA', requireAuth = false, requireAdmin = false } = Astro.props;
+// Versión semántica incrustada al compilar (para bumpear: cambia package.json).
+// Estática en el HTML: si el pie muestra una versión vieja, estás cacheado.
+const appVersion = pkg.version;
 
 const ogDescription =
   'GREBLA — Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo. Herramientas para entender y desarrollar equipos y personas.';
@@ -97,7 +102,7 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       <slot />
     </main>
     <footer class="site-footer">
-      <p>GREBLA · Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo</p>
+      <p>GREBLA · Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo · versión {appVersion}</p>
     </footer>
 
     <style is:global>
