@@ -33,6 +33,7 @@ export class O2OApp extends LitElement {
     persistence: { attribute: false },
     people: { attribute: false },
     canEdit: { attribute: false },
+    aiPropose: { attribute: false },
     error: { state: true },
     loading: { state: true },
     _periods: { state: true },
@@ -82,6 +83,8 @@ export class O2OApp extends LitElement {
     this.persistence = null;
     this.people = [];
     this.canEdit = false;
+    /** @type {import('../../lib/o2oAi.js').proposeQuestions|null} */
+    this.aiPropose = null;
     this.error = '';
     this.loading = true;
     /** @type {import('../../tools/o2o/domain/types.js').O2OPeriod[]} */
@@ -238,11 +241,14 @@ export class O2OApp extends LitElement {
   }
 
   _renderEditor(kind, value) {
+    const previousPeriods = this._periods.filter((p) => p.id !== this._period.id);
     return html`<o2o-questions-editor
       .persistence=${this.persistence}
       .periodId=${this._period.id}
       .kind=${kind}
       .value=${value}
+      .aiPropose=${this.aiPropose}
+      .previousPeriods=${previousPeriods}
       @saved=${(e) => this._onEditorSaved(e)}
     ></o2o-questions-editor>`;
   }

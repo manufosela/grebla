@@ -11,6 +11,7 @@
 import { LitElement, html, css } from 'lit';
 import { savePeriodGuide, savePeriodForm } from '../../tools/o2o/application/usecases/periods.js';
 import { parseQuestionsMarkdown } from '../../tools/o2o/application/markdown.js';
+import { periodQuestions } from '../../tools/o2o/application/aiProposal.js';
 
 const uid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `id-${Math.round(performance.now() * 1000)}`);
 
@@ -20,10 +21,14 @@ export class O2OQuestionsEditor extends LitElement {
     periodId: { attribute: false },
     kind: { type: String },
     value: { attribute: false },
+    aiPropose: { attribute: false },
+    previousPeriods: { attribute: false },
     _groups: { state: true },
     _intro: { state: true },
+    _instructions: { state: true },
     _dirty: { state: true },
     _saving: { state: true },
+    _ai: { state: true },
     _error: { state: true },
   };
 
@@ -50,6 +55,7 @@ export class O2OQuestionsEditor extends LitElement {
     .muted { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .ai-hint { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
+    .ai-focus { width: auto; flex: 1; min-width: 12rem; }
     .file { display: none; }
   `;
 
@@ -59,10 +65,15 @@ export class O2OQuestionsEditor extends LitElement {
     this.periodId = null;
     this.kind = 'guide';
     this.value = null;
+    /** @type {import('../../lib/o2oAi.js').proposeQuestions|null} */
+    this.aiPropose = null;
+    this.previousPeriods = [];
     this._groups = [];
     this._intro = '';
+    this._instructions = '';
     this._dirty = false;
     this._saving = false;
+    this._ai = false;
     this._error = '';
     this._loadedFrom = null;
   }
@@ -140,6 +151,29 @@ export class O2OQuestionsEditor extends LitElement {
     }
   }
 
+  async _generateAi() {
+    if (!this.aiPropose || this._ai) return;
+    this._ai = true;
+    this._error = '';
+    try {
+      const previousPeriods = (this.previousPeriods ?? [])
+        .map((p) => periodQuestions(p, this.kind))
+        .filter((p) => p.groups.length);
+      const proposal = await this.aiPropose({ kind: this.kind, previousPeriods, instructions: this._instructions.trim() });
+      this._groups = proposal.groups.map((g) => ({
+        id: uid(),
+        title: g.title,
+        questions: g.questions.map((q) => ({ id: uid(), text: q.text })),
+      }));
+      if (this.kind === 'form' && proposal.intro) this._intro = proposal.intro;
+      this._dirty = true;
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo generar con IA.';
+    } finally {
+      this._ai = false;
+    }
+  }
+
   _buildValue() {
     // Descarta grupos/preguntas totalmente vacíos al guardar.
     const groups = this._groups
@@ -182,8 +216,7 @@ export class O2OQuestionsEditor extends LitElement {
         <button class="btn" @click=${() => this._addGroup()}>+ ${groupWord}</button>
         <button class="btn" @click=${() => this.renderRoot.querySelector('.file')?.click()}>Importar .md</button>
         <input class="file" type="file" accept=".md,.markdown,text/markdown,text/plain" @change=${(e) => this._onMdFile(e)} />
-        <button class="btn" disabled title="Disponible al configurar la IA">✨ Generar con IA</button>
-        <span class="ai-hint">La IA propondrá preguntas desde O2O anteriores en una fase próxima.</span>
+        ${this._renderAi()}
       </div>
       ${this.kind === 'form' ? this._renderIntro() : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
@@ -195,6 +228,20 @@ export class O2OQuestionsEditor extends LitElement {
         ${this._dirty ? html`<span class="muted">Cambios sin guardar</span>` : null}
       </div>
     `;
+  }
+
+  _renderAi() {
+    if (!this.aiPropose) {
+      return html`<button class="btn" disabled title="Disponible al configurar la IA">✨ Generar con IA</button>
+        <span class="ai-hint">La IA aún no está configurada en esta instancia.</span>`;
+    }
+    return html`
+      <input class="ai-focus" type="text" placeholder="Enfoque para la IA (opcional)"
+        .value=${this._instructions} @input=${(e) => { this._instructions = e.target.value; }}
+        ?disabled=${this._ai} />
+      <button class="btn" ?disabled=${this._ai || this._saving} @click=${() => this._generateAi()}>
+        ${this._ai ? 'Generando…' : '✨ Generar con IA'}
+      </button>`;
   }
 
   _renderIntro() {
