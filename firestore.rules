@@ -249,6 +249,12 @@ service cloud.firestore {
       allow read, write: if isSuperAdmin() || (isSignedIn() && request.auth.uid == leaderUid);
     }
 
+    // O2O — PERIODOS del líder (campañas con su guía/formulario embebidos). Solo
+    // el propio líder dueño (o el superadmin). Mismo criterio que las sesiones.
+    match /leaders/{leaderUid}/o2oPeriods/{periodId} {
+      allow read, write: if isSuperAdmin() || (isSignedIn() && request.auth.uid == leaderUid);
+    }
+
     // Configuración: /config/org (Role Mirror, superadmin); /config/settings
     // (ajustes de la tool Equipo, líderes).
     match /config/org {
