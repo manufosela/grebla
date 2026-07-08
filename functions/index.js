@@ -200,6 +200,109 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
   return { sessions, actions };
 });
 
+/**
+ * Propuesta de preguntas para un periodo de O2O con IA. El cliente manda las
+ * preguntas de periodos anteriores (guía o formulario) y Claude devuelve una
+ * batería nueva. Usa tool-use para forzar JSON; el cliente la sanea antes de
+ * volcarla al editor. Acceso: superadmin o líder (como refreshDora). El secreto
+ * ANTHROPIC_API_KEY es de la instancia (`firebase functions:secrets:set`).
+ */
+const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const O2O_AI_MODEL = 'claude-sonnet-4-6';
+const O2O_QUESTIONS_TOOL = {
+  name: 'emit_o2o_questions',
+  description: 'Devuelve la batería de preguntas propuesta para el O2O.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      intro: { type: 'string', description: 'Cabecera opcional (solo para el formulario previo).' },
+      groups: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Título del bloque temático.' },
+            questions: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['title', 'questions'],
+        },
+      },
+    },
+    required: ['groups'],
+  },
+};
+
+/** Construye el prompt con el contexto de periodos anteriores. */
+function buildO2OPrompt(kind, previousPeriods, instructions) {
+  const label = kind === 'form'
+    ? 'formulario previo (temas para que la persona reflexione ANTES del O2O)'
+    : 'guía de temas y preguntas para el líder DURANTE el O2O';
+  const prev = (previousPeriods ?? [])
+    .filter((p) => Array.isArray(p?.groups) && p.groups.length)
+    .map((p) => {
+      const blocks = p.groups
+        .map((g) => `## ${g.title}\n${(g.questions ?? []).map((q) => `- ${q}`).join('\n')}`)
+        .join('\n');
+      return `# ${p.name || 'Periodo anterior'}\n${blocks}`;
+    })
+    .join('\n\n');
+  const context = prev
+    ? `O2O de periodos anteriores:\n\n${prev}`
+    : 'No hay periodos anteriores con preguntas; propón una batería inicial sólida.';
+  const extra = instructions?.trim() ? `\n\nEnfoque pedido por el líder: ${instructions.trim()}` : '';
+  return `Eres experto en gestión de equipos de ingeniería y diseñas one-to-ones (O2O). Propón una ${label} para el próximo periodo.\n\n${context}${extra}\n\nCriterios: preguntas abiertas y concretas, en español, agrupadas en bloques temáticos (p. ej. cómo van hoy, carrera y crecimiento, bienestar, feedback mutuo). No repitas literalmente las de periodos anteriores: renuévalas manteniendo continuidad. Entre 3 y 6 bloques y 2-5 preguntas por bloque. Llama a la herramienta emit_o2o_questions con el resultado.`;
+}
+
+export const o2oProposeQuestions = onCall(
+  { region: 'europe-west1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 120 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+
+    const kind = request.data?.kind === 'form' ? 'form' : 'guide';
+    const previousPeriods = Array.isArray(request.data?.previousPeriods) ? request.data.previousPeriods : [];
+    const instructions = typeof request.data?.instructions === 'string' ? request.data.instructions : '';
+
+    const db = getFirestore();
+    const [adminSnap, leaderSnap] = await Promise.all([
+      db.doc(`admins/${uid}`).get(),
+      db.doc(`leaders/${uid}`).get(),
+    ]);
+    if (!adminSnap.exists && !leaderSnap.exists) {
+      throw new HttpsError('permission-denied', 'Solo un líder o superadmin puede generar preguntas.');
+    }
+
+    const apiKey = ANTHROPIC_API_KEY.value();
+    if (!apiKey) throw new HttpsError('failed-precondition', 'La IA no está configurada en esta instancia.');
+
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: O2O_AI_MODEL,
+          max_tokens: 2000,
+          tools: [O2O_QUESTIONS_TOOL],
+          tool_choice: { type: 'tool', name: 'emit_o2o_questions' },
+          messages: [{ role: 'user', content: buildO2OPrompt(kind, previousPeriods, instructions) }],
+        }),
+      });
+    } catch {
+      throw new HttpsError('unavailable', 'No se pudo contactar con la IA. Inténtalo de nuevo.');
+    }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      console.error(`Anthropic error ${res.status}: ${detail}`);
+      throw new HttpsError('internal', 'La IA no pudo generar las preguntas.');
+    }
+    const payload = await res.json();
+    const block = (payload.content ?? []).find((c) => c.type === 'tool_use');
+    if (!block) throw new HttpsError('internal', 'La IA no devolvió una propuesta válida.');
+    return { kind, proposal: block.input };
+  },
+);
+
 // ── DORA ───────────────────────────────────────────────────────────────────
 const MS_HOUR = 3_600_000;
 const toMs = (d) => new Date(d).getTime();
