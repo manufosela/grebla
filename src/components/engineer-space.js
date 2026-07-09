@@ -44,14 +44,18 @@ import {
 import { stats } from '../tools/career/application/usecases.js';
 import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
 import { setCareerTarget } from '../lib/engineer.js';
+import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 
 /**
  * Pestañas de «Mi espacio». El id (clave) sincroniza con `location.hash`
  * (#carrera / #rolemirror / #mapa) para conservar la pestaña activa al recargar
  * o navegar atrás/adelante, igual que el patrón de <superadmin-panel>.
- * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'|'o2o'>}
+ * `datos` solo la ven los EXTERNOS (no tienen carrera/rolemirror/mapa).
+ * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'|'o2o'|'datos'>}
  */
-const TABS = ['carrera', 'rolemirror', 'mapa', 'o2o'];
+const TABS = ['carrera', 'rolemirror', 'mapa', 'o2o', 'datos'];
+/** Búsqueda O(1) de existencia (validar el hash de la URL). */
+const TAB_SET = new Set(TABS);
 
 /**
  * Metadatos de cada pestaña: etiqueta de la barra, encabezado del panel y clase
@@ -63,6 +67,7 @@ const TAB_META = {
   rolemirror: { label: 'Mi Role Mirror', heading: 'Mi Role Mirror', cls: 'rolemirror' },
   mapa: { label: 'Mi mapa', heading: 'Mi mapa de carrera', cls: 'map' },
   o2o: { label: 'Mis O2O', heading: 'Mis O2O', cls: 'o2o' },
+  datos: { label: 'Mis datos', heading: 'Mis datos', cls: 'datos' },
 };
 
 export class EngineerSpace extends LitElement {
@@ -119,6 +124,14 @@ export class EngineerSpace extends LitElement {
     .o2o-act.done { color: var(--rm-muted, #9ca3af); text-decoration: line-through; }
     .o2o-note { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0.25rem 0 1rem; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; margin: 0; }
+
+    /* ── Sección Mis datos (externos) ── */
+    section.datos { border-left: 4px solid var(--rm-navy, #1e3a5f); }
+    .datos-note { font-size: 0.9rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
+    .datos-dl { margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+    .datos-row { display: flex; gap: 0.75rem; border-bottom: 1px solid var(--rm-border, #eef0f2); padding: 0 0 0.5rem; }
+    .datos-row dt { flex: 0 0 7rem; font-weight: 700; font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); margin: 0; }
+    .datos-row dd { margin: 0; font-size: 0.9rem; color: var(--rm-text, #111827); }
     .playlink { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; margin-left: 0.35rem; }
     .playlink:hover { text-decoration: underline; }
     .topmost { color: var(--rm-accent, #2a9d8f); font-size: 0.9rem; font-weight: 600; margin: 0.2rem 0 0; }
@@ -232,13 +245,13 @@ export class EngineerSpace extends LitElement {
     /** @type {boolean} true mientras se persiste el objetivo (deshabilita controles) */
     this._targetSaving = false;
     /** @type {typeof TABS[number]} pestaña activa (inicializada desde el hash) */
-    this._tab = TABS.includes(/** @type {any} */ (location.hash.slice(1)))
+    this._tab = TAB_SET.has(location.hash.slice(1))
       ? /** @type {typeof TABS[number]} */ (location.hash.slice(1))
       : 'carrera';
     // Mantiene la pestaña activa sincronizada con el hash (recarga / atrás-adelante).
     this._onHashChange = () => {
       const t = location.hash.slice(1);
-      if (TABS.includes(/** @type {any} */ (t))) this._tab = /** @type {typeof TABS[number]} */ (t);
+      if (this._visibleTabs().includes(t)) this._tab = /** @type {typeof TABS[number]} */ (t);
     };
   }
 
@@ -264,6 +277,16 @@ export class EngineerSpace extends LitElement {
     else this._tab = tab;
   }
 
+  /** Pestañas visibles según el tipo de persona (externo vs interno). */
+  _visibleTabs() {
+    return visibleTabsFor(this.person);
+  }
+
+  /** Pestaña efectiva: fuerza una visible si la activa no lo está (p. ej. #carrera en un externo). */
+  _effectiveTab() {
+    return effectiveTabFor(this._tab, this.person);
+  }
+
   /**
    * Navegación por teclado de la barra de pestañas (patrón ARIA tablist con
    * activación automática): ←/→ recorren las pestañas de forma circular y
@@ -272,15 +295,16 @@ export class EngineerSpace extends LitElement {
    * @returns {void}
    */
   _onTabsKeydown(e) {
-    const i = TABS.indexOf(this._tab);
+    const tabs = this._visibleTabs();
+    const i = tabs.indexOf(this._effectiveTab());
     let next = i;
-    if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
-    else if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+    if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
     else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = TABS.length - 1;
+    else if (e.key === 'End') next = tabs.length - 1;
     else return;
     e.preventDefault();
-    const tab = TABS[next];
+    const tab = tabs[next];
     this._setTab(tab);
     // Tras el re-render, mueve el foco a la pestaña recién activada.
     this.updateComplete.then(() => {
@@ -320,8 +344,8 @@ export class EngineerSpace extends LitElement {
   _renderTabs() {
     return html`
       <div class="tabs" role="tablist" aria-label="Secciones de mi espacio" @keydown=${this._onTabsKeydown}>
-        ${TABS.map((tab) => {
-          const selected = this._tab === tab;
+        ${this._visibleTabs().map((tab) => {
+          const selected = this._effectiveTab() === tab;
           return html`
             <button
               id="tab-${tab}"
@@ -704,27 +728,47 @@ export class EngineerSpace extends LitElement {
   }
 
   render() {
-    const meta = TAB_META[this._tab];
+    const tab = this._effectiveTab();
+    const meta = TAB_META[tab];
     // Cada pestaña reutiliza su método de render existente (sin duplicar lógica).
     const panel = {
       carrera: () => this._renderCareer(),
       rolemirror: () => this._renderRoleMirror(),
       mapa: () => this._renderMap(),
       o2o: () => this._renderO2O(),
-    }[this._tab];
+      datos: () => this._renderDatos(),
+    }[tab];
 
     return html`
       ${this._renderTabs()}
       <section
-        id="panel-${this._tab}"
+        id="panel-${tab}"
         class="${meta.cls}"
         role="tabpanel"
-        aria-labelledby="tab-${this._tab}"
+        aria-labelledby="tab-${tab}"
         tabindex="0"
       >
         <h2>${meta.heading}</h2>
         ${panel()}
       </section>
+    `;
+  }
+
+  /** Datos básicos del externo (solo lectura): sin carrera ni nivel. */
+  _renderDatos() {
+    const p = this.person ?? {};
+    const rows = [
+      ['Nombre', p.name],
+      ['Desde', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(p.startDate)) : null],
+      ['Ubicación', p.location],
+      ['Gremios', (p.guilds ?? []).join(', ') || null],
+      ['Equipos', (p.labels ?? []).join(', ') || null],
+    ].filter(([, v]) => v);
+    return html`
+      <p class="datos-note">Eres una persona externa: aquí ves tus datos básicos y, en «Mis O2O», los resúmenes que tu responsable comparta contigo.</p>
+      <dl class="datos-dl">
+        ${rows.map(([k, v]) => html`<div class="datos-row"><dt>${k}</dt><dd>${v}</dd></div>`)}
+      </dl>
     `;
   }
 }
