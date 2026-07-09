@@ -429,6 +429,17 @@ export class TeamPersonDetail extends LitElement {
       this._seedDatos();
       this._load();
     }
+    // Los externos no tienen Carrera: si la sub-pestaña activa quedó en «carrera»
+    // (o vino como initialSubtab), la reubicamos en «Datos».
+    if (this.person?.external && this._subtab === 'carrera') {
+      this._subtab = 'datos';
+    }
+  }
+
+  /** Sub-pestañas visibles: los externos no tienen Carrera (ni mapa de carrera). */
+  _visibleSubtabs() {
+    if (this.person?.external) return SUBTABS.filter((t) => t.id !== 'carrera');
+    return SUBTABS;
   }
 
   /** Siembra el borrador de «Datos» desde la persona (RMR-TSK-0173). */
@@ -470,7 +481,7 @@ export class TeamPersonDetail extends LitElement {
    * @returns {void}
    */
   _onSubtabsKeydown(e) {
-    const ids = SUBTABS.map((t) => t.id);
+    const ids = this._visibleSubtabs().map((t) => t.id);
     const i = ids.indexOf(this._subtab);
     let next = i;
     if (e.key === 'ArrowLeft') next = (i - 1 + ids.length) % ids.length;
@@ -609,7 +620,7 @@ export class TeamPersonDetail extends LitElement {
   _renderSubtabs() {
     return html`
       <div class="tabs" role="tablist" aria-label="Secciones de la ficha" @keydown=${this._onSubtabsKeydown}>
-        ${SUBTABS.map((t) => {
+        ${this._visibleSubtabs().map((t) => {
           const selected = this._subtab === t.id;
           return html`
             <button
@@ -1730,7 +1741,7 @@ export class TeamPersonDetail extends LitElement {
       contribution: () => this._renderContribution(),
       conversations: () => this._renderConversations(),
       notes: () => this._renderNotes(),
-    }[this._subtab] ?? (() => this._renderCareer());
+    }[this._subtab] ?? (() => (this.person?.external ? this._renderDatos() : this._renderCareer()));
     return panel();
   }
 }
