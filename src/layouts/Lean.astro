@@ -1,0 +1,29 @@
+---
+/**
+ * Layout de la herramienta LEAN / Flujo. Envuelve Base y marca la ruta protegida.
+ * Props: title
+ */
+import Base from './Base.astro';
+
+const { title = 'Flujo (LEAN)' } = Astro.props;
+---
+
+<Base title={title} requireAuth={true}>
+  <nav class="tool-nav" aria-label="Flujo LEAN">
+    <a href="/" class="tool-back">← Volver</a>
+    <span class="tool-name">🔀 Flujo (LEAN)</span>
+  </nav>
+  <slot />
+</Base>
+
+<style>
+  .tool-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--rm-border);
+  }
+  .tool-name { font-weight: 800; color: var(--rm-accent); }
+</style>

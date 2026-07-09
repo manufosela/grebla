@@ -721,6 +721,141 @@ export const refreshDora = onCall(
   return { computedAt: now, results };
 });
 
+// ── LEAN / Flujo (métricas de flujo del equipo desde Linear) ─────────────────
+const LINEAR_API_KEY = defineSecret('LINEAR_API_KEY');
+const FLOW_HOUR = 3_600_000;
+const FLOW_DAY = 24 * FLOW_HOUR;
+const flowRound1 = (n) => Math.round(n * 10) / 10;
+
+/** Percentil por interpolación lineal (espejo de src/tools/lean/domain/metrics.js). */
+function flowPercentile(sortedAsc, p) {
+  if (!sortedAsc.length) return null;
+  if (sortedAsc.length === 1) return sortedAsc[0];
+  const idx = (sortedAsc.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sortedAsc[lo];
+  return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (idx - lo);
+}
+
+/** Métricas de flujo de un equipo (espejo de src/tools/lean/domain/metrics.js). */
+function computeFlowMetricsFn(issues, period) {
+  const list = Array.isArray(issues) ? issues : [];
+  const fromMs = new Date(period.from).getTime();
+  const toMs = new Date(period.to).getTime();
+  const nowMs = period.now != null ? new Date(period.now).getTime() : toMs;
+  const t = (d) => new Date(d).getTime();
+  const completed = list.filter(
+    (i) => i.stateType === 'completed' && i.completedAt && t(i.completedAt) >= fromMs && t(i.completedAt) <= toMs,
+  );
+  const weeks = Math.max(1, (toMs - fromMs) / (7 * FLOW_DAY));
+  const cycle = completed
+    .map((i) => (i.startedAt && i.completedAt ? (t(i.completedAt) - t(i.startedAt)) / FLOW_HOUR : NaN))
+    .filter((h) => Number.isFinite(h) && h >= 0)
+    .sort((a, b) => a - b);
+  const wipIssues = list.filter((i) => i.stateType === 'started');
+  const agingDays = wipIssues
+    .map((i) => (i.startedAt ? (nowMs - t(i.startedAt)) / FLOW_DAY : NaN))
+    .filter((d) => Number.isFinite(d) && d >= 0);
+  const p50 = flowPercentile(cycle, 0.5);
+  const p85 = flowPercentile(cycle, 0.85);
+  return {
+    completed: completed.length,
+    throughputPerWeek: flowRound1(completed.length / weeks),
+    cycleTimeP50Hours: p50 == null ? null : flowRound1(p50),
+    cycleTimeP85Hours: p85 == null ? null : flowRound1(p85),
+    wip: wipIssues.length,
+    agingDaysMax: agingDays.length ? flowRound1(Math.max(...agingDays)) : null,
+    agingDaysAvg: agingDays.length ? flowRound1(agingDays.reduce((s, d) => s + d, 0) / agingDays.length) : 0,
+  };
+}
+
+const LINEAR_ISSUES_QUERY = `
+  query Issues($filter: IssueFilter, $after: String) {
+    issues(first: 100, after: $after, filter: $filter) {
+      pageInfo { hasNextPage endCursor }
+      nodes { id createdAt startedAt completedAt canceledAt state { type } }
+    }
+  }`;
+
+/** Trae las issues de un equipo de Linear actualizadas desde `sinceIso` (paginado, GraphQL). */
+async function fetchLinearIssues(teamKey, sinceIso, apiKey) {
+  const filter = { team: { key: { eq: teamKey } }, updatedAt: { gte: sinceIso } };
+  const out = [];
+  let after = null;
+  for (let page = 0; page < 50; page += 1) { // tope de seguridad (~5000 issues)
+    const res = await fetch('https://api.linear.app/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+      body: JSON.stringify({ query: LINEAR_ISSUES_QUERY, variables: { filter, after } }),
+    });
+    if (!res.ok) throw new Error(`Linear respondió ${res.status}.`);
+    const json = await res.json();
+    if (json.errors?.length) throw new Error(json.errors[0]?.message || 'Error de la API de Linear.');
+    const conn = json.data?.issues;
+    if (!conn) break;
+    for (const n of conn.nodes) {
+      out.push({
+        id: n.id,
+        stateType: n.state?.type ?? 'backlog',
+        createdAt: n.createdAt,
+        startedAt: n.startedAt ?? null,
+        completedAt: n.completedAt ?? null,
+        canceledAt: n.canceledAt ?? null,
+      });
+    }
+    if (!conn.pageInfo?.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return out;
+}
+
+/**
+ * Recalcula las métricas de flujo (LEAN) de todos los equipos de `/leanTeams` desde
+ * Linear (ventana de 8 semanas). Acceso: superadmin o líder (como refreshDora). El
+ * secreto LINEAR_API_KEY es de la instancia.
+ */
+export const refreshLean = onCall(
+  { region: 'europe-west1', secrets: [LINEAR_API_KEY], timeoutSeconds: 300 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+
+    const db = getFirestore();
+    const [adminSnap, leaderSnap] = await Promise.all([
+      db.doc(`admins/${uid}`).get(),
+      db.doc(`leaders/${uid}`).get(),
+    ]);
+    if (!adminSnap.exists && !leaderSnap.exists) {
+      throw new HttpsError('permission-denied', 'No tienes acceso a esta organización.');
+    }
+
+    const apiKey = LINEAR_API_KEY.value();
+    if (!apiKey) throw new HttpsError('failed-precondition', 'Linear no está configurado en esta instancia.');
+
+    const now = new Date();
+    const to = now.toISOString();
+    const from = new Date(now.getTime() - 8 * 7 * FLOW_DAY).toISOString(); // 8 semanas
+
+    const teamsSnap = await db.collection('leanTeams').get();
+    const results = [];
+    for (const docSnap of teamsSnap.docs) {
+      const team = docSnap.data();
+      try {
+        const issues = await fetchLinearIssues(team.linearTeamKey, from, apiKey);
+        const metrics = computeFlowMetricsFn(issues, { from, to, now: to });
+        await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: to, computedAt: to } }, { merge: true });
+        results.push({ id: docSnap.id, key: team.linearTeamKey, ok: true });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error desconocido.';
+        await docSnap.ref.set({ metrics: { error: msg, computedAt: to } }, { merge: true });
+        results.push({ id: docSnap.id, key: team.linearTeamKey, ok: false, error: msg });
+      }
+    }
+    return { computedAt: to, results };
+  },
+);
+
 // ── TRIBBU-COINS (CP-2): emisor único del ledger firmado ─────────────────────
 //
 // La emisión de tribbu-coins va SOLO por contratos (functions/coins.js, espejo
