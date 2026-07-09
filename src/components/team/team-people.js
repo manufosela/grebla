@@ -59,6 +59,7 @@ export class TeamPeople extends LitElement {
     _newLabel: { state: true },
     _startDate: { state: true },
     _github: { state: true },
+    _external: { state: true },
     _confirmOff: { state: true },
     _shareFor: { state: true },
     _shareSel: { state: true },
@@ -82,6 +83,8 @@ export class TeamPeople extends LitElement {
     .row { display: grid; grid-template-columns: 2fr 1.3fr auto; gap: 0.75rem; align-items: end; }
     @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
     label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    label.chk-inline { flex-direction: row; align-items: center; gap: 0.4rem; }
+    label.chk-inline input { width: auto; }
     fieldset.roles { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.75rem 0.9rem; margin: 0; }
     fieldset.roles legend { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; padding: 0 0.4rem; }
     .role-checks { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
@@ -232,6 +235,7 @@ export class TeamPeople extends LitElement {
     this._newLabel = '';
     this._startDate = '';
     this._github = '';
+    this._external = false;
     /** @type {string|null} */
     this._confirmOff = null;
     /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Compartir */
@@ -416,6 +420,7 @@ export class TeamPeople extends LitElement {
         startDate: this._startDate || new Date().toISOString().slice(0, 10),
         githubLogin: this._github,
         uid: this._selectedUid || null,
+        external: this._external,
       });
       this._name = '';
       this._selectedDisciplines = [];
@@ -426,6 +431,7 @@ export class TeamPeople extends LitElement {
       this._newLabel = '';
       this._startDate = '';
       this._github = '';
+      this._external = false;
       this._selectedUid = '';
       await this._load();
     } catch (err) {
@@ -776,6 +782,10 @@ export class TeamPeople extends LitElement {
             </label>
             <label>Usuario de GitHub (opcional)
               <input type="text" placeholder="usuario" .value=${this._github} @input=${(e) => { this._github = e.target.value; }} />
+            </label>
+            <label class="chk-inline">
+              <input type="checkbox" .checked=${this._external} @change=${(e) => { this._external = e.target.checked; }} />
+              Es externo/a
             </label>
           </div>
           ${this._renderAccountSelect(this._selectedUid, (uid) => this._onSelectAltaAccount(uid))}

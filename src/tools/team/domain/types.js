@@ -14,6 +14,7 @@
  * @property {string|null} [careerTargetLevelId]  Nivel objetivo de carrera declarado por el propio ingeniero (o null).
  * @property {string} startDate       ISO date (alta)
  * @property {boolean} active
+ * @property {boolean} [external]     Persona externa (consultor/contractor); ausente = interna.
  * @property {string|null} [deactivatedAt]  ISO date de la baja (null/ausente si activa)
  * @property {string|null} [githubLogin]    Usuario de GitHub, para mapear la contribución DORA a la persona.
  * @property {string|null} [uid]            Cuenta vinculada (acceso de solo lectura de la persona). Se vincula al dar acceso.
