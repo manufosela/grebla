@@ -64,6 +64,8 @@ export class TeamPeople extends LitElement {
     _startDate: { state: true },
     _github: { state: true },
     _external: { state: true },
+    _sortBy: { state: true },
+    _sortDir: { state: true },
     _confirmOff: { state: true },
     _shareFor: { state: true },
     _shareSel: { state: true },
@@ -106,6 +108,9 @@ export class TeamPeople extends LitElement {
     .title { font-weight: 600; color: var(--rm-text, #111827); }
     .leader { font-size: 0.85rem; color: var(--rm-text, #111827); }
     .muted { color: var(--rm-muted, #9ca3af); }
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { color: var(--rm-accent, #2a9d8f); }
+    .ext-badge { display: inline-block; margin-left: 0.4rem; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-navy, #1e3a5f); background: var(--rm-chip, #eef2f7); border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; padding: 0.05rem 0.45rem; vertical-align: middle; }
     .link-inline {
       border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
       font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
@@ -241,6 +246,10 @@ export class TeamPeople extends LitElement {
     this._startDate = '';
     this._github = '';
     this._external = false;
+    /** @type {'name'|'leader'|'startDate'|null} columna de orden de la tabla */
+    this._sortBy = null;
+    /** @type {1|-1} sentido del orden (1 asc, -1 desc) */
+    this._sortDir = 1;
     /** @type {string|null} */
     this._confirmOff = null;
     /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Compartir */
@@ -468,22 +477,71 @@ export class TeamPeople extends LitElement {
     return html`
       <table>
         <thead>
-          <tr><th>Nombre</th>${this.isAdmin ? html`<th>Líder</th>` : null}<th>Carrera</th><th>Gremios</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
+          <tr>
+            ${this._sortableTh('name', 'Nombre')}
+            ${this.isAdmin ? this._sortableTh('leader', 'Líder') : null}
+            <th>Carrera</th><th>Gremios</th><th>Labels</th>
+            ${this._sortableTh('startDate', 'Desde')}
+            <th>Acciones</th>
+          </tr>
         </thead>
-        <tbody>${this.people.map((p) => this._renderPersonRow(p))}</tbody>
+        <tbody>${this._sortedPeople().map((p) => this._renderPersonRow(p))}</tbody>
       </table>`;
   }
 
-  /** Un chip (gremio/label). Extraído para no anidar template literals. */
-  _chipEl(text) {
-    return html`<span class="chip">${text}</span>`;
+  /** Cabecera de columna ordenable, con indicador de sentido. */
+  _sortableTh(key, label) {
+    const active = this._sortBy === key;
+    let arrow = '';
+    if (active) arrow = this._sortDir === 1 ? ' ▲' : ' ▼';
+    return html`<th class="sortable" role="button" tabindex="0"
+      @click=${() => this._toggleSort(key)}
+      @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._toggleSort(key); } }}
+    >${label}${arrow}</th>`;
   }
 
-  /** Celda de chips (gremios o labels), o «—» si está vacía. */
-  _renderChips(items) {
+  _toggleSort(key) {
+    if (this._sortBy === key) this._sortDir = /** @type {1|-1} */ (-this._sortDir);
+    else { this._sortBy = key; this._sortDir = 1; }
+  }
+
+  /** Personas ordenadas según la columna activa (sin orden → como vienen). */
+  _sortedPeople() {
+    const people = [...this.people];
+    if (!this._sortBy) return people;
+    const dir = this._sortDir;
+    const keyOf = (p) => {
+      if (this._sortBy === 'leader') return (this._leaderName(p.ownerLeaderUid) || '~~~').toLowerCase();
+      if (this._sortBy === 'startDate') return p.startDate || '';
+      return (p.name || '').toLowerCase();
+    };
+    return people.sort((a, b) => {
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      if (ka < kb) return -dir;
+      if (ka > kb) return dir;
+      return 0;
+    });
+  }
+
+  /** Un chip (gremio/label). `color` opcional lo tiñe (labels con color de catálogo). */
+  _chipEl(text, color) {
+    const style = color ? `background:${color};border-color:${color};color:#fff` : '';
+    return html`<span class="chip" style=${style}>${text}</span>`;
+  }
+
+  /** Color del label en el catálogo (o '' si no tiene). */
+  _labelColor(name) {
+    const label = (this.labels ?? []).find((l) => l.name === name);
+    return label?.color || '';
+  }
+
+  /** Celda de chips (gremios o labels), o «—» si está vacía. Con `withColor`,
+   * cada chip usa el color de su label del catálogo. */
+  _renderChips(items, withColor = false) {
     const list = items ?? [];
     if (list.length === 0) return html`<span class="muted">—</span>`;
-    return html`<span class="chips">${list.map((x) => this._chipEl(x))}</span>`;
+    return html`<span class="chips">${list.map((x) => this._chipEl(x, withColor ? this._labelColor(x) : ''))}</span>`;
   }
 
   /** Una fila de la tabla de personas. */
@@ -492,13 +550,14 @@ export class TeamPeople extends LitElement {
     const pending = !p.uid && p.pendingEmail
       ? html`<span class="pending" title="Aún no se ha logado: se vinculará en su primer login con este email">⏳ Pendiente: ${p.pendingEmail}</span>`
       : null;
+    const ext = p.external ? html`<span class="ext-badge" title="Persona externa">Externo</span>` : null;
     return html`
       <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
-        <td>${p.name}${pending}</td>
+        <td>${p.name}${ext}${pending}</td>
         ${this.isAdmin ? html`<td>${this._renderLeaderCell(p)}</td>` : null}
         <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
         <td>${this._renderChips(p.guilds)}</td>
-        <td>${this._renderChips(p.labels)}</td>
+        <td>${this._renderChips(p.labels, true)}</td>
         <td>${formatDate(p.startDate)}</td>
         <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
       </tr>`;
