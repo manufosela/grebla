@@ -312,6 +312,19 @@ service cloud.firestore {
       }
     }
 
+    // LEAN / Flujo: equipos de Linear monitorizados (mismo modelo owner-scoped que
+    // /dora). Las métricas las calcula la Cloud Function refreshLean (Admin SDK).
+    match /leanTeams/{teamId} {
+      allow read: if isSignedIn();
+      allow create: if isSuperAdmin()
+        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
+      allow update: if isSuperAdmin()
+        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid
+            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
+      allow delete: if isSuperAdmin()
+        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
+    }
+
     // Mapa de Carrera: el journey de cada persona, solo suyo.
     match /journeys/{uid} {
       allow read, write: if isSignedIn() && request.auth.uid == uid;
