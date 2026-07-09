@@ -100,6 +100,7 @@ export class TeamPeople extends LitElement {
     .pending { display: block; margin-top: 0.2rem; font-size: 0.74rem; font-weight: 600; color: #8a5a00; }
     .invite-field input:disabled { opacity: 0.55; }
     .title { font-weight: 600; color: var(--rm-text, #111827); }
+    .leader { font-size: 0.85rem; color: var(--rm-text, #111827); }
     .muted { color: var(--rm-muted, #9ca3af); }
     .link-inline {
       border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
@@ -445,6 +446,58 @@ export class TeamPeople extends LitElement {
     this.dispatchEvent(
       new CustomEvent('open-person', { detail: { person, subtab }, bubbles: true, composed: true }),
     );
+  }
+
+  /** Celda «Líder» de la tabla (solo superadmin): nombre del dueño o «Sin líder».
+   * Reutiliza `_leaderName` (displayName › email › uid). */
+  _renderLeaderCell(person) {
+    if (!person.ownerLeaderUid) return html`<span class="muted">Sin líder</span>`;
+    return html`<span class="leader">${this._leaderName(person.ownerLeaderUid)}</span>`;
+  }
+
+  /** Lista de personas activas: cargando / vacío / tabla (sin ternarios anidados). */
+  _renderPeopleList() {
+    if (this.loading) return html`<p class="empty">Cargando…</p>`;
+    if (this.people.length === 0) {
+      return html`<p class="empty">Aún no has añadido a nadie. Despliega «Añadir persona» para empezar.</p>`;
+    }
+    return html`
+      <table>
+        <thead>
+          <tr><th>Nombre</th>${this.isAdmin ? html`<th>Líder</th>` : null}<th>Carrera</th><th>Gremios</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
+        </thead>
+        <tbody>${this.people.map((p) => this._renderPersonRow(p))}</tbody>
+      </table>`;
+  }
+
+  /** Un chip (gremio/label). Extraído para no anidar template literals. */
+  _chipEl(text) {
+    return html`<span class="chip">${text}</span>`;
+  }
+
+  /** Celda de chips (gremios o labels), o «—» si está vacía. */
+  _renderChips(items) {
+    const list = items ?? [];
+    if (list.length === 0) return html`<span class="muted">—</span>`;
+    return html`<span class="chips">${list.map((x) => this._chipEl(x))}</span>`;
+  }
+
+  /** Una fila de la tabla de personas. */
+  _renderPersonRow(p) {
+    const title = composeTitle(this.framework, p.levelId, p.disciplines);
+    const pending = !p.uid && p.pendingEmail
+      ? html`<span class="pending" title="Aún no se ha logado: se vinculará en su primer login con este email">⏳ Pendiente: ${p.pendingEmail}</span>`
+      : null;
+    return html`
+      <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
+        <td>${p.name}${pending}</td>
+        ${this.isAdmin ? html`<td>${this._renderLeaderCell(p)}</td>` : null}
+        <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
+        <td>${this._renderChips(p.guilds)}</td>
+        <td>${this._renderChips(p.labels)}</td>
+        <td>${formatDate(p.startDate)}</td>
+        <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
+      </tr>`;
   }
 
   /**
@@ -861,47 +914,7 @@ export class TeamPeople extends LitElement {
       <details open>
         <summary>Personas activas <span class="count">(${this.people.length})</span></summary>
         <div class="body">
-        ${this.loading
-          ? html`<p class="empty">Cargando…</p>`
-          : this.people.length === 0
-            ? html`<p class="empty">Aún no has añadido a nadie. Despliega «Añadir persona» para empezar.</p>`
-            : html`
-                <table>
-                  <thead>
-                    <tr><th>Nombre</th><th>Carrera</th><th>Gremios</th><th>Labels</th><th>Desde</th><th>Acciones</th></tr>
-                  </thead>
-                  <tbody>
-                    ${this.people.map(
-                      (p) => {
-                        const title = composeTitle(this.framework, p.levelId, p.disciplines);
-                        return html`
-                        <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
-                          <td>
-                            ${p.name}
-                            ${!p.uid && p.pendingEmail
-                              ? html`<span class="pending" title="Aún no se ha logado: se vinculará en su primer login con este email">⏳ Pendiente: ${p.pendingEmail}</span>`
-                              : null}
-                          </td>
-                          <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
-                          <td>
-                            ${(p.guilds ?? []).length === 0
-                              ? html`<span class="muted">—</span>`
-                              : html`<span class="chips">${p.guilds.map((g) => html`<span class="chip">${g}</span>`)}</span>`}
-                          </td>
-                          <td>
-                            ${(p.labels ?? []).length === 0
-                              ? html`<span class="muted">—</span>`
-                              : html`<span class="chips">${p.labels.map((l) => html`<span class="chip">${l}</span>`)}</span>`}
-                          </td>
-                          <td>${formatDate(p.startDate)}</td>
-                          <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
-                        </tr>
-                      `;
-                      },
-                    )}
-                  </tbody>
-                </table>
-              `}
+        ${this._renderPeopleList()}
         </div>
       </details>
 
