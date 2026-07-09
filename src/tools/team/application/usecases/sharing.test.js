@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryPersistence, createMemoryPeopleRepository } from '../../infrastructure/memory/index.js';
-import { addPerson, sharePerson, unsharePerson, transferOwnership } from './index.js';
+import {
+  addPerson, sharePerson, unsharePerson, transferOwnership, releaseOwnership,
+} from './index.js';
 
 describe('Fase 3b — compartir personas entre líderes', () => {
   /** @type {ReturnType<typeof createMemoryPersistence>} */
@@ -91,5 +93,23 @@ describe('Fase 3b — compartir personas entre líderes', () => {
   it('transferOwnership exige el uid del nuevo líder', async () => {
     const repo = createMemoryPeopleRepository([{ id: 'a', name: 'Ana', active: true, ownerLeaderUid: 'l1' }], () => '');
     await expect(transferOwnership({ people: repo }, 'a', '')).rejects.toThrow(/requiere/);
+  });
+
+  it('releaseOwnership deja a la persona sin dueño (sin líder)', async () => {
+    const repo = createMemoryPeopleRepository([{ id: 'a', name: 'Ana', active: true, ownerLeaderUid: 'leader-1' }], () => '');
+    await releaseOwnership({ people: repo }, 'a');
+    const person = await repo.getById('a');
+    expect(person.ownerLeaderUid).toBeUndefined();
+  });
+
+  it('tras soltar, el líder anterior deja de ver la persona (pool del superadmin)', async () => {
+    const repo = createMemoryPeopleRepository(
+      [{ id: 'a', name: 'Ana', active: true, ownerLeaderUid: 'leader-1' }],
+      () => '',
+      'leader-1',
+    );
+    expect((await repo.list()).map((x) => x.name)).toEqual(['Ana']);
+    await releaseOwnership({ people: repo }, 'a');
+    expect((await repo.list()).map((x) => x.name)).toEqual([]);
   });
 });

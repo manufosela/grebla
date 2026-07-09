@@ -68,6 +68,12 @@ export function createMemoryPeopleRepository(
     async transfer(id, newLeaderUid) {
       const person = store.get(id);
       if (!person) throw new Error(`Person ${id} no existe`);
+      // Sin nuevo líder → soltar: la persona queda sin dueño (pool del superadmin).
+      if (!newLeaderUid) {
+        const { ownerLeaderUid, ...rest } = person;
+        store.set(id, rest);
+        return;
+      }
       // Transferencia total: el nuevo líder es el dueño; se le retira de sharedWith
       // (ya no es "compartido", es propietario) y el anterior pierde el acceso.
       const sharedWith = { ...(person.sharedWith ?? {}) };

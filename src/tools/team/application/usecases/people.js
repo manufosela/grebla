@@ -173,3 +173,14 @@ export async function transferOwnership(persistence, personId, newLeaderUid) {
   if (!newLeaderUid) throw new Error('transferOwnership requiere el uid del nuevo líder');
   return persistence.people.transfer(personId, newLeaderUid);
 }
+
+/**
+ * Suelta a una persona de su líder: queda SIN dueño (pool del superadmin), sin
+ * asignarla a otro. Lo hace el dueño actual o el superadmin.
+ * @param {PersistencePort} persistence
+ * @param {string} personId
+ * @returns {Promise<void>}
+ */
+export async function releaseOwnership(persistence, personId) {
+  return persistence.people.transfer(personId, null);
+}
