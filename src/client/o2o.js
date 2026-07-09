@@ -19,7 +19,7 @@ async function loadPeople(uid, viewAll) {
   const people = await persistence.people.list();
   return people
     .filter((p) => p.active)
-    .map((p) => ({ id: p.id, name: p.name }))
+    .map((p) => ({ id: p.id, name: p.name, external: !!p.external }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 

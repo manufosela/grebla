@@ -69,6 +69,7 @@ export class O2ORegister extends LitElement {
     .check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(--rm-text, #111827); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
+    .ext-note { font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); background: var(--rm-chip, #eef2f7); border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0 0 0.85rem; }
   `;
 
   constructor() {
@@ -89,6 +90,11 @@ export class O2ORegister extends LitElement {
 
   get _personName() {
     return this.people.find((p) => p.id === this._personId)?.name ?? '';
+  }
+
+  /** ¿La persona seleccionada es externa? Su O2O es libre (sin guía). */
+  get _isExternalPerson() {
+    return !!this.people.find((p) => p.id === this._personId)?.external;
   }
 
   async _selectPerson(personId) {
@@ -152,12 +158,13 @@ export class O2ORegister extends LitElement {
     if (!d) return;
     this._saving = true;
     this._error = '';
+    const external = this._isExternalPerson;
     const payload = {
       personId: this._personId,
       periodId: this.periodId,
       date: d.date,
-      guideVersion: this.guide?.version,
-      answers: this._buildAnswers(),
+      guideVersion: external ? null : (this.guide?.version ?? null),
+      answers: external ? [] : this._buildAnswers(),
       transcript: d.transcript.trim(),
       privateNotes: d.privateNotes.trim(),
       summary: d.summary.trim(),
@@ -250,9 +257,12 @@ export class O2ORegister extends LitElement {
 
   _renderForm() {
     const d = this._draft;
-    const blocks = (this.guide?.blocks ?? []).map((b) => this._renderAnswerBlock(b));
+    const external = this._isExternalPerson;
+    // Un externo tiene O2O LIBRE: sin las preguntas de la guía del periodo.
+    const blocks = external ? [] : (this.guide?.blocks ?? []).map((b) => this._renderAnswerBlock(b));
     return html`<div class="form">
       <h3>${d.id ? 'Editar' : 'Nuevo'} O2O con ${this._personName}</h3>
+      ${external ? html`<p class="ext-note">Persona externa: O2O libre (notas y acuerdos), sin las preguntas de la guía.</p>` : null}
       <div class="row">
         <label>Fecha
           <input type="date" .value=${d.date} @change=${(e) => this._setField('date', e.target.value)} />
