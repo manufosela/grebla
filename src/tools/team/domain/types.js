@@ -87,6 +87,8 @@
  * @typedef {Object} Label   Etiqueta libre con ámbito personal/global.
  * @property {string} id
  * @property {string} name
+ * @property {string} [subLabel]          Aclaración opcional; se muestra pequeña bajo el nombre.
+ * @property {string} [color]             Color opcional del label (hex, p. ej. «#2a9d8f»).
  * @property {string} [ownerLeaderUid]   Líder dueño si es personal; ausente si es global.
  *
  * @typedef {Object} OrgSettings

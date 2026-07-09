@@ -9,7 +9,9 @@
  */
 import { addArea, listAreas, removeArea, renameArea } from './areas.js';
 import { addGuild, listGuilds, removeGuild, renameGuild } from './guilds.js';
-import { addLabel, listLabels, removeLabel, renameLabel } from './labels.js';
+import {
+  addLabel, listLabels, removeLabel, renameLabel, updateLabelMeta,
+} from './labels.js';
 
 const LIST = { areas: listAreas, guilds: listGuilds, labels: listLabels };
 const ADD = { areas: addArea, guilds: addGuild, labels: addLabel };
@@ -28,9 +30,22 @@ export function listCatalog(persistence, kind) {
   return LIST[kind](persistence);
 }
 
-/** @param {PersistencePort} persistence @param {CatalogKind} kind @param {string} name */
-export function addCatalog(persistence, kind, name) {
-  return ADD[kind](persistence, name);
+/**
+ * @param {PersistencePort} persistence @param {CatalogKind} kind @param {string} name
+ * @param {{ subLabel?: string, color?: string }} [extra]  Metadatos (solo labels).
+ */
+export function addCatalog(persistence, kind, name, extra = {}) {
+  return ADD[kind](persistence, name, extra);
+}
+
+/**
+ * Actualiza los metadatos de un label (subLabel/color); solo aplica a `labels`.
+ * @param {PersistencePort} persistence @param {CatalogKind} kind @param {string} id
+ * @param {{ subLabel?: string, color?: string }} patch
+ */
+export function updateCatalogMeta(persistence, kind, id, patch) {
+  if (kind !== 'labels') throw new Error(`El catálogo ${kind} no tiene metadatos`);
+  return updateLabelMeta(persistence, id, patch);
 }
 
 /** @param {PersistencePort} persistence @param {CatalogKind} kind @param {string} id @param {string} name */
