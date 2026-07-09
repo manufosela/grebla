@@ -9,7 +9,7 @@ const round1 = (n) => Math.round(n * 10) / 10;
 
 /**
  * @param {LeanTeam[]} teams  equipos con `metrics` calculadas
- * @returns {{ teams: number, completed: number, throughputPerWeek: number, wip: number, cycleTimeP50Hours: number|null, cycleTimeP85Hours: number|null, agingDaysMax: number|null }}
+ * @returns {{ teams: number, completed: number, throughputPerWeek: number, wip: number, cycleTimeP50Hours: number|null, cycleTimeP85Hours: number|null, agingDaysMax: number|null, flowEfficiencyPct: number|null }}
  */
 export function aggregateFlow(teams) {
   const withMetrics = (teams ?? []).filter((t) => t.metrics && !t.metrics.error);
@@ -29,5 +29,6 @@ export function aggregateFlow(teams) {
     cycleTimeP50Hours: weighted('cycleTimeP50Hours'),
     cycleTimeP85Hours: weighted('cycleTimeP85Hours'),
     agingDaysMax: agingMaxes.length ? Math.max(...agingMaxes) : null,
+    flowEfficiencyPct: weighted('flowEfficiencyPct'),
   };
 }

@@ -10,8 +10,11 @@ import { formatHours } from '../dora/format.js';
 const num = (v) => (v == null ? '—' : v);
 const days = (v) => (v == null ? '—' : `${v} d`);
 const hrs = (v) => formatHours(v) ?? '—';
+const pct = (v) => (v == null ? '—' : `${v} %`);
 /** Aging alto (posible atasco) si supera ~2 semanas. */
 const AGING_WARN_DAYS = 14;
+/** Flow efficiency baja (mucho tiempo esperando) por debajo de este %. */
+const FLOW_EFF_WARN_PCT = 25;
 
 export class LeanMetrics extends LitElement {
   static properties = {
@@ -87,12 +90,14 @@ export class LeanMetrics extends LitElement {
 
   _renderCards(g) {
     const agingWarn = g.agingDaysMax != null && g.agingDaysMax >= AGING_WARN_DAYS;
+    const flowWarn = g.flowEfficiencyPct != null && g.flowEfficiencyPct < FLOW_EFF_WARN_PCT;
     return html`<div class="cards">
       <div class="card"><span class="value">${num(g.throughputPerWeek)}</span><span class="label">Throughput / semana</span></div>
       <div class="card"><span class="value">${hrs(g.cycleTimeP50Hours)}</span><span class="label">Cycle time (p50)</span></div>
       <div class="card"><span class="value">${hrs(g.cycleTimeP85Hours)}</span><span class="label">Cycle time (p85)</span></div>
       <div class="card"><span class="value">${num(g.wip)}</span><span class="label">WIP (en curso)</span></div>
       <div class="card"><span class="value ${agingWarn ? 'warn' : ''}">${days(g.agingDaysMax)}</span><span class="label">Aging máx.</span></div>
+      <div class="card"><span class="value ${flowWarn ? 'warn' : ''}">${pct(g.flowEfficiencyPct)}</span><span class="label">Flow efficiency</span></div>
     </div>`;
   }
 
@@ -100,7 +105,7 @@ export class LeanMetrics extends LitElement {
     return html`<table>
       <thead><tr>
         <th>Equipo</th><th class="num">Throughput/sem</th><th class="num">Cycle p50</th>
-        <th class="num">Cycle p85</th><th class="num">WIP</th><th class="num">Aging máx</th>
+        <th class="num">Cycle p85</th><th class="num">WIP</th><th class="num">Aging máx</th><th class="num">Flow eff.</th>
       </tr></thead>
       <tbody>${teams.map((t) => this._renderRow(t))}</tbody>
     </table>`;
@@ -109,6 +114,7 @@ export class LeanMetrics extends LitElement {
   _renderRow(t) {
     const m = t.metrics;
     const agingWarn = m.agingDaysMax != null && m.agingDaysMax >= AGING_WARN_DAYS;
+    const flowWarn = m.flowEfficiencyPct != null && m.flowEfficiencyPct < FLOW_EFF_WARN_PCT;
     return html`<tr>
       <td><span class="key-cell">${t.linearTeamKey}</span> ${t.name}</td>
       <td class="num">${num(m.throughputPerWeek)}</td>
@@ -116,6 +122,7 @@ export class LeanMetrics extends LitElement {
       <td class="num">${hrs(m.cycleTimeP85Hours)}</td>
       <td class="num">${num(m.wip)}</td>
       <td class="num ${agingWarn ? 'warn' : ''}">${days(m.agingDaysMax)}</td>
+      <td class="num ${flowWarn ? 'warn' : ''}">${pct(m.flowEfficiencyPct)}</td>
     </tr>`;
   }
 }

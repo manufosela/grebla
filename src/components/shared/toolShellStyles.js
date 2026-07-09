@@ -3,7 +3,12 @@
  * disclaimer de nivel-equipo): los usan <dora-app> y <lean-app> para no duplicar
  * el mismo CSS. Añádelo a `static styles` (Lit acepta un CSSResult o un array).
  */
-import { css } from 'lit';
+import { css, html } from 'lit';
+
+/** Disclaimer «métrica de equipo, nunca individual» — DORA y LEAN. `content` es el texto (TemplateResult). */
+export function toolDisclaimer(content) {
+  return html`<p class="disclaimer"><span aria-hidden="true">👥</span><span>${content}</span></p>`;
+}
 
 export const toolShellStyles = css`
   :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }

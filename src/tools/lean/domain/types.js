@@ -27,6 +27,7 @@
  * @property {number} wip                    Issues en curso ahora (`started`).
  * @property {number|null} agingDaysMax      Antigüedad máxima de un WIP, en días.
  * @property {number} agingDaysAvg           Antigüedad media de los WIP, en días.
+ * @property {number|null} [flowEfficiencyPct]  Flow efficiency (% activo/total) — Fase 2.
  * @property {string} [periodFrom]           ISO inicio de la ventana.
  * @property {string} [periodTo]             ISO fin de la ventana.
  * @property {string} [computedAt]           ISO del cálculo.

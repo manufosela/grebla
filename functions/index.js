@@ -767,6 +767,7 @@ function computeFlowMetricsFn(issues, period) {
     wip: wipIssues.length,
     agingDaysMax: agingDays.length ? flowRound1(Math.max(...agingDays)) : null,
     agingDaysAvg: agingDays.length ? flowRound1(agingDays.reduce((s, d) => s + d, 0) / agingDays.length) : 0,
+    flowEfficiencyPct: flowEfficiencyFn(completed),
   };
 }
 
@@ -774,9 +775,50 @@ const LINEAR_ISSUES_QUERY = `
   query Issues($filter: IssueFilter, $after: String) {
     issues(first: 100, after: $after, filter: $filter) {
       pageInfo { hasNextPage endCursor }
-      nodes { id createdAt startedAt completedAt canceledAt state { type } }
+      nodes {
+        id createdAt startedAt completedAt canceledAt state { type }
+        history(first: 50) { nodes { toState { type } createdAt } }
+      }
     }
   }`;
+
+/** Tiempo activo (started) y total (started→completed) de una issue (espejo de flowEfficiency.js). */
+function flowActiveAndTotalFn(issue) {
+  const started = new Date(issue.startedAt).getTime();
+  const completed = new Date(issue.completedAt).getTime();
+  if (!(Number.isFinite(started) && Number.isFinite(completed) && completed > started)) {
+    return { activeMs: 0, totalMs: 0 };
+  }
+  const trans = (issue.transitions ?? [])
+    .map((t) => ({ stateType: t.stateType, at: new Date(t.at).getTime() }))
+    .filter((t) => Number.isFinite(t.at))
+    .sort((a, b) => a.at - b.at);
+  let current = 'started';
+  const before = trans.filter((t) => t.at <= started);
+  if (before.length) current = before[before.length - 1].stateType;
+  let active = 0;
+  let cursor = started;
+  for (const t of trans) {
+    if (t.at <= started || t.at >= completed) continue;
+    if (current === 'started') active += t.at - cursor;
+    cursor = t.at;
+    current = t.stateType;
+  }
+  if (current === 'started') active += completed - cursor;
+  return { activeMs: active, totalMs: completed - started };
+}
+
+/** Flow efficiency agregada (% activo/total) de un conjunto de issues (espejo del dominio). */
+function flowEfficiencyFn(issues) {
+  let active = 0;
+  let total = 0;
+  for (const issue of issues ?? []) {
+    const { activeMs, totalMs } = flowActiveAndTotalFn(issue);
+    active += activeMs;
+    total += totalMs;
+  }
+  return total > 0 ? Math.round((active / total) * 1000) / 10 : null;
+}
 
 /** Trae las issues de un equipo de Linear actualizadas desde `sinceIso` (paginado, GraphQL). */
 async function fetchLinearIssues(teamKey, sinceIso, apiKey) {
@@ -802,6 +844,9 @@ async function fetchLinearIssues(teamKey, sinceIso, apiKey) {
         startedAt: n.startedAt ?? null,
         completedAt: n.completedAt ?? null,
         canceledAt: n.canceledAt ?? null,
+        transitions: (n.history?.nodes ?? [])
+          .map((h) => ({ stateType: h.toState?.type ?? null, at: h.createdAt }))
+          .filter((t) => t.stateType && t.at),
       });
     }
     if (!conn.pageInfo?.hasNextPage) break;
