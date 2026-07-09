@@ -23,10 +23,14 @@ export function createMemoryLabelRepository(seed = [], viewerLeaderUid = null) {
         .filter((l) => !viewerLeaderUid || !l.ownerLeaderUid || l.ownerLeaderUid === viewerLeaderUid)
         .map((l) => ({ ...l }));
     },
-    async create(name) {
+    async create(name, extra = {}) {
       const id = crypto.randomUUID();
       /** @type {Label} */
       const label = { id, name };
+      const subLabel = String(extra.subLabel ?? '').trim();
+      const color = String(extra.color ?? '').trim();
+      if (subLabel) label.subLabel = subLabel;
+      if (color) label.color = color;
       if (viewerLeaderUid) label.ownerLeaderUid = viewerLeaderUid;
       store.set(id, label);
       return id;

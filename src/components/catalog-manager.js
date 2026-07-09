@@ -11,11 +11,12 @@
  *  - currentUid   uid del que mira (para decidir quién edita un personal)
  *  - readOnly     viewer: solo lectura
  *  - leaders      opcional [{uid, displayName?, email?}] para mostrar el dueño de un personal
+ *  - withMeta     activa sub-label y color por item (solo para labels)
  *  - title / placeholder  textos de la sección
  */
 import { LitElement, html, css } from 'lit';
 import {
-  listCatalog, addCatalog, renameCatalog, removeCatalog, promoteCatalog,
+  listCatalog, addCatalog, renameCatalog, removeCatalog, promoteCatalog, updateCatalogMeta,
 } from '../tools/team/application/usecases/catalog.js';
 
 export class CatalogManager extends LitElement {
@@ -26,14 +27,19 @@ export class CatalogManager extends LitElement {
     currentUid: { attribute: false },
     readOnly: { attribute: false },
     leaders: { attribute: false },
+    withMeta: { attribute: false },
     title: { type: String },
     placeholder: { type: String },
     _items: { state: true },
     _loading: { state: true },
     _error: { state: true },
     _new: { state: true },
+    _newSub: { state: true },
+    _newColor: { state: true },
     _editingId: { state: true },
     _editName: { state: true },
+    _editSub: { state: true },
+    _editColor: { state: true },
     _confirmId: { state: true },
   };
 
@@ -56,7 +62,12 @@ export class CatalogManager extends LitElement {
     .sub { font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #6b7280); margin: 0.9rem 0 0.3rem; }
     ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
     li { display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.4rem 0.7rem; }
+    .swatch { width: 0.85rem; height: 0.85rem; border-radius: 999px; border: 1px solid rgba(0, 0, 0, 0.15); flex: none; }
+    .label-col { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
     .name { font-size: 0.92rem; }
+    .sublabel { font-size: 0.72rem; color: var(--rm-muted, #6b7280); }
+    .color-in { width: 2.2rem; height: 2rem; padding: 0.1rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); cursor: pointer; }
+    .toolbar .sub-in { min-width: 12rem; }
     .badge { font-size: 0.68rem; border-radius: 999px; padding: 0.05rem 0.45rem; background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f); }
     .owner { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
     .spacer { flex: 1; }
@@ -73,14 +84,19 @@ export class CatalogManager extends LitElement {
     this.currentUid = null;
     this.readOnly = false;
     this.leaders = null;
+    this.withMeta = false;
     this.title = '';
     this.placeholder = 'Nuevo…';
     this._items = [];
     this._loading = false;
     this._error = '';
     this._new = '';
+    this._newSub = '';
+    this._newColor = '';
     this._editingId = null;
     this._editName = '';
+    this._editSub = '';
+    this._editColor = '';
     this._confirmId = null;
     this._loaded = false;
   }
@@ -116,8 +132,11 @@ export class CatalogManager extends LitElement {
     if (!name) return;
     this._error = '';
     try {
-      await addCatalog(this.persistence, this.kind, name);
+      const extra = this.withMeta ? { subLabel: this._newSub, color: this._newColor } : {};
+      await addCatalog(this.persistence, this.kind, name, extra);
       this._new = '';
+      this._newSub = '';
+      this._newColor = '';
       await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo crear.';
@@ -127,6 +146,8 @@ export class CatalogManager extends LitElement {
   _startEdit(item) {
     this._editingId = item.id;
     this._editName = item.name;
+    this._editSub = item.subLabel ?? '';
+    this._editColor = item.color ?? '';
     this._confirmId = null;
   }
 
@@ -135,11 +156,16 @@ export class CatalogManager extends LitElement {
     if (!name || !this._editingId) return;
     this._error = '';
     try {
-      await renameCatalog(this.persistence, this.kind, this._editingId, name);
+      const id = this._editingId;
+      await renameCatalog(this.persistence, this.kind, id, name);
+      // El nombre cascadea a /people; los metadatos (subLabel/color) no.
+      if (this.withMeta) {
+        await updateCatalogMeta(this.persistence, this.kind, id, { subLabel: this._editSub, color: this._editColor });
+      }
       this._editingId = null;
       await this._load();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo renombrar.';
+      this._error = err instanceof Error ? err.message : 'No se pudo guardar.';
     }
   }
 
@@ -189,10 +215,30 @@ export class CatalogManager extends LitElement {
         @input=${(e) => { this._new = e.target.value; }}
         @keydown=${(e) => { if (e.key === 'Enter') this._add(); }}
       />
+      ${this.withMeta ? this._renderMetaInputs('_new') : null}
       <button class="btn primary" ?disabled=${!this._new.trim()} @click=${() => this._add()}>
         ${this.isAdmin ? 'Crear global' : 'Añadir'}
       </button>
     </div>`;
+  }
+
+  /** Inputs de sub-label + color. `prefix` es '_new' (alta) o '_edit' (edición). */
+  _renderMetaInputs(prefix) {
+    const sub = prefix === '_new' ? this._newSub : this._editSub;
+    const color = prefix === '_new' ? this._newColor : this._editColor;
+    const setSub = (v) => { if (prefix === '_new') this._newSub = v; else this._editSub = v; };
+    const setColor = (v) => { if (prefix === '_new') this._newColor = v; else this._editColor = v; };
+    return html`
+      <input
+        type="text" class="sub-in" placeholder="Sub-label (opcional)"
+        .value=${sub} @input=${(e) => setSub(e.target.value)}
+      />
+      <input
+        type="color" class="color-in" title="Color (opcional)"
+        .value=${color || '#e5e7eb'} @input=${(e) => setColor(e.target.value)}
+      />
+      ${color ? html`<button class="btn" title="Sin color" @click=${() => setColor('')}>×</button>` : null}
+    `;
   }
 
   _renderLists(globals, personals) {
@@ -220,13 +266,22 @@ export class CatalogManager extends LitElement {
             else if (e.key === 'Escape') { this._editingId = null; }
           }}
         />
+        ${this.withMeta ? this._renderMetaInputs('_edit') : null}
         <button class="btn primary" @click=${() => this._saveRename()}>Guardar</button>
         <button class="btn" @click=${() => { this._editingId = null; }}>Cancelar</button>
       </li>`;
     }
     const owner = isPersonal && this.leaders ? html`<span class="owner">${this._ownerName(item.ownerLeaderUid)}</span>` : null;
-    return html`<li>
-      <span class="name">${item.name}</span>
+    const swatchStyle = `background:${item.color}`;
+    const liStyle = item.color ? `border-left:4px solid ${item.color}` : '';
+    const swatch = item.color ? html`<span class="swatch" style=${swatchStyle}></span>` : null;
+    const sub = item.subLabel ? html`<span class="sublabel">${item.subLabel}</span>` : null;
+    return html`<li style=${liStyle}>
+      ${swatch}
+      <span class="label-col">
+        <span class="name">${item.name}</span>
+        ${sub}
+      </span>
       ${isPersonal ? null : html`<span class="badge">Global</span>`}
       ${owner}
       <span class="spacer"></span>

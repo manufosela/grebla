@@ -237,6 +237,7 @@ export class TeamSettings extends LitElement {
           .persistence=${this.persistence}
           .isAdmin=${this.isAdmin}
           .currentUid=${this.currentUid}
+          .withMeta=${kind === 'labels'}
         ></catalog-manager>
       </section>
     `;

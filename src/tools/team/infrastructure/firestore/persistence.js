@@ -154,8 +154,15 @@ function catalogRepo(db, base, kind, leaderUid, viewAll = false) {
       const all = mapDocs(await getDocs(col()));
       return viewAll ? all : all.filter((i) => !i.ownerLeaderUid || i.ownerLeaderUid === leaderUid);
     },
-    async create(name) {
-      const data = viewAll ? { name } : { name, ownerLeaderUid: leaderUid };
+    async create(name, extra = {}) {
+      // `extra` (solo labels) fija subLabel/color; se filtran los vacíos porque
+      // Firestore rechaza `undefined` y no queremos claves en blanco.
+      const meta = {};
+      const subLabel = String(extra.subLabel ?? '').trim();
+      const color = String(extra.color ?? '').trim();
+      if (subLabel) meta.subLabel = subLabel;
+      if (color) meta.color = color;
+      const data = viewAll ? { name, ...meta } : { name, ...meta, ownerLeaderUid: leaderUid };
       const created = await addDoc(col(), data);
       return created.id;
     },

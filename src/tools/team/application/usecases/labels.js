@@ -9,12 +9,28 @@
 /**
  * @param {PersistencePort} persistence
  * @param {string} name
+ * @param {{ subLabel?: string, color?: string }} [extra]  Metadatos opcionales del label.
  * @returns {Promise<string>}
  */
-export function addLabel(persistence, name) {
+export function addLabel(persistence, name, extra = {}) {
   const trimmed = String(name ?? '').trim();
   if (!trimmed) throw new Error('El nombre del label es obligatorio');
-  return persistence.labels.create(trimmed);
+  return persistence.labels.create(trimmed, extra);
+}
+
+/**
+ * Actualiza metadatos del label (subLabel/color) sin tocar el nombre (el nombre
+ * se cambia con renameLabel, que cascadea a /people). Cadena vacía = borrar campo.
+ * @param {PersistencePort} persistence
+ * @param {string} id
+ * @param {{ subLabel?: string, color?: string }} patch
+ * @returns {Promise<void>}
+ */
+export function updateLabelMeta(persistence, id, patch) {
+  const meta = {};
+  if (patch.subLabel !== undefined) meta.subLabel = String(patch.subLabel).trim();
+  if (patch.color !== undefined) meta.color = String(patch.color).trim();
+  return persistence.labels.update(id, meta);
 }
 
 /**

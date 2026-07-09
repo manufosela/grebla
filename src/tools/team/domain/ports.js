@@ -45,8 +45,8 @@
  * @typedef {import('./types.js').Label} Label
  * @typedef {Object} LabelRepository   Catálogo de labels con ámbito (mismo modelo que Guild).
  * @property {() => Promise<Label[]>} list   Globales + los del líder (o TODAS si superadmin/viewAll).
- * @property {(name: string) => Promise<string>} create   Personal del líder, o GLOBAL si superadmin.
- * @property {(id: string, patch: Partial<Label>) => Promise<void>} update   Renombra un label.
+ * @property {(name: string, extra?: { subLabel?: string, color?: string }) => Promise<string>} create   Personal del líder, o GLOBAL si superadmin. `extra` (solo labels) fija subLabel/color al crear.
+ * @property {(id: string, patch: Partial<Label>) => Promise<void>} update   Renombra un label o actualiza subLabel/color.
  * @property {(id: string) => Promise<void>} remove
  * @property {(id: string) => Promise<void>} promote   Personal → global (quita ownerLeaderUid).
  *
