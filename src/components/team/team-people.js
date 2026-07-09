@@ -19,6 +19,7 @@ import {
   sharePerson,
   unsharePerson,
   transferOwnership,
+  releaseOwnership,
   listLabels,
   addLabel,
   listGuilds,
@@ -28,6 +29,9 @@ import { composeTitle } from '../../tools/career/data/framework.js';
 import { listUsers, unlinkedUsers } from '../../lib/users.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
+
+/** Valor sentinela del selector de transferencia para «soltar» (dejar sin líder). */
+const RELEASE_OWNER = '__release__';
 
 /** @param {string} iso */
 function formatDate(iso) {
@@ -644,11 +648,15 @@ export class TeamPeople extends LitElement {
 
   async _transfer() {
     const person = this._transferFor;
-    const uid = this._transferSel;
-    if (!person || !uid) return;
+    const sel = this._transferSel;
+    if (!person || !sel) return;
     this.error = '';
     try {
-      await transferOwnership(this.persistence, person.id, uid);
+      if (sel === RELEASE_OWNER) {
+        await releaseOwnership(this.persistence, person.id);
+      } else {
+        await transferOwnership(this.persistence, person.id, sel);
+      }
       this._transferFor = null;
       this._transferSel = '';
       this._confirmTransfer = false;
@@ -782,41 +790,51 @@ export class TeamPeople extends LitElement {
   _renderTransferModal() {
     const person = this._transferFor;
     const heading = person ? `Transferir · ${person.name}` : 'Transferir';
-    const candidates = person
-      ? (this.members ?? []).filter((m) => m.uid !== person.ownerLeaderUid)
-      : [];
     return html`
       <app-modal .open=${!!person} heading=${heading} @close=${() => this._closeTransfer()}>
-        ${person
-          ? html`
-              <div class="modal-body">
-                <p>Cede esta persona a otro líder. Es una transferencia total: dejarás de tener acceso.</p>
-                <div class="fields">
-                  <label>Nuevo dueño
-                    <select
-                      .value=${this._transferSel}
-                      @change=${(e) => { this._transferSel = e.target.value; this._confirmTransfer = false; }}
-                    >
-                      <option value="">— Elige un líder —</option>
-                      ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
-                    </select>
-                  </label>
-                </div>
-                ${this._confirmTransfer
-                  ? html`<p class="confirm-text">Perderás el acceso a esta persona. ¿Confirmas la transferencia?</p>`
-                  : null}
-                ${this.error ? html`<p class="error">${this.error}</p>` : null}
-                <div class="actions-row">
-                  <button class="act" type="button" @click=${() => this._closeTransfer()}>Cancelar</button>
-                  ${this._confirmTransfer
-                    ? html`<button class="primary" type="button" @click=${() => this._transfer()}>Sí, transferir</button>`
-                    : html`<button class="primary" type="button" ?disabled=${!this._transferSel} @click=${() => { this._confirmTransfer = true; }}>Transferir</button>`}
-                </div>
-              </div>
-            `
-          : null}
+        ${person ? this._renderTransferBody(person) : null}
       </app-modal>
     `;
+  }
+
+  /** Cuerpo del modal de transferencia (destino: otro líder o «sin líder»). */
+  _renderTransferBody(person) {
+    const candidates = (this.members ?? []).filter((m) => m.uid !== person.ownerLeaderUid);
+    const isRelease = this._transferSel === RELEASE_OWNER;
+    const confirmText = isRelease
+      ? 'La persona quedará sin líder (solo el superadmin podrá gestionarla). ¿Confirmas?'
+      : 'Perderás el acceso a esta persona. ¿Confirmas la transferencia?';
+    const primaryLabel = this._transferPrimaryLabel(isRelease);
+    const onPrimary = this._confirmTransfer ? () => this._transfer() : () => { this._confirmTransfer = true; };
+    return html`
+      <div class="modal-body">
+        <p>Cede esta persona a otro líder, o suéltala para dejarla sin líder. Es una transferencia total: dejarás de tener acceso.</p>
+        <div class="fields">
+          <label>Nuevo dueño
+            <select
+              .value=${this._transferSel}
+              @change=${(e) => { this._transferSel = e.target.value; this._confirmTransfer = false; }}
+            >
+              <option value="">— Elige un destino —</option>
+              ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
+              <option value=${RELEASE_OWNER}>— Sin líder (soltar) —</option>
+            </select>
+          </label>
+        </div>
+        ${this._confirmTransfer ? html`<p class="confirm-text">${confirmText}</p>` : null}
+        ${this.error ? html`<p class="error">${this.error}</p>` : null}
+        <div class="actions-row">
+          <button class="act" type="button" @click=${() => this._closeTransfer()}>Cancelar</button>
+          <button class="primary" type="button" ?disabled=${!this._confirmTransfer && !this._transferSel} @click=${onPrimary}>${primaryLabel}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  /** Texto del botón primario del modal de transferencia según el paso y el destino. */
+  _transferPrimaryLabel(isRelease) {
+    if (this._confirmTransfer) return isRelease ? 'Sí, soltar' : 'Sí, transferir';
+    return isRelease ? 'Soltar' : 'Transferir';
   }
 
   render() {

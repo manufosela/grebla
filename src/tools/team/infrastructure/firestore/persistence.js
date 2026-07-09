@@ -111,6 +111,11 @@ function peopleRepo(db, base, leaderUid, viewAll = false) {
       });
     },
     async transfer(id, newLeaderUid) {
+      // Sin nuevo líder → soltar: se quita el dueño (queda en el pool del superadmin).
+      if (!newLeaderUid) {
+        await updateDoc(personDoc(db, base, id), { ownerLeaderUid: deleteField() });
+        return;
+      }
       // Transferencia total: nuevo dueño y se le retira de sharedWith (ya es owner).
       await updateDoc(personDoc(db, base, id), {
         ownerLeaderUid: newLeaderUid,

@@ -12,6 +12,7 @@ export {
   sharePerson,
   unsharePerson,
   transferOwnership,
+  releaseOwnership,
   normalizePerson,
   normalizeInviteEmail,
   getTurnover,
