@@ -243,6 +243,7 @@ export class TeamPersonDetail extends LitElement {
     .datos-checks legend { font-size: 0.8rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); padding: 0 0.3rem; }
     .datos-checks .chk { display: inline-flex; align-items: center; gap: 0.35rem; margin: 0.15rem 0.7rem 0.15rem 0; font-size: 0.82rem; }
     .datos-checks .empty { font-size: 0.8rem; color: var(--rm-muted, #9ca3af); }
+    .datos-checks .orphan-tag { font-style: normal; font-size: 0.7rem; color: var(--rm-danger, #dc2626); }
     .datos .acct { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 0.85rem; margin: 0; }
     .datos .acct .empty { color: var(--rm-muted, #9ca3af); }
     .datos .acct .act { border: 1px solid var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); background: var(--rm-surface, #fff); border-radius: 999px; padding: 0.35rem 0.8rem; font-weight: 700; cursor: pointer; }
@@ -1590,19 +1591,31 @@ export class TeamPersonDetail extends LitElement {
     }
   }
 
-  /** Fieldset de checkboxes (gremios/labels) desde su catálogo. */
+  /** Fieldset de checkboxes (gremios/labels) del catálogo MÁS los que la persona
+   * tenga fuera del catálogo (p. ej. metidos por importación): así se pueden
+   * desmarcar y quitar aunque no existan en el catálogo. */
   _renderDatosChecks(legend, catalog, selected, onToggle) {
+    const catalogNames = new Set(catalog.map((c) => c.name));
+    const orphans = (selected ?? []).filter((name) => !catalogNames.has(name));
+    if (catalog.length === 0 && orphans.length === 0) {
+      return html`<fieldset class="datos-checks">
+        <legend>${legend}</legend>
+        <span class="empty">Aún no hay ${legend.toLowerCase()} (se gestionan en Ajustes).</span>
+      </fieldset>`;
+    }
     return html`<fieldset class="datos-checks">
       <legend>${legend}</legend>
-      ${catalog.length === 0
-        ? html`<span class="empty">Aún no hay ${legend.toLowerCase()} (se gestionan en Ajustes).</span>`
-        : catalog.map(
-            (c) => html`<label class="chk">
-              <input type="checkbox" .checked=${selected.includes(c.name)} @change=${(e) => onToggle(c.name, e.target.checked)} />
-              <span>${c.name}</span>
-            </label>`,
-          )}
+      ${catalog.map((c) => this._datosCheck(c.name, selected, onToggle, false))}
+      ${orphans.map((name) => this._datosCheck(name, selected, onToggle, true))}
     </fieldset>`;
+  }
+
+  /** Un checkbox de gremio/label; `orphan` marca los que están fuera del catálogo. */
+  _datosCheck(name, selected, onToggle, orphan) {
+    return html`<label class="chk">
+      <input type="checkbox" .checked=${selected.includes(name)} @change=${(e) => onToggle(name, e.target.checked)} />
+      <span>${name}${orphan ? html` <em class="orphan-tag">(fuera de catálogo)</em>` : null}</span>
+    </label>`;
   }
 
   /**
