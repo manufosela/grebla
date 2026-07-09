@@ -237,6 +237,8 @@ export class TeamPersonDetail extends LitElement {
     .datos .fld input { font: inherit; font-weight: 400; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
     .datos .fld .chk-loc { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 400; font-size: 0.9rem; color: var(--rm-text, #111827); }
     .datos .fld .chk-loc input { width: auto; }
+    .datos .fld.chk-ext { flex-direction: row; align-items: center; gap: 0.4rem; font-weight: 400; font-size: 0.9rem; color: var(--rm-text, #111827); }
+    .datos .fld.chk-ext input { width: auto; }
     .datos-checks { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.5rem 0.7rem; margin: 0; }
     .datos-checks legend { font-size: 0.8rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); padding: 0 0.3rem; }
     .datos-checks .chk { display: inline-flex; align-items: center; gap: 0.35rem; margin: 0.15rem 0.7rem 0.15rem 0; font-size: 0.82rem; }
@@ -441,6 +443,7 @@ export class TeamPersonDetail extends LitElement {
       uid: p?.uid ?? '',
       pendingEmail: p?.pendingEmail ?? '',
       location: p?.location ?? '',
+      external: p?.external ?? false,
     };
     this._datosError = '';
     this._datosSaved = false;
@@ -1558,6 +1561,7 @@ export class TeamPersonDetail extends LitElement {
         guilds: [...this._datos.guilds],
         labels: [...this._datos.labels],
         location: this._datos.location.trim() || null,
+        external: !!this._datos.external,
       };
       // El email SOLO se edita si aún no tiene cuenta (pendingEmail = auto-vínculo
       // al primer login). Si ya tiene cuenta, su email es el de su login (no se toca).
@@ -1657,6 +1661,10 @@ export class TeamPersonDetail extends LitElement {
           <input type="date" .value=${d.startDate} @input=${(e) => { this._datos = { ...d, startDate: e.target.value }; }} />
         </label>
         ${this._renderLocationBlock()}
+        <label class="fld chk-ext">
+          <input type="checkbox" .checked=${!!d.external} @change=${(e) => { this._datos = { ...d, external: e.target.checked }; }} />
+          Es externo/a
+        </label>
         ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
         ${this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c))}
         ${this._renderEmailBlock()}

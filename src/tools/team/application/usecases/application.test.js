@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryPersistence } from '../../infrastructure/memory/index.js';
 import {
   addPerson,
+  updatePerson,
   listActivePeople,
   listDepartedPeople,
   deactivatePerson,
@@ -101,6 +102,13 @@ describe('Fase 2b — casos de uso', () => {
     const person = (await listActivePeople(p)).find((x) => x.name === 'Vinculada');
     expect(person.uid).toBe('uid-123');
     expect(person.pendingEmail).toBeNull();
+  });
+
+  it('addPerson guarda el flag external y updatePerson lo cambia', async () => {
+    const id = await addPerson(p, { name: 'Ext', guilds: [], startDate: '2025-01-01', external: true });
+    expect((await listActivePeople(p)).find((x) => x.name === 'Ext').external).toBe(true);
+    await updatePerson(p, id, { external: false });
+    expect((await listActivePeople(p)).find((x) => x.name === 'Ext').external).toBe(false);
   });
 
   it('normalizeInviteEmail: trim + minúsculas, vacío → null', () => {
