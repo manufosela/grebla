@@ -20,7 +20,9 @@ export const toolShellStyles = css`
   .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }
   .disclaimer {
     display: flex; gap: 0.5rem; align-items: baseline;
-    background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f);
+    /* Tokens que SÍ se adaptan al tema (en oscuro --rm-chip no se redefine y quedaba
+       texto claro sobre fondo claro): fondo y texto van juntos claro/oscuro. */
+    background: var(--rm-surface-hover, #eef3f5); color: var(--rm-text, #1e3a5f);
     border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f);
     border-radius: 10px; padding: 0.55rem 0.85rem; margin-bottom: 1rem; font-size: 0.85rem;
   }
