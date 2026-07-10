@@ -18,13 +18,14 @@ onUserChanged(async (user) => {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como líder.';
       return;
     }
-    const { persistence, refresh } = await createLeanContainer({
+    const { persistence, refresh, discover } = await createLeanContainer({
       mode: 'firestore',
       leaderUid: user.uid,
-      viewAll: role === 'superadmin', // el superadmin ve y gestiona los equipos de toda la organización
+      viewAll: role === 'superadmin', // el superadmin ve y gestiona las unidades de toda la organización
     });
     app.canEdit = role === 'superadmin' || role === 'leader';
     app.refresh = refresh;
+    app.discover = discover;
     app.persistence = persistence;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar el Flujo (LEAN).';

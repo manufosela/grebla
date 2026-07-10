@@ -3,10 +3,14 @@
  * a partir de las issues de Linear. JSDoc puro, sin Firebase. Complementa a DORA
  * (entrega) y es SIEMPRE de equipo, nunca por persona.
  *
- * @typedef {Object} LeanTeam   Equipo de Linear monitorizado (config, análogo al repo de DORA).
+ * @typedef {'squad'|'chapter'} LeanUnitKind   Equipo (label del grupo Squad) o gremio (grupo Chapter).
+ *
+ * @typedef {Object} LeanUnit   Unidad de flujo monitorizada = un LABEL de Linear
+ *   (equipo o gremio). El flujo se mide filtrando las issues por ese label.
  * @property {string} id
- * @property {string} linearTeamKey   Key del equipo en Linear (p. ej. «ENG»).
- * @property {string} name            Nombre visible del equipo.
+ * @property {string} linearLabel     Nombre del label en Linear (p. ej. «Trust», «Backend»).
+ * @property {LeanUnitKind} kind       'squad' (equipo) o 'chapter' (gremio).
+ * @property {string} name            Nombre visible (por defecto = linearLabel).
  * @property {string} [ownerLeaderUid]   Líder dueño (permisología multi-leader).
  * @property {string} createdAt       ISO de alta.
  * @property {FlowMetrics} [metrics]   Última métrica calculada por la Cloud Function.

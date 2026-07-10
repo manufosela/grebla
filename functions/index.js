@@ -820,9 +820,9 @@ function flowEfficiencyFn(issues) {
   return total > 0 ? Math.round((active / total) * 1000) / 10 : null;
 }
 
-/** Trae las issues de un equipo de Linear actualizadas desde `sinceIso` (paginado, GraphQL). */
-async function fetchLinearIssues(teamKey, sinceIso, apiKey) {
-  const filter = { team: { key: { eq: teamKey } }, updatedAt: { gte: sinceIso } };
+/** Trae las issues con un LABEL de Linear actualizadas desde `sinceIso` (paginado, GraphQL). */
+async function fetchLinearIssues(label, sinceIso, apiKey) {
+  const filter = { labels: { name: { eq: label } }, updatedAt: { gte: sinceIso } };
   const out = [];
   let after = null;
   for (let page = 0; page < 50; page += 1) { // tope de seguridad (~5000 issues)
@@ -882,22 +882,87 @@ export const refreshLean = onCall(
     const to = now.toISOString();
     const from = new Date(now.getTime() - 8 * 7 * FLOW_DAY).toISOString(); // 8 semanas
 
-    const teamsSnap = await db.collection('leanTeams').get();
+    const unitsSnap = await db.collection('leanTeams').get();
     const results = [];
-    for (const docSnap of teamsSnap.docs) {
-      const team = docSnap.data();
+    for (const docSnap of unitsSnap.docs) {
+      const unit = docSnap.data();
       try {
-        const issues = await fetchLinearIssues(team.linearTeamKey, from, apiKey);
+        const issues = await fetchLinearIssues(unit.linearLabel, from, apiKey);
         const metrics = computeFlowMetricsFn(issues, { from, to, now: to });
         await docSnap.ref.set({ metrics: { ...metrics, periodFrom: from, periodTo: to, computedAt: to } }, { merge: true });
-        results.push({ id: docSnap.id, key: team.linearTeamKey, ok: true });
+        results.push({ id: docSnap.id, label: unit.linearLabel, ok: true });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Error desconocido.';
         await docSnap.ref.set({ metrics: { error: msg, computedAt: to } }, { merge: true });
-        results.push({ id: docSnap.id, key: team.linearTeamKey, ok: false, error: msg });
+        results.push({ id: docSnap.id, label: unit.linearLabel, ok: false, error: msg });
       }
     }
     return { computedAt: to, results };
+  },
+);
+
+/** Grupos de labels de Linear que GREBLA mapea a unidades de flujo. */
+const LEAN_LABEL_GROUPS = [
+  { group: 'Squad', kind: 'squad' },
+  { group: 'Chapter', kind: 'chapter' },
+];
+const LINEAR_GROUP_LABELS_QUERY = `
+  query GroupLabels($group: String!) {
+    issueLabels(filter: { parent: { name: { eq: $group } } }) { nodes { name } }
+  }`;
+
+/** Nombres de los labels que cuelgan de un grupo de Linear (p. ej. «Squad»). */
+async function fetchLinearGroupLabels(group, apiKey) {
+  const res = await fetch('https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+    body: JSON.stringify({ query: LINEAR_GROUP_LABELS_QUERY, variables: { group } }),
+  });
+  if (!res.ok) throw new Error(`Linear respondió ${res.status}.`);
+  const json = await res.json();
+  if (json.errors?.length) throw new Error(json.errors[0]?.message || 'Error de la API de Linear.');
+  return (json.data?.issueLabels?.nodes ?? []).map((n) => n.name).filter(Boolean);
+}
+
+/**
+ * Auto-descubre las unidades de flujo desde los labels de Linear: los del grupo
+ * «Squad» como equipos y los de «Chapter» como gremios. Crea en /leanTeams los que
+ * falten (por dueño). Acceso: superadmin o líder.
+ */
+export const discoverLeanUnits = onCall(
+  { region: 'europe-west1', secrets: [LINEAR_API_KEY], timeoutSeconds: 120 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+
+    const db = getFirestore();
+    const [adminSnap, leaderSnap] = await Promise.all([
+      db.doc(`admins/${uid}`).get(),
+      db.doc(`leaders/${uid}`).get(),
+    ]);
+    if (!adminSnap.exists && !leaderSnap.exists) {
+      throw new HttpsError('permission-denied', 'No tienes acceso a esta organización.');
+    }
+
+    const apiKey = LINEAR_API_KEY.value();
+    if (!apiKey) throw new HttpsError('failed-precondition', 'Linear no está configurado en esta instancia.');
+
+    const existingSnap = await db.collection('leanTeams').where('ownerLeaderUid', '==', uid).get();
+    const existing = new Set(existingSnap.docs.map((d) => `${d.data().kind}:${d.data().linearLabel}`));
+
+    const now = new Date().toISOString();
+    const created = [];
+    for (const { group, kind } of LEAN_LABEL_GROUPS) {
+      const labels = await fetchLinearGroupLabels(group, apiKey);
+      for (const name of labels) {
+        const key = `${kind}:${name}`;
+        if (existing.has(key)) continue;
+        await db.collection('leanTeams').add({ linearLabel: name, kind, name, ownerLeaderUid: uid, createdAt: now });
+        existing.add(key);
+        created.push({ kind, name });
+      }
+    }
+    return { created };
   },
 );
 

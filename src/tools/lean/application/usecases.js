@@ -1,47 +1,52 @@
 /**
- * Casos de uso LEAN: alta/baja/listado de equipos de Linear monitorizados y el
- * resumen de flujo (global + por equipo). La UI nunca toca el repo directamente.
- * Espeja el patrón de `tools/dora/application/usecases.js`.
+ * Casos de uso LEAN: alta/baja/listado de unidades de flujo (equipos = label del
+ * grupo Squad de Linear; gremios = grupo Chapter) y el resumen de flujo separado
+ * por tipo. La UI nunca toca el repo directamente.
  *
  * @typedef {import('../domain/ports.js').LeanPersistence} LeanPersistence
- * @typedef {import('../domain/types.js').LeanTeam} LeanTeam
+ * @typedef {import('../domain/types.js').LeanUnit} LeanUnit
+ * @typedef {import('../domain/types.js').LeanUnitKind} LeanUnitKind
  */
 import { aggregateFlow } from '../domain/aggregate.js';
 
-/** Normaliza la key del equipo de Linear (mayúsculas, sin espacios). */
-function normalizeKey(value) {
-  return String(value ?? '').trim().toUpperCase();
-}
+const KINDS = new Set(['squad', 'chapter']);
 
 /**
- * Da de alta un equipo de Linear a monitorizar.
+ * Da de alta una unidad de flujo (un label de Linear).
  * @param {LeanPersistence} persistence
- * @param {{ linearTeamKey: string, name?: string }} input
+ * @param {{ linearLabel: string, kind: LeanUnitKind, name?: string }} input
  * @returns {Promise<string>}
  */
-export function addTeam(persistence, input) {
-  const linearTeamKey = normalizeKey(input.linearTeamKey);
-  if (!linearTeamKey) throw new Error('La key del equipo de Linear es obligatoria');
-  const name = String(input.name ?? '').trim() || linearTeamKey;
-  return persistence.teams.add({ linearTeamKey, name, createdAt: new Date().toISOString() });
+export function addUnit(persistence, input) {
+  const linearLabel = String(input.linearLabel ?? '').trim();
+  if (!linearLabel) throw new Error('El label de Linear es obligatorio');
+  const kind = KINDS.has(input.kind) ? input.kind : 'squad';
+  const name = String(input.name ?? '').trim() || linearLabel;
+  return persistence.units.add({ linearLabel, kind, name, createdAt: new Date().toISOString() });
 }
 
 /** @param {LeanPersistence} persistence */
-export function listTeams(persistence) {
-  return persistence.teams.list();
+export function listUnits(persistence) {
+  return persistence.units.list();
 }
 
 /** @param {LeanPersistence} persistence @param {string} id */
-export function removeTeam(persistence, id) {
-  return persistence.teams.remove(id);
+export function removeUnit(persistence, id) {
+  return persistence.units.remove(id);
 }
 
 /**
- * Resumen de flujo: los equipos (con sus métricas) y un agregado global.
+ * Resumen de flujo separado por tipo: equipos (squad) y gremios (chapter), cada
+ * grupo con sus unidades y su agregado global.
  * @param {LeanPersistence} persistence
- * @returns {Promise<{ teams: LeanTeam[], global: ReturnType<typeof aggregateFlow> }>}
+ * @returns {Promise<{ squads: { units: LeanUnit[], global: ReturnType<typeof aggregateFlow> }, chapters: { units: LeanUnit[], global: ReturnType<typeof aggregateFlow> } }>}
  */
 export async function getFlowSummary(persistence) {
-  const teams = await persistence.teams.list();
-  return { teams, global: aggregateFlow(teams) };
+  const all = await persistence.units.list();
+  const squads = all.filter((u) => u.kind === 'squad');
+  const chapters = all.filter((u) => u.kind === 'chapter');
+  return {
+    squads: { units: squads, global: aggregateFlow(squads) },
+    chapters: { units: chapters, global: aggregateFlow(chapters) },
+  };
 }
