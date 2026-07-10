@@ -23,6 +23,7 @@ export async function createLeanContainer(options = {}) {
       mode,
       persistence: createMemoryLeanPersistence(seed, { leaderUid, viewAll }),
       refresh: async () => ({ results: [] }),
+      discover: async () => ({ created: [] }),
     };
   }
   if (mode === 'firestore') {
@@ -32,15 +33,18 @@ export async function createLeanContainer(options = {}) {
       const firebase = await import('../../../lib/firebase.js');
       database = firebase.db;
     }
-    // refresh: invoca la Cloud Function que calcula las métricas de flujo desde Linear.
-    const refresh = async () => {
+    const callFn = async (name) => {
       const { app } = await import('../../../lib/firebase.js');
       const { getFunctions, httpsCallable } = await import('firebase/functions');
       const fns = getFunctions(app, 'europe-west1');
-      const res = await httpsCallable(fns, 'refreshLean')({});
+      const res = await httpsCallable(fns, name)({});
       return res.data;
     };
-    return { mode, persistence: createFirestoreLeanPersistence(database, leaderUid, { viewAll }), refresh };
+    // refresh: recalcula las métricas de flujo desde Linear. discover: auto-descubre
+    // equipos (Squad) y gremios (Chapter) desde los labels de Linear.
+    const refresh = () => callFn('refreshLean');
+    const discover = () => callFn('discoverLeanUnits');
+    return { mode, persistence: createFirestoreLeanPersistence(database, leaderUid, { viewAll }), refresh, discover };
   }
   throw new Error(`Modo de container LEAN desconocido: ${mode}`);
 }

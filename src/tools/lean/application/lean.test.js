@@ -1,43 +1,44 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryLeanPersistence } from '../infrastructure/memory/index.js';
-import { addTeam, listTeams, removeTeam, getFlowSummary } from './usecases.js';
+import { addUnit, listUnits, removeUnit, getFlowSummary } from './usecases.js';
 
-describe('LEAN usecases', () => {
+describe('LEAN usecases (unidades = labels de Linear)', () => {
   let p;
   beforeEach(() => { p = createMemoryLeanPersistence(); });
 
-  it('addTeam normaliza la key (mayúsculas/trim) y la exige', async () => {
-    const id = await addTeam(p, { linearTeamKey: ' eng ', name: 'Ingeniería' });
-    const [t] = await listTeams(p);
-    expect(t.id).toBe(id);
-    expect(t.linearTeamKey).toBe('ENG');
-    expect(t.name).toBe('Ingeniería');
-    expect(() => addTeam(p, { linearTeamKey: '  ' })).toThrow(/obligatoria/);
+  it('addUnit trimea el label, exige que no esté vacío y guarda el kind', async () => {
+    const id = await addUnit(p, { linearLabel: ' Trust ', kind: 'squad', name: 'Equipo Trust' });
+    const [u] = await listUnits(p);
+    expect(u.id).toBe(id);
+    expect(u.linearLabel).toBe('Trust');
+    expect(u.kind).toBe('squad');
+    expect(u.name).toBe('Equipo Trust');
+    expect(() => addUnit(p, { linearLabel: '  ', kind: 'squad' })).toThrow(/obligatorio/);
   });
 
-  it('name por defecto = key', async () => {
-    await addTeam(p, { linearTeamKey: 'ops' });
-    expect((await listTeams(p))[0].name).toBe('OPS');
+  it('name por defecto = label; kind inválido cae a squad', async () => {
+    await addUnit(p, { linearLabel: 'Backend', kind: 'nope' });
+    const [u] = await listUnits(p);
+    expect(u.name).toBe('Backend');
+    expect(u.kind).toBe('squad');
   });
 
-  it('removeTeam quita el equipo', async () => {
-    const id = await addTeam(p, { linearTeamKey: 'ENG' });
-    await removeTeam(p, id);
-    expect(await listTeams(p)).toEqual([]);
+  it('removeUnit quita la unidad', async () => {
+    const id = await addUnit(p, { linearLabel: 'Trust', kind: 'squad' });
+    await removeUnit(p, id);
+    expect(await listUnits(p)).toEqual([]);
   });
 
-  it('getFlowSummary agrega el global (suma throughput/wip, cycle ponderado, aging máx)', async () => {
+  it('getFlowSummary separa squads (equipos) y chapters (gremios) con su global', async () => {
     const seed = [
-      { id: '1', linearTeamKey: 'ENG', name: 'Eng', metrics: { completed: 10, throughputPerWeek: 2.5, wip: 3, cycleTimeP50Hours: 20, cycleTimeP85Hours: 40, agingDaysMax: 5 } },
-      { id: '2', linearTeamKey: 'OPS', name: 'Ops', metrics: { completed: 0, throughputPerWeek: 0, wip: 1, cycleTimeP50Hours: null, cycleTimeP85Hours: null, agingDaysMax: 12 } },
+      { id: '1', linearLabel: 'Trust', kind: 'squad', name: 'Trust', metrics: { completed: 10, throughputPerWeek: 2.5, wip: 3, cycleTimeP50Hours: 20, cycleTimeP85Hours: 40, agingDaysMax: 5 } },
+      { id: '2', linearLabel: 'Backend', kind: 'chapter', name: 'Backend', metrics: { completed: 6, throughputPerWeek: 1.5, wip: 2, cycleTimeP50Hours: 12, cycleTimeP85Hours: 30, agingDaysMax: 9 } },
     ];
     const pp = createMemoryLeanPersistence(seed);
-    const { teams, global } = await getFlowSummary(pp);
-    expect(teams).toHaveLength(2);
-    expect(global.completed).toBe(10);
-    expect(global.wip).toBe(4);
-    expect(global.throughputPerWeek).toBe(2.5);
-    expect(global.cycleTimeP50Hours).toBe(20); // solo ENG (completed>0) pondera
-    expect(global.agingDaysMax).toBe(12);
+    const { squads, chapters } = await getFlowSummary(pp);
+    expect(squads.units).toHaveLength(1);
+    expect(chapters.units).toHaveLength(1);
+    expect(squads.global.completed).toBe(10);
+    expect(chapters.global.completed).toBe(6);
   });
 });

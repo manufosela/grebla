@@ -1,7 +1,7 @@
 /**
- * <lean-metrics> — dashboard de flujo (LEAN): tarjetas globales + tabla por equipo
- * con throughput, cycle time (p50/p85), WIP y aging. Solo lectura. Espeja a
- * <dora-metrics>. Reutiliza `formatHours` de DORA para las duraciones.
+ * <lean-metrics> — dashboard de flujo (LEAN) separado por Equipos (Squad) y Gremios
+ * (Chapter): tarjetas globales + tabla por unidad, con throughput, cycle time
+ * (p50/p85), WIP, aging y flow efficiency. Solo lectura. Reutiliza `formatHours` de DORA.
  */
 import { LitElement, html, css } from 'lit';
 import { getFlowSummary } from '../../tools/lean/application/usecases.js';
@@ -26,19 +26,21 @@ export class LeanMetrics extends LitElement {
 
   static styles = css`
     :host { display: block; }
-    h3 { font-size: 1rem; margin: 0 0 0.75rem; color: var(--rm-navy, #1e3a5f); }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin: 0 0 1.5rem; }
-    .card { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 0.75rem 0.9rem; display: flex; flex-direction: column; gap: 0.2rem; }
-    .card .value { font-size: 1.7rem; font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
+    h3 { font-size: 1.05rem; margin: 1.25rem 0 0.75rem; color: var(--rm-navy, #1e3a5f); }
+    h3:first-of-type { margin-top: 0; }
+    h4 { font-size: 0.85rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.4rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 0 0 1rem; }
+    .card { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.15rem; }
+    .card .value { font-size: 1.5rem; font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
     .card .value.warn { color: var(--rm-danger, #dc2626); }
-    .card .label { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
-    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
+    .card .label { font-size: 0.74rem; color: var(--rm-muted, #6b7280); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 0 0 0.5rem; }
+    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #6b7280); font-weight: 600; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .key-cell { font-weight: 700; font-family: ui-monospace, monospace; }
+    .label-cell { font-weight: 700; }
     .warn { color: var(--rm-danger, #dc2626); font-weight: 700; }
-    .note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.5rem 0 0; }
+    .note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.5rem 0 1.25rem; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
   `;
@@ -74,17 +76,31 @@ export class LeanMetrics extends LitElement {
   render() {
     if (this._error) return html`<p class="error">${this._error}</p>`;
     if (this._loading || !this._summary) return html`<p class="empty">Cargando métricas…</p>`;
-    const { global, teams } = this._summary;
-    const withMetrics = teams.filter((t) => t.metrics && !t.metrics.error);
-    if (withMetrics.length === 0) {
-      return html`<p class="empty">Aún no hay métricas. Añade un equipo de Linear y pulsa «↻ Recalcular desde Linear» en la pestaña Equipos.</p>`;
+    const { squads, chapters } = this._summary;
+    const hasAny = this._withMetrics(squads.units).length || this._withMetrics(chapters.units).length;
+    if (!hasAny) {
+      return html`<p class="empty">Aún no hay métricas. En la pestaña Equipos, «✨ Descubrir…» y luego «↻ Recalcular desde Linear».</p>`;
     }
     return html`
-      <h3>Global (${global.teams} equipo${global.teams === 1 ? '' : 's'})</h3>
-      ${this._renderCards(global)}
-      <h3>Por equipo</h3>
-      ${this._renderTable(withMetrics)}
-      <p class="note">Ventana móvil de las últimas 8 semanas. WIP y aging son una foto del momento del último cálculo. Métrica de equipo, nunca individual.</p>
+      ${this._renderSection('Equipos', squads, 'Equipo')}
+      ${this._renderSection('Gremios', chapters, 'Gremio')}
+      <p class="note">Ventana móvil de 8 semanas. WIP y aging son una foto del último cálculo. Métrica de equipo/gremio, nunca individual.</p>
+    `;
+  }
+
+  _withMetrics(units) {
+    return (units ?? []).filter((u) => u.metrics && !u.metrics.error);
+  }
+
+  _renderSection(title, group, unitWord) {
+    const units = this._withMetrics(group.units);
+    if (units.length === 0) return null;
+    return html`
+      <h3>${title} (${units.length})</h3>
+      <h4>Global</h4>
+      ${this._renderCards(group.global)}
+      <h4>Por ${unitWord.toLowerCase()}</h4>
+      ${this._renderTable(units, unitWord)}
     `;
   }
 
@@ -101,22 +117,22 @@ export class LeanMetrics extends LitElement {
     </div>`;
   }
 
-  _renderTable(teams) {
+  _renderTable(units, unitWord) {
     return html`<table>
       <thead><tr>
-        <th>Equipo</th><th class="num">Throughput/sem</th><th class="num">Cycle p50</th>
+        <th>${unitWord}</th><th class="num">Throughput/sem</th><th class="num">Cycle p50</th>
         <th class="num">Cycle p85</th><th class="num">WIP</th><th class="num">Aging máx</th><th class="num">Flow eff.</th>
       </tr></thead>
-      <tbody>${teams.map((t) => this._renderRow(t))}</tbody>
+      <tbody>${units.map((u) => this._renderRow(u))}</tbody>
     </table>`;
   }
 
-  _renderRow(t) {
-    const m = t.metrics;
+  _renderRow(u) {
+    const m = u.metrics;
     const agingWarn = m.agingDaysMax != null && m.agingDaysMax >= AGING_WARN_DAYS;
     const flowWarn = m.flowEfficiencyPct != null && m.flowEfficiencyPct < FLOW_EFF_WARN_PCT;
     return html`<tr>
-      <td><span class="key-cell">${t.linearTeamKey}</span> ${t.name}</td>
+      <td class="label-cell">${u.name}</td>
       <td class="num">${num(m.throughputPerWeek)}</td>
       <td class="num">${hrs(m.cycleTimeP50Hours)}</td>
       <td class="num">${hrs(m.cycleTimeP85Hours)}</td>
