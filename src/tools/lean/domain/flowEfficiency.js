@@ -1,16 +1,37 @@
 /**
- * Flow efficiency (LEAN, Fase 2): qué proporción del cycle time se pasa realmente
- * TRABAJANDO (estados activos = `type='started'`) frente a ESPERANDO (parado en
- * review/blocked/backlog tras haber empezado). Funciones puras a partir del
- * historial de estados de cada issue de Linear.
+ * Flow efficiency (LEAN): qué proporción del cycle time se pasa realmente TRABAJANDO
+ * frente a ESPERANDO. Funciones puras a partir del historial de estados de Linear.
  *
- * Una eficiencia baja (p. ej. 20 %) significa que el trabajo pasa la mayor parte
- * del tiempo esperando, no en curso: señal de cuellos de botella en el proceso.
+ * OJO: Linear tipa TODOS los estados de trabajo como `type='started'` (In Progress,
+ * In Review, In QA, Blocked, Ready for QA, Merged…). Por eso el `type` no basta para
+ * medir eficiencia: hay que mirar el NOMBRE del estado. Aplicamos el criterio ESTRICTO
+ * de Lean (touch time): solo cuenta como ACTIVO el trabajo hands-on (`Doing`,
+ * `In Progress`, `Breakdown Parents`); revisión, QA, colas y bloqueos (`In Review`,
+ * `In Code Review`, `In QA`, `Ready for CR/QA`, `Blocked`, `Merged`, `QA Rejected`) son
+ * ESPERA, igual que volver a backlog/unstarted. Un estado desconocido cuenta como espera
+ * (conservador: no inflar la eficiencia).
  *
- * @typedef {{ stateType: string, at: string|number|Date }} StateTransition
+ * Una eficiencia baja (p. ej. 15 %) significa que el trabajo pasa la mayor parte del
+ * tiempo esperando (en colas de review/QA), no en curso: señal de cuellos de botella.
+ *
+ * @typedef {{ stateType: string, stateName?: string, at: string|number|Date }} StateTransition
  * @typedef {{ startedAt: string|number|Date, completedAt: string|number|Date, transitions?: StateTransition[] }} IssueHistory
  */
 const ms = (d) => new Date(d).getTime();
+
+/** Nombres de estado `started` que cuentan como TRABAJO ACTIVO (touch time), en minúsculas. */
+export const ACTIVE_STATE_NAMES = new Set(['doing', 'in progress', 'breakdown parents']);
+
+/**
+ * ¿La issue se está trabajando activamente (hands-on) en este estado? Criterio estricto:
+ * solo `started` con un nombre de trabajo real; review/QA/colas/bloqueos son espera.
+ * @param {string} stateType  tipo Linear: backlog|unstarted|started|completed|canceled
+ * @param {string} [stateName]  nombre del estado (In Progress, In Review, Blocked…)
+ * @returns {boolean}
+ */
+export function isActiveWork(stateType, stateName) {
+  return stateType === 'started' && ACTIVE_STATE_NAMES.has(String(stateName ?? '').trim().toLowerCase());
+}
 
 /**
  * Tiempo activo (en `started`) y total (started→completed) de una issue.
@@ -25,26 +46,26 @@ export function activeAndTotal(issue) {
   }
   const total = completed - started;
 
-  // Transiciones (entrada a un estado) ordenadas por fecha.
+  // Transiciones (entrada a un estado) como booleano activo/espera, ordenadas por fecha.
   const trans = (issue.transitions ?? [])
-    .map((t) => ({ stateType: t.stateType, at: ms(t.at) }))
+    .map((t) => ({ active: isActiveWork(t.stateType, t.stateName), at: ms(t.at) }))
     .filter((t) => Number.isFinite(t.at))
     .sort((a, b) => a.at - b.at);
 
-  // Estado vigente al empezar: la última transición con `at <= started`, o `started`.
-  let current = 'started';
+  // Estado vigente al empezar: la última transición con `at <= started`, o activo por defecto.
+  let current = true;
   const lastBefore = trans.findLast((t) => t.at <= started);
-  if (lastBefore) current = lastBefore.stateType;
+  if (lastBefore) current = lastBefore.active;
 
   let active = 0;
   let cursor = started;
   for (const t of trans) {
     if (t.at <= started || t.at >= completed) continue;
-    if (current === 'started') active += t.at - cursor;
+    if (current) active += t.at - cursor;
     cursor = t.at;
-    current = t.stateType;
+    current = t.active;
   }
-  if (current === 'started') active += completed - cursor;
+  if (current) active += completed - cursor;
 
   return { activeMs: active, totalMs: total };
 }
