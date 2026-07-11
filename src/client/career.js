@@ -68,6 +68,7 @@ onUserChanged(async (user) => {
       name: p.name,
       uid: p.uid ?? null,
       careerTargetLevelId: p.careerTargetLevelId ?? null,
+      external: p.external ?? false, // los externos no tienen carrera: el selector los deshabilita
     }));
     // Rol para el brujo (MC-22) y la gestión de equipo: canEdit habilita la
     // cola del líder, el tiempo agregado y el selector de persona.
