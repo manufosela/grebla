@@ -1022,12 +1022,10 @@ export const interpretMetrics = onCall(
     const summary = request.data?.summary ?? {};
 
     const db = getFirestore();
-    const [adminSnap, leaderSnap] = await Promise.all([
-      db.doc(`admins/${uid}`).get(),
-      db.doc(`leaders/${uid}`).get(),
-    ]);
-    if (!adminSnap.exists && !leaderSnap.exists) {
-      throw new HttpsError('permission-denied', 'Solo un líder o superadmin puede interpretar.');
+    // Solo el superadmin refresca la interpretación (el resto la ve guardada).
+    const adminSnap = await db.doc(`admins/${uid}`).get();
+    if (!adminSnap.exists) {
+      throw new HttpsError('permission-denied', 'Solo un superadmin puede interpretar.');
     }
 
     const apiKey = ANTHROPIC_API_KEY.value();
@@ -1057,7 +1055,16 @@ export const interpretMetrics = onCall(
     const payload = await res.json();
     const block = (payload.content ?? []).find((c) => c.type === 'tool_use');
     if (!block) throw new HttpsError('internal', 'La IA no devolvió una interpretación válida.');
-    return { interpretation: block.input };
+    // Persistir la interpretación VIGENTE de la herramienta (sobrescribe), con la
+    // fecha del server y el autor, para que quien abra LEAN/DORA la vea aunque no
+    // la haya generado. Escribe la Function (Admin SDK); el cliente solo lee.
+    const record = {
+      ...block.input,
+      at: new Date().toISOString(),
+      by: { uid, name: request.auth?.token?.name ?? '' },
+    };
+    await db.doc(`interpretations/${tool}`).set(record);
+    return { interpretation: record };
   },
 );
 

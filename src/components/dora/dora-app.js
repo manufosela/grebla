@@ -13,6 +13,8 @@ export class DoraApp extends MetricsToolApp {
   static properties = {
     ...MetricsToolApp.properties,
     interpret: { attribute: false },
+    loadSaved: { attribute: false },
+    canInterpret: { attribute: false },
   };
 
   static tabs = [
@@ -23,6 +25,8 @@ export class DoraApp extends MetricsToolApp {
   constructor() {
     super();
     this.interpret = null;
+    this.loadSaved = null;
+    this.canInterpret = false;
   }
 
   get disclaimer() {
@@ -32,7 +36,12 @@ export class DoraApp extends MetricsToolApp {
   renderView() {
     return this.view === 'repos'
       ? html`<dora-repos .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh}></dora-repos>`
-      : html`<dora-metrics .persistence=${this.persistence} .interpret=${this.interpret}></dora-metrics>`;
+      : html`<dora-metrics
+          .persistence=${this.persistence}
+          .interpret=${this.interpret}
+          .loadSaved=${this.loadSaved}
+          .canInterpret=${this.canInterpret}
+        ></dora-metrics>`;
   }
 }
 

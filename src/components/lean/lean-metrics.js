@@ -19,6 +19,8 @@ export class LeanMetrics extends LitElement {
   static properties = {
     persistence: { attribute: false },
     interpret: { attribute: false },
+    loadSaved: { attribute: false },
+    canInterpret: { attribute: false },
     _summary: { state: true },
     _loading: { state: true },
     _error: { state: true },
@@ -48,6 +50,8 @@ export class LeanMetrics extends LitElement {
     super();
     this.persistence = null;
     this.interpret = null;
+    this.loadSaved = null;
+    this.canInterpret = false;
     this._summary = null;
     this._loading = false;
     this._error = '';
@@ -84,7 +88,13 @@ export class LeanMetrics extends LitElement {
     return html`
       ${this._renderSection('Equipos', squads, 'Equipo')}
       ${this._renderSection('Gremios', chapters, 'Gremio')}
-      <metrics-interpretation .interpret=${this.interpret} .summary=${this._summary} tool="lean"></metrics-interpretation>
+      <metrics-interpretation
+        .interpret=${this.interpret}
+        .loadSaved=${this.loadSaved}
+        .canInterpret=${this.canInterpret}
+        .summary=${this._summary}
+        tool="lean"
+      ></metrics-interpretation>
       <p class="note">Ventana móvil de 8 semanas. WIP y aging son una foto del último cálculo. Métrica de equipo/gremio, nunca individual.</p>
     `;
   }
