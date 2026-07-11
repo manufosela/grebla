@@ -8,6 +8,7 @@ import { getFlowSummary } from '../../tools/lean/application/usecases.js';
 import { flowEfficiencyLevel, agingLevel } from '../../tools/lean/domain/levels.js';
 import { formatHours } from '../dora/format.js';
 import { levelBadge, levelStyles } from '../dora/level-badge.js';
+import '../shared/metrics-interpretation.js';
 
 const num = (v) => (v == null ? '—' : v);
 const days = (v) => (v == null ? '—' : `${v} d`);
@@ -17,6 +18,7 @@ const pct = (v) => (v == null ? '—' : `${v} %`);
 export class LeanMetrics extends LitElement {
   static properties = {
     persistence: { attribute: false },
+    interpret: { attribute: false },
     _summary: { state: true },
     _loading: { state: true },
     _error: { state: true },
@@ -45,6 +47,7 @@ export class LeanMetrics extends LitElement {
   constructor() {
     super();
     this.persistence = null;
+    this.interpret = null;
     this._summary = null;
     this._loading = false;
     this._error = '';
@@ -81,6 +84,7 @@ export class LeanMetrics extends LitElement {
     return html`
       ${this._renderSection('Equipos', squads, 'Equipo')}
       ${this._renderSection('Gremios', chapters, 'Gremio')}
+      <metrics-interpretation .interpret=${this.interpret} .summary=${this._summary} tool="lean"></metrics-interpretation>
       <p class="note">Ventana móvil de 8 semanas. WIP y aging son una foto del último cálculo. Métrica de equipo/gremio, nunca individual.</p>
     `;
   }
