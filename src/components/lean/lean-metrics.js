@@ -5,16 +5,14 @@
  */
 import { LitElement, html, css } from 'lit';
 import { getFlowSummary } from '../../tools/lean/application/usecases.js';
+import { flowEfficiencyLevel, agingLevel } from '../../tools/lean/domain/levels.js';
 import { formatHours } from '../dora/format.js';
+import { levelBadge, levelStyles } from '../dora/level-badge.js';
 
 const num = (v) => (v == null ? '—' : v);
 const days = (v) => (v == null ? '—' : `${v} d`);
 const hrs = (v) => formatHours(v) ?? '—';
 const pct = (v) => (v == null ? '—' : `${v} %`);
-/** Aging alto (posible atasco) si supera ~2 semanas. */
-const AGING_WARN_DAYS = 14;
-/** Flow efficiency baja (mucho tiempo esperando) por debajo de este %. */
-const FLOW_EFF_WARN_PCT = 25;
 
 export class LeanMetrics extends LitElement {
   static properties = {
@@ -24,7 +22,7 @@ export class LeanMetrics extends LitElement {
     _error: { state: true },
   };
 
-  static styles = css`
+  static styles = [css`
     :host { display: block; }
     h3 { font-size: 1.05rem; margin: 1.25rem 0 0.75rem; color: var(--rm-navy, #1e3a5f); }
     h3:first-of-type { margin-top: 0; }
@@ -32,18 +30,17 @@ export class LeanMetrics extends LitElement {
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 0 0 1rem; }
     .card { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.15rem; }
     .card .value { font-size: 1.5rem; font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
-    .card .value.warn { color: var(--rm-danger, #dc2626); }
     .card .label { font-size: 0.74rem; color: var(--rm-muted, #6b7280); }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 0 0 0.5rem; }
     th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #6b7280); font-weight: 600; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .label-cell { font-weight: 700; }
-    .warn { color: var(--rm-danger, #dc2626); font-weight: 700; }
     .note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.5rem 0 1.25rem; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-  `;
+    .val-line { display: inline-flex; align-items: center; gap: 0.35rem; }
+  `, levelStyles];
 
   constructor() {
     super();
@@ -105,15 +102,13 @@ export class LeanMetrics extends LitElement {
   }
 
   _renderCards(g) {
-    const agingWarn = g.agingDaysMax != null && g.agingDaysMax >= AGING_WARN_DAYS;
-    const flowWarn = g.flowEfficiencyPct != null && g.flowEfficiencyPct < FLOW_EFF_WARN_PCT;
     return html`<div class="cards">
       <div class="card"><span class="value">${num(g.throughputPerWeek)}</span><span class="label">Throughput / semana</span></div>
       <div class="card"><span class="value">${hrs(g.cycleTimeP50Hours)}</span><span class="label">Cycle time (p50)</span></div>
       <div class="card"><span class="value">${hrs(g.cycleTimeP85Hours)}</span><span class="label">Cycle time (p85)</span></div>
       <div class="card"><span class="value">${num(g.wip)}</span><span class="label">WIP (en curso)</span></div>
-      <div class="card"><span class="value ${agingWarn ? 'warn' : ''}">${days(g.agingDaysMax)}</span><span class="label">Aging máx.</span></div>
-      <div class="card"><span class="value ${flowWarn ? 'warn' : ''}">${pct(g.flowEfficiencyPct)}</span><span class="label">Flow efficiency</span></div>
+      <div class="card"><span class="val-line"><span class="value">${days(g.agingDaysMax)}</span>${levelBadge(agingLevel(g.agingDaysMax))}</span><span class="label">Aging máx.</span></div>
+      <div class="card"><span class="val-line"><span class="value">${pct(g.flowEfficiencyPct)}</span>${levelBadge(flowEfficiencyLevel(g.flowEfficiencyPct))}</span><span class="label">Flow efficiency</span></div>
     </div>`;
   }
 
@@ -129,16 +124,14 @@ export class LeanMetrics extends LitElement {
 
   _renderRow(u) {
     const m = u.metrics;
-    const agingWarn = m.agingDaysMax != null && m.agingDaysMax >= AGING_WARN_DAYS;
-    const flowWarn = m.flowEfficiencyPct != null && m.flowEfficiencyPct < FLOW_EFF_WARN_PCT;
     return html`<tr>
       <td class="label-cell">${u.name}</td>
       <td class="num">${num(m.throughputPerWeek)}</td>
       <td class="num">${hrs(m.cycleTimeP50Hours)}</td>
       <td class="num">${hrs(m.cycleTimeP85Hours)}</td>
       <td class="num">${num(m.wip)}</td>
-      <td class="num ${agingWarn ? 'warn' : ''}">${days(m.agingDaysMax)}</td>
-      <td class="num ${flowWarn ? 'warn' : ''}">${pct(m.flowEfficiencyPct)}</td>
+      <td class="num">${days(m.agingDaysMax)}${levelBadge(agingLevel(m.agingDaysMax))}</td>
+      <td class="num">${pct(m.flowEfficiencyPct)}${levelBadge(flowEfficiencyLevel(m.flowEfficiencyPct))}</td>
     </tr>`;
   }
 }
