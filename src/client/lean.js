@@ -7,7 +7,7 @@ import '../components/lean/lean-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createLeanContainer } from '../tools/lean/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
-import { interpretMetrics } from '../lib/metricsAi.js';
+import { interpretMetrics, loadInterpretation } from '../lib/metricsAi.js';
 
 const app = document.querySelector('lean-app');
 
@@ -27,7 +27,9 @@ onUserChanged(async (user) => {
     app.canEdit = role === 'superadmin' || role === 'leader';
     app.refresh = refresh;
     app.discover = discover;
-    app.interpret = interpretMetrics; // activa «Interpretar con IA» en Métricas
+    app.interpret = interpretMetrics; // (re)generar la interpretación: solo superadmin
+    app.loadSaved = loadInterpretation; // interpretación guardada: la ven todos
+    app.canInterpret = role === 'superadmin'; // el botón solo lo ve el superadmin
     app.persistence = persistence;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar el Flujo (LEAN).';

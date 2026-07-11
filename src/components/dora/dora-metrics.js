@@ -34,6 +34,8 @@ export class DoraMetrics extends LitElement {
   static properties = {
     persistence: { attribute: false },
     interpret: { attribute: false },
+    loadSaved: { attribute: false },
+    canInterpret: { attribute: false },
     summary: { state: true },
     loading: { state: true },
     error: { state: true },
@@ -60,6 +62,8 @@ export class DoraMetrics extends LitElement {
     super();
     this.persistence = null;
     this.interpret = null;
+    this.loadSaved = null;
+    this.canInterpret = false;
     this.summary = null;
     this.loading = true;
     this.error = '';
@@ -184,7 +188,13 @@ export class DoraMetrics extends LitElement {
       </section>
       ${this._table('Por equipo', s.byTeam)}
       ${this._table('Por gremio', s.byGuild)}
-      <metrics-interpretation .interpret=${this.interpret} .summary=${s} tool="dora"></metrics-interpretation>
+      <metrics-interpretation
+        .interpret=${this.interpret}
+        .loadSaved=${this.loadSaved}
+        .canInterpret=${this.canInterpret}
+        .summary=${s}
+        tool="dora"
+      ></metrics-interpretation>
     `;
   }
 }

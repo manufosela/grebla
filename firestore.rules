@@ -48,6 +48,15 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Interpretación IA vigente por herramienta (lean/dora): la genera y sobrescribe
+    // SOLO la Cloud Function interpretMetrics (Admin SDK, restringida a superadmin);
+    // la leen todos los autenticados con acceso a la herramienta. El cliente nunca
+    // escribe aquí (por eso write: false; el Admin SDK omite las reglas).
+    match /interpretations/{tool} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // Directorio de usuarios que han iniciado sesión (nombre, email, última
     // conexión). Cada usuario escribe SOLO su propio doc (registro de presencia);
     // la lista la leen superadmin y viewer (pestaña Usuarios) y el líder (para
