@@ -777,12 +777,19 @@ const LINEAR_ISSUES_QUERY = `
       pageInfo { hasNextPage endCursor }
       nodes {
         id createdAt startedAt completedAt canceledAt state { type }
-        history(first: 50) { nodes { toState { type } createdAt } }
+        history(first: 50) { nodes { toState { type name } createdAt } }
       }
     }
   }`;
 
-/** Tiempo activo (started) y total (started→completed) de una issue (espejo de flowEfficiency.js). */
+// Nombres de estado `started` de Linear que cuentan como TRABAJO ACTIVO (touch time).
+// Criterio estricto: review/QA/colas/bloqueos son espera. Espejo de ACTIVE_STATE_NAMES
+// en src/tools/lean/domain/flowEfficiency.js.
+const LEAN_ACTIVE_STATE_NAMES = new Set(['doing', 'in progress', 'breakdown parents']);
+const leanIsActiveWork = (stateType, stateName) =>
+  stateType === 'started' && LEAN_ACTIVE_STATE_NAMES.has(String(stateName ?? '').trim().toLowerCase());
+
+/** Tiempo activo y total (started→completed) de una issue (espejo de flowEfficiency.js). */
 function flowActiveAndTotalFn(issue) {
   const started = new Date(issue.startedAt).getTime();
   const completed = new Date(issue.completedAt).getTime();
@@ -790,21 +797,21 @@ function flowActiveAndTotalFn(issue) {
     return { activeMs: 0, totalMs: 0 };
   }
   const trans = (issue.transitions ?? [])
-    .map((t) => ({ stateType: t.stateType, at: new Date(t.at).getTime() }))
+    .map((t) => ({ active: leanIsActiveWork(t.stateType, t.stateName), at: new Date(t.at).getTime() }))
     .filter((t) => Number.isFinite(t.at))
     .sort((a, b) => a.at - b.at);
-  let current = 'started';
+  let current = true;
   const before = trans.filter((t) => t.at <= started);
-  if (before.length) current = before[before.length - 1].stateType;
+  if (before.length) current = before[before.length - 1].active;
   let active = 0;
   let cursor = started;
   for (const t of trans) {
     if (t.at <= started || t.at >= completed) continue;
-    if (current === 'started') active += t.at - cursor;
+    if (current) active += t.at - cursor;
     cursor = t.at;
-    current = t.stateType;
+    current = t.active;
   }
-  if (current === 'started') active += completed - cursor;
+  if (current) active += completed - cursor;
   return { activeMs: active, totalMs: completed - started };
 }
 
@@ -845,7 +852,7 @@ async function fetchLinearIssues(label, sinceIso, apiKey) {
         completedAt: n.completedAt ?? null,
         canceledAt: n.canceledAt ?? null,
         transitions: (n.history?.nodes ?? [])
-          .map((h) => ({ stateType: h.toState?.type ?? null, at: h.createdAt }))
+          .map((h) => ({ stateType: h.toState?.type ?? null, stateName: h.toState?.name ?? null, at: h.createdAt }))
           .filter((t) => t.stateType && t.at),
       });
     }
