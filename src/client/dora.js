@@ -7,6 +7,7 @@ import '../components/dora/dora-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createDoraContainer } from '../tools/dora/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
+import { interpretMetrics } from '../lib/metricsAi.js';
 
 const app = document.querySelector('dora-app');
 
@@ -27,6 +28,7 @@ onUserChanged(async (user) => {
     // tipo C-level) nunca edita: solo ve la lista.
     app.canEdit = role === 'superadmin' || role === 'leader';
     app.refresh = refresh;
+    app.interpret = interpretMetrics; // activa «Interpretar con IA» en Métricas
     app.persistence = persistence;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar DORA.';

@@ -10,10 +10,20 @@ import './dora-metrics.js';
 import { MetricsToolApp } from '../shared/metrics-tool-app.js';
 
 export class DoraApp extends MetricsToolApp {
+  static properties = {
+    ...MetricsToolApp.properties,
+    interpret: { attribute: false },
+  };
+
   static tabs = [
     { id: 'repos', label: 'Repos' },
     { id: 'metrics', label: 'Métricas' },
   ];
+
+  constructor() {
+    super();
+    this.interpret = null;
+  }
 
   get disclaimer() {
     return html`Las métricas DORA miden la <strong>salud de la entrega del equipo/sistema</strong>, no el rendimiento de personas concretas. No las uses para evaluar a ingenieros individuales: para eso están la carrera, las dimensiones y los O2O.`;
@@ -22,7 +32,7 @@ export class DoraApp extends MetricsToolApp {
   renderView() {
     return this.view === 'repos'
       ? html`<dora-repos .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh}></dora-repos>`
-      : html`<dora-metrics .persistence=${this.persistence}></dora-metrics>`;
+      : html`<dora-metrics .persistence=${this.persistence} .interpret=${this.interpret}></dora-metrics>`;
   }
 }
 

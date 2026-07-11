@@ -966,6 +966,94 @@ export const discoverLeanUnits = onCall(
   },
 );
 
+// ── Interpretación de métricas con IA (LEAN / DORA) ──────────────────────────
+const INTERPRET_TOOL = {
+  name: 'emit_interpretation',
+  description: 'Devuelve la interpretación de las métricas del equipo.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      verdict: { type: 'string', enum: ['bien', 'regular', 'mal'], description: 'Veredicto general.' },
+      summary: { type: 'string', description: 'Resumen claro de 2-3 frases, en español.' },
+      causes: { type: 'array', items: { type: 'string' }, description: 'Causas probables (correlacionando métricas).' },
+      recommendations: { type: 'array', items: { type: 'string' }, description: 'Acciones recomendadas.' },
+    },
+    required: ['verdict', 'summary'],
+  },
+};
+
+/** Prompt de interpretación según la herramienta (lean/dora). */
+function buildInterpretPrompt(tool, summary) {
+  const context = tool === 'dora'
+    ? 'métricas DORA de ENTREGA (deploy frequency, lead time, change failure rate, MTTR)'
+    : 'métricas LEAN de FLUJO (throughput/semana, cycle time p50/p85, WIP, aging en días, flow efficiency %)';
+  const refs = tool === 'dora'
+    ? 'Referencias DORA: elite = deploy diario y lead time < 1h; low = lead time > 1 semana.'
+    : 'Referencias LEAN: flow efficiency típica 15-25% (>40% muy buena, <15% mala); un WIP con aging > 2 semanas es un atasco; throughput y WIP dependen del tamaño del equipo (no juzgar en absoluto).';
+  return `Eres experto en rendimiento de equipos de ingeniería. Tienes las ${context} de uno o varios equipos/gremios (SIEMPRE a nivel de equipo/sistema, NUNCA de personas). Interprétalas EN CONJUNTO, correlacionando unas con otras.
+
+Datos (JSON):
+${JSON.stringify(summary)}
+
+${refs}
+
+Llama a emit_interpretation con: un veredicto (bien/regular/mal), un resumen de 2-3 frases, las causas PROBABLES de lo que ves y recomendaciones accionables. Todo en español. No menciones ni evalúes a personas concretas.`;
+}
+
+/**
+ * Interpreta un conjunto de métricas (LEAN o DORA) con Claude: veredicto, resumen,
+ * causas probables y recomendaciones. El cliente manda el resumen ya calculado.
+ * Acceso: superadmin o líder.
+ */
+export const interpretMetrics = onCall(
+  { region: 'europe-west1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 120 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+
+    const tool = request.data?.tool === 'dora' ? 'dora' : 'lean';
+    const summary = request.data?.summary ?? {};
+
+    const db = getFirestore();
+    const [adminSnap, leaderSnap] = await Promise.all([
+      db.doc(`admins/${uid}`).get(),
+      db.doc(`leaders/${uid}`).get(),
+    ]);
+    if (!adminSnap.exists && !leaderSnap.exists) {
+      throw new HttpsError('permission-denied', 'Solo un líder o superadmin puede interpretar.');
+    }
+
+    const apiKey = ANTHROPIC_API_KEY.value();
+    if (!apiKey) throw new HttpsError('failed-precondition', 'La IA no está configurada en esta instancia.');
+
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: O2O_AI_MODEL,
+          max_tokens: 1500,
+          tools: [INTERPRET_TOOL],
+          tool_choice: { type: 'tool', name: 'emit_interpretation' },
+          messages: [{ role: 'user', content: buildInterpretPrompt(tool, summary) }],
+        }),
+      });
+    } catch {
+      throw new HttpsError('unavailable', 'No se pudo contactar con la IA. Inténtalo de nuevo.');
+    }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      console.error(`Anthropic error ${res.status}: ${detail}`);
+      throw new HttpsError('internal', 'La IA no pudo interpretar las métricas.');
+    }
+    const payload = await res.json();
+    const block = (payload.content ?? []).find((c) => c.type === 'tool_use');
+    if (!block) throw new HttpsError('internal', 'La IA no devolvió una interpretación válida.');
+    return { interpretation: block.input };
+  },
+);
+
 // ── TRIBBU-COINS (CP-2): emisor único del ledger firmado ─────────────────────
 //
 // La emisión de tribbu-coins va SOLO por contratos (functions/coins.js, espejo

@@ -13,6 +13,7 @@ export class LeanApp extends MetricsToolApp {
   static properties = {
     ...MetricsToolApp.properties,
     discover: { attribute: false },
+    interpret: { attribute: false },
   };
 
   static tabs = [
@@ -23,6 +24,7 @@ export class LeanApp extends MetricsToolApp {
   constructor() {
     super();
     this.discover = null;
+    this.interpret = null;
   }
 
   get disclaimer() {
@@ -32,7 +34,7 @@ export class LeanApp extends MetricsToolApp {
   renderView() {
     return this.view === 'teams'
       ? html`<lean-teams .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh} .discover=${this.discover}></lean-teams>`
-      : html`<lean-metrics .persistence=${this.persistence}></lean-metrics>`;
+      : html`<lean-metrics .persistence=${this.persistence} .interpret=${this.interpret}></lean-metrics>`;
   }
 }
 

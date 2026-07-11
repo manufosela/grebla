@@ -11,6 +11,7 @@ import { getDoraSummary } from '../../tools/dora/application/usecases.js';
 import { leadTimeLevel, deployFrequencyLevel, changeFailureRateLevel, mttrLevel } from '../../tools/dora/domain/levels.js';
 import { levelBadge, levelStyles } from './level-badge.js';
 import { formatHours } from './format.js';
+import '../shared/metrics-interpretation.js';
 
 const lt = (v) => (v != null ? `${v} h` : '—');
 /**
@@ -32,6 +33,7 @@ const cfr = (g) => (g.deploymentsTotal > 0 ? `${g.changeFailureRatePct}%` : '—
 export class DoraMetrics extends LitElement {
   static properties = {
     persistence: { attribute: false },
+    interpret: { attribute: false },
     summary: { state: true },
     loading: { state: true },
     error: { state: true },
@@ -57,6 +59,7 @@ export class DoraMetrics extends LitElement {
   constructor() {
     super();
     this.persistence = null;
+    this.interpret = null;
     this.summary = null;
     this.loading = true;
     this.error = '';
@@ -181,6 +184,7 @@ export class DoraMetrics extends LitElement {
       </section>
       ${this._table('Por equipo', s.byTeam)}
       ${this._table('Por gremio', s.byGuild)}
+      <metrics-interpretation .interpret=${this.interpret} .summary=${s} tool="dora"></metrics-interpretation>
     `;
   }
 }
