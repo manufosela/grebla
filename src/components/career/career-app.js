@@ -875,6 +875,9 @@ export class CareerApp extends LitElement {
     }
     .grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); gap: 1.5rem; align-items: start; }
     @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+    /* Vista LISTA (RMR-BUG-0023): la lista larga scrollea DENTRO del marco (fijado
+       a 100dvh por la página) en vez de desbordarlo. */
+    .listgrid { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     .panel { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); padding: 1rem 1.25rem; }
     .panel h3 { margin: 0 0 0.2rem; }
     .kind { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; text-transform: capitalize; }
@@ -2295,9 +2298,9 @@ export class CareerApp extends LitElement {
     // _islandMaps). El índice del archipiélago también dispara (resolver
     // parada → isla lo necesita y puede llegar después del journey).
     if (changed.has('journey') || changed.has('archipelago')) this._ensureChallengeMapLoaded();
-    // Vista PLANO (JG-11): al entrar se aseguran el índice del archipiélago y
-    // los mapas de todas las islas (cacheados, en paralelo, una vez).
-    if (this.viewMode === 'flat' && this.store && !this._planoStarted) {
+    // Vistas PLANO (JG-11) y LISTA (RMR-TSK-0205): ambas necesitan el índice del
+    // archipiélago y los mapas de TODAS las islas (cacheados, en paralelo, una vez).
+    if ((this.viewMode === 'flat' || this.viewMode === 'list') && this.store && !this._planoStarted) {
       this._planoStarted = true;
       this._ensurePlanoMaps();
     }
@@ -7221,7 +7224,7 @@ export class CareerApp extends LitElement {
       </div>`
         : null}
       ${this.viewMode === 'list'
-        ? html`<div class="grid">
+        ? html`<div class="grid listgrid">
             <career-list
               .archipelago=${this.archipelago}
               .islandMaps=${this.planoMaps}
