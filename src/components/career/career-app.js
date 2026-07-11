@@ -183,6 +183,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
+import './career-list.js';
 import './career-island-3d.js';
 import './player-card.js';
 import './game-dialog.js';
@@ -2221,15 +2222,17 @@ export class CareerApp extends LitElement {
     }
   }
 
-  /** Lee la preferencia de modo de vista sin romper SSR/estático. El valor
-   * legado 'island' (2.5D, retirada en MC-8) cae al 3D. */
+  /** Lee la preferencia de modo de vista sin romper SSR/estático. Por defecto
+   * 'list' (RMR-TSK-0205): quien no elige, entra a la lista, no al juego. Se
+   * respeta lo que el usuario ya tuviera guardado ('flat'/'3d'); el valor legado
+   * 'island' (2.5D, retirada en MC-8) cae al default. */
   _readViewMode() {
-    if (typeof localStorage === 'undefined') return '3d';
+    if (typeof localStorage === 'undefined') return 'list';
     const stored = localStorage.getItem(CareerApp.VIEW_MODE_KEY);
-    return stored === 'flat' ? 'flat' : '3d';
+    return stored === 'flat' || stored === '3d' || stored === 'list' ? stored : 'list';
   }
 
-  /** @param {'3d'|'flat'} mode */
+  /** @param {'list'|'flat'|'3d'} mode */
   _setViewMode(mode) {
     if (mode !== '3d') this.mode3d = 'aerial'; // el modo a pie no sobrevive al cambio de vista
     this.viewMode = mode;
@@ -3790,6 +3793,21 @@ export class CareerApp extends LitElement {
     const id = this._suggestedRouteId(groupRoutesByRole(this.careerRoutes ?? []));
     if (!id || id === this._challenge?.routeId) return null;
     return (this.careerRoutes ?? []).find((r) => r.routeId === id) ?? null;
+  }
+
+  /** Ids de casas para «Mi ruta» en la vista LISTA (RMR-TSK-0205): la ruta
+   * planificada si tiene paradas; si está vacía, la ruta sugerida por rol×nivel. */
+  get _listRouteCityIds() {
+    const planned = this.journey?.plannedRoute ?? [];
+    if (planned.length > 0) return planned;
+    return this._nextSuggestedRoute()?.stops ?? [];
+  }
+
+  /** Panel lateral de la vista LISTA: la ficha de la casa seleccionada, o la pista
+   * inicial si aún no hay ninguna (evita el ternario anidado en el render). */
+  _renderListPanel(sel, selAreaName) {
+    if (sel) return this._renderPlanoPanel(sel, selAreaName);
+    return html`<p class="hint">Pulsa un tema de la lista para ver su ficha: qué es, qué aprenderás y cómo certificarte.</p>`;
   }
 
   /** Meta de una ruta completada: «{fecha} · {duración}» (o solo fecha si no
@@ -6433,8 +6451,9 @@ export class CareerApp extends LitElement {
    */
   _renderViewSwitch() {
     const modes = [
-      { id: '3d', label: 'Isla 3D' },
+      { id: 'list', label: 'Lista' },
       { id: 'flat', label: 'Plano' },
+      { id: '3d', label: 'Isla 3D' },
     ];
     return html`<div class="viewswitch" role="group" aria-label="Modo de vista del mapa">
       ${modes.map(
@@ -7172,7 +7191,9 @@ export class CareerApp extends LitElement {
             ${sel ? this._renderCityPanel(sel) : null}
             ${fps ? null : this._renderOnboarding()}
           </div>`
-        : html`<div class="grid">
+        : null}
+      ${this.viewMode === 'flat'
+        ? html`<div class="grid">
         <career-map
           .archipelago=${this.archipelago}
           .islandMaps=${this.planoMaps}
@@ -7197,7 +7218,22 @@ export class CareerApp extends LitElement {
             </div>
           </details>
         </div>
-      </div>`}
+      </div>`
+        : null}
+      ${this.viewMode === 'list'
+        ? html`<div class="grid">
+            <career-list
+              .archipelago=${this.archipelago}
+              .islandMaps=${this.planoMaps}
+              .journey=${this.journey}
+              .routeCityIds=${this._listRouteCityIds}
+              .endorsements=${this.endorsements}
+              .selected=${this.selected}
+              @select-city=${this._onSelect}
+            ></career-list>
+            <div class="panel">${this._renderListPanel(sel, selAreaName)}</div>
+          </div>`
+        : null}
       ${this._renderArchipelago()}
       ${this._renderChallenges()}
       ${this._renderRouteManager()}
