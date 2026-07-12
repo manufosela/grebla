@@ -7056,15 +7056,26 @@ export class CareerApp extends LitElement {
     </aside>`;
   }
 
+  /** Etiqueta de la opción del selector: marca a los externos (no tienen carrera). */
+  static _personOptionLabel(p) {
+    return p.external ? `${p.name} (externo)` : p.name;
+  }
+
   _renderPersonSelect() {
     // El ingeniero juega SU plan (JG-1): con una sola persona (la suya) el
     // selector es ruido de gestión de equipo — no se pinta.
     if (this.canPlay && (this.people ?? []).length === 1) return null;
+    // Los externos aparecen DESHABILITADOS: no tienen carrera/mapa (solo datos y
+    // O2O), así que no son un destino válido del Mapa de Carrera.
     return html`<label>Persona
       <select @change=${this._changePerson}>
         <option value="" ?selected=${!this.personId}>— Elige una persona —</option>
         ${(this.people ?? []).map(
-          (p) => html`<option value=${p.id} ?selected=${p.id === this.personId}>${p.name}</option>`,
+          (p) => html`<option
+            value=${p.id}
+            ?selected=${p.id === this.personId}
+            ?disabled=${p.external}
+          >${CareerApp._personOptionLabel(p)}</option>`,
         )}
       </select>
     </label>`;
