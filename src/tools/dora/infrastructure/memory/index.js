@@ -27,11 +27,15 @@ export function createMemoryDoraPersistence(seed = [], options = {}) {
       async list() {
         const all = [...store.values()].map((r) => ({ ...r }));
         if (viewAll || !leaderUid) return all;
-        return all.filter((r) => r.ownerLeaderUid === leaderUid);
+        // Ámbito personal/global (como guilds/labels): el líder ve los GLOBALES
+        // (sin owner, del superadmin) además de los suyos, no los de otros líderes.
+        return all.filter((r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid);
       },
       async add(input) {
         const id = crypto.randomUUID();
-        store.set(id, { ...input, ...(leaderUid ? { ownerLeaderUid: leaderUid } : {}), id });
+        // El superadmin (viewAll) crea a nivel GLOBAL (sin owner); el líder, personal.
+        const owner = leaderUid && !viewAll ? { ownerLeaderUid: leaderUid } : {};
+        store.set(id, { ...input, ...owner, id });
         return id;
       },
       async update(id, patch) {

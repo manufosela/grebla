@@ -9,7 +9,7 @@
  * @typedef {import('firebase/firestore').Firestore} Firestore
  * @typedef {import('../../domain/ports.js').DoraPersistence} DoraPersistence
  */
-import { doc, collection, addDoc, getDocs, setDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { doc, collection, addDoc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
 
 const reposCol = (db) => collection(db, 'dora');
 const repoDoc = (db, id) => doc(db, 'dora', id);
@@ -31,16 +31,18 @@ export function createFirestoreDoraPersistence(db, leaderUid, options = {}) {
   return {
     repos: {
       async list() {
-        // El superadmin (viewAll) ve TODOS los repos (las reglas se lo permiten),
-        // incluidos los legacy sin ownerLeaderUid. El líder solo ve los suyos: la
-        // query se respalda con el MISMO campo del where (rules are not filters).
-        const snap = viewAll
-          ? await getDocs(reposCol(db))
-          : await getDocs(query(reposCol(db), where('ownerLeaderUid', '==', leaderUid)));
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        // Ámbito personal/global (como guilds/labels): el superadmin (viewAll) ve
+        // TODOS; el líder ve los GLOBALES (sin owner, del superadmin) + los suyos.
+        // Como la regla es `read: isSignedIn` puede leer todos y filtrar en cliente
+        // (no hay query directa para "campo ausente OR igual").
+        const snap = await getDocs(reposCol(db));
+        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        return viewAll ? all : all.filter((r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid);
       },
       async add(input) {
-        const ref = await addDoc(reposCol(db), { ...input, ownerLeaderUid: leaderUid });
+        // El superadmin (viewAll) crea a nivel GLOBAL (sin owner); el líder, personal.
+        const data = viewAll ? { ...input } : { ...input, ownerLeaderUid: leaderUid };
+        const ref = await addDoc(reposCol(db), data);
         return ref.id;
       },
       async update(id, patch) {
