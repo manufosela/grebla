@@ -10,6 +10,8 @@ import { toolShellStyles, toolDisclaimer } from '../shared/toolShellStyles.js';
 import { getDeck } from '../../tools/motivators/domain/decks.js';
 import { saveSession } from '../../tools/motivators/application/usecases.js';
 import './motivators-board.js';
+import './motivators-my-results.js';
+import './motivators-aggregates.js';
 
 export class MotivatorsApp extends LitElement {
   static properties = {
@@ -18,6 +20,9 @@ export class MotivatorsApp extends LitElement {
     identity: { attribute: false },
     round: { attribute: false },
     role: { type: String },
+    uid: { type: String },
+    rounds: { attribute: false },
+    leaderNames: { attribute: false },
     error: { state: true },
     view: { state: true },
     _saved: { state: true },
@@ -45,8 +50,11 @@ export class MotivatorsApp extends LitElement {
     this.identity = null;
     this.round = null;
     this.role = '';
+    this.uid = '';
+    this.rounds = [];
+    this.leaderNames = {};
     this.error = '';
-    this.view = 'play';
+    this.view = '';
     this._saved = false;
     this._busy = false;
   }
@@ -59,8 +67,15 @@ export class MotivatorsApp extends LitElement {
 
   get _tabs() {
     const tabs = [];
-    if (this._canPlay) tabs.push({ id: 'play', label: 'Jugar' });
+    if (this._canPlay) tabs.push({ id: 'play', label: 'Jugar' }, { id: 'mine', label: 'Mis resultados' });
+    tabs.push({ id: 'results', label: 'Resultados' });
     return tabs;
+  }
+
+  /** Vista efectiva: la seleccionada si es válida, o la primera pestaña disponible. */
+  get _view() {
+    const tabs = this._tabs;
+    return tabs.some((t) => t.id === this.view) ? this.view : (tabs[0]?.id ?? 'results');
   }
 
   get disclaimer() {
@@ -101,19 +116,22 @@ export class MotivatorsApp extends LitElement {
   }
 
   _renderView() {
-    if (this.view === 'play') return this._renderPlay();
-    return null;
+    const view = this._view;
+    if (view === 'play') return this._renderPlay();
+    if (view === 'mine') {
+      return html`<motivators-my-results .persistence=${this.persistence} .deck=${this._deck}
+        uid=${this.uid} .rounds=${this.rounds}></motivators-my-results>`;
+    }
+    return html`<motivators-aggregates .persistence=${this.persistence} .deck=${this._deck}
+      .leaderNames=${this.leaderNames} .rounds=${this.rounds}></motivators-aggregates>`;
   }
 
   render() {
     if (this.error && !this.persistence) return html`<p class="error">${this.error}</p>`;
-    const tabs = this._tabs;
-    if (tabs.length === 0) {
-      return html`${toolDisclaimer(this.disclaimer)}<p class="state">Este juego lo juegan ingenieros y líderes. Aquí verás los resultados agregados próximamente.</p>`;
-    }
+    const view = this._view;
     return html`
       <nav class="tabs">
-        ${tabs.map((t) => html`<button class="tab ${this.view === t.id ? 'active' : ''}"
+        ${this._tabs.map((t) => html`<button class="tab ${view === t.id ? 'active' : ''}"
           @click=${() => { this.view = t.id; }}>${t.label}</button>`)}
       </nav>
       ${toolDisclaimer(this.disclaimer)}
