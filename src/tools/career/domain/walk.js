@@ -19,8 +19,10 @@
  * determinista (sin RNG), igual que hace la geometría low-poly.
  *
  * @typedef {{ x: number, z: number }} WalkPoint  Posición 2D en el plano del suelo.
- * @typedef {{ radius: number }} WalkBounds       Límite circular del área caminable.
- * @typedef {{ radius: number }} IslandParams     Radio lógico de la isla (islandRadius del layout).
+ * @typedef {{ ax: number, az: number, bx: number, bz: number, halfWidth: number, deckY: number }} DockCorridor
+ *   Corredor del muelle (RMR-TSK-0208): cápsula del segmento A→B con medio-ancho y altura de cubierta.
+ * @typedef {{ radius: number, dock?: DockCorridor }} WalkBounds  Límite: círculo caminable ∪ muelle.
+ * @typedef {{ radius: number, dock?: DockCorridor }} IslandParams  Radio de la isla (+ muelle para la altura).
  */
 
 /** Velocidad al caminar (unidades de mundo por segundo). */
@@ -107,6 +109,12 @@ export function groundHeightAt(x, z, islandParams) {
   if (!Number.isFinite(R) || R <= 0) {
     throw new Error(`Radio de isla inválido para groundHeightAt: "${R}"`);
   }
+  // Sobre el corredor del muelle (RMR-TSK-0208) se anda a la altura de la cubierta,
+  // no a ras de agua. La cápsula tiene prioridad sobre el terreno de debajo.
+  const dock = islandParams.dock;
+  if (dock && dockProjection(x, z, dock).dist <= dock.halfWidth) {
+    return dock.deckY;
+  }
   const r = Math.hypot(x, z);
   const angle = Math.atan2(z, x);
   const h = Math.max(
@@ -146,6 +154,24 @@ export function walkableRadius(islandR) {
  * @param {WalkBounds} bounds Límite circular (walkableRadius).
  * @returns {WalkPoint} Nueva posición.
  */
+/**
+ * Proyección de un punto sobre el SEGMENTO A→B del corredor del muelle. Devuelve el
+ * parámetro `t∈[0,1]` (recortado a los extremos: tapas redondeadas de la cápsula),
+ * el punto proyectado `(cx,cz)` y la distancia perpendicular `dist`.
+ * @param {number} px @param {number} pz
+ * @param {{ ax:number, az:number, bx:number, bz:number }} dock
+ * @returns {{ t:number, cx:number, cz:number, dist:number }}
+ */
+function dockProjection(px, pz, dock) {
+  const abx = dock.bx - dock.ax;
+  const abz = dock.bz - dock.az;
+  const len2 = abx * abx + abz * abz;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - dock.ax) * abx + (pz - dock.az) * abz) / len2)) : 0;
+  const cx = dock.ax + t * abx;
+  const cz = dock.az + t * abz;
+  return { t, cx, cz, dist: Math.hypot(px - cx, pz - cz) };
+}
+
 export function stepPosition(pos, dir, dt, speed, bounds) {
   const radius = bounds?.radius;
   if (!Number.isFinite(radius) || radius <= 0) {
@@ -156,7 +182,25 @@ export function stepPosition(pos, dir, dt, speed, bounds) {
   const nx = pos.x + (dir.x / len) * speed * dt;
   const nz = pos.z + (dir.z / len) * speed * dt;
   const r = Math.hypot(nx, nz);
+  // Válido si el punto cae dentro del círculo caminable (como siempre)...
   if (r <= radius) return { x: nx, z: nz };
+  const dock = bounds.dock;
+  if (dock) {
+    // ...o dentro de la cápsula del muelle (RMR-TSK-0208): se camina por él.
+    const p = dockProjection(nx, nz, dock);
+    if (p.dist <= dock.halfWidth) return { x: nx, z: nz };
+    // Fuera de ambos: deslizar al borde MÁS CERCANO (círculo radial vs cápsula),
+    // para no frenar en seco al bordear la boca del muelle.
+    const cs = radius / r;
+    const circleX = nx * cs;
+    const circleZ = nz * cs;
+    const u = p.dist > 0 ? dock.halfWidth / p.dist : 0;
+    const dockX = p.cx + (nx - p.cx) * u;
+    const dockZ = p.cz + (nz - p.cz) * u;
+    const dCircle = Math.hypot(nx - circleX, nz - circleZ);
+    const dDock = Math.hypot(nx - dockX, nz - dockZ);
+    return dDock < dCircle ? { x: dockX, z: dockZ } : { x: circleX, z: circleZ };
+  }
   const s = radius / r; // proyección radial al borde → deslizamiento tangencial
   return { x: nx * s, z: nz * s };
 }

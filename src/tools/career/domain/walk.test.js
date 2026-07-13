@@ -584,3 +584,41 @@ describe('minimapHeading (MC-13)', () => {
     expect(() => minimapHeading(0, Number.POSITIVE_INFINITY)).toThrow();
   });
 });
+
+describe('stepPosition con corredor del muelle (dock)', () => {
+  const dock = { ax: 40, az: 0, bx: 55, bz: 0, halfWidth: 2, deckY: 1.5 };
+
+  it('permite avanzar por el muelle más allá del círculo', () => {
+    const p = stepPosition({ x: 40, z: 0 }, { x: 1, z: 0 }, 1, 5, { radius: 40, dock });
+    expect(p.x).toBeGreaterThan(40); // salió del círculo, caminando por el muelle
+    expect(p.z).toBeCloseTo(0, 6);
+  });
+
+  it('no deja caerse por el lateral: acota al medio-ancho del muelle', () => {
+    const p = stepPosition({ x: 48, z: 0 }, { x: 0, z: 1 }, 1, 10, { radius: 40, dock });
+    expect(Math.abs(p.z)).toBeLessThanOrEqual(2 + 1e-6);
+  });
+
+  it('sin dock, el mismo paso se acota al círculo (retrocompatibilidad)', () => {
+    const p = stepPosition({ x: 40, z: 0 }, { x: 1, z: 0 }, 1, 5, { radius: 40 });
+    expect(Math.hypot(p.x, p.z)).toBeCloseTo(40, 6);
+  });
+});
+
+describe('groundHeightAt con corredor del muelle (dock)', () => {
+  const dock = { ax: R, az: 0, bx: R + 15, bz: 0, halfWidth: 2, deckY: 1.5 };
+
+  it('sobre el muelle se anda a la altura de la cubierta', () => {
+    expect(groundHeightAt(R + 8, 0, { radius: R, dock })).toBe(1.5);
+  });
+
+  it('fuera del muelle (lateral) ignora la cubierta y usa el terreno de debajo', () => {
+    const withDock = groundHeightAt(R + 8, 5, { radius: R, dock });
+    expect(withDock).not.toBe(1.5); // no es la cubierta del muelle
+    expect(withDock).toBe(groundHeightAt(R + 8, 5, { radius: R })); // es el terreno base
+  });
+
+  it('el dock no altera la altura fuera de su cápsula (retrocompatibilidad)', () => {
+    expect(groundHeightAt(R + 30, 0, { radius: R, dock })).toBe(groundHeightAt(R + 30, 0, { radius: R }));
+  });
+});
