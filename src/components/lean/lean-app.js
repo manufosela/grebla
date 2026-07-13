@@ -7,6 +7,7 @@
 import { html } from 'lit';
 import './lean-teams.js';
 import './lean-metrics.js';
+import './lean-old-issues.js';
 import { MetricsToolApp } from '../shared/metrics-tool-app.js';
 
 export class LeanApp extends MetricsToolApp {
@@ -21,6 +22,7 @@ export class LeanApp extends MetricsToolApp {
   static tabs = [
     { id: 'teams', label: 'Equipos' },
     { id: 'metrics', label: 'Métricas' },
+    { id: 'atascos', label: 'Atascos' },
   ];
 
   constructor() {
@@ -36,14 +38,19 @@ export class LeanApp extends MetricsToolApp {
   }
 
   renderView() {
-    return this.view === 'teams'
-      ? html`<lean-teams .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh} .discover=${this.discover}></lean-teams>`
-      : html`<lean-metrics
-          .persistence=${this.persistence}
-          .interpret=${this.interpret}
-          .loadSaved=${this.loadSaved}
-          .canInterpret=${this.canInterpret}
-        ></lean-metrics>`;
+    if (this.view === 'teams') {
+      return html`<lean-teams .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh} .discover=${this.discover}></lean-teams>`;
+    }
+    if (this.view === 'atascos') {
+      return html`<lean-old-issues .persistence=${this.persistence} .refresh=${this.refresh}></lean-old-issues>`;
+    }
+    return html`<lean-metrics
+      .persistence=${this.persistence}
+      .refresh=${this.refresh}
+      .interpret=${this.interpret}
+      .loadSaved=${this.loadSaved}
+      .canInterpret=${this.canInterpret}
+    ></lean-metrics>`;
   }
 }
 
