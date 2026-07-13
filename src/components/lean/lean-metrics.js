@@ -54,21 +54,15 @@ export class LeanMetrics extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .val-line { display: inline-flex; align-items: center; gap: 0.35rem; }
-    .label { display: inline-flex; align-items: center; gap: 0.25rem; }
+    /* «?» de ayuda: fondo oscuro FIJO + símbolo blanco → contraste AA garantizado
+       en claro y oscuro (RMR-BUG-0027, accesibilidad). No depende de tokens. */
     .help {
-      position: relative; display: inline-grid; place-items: center; width: 14px; height: 14px;
-      border-radius: 50%; border: 1px solid var(--rm-muted, #9ca3af); color: var(--rm-muted, #9ca3af);
-      font-size: 0.62rem; font-weight: 700; cursor: help; flex: 0 0 auto;
+      position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px;
+      border-radius: 50%; background: #1e3a5f; color: #fff;
+      font-size: 0.68rem; font-weight: 700; cursor: help; flex: 0 0 auto; vertical-align: middle;
     }
-    .help:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 1px; }
-    .help .tip {
-      position: absolute; bottom: 150%; left: 50%; transform: translateX(-50%); z-index: 6;
-      width: 220px; background: var(--rm-navy, #1e3a5f); color: #fff; text-align: left;
-      padding: 0.5rem 0.6rem; border-radius: 8px; font-size: 0.72rem; font-weight: 400; line-height: 1.35;
-      box-shadow: 0 6px 20px rgba(15, 27, 45, 0.3); opacity: 0; pointer-events: none; transition: opacity 0.12s;
-    }
-    .help:hover .tip, .help:focus .tip, .help:focus-within .tip { opacity: 1; }
-    .help .tip strong { display: block; margin-bottom: 0.15rem; }
+    .help:hover { background: #14293f; }
+    .help:focus-visible { outline: 2px solid #2a9d8f; outline-offset: 2px; }
   `, levelStyles];
 
   constructor() {
@@ -140,30 +134,36 @@ export class LeanMetrics extends LitElement {
     `;
   }
 
-  /** Icono «?» con tooltip (nombre completo, traducción y qué mide) de una métrica. */
+  /** Icono «?» con la ayuda de una métrica en `title` (tooltip nativo del navegador:
+   * se coloca solo sin salirse, y lo leen los lectores de pantalla) + aria-label. */
   _help(key) {
     const h = FIELD_HELP[key];
     if (!h) return null;
-    return html`<span class="help" tabindex="0" role="note" aria-label="${h.name} (${h.es}): ${h.what}"
-      >?<span class="tip"><strong>${h.name} — ${h.es}</strong>${h.what}</span></span>`;
+    const text = `${h.name} — ${h.es}: ${h.what}`;
+    return html`<span class="help" tabindex="0" role="note" title=${text} aria-label=${text}>?</span>`;
   }
 
   _renderCards(g) {
     return html`<div class="cards">
-      <div class="card"><span class="value">${num(g.throughputPerWeek)}</span><span class="label">Throughput / semana ${this._help('throughput')}</span></div>
-      <div class="card"><span class="value">${hrs(g.cycleTimeP50Hours)}</span><span class="label">Cycle time (p50) ${this._help('cycleP50')}</span></div>
-      <div class="card"><span class="value">${hrs(g.cycleTimeP85Hours)}</span><span class="label">Cycle time (p85) ${this._help('cycleP85')}</span></div>
-      <div class="card"><span class="value">${num(g.wip)}</span><span class="label">WIP (en curso) ${this._help('wip')}</span></div>
-      <div class="card"><span class="val-line"><span class="value">${days(g.agingDaysMax)}</span>${levelBadge(agingLevel(g.agingDaysMax))}</span><span class="label">Aging máx. ${this._help('aging')}</span></div>
-      <div class="card"><span class="val-line"><span class="value">${pct(g.flowEfficiencyPct)}</span>${levelBadge(flowEfficiencyLevel(g.flowEfficiencyPct))}</span><span class="label">Flow efficiency ${this._help('flowEff')}</span></div>
+      <div class="card"><span class="value">${num(g.throughputPerWeek)}</span><span class="label">Throughput / semana</span></div>
+      <div class="card"><span class="value">${hrs(g.cycleTimeP50Hours)}</span><span class="label">Cycle time (p50)</span></div>
+      <div class="card"><span class="value">${hrs(g.cycleTimeP85Hours)}</span><span class="label">Cycle time (p85)</span></div>
+      <div class="card"><span class="value">${num(g.wip)}</span><span class="label">WIP (en curso)</span></div>
+      <div class="card"><span class="val-line"><span class="value">${days(g.agingDaysMax)}</span>${levelBadge(agingLevel(g.agingDaysMax))}</span><span class="label">Aging máx.</span></div>
+      <div class="card"><span class="val-line"><span class="value">${pct(g.flowEfficiencyPct)}</span>${levelBadge(flowEfficiencyLevel(g.flowEfficiencyPct))}</span><span class="label">Flow efficiency</span></div>
     </div>`;
   }
 
   _renderTable(units, unitWord) {
     return html`<table>
       <thead><tr>
-        <th>${unitWord}</th><th class="num">Throughput/sem</th><th class="num">Cycle p50</th>
-        <th class="num">Cycle p85</th><th class="num">WIP</th><th class="num">Aging máx</th><th class="num">Flow eff.</th>
+        <th>${unitWord}</th>
+        <th class="num">Throughput/sem ${this._help('throughput')}</th>
+        <th class="num">Cycle p50 ${this._help('cycleP50')}</th>
+        <th class="num">Cycle p85 ${this._help('cycleP85')}</th>
+        <th class="num">WIP ${this._help('wip')}</th>
+        <th class="num">Aging máx ${this._help('aging')}</th>
+        <th class="num">Flow eff. ${this._help('flowEff')}</th>
       </tr></thead>
       <tbody>${units.map((u) => this._renderRow(u))}</tbody>
     </table>`;
