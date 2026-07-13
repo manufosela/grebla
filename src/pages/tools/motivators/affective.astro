@@ -1,0 +1,17 @@
+---
+import Motivators from '../../../layouts/Motivators.astro';
+---
+
+<Motivators title="GREBLA — Affective Motivators" name="Affective Motivators">
+  <h1 class="page-title">Affective Motivators</h1>
+  <p class="page-lead">
+    Ordena qué necesitas sentir en tu equipo, de lo más importante (1) a lo menos (10).
+    Es una reflexión personal: tu orden es privado y solo se comparten resultados agregados de equipo.
+  </p>
+
+  <motivators-app deck="affective_motivators"></motivators-app>
+</Motivators>
+
+<script>
+  import '../../../client/motivators.js';
+</script>
