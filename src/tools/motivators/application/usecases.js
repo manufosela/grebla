@@ -103,13 +103,14 @@ export async function saveSession(p, input, now = new Date()) {
 }
 
 /**
- * Histórico privado del jugador para un juego (todas sus sesiones).
- * @param {MotivatorsPersistence} p @param {string} usuarioId @param {GameId} game
+ * Histórico privado del jugador para un juego (todas sus sesiones). Se filtra por
+ * `uid` (la cuenta dueña), que es lo que permiten leer las reglas de Firestore.
+ * @param {MotivatorsPersistence} p @param {string} uid @param {GameId} game
  * @returns {Promise<Session[]>}
  */
-export function getMyHistory(p, usuarioId, game) {
+export function getMyHistory(p, uid, game) {
   assertGame(game);
-  return p.sessions.listByUser(usuarioId, game);
+  return p.sessions.listByUser(uid, game);
 }
 
 /** Agregados públicos de un juego. @param {MotivatorsPersistence} p @param {GameId} game @returns {Promise<import('../domain/types.js').Aggregates|null>} */

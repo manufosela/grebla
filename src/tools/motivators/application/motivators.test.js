@@ -41,7 +41,7 @@ describe('usecases motivadores (memoria)', () => {
     const sid = await saveSession(p, { round, identity: identity('p1', 'L1'), orden }, NOW);
     expect(sid).toBe(`${roundId}__p1`);
 
-    const history = await getMyHistory(p, 'p1', GAME);
+    const history = await getMyHistory(p, 'uid-p1', GAME);
     expect(history).toHaveLength(1);
     expect(history[0].orden).toHaveLength(10);
     expect(history[0].equipoId).toBe('L1');
@@ -54,7 +54,7 @@ describe('usecases motivadores (memoria)', () => {
     const ids = deckCardIds(GAME);
     await saveSession(p, { round, identity: identity('p1', 'L1'), orden: ordenFrom(ids) }, NOW);
     await saveSession(p, { round, identity: identity('p1', 'L1'), orden: ordenFrom(ids.toReversed()) }, NOW);
-    const history = await getMyHistory(p, 'p1', GAME);
+    const history = await getMyHistory(p, 'uid-p1', GAME);
     expect(history).toHaveLength(1); // una sola, sobrescrita
     expect(history[0].orden[0].motivadorId).toBe(ids.at(-1));
   });

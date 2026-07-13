@@ -16,7 +16,7 @@
  *
  * @typedef {Object} SessionRepository
  * @property {(sessionId: string, session: Session) => Promise<void>} save   Upsert (id determinista).
- * @property {(usuarioId: string, game: GameId) => Promise<Session[]>} listByUser
+ * @property {(uid: string, game: GameId) => Promise<Session[]>} listByUser   Sesiones de la cuenta (uid dueño); seguro ante las reglas.
  * @property {(roundId: string) => Promise<Session[]>} listByRound   Solo superadmin / Cloud Function.
  *
  * @typedef {Object} AggregateRepository
