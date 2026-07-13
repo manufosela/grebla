@@ -247,10 +247,21 @@ function buildO2OPrompt(kind, previousPeriods, instructions) {
     })
     .join('\n\n');
   const context = prev
-    ? `O2O de periodos anteriores:\n\n${prev}`
-    : 'No hay periodos anteriores con preguntas; propón una batería inicial sólida.';
-  const extra = instructions?.trim() ? `\n\nEnfoque pedido por el líder: ${instructions.trim()}` : '';
-  return `Eres experto en gestión de equipos de ingeniería y diseñas one-to-ones (O2O). Propón una ${label} para el próximo periodo.\n\n${context}${extra}\n\nCriterios: preguntas abiertas y concretas, en español, agrupadas en bloques temáticos (p. ej. cómo van hoy, carrera y crecimiento, bienestar, feedback mutuo). No repitas literalmente las de periodos anteriores: renuévalas manteniendo continuidad. Entre 3 y 6 bloques y 2-5 preguntas por bloque. Llama a la herramienta emit_o2o_questions con el resultado.`;
+    ? `Histórico de O2O anteriores (guías y formularios ya usados):\n\n${prev}`
+    : 'No hay O2O anteriores con preguntas; propón una batería inicial sólida.';
+  // Enfoque por defecto (persona-céntrico) si el líder no da uno propio.
+  const focus = instructions?.trim()
+    ? instructions.trim()
+    : 'un O2O centrado en la persona: cómo va su trabajo ahora, crecimiento y carrera, bienestar y carga, feedback mutuo, y obstáculos y apoyo que necesita';
+  return `Eres experto en gestión de equipos de ingeniería y diseñas one-to-ones (O2O). Tu tarea: proponer una ${label} para el PRÓXIMO O2O.
+
+ENFOQUE del O2O: ${focus}.
+
+${context}
+
+HILO CONDUCTOR: este O2O CONTINÚA a los anteriores, no empieza de cero. Retoma los temas que quedaron abiertos y haz evolucionar la conversación. NO repitas las preguntas ya usadas en O2O anteriores —salvo que quieras medir la evolución de algo concreto; en ese caso, reformúlala dejando claro que se compara con la vez anterior—.
+
+Criterios: preguntas abiertas y concretas, en español, agrupadas en 3-6 bloques temáticos (2-5 preguntas por bloque), cubriendo los ejes del enfoque sin forzarlos todos si no aplican. Llama a la herramienta emit_o2o_questions con el resultado.`;
 }
 
 export const o2oProposeQuestions = onCall(
