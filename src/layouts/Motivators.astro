@@ -1,0 +1,29 @@
+---
+/**
+ * Layout de los juegos de Motivadores (Moving / Affective). Envuelve Base y marca
+ * la ruta protegida. Props: title, name (nombre del juego para la barra).
+ */
+import Base from './Base.astro';
+
+const { title = 'Motivadores', name = 'Motivadores' } = Astro.props;
+---
+
+<Base title={title} requireAuth={true}>
+  <nav class="tool-nav" aria-label={name}>
+    <a href="/" class="tool-back">← Volver</a>
+    <span class="tool-name">🃏 {name}</span>
+  </nav>
+  <slot />
+</Base>
+
+<style>
+  .tool-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--rm-border);
+  }
+  .tool-name { font-weight: 800; color: var(--rm-accent); }
+</style>
