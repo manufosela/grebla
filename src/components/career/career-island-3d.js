@@ -1330,12 +1330,11 @@ export class CareerIsland3D extends LitElement {
       return;
     }
     this._renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 2));
-    // Pasada de calidad (RMR-TSK-0207): tone mapping filmográfico + gestión de
-    // color. Coste de runtime ~0 (solo el shader de salida), pero da contraste y
-    // color mucho más ricos. La exposición se sube un poco para compensar el
-    // oscurecimiento típico de ACES.
-    this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._renderer.toneMappingExposure = 1.15;
+    // Pasada de calidad (RMR-TSK-0207 / RMR-BUG-0025): tone mapping que PRESERVA la
+    // saturación (Neutral, de Khronos) en vez de ACES —que lavaba los colores a
+    // pastel—, con exposición neutra. Coste de runtime ~0 y colores vivos.
+    this._renderer.toneMapping = THREE.NeutralToneMapping;
+    this._renderer.toneMappingExposure = 1;
     // Sombras suaves (MC-10): shadow map PCF del sol direccional. OJO:
     // PCFSoftShadowMap está DEPRECADO en three 0.185 (el propio renderer lo
     // degrada a PCF con un warning por frame); el suavizado del borde lo da
@@ -1351,7 +1350,7 @@ export class CareerIsland3D extends LitElement {
     // el coste es un pre-cálculo puntual al montar, no por frame.
     const pmrem = new THREE.PMREMGenerator(this._renderer);
     this._scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this._scene.environmentIntensity = 0.55; // ambiente sutil: no aplanar el sol
+    this._scene.environmentIntensity = 0.22; // reflejos/ambiente MUY sutiles: no lavar el color
     pmrem.dispose();
 
     this._camera = new THREE.PerspectiveCamera(45, 1, 0.5, 4000);
@@ -2791,7 +2790,7 @@ export class CareerIsland3D extends LitElement {
         y: GROUND_Y + 10.5,
         z: center.wz,
         scale: 6.5,
-        color: '#5b6b7d',
+        color: '#243447',
         id: `area:${area.id}`,
         kind: 'area',
         targetPx: LABEL_PX.area,
@@ -3508,7 +3507,7 @@ export class CareerIsland3D extends LitElement {
       y: 11,
       z: 0,
       scale: 6,
-      color: '#5b6b7d',
+      color: '#243447',
       id: 'area:puerto',
       kind: 'area', // topónimo estructural: mismo rango que las comarcas
       targetPx: LABEL_PX.area,
@@ -5959,17 +5958,24 @@ export class CareerIsland3D extends LitElement {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const fs = 44;
+    const pad = 20; // margen holgado para el halo grueso + la sombra de contraste
     ctx.font = `700 ${fs}px system-ui, sans-serif`;
-    const w = Math.ceil(ctx.measureText(text).width) + 24;
+    const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
     canvas.width = w;
-    canvas.height = fs + 24;
+    canvas.height = fs + pad * 2;
     // Cambiar el tamaño del canvas resetea el contexto: se reconfigura la fuente.
     ctx.font = `700 ${fs}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 8;
+    // Contraste robusto (RMR-BUG-0025): una sombra oscura difusa DETRÁS de un halo
+    // blanco sólido separa el texto tanto del fondo claro de la isla como del agua.
+    ctx.shadowColor = 'rgba(16, 24, 36, 0.6)';
+    ctx.shadowBlur = 5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 9;
+    ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+    ctx.shadowColor = 'transparent'; // el halo nítido y el relleno van sin sombra
     ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
     ctx.fillStyle = color;
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
