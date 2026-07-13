@@ -1540,6 +1540,10 @@ export class CareerIsland3D extends LitElement {
   _updateLabels() {
     if (!this._camera || !this._renderer || this._viewH === 0) return;
     const onFoot = this._mode === 'fps' || this._mode === 'to-fps';
+    // Los discos de color de las comarcas (RMR-BUG-0026) son una ayuda de la vista
+    // AÉREA; a ras de suelo (primera persona) su plano se cruza con el terreno con
+    // relieve y hace z-fighting (el suelo «parpadea» al andar), así que se ocultan.
+    for (const patch of this._areaPatches) patch.visible = !onFoot;
     const sprites = onFoot
       ? this._teammateLabels
       : [...this._areaLabels, ...this._cityLabels, ...this._wizardLabels, ...this._teammateLabels];
