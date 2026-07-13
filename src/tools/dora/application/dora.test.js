@@ -301,9 +301,9 @@ describe('DORA — repos owner-scoped (multi-leader)', () => {
     expect(repo.ownerLeaderUid).toBe('uid-ana');
   });
 
-  it('list del líder filtra por owner; viewAll (superadmin) los ve todos', async () => {
-    // Cada líder tiene su propia vista (mismo store no aplica: son instancias
-    // distintas); aquí simulamos un store compartido con el seed.
+  it('list del líder ve globales + propios (no los de otro líder); viewAll ve todos', async () => {
+    // Ámbito personal/global (como guilds/labels): el líder ve los globales (sin
+    // owner, del superadmin) y los suyos, nunca los personales de otro líder.
     const seed = [
       { id: 'r1', fullName: 'org/web', ownerLeaderUid: 'uid-ana', guilds: [], baseBranch: 'main', deploySignal: 'branch', startDate: null },
       { id: 'r2', fullName: 'org/api', ownerLeaderUid: 'uid-luis', guilds: [], baseBranch: 'main', deploySignal: 'branch', startDate: null },
@@ -312,9 +312,9 @@ describe('DORA — repos owner-scoped (multi-leader)', () => {
     const ana = createMemoryDoraPersistence(seed, { leaderUid: 'uid-ana' });
     const superadmin = createMemoryDoraPersistence(seed, { leaderUid: 'uid-ana', viewAll: true });
 
-    // El líder solo ve los suyos (no los de otro líder ni los legacy sin owner).
-    expect((await listRepos(ana)).map((r) => r.fullName)).toEqual(['org/web']);
-    // El superadmin (viewAll) ve todos, incluidos los legacy sin ownerLeaderUid.
+    // Ana ve el global (legacy, sin owner) + el suyo (web), NO el de Luis (api).
+    expect((await listRepos(ana)).map((r) => r.fullName)).toEqual(['org/legacy', 'org/web']);
+    // El superadmin (viewAll) ve todos.
     expect((await listRepos(superadmin)).map((r) => r.fullName)).toEqual(['org/api', 'org/legacy', 'org/web']);
   });
 
