@@ -22,6 +22,15 @@
  * @property {string|null} [startedAt]     Cuándo pasó a «en curso».
  * @property {string|null} [completedAt]   Cuándo se completó.
  * @property {string|null} [canceledAt]
+ * @property {string} [identifier]         Identificador humano de Linear (p. ej. «TRIBBU-123»).
+ * @property {string|null} [url]           Enlace directo a la issue en Linear.
+ * @property {string} [title]              Título de la issue.
+ *
+ * @typedef {Object} OldestWipIssue   Issue en curso del reporte «más antiguas» (con enlace a Linear).
+ * @property {string} identifier
+ * @property {string|null} url
+ * @property {string} title
+ * @property {number} agingDays        Días que lleva abierta (en curso).
  *
  * @typedef {Object} FlowMetrics   Métricas de flujo de un equipo en una ventana.
  * @property {number} completed              Issues completadas en la ventana.
@@ -31,6 +40,7 @@
  * @property {number} wip                    Issues en curso ahora (`started`).
  * @property {number|null} agingDaysMax      Antigüedad máxima de un WIP, en días.
  * @property {number} agingDaysAvg           Antigüedad media de los WIP, en días.
+ * @property {OldestWipIssue[]} [oldestWip]  Las 3 issues en curso más antiguas (con enlace a Linear).
  * @property {number|null} [flowEfficiencyPct]  Flow efficiency (% activo/total) — Fase 2.
  * @property {string} [periodFrom]           ISO inicio de la ventana.
  * @property {string} [periodTo]             ISO fin de la ventana.

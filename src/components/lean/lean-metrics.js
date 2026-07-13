@@ -63,6 +63,18 @@ export class LeanMetrics extends LitElement {
     }
     .help:hover { background: #14293f; }
     .help:focus-visible { outline: 2px solid #2a9d8f; outline-offset: 2px; }
+    /* Reporte «issues más antiguas»: contraste con tokens que cambian con el tema
+       (texto sobre superficie) + acentos legibles en claro y oscuro. */
+    .oldest { display: grid; gap: 0.7rem; margin: 0.3rem 0 1.25rem; }
+    .oldest-name { font-weight: 700; font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); }
+    .oldest-list { list-style: none; margin: 0.25rem 0 0; padding: 0; display: grid; gap: 0.25rem; }
+    .oldest-list li { font-size: 0.83rem; line-height: 1.35; }
+    .oldest-link { color: var(--rm-text, #1a1a1a); text-decoration: none; display: inline-flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
+    .oldest-link:hover .oldest-id, .oldest-link:hover .oldest-title { text-decoration: underline; }
+    .oldest-link:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
+    .oldest-id { font-weight: 700; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
+    .oldest-title { color: var(--rm-text, #1a1a1a); }
+    .oldest-days { font-weight: 700; color: var(--rm-coral-600, #e26d5e); font-variant-numeric: tabular-nums; white-space: nowrap; }
   `, levelStyles];
 
   constructor() {
@@ -131,7 +143,33 @@ export class LeanMetrics extends LitElement {
       ${this._renderCards(group.global)}
       <h4>Por ${unitWord.toLowerCase()}</h4>
       ${this._renderTable(units, unitWord)}
+      ${this._renderOldestWip(units)}
     `;
+  }
+
+  /** Reporte accionable: las issues en curso más antiguas de cada unidad, con enlace
+   * a Linear, para ir a desatascarlas. Sin responsable (foco de equipo). */
+  _renderOldestWip(units) {
+    const withWip = units.filter((u) => (u.metrics?.oldestWip ?? []).length > 0);
+    if (withWip.length === 0) return null;
+    return html`
+      <h4>🕒 Issues más antiguas en curso</h4>
+      <div class="oldest">
+        ${withWip.map((u) => html`<div class="oldest-unit">
+          <span class="oldest-name">${u.name}</span>
+          <ul class="oldest-list">
+            ${(u.metrics.oldestWip ?? []).map((i) => html`<li>${this._renderIssueLink(i)}</li>`)}
+          </ul>
+        </div>`)}
+      </div>
+    `;
+  }
+
+  _renderIssueLink(i) {
+    const body = html`<span class="oldest-id">${i.identifier}</span> <span class="oldest-title">${i.title}</span> <span class="oldest-days">${i.agingDays} d</span>`;
+    return i.url
+      ? html`<a class="oldest-link" href=${i.url} target="_blank" rel="noopener noreferrer">${body}</a>`
+      : html`<span class="oldest-link">${body}</span>`;
   }
 
   /** Icono «?» con la ayuda de una métrica en `title` (tooltip nativo del navegador:

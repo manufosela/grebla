@@ -58,6 +58,21 @@ export function computeFlowMetrics(issues, period) {
     .map((i) => (i.startedAt ? (nowMs - ms(i.startedAt)) / DAY : Number.NaN))
     .filter((d) => Number.isFinite(d) && d >= 0);
 
+  // Las 3 issues EN CURSO más antiguas, para ir a desatascarlas (con enlace a
+  // Linear). Sin responsable: es un reporte de equipo, no individual.
+  const oldestWip = wipIssues
+    .filter((i) => i.startedAt)
+    .map((i) => ({ issue: i, days: (nowMs - ms(i.startedAt)) / DAY }))
+    .filter((x) => Number.isFinite(x.days) && x.days >= 0)
+    .sort((a, b) => b.days - a.days)
+    .slice(0, 3)
+    .map((x) => ({
+      identifier: x.issue.identifier ?? x.issue.id,
+      url: x.issue.url ?? null,
+      title: x.issue.title ?? '',
+      agingDays: round1(x.days),
+    }));
+
   const p50 = percentile(cycle, 0.5);
   const p85 = percentile(cycle, 0.85);
 
@@ -69,5 +84,6 @@ export function computeFlowMetrics(issues, period) {
     wip: wipIssues.length,
     agingDaysMax: agingDays.length ? round1(Math.max(...agingDays)) : null,
     agingDaysAvg: agingDays.length ? round1(agingDays.reduce((s, d) => s + d, 0) / agingDays.length) : 0,
+    oldestWip,
   };
 }
