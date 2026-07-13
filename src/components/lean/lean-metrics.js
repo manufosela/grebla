@@ -15,6 +15,16 @@ const days = (v) => (v == null ? '—' : `${v} d`);
 const hrs = (v) => formatHours(v) ?? '—';
 const pct = (v) => (v == null ? '—' : `${v} %`);
 
+/** Ayuda de cada métrica: nombre completo, traducción y qué mide (tooltip «?»). */
+const FIELD_HELP = {
+  throughput: { name: 'Throughput', es: 'Rendimiento', what: 'Issues completadas por semana: cuánto trabajo termina el equipo.' },
+  cycleP50: { name: 'Cycle time · p50', es: 'Tiempo de ciclo (mediana)', what: 'Desde que se empieza una issue hasta que se completa. La mitad tarda menos que esto.' },
+  cycleP85: { name: 'Cycle time · p85', es: 'Tiempo de ciclo (percentil 85)', what: 'El 85 % de las issues tarda menos; refleja la cola de casos lentos.' },
+  wip: { name: 'WIP', es: 'Trabajo en curso (Work In Progress)', what: 'Issues en curso ahora mismo. Mucho WIP = trabajo repartido o atascado.' },
+  aging: { name: 'Aging', es: 'Antigüedad del trabajo en curso', what: 'Días que lleva sin cerrarse la issue en curso más vieja. Alto = algo atascado.' },
+  flowEff: { name: 'Flow efficiency', es: 'Eficiencia de flujo', what: '% del tiempo de ciclo que se trabaja de verdad, frente a esperar en colas/review. Alta = poca espera.' },
+};
+
 export class LeanMetrics extends LitElement {
   static properties = {
     persistence: { attribute: false },
@@ -44,6 +54,21 @@ export class LeanMetrics extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .val-line { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .label { display: inline-flex; align-items: center; gap: 0.25rem; }
+    .help {
+      position: relative; display: inline-grid; place-items: center; width: 14px; height: 14px;
+      border-radius: 50%; border: 1px solid var(--rm-muted, #9ca3af); color: var(--rm-muted, #9ca3af);
+      font-size: 0.62rem; font-weight: 700; cursor: help; flex: 0 0 auto;
+    }
+    .help:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 1px; }
+    .help .tip {
+      position: absolute; bottom: 150%; left: 50%; transform: translateX(-50%); z-index: 6;
+      width: 220px; background: var(--rm-navy, #1e3a5f); color: #fff; text-align: left;
+      padding: 0.5rem 0.6rem; border-radius: 8px; font-size: 0.72rem; font-weight: 400; line-height: 1.35;
+      box-shadow: 0 6px 20px rgba(15, 27, 45, 0.3); opacity: 0; pointer-events: none; transition: opacity 0.12s;
+    }
+    .help:hover .tip, .help:focus .tip, .help:focus-within .tip { opacity: 1; }
+    .help .tip strong { display: block; margin-bottom: 0.15rem; }
   `, levelStyles];
 
   constructor() {
@@ -115,14 +140,22 @@ export class LeanMetrics extends LitElement {
     `;
   }
 
+  /** Icono «?» con tooltip (nombre completo, traducción y qué mide) de una métrica. */
+  _help(key) {
+    const h = FIELD_HELP[key];
+    if (!h) return null;
+    return html`<span class="help" tabindex="0" role="note" aria-label="${h.name} (${h.es}): ${h.what}"
+      >?<span class="tip"><strong>${h.name} — ${h.es}</strong>${h.what}</span></span>`;
+  }
+
   _renderCards(g) {
     return html`<div class="cards">
-      <div class="card"><span class="value">${num(g.throughputPerWeek)}</span><span class="label">Throughput / semana</span></div>
-      <div class="card"><span class="value">${hrs(g.cycleTimeP50Hours)}</span><span class="label">Cycle time (p50)</span></div>
-      <div class="card"><span class="value">${hrs(g.cycleTimeP85Hours)}</span><span class="label">Cycle time (p85)</span></div>
-      <div class="card"><span class="value">${num(g.wip)}</span><span class="label">WIP (en curso)</span></div>
-      <div class="card"><span class="val-line"><span class="value">${days(g.agingDaysMax)}</span>${levelBadge(agingLevel(g.agingDaysMax))}</span><span class="label">Aging máx.</span></div>
-      <div class="card"><span class="val-line"><span class="value">${pct(g.flowEfficiencyPct)}</span>${levelBadge(flowEfficiencyLevel(g.flowEfficiencyPct))}</span><span class="label">Flow efficiency</span></div>
+      <div class="card"><span class="value">${num(g.throughputPerWeek)}</span><span class="label">Throughput / semana ${this._help('throughput')}</span></div>
+      <div class="card"><span class="value">${hrs(g.cycleTimeP50Hours)}</span><span class="label">Cycle time (p50) ${this._help('cycleP50')}</span></div>
+      <div class="card"><span class="value">${hrs(g.cycleTimeP85Hours)}</span><span class="label">Cycle time (p85) ${this._help('cycleP85')}</span></div>
+      <div class="card"><span class="value">${num(g.wip)}</span><span class="label">WIP (en curso) ${this._help('wip')}</span></div>
+      <div class="card"><span class="val-line"><span class="value">${days(g.agingDaysMax)}</span>${levelBadge(agingLevel(g.agingDaysMax))}</span><span class="label">Aging máx. ${this._help('aging')}</span></div>
+      <div class="card"><span class="val-line"><span class="value">${pct(g.flowEfficiencyPct)}</span>${levelBadge(flowEfficiencyLevel(g.flowEfficiencyPct))}</span><span class="label">Flow efficiency ${this._help('flowEff')}</span></div>
     </div>`;
   }
 
