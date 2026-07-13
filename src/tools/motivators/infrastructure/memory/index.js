@@ -46,8 +46,8 @@ export function createMemoryMotivatorsPersistence(seed = {}) {
       async save(sessionId, session) {
         sessions.set(sessionId, { ...session });
       },
-      async listByUser(usuarioId, game) {
-        return [...sessions.values()].filter((s) => s.usuarioId === usuarioId && s.game === game).map((s) => ({ ...s }));
+      async listByUser(uid, game) {
+        return [...sessions.values()].filter((s) => s.uid === uid && s.game === game).map((s) => ({ ...s }));
       },
       async listByRound(roundId) {
         return [...sessions.values()].filter((s) => s.roundId === roundId).map((s) => ({ ...s }));

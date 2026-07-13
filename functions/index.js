@@ -1311,3 +1311,141 @@ export const emitCoinsOnJourneyWrite = onDocumentWritten(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOTIVADORES — agregados públicos (espejo de src/tools/motivators/domain/aggregate.js)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MOTIVATOR_DECK_SIZE = 10;
+
+// Ids de carta por juego (espejo de src/tools/motivators/domain/decks.js). Solo
+// los ids: los textos viven en el cliente; aquí solo se necesita el universo.
+const MOTIVATOR_DECK_IDS = {
+  moving_motivators: ['curiosity', 'honor', 'acceptance', 'mastery', 'power', 'freedom', 'relatedness', 'order', 'goal', 'status'],
+  affective_motivators: ['listening', 'trust', 'authenticity', 'psychological_safety', 'accompanied_vulnerability', 'holistic_care', 'belonging', 'growth_support', 'mutual_commitment', 'closeness'],
+};
+
+const motRound1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
+const motMean = (xs) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length);
+function motMedian(xs) {
+  if (xs.length === 0) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
+}
+
+/** Estadística de un motivador (espejo de statFor del dominio). */
+function motStatFor(motivadorId, positions, size) {
+  const distribution = Array.from({ length: size }, () => 0);
+  for (const p of positions) {
+    if (p >= 1 && p <= size) distribution[p - 1] += 1;
+  }
+  const respondents = positions.length;
+  const top3Count = positions.filter((p) => p <= 3).length;
+  return {
+    motivadorId,
+    averagePosition: motRound1(motMean(positions)),
+    medianPosition: motRound1(motMedian(positions)),
+    top3Count,
+    top3Pct: respondents === 0 ? null : motRound1((top3Count / respondents) * 100),
+    distribution,
+    respondents,
+  };
+}
+
+/** Corte agregado (espejo de aggregateBlock del dominio). */
+function motAggregateBlock(sessions, cardIds, size) {
+  const positionsByCard = new Map(cardIds.map((id) => [id, []]));
+  for (const s of sessions ?? []) {
+    for (const { motivadorId, posicion } of s.orden ?? []) {
+      const bucket = positionsByCard.get(motivadorId);
+      if (bucket) bucket.push(posicion);
+    }
+  }
+  const byMotivator = {};
+  for (const id of cardIds) byMotivator[id] = motStatFor(id, positionsByCard.get(id) ?? [], size);
+  const rankKey = (stat) => (stat.averagePosition == null ? Number.POSITIVE_INFINITY : stat.averagePosition);
+  const ranking = cardIds.map((id) => byMotivator[id]).sort((a, b) => rankKey(a) - rankKey(b));
+  return { respondents: (sessions ?? []).length, byMotivator, ranking };
+}
+
+function motGroupBy(sessions, keyOf) {
+  const groups = new Map();
+  for (const s of sessions ?? []) {
+    const key = keyOf(s);
+    if (key == null) continue;
+    const list = groups.get(key) ?? [];
+    list.push(s);
+    groups.set(key, list);
+  }
+  return groups;
+}
+
+/** Agregados completos de un juego (espejo de computeAggregates del dominio). */
+function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size) {
+  const all = sessions ?? [];
+  const byRoundSessions = motGroupBy(all, (s) => s.roundId);
+  const byLeaderSessions = motGroupBy(all, (s) => s.equipoId);
+
+  const byRound = {};
+  for (const [roundId, list] of byRoundSessions) byRound[roundId] = motAggregateBlock(list, cardIds, size);
+  const byLeader = {};
+  for (const [leaderId, list] of byLeaderSessions) byLeader[leaderId] = motAggregateBlock(list, cardIds, size);
+
+  const roundOrder = orderedRoundIds.length > 0 ? orderedRoundIds : [...byRoundSessions.keys()];
+  const evolution = {};
+  for (const id of cardIds) {
+    evolution[id] = roundOrder
+      .filter((roundId) => byRound[roundId])
+      .map((roundId) => ({ roundId, averagePosition: byRound[roundId].byMotivator[id]?.averagePosition ?? null }));
+  }
+
+  return {
+    game,
+    respondents: all.length,
+    global: motAggregateBlock(all, cardIds, size),
+    byRound,
+    byLeader,
+    evolution,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+const motToMs = (v) => {
+  if (v == null) return 0;
+  if (typeof v.toDate === 'function') return v.toDate().getTime();
+  const ms = new Date(v).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+};
+
+/**
+ * Recalcula el documento público /motivatorAggregates/{game} cada vez que se
+ * crea, edita o borra una sesión. Nunca expone datos individuales: solo medias,
+ * medianas, top-3 y distribución por motivador. Admin SDK (omite reglas).
+ */
+export const onMotivatorSessionWritten = onDocumentWritten(
+  { region: 'europe-west1', document: 'motivatorSessions/{sessionId}' },
+  async (event) => {
+    const after = event.data?.after;
+    const before = event.data?.before;
+    const game = after?.exists ? after.data()?.game : before?.data()?.game;
+    if (!game || !MOTIVATOR_DECK_IDS[game]) {
+      console.warn(`[motivators] sesión sin juego válido, se ignora: ${game}`);
+      return;
+    }
+    const db = getFirestore();
+    const [sessionsSnap, roundsSnap] = await Promise.all([
+      db.collection('motivatorSessions').where('game', '==', game).get(),
+      db.collection('motivatorRounds').where('game', '==', game).get(),
+    ]);
+    const sessions = sessionsSnap.docs.map((d) => d.data());
+    const orderedRoundIds = roundsSnap.docs
+      .map((d) => ({ id: d.id, startMs: motToMs(d.data().startAt) }))
+      .sort((a, b) => a.startMs - b.startMs)
+      .map((r) => r.id);
+
+    const aggregates = motComputeAggregates(sessions, MOTIVATOR_DECK_IDS[game], game, orderedRoundIds, MOTIVATOR_DECK_SIZE);
+    await db.doc(`motivatorAggregates/${game}`).set(aggregates);
+    console.log(`[motivators] agregados de ${game} recalculados (${sessions.length} sesiones).`);
+  },
+);
