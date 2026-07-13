@@ -355,8 +355,6 @@ const PROXIMITY_CHECK_MS = 100;
  * para que salga el prompt «[E] Zarpar».
  */
 const BOAT_PROXIMITY_RADIUS = 12;
-/** Color de la vela de pergamino del barquito pirata amarrado (JG-24). */
-const PARCH_SAIL = 0xf1e4c3;
 /** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
 const AUTOWALK_TIMEOUT_S = 30;
 /** El autopiloto solo AVANZA cuando el rumbo al objetivo está dentro de este ángulo (rad): gira primero. Arco abierto (~34°) para que no se atasque girando al llegar (RMR-BUG-0016). */
@@ -1290,13 +1288,17 @@ export class CareerIsland3D extends LitElement {
     let OrbitControls;
     let PointerLockControls;
     let mergeGeometries;
+    let RoomEnvironment;
+    let GLTFLoader;
     try {
       // Import dinámico: three solo se descarga al montar la vista 3D.
-      [THREE, { OrbitControls }, { PointerLockControls }, { mergeGeometries }] = await Promise.all([
+      [THREE, { OrbitControls }, { PointerLockControls }, { mergeGeometries }, { RoomEnvironment }, { GLTFLoader }] = await Promise.all([
         import('three'),
         import('three/addons/controls/OrbitControls.js'),
         import('three/addons/controls/PointerLockControls.js'),
         import('three/addons/utils/BufferGeometryUtils.js'),
+        import('three/addons/environments/RoomEnvironment.js'),
+        import('three/addons/loaders/GLTFLoader.js'),
       ]);
     } catch (err) {
       this._phase = 'error';
@@ -1306,6 +1308,7 @@ export class CareerIsland3D extends LitElement {
     this._THREE = THREE;
     this._PointerLockControls = PointerLockControls;
     this._mergeGeometries = mergeGeometries;
+    this._GLTFLoader = GLTFLoader;
     this._walkDirScratch = new THREE.Vector3();
     this._lookScratch = new THREE.Vector3();
     this._eulerScratch = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -1327,6 +1330,12 @@ export class CareerIsland3D extends LitElement {
       return;
     }
     this._renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 2));
+    // Pasada de calidad (RMR-TSK-0207): tone mapping filmográfico + gestión de
+    // color. Coste de runtime ~0 (solo el shader de salida), pero da contraste y
+    // color mucho más ricos. La exposición se sube un poco para compensar el
+    // oscurecimiento típico de ACES.
+    this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this._renderer.toneMappingExposure = 1.15;
     // Sombras suaves (MC-10): shadow map PCF del sol direccional. OJO:
     // PCFSoftShadowMap está DEPRECADO en three 0.185 (el propio renderer lo
     // degrada a PCF con un warning por frame); el suavizado del borde lo da
@@ -1336,6 +1345,14 @@ export class CareerIsland3D extends LitElement {
 
     this._scene = new THREE.Scene();
     this._scene.background = new THREE.Color(ENV_COLORS.sky);
+    // Environment map PROCEDURAL (RMR-TSK-0207): se genera una vez con
+    // PMREMGenerator a partir de RoomEnvironment (sin descargar ningún HDRI). Da
+    // iluminación ambiental por imagen y reflejos sutiles a los materiales PBR;
+    // el coste es un pre-cálculo puntual al montar, no por frame.
+    const pmrem = new THREE.PMREMGenerator(this._renderer);
+    this._scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this._scene.environmentIntensity = 0.55; // ambiente sutil: no aplanar el sol
+    pmrem.dispose();
 
     this._camera = new THREE.PerspectiveCamera(45, 1, 0.5, 4000);
 
@@ -2693,7 +2710,7 @@ export class CareerIsland3D extends LitElement {
         WATER.segments,
         WATER.segments,
       ),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.water, transparent: true, opacity: 0.9 }),
+      new THREE.MeshStandardMaterial({ color: ENV_COLORS.water, transparent: true, opacity: 0.9, roughness: 0.18, metalness: 0.05 }),
     );
     water.rotation.x = -Math.PI / 2;
     water.position.y = TERRAIN.waterY;
@@ -2714,7 +2731,7 @@ export class CareerIsland3D extends LitElement {
         TERRAIN.beach.height,
         TERRAIN.beach.amount,
       ),
-      new THREE.MeshLambertMaterial({ map: this._envTexture('sand'), flatShading: true }),
+      new THREE.MeshStandardMaterial({ map: this._envTexture('sand'), flatShading: true }),
     );
     beach.position.y = TERRAIN.baseY;
     beach.receiveShadow = SHADOWS.enabled;
@@ -2729,7 +2746,7 @@ export class CareerIsland3D extends LitElement {
         TERRAIN.grass.height,
         TERRAIN.grass.amount,
       ),
-      new THREE.MeshLambertMaterial({ map: this._envTexture('grass'), flatShading: true }),
+      new THREE.MeshStandardMaterial({ map: this._envTexture('grass'), flatShading: true }),
     );
     grass.position.y = TERRAIN.baseY;
     grass.receiveShadow = SHADOWS.enabled;
@@ -2756,7 +2773,7 @@ export class CareerIsland3D extends LitElement {
     for (const { area, center, radius, color } of areaLayout(this.map)) {
       const patch = new THREE.Mesh(
         new THREE.CircleGeometry(radius, 24),
-        new THREE.MeshLambertMaterial({
+        new THREE.MeshStandardMaterial({
           color,
           polygonOffset: true,
           polygonOffsetFactor: -1,
@@ -2825,7 +2842,7 @@ export class CareerIsland3D extends LitElement {
     group.position.set(x, groundHeightAt(x, z, { radius: this._islandR }), z);
     group.rotation.y = yaw;
 
-    const postMat = new THREE.MeshLambertMaterial({
+    const postMat = new THREE.MeshStandardMaterial({
       color: ENV_COLORS.post,
       flatShading: true,
       map: this._envTexture('wood'),
@@ -2839,7 +2856,7 @@ export class CareerIsland3D extends LitElement {
     }
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(4.2, 1.7, 0.14),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.plank, flatShading: true, map: this._envTexture('wood') }),
+      new THREE.MeshStandardMaterial({ color: ENV_COLORS.plank, flatShading: true, map: this._envTexture('wood') }),
     );
     board.position.set(0, 2.5, 0);
     board.castShadow = SHADOWS.enabled;
@@ -2968,7 +2985,7 @@ export class CareerIsland3D extends LitElement {
       spot.wz,
     );
     group.rotation.y = spot.yaw;
-    const woodMat = new THREE.MeshLambertMaterial({
+    const woodMat = new THREE.MeshStandardMaterial({
       color: ENV_COLORS.post,
       flatShading: true,
       map: this._envTexture('wood'),
@@ -2993,7 +3010,7 @@ export class CareerIsland3D extends LitElement {
     const plankTop = AREA_SIGN.armY - AREA_SIGN.chainDrop;
     // Cadenitas: dos cilindros finos del brazo al canto superior del tablón.
     const chainGeo = new THREE.CylinderGeometry(0.02, 0.02, AREA_SIGN.chainDrop, 4);
-    const chainMat = new THREE.MeshLambertMaterial({ color: 0x4a4a4a, flatShading: true });
+    const chainMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, flatShading: true });
     for (const lx of [plankX - AREA_SIGN.plankW / 2 + 0.18, plankX + AREA_SIGN.plankW / 2 - 0.18]) {
       const chain = new THREE.Mesh(chainGeo, chainMat);
       chain.position.set(lx, plankTop + AREA_SIGN.chainDrop / 2, 0);
@@ -3001,7 +3018,7 @@ export class CareerIsland3D extends LitElement {
     }
     const plank = new THREE.Mesh(
       new THREE.BoxGeometry(AREA_SIGN.plankW, AREA_SIGN.plankH, AREA_SIGN.plankD),
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         color: ENV_COLORS.plank,
         flatShading: true,
         map: this._envTexture('wood'),
@@ -3098,7 +3115,7 @@ export class CareerIsland3D extends LitElement {
     );
     group.rotation.y = spot.yaw;
 
-    const postMat = new THREE.MeshLambertMaterial({
+    const postMat = new THREE.MeshStandardMaterial({
       color: ENV_COLORS.post,
       flatShading: true,
       map: this._envTexture('wood'),
@@ -3123,7 +3140,7 @@ export class CareerIsland3D extends LitElement {
     tilted.rotation.x = BILLBOARD.tilt;
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(BILLBOARD.boardW, BILLBOARD.boardH, BILLBOARD.boardD),
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         color: ENV_COLORS.plank,
         flatShading: true,
         map: this._envTexture('wood'),
@@ -3270,6 +3287,42 @@ export class CareerIsland3D extends LitElement {
    * @param {{x: number, y: number}} port
    * @param {boolean} labelVisible La etiqueta flotante se oculta a pie.
    */
+  /**
+   * Carga el barco pirata (glTF CC0, Kenney Pirate Kit) dentro del grupo del
+   * muelle: auto-escala a un largo objetivo, apoya la quilla en la línea de agua,
+   * orienta la proa hacia el mar y proyecta sombra. Cada malla hereda
+   * `userData.sail` para que el raycast de «Zarpar» siga funcionando en cualquier
+   * parte del casco. Carga diferida: si el modelo falla, el juego sigue sin él.
+   * @param {import('three').Group} boat grupo ya posicionado en el amarre.
+   */
+  _loadBoatModel(boat) {
+    const THREE = this._THREE;
+    new this._GLTFLoader().load(
+      '/models/ship-pirate-large.glb',
+      (gltf) => {
+        if (this._boatGroup !== boat) return; // se desmontó o cambió de isla mientras cargaba
+        const model = gltf.scene;
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const scale = 6.5 / Math.max(size.x, size.z, 0.001); // largo objetivo ~6.5 u
+        model.scale.setScalar(scale);
+        // Recentrar en el origen del grupo y apoyar la quilla en el agua (y=0 local).
+        const center = box.getCenter(new THREE.Vector3()).multiplyScalar(scale);
+        model.position.set(-center.x, -box.min.y * scale, -center.z);
+        model.rotation.y = Math.PI; // proa hacia +z (mar); se afina visualmente
+        model.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = SHADOWS.enabled;
+            o.userData.sail = true;
+          }
+        });
+        boat.add(model);
+      },
+      undefined,
+      (err) => console.warn('No se pudo cargar el modelo del barco:', err),
+    );
+  }
+
   _buildPort(port, labelVisible) {
     const THREE = this._THREE;
     const { wx, wz } = worldFromMap(port.x, port.y);
@@ -3287,7 +3340,7 @@ export class CareerIsland3D extends LitElement {
       const key = `${color}:${texKey ?? ''}`;
       let m = materials.get(key);
       if (!m) {
-        m = new THREE.MeshLambertMaterial({
+        m = new THREE.MeshStandardMaterial({
           color,
           flatShading: true,
           map: texKey ? this._envTexture(texKey) : null,
@@ -3364,57 +3417,11 @@ export class CareerIsland3D extends LitElement {
       x: wx + BOAT_LOCAL.lx * Math.cos(seaYaw) + BOAT_LOCAL.lz * Math.sin(seaYaw),
       z: wz - BOAT_LOCAL.lx * Math.sin(seaYaw) + BOAT_LOCAL.lz * Math.cos(seaYaw),
     };
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.5, 2.6), materialFor(ENV_COLORS.boat));
-    hull.position.y = 0.1;
-    boat.add(hull);
-    const bowGeo = new THREE.ConeGeometry(0.58, 0.9, 4);
-    bowGeo.rotateY(Math.PI / 4); // sección cuadrada alineada con el casco
-    bowGeo.rotateX(Math.PI / 2); // vértice hacia +z (proa)
-    const bow = new THREE.Mesh(bowGeo, materialFor(ENV_COLORS.boat));
-    bow.scale.set(1.4, 0.6, 1);
-    bow.position.set(0, 0.1, 1.72);
-    boat.add(bow);
-    const rim = new THREE.Mesh(
-      new THREE.BoxGeometry(1.31, 0.14, 2.72),
-      materialFor(ENV_COLORS.wood, 'wood'),
-    );
-    rim.position.y = 0.4;
-    boat.add(rim);
-    const bench = new THREE.Mesh(
-      new THREE.BoxGeometry(1.05, 0.1, 0.4),
-      materialFor(ENV_COLORS.plank, 'wood'),
-    );
-    bench.position.y = 0.52;
-    boat.add(bench);
-    // Aparejo pirata (JG-24): mástil, verga, vela de pergamino y gallardete con
-    // calavera — la barca amarrada pasa a leerse como un barquito pirata. Vela
-    // y bandera son hijas del grupo: siguen siendo puerta del archipiélago
-    // (raycast al clicar cualquier parte, y prompt «[E] Zarpar» a pie).
-    const mast = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.07, 2.5, 6),
-      materialFor(ENV_COLORS.wood, 'wood'),
-    );
-    mast.position.set(0, 1.55, 0.1);
-    boat.add(mast);
-    const yard = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.045, 0.045, 1.5, 6),
-      materialFor(ENV_COLORS.wood, 'wood'),
-    );
-    yard.rotation.z = Math.PI / 2;
-    yard.position.set(0, 2.35, 0.1);
-    boat.add(yard);
-    const sail = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.35, 1.25),
-      new THREE.MeshLambertMaterial({ color: PARCH_SAIL, side: THREE.DoubleSide, flatShading: true }),
-    );
-    sail.position.set(0, 1.72, 0.1);
-    boat.add(sail);
-    const pennant = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.6, 0.36),
-      new THREE.MeshBasicMaterial({ map: this._envTexture('jollyroger'), transparent: true, side: THREE.DoubleSide }),
-    );
-    pennant.position.set(0.32, 2.75, 0.1);
-    boat.add(pennant);
+    // Barco pirata «de verdad» (RMR-TSK-0207): modelo glTF low-poly CC0 (Kenney
+    // Pirate Kit) que sustituye al antiguo botecito procedural (caja + cono). Es
+    // DECORATIVO (puerta del archipiélago: clic/«[E] Zarpar»), no participa en el
+    // juego, así que se carga en diferido sin bloquear nada.
+    this._loadBoatModel(boat);
     harbor.add(boat);
 
     // Faro a pie de muelle: torre BLANCA troncocónica con dos franjas rojas,
@@ -3450,7 +3457,7 @@ export class CareerIsland3D extends LitElement {
     // Linterna: pequeña luz cálida arriba (material emisivo, como las ventanas).
     const lantern = new THREE.Mesh(
       new THREE.CylinderGeometry(0.55, 0.55, 0.85, 10),
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         color: ENV_COLORS.window,
         emissive: ENV_COLORS.windowGlow,
         emissiveIntensity: 0.9,
@@ -3483,7 +3490,7 @@ export class CareerIsland3D extends LitElement {
     flagGeo.translate(PIRATE_FLAG.w / 2, 0, 0); // el borde izquierdo, fijo al mástil
     const flag = new THREE.Mesh(
       flagGeo,
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         map: this._envTexture('jollyroger'),
         side: THREE.DoubleSide,
       }),
@@ -3556,7 +3563,7 @@ export class CareerIsland3D extends LitElement {
     // flejes (a color: el material no tinta). Los `stacked` van encima.
     instanced(
       new THREE.CylinderGeometry(PORT_PROPS.barrelR * 0.86, PORT_PROPS.barrelR, PORT_PROPS.barrelH, 9),
-      new THREE.MeshLambertMaterial({ map: this._envTexture('barrel'), flatShading: true }),
+      new THREE.MeshStandardMaterial({ map: this._envTexture('barrel'), flatShading: true }),
       PORT_PROPS.barrels,
       (d, b) => {
         const y =
@@ -3669,7 +3676,7 @@ export class CareerIsland3D extends LitElement {
       const key = `${color}:${texKey ?? ''}`;
       let m = materials.get(key);
       if (!m) {
-        m = new THREE.MeshLambertMaterial({
+        m = new THREE.MeshStandardMaterial({
           color,
           map: texKey ? this._envTexture(texKey) : null,
         });
@@ -3678,7 +3685,7 @@ export class CareerIsland3D extends LitElement {
       return m;
     };
     // Ventanas: un ÚNICO material emisivo suave compartido por todas las casas.
-    const windowMat = new THREE.MeshLambertMaterial({
+    const windowMat = new THREE.MeshStandardMaterial({
       color: ENV_COLORS.window,
       emissive: ENV_COLORS.windowGlow,
       emissiveIntensity: 0.75,
@@ -3729,7 +3736,7 @@ export class CareerIsland3D extends LitElement {
       // de pulso dorado. Se crea uno NUEVO por build (el anterior lo libera
       // _disposeSubtree con su grupo); _tickCelebration anima el vigente.
       if (this._celebration?.cityId === city.id) {
-        const pulseMat = new THREE.MeshLambertMaterial({
+        const pulseMat = new THREE.MeshStandardMaterial({
           color,
           map: this._envTexture('wall'),
           emissive: CITIZEN_GOLD,
@@ -3875,7 +3882,7 @@ export class CareerIsland3D extends LitElement {
         this._celebration?.cityId !== city.id &&
         (this.selected === city.id || (this._mode === 'fps' && this._nearCityId === city.id))
       ) {
-        const selMat = new THREE.MeshLambertMaterial({
+        const selMat = new THREE.MeshStandardMaterial({
           color,
           map: this._envTexture('wall'),
           emissive: ACCENT_COLORS.route,
@@ -4134,7 +4141,7 @@ export class CareerIsland3D extends LitElement {
     // Torre: cilindro púrpura estrellado, levemente troncocónico.
     const body = new THREE.Mesh(
       new THREE.CylinderGeometry(WIZARD.bodyR * 0.88, WIZARD.bodyR, WIZARD.bodyH, 10),
-      new THREE.MeshLambertMaterial({ map: this._envTexture('wizard'), flatShading: true }),
+      new THREE.MeshStandardMaterial({ map: this._envTexture('wizard'), flatShading: true }),
     );
     body.position.y = WIZARD.bodyH / 2;
     body.castShadow = SHADOWS.enabled;
@@ -4143,7 +4150,7 @@ export class CareerIsland3D extends LitElement {
     // Tejado cónico ladeado (el toque «retorcido») con estrella dorada arriba.
     const roof = new THREE.Mesh(
       new THREE.ConeGeometry(WIZARD.roofR, WIZARD.roofH, 10),
-      new THREE.MeshLambertMaterial({ color: WIZARD.colors.roof, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: WIZARD.colors.roof, flatShading: true }),
     );
     roof.position.y = WIZARD.bodyH + WIZARD.roofH / 2 - 0.25;
     roof.rotation.z = WIZARD.roofTilt;
@@ -4151,7 +4158,7 @@ export class CareerIsland3D extends LitElement {
     group.add(roof);
     const star = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.3, 0),
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         color: WIZARD.colors.star,
         emissive: WIZARD.colors.star,
         emissiveIntensity: 0.5,
@@ -4171,7 +4178,7 @@ export class CareerIsland3D extends LitElement {
     // Puerta de madera en la fachada (+z local, hacia el puerto).
     const door = new THREE.Mesh(
       new THREE.BoxGeometry(CITY_DOOR.w, CITY_DOOR.h, CITY_DOOR.d),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.door, flatShading: true, map: this._envTexture('wood') }),
+      new THREE.MeshStandardMaterial({ color: ENV_COLORS.door, flatShading: true, map: this._envTexture('wood') }),
     );
     door.position.set(0, CITY_DOOR.h / 2, WIZARD.bodyR - 0.08);
     group.add(door);
@@ -4203,7 +4210,7 @@ export class CareerIsland3D extends LitElement {
     // Chimenea trasera (ancla del humo de reposo).
     const chimney = new THREE.Mesh(
       new THREE.CylinderGeometry(0.22, 0.26, 1.1, 6),
-      new THREE.MeshLambertMaterial({ color: WIZARD.colors.roof, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: WIZARD.colors.roof, flatShading: true }),
     );
     const chimneyTop = WIZARD.bodyH + 1.15;
     chimney.position.set(-WIZARD.bodyR * 0.55, chimneyTop - 0.55, -WIZARD.bodyR * 0.45);
@@ -4212,7 +4219,7 @@ export class CareerIsland3D extends LitElement {
     // Farol indicador junto a la puerta: poste + esfera emisiva por estado.
     const post = new THREE.Mesh(
       new THREE.CylinderGeometry(0.07, 0.09, WIZARD.lantern.y, 6),
-      new THREE.MeshLambertMaterial({ color: ENV_COLORS.post, flatShading: true, map: this._envTexture('wood') }),
+      new THREE.MeshStandardMaterial({ color: ENV_COLORS.post, flatShading: true, map: this._envTexture('wood') }),
     );
     post.position.set(WIZARD.lantern.postX, WIZARD.lantern.y / 2, WIZARD.bodyR - 0.3);
     group.add(post);
@@ -4224,7 +4231,7 @@ export class CareerIsland3D extends LitElement {
           : WIZARD.colors.none;
     const lantern = new THREE.Mesh(
       new THREE.SphereGeometry(WIZARD.lantern.r, 10, 8),
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         color: lanternColor,
         emissive: lanternColor,
         emissiveIntensity:
@@ -4272,7 +4279,7 @@ export class CareerIsland3D extends LitElement {
       for (let i = 0; i < WIZARD.smoke.count; i += 1) {
         const puff = new THREE.Mesh(
           smokeGeo,
-          new THREE.MeshLambertMaterial({
+          new THREE.MeshStandardMaterial({
             color: WIZARD.colors.smoke,
             transparent: true,
             opacity: 0,
@@ -4966,7 +4973,7 @@ export class CareerIsland3D extends LitElement {
     });
 
     /** Materiales planos de la vegetación (uno por color). */
-    const mat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const mat = (color) => new THREE.MeshStandardMaterial({ color, flatShading: true });
     const dummy = new THREE.Object3D();
     /**
      * InstancedMesh con una matriz por elemento; `place` configura el dummy
@@ -5073,7 +5080,7 @@ export class CareerIsland3D extends LitElement {
     instanced(palmTrunkGeo, mat(ENV_COLORS.palmTrunk), palms, palmPlace);
     instanced(
       palmCrownGeo,
-      new THREE.MeshLambertMaterial({
+      new THREE.MeshStandardMaterial({
         color: ENV_COLORS.palmLeaf,
         flatShading: true,
         side: THREE.DoubleSide,
@@ -5225,7 +5232,7 @@ export class CareerIsland3D extends LitElement {
     return (color) => {
       let m = materials.get(color);
       if (!m) {
-        m = new THREE.MeshLambertMaterial({ color, flatShading: true });
+        m = new THREE.MeshStandardMaterial({ color, flatShading: true });
         materials.set(color, m);
       }
       return m;
