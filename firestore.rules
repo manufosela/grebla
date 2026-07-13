@@ -405,6 +405,45 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // MOTIVADORES — juegos de cartas (Moving & Affective Motivators).
+    // Rondas globales: las crea/edita el superadmin; las lee cualquier autenticado.
+    match /motivatorRounds/{roundId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // Sesiones PRIVADAS del jugador. Id determinista {roundId}__{usuarioId}; cada
+    // doc lleva su `uid` dueño. La lee el dueño o el superadmin (nunca otros
+    // jugadores). La escribe solo el dueño y solo con la ronda ABIERTA: se hace
+    // get() de la ronda y se comprueba que request.time cae en [startAt, endAt]
+    // (fechas guardadas como Timestamp). La barrera es la firma (uid == auth.uid):
+    // nadie escribe la sesión de otro. Los agregados públicos los calcula la Cloud
+    // Function onMotivatorSessionWritten con Admin SDK (omite estas reglas).
+    match /motivatorSessions/{sessionId} {
+      function roundRef() {
+        return get(/databases/$(database)/documents/motivatorRounds/$(request.resource.data.roundId)).data;
+      }
+      function roundOpen() {
+        return roundRef().active == true
+          && request.time >= roundRef().startAt
+          && request.time <= roundRef().endAt;
+      }
+      allow read: if isSuperAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create, update: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && roundOpen();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Agregados públicos por juego (posición media, top-3, evolución…). Los lee
+    // cualquier autenticado; solo los escribe la Cloud Function (Admin SDK). Nunca
+    // desde el cliente: rompería la garantía de que no se filtran datos individuales.
+    match /motivatorAggregates/{game} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
