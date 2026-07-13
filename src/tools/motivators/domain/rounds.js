@@ -66,3 +66,14 @@ export function pickOpenRound(rounds, now = new Date()) {
 export function sortRoundsChronologically(rounds) {
   return (rounds ?? []).toSorted((a, b) => (toMs(a.startAt) ?? 0) - (toMs(b.startAt) ?? 0));
 }
+
+/**
+ * Convierte un rango de días (`YYYY-MM-DD`) a la ventana ISO de la ronda: desde el
+ * inicio del primer día hasta el final del último (inclusive).
+ * @param {string} startDate  YYYY-MM-DD
+ * @param {string} endDate    YYYY-MM-DD
+ * @returns {{ startAt: string, endAt: string }}
+ */
+export function dayWindowToIso(startDate, endDate) {
+  return { startAt: `${startDate}T00:00:00.000Z`, endAt: `${endDate}T23:59:59.999Z` };
+}

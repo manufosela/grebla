@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isRoundOpen, roundStatus, pickOpenRound, sortRoundsChronologically } from './rounds.js';
+import { isRoundOpen, roundStatus, pickOpenRound, sortRoundsChronologically, dayWindowToIso } from './rounds.js';
 
 const round = (id, startAt, endAt, active = true) => ({ id, game: 'g', name: id, startAt, endAt, active });
 const NOW = new Date('2026-07-13T12:00:00Z');
@@ -42,5 +42,14 @@ describe('sortRoundsChronologically', () => {
       round('a', '2026-07-01T00:00:00Z', '2026-07-04T00:00:00Z'),
     ];
     expect(sortRoundsChronologically(rounds).map((r) => r.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('dayWindowToIso', () => {
+  it('abre el primer día y cierra al final del último (inclusive)', () => {
+    expect(dayWindowToIso('2026-07-12', '2026-07-14')).toEqual({
+      startAt: '2026-07-12T00:00:00.000Z',
+      endAt: '2026-07-14T23:59:59.999Z',
+    });
   });
 });

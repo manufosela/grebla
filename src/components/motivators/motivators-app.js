@@ -12,6 +12,7 @@ import { saveSession } from '../../tools/motivators/application/usecases.js';
 import './motivators-board.js';
 import './motivators-my-results.js';
 import './motivators-aggregates.js';
+import './motivators-rounds-admin.js';
 
 export class MotivatorsApp extends LitElement {
   static properties = {
@@ -69,6 +70,7 @@ export class MotivatorsApp extends LitElement {
     const tabs = [];
     if (this._canPlay) tabs.push({ id: 'play', label: 'Jugar' }, { id: 'mine', label: 'Mis resultados' });
     tabs.push({ id: 'results', label: 'Resultados' });
+    if (this.role === 'superadmin') tabs.push({ id: 'rounds', label: 'Rondas' });
     return tabs;
   }
 
@@ -121,6 +123,10 @@ export class MotivatorsApp extends LitElement {
     if (view === 'mine') {
       return html`<motivators-my-results .persistence=${this.persistence} .deck=${this._deck}
         uid=${this.uid} .rounds=${this.rounds}></motivators-my-results>`;
+    }
+    if (view === 'rounds') {
+      return html`<motivators-rounds-admin .persistence=${this.persistence} game=${this.deck}
+        accent=${this._deck?.accent ?? 'teal'} createdBy=${this.uid}></motivators-rounds-admin>`;
     }
     return html`<motivators-aggregates .persistence=${this.persistence} .deck=${this._deck}
       .leaderNames=${this.leaderNames} .rounds=${this.rounds}></motivators-aggregates>`;
