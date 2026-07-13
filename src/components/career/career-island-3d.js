@@ -1063,6 +1063,10 @@ export class CareerIsland3D extends LitElement {
     this._boatGroup = null;
     /** Posición de mundo de la barca para la proximidad a pie (MC-14), o null. */
     this._boatSpot = null;
+    /** Corredor caminable del muelle (RMR-TSK-0208): cápsula A→B + cubierta, o null. */
+    this._dockCorridor = null;
+    /** Guard del auto-zarpar a pie: evita disparar el viaje varias veces seguidas. */
+    this._sailed = false;
     // La cabaña del brujo (MC-22): estado visual (lo pone <career-app> desde
     // las consultas de la isla), grupo propio (se rehace al cambiar el estado
     // o el mapa), posición determinista (wizardSpot) y refs del indicador.
@@ -2121,7 +2125,7 @@ export class CareerIsland3D extends LitElement {
           dir,
           dt,
           WALK_SPEED * (running ? RUN_MULTIPLIER : 1),
-          { radius: this._walkRadius },
+          { radius: this._walkRadius, dock: this._dockCorridor },
         );
         // Colisión con las casas (MC-9, collideWithCities puro): no se
         // atraviesan — se desliza por su contorno — y un empuje FRONTAL
@@ -2152,6 +2156,20 @@ export class CareerIsland3D extends LitElement {
         } else if (col.hitWizard && fwd > 0) {
           this._openWizard();
         }
+        // Zarpar yendo hacia el barco (RMR-TSK-0208): cerca del barco, avanzando y
+        // MIRANDO hacia él → viajar, como al chocar de frente con una casa. La [E]
+        // sigue disponible; el guard se rearma al alejarse para no zarpar en bucle.
+        if (this._boatSpot) {
+          const toBx = this._boatSpot.x - cam.x;
+          const toBz = this._boatSpot.z - cam.z;
+          const toBd = Math.hypot(toBx, toBz);
+          if (toBd > BOAT_PROXIMITY_RADIUS) {
+            this._sailed = false;
+          } else if (!this._sailed && fwd > 0 && toBd > 0 && (fx * toBx + fz * toBz) / toBd >= 0.7) {
+            this._sailed = true;
+            this._openArchipelago();
+          }
+        }
       }
     } else if (this._autoWalkTargetId) {
       // Autopiloto (JG-21): sin teclas pulsadas, el avatar camina solo hacia
@@ -2159,7 +2177,7 @@ export class CareerIsland3D extends LitElement {
       // llegar andando); una tecla de movimiento cancela el autopiloto.
       this._autoWalkStep(dt);
     }
-    cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR }) + EYE_HEIGHT;
+    cam.y = groundHeightAt(cam.x, cam.z, { radius: this._islandR, dock: this._dockCorridor }) + EYE_HEIGHT;
     this._updateGuide();
     if (now - this._lastProxTs >= PROXIMITY_CHECK_MS) {
       this._lastProxTs = now;
@@ -2621,7 +2639,9 @@ export class CareerIsland3D extends LitElement {
     // (y quedan null en un mapa sin puerto, MC-14).
     this._boatGroup = null;
     this._boatSpot = null;
+    this._dockCorridor = null;
     this._nearBoat = false;
+    this._sailed = false;
     this._replaceGroup('_staticGroup', this._buildStatic());
     this._rebuildCities();
     this._rebuildWizard(); // la cabaña del brujo depende del mapa (MC-22)
@@ -3416,6 +3436,23 @@ export class CareerIsland3D extends LitElement {
       x: wx + BOAT_LOCAL.lx * Math.cos(seaYaw) + BOAT_LOCAL.lz * Math.sin(seaYaw),
       z: wz - BOAT_LOCAL.lx * Math.sin(seaYaw) + BOAT_LOCAL.lz * Math.cos(seaYaw),
     };
+    // Corredor caminable del muelle (RMR-TSK-0208): cápsula a lo largo del EJE del
+    // muelle (la dirección centro→puerto, porque seaYaw = atan2(wx,wz)), desde el
+    // borde del círculo caminable hasta cerca del barco. Deja andar por los tablones
+    // (deckY) y zarpar al llegar. Sin puerto (d≈0) no hay corredor.
+    if (d > 0.001) {
+      const dirX = wx / d;
+      const dirZ = wz / d;
+      const walkR = walkableRadius(this._islandR); // robusto al orden de construcción
+      this._dockCorridor = {
+        ax: dirX * walkR,
+        az: dirZ * walkR,
+        bx: dirX * (d + dockLen - 1.5),
+        bz: dirZ * (d + dockLen - 1.5),
+        halfWidth: PLANK.w / 2 - 0.3,
+        deckY: GROUND_Y + DECK_Y + PLANK.t / 2,
+      };
+    }
     // Barco pirata «de verdad» (RMR-TSK-0207): modelo glTF low-poly CC0 (Kenney
     // Pirate Kit) que sustituye al antiguo botecito procedural (caja + cono). Es
     // DECORATIVO (puerta del archipiélago: clic/«[E] Zarpar»), no participa en el
