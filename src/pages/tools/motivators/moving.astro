@@ -1,0 +1,17 @@
+---
+import Motivators from '../../../layouts/Motivators.astro';
+---
+
+<Motivators title="GREBLA — Moving Motivators" name="Moving Motivators">
+  <h1 class="page-title">Moving Motivators</h1>
+  <p class="page-lead">
+    Ordena qué te mueve de verdad en el trabajo, de lo más importante (1) a lo menos (10).
+    Es una reflexión personal: tu orden es privado y solo se comparten resultados agregados de equipo.
+  </p>
+
+  <motivators-app deck="moving_motivators"></motivators-app>
+</Motivators>
+
+<script>
+  import '../../../client/motivators.js';
+</script>
