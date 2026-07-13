@@ -35,6 +35,22 @@ describe('computeFlowMetrics', () => {
     expect(m.agingDaysMax).toBe(3);
   });
 
+  it('oldestWip: las 3 issues en curso más antiguas, ordenadas por antigüedad, con enlace', () => {
+    const wip = (n, days) => ({ id: `w${n}`, stateType: 'started', createdAt: from, startedAt: iso(toMs - days * D), identifier: `T-${n}`, url: `https://linear.app/x/T-${n}`, title: `Issue ${n}` });
+    const issues = [
+      wip(1, 10), wip(2, 2), wip(3, 5), wip(4, 7),
+      { id: 'done', stateType: 'completed', createdAt: from, startedAt: from, completedAt: iso(fromMs + D) }, // no cuenta
+    ];
+    const m = computeFlowMetrics(issues, { from, to });
+    expect(m.oldestWip.map((o) => o.identifier)).toEqual(['T-1', 'T-4', 'T-3']); // top 3 por días desc
+    expect(m.oldestWip[0]).toEqual({ identifier: 'T-1', url: 'https://linear.app/x/T-1', title: 'Issue 1', agingDays: 10 });
+  });
+
+  it('oldestWip vacío si no hay issues en curso', () => {
+    const issues = [{ id: 'c', stateType: 'completed', createdAt: from, startedAt: from, completedAt: iso(fromMs + D) }];
+    expect(computeFlowMetrics(issues, { from, to }).oldestWip).toEqual([]);
+  });
+
   it('sin issues → ceros/nulls sin romper', () => {
     const m = computeFlowMetrics([], { from, to });
     expect(m).toMatchObject({ completed: 0, throughputPerWeek: 0, cycleTimeP50Hours: null, wip: 0, agingDaysMax: null, agingDaysAvg: 0 });

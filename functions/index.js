@@ -768,6 +768,19 @@ function computeFlowMetricsFn(issues, period) {
   const agingDays = wipIssues
     .map((i) => (i.startedAt ? (nowMs - t(i.startedAt)) / FLOW_DAY : NaN))
     .filter((d) => Number.isFinite(d) && d >= 0);
+  // Top-3 issues en curso más antiguas (con enlace a Linear); espejo del dominio.
+  const oldestWip = wipIssues
+    .filter((i) => i.startedAt)
+    .map((i) => ({ issue: i, days: (nowMs - t(i.startedAt)) / FLOW_DAY }))
+    .filter((x) => Number.isFinite(x.days) && x.days >= 0)
+    .sort((a, b) => b.days - a.days)
+    .slice(0, 3)
+    .map((x) => ({
+      identifier: x.issue.identifier ?? x.issue.id,
+      url: x.issue.url ?? null,
+      title: x.issue.title ?? '',
+      agingDays: flowRound1(x.days),
+    }));
   const p50 = flowPercentile(cycle, 0.5);
   const p85 = flowPercentile(cycle, 0.85);
   return {
@@ -778,6 +791,7 @@ function computeFlowMetricsFn(issues, period) {
     wip: wipIssues.length,
     agingDaysMax: agingDays.length ? flowRound1(Math.max(...agingDays)) : null,
     agingDaysAvg: agingDays.length ? flowRound1(agingDays.reduce((s, d) => s + d, 0) / agingDays.length) : 0,
+    oldestWip,
     flowEfficiencyPct: flowEfficiencyFn(completed),
   };
 }
@@ -787,7 +801,7 @@ const LINEAR_ISSUES_QUERY = `
     issues(first: 100, after: $after, filter: $filter) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id createdAt startedAt completedAt canceledAt state { type }
+        id identifier url title createdAt startedAt completedAt canceledAt state { type }
         history(first: 50) { nodes { toState { type name } createdAt } }
       }
     }
@@ -857,6 +871,9 @@ async function fetchLinearIssues(label, sinceIso, apiKey) {
     for (const n of conn.nodes) {
       out.push({
         id: n.id,
+        identifier: n.identifier ?? n.id,
+        url: n.url ?? null,
+        title: n.title ?? '',
         stateType: n.state?.type ?? 'backlog',
         createdAt: n.createdAt,
         startedAt: n.startedAt ?? null,
