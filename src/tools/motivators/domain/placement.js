@@ -79,6 +79,30 @@ export function slotsToOrden(slots) {
 }
 
 /**
+ * Sanea unos slots (p. ej. un borrador restaurado): fija el tamaño, descarta ids
+ * que no estén en el mazo y elimina repeticiones (se queda con la primera). Nunca
+ * lanza; ante entrada corrupta devuelve un tablero limpio.
+ * @param {unknown} slots
+ * @param {string[]} cardIds
+ * @param {number} [size]
+ * @returns {(string|null)[]}
+ */
+export function sanitizeSlots(slots, cardIds, size = DECK_SIZE) {
+  const allowed = new Set(cardIds ?? []);
+  const seen = new Set();
+  const out = emptySlots(size);
+  const arr = Array.isArray(slots) ? slots : [];
+  for (let i = 0; i < size; i += 1) {
+    const id = arr[i];
+    if (typeof id === 'string' && allowed.has(id) && !seen.has(id)) {
+      out[i] = id;
+      seen.add(id);
+    }
+  }
+  return out;
+}
+
+/**
  * Reconstruye el tablero desde un orden guardado (para releer una sesión previa).
  * @param {Placement[]} orden
  * @param {number} [size]
