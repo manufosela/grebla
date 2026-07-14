@@ -8,6 +8,7 @@
  * @typedef {{ text: string }} ProposedQuestion
  * @typedef {{ title: string, questions: ProposedQuestion[] }} ProposedGroup
  * @typedef {{ intro: string, groups: ProposedGroup[] }} Proposal
+ * @typedef {{ guide: Proposal, form: Proposal }} PrepProposal   Guía + formulario a la vez.
  */
 
 /** Límites defensivos para no volcar un elefante en el editor. */
@@ -32,6 +33,17 @@ export function sanitizeProposal(raw) {
     .map((g) => sanitizeGroup(g))
     .filter((g) => g.title || g.questions.length);
   return { intro: clean(obj.intro), groups };
+}
+
+/**
+ * Normaliza la propuesta DOBLE (guía + formulario) que devuelve la IA unificada.
+ * Reusa `sanitizeProposal` en cada batería; tolera basura y nunca lanza.
+ * @param {unknown} raw
+ * @returns {PrepProposal}
+ */
+export function sanitizePrep(raw) {
+  const obj = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
+  return { guide: sanitizeProposal(obj.guide), form: sanitizeProposal(obj.form) };
 }
 
 /** @param {unknown} raw */
@@ -64,4 +76,18 @@ export function periodQuestions(period, kind) {
     }))
     .filter((g) => g.questions.length);
   return { name: clean(period?.name), groups };
+}
+
+/**
+ * Prepara un periodo anterior como contexto para la IA unificada: su nombre y las
+ * preguntas de la guía Y del formulario (para que la IA lea el O2O completo).
+ * @param {{ name?: string, guide?: object, form?: object }} period
+ * @returns {{ name: string, guide: { title: string, questions: string[] }[], form: { title: string, questions: string[] }[] }}
+ */
+export function periodPrep(period) {
+  return {
+    name: clean(period?.name),
+    guide: periodQuestions(period, 'guide').groups,
+    form: periodQuestions(period, 'form').groups,
+  };
 }

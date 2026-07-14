@@ -1,21 +1,22 @@
 /**
- * Cliente de la Cloud Function `o2oProposeQuestions`: pide a la IA una batería de
- * preguntas para un periodo de O2O a partir de las de periodos anteriores. La
- * respuesta se sanea con `sanitizeProposal` antes de volcarla al editor.
+ * Cliente de la Cloud Function `o2oProposeQuestions`: a partir de un ENFOQUE y de
+ * los O2O anteriores (guía + formulario), pide a la IA una preparación completa —
+ * la nueva guía y el nuevo formulario previo a la vez. La respuesta se sanea con
+ * `sanitizePrep` antes de volcarla en los editores.
  *
- * @typedef {import('../tools/o2o/application/aiProposal.js').Proposal} Proposal
+ * @typedef {import('../tools/o2o/application/aiProposal.js').PrepProposal} PrepProposal
  */
-import { sanitizeProposal } from '../tools/o2o/application/aiProposal.js';
+import { sanitizePrep } from '../tools/o2o/application/aiProposal.js';
 
 /**
- * @param {{ kind: 'guide'|'form', previousPeriods: Array<{ name: string, groups: Array<{ title: string, questions: string[] }> }>, instructions?: string }} params
- * @returns {Promise<Proposal>}  Propuesta saneada, lista para el editor.
+ * @param {{ focus?: string, previousPeriods: Array<{ name: string, guide: Array<{ title: string, questions: string[] }>, form: Array<{ title: string, questions: string[] }> }> }} params
+ * @returns {Promise<PrepProposal>}  Guía + formulario saneados, listos para los editores.
  */
-export async function proposeQuestions({ kind, previousPeriods, instructions }) {
+export async function proposePrep({ focus, previousPeriods }) {
   const { app } = await import('./firebase.js');
   const { getFunctions, httpsCallable } = await import('firebase/functions');
   const fns = getFunctions(app, 'europe-west1');
-  const res = await httpsCallable(fns, 'o2oProposeQuestions')({ kind, previousPeriods, instructions });
+  const res = await httpsCallable(fns, 'o2oProposeQuestions')({ focus, previousPeriods });
   const data = /** @type {{ proposal: unknown }} */ (res.data);
-  return sanitizeProposal(data?.proposal);
+  return sanitizePrep(data?.proposal);
 }

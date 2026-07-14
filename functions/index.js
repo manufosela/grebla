@@ -209,59 +209,82 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
  */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const O2O_AI_MODEL = 'claude-sonnet-4-6';
-const O2O_QUESTIONS_TOOL = {
-  name: 'emit_o2o_questions',
-  description: 'Devuelve la batería de preguntas propuesta para el O2O.',
+const O2O_GROUPS_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Título del bloque temático.' },
+      questions: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['title', 'questions'],
+  },
+};
+const O2O_PREP_TOOL = {
+  name: 'emit_o2o_prep',
+  description: 'Devuelve la preparación completa del O2O: guía (durante) y formulario previo (antes), a la vez.',
   input_schema: {
     type: 'object',
     properties: {
-      intro: { type: 'string', description: 'Cabecera opcional (solo para el formulario previo).' },
-      groups: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            title: { type: 'string', description: 'Título del bloque temático.' },
-            questions: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['title', 'questions'],
+      guide: {
+        type: 'object',
+        description: 'Guía de temas y preguntas para el líder DURANTE el O2O.',
+        properties: { groups: O2O_GROUPS_SCHEMA },
+        required: ['groups'],
+      },
+      form: {
+        type: 'object',
+        description: 'Formulario previo para que la persona reflexione ANTES del O2O.',
+        properties: {
+          intro: { type: 'string', description: 'Cabecera del formulario (lo que ve la persona).' },
+          groups: O2O_GROUPS_SCHEMA,
         },
+        required: ['groups'],
       },
     },
-    required: ['groups'],
+    required: ['guide', 'form'],
   },
 };
 
-/** Construye el prompt con el contexto de periodos anteriores. */
-function buildO2OPrompt(kind, previousPeriods, instructions) {
-  const label = kind === 'form'
-    ? 'formulario previo (temas para que la persona reflexione ANTES del O2O)'
-    : 'guía de temas y preguntas para el líder DURANTE el O2O';
+/** Renderiza los grupos de una batería (guía o formulario) como markdown para el prompt. */
+function renderO2OGroups(groups) {
+  return (Array.isArray(groups) ? groups : [])
+    .filter((g) => Array.isArray(g?.questions) && g.questions.length)
+    .map((g) => `## ${g.title}\n${g.questions.map((q) => `- ${q}`).join('\n')}`)
+    .join('\n');
+}
+
+/** Construye el prompt unificado (guía + formulario) con el histórico de O2O anteriores. */
+function buildO2OPrompt(focus, previousPeriods) {
   const prev = (previousPeriods ?? [])
-    .filter((p) => Array.isArray(p?.groups) && p.groups.length)
+    .filter((p) => (Array.isArray(p?.guide) && p.guide.length) || (Array.isArray(p?.form) && p.form.length))
     .map((p) => {
-      const blocks = p.groups
-        .map((g) => `## ${g.title}\n${(g.questions ?? []).map((q) => `- ${q}`).join('\n')}`)
-        .join('\n');
-      return `# ${p.name || 'Periodo anterior'}\n${blocks}`;
+      const guide = renderO2OGroups(p.guide);
+      const form = renderO2OGroups(p.form);
+      const parts = [];
+      if (guide) parts.push(`### Guía (durante)\n${guide}`);
+      if (form) parts.push(`### Formulario previo (antes)\n${form}`);
+      return `# ${p.name || 'Periodo anterior'}\n${parts.join('\n\n')}`;
     })
     .join('\n\n');
   const context = prev
     ? `Histórico de O2O anteriores (guías y formularios ya usados):\n\n${prev}`
-    : 'No hay O2O anteriores con preguntas; propón una batería inicial sólida.';
-  // Enfoque por defecto (persona-céntrico) si el líder no da uno propio.
-  const focus = instructions?.trim()
-    ? instructions.trim()
+    : 'No hay O2O anteriores; propón una preparación inicial sólida.';
+  const theFocus = focus?.trim()
+    ? focus.trim()
     : 'un O2O centrado en la persona: cómo va su trabajo ahora, crecimiento y carrera, bienestar y carga, feedback mutuo, y obstáculos y apoyo que necesita';
-  return `Eres experto en gestión de equipos de ingeniería y diseñas one-to-ones (O2O). Tu tarea: proponer una ${label} para el PRÓXIMO O2O.
+  return `Eres experto en gestión de equipos de ingeniería y diseñas one-to-ones (O2O). Tu tarea: preparar el PRÓXIMO O2O generando DOS baterías coherentes entre sí:
+1) el FORMULARIO PREVIO: temas para que la persona reflexione ANTES (con una breve cabecera motivadora), y
+2) la GUÍA: temas y preguntas para que el líder conduzca la conversación DURANTE el O2O.
+La guía debe recoger y profundizar lo que el formulario previo pide reflexionar; no deben ir por separado.
 
-ENFOQUE del O2O: ${focus}.
+ENFOQUE del O2O: ${theFocus}.
 
 ${context}
 
 HILO CONDUCTOR: este O2O CONTINÚA a los anteriores, no empieza de cero. Retoma los temas que quedaron abiertos y haz evolucionar la conversación. NO repitas las preguntas ya usadas en O2O anteriores —salvo que quieras medir la evolución de algo concreto; en ese caso, reformúlala dejando claro que se compara con la vez anterior—.
 
-Criterios: preguntas abiertas y concretas, en español, agrupadas en 3-6 bloques temáticos (2-5 preguntas por bloque), cubriendo los ejes del enfoque sin forzarlos todos si no aplican. Llama a la herramienta emit_o2o_questions con el resultado.`;
+Criterios: preguntas abiertas y concretas, en español, agrupadas en 3-6 bloques temáticos por batería (2-5 preguntas por bloque), cubriendo los ejes del enfoque sin forzarlos todos si no aplican. Llama a la herramienta emit_o2o_prep con el resultado.`;
 }
 
 export const o2oProposeQuestions = onCall(
@@ -270,9 +293,8 @@ export const o2oProposeQuestions = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
 
-    const kind = request.data?.kind === 'form' ? 'form' : 'guide';
+    const focus = typeof request.data?.focus === 'string' ? request.data.focus : '';
     const previousPeriods = Array.isArray(request.data?.previousPeriods) ? request.data.previousPeriods : [];
-    const instructions = typeof request.data?.instructions === 'string' ? request.data.instructions : '';
 
     const db = getFirestore();
     const [adminSnap, leaderSnap] = await Promise.all([
@@ -293,10 +315,10 @@ export const o2oProposeQuestions = onCall(
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
           model: O2O_AI_MODEL,
-          max_tokens: 2000,
-          tools: [O2O_QUESTIONS_TOOL],
-          tool_choice: { type: 'tool', name: 'emit_o2o_questions' },
-          messages: [{ role: 'user', content: buildO2OPrompt(kind, previousPeriods, instructions) }],
+          max_tokens: 3000,
+          tools: [O2O_PREP_TOOL],
+          tool_choice: { type: 'tool', name: 'emit_o2o_prep' },
+          messages: [{ role: 'user', content: buildO2OPrompt(focus, previousPeriods) }],
         }),
       });
     } catch {
@@ -305,12 +327,12 @@ export const o2oProposeQuestions = onCall(
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       console.error(`Anthropic error ${res.status}: ${detail}`);
-      throw new HttpsError('internal', 'La IA no pudo generar las preguntas.');
+      throw new HttpsError('internal', 'La IA no pudo generar la preparación.');
     }
     const payload = await res.json();
     const block = (payload.content ?? []).find((c) => c.type === 'tool_use');
     if (!block) throw new HttpsError('internal', 'La IA no devolvió una propuesta válida.');
-    return { kind, proposal: block.input };
+    return { proposal: block.input };
   },
 );
 

@@ -13,15 +13,14 @@ import './o2o-register.js';
 import './o2o-actions.js';
 import './o2o-period-summary.js';
 import './o2o-evolution.js';
-import './o2o-questions-editor.js';
+import './o2o-prepare.js';
 import {
   listPeriods, getPeriod, createPeriod, removePeriod, defaultPeriodName,
 } from '../../tools/o2o/application/usecases/periods.js';
 
 /** @type {ReadonlyArray<{ id: string, label: string, ready?: boolean }>} */
 const VIEWS = [
-  { id: 'guia', label: 'Guía', ready: true },
-  { id: 'formulario', label: 'Formulario previo', ready: true },
+  { id: 'preparar', label: 'Preparar O2O', ready: true },
   { id: 'registrar', label: 'Registrar O2O', ready: true },
   { id: 'resumen', label: 'Resumen', ready: true },
   { id: 'acciones', label: 'Acciones', ready: true },
@@ -91,7 +90,7 @@ export class O2OApp extends LitElement {
     this._periods = [];
     /** @type {import('../../tools/o2o/domain/types.js').O2OPeriod|null} */
     this._period = null;
-    this._view = 'guia';
+    this._view = 'preparar';
     this._newName = '';
     this._busy = false;
     this._confirmDelete = null;
@@ -138,7 +137,7 @@ export class O2OApp extends LitElement {
     this.error = '';
     try {
       this._period = await getPeriod(this.persistence, id);
-      this._view = 'guia';
+      this._view = 'preparar';
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo abrir el periodo.';
     }
@@ -230,9 +229,7 @@ export class O2OApp extends LitElement {
   }
 
   _renderView() {
-    const period = this._period;
-    if (this._view === 'guia') return this._renderEditor('guide', period.guide);
-    if (this._view === 'formulario') return this._renderEditor('form', period.form);
+    if (this._view === 'preparar') return this._renderPrepare();
     if (this._view === 'registrar') return this._renderRegister();
     if (this._view === 'acciones') return this._renderActions();
     if (this._view === 'resumen') return this._renderSummary();
@@ -240,17 +237,17 @@ export class O2OApp extends LitElement {
     return this._renderPlaceholder();
   }
 
-  _renderEditor(kind, value) {
+  _renderPrepare() {
     const previousPeriods = this._periods.filter((p) => p.id !== this._period.id);
-    return html`<o2o-questions-editor
+    return html`<o2o-prepare
       .persistence=${this.persistence}
       .periodId=${this._period.id}
-      .kind=${kind}
-      .value=${value}
+      .guide=${this._period.guide}
+      .form=${this._period.form}
       .aiPropose=${this.aiPropose}
       .previousPeriods=${previousPeriods}
       @saved=${(e) => this._onEditorSaved(e)}
-    ></o2o-questions-editor>`;
+    ></o2o-prepare>`;
   }
 
   _renderRegister() {
