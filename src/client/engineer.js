@@ -12,8 +12,10 @@ import { resolveAccess } from '../lib/access.js';
 import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap } from '../lib/engineer.js';
 import { getMyO2O } from '../lib/o2o.js';
 import { getFramework } from '../lib/careerFramework.js';
+import { getOrgConfig } from '../lib/firestore.js';
 import { composeTitle } from '../tools/career/data/framework.js';
 import { ROLES } from '../data/roles.js';
+import { ITEMS, DIMENSIONS } from '../data/items.js';
 
 const identity = document.getElementById('engineer-identity');
 const errorBox = document.getElementById('engineer-error');
@@ -38,14 +40,15 @@ onUserChanged(async (user) => {
     // Carga en paralelo del contenido de las secciones (de solo lectura). El
     // O2O va por Cloud Function y es NO crítico: si falla, la vista sigue con el
     // resto y «Mis O2O» queda vacío (no tumba «Mi espacio»).
-    const [framework, profile, career, o2o] = await Promise.all([
+    const [framework, profile, career, o2o, orgConfig] = await Promise.all([
       getFramework(),
       getMyRoleMirrorProfile(person.id),
       getMyCareerMap(person.id),
       getMyO2O().catch(() => null),
+      getOrgConfig().catch(() => null),
     ]);
     renderIdentity(person, framework);
-    renderSpace(person, framework, profile, career, o2o);
+    renderSpace(person, framework, profile, career, o2o, orgConfig);
   } catch {
     showError('No se pudo cargar tu espacio. Vuelve a intentarlo en unos minutos.');
   }
@@ -53,20 +56,27 @@ onUserChanged(async (user) => {
 
 /**
  * Inyecta los datos ya cargados en el componente <engineer-space>, que renderiza
- * las tres secciones (Carrera / Role Mirror / Mapa) en solo lectura.
+ * las secciones. Carrera y Mapa van en solo lectura; «Mi Role Mirror» es editable
+ * por el propio ingeniero (RMR-TSK-0224).
  * @param {import('../lib/engineer.js').Person & { id: string }} person
  * @param {import('../tools/career/data/framework.js').CareerFramework} framework
  * @param {import('../lib/scoring.js').Profile|null} profile
  * @param {Awaited<ReturnType<import('../lib/engineer.js').getMyCareerMap>>} career
  * @param {import('../lib/o2o.js').MyO2O|null} o2o  proyección compartida de mis O2O (o null si falló)
+ * @param {import('../lib/scoring.js').OrgConfig|null} orgConfig  config de organización (para el cálculo del rol)
  * @returns {void}
  */
-function renderSpace(person, framework, profile, career, o2o) {
+function renderSpace(person, framework, profile, career, o2o, orgConfig) {
   if (!space) return;
   space.person = person;
   space.framework = framework;
   space.profile = profile;
   space.roles = ROLES;
+  // Role Mirror editable por el ingeniero (RMR-TSK-0224): el cuestionario necesita
+  // los ítems, dimensiones y la config de organización para calcular el perfil.
+  space.items = ITEMS;
+  space.dimensions = DIMENSIONS;
+  space.orgConfig = orgConfig;
   space.island = career.island;
   space.journey = career.journey;
   // Ficha de ciudadanía (MC-21): índice del archipiélago y logros registrados.

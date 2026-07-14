@@ -170,6 +170,16 @@ service cloud.firestore {
         allow create, update: if isLinkedPlayer();
       }
 
+      // EL INGENIERO AFINA SU ROLE MIRROR (RMR-TSK-0224): el rol se fija de forma
+      // CONJUNTA — el líder propone (autorrelleno) y el ingeniero termina de afinar
+      // su propio cuestionario al loguearse. El jugador vinculado crea/actualiza su
+      // resumen y sus sesiones de Role Mirror. ADITIVO al {document=**} de abajo (las
+      // reglas de matches solapados se OR-ean): el líder dueño/compartido-edit/
+      // superadmin siguen escribiendo por esa vía. Sin delete: el histórico no se borra.
+      match /rolemirror/{document=**} {
+        allow create, update: if isLinkedPlayer();
+      }
+
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
       match /{document=**} {
