@@ -14,6 +14,7 @@ import { LitElement, html, css } from 'lit';
 import {
   listSessions, createSession, updateSession, removeSession,
 } from '../../tools/o2o/application/usecases/sessions.js';
+import { getPersonProfile } from '../../lib/firestore.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -21,6 +22,7 @@ export class O2ORegister extends LitElement {
   static properties = {
     persistence: { attribute: false },
     people: { attribute: false },
+    roles: { attribute: false },
     guide: { attribute: false },
     periodId: { attribute: false },
     canEdit: { attribute: false },
@@ -31,6 +33,7 @@ export class O2ORegister extends LitElement {
     _saving: { state: true },
     _error: { state: true },
     _confirmDelete: { state: true },
+    _rmProfile: { state: true },
   };
 
   static styles = css`
@@ -70,12 +73,14 @@ export class O2ORegister extends LitElement {
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
     .ext-note { font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); background: var(--rm-chip, #eef2f7); border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0 0 0.85rem; }
+    .rm-context { font-size: 0.85rem; color: var(--rm-text, #111827); background: var(--rm-surface-hover, #eef3f5); border-left: 4px solid var(--rm-accent, #2a9d8f); border-radius: 8px; padding: 0.55rem 0.85rem; margin: 0 0 1rem; line-height: 1.5; }
   `;
 
   constructor() {
     super();
     this.persistence = null;
     this.people = [];
+    this.roles = [];
     this.guide = null;
     this.periodId = null;
     this.canEdit = false;
@@ -86,6 +91,8 @@ export class O2ORegister extends LitElement {
     this._saving = false;
     this._error = '';
     this._confirmDelete = '';
+    /** @type {object|null} resumen de Role Mirror de la persona (RMR-TSK-0226) */
+    this._rmProfile = null;
   }
 
   get _personName() {
@@ -102,18 +109,43 @@ export class O2ORegister extends LitElement {
     this._draft = null;
     this._confirmDelete = '';
     this._error = '';
+    this._rmProfile = null;
     if (!personId) {
       this._sessions = [];
       return;
     }
     this._loadingList = true;
     try {
-      this._sessions = await listSessions(this.persistence, personId, this.periodId);
+      const [sessions, rmProfile] = await Promise.all([
+        listSessions(this.persistence, personId, this.periodId),
+        // Contexto de Role Mirror (RMR-TSK-0226): pie para hablar de la evolución
+        // del rol en el O2O. No crítico: si falla, el registro sigue sin este dato.
+        getPersonProfile(personId).catch(() => null),
+      ]);
+      this._sessions = sessions;
+      this._rmProfile = rmProfile;
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los O2O.';
     } finally {
       this._loadingList = false;
     }
+  }
+
+  /** Etiqueta de un rol Role Mirror por key, o el propio key si no está en catálogo. */
+  _roleLabel(key) {
+    return this.roles?.find((r) => r.key === key)?.label ?? key;
+  }
+
+  /** Tarjeta compacta de contexto: rol Role Mirror actual y quién lo tocó por
+   * última vez, para comentarlo/ajustarlo durante el O2O (RMR-TSK-0226). */
+  _renderRoleMirrorContext() {
+    if (this._isExternalPerson || !this._rmProfile?.dominantRole) return null;
+    const who = this._rmProfile.updatedBy?.kind === 'engineer' ? 'la propia persona' : 'el líder';
+    const name = this._rmProfile.updatedBy?.name ? ` (${this._rmProfile.updatedBy.name})` : '';
+    return html`<p class="rm-context">
+      🔎 <strong>Role Mirror:</strong> ${this._roleLabel(this._rmProfile.dominantRole)} · ${this._rmProfile.completion ?? 0}% completado.
+      Último ajuste por ${who}${name}. Es buen momento para comentar la evolución y ajustarlo entre los dos.
+    </p>`;
   }
 
   _newDraft() {
@@ -197,6 +229,7 @@ export class O2ORegister extends LitElement {
   render() {
     return html`
       ${this._renderPicker()}
+      ${this._renderRoleMirrorContext()}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderBody()}
     `;

@@ -11,6 +11,8 @@
  *  - orgConfig: import('../lib/scoring.js').OrgConfig|null
  *  - personId: string|null   (si null, modo local sin persistencia; el líder evalúa a la persona)
  *  - sessionId: string|null   (si null y hay uid, se crea una sesión)
+ *  - editorKind: 'leader'|'engineer'   quién edita (para la atribución de RMR-TSK-0226)
+ *  - editorUid, editorName: string|null   identidad de quien edita, para `updatedBy`
  */
 import { LitElement, html, css } from 'lit';
 import './role-result.js';
@@ -43,6 +45,9 @@ export class RoleQuestionnaire extends LitElement {
     orgConfig: { attribute: false },
     personId: { attribute: false },
     sessionId: { attribute: false },
+    editorKind: { type: String },
+    editorUid: { type: String },
+    editorName: { type: String },
     answers: { state: true },
     targetRole: { state: true },
     status: { state: true },
@@ -224,6 +229,12 @@ export class RoleQuestionnaire extends LitElement {
     this.personId = null;
     /** @type {string|null} */
     this.sessionId = null;
+    /** @type {'leader'|'engineer'} quién edita (atribución RMR-TSK-0226) */
+    this.editorKind = 'leader';
+    /** @type {string|null} */
+    this.editorUid = null;
+    /** @type {string|null} */
+    this.editorName = null;
     /** @type {import('../data/items.js').Answers} */
     this.answers = {};
     /** @type {string|null} */
@@ -359,6 +370,9 @@ export class RoleQuestionnaire extends LitElement {
         dominantRole: profile.dominant?.key ?? null,
         completion: Math.round(profile.completion),
         orgPhase: this.orgConfig?.phase ?? null,
+        // Atribución (RMR-TSK-0226): quién hizo este cambio — el rol se fija de
+        // forma conjunta y conviene saber si fue el líder o la propia persona.
+        updatedBy: { kind: this.editorKind, uid: this.editorUid ?? null, name: this.editorName ?? null },
       });
       await upsertUserSummary(
         this.personId,
@@ -367,6 +381,7 @@ export class RoleQuestionnaire extends LitElement {
           completion: Math.round(profile.completion),
           affinities,
           lastSessionId: this.sessionId,
+          updatedBy: { kind: this.editorKind, uid: this.editorUid ?? null, name: this.editorName ?? null },
         },
       );
       this.status = 'saved';

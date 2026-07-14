@@ -46,6 +46,10 @@ if (el) {
         return;
       }
       el.orgConfig = await getOrgConfig();
+      // Atribución (RMR-TSK-0226): quien rellena aquí es el líder.
+      el.editorKind = 'leader';
+      el.editorUid = user.uid;
+      el.editorName = user.displayName ?? null;
       // Personas del equipo del líder (reusa la tool Equipo).
       const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid });
       const people = await listActivePeople(persistence);

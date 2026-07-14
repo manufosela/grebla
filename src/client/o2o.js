@@ -10,6 +10,7 @@ import { createO2OContainer } from '../tools/o2o/composition/container.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
 import { proposePrep } from '../lib/o2oAi.js';
+import { ROLES } from '../data/roles.js';
 
 const app = document.querySelector('o2o-app');
 
@@ -37,6 +38,7 @@ onUserChanged(async (user) => {
     ]);
     app.canEdit = true; // líder/superadmin
     app.people = people;
+    app.roles = ROLES; // para mostrar el rol Role Mirror en «Registrar O2O» (RMR-TSK-0226)
     app.aiPropose = proposePrep; // activa «Generar con IA» en «Preparar O2O»
     app.persistence = persistence;
   } catch (err) {

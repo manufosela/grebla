@@ -186,6 +186,13 @@ export class AdminDashboard extends LitElement {
     return this._roleByKey.get(key)?.color ?? '#9ca3af';
   }
 
+  /** Etiqueta de atribución (RMR-TSK-0226): quién hizo este cambio. */
+  _editorLabel(updatedBy) {
+    if (!updatedBy?.kind) return '—';
+    const who = updatedBy.kind === 'engineer' ? 'Ingeniero' : 'Líder';
+    return updatedBy.name ? `${who} · ${updatedBy.name}` : who;
+  }
+
   async _openDetail(user) {
     this.detail = { user, sessions: [] };
     try {
@@ -399,7 +406,7 @@ export class AdminDashboard extends LitElement {
           : html`
               <table>
                 <thead>
-                  <tr><th>Fecha</th><th>Rol dominante</th><th>Completitud</th><th>Objetivo</th><th></th></tr>
+                  <tr><th>Fecha</th><th>Rol dominante</th><th>Completitud</th><th>Objetivo</th><th>Editado por</th><th></th></tr>
                 </thead>
                 <tbody>
                   ${sessions.map(
@@ -413,6 +420,7 @@ export class AdminDashboard extends LitElement {
                         </td>
                         <td class="completion">${s.completion ?? 0}%</td>
                         <td class="muted">${s.targetRole ? this._roleLabel(s.targetRole) : '—'}</td>
+                        <td class="muted">${this._editorLabel(s.updatedBy)}</td>
                         <td class="num">${this._renderDeleteCell(user.id, s.id)}</td>
                       </tr>
                     `,
