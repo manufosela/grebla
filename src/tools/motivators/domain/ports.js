@@ -13,11 +13,13 @@
  * @property {(id: string) => Promise<Round|null>} get
  * @property {(input: Omit<Round, 'id'>) => Promise<string>} add
  * @property {(id: string, patch: Partial<Round>) => Promise<void>} update
+ * @property {(id: string) => Promise<void>} remove   Solo superadmin.
  *
  * @typedef {Object} SessionRepository
  * @property {(sessionId: string, session: Session) => Promise<void>} save   Upsert (id determinista).
  * @property {(uid: string, game: GameId) => Promise<Session[]>} listByUser   Sesiones de la cuenta (uid dueño); seguro ante las reglas.
  * @property {(roundId: string) => Promise<Session[]>} listByRound   Solo superadmin / Cloud Function.
+ * @property {(roundId: string) => Promise<void>} removeByRound   Borra todas las sesiones de una ronda (solo superadmin).
  *
  * @typedef {Object} AggregateRepository
  * @property {(game: GameId) => Promise<Aggregates|null>} get
