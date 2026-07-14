@@ -32,6 +32,7 @@ export class AdminDashboard extends LitElement {
     roles: { attribute: false },
     leaderUid: { attribute: false },
     uid: { attribute: false },
+    viewerRole: { attribute: false },
     users: { state: true },
     _confirmDelete: { state: true },
     _confirmDeleteUser: { state: true },
@@ -125,6 +126,8 @@ export class AdminDashboard extends LitElement {
     this.roles = [];
     /** @type {string|null} */
     this.uid = null;
+    /** @type {'superadmin'|'leader'|'viewer'|null} quién mira este panel (RMR-TSK-0227) */
+    this.viewerRole = null;
     /** @type {string|null} uid del líder dueño de las personas */
     this.leaderUid = null;
     this._loaded = false;
@@ -314,16 +317,18 @@ export class AdminDashboard extends LitElement {
 
   /** Intro general: qué es Role Mirror y quién hace qué (superadmin vs líder). */
   _renderIntro() {
+    const scope = this.viewerRole === 'leader' ? 'tu equipo' : 'toda la organización';
     return html`<section class="intro">
       ${this._help('¿Cómo funciona Role Mirror? (empieza por aquí)', html`
-        <p><strong>Role Mirror es un diagnóstico, no una asignación manual de roles.</strong></p>
+        <p><strong>El rol se fija de forma conjunta, no es una asignación unilateral.</strong></p>
         <ol>
-          <li>El <strong>líder</strong> rellena un <strong>cuestionario sobre cada ingeniero</strong> en la herramienta Role Mirror (no aquí, sino en «Role Mirror» del menú).</li>
-          <li>El sistema <strong>calcula</strong> el «rol dominante» a partir de las respuestas (Engineer, Tech Lead, Staff Engineer…). Nadie lo fija a mano.</li>
-          <li>Cada <strong>ingeniero</strong> ve su resultado en <strong>solo lectura</strong> en «Mi espacio»; no lo edita.</li>
+          <li>El <strong>líder</strong> propone un punto de partida para cada persona en la herramienta Role Mirror (no aquí, sino en «Role Mirror» del menú); si no toca nada, arranca sugerido como <strong>Engineer</strong>.</li>
+          <li>El sistema <strong>calcula</strong> el «rol dominante» a partir de las respuestas (Engineer, Tech Lead, Staff Engineer…).</li>
+          <li>Cada <strong>ingeniero</strong> puede <strong>afinar su propio cuestionario</strong> desde «Mi espacio».</li>
+          <li>En los <strong>O2O</strong> podéis comentar la evolución y seguir ajustándolo entre los dos; el historial de abajo indica quién editó cada medición.</li>
         </ol>
-        <p><strong>Superadmin vs líder:</strong> el <strong>superadmin</strong> gestiona toda la organización (este panel, altas y borrados); el <strong>líder</strong> gestiona su equipo y rellena los cuestionarios. En esta instancia una misma persona puede ser ambos: como superadmin puedes «usar como líder» para entrar en las herramientas.</p>
-        <p>Este panel es solo de <strong>consulta</strong>: aquí ves los resultados de todo el equipo, comparas y exportas, pero el cuestionario se rellena en la herramienta del líder.</p>
+        <p><strong>Superadmin vs líder:</strong> el <strong>superadmin</strong> gestiona toda la organización (este panel, altas y borrados); el <strong>líder</strong> gestiona su equipo y propone los cuestionarios. En esta instancia una misma persona puede ser ambos: como superadmin puedes «usar como líder» para entrar en las herramientas.</p>
+        <p>Este panel es solo de <strong>consulta</strong>: aquí ves los resultados de ${scope}, comparas y exportas, pero el cuestionario se prepara y afina en Role Mirror y en «Mi espacio».</p>
       `)}
     </section>`;
   }
