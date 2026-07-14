@@ -583,6 +583,9 @@ export class EngineerSpace extends LitElement {
         .dimensions=${this.dimensions ?? []}
         .orgConfig=${this.orgConfig ?? null}
         .personId=${this.person.id}
+        editorKind="engineer"
+        editorUid=${this.person.uid ?? ''}
+        editorName=${this.person.name ?? ''}
       ></role-questionnaire>
     `;
   }

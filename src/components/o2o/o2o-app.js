@@ -31,6 +31,7 @@ export class O2OApp extends LitElement {
   static properties = {
     persistence: { attribute: false },
     people: { attribute: false },
+    roles: { attribute: false },
     canEdit: { attribute: false },
     aiPropose: { attribute: false },
     error: { state: true },
@@ -81,6 +82,7 @@ export class O2OApp extends LitElement {
     super();
     this.persistence = null;
     this.people = [];
+    this.roles = [];
     this.canEdit = false;
     /** @type {import('../../lib/o2oAi.js').proposeQuestions|null} */
     this.aiPropose = null;
@@ -254,6 +256,7 @@ export class O2OApp extends LitElement {
     return html`<o2o-register
       .persistence=${this.persistence}
       .people=${this.people}
+      .roles=${this.roles}
       .guide=${this._period.guide}
       .periodId=${this._period.id}
       .canEdit=${this.canEdit}
