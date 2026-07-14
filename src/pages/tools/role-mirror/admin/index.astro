@@ -3,9 +3,12 @@ import RoleMirror from '../../../../layouts/RoleMirror.astro';
 ---
 
 <RoleMirror title="Role Mirror — Admin" requireAuth={true}>
-  <h1 class="page-title">Panel de administración</h1>
-  <p class="page-lead">
-    Perfiles del equipo, comparativas, distribución de roles y exportación CSV.
+  <!-- El título/lead final depende del rol (superadmin ve toda la organización;
+       líder, solo su equipo), que se resuelve en cliente tras la autenticación
+       (client/admin.js). Empieza con el texto de superadmin como fallback SSR. -->
+  <h1 class="page-title" data-page-title>Panel de administración</h1>
+  <p class="page-lead" data-page-lead>
+    Perfiles de todo el equipo, comparativas, distribución de roles y exportación CSV.
   </p>
 
   <admin-dashboard></admin-dashboard>
