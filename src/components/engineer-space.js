@@ -33,6 +33,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import './role-result.js';
+import './role-questionnaire.js';
 import './career/career-map.js';
 import './career/player-card.js';
 import {
@@ -76,6 +77,9 @@ export class EngineerSpace extends LitElement {
     framework: { attribute: false },
     profile: { attribute: false },
     roles: { attribute: false },
+    items: { attribute: false },
+    dimensions: { attribute: false },
+    orgConfig: { attribute: false },
     island: { attribute: false },
     journey: { attribute: false },
     archipelago: { attribute: false },
@@ -112,6 +116,8 @@ export class EngineerSpace extends LitElement {
     section > h2 { margin: 0 0 0.75rem; font-size: 1.2rem; }
     section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.rolemirror { border-left: 4px solid var(--rm-accent, #2a9d8f); }
+    .rm-intro { font-size: 0.88rem; color: var(--rm-muted, #6b7280); line-height: 1.5; margin: 0 0 1rem;
+      background: var(--rm-surface-hover, #eef3f5); border-radius: 8px; padding: 0.7rem 0.9rem; }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
     section.o2o { border-left: 4px solid var(--rm-navy, #1e3a5f); }
 
@@ -226,6 +232,12 @@ export class EngineerSpace extends LitElement {
     this.profile = null;
     /** @type {ReadonlyArray<Role>} */
     this.roles = [];
+    /** @type {ReadonlyArray<import('../data/items.js').Item>} */
+    this.items = [];
+    /** @type {ReadonlyArray<{ key: string, label: string }>} */
+    this.dimensions = [];
+    /** @type {import('../lib/scoring.js').OrgConfig|null} */
+    this.orgConfig = null;
     /** @type {CareerMap|null} */
     this.island = null;
     /** @type {Journey|null} */
@@ -554,19 +566,24 @@ export class EngineerSpace extends LitElement {
   }
 
   /**
-   * Sección «Mi Role Mirror»: el perfil calculado. Reutiliza <role-result> con
-   * `hideTarget` para ocultar el comparador what-if (selector de rol objetivo):
-   * la vista del ingeniero es de solo lectura y ese control no debe usarse como
-   * edición. <role-result> no persiste nada de todas formas (solo emite eventos).
+   * Sección «Mi Role Mirror»: el rol se fija de forma CONJUNTA (RMR-TSK-0224). El
+   * líder propone un perfil de partida; aquí el ingeniero lo AFINA él mismo con su
+   * propio cuestionario editable (<role-questionnaire> con su personId), que guarda
+   * en Firestore y recalcula el rol. Incluye el resultado calculado. Si aún no hay
+   * items cargados, mientras tanto no se puede editar.
    * @returns {import('lit').TemplateResult}
    */
   _renderRoleMirror() {
-    const profile = this.profile;
-    if (!profile?.dominant) {
-      return html`<p class="empty">Aún no tienes un perfil de Role Mirror.</p>`;
-    }
+    if (!this.person?.id) return html`<p class="empty">Cargando tu Role Mirror…</p>`;
     return html`
-      <role-result .profile=${profile} .roles=${this.roles ?? []} .hideTarget=${true}></role-result>
+      <p class="rm-intro">Tu líder ha propuesto un perfil de partida. Aquí puedes <strong>afinarlo tú</strong>: ajusta las respuestas según lo que consideras y se guarda solo (el rol se recalcula). En tus O2O podéis comentarlo y seguir ajustándolo entre los dos.</p>
+      <role-questionnaire
+        .items=${this.items ?? []}
+        .roles=${this.roles ?? []}
+        .dimensions=${this.dimensions ?? []}
+        .orgConfig=${this.orgConfig ?? null}
+        .personId=${this.person.id}
+      ></role-questionnaire>
     `;
   }
 
