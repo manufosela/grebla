@@ -31,6 +31,10 @@ import {
 import { isMeasurementStale, tsToMs, pickActiveMeasurement } from '../lib/measurement.js';
 import { fillAnswersFromRole } from '../lib/roleTemplate.js';
 
+// El rol se fija de forma CONJUNTA: si no hay ninguna medición previa, se propone
+// este rol por defecto (el más común) en vez de arrancar en blanco.
+const DEFAULT_ROLE_KEY = 'engineer';
+
 export class RoleQuestionnaire extends LitElement {
   static properties = {
     items: { attribute: false },
@@ -195,6 +199,15 @@ export class RoleQuestionnaire extends LitElement {
       color: var(--rm-muted, #4b5563);
       margin-bottom: 1rem;
     }
+    .default-hint {
+      background: var(--rm-surface-hover, #eef3f5);
+      border-left: 4px solid var(--rm-accent, #2a9d8f);
+      border-radius: 8px;
+      padding: 0.55rem 0.85rem;
+      font-size: 0.82rem;
+      color: var(--rm-text, #111827);
+      margin: 0 0 0.85rem;
+    }
   `;
 
   constructor() {
@@ -269,6 +282,11 @@ export class RoleQuestionnaire extends LitElement {
         this.answers = session.answers ?? {};
         this.targetRole = session.targetRole ?? null;
         this._measuredAtMs = tsToMs(session.createdAt);
+      } else {
+        // Sin ninguna medición previa: el rol se fija de forma CONJUNTA (RMR-TSK-0225).
+        // Propuesta de entrada visual (patrón "Engineer"), SIN persistir todavía —
+        // es una sugerencia, no un hecho, hasta que alguien la toque y guarde.
+        this.answers = fillAnswersFromRole(DEFAULT_ROLE_KEY, this.items);
       }
       // Si no hay medición con contenido, quedamos sin sesión: se creará al
       // primer cambio. Así nunca se persisten cuestionarios vacíos.
@@ -377,6 +395,7 @@ export class RoleQuestionnaire extends LitElement {
           ${this.personId
             ? null
             : html`<div class="notice">Estás en modo local: inicia sesión con Google para guardar tu progreso.</div>`}
+          ${this.sessionId ? null : html`<p class="default-hint">📋 Propuesta inicial (sin guardar): el rol se fija de forma conjunta. Ajusta lo que consideres y se guardará al primer cambio.</p>`}
           <div class="template">
             <label for="role-template">Empezar desde un rol:</label>
             <select id="role-template" @change=${this._applyRoleTemplate}>
