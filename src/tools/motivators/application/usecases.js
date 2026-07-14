@@ -68,6 +68,23 @@ export function setRoundActive(p, id, active) {
 }
 
 /**
+ * Edita el nombre y/o la ventana de una ronda (superadmin). Valida igual que el alta.
+ * @param {MotivatorsPersistence} p
+ * @param {string} id
+ * @param {{ name: string, startAt: string, endAt: string }} patch
+ * @returns {Promise<void>}
+ */
+export async function updateRound(p, id, patch) {
+  const name = String(patch.name ?? '').trim();
+  if (!name) throw new Error('El nombre de la ronda es obligatorio');
+  const start = new Date(patch.startAt).getTime();
+  const end = new Date(patch.endAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) throw new Error('Fechas de la ronda no válidas');
+  if (end <= start) throw new Error('La fecha de fin debe ser posterior a la de inicio');
+  await p.rounds.update(id, { name, startAt: new Date(start).toISOString(), endAt: new Date(end).toISOString() });
+}
+
+/**
  * Guarda (o sobrescribe) la sesión del jugador para una ronda. Falla si la ronda
  * no está abierta o el orden no es completo/válido. Devuelve el id de sesión.
  * @param {MotivatorsPersistence} p

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createMemoryMotivatorsPersistence } from '../infrastructure/memory/index.js';
 import {
-  createRound, getActiveRound, saveSession, getMyHistory, getAggregates, setRoundActive, listRounds,
+  createRound, getActiveRound, saveSession, getMyHistory, getAggregates, setRoundActive, listRounds, updateRound,
 } from './usecases.js';
 import { deckCardIds } from '../domain/decks.js';
 
@@ -30,6 +30,16 @@ describe('usecases motivadores (memoria)', () => {
     const p = createMemoryMotivatorsPersistence();
     await expect(createRound(p, { game: GAME, name: 'x', startAt: '2026-07-15T00:00:00Z', endAt: '2026-07-12T00:00:00Z' }, NOW))
       .rejects.toThrow();
+  });
+
+  it('updateRound cambia nombre y fechas; valida la ventana', async () => {
+    const p = createMemoryMotivatorsPersistence();
+    const id = await createRound(p, { game: GAME, name: 'Julio', startAt: '2026-07-12T00:00:00Z', endAt: '2026-07-15T00:00:00Z' }, NOW);
+    await updateRound(p, id, { name: 'Julio (corregido)', startAt: '2026-07-12T00:00:00Z', endAt: '2026-07-20T00:00:00Z' });
+    const round = await p.rounds.get(id);
+    expect(round.name).toBe('Julio (corregido)');
+    expect(round.endAt).toBe('2026-07-20T00:00:00.000Z');
+    await expect(updateRound(p, id, { name: 'x', startAt: '2026-07-20T00:00:00Z', endAt: '2026-07-12T00:00:00Z' })).rejects.toThrow();
   });
 
   it('guarda la sesión con la ronda abierta y la devuelve en el histórico', async () => {

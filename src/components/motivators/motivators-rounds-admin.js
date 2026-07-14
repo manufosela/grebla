@@ -4,7 +4,7 @@
  * deriva de las fechas; «cerrar» aquí desactiva la ronda antes de tiempo.
  */
 import { LitElement, html, css } from 'lit';
-import { listRounds, createRound, setRoundActive } from '../../tools/motivators/application/usecases.js';
+import { listRounds, createRound, setRoundActive, updateRound } from '../../tools/motivators/application/usecases.js';
 import { roundStatus, dayWindowToIso } from '../../tools/motivators/domain/rounds.js';
 import { accentStyle } from './accent.js';
 
@@ -30,6 +30,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
     _name: { state: true },
     _start: { state: true },
     _end: { state: true },
+    _editingId: { state: true },
   };
 
   static styles = css`
@@ -46,6 +47,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
     .create:disabled { opacity: 0.5; cursor: progress; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; margin: 0.2rem 0 0; }
     .flash { color: var(--rm-success, #16a34a); font-size: 0.85rem; margin: 0.2rem 0 0; }
+    .editing { margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--accent-ink); }
     ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
     .item { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: 10px; padding: 0.6rem 0.85rem; }
@@ -78,6 +80,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
     this._name = '';
     this._start = ymd(today);
     this._end = ymd(in3);
+    this._editingId = null;
     this._loaded = false;
   }
 
@@ -101,22 +104,45 @@ export class MotivatorsRoundsAdmin extends LitElement {
     }
   }
 
-  async _create() {
+  async _submit() {
     if (this._busy) return;
     this._busy = true;
     this._error = '';
     this._flash = '';
     try {
       const { startAt, endAt } = dayWindowToIso(this._start, this._end);
-      await createRound(this.persistence, { game: this.game, name: this._name, startAt, endAt, createdBy: this.createdBy });
-      this._name = '';
-      this._flash = 'Ronda creada.';
+      if (this._editingId) {
+        await updateRound(this.persistence, this._editingId, { name: this._name, startAt, endAt });
+        this._flash = 'Ronda actualizada.';
+        this._resetForm();
+      } else {
+        await createRound(this.persistence, { game: this.game, name: this._name, startAt, endAt, createdBy: this.createdBy });
+        this._flash = 'Ronda creada.';
+        this._name = '';
+      }
       await this._load();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo crear la ronda.';
+      this._error = err instanceof Error ? err.message : 'No se pudo guardar la ronda.';
     } finally {
       this._busy = false;
     }
+  }
+
+  _startEdit(round) {
+    this._editingId = round.id;
+    this._name = round.name;
+    this._start = String(round.startAt).slice(0, 10);
+    this._end = String(round.endAt).slice(0, 10);
+    this._error = '';
+    this._flash = '';
+  }
+
+  _resetForm() {
+    this._editingId = null;
+    this._name = '';
+    const today = new Date();
+    this._start = ymd(today);
+    this._end = ymd(new Date(today.getTime() + 3 * 24 * 3600 * 1000));
   }
 
   async _toggle(round) {
@@ -138,7 +164,9 @@ export class MotivatorsRoundsAdmin extends LitElement {
   }
 
   _renderForm() {
+    const editing = !!this._editingId;
     return html`<div class="form">
+      ${editing ? html`<p class="editing">Editando la ronda seleccionada</p>` : null}
       <div class="row">
         <div class="field">
           <label for="rn">Nombre de la ronda</label>
@@ -152,7 +180,8 @@ export class MotivatorsRoundsAdmin extends LitElement {
           <label for="re">Fin</label>
           <input id="re" type="date" .value=${this._end} @input=${(e) => { this._end = e.target.value; }} />
         </div>
-        <button class="create" ?disabled=${this._busy || !this._name.trim()} @click=${this._create}>Crear ronda</button>
+        <button class="create" ?disabled=${this._busy || !this._name.trim()} @click=${this._submit}>${editing ? 'Guardar cambios' : 'Crear ronda'}</button>
+        ${editing ? html`<button class="toggle" @click=${this._resetForm}>Cancelar</button>` : null}
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._flash ? html`<p class="flash">${this._flash}</p>` : null}
@@ -172,6 +201,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
       <span class="dates">${range}</span>
       <span class="badge ${status}">${STATUS_LABEL[status]}</span>
       <span class="spacer"></span>
+      <button class="toggle" @click=${() => this._startEdit(round)}>Editar</button>
       <button class="toggle" @click=${() => this._toggle(round)}>${round.active === false ? 'Activar' : 'Cerrar'}</button>
     </li>`;
   }
