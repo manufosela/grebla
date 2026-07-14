@@ -66,6 +66,12 @@ export class MotivatorsApp extends LitElement {
 
   get _canPlay() { return !!this.identity; }
 
+  /** Clave del borrador local del tablero: única por juego, ronda y usuario. */
+  get _draftKey() {
+    if (!this.round || !this.uid) return '';
+    return `motiv-draft:${this.deck}:${this.round.id}:${this.uid}`;
+  }
+
   get _tabs() {
     const tabs = [];
     if (this._canPlay) tabs.push({ id: 'play', label: 'Jugar' }, { id: 'mine', label: 'Mis resultados' });
@@ -113,7 +119,7 @@ export class MotivatorsApp extends LitElement {
     const err = this.error ? html`<p class="state error">${this.error}</p>` : null;
     return html`
       <p class="state">Ronda abierta: <span class="round-name">${this.round.name}</span></p>
-      <motivators-board .deck=${deck} @finalize=${this._onFinalize}></motivators-board>
+      <motivators-board .deck=${deck} storageKey=${this._draftKey} @finalize=${this._onFinalize}></motivators-board>
       ${err}`;
   }
 

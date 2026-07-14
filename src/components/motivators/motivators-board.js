@@ -11,7 +11,7 @@ import { LitElement, html, css } from 'lit';
 import './motivators-card.js';
 import '../app-modal.js';
 import {
-  emptySlots, placedCount, canFinalize, placeCard, removeCard, trayCards, slotsToOrden,
+  emptySlots, placedCount, canFinalize, placeCard, removeCard, trayCards, slotsToOrden, sanitizeSlots,
 } from '../../tools/motivators/domain/placement.js';
 import { DECK_SIZE } from '../../tools/motivators/domain/types.js';
 
@@ -21,6 +21,7 @@ export class MotivatorsBoard extends LitElement {
   static properties = {
     deck: { attribute: false },
     initialSlots: { attribute: false },
+    storageKey: { type: String },
     _slots: { state: true },
     _selectedId: { state: true },
     _dragId: { state: true },
@@ -61,6 +62,7 @@ export class MotivatorsBoard extends LitElement {
     .finish:disabled { opacity: 0.45; cursor: not-allowed; }
     .finish:focus-visible { outline: 3px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
     .count { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
+    .draft-note { color: var(--rm-muted, #6b7280); font-size: 0.78rem; margin: 0.6rem 0 0; }
     .ghost {
       position: fixed; z-index: 1200; pointer-events: none; transform: translate(-50%, -50%);
       background: var(--accent); color: var(--accent-on); border-radius: 10px; padding: 0.4rem 0.8rem;
@@ -73,6 +75,8 @@ export class MotivatorsBoard extends LitElement {
     super();
     this.deck = null;
     this.initialSlots = null;
+    this.storageKey = '';
+    this._restored = false;
     this._slots = emptySlots(DECK_SIZE);
     this._selectedId = null;
     this._dragId = null;
@@ -87,6 +91,45 @@ export class MotivatorsBoard extends LitElement {
     if (changed.has('initialSlots') && Array.isArray(this.initialSlots)) {
       this._slots = [...this.initialSlots];
     }
+    // Restaura el borrador guardado la primera vez que hay clave + mazo.
+    if ((changed.has('storageKey') || changed.has('deck')) && this.storageKey && this.deck && !this._restored) {
+      this._restored = true;
+      const draft = this._loadDraft();
+      if (draft) this._slots = draft;
+    }
+  }
+
+  updated(changed) {
+    if (changed.has('_slots') && this.storageKey) this._saveDraft();
+  }
+
+  /** Ids del mazo (para sanear un borrador restaurado). */
+  get _cardIds() {
+    return (this.deck?.cards ?? []).map((c) => c.id);
+  }
+
+  _loadDraft() {
+    try {
+      const raw = globalThis.localStorage?.getItem(this.storageKey);
+      if (!raw) return null;
+      const clean = sanitizeSlots(JSON.parse(raw), this._cardIds);
+      return placedCount(clean) > 0 ? clean : null;
+    } catch {
+      return null;
+    }
+  }
+
+  _saveDraft() {
+    try {
+      const store = globalThis.localStorage;
+      if (!store) return;
+      if (placedCount(this._slots) === 0) store.removeItem(this.storageKey);
+      else store.setItem(this.storageKey, JSON.stringify(this._slots));
+    } catch { /* almacenamiento no disponible: el borrador es best-effort */ }
+  }
+
+  _clearDraft() {
+    try { globalThis.localStorage?.removeItem(this.storageKey); } catch { /* noop */ }
   }
 
   get _accent() { return this.deck?.accent === 'coral' ? 'coral' : 'teal'; }
@@ -194,6 +237,7 @@ export class MotivatorsBoard extends LitElement {
 
   _finalize() {
     if (!canFinalize(this._slots)) return;
+    this._clearDraft();
     this.dispatchEvent(new CustomEvent('finalize', { detail: { orden: slotsToOrden(this._slots) }, bubbles: true, composed: true }));
   }
 
@@ -226,6 +270,7 @@ export class MotivatorsBoard extends LitElement {
           <button class="finish" ?disabled=${!ready} @click=${this._finalize}>Finalizar</button>
           <span class="count">${ready ? '¡Listo! Ya puedes finalizar.' : `Coloca las ${DECK_SIZE} cartas para finalizar.`}</span>
         </div>
+        ${this.storageKey ? html`<p class="draft-note">Tu orden se guarda como borrador en este dispositivo: no se pierde si cambias de pestaña o recargas. Solo se registra al pulsar <strong>Finalizar</strong>.</p>` : null}
       </div>
       ${this._renderGhost()}
       <app-modal .open=${!!this._modalCard} heading=${this._modalCard?.name ?? ''} @close=${() => { this._modalCard = null; }}>

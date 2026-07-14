@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   emptySlots, placedCount, canFinalize, placeCard, removeCard,
-  trayCards, slotsToOrden, ordenToSlots, validateOrden,
+  trayCards, slotsToOrden, ordenToSlots, validateOrden, sanitizeSlots,
 } from './placement.js';
 
 const IDS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
@@ -61,6 +61,16 @@ describe('placement — tablero', () => {
   it('ordenToSlots reconstruye el tablero (ida y vuelta)', () => {
     const orden = slotsToOrden(full());
     expect(ordenToSlots(orden)).toEqual(full());
+  });
+
+  it('sanitizeSlots limpia borradores: tamaño, ids ajenos y repetidos', () => {
+    expect(sanitizeSlots(full(), IDS)).toEqual(full());
+    // id ajeno → hueco; repetido → solo la primera aparición
+    const dirty = ['a', 'zzz', 'a', 'b'];
+    expect(sanitizeSlots(dirty, IDS)).toEqual(['a', null, null, 'b', null, null, null, null, null, null]);
+    // entrada corrupta → tablero vacío del tamaño correcto
+    expect(sanitizeSlots(null, IDS)).toEqual(emptySlots());
+    expect(sanitizeSlots('nope', IDS)).toEqual(emptySlots());
   });
 
   it('validateOrden acepta un orden correcto', () => {
