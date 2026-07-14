@@ -194,6 +194,20 @@ export async function getOrgConfig() {
 }
 
 /**
+ * Datos de contacto de la cuenta vinculada a una persona (`/users/{uid}`, que
+ * escribe `registerUserPresence`). Devuelve `null` si no hay uid o no existe.
+ * @param {string|null|undefined} uid
+ * @returns {Promise<{ email: string|null, displayName: string|null }|null>}
+ */
+export async function getUserAccount(uid) {
+  if (!uid) return null;
+  const snapshot = await getDoc(doc(db, 'users', uid));
+  if (!snapshot.exists()) return null;
+  const data = /** @type {any} */ (snapshot.data());
+  return { email: data.email ?? null, displayName: data.displayName ?? null };
+}
+
+/**
  * Guarda/actualiza la configuración de la organización (instancia; solo superadmin).
  * @param {OrgConfig} config
  * @returns {Promise<void>}
