@@ -9,7 +9,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { createO2OContainer } from '../tools/o2o/composition/container.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
-import { proposeQuestions } from '../lib/o2oAi.js';
+import { proposePrep } from '../lib/o2oAi.js';
 
 const app = document.querySelector('o2o-app');
 
@@ -37,7 +37,7 @@ onUserChanged(async (user) => {
     ]);
     app.canEdit = true; // líder/superadmin
     app.people = people;
-    app.aiPropose = proposeQuestions; // activa «Generar con IA» en el editor
+    app.aiPropose = proposePrep; // activa «Generar con IA» en «Preparar O2O»
     app.persistence = persistence;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar el O2O.';
