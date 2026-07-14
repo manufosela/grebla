@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createMemoryMotivatorsPersistence } from '../infrastructure/memory/index.js';
 import {
-  createRound, getActiveRound, saveSession, getMyHistory, getAggregates, setRoundActive, listRounds, updateRound,
+  createRound, getActiveRound, saveSession, getMyHistory, getAggregates, setRoundActive, listRounds, updateRound, deleteRound,
 } from './usecases.js';
 import { deckCardIds } from '../domain/decks.js';
 
@@ -84,6 +84,21 @@ describe('usecases motivadores (memoria)', () => {
     const round = await getActiveRound(p, GAME, NOW);
     await expect(saveSession(p, { round, identity: identity('p1', 'L1'), orden: [{ motivadorId: 'curiosity', posicion: 1 }] }, NOW))
       .rejects.toThrow(/Orden no válido/);
+  });
+
+  it('deleteRound borra la ronda y todas sus sesiones', async () => {
+    const p = createMemoryMotivatorsPersistence();
+    const rid = await createRound(p, { game: GAME, name: 'Julio', startAt: '2026-07-12T00:00:00Z', endAt: '2026-07-15T00:00:00Z' }, NOW);
+    const round = await getActiveRound(p, GAME, NOW);
+    const ids = deckCardIds(GAME);
+    await saveSession(p, { round, identity: identity('p1', 'L1'), orden: ordenFrom(ids) }, NOW);
+    await saveSession(p, { round, identity: identity('p2', 'L1'), orden: ordenFrom(ids) }, NOW);
+    expect(await p.sessions.listByRound(rid)).toHaveLength(2);
+
+    await deleteRound(p, rid);
+    expect(await listRounds(p, GAME)).toHaveLength(0);
+    expect(await p.sessions.listByRound(rid)).toHaveLength(0);
+    expect(await getMyHistory(p, 'uid-p1', GAME)).toHaveLength(0);
   });
 
   it('los agregados reflejan las sesiones guardadas', async () => {

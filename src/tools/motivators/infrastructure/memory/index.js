@@ -41,6 +41,9 @@ export function createMemoryMotivatorsPersistence(seed = {}) {
         if (!r) throw new Error(`Ronda ${id} no existe`);
         rounds.set(id, { ...r, ...patch, id });
       },
+      async remove(id) {
+        rounds.delete(id);
+      },
     },
     sessions: {
       async save(sessionId, session) {
@@ -51,6 +54,11 @@ export function createMemoryMotivatorsPersistence(seed = {}) {
       },
       async listByRound(roundId) {
         return [...sessions.values()].filter((s) => s.roundId === roundId).map((s) => ({ ...s }));
+      },
+      async removeByRound(roundId) {
+        for (const [key, s] of sessions) {
+          if (s.roundId === roundId) sessions.delete(key);
+        }
       },
     },
     aggregates: {

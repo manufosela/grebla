@@ -11,7 +11,7 @@
  * @typedef {import('../../domain/ports.js').MotivatorsPersistence} MotivatorsPersistence
  */
 import {
-  collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, query, where, Timestamp,
+  collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, Timestamp,
 } from 'firebase/firestore';
 
 const ROUNDS = 'motivatorRounds';
@@ -79,6 +79,9 @@ export function createFirestoreMotivatorsPersistence(db) {
         if (patch.endAt) next.endAt = toTimestamp(patch.endAt);
         await updateDoc(doc(db, ROUNDS, id), next);
       },
+      async remove(id) {
+        await deleteDoc(doc(db, ROUNDS, id));
+      },
     },
     sessions: {
       async save(sessionId, session) {
@@ -92,6 +95,10 @@ export function createFirestoreMotivatorsPersistence(db) {
       async listByRound(roundId) {
         const snap = await getDocs(query(collection(db, SESSIONS), where('roundId', '==', roundId)));
         return snap.docs.map((d) => /** @type {Session} */ (d.data()));
+      },
+      async removeByRound(roundId) {
+        const snap = await getDocs(query(collection(db, SESSIONS), where('roundId', '==', roundId)));
+        await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
       },
     },
     aggregates: {

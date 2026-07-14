@@ -4,9 +4,10 @@
  * deriva de las fechas; «cerrar» aquí desactiva la ronda antes de tiempo.
  */
 import { LitElement, html, css } from 'lit';
-import { listRounds, createRound, setRoundActive, updateRound } from '../../tools/motivators/application/usecases.js';
+import { listRounds, createRound, setRoundActive, updateRound, deleteRound } from '../../tools/motivators/application/usecases.js';
 import { roundStatus, dayWindowToIso } from '../../tools/motivators/domain/rounds.js';
 import { accentStyle } from './accent.js';
+import '../app-modal.js';
 
 const DAY_FMT = new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', timeZone: 'UTC' });
 const STATUS_LABEL = { open: 'Abierta', upcoming: 'Próxima', closed: 'Cerrada' };
@@ -31,6 +32,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
     _start: { state: true },
     _end: { state: true },
     _editingId: { state: true },
+    _confirmDelete: { state: true },
   };
 
   static styles = css`
@@ -61,7 +63,12 @@ export class MotivatorsRoundsAdmin extends LitElement {
     .toggle { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
     .toggle:hover { border-color: var(--accent); color: var(--accent-ink); }
+    .toggle.danger { color: var(--rm-danger, #dc2626); }
+    .toggle.danger:hover { border-color: var(--rm-danger, #dc2626); color: var(--rm-danger, #dc2626); }
     .empty { color: var(--rm-muted, #6b7280); font-size: 0.9rem; }
+    .confirm-text { color: var(--rm-text, #111827); line-height: 1.5; margin: 0 0 1rem; }
+    .confirm-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+    .danger-btn { background: var(--rm-danger, #dc2626); }
   `;
 
   constructor() {
@@ -81,6 +88,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
     this._start = ymd(today);
     this._end = ymd(in3);
     this._editingId = null;
+    this._confirmDelete = null;
     this._loaded = false;
   }
 
@@ -155,11 +163,31 @@ export class MotivatorsRoundsAdmin extends LitElement {
     }
   }
 
+  async _confirmedDelete() {
+    const round = this._confirmDelete;
+    if (!round || this._busy) return;
+    this._busy = true;
+    this._error = '';
+    this._flash = '';
+    try {
+      await deleteRound(this.persistence, round.id);
+      this._confirmDelete = null;
+      if (this._editingId === round.id) this._resetForm();
+      this._flash = 'Ronda borrada.';
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo borrar la ronda.';
+    } finally {
+      this._busy = false;
+    }
+  }
+
   render() {
     const rounds = this._rounds ?? [];
     return html`<div style=${accentStyle(this.accent)}>
       ${this._renderForm()}
       ${this._loading && !this._rounds ? html`<p class="empty">Cargando rondas…</p>` : this._renderList(rounds)}
+      ${this._renderConfirm()}
     </div>`;
   }
 
@@ -203,7 +231,19 @@ export class MotivatorsRoundsAdmin extends LitElement {
       <span class="spacer"></span>
       <button class="toggle" @click=${() => this._startEdit(round)}>Editar</button>
       <button class="toggle" @click=${() => this._toggle(round)}>${round.active === false ? 'Activar' : 'Cerrar'}</button>
+      <button class="toggle danger" @click=${() => { this._confirmDelete = round; }}>Borrar</button>
     </li>`;
+  }
+
+  _renderConfirm() {
+    const round = this._confirmDelete;
+    return html`<app-modal .open=${!!round} heading="Borrar ronda" @close=${() => { this._confirmDelete = null; }}>
+      ${round ? html`<p class="confirm-text">Vas a borrar la ronda <strong>«${round.name}»</strong> y <strong>todas las participaciones</strong> de quienes la completaron. Esta acción no se puede deshacer.</p>
+      <div class="confirm-actions">
+        <button class="toggle" @click=${() => { this._confirmDelete = null; }}>Cancelar</button>
+        <button class="create danger-btn" ?disabled=${this._busy} @click=${this._confirmedDelete}>Borrar definitivamente</button>
+      </div>` : null}
+    </app-modal>`;
   }
 }
 

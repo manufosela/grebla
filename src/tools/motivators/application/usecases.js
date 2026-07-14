@@ -85,6 +85,16 @@ export async function updateRound(p, id, patch) {
 }
 
 /**
+ * Borra una ronda y TODAS las sesiones de quienes participaron (superadmin). Al
+ * borrarse las sesiones, la Cloud Function recalcula los agregados públicos.
+ * @param {MotivatorsPersistence} p @param {string} id @returns {Promise<void>}
+ */
+export async function deleteRound(p, id) {
+  await p.sessions.removeByRound(id);
+  await p.rounds.remove(id);
+}
+
+/**
  * Guarda (o sobrescribe) la sesión del jugador para una ronda. Falla si la ronda
  * no está abierta o el orden no es completo/válido. Devuelve el id de sesión.
  * @param {MotivatorsPersistence} p
