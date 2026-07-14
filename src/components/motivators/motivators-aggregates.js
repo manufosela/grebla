@@ -6,6 +6,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { getAggregates } from '../../tools/motivators/application/usecases.js';
+import { DECK_SIZE } from '../../tools/motivators/domain/types.js';
 import { accentStyle } from './accent.js';
 
 export class MotivatorsAggregates extends LitElement {
@@ -26,6 +27,7 @@ export class MotivatorsAggregates extends LitElement {
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }
     .bar-top { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0 0 1rem; }
     .respondents { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .legend { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; line-height: 1.45; }
     label { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     select { font: inherit; padding: 0.3rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
@@ -132,20 +134,32 @@ export class MotivatorsAggregates extends LitElement {
 
   _renderRanking(block) {
     if (!block || block.respondents === 0) return html`<p class="empty">Sin datos para esta vista.</p>`;
-    const maxTop3 = Math.max(1, ...block.ranking.map((s) => s.top3Pct ?? 0));
-    return html`<div>${block.ranking.map((s, i) => this._renderRow(s, i, maxTop3))}</div>`;
+    const n = block.respondents;
+    const few = n < 3
+      ? ` Con pocas respuestas (${n}), el ranking refleja casi literalmente lo elegido.`
+      : '';
+    return html`
+      <p class="legend">Ordenados por <strong>posición media</strong> (1 = lo más prioritario para el equipo). La barra indica la prioridad relativa. Basado en ${n} ${n === 1 ? 'respuesta' : 'respuestas'}.${few}</p>
+      <div>${block.ranking.map((s, i) => this._renderRow(s, i))}</div>`;
   }
 
-  _renderRow(stat, i, maxTop3) {
-    const width = stat.top3Pct == null ? 0 : Math.round((stat.top3Pct / maxTop3) * 100);
-    const avg = stat.averagePosition == null ? '—' : stat.averagePosition;
+  /** Anchura de barra proporcional a la prioridad: media 1 → llena, media DECK_SIZE → mínima. */
+  _priorityWidth(avg) {
+    if (avg == null) return 0;
+    return Math.round(((DECK_SIZE - avg + 1) / DECK_SIZE) * 100);
+  }
+
+  _renderRow(stat, i) {
+    const width = this._priorityWidth(stat.averagePosition);
+    const avg = stat.averagePosition == null ? '—' : stat.averagePosition.toFixed(1);
+    const top3 = stat.top3Count > 0 ? ` · top-3 ${stat.top3Count}×` : '';
     return html`<div class="row">
       <span class="rank">${i + 1}</span>
       <div class="who">
         <div class="name">${this._cardName(stat.motivadorId)}</div>
         <div class="track"><div class="fill" style=${`width:${width}%`}></div></div>
       </div>
-      <div class="metric"><span class="avg">${avg}</span><span class="sub">pos. media · ${stat.top3Count} veces top-3</span></div>
+      <div class="metric"><span class="avg">${avg}</span><span class="sub">media${top3}</span></div>
     </div>`;
   }
 
