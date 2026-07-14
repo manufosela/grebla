@@ -1,15 +1,14 @@
 /**
  * <admin-dashboard>
- * Panel de administración: lista de perfiles, comparativa, distribución
- * agregada, export CSV (cliente) y configuración de la organización.
+ * Panel de administración: lista de perfiles (con nombre y email), comparativa,
+ * distribución de roles agregada y export CSV (cliente). Solo consulta: el
+ * cuestionario se rellena en la herramienta del líder. Incluye ayudas desplegables.
  *
  * Propiedades (asignadas como propiedades JS desde la página Astro):
  *  - roles: import('../data/roles.js').Role[]
- *  - orgPhases: import('../data/org.js').OrgPhase[]
- *  - currentPhase: string|null
  */
 import { LitElement, html, css } from 'lit';
-import { getPersonProfile, listSessions, saveOrgConfig, deleteSession, deleteUserData } from '../lib/firestore.js';
+import { getPersonProfile, getUserAccount, listSessions, deleteSession, deleteUserData } from '../lib/firestore.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 
@@ -31,8 +30,6 @@ function formatDate(ts) {
 export class AdminDashboard extends LitElement {
   static properties = {
     roles: { attribute: false },
-    orgPhases: { attribute: false },
-    currentPhase: { attribute: false },
     leaderUid: { attribute: false },
     uid: { attribute: false },
     users: { state: true },
@@ -107,16 +104,25 @@ export class AdminDashboard extends LitElement {
     .confirm .link-danger { color: var(--rm-danger, #dc2626); }
     .confirm .link { color: var(--rm-muted, #6b7280); }
     .phase-desc { font-size: 0.82rem; color: var(--rm-muted, #6b7280); margin-top: 0.5rem; }
+    section.intro { border-left: 4px solid var(--rm-accent, #2a9d8f); }
+    details.help { margin: 0 0 1rem; }
+    details.help summary {
+      cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--rm-accent, #2a9d8f);
+      list-style: none; user-select: none; padding: 0.15rem 0;
+    }
+    details.help summary::-webkit-details-marker { display: none; }
+    details.help summary:hover { text-decoration: underline; }
+    details.help summary:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
+    details.help .help-body { font-size: 0.85rem; color: var(--rm-text, #111827); line-height: 1.5; margin-top: 0.5rem; }
+    details.help .help-body p { margin: 0 0 0.5rem; }
+    details.help .help-body ol { margin: 0.25rem 0 0.5rem; padding-left: 1.2rem; }
+    details.help .help-body li { margin: 0 0 0.3rem; }
   `;
 
   constructor() {
     super();
     /** @type {import('../data/roles.js').Role[]} */
     this.roles = [];
-    /** @type {import('../data/org.js').OrgPhase[]} */
-    this.orgPhases = [];
-    /** @type {string|null} */
-    this.currentPhase = null;
     /** @type {string|null} */
     this.uid = null;
     /** @type {string|null} uid del líder dueño de las personas */
@@ -155,8 +161,10 @@ export class AdminDashboard extends LitElement {
       const people = await listActivePeople(persistence);
       this.users = await Promise.all(
         people.map(async (p) => {
-          const prof = await getPersonProfile(p.id);
-          return { id: p.id, name: p.name, ...(prof || {}) };
+          const [prof, account] = await Promise.all([getPersonProfile(p.id), getUserAccount(p.uid)]);
+          // El nombre real vive en la Person; el email, en la cuenta vinculada (/users/{uid}).
+          const base = { id: p.id, name: p.name, email: account?.email ?? null };
+          return prof ? { ...base, ...prof } : base;
         }),
       );
     } catch (err) {
@@ -249,26 +257,13 @@ export class AdminDashboard extends LitElement {
     this.selected = next;
   }
 
-  async _onPhaseChange(event) {
-    const key = event.target.value;
-    const phase = this.orgPhases.find((p) => p.key === key);
-    if (!phase) return;
-    this.error = '';
-    try {
-      await saveOrgConfig({ phase: phase.key, roleMultipliers: phase.roleMultipliers });
-      this.currentPhase = phase.key;
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo guardar la configuración.';
-    }
-  }
-
   _exportCsv() {
     const roleKeys = this.roles.map((r) => r.key);
     const header = ['Nombre', 'Email', 'Rol dominante', ...roleKeys.map((k) => `% ${k}`), 'Completitud', 'Última actualización'];
     const rows = this.users.map((u) => {
       const affinities = u.affinities ?? {};
       return [
-        u.displayName ?? '',
+        u.name ?? '',
         u.email ?? '',
         this._roleLabel(u.dominantRole),
         ...roleKeys.map((k) => (affinities[k] ?? '')),
@@ -294,17 +289,49 @@ export class AdminDashboard extends LitElement {
     if (this.loading) return html`<p class="empty">Cargando perfiles…</p>`;
     return html`
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
+      ${this._renderIntro()}
       ${this._renderProfiles()}
       ${this.detail ? this._renderDetail() : null}
       ${this._renderCompare()}
       ${this._renderDistribution()}
-      ${this._renderOrgConfig()}
     `;
+  }
+
+  /** Bloque de ayuda desplegable (opcional): se abre para leer cómo actuar. */
+  _help(title, content) {
+    return html`<details class="help">
+      <summary>ℹ️ ${title}</summary>
+      <div class="help-body">${content}</div>
+    </details>`;
+  }
+
+  /** Intro general: qué es Role Mirror y quién hace qué (superadmin vs líder). */
+  _renderIntro() {
+    return html`<section class="intro">
+      ${this._help('¿Cómo funciona Role Mirror? (empieza por aquí)', html`
+        <p><strong>Role Mirror es un diagnóstico, no una asignación manual de roles.</strong></p>
+        <ol>
+          <li>El <strong>líder</strong> rellena un <strong>cuestionario sobre cada ingeniero</strong> en la herramienta Role Mirror (no aquí, sino en «Role Mirror» del menú).</li>
+          <li>El sistema <strong>calcula</strong> el «rol dominante» a partir de las respuestas (Engineer, Tech Lead, Staff Engineer…). Nadie lo fija a mano.</li>
+          <li>Cada <strong>ingeniero</strong> ve su resultado en <strong>solo lectura</strong> en «Mi espacio»; no lo edita.</li>
+        </ol>
+        <p><strong>Superadmin vs líder:</strong> el <strong>superadmin</strong> gestiona toda la organización (este panel, altas y borrados); el <strong>líder</strong> gestiona su equipo y rellena los cuestionarios. En esta instancia una misma persona puede ser ambos: como superadmin puedes «usar como líder» para entrar en las herramientas.</p>
+        <p>Este panel es solo de <strong>consulta</strong>: aquí ves los resultados de todo el equipo, comparas y exportas, pero el cuestionario se rellena en la herramienta del líder.</p>
+      `)}
+    </section>`;
+  }
+
+  _renderProfilesHelp() {
+    return this._help('¿Qué muestra esta tabla?', html`
+      <p>Un perfil por persona de tu equipo. <strong>Completitud</strong> = % del cuestionario respondido; el <strong>rol dominante</strong> es el de mayor afinidad en su último cuestionario. Pulsa una fila para ver su histórico de mediciones. «Borrar usuario» elimina sus datos de Role Mirror.</p>
+      <p>Si el email aparece vacío es que la persona aún no ha iniciado sesión con su cuenta (solo está dada de alta).</p>
+    `);
   }
 
   _renderProfiles() {
     return html`
       <section>
+        ${this._renderProfilesHelp()}
         <h2>Perfiles (${this.users.length})</h2>
         <div class="toolbar">
           <button class="primary" @click=${this._exportCsv} ?disabled=${this.users.length === 0}>
@@ -339,7 +366,7 @@ export class AdminDashboard extends LitElement {
                             @change=${(e) => this._toggleSelect(u.id, e.target.checked)}
                           />
                         </td>
-                        <td>${u.displayName ?? '—'}</td>
+                        <td>${u.name ?? '—'}</td>
                         <td class="muted">${u.email ?? '—'}</td>
                         <td class="muted">${formatDate(u.updatedAt)}</td>
                         <td>
@@ -401,6 +428,7 @@ export class AdminDashboard extends LitElement {
     const selectedUsers = this.users.filter((u) => this.selected.has(u.id));
     return html`
       <section>
+        ${this._help('¿Para qué sirve la comparativa?', html`<p>Marca 2 o más personas en la tabla de arriba (casilla de la izquierda) para ver su <strong>afinidad por cada rol</strong> lado a lado. Útil para comparar perfiles de un mismo equipo.</p>`)}
         <h2>Comparativa (${selectedUsers.length} seleccionados)</h2>
         ${selectedUsers.length < 2
           ? html`<p class="empty">Selecciona 2 o más perfiles en la tabla para compararlos.</p>`
@@ -443,7 +471,8 @@ export class AdminDashboard extends LitElement {
     const max = Math.max(1, ...counts.values());
     return html`
       <section>
-        <h2>Distribución de rol dominante</h2>
+        ${this._help('¿Qué es esta distribución?', html`<p>Cuántas personas del equipo tienen cada rol como <strong>rol dominante</strong> (el de mayor afinidad en su último cuestionario). Sirve para ver la forma del equipo de un vistazo.</p>`)}
+        <h2>Distribución de roles</h2>
         ${this.roles.map((role) => {
           const count = counts.get(role.key) ?? 0;
           return html`
@@ -457,24 +486,6 @@ export class AdminDashboard extends LitElement {
           `;
         })}
         <p class="phase-desc">Total de perfiles con rol dominante calculado: ${this.users.filter((u) => u.dominantRole).length} / ${total}.</p>
-      </section>
-    `;
-  }
-
-  _renderOrgConfig() {
-    const current = this.orgPhases.find((p) => p.key === this.currentPhase);
-    return html`
-      <section>
-        <h2>Configuración de la organización</h2>
-        <div class="toolbar">
-          <label for="phase">Tamaño / fase de la empresa:</label>
-          <select id="phase" @change=${this._onPhaseChange}>
-            ${this.orgPhases.map(
-              (p) => html`<option value=${p.key} ?selected=${p.key === this.currentPhase}>${p.label}</option>`,
-            )}
-          </select>
-        </div>
-        ${current ? html`<p class="phase-desc">${current.description}</p>` : null}
       </section>
     `;
   }
