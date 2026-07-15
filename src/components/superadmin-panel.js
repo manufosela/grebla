@@ -14,7 +14,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import './app-modal.js';
-import { listLeaders, addLeaderByEmail, removeLeader } from '../lib/leaders.js';
+import { listLeaders, addLeaderByEmail, removeLeader, renameLeader } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
 import { listAllUsers, setUserRole, listLinkedUids, assignUserToLeader } from '../lib/users.js';
@@ -88,6 +88,8 @@ export class SuperadminPanel extends LitElement {
     teamLoading: { state: true },
     _email: { state: true },
     _error: { state: true },
+    _editLeaderUid: { state: true },
+    _editLeaderName: { state: true },
     _careerMap: { state: true },
     _archipelago: { state: true },
     _mapIsland: { state: true },
@@ -233,6 +235,9 @@ export class SuperadminPanel extends LitElement {
     this.teamLoading = false;
     this._email = '';
     this._error = '';
+    /** @type {string|null} uid del líder cuyo nombre se está editando (RMR-BUG-0032), o null */
+    this._editLeaderUid = null;
+    this._editLeaderName = '';
     /** @type {import('../tools/team/domain/ports.js').PersistencePort|null} persistencia del superadmin (viewAll) para los catálogos */
     this.persistence = null;
     /** @type {string|null} uid del superadmin (para <catalog-manager>) */
@@ -748,6 +753,41 @@ export class SuperadminPanel extends LitElement {
       await this._loadLeaders();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo añadir el líder.';
+    }
+  }
+
+  /** @param {import('../lib/leaders.js').Leader} leader */
+  _startEditLeaderName(leader) {
+    this._editLeaderUid = leader.uid;
+    this._editLeaderName = leader.displayName ?? '';
+  }
+
+  _cancelEditLeaderName() {
+    this._editLeaderUid = null;
+    this._editLeaderName = '';
+  }
+
+  /** @param {KeyboardEvent} e */
+  _onEditLeaderNameKey(e) {
+    if (e.key === 'Enter') {
+      this._saveLeaderName();
+    } else if (e.key === 'Escape') {
+      this._cancelEditLeaderName();
+    }
+  }
+
+  /** Guarda el nombre corregido (RMR-BUG-0032) — p. ej. cuando cae al email por no haber iniciado sesión aún. */
+  async _saveLeaderName() {
+    const uid = this._editLeaderUid;
+    if (!uid) return;
+    this._error = '';
+    try {
+      await renameLeader(uid, this._editLeaderName);
+      this._editLeaderUid = null;
+      this._editLeaderName = '';
+      await this._loadLeaders();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo renombrar el líder.';
     }
   }
 
@@ -1482,20 +1522,41 @@ export class SuperadminPanel extends LitElement {
           : html`<table>
               <thead><tr><th>Nombre</th><th>Email</th><th></th></tr></thead>
               <tbody>
-                ${this.leaders.map(
-                  (l) => html`
-                    <tr class="clickable ${this.selected?.uid === l.uid ? 'sel' : ''}" @click=${() => this._openTeam(l)}>
-                      <td>${l.displayName ?? '—'}</td>
-                      <td class="muted">${l.email ?? '—'}</td>
-                      <td @click=${(e) => e.stopPropagation()}>
-                        ${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeLeader(l.uid)}>Quitar</button>`}
-                      </td>
-                    </tr>
-                  `,
-                )}
+                ${this.leaders.map((l) => this._renderLeaderRow(l))}
               </tbody>
             </table>`}
       </section>
+    `;
+  }
+
+  /** @param {import('../lib/leaders.js').Leader} l */
+  _renderLeaderRow(l) {
+    const editing = this._editLeaderUid === l.uid;
+    if (editing) {
+      return html`<tr>
+        <td @click=${(e) => e.stopPropagation()}>
+          <input type="text" .value=${this._editLeaderName} placeholder="Nombre"
+            @input=${(e) => { this._editLeaderName = e.target.value; }}
+            @keydown=${(e) => this._onEditLeaderNameKey(e)} />
+        </td>
+        <td class="muted">${l.email ?? '—'}</td>
+        <td @click=${(e) => e.stopPropagation()}>
+          <button class="act" @click=${() => this._saveLeaderName()}>Guardar</button>
+          <button @click=${() => this._cancelEditLeaderName()}>Cancelar</button>
+        </td>
+      </tr>`;
+    }
+    return html`
+      <tr class="clickable ${this.selected?.uid === l.uid ? 'sel' : ''}" @click=${() => this._openTeam(l)}>
+        <td>${l.displayName ?? '—'}</td>
+        <td class="muted">${l.email ?? '—'}</td>
+        <td @click=${(e) => e.stopPropagation()}>
+          ${this.readOnly
+            ? null
+            : html`<button class="act" @click=${() => this._startEditLeaderName(l)}>Renombrar</button>
+                <button class="del-btn" @click=${() => this._removeLeader(l.uid)}>Quitar</button>`}
+        </td>
+      </tr>
     `;
   }
 

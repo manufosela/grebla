@@ -48,9 +48,21 @@ export function removeLeader(uid) {
 }
 
 /**
+ * Corrige el nombre visible de un líder (RMR-BUG-0032): al provisionar la
+ * cuenta por email antes de su primer login, el nombre cae al propio email
+ * (Firebase Auth aún no tiene displayName). Solo toca ese campo — no pisa
+ * email/addedAt.
+ * @param {string} uid @param {string} displayName
+ * @returns {Promise<void>}
+ */
+export function renameLeader(uid, displayName) {
+  return setDoc(doc(db, 'leaders', uid), { displayName: displayName.trim() || null }, { merge: true });
+}
+
+/**
  * Alta de un líder por email (lo invoca un superadmin). Usa la Cloud Function
- * manageAccess, que resuelve el email a uid (el usuario debe haber iniciado
- * sesión al menos una vez) y crea /leaders/{uid}.
+ * manageAccess: resuelve el email a uid o, si nunca ha iniciado sesión,
+ * provisiona la cuenta (RMR-TSK-0228) y crea /leaders/{uid}.
  * @param {string} email
  * @returns {Promise<{ ok: boolean, uid: string }>}
  */
