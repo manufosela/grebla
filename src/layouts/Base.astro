@@ -107,6 +107,11 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       <p>GREBLA · Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo · versión {appVersion} · {buildHash}</p>
     </footer>
 
+    <!-- Modo superadmin (RMR-TSK-0228): ocultos por defecto; client/layout.js los
+         muestra en TODAS las páginas cuando resuelve que el rol es superadmin. -->
+    <div id="superadmin-halo" aria-hidden="true"></div>
+    <div id="superadmin-tag" title="Estás operando como superadministrador: ves y gestionas toda la organización.">🛡️ Superadmin</div>
+
     <style is:global>
       :root {
         /* Paleta GREBLA (extraída del logo) */
@@ -290,7 +295,10 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       p.page-lead { color: var(--rm-muted); margin: 0 0 1.5rem; max-width: 60ch; }
 
       /* Aviso de versión nueva del PWA (RMR-TSK-0158): banner persistente
-         hasta que el usuario recarga (el botón borra la caché del SW). */
+         hasta que el usuario recarga (el botón borra la caché del SW). Fondo
+         FIJO (no var(--rm-surface)): en oscuro esa superficie queda casi
+         igual que el fondo de página y el aviso no destacaba (RMR-BUG-0029).
+         Navy+teal fijos garantizan contraste en claro y en oscuro por igual. */
       #sw-update-banner {
         position: fixed;
         left: 50%;
@@ -303,16 +311,16 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         max-width: calc(100vw - 2rem);
         padding: 0.65rem 1rem;
         border-radius: 12px;
-        border: 1px solid var(--rm-border);
-        background: var(--rm-surface);
-        color: var(--rm-text);
+        border: 1px solid #2a9d8f;
+        background: #1e3a5f;
+        color: #fff;
         font-size: 0.9rem;
-        box-shadow: 0 10px 30px rgba(17, 24, 39, 0.25);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
       }
       #sw-update-banner button {
-        border: 1px solid var(--rm-accent);
-        background: var(--rm-accent);
-        color: var(--rm-on-accent, #fff);
+        border: 1px solid #2a9d8f;
+        background: #2a9d8f;
+        color: #fff;
         border-radius: 8px;
         padding: 0.35rem 0.9rem;
         font: inherit;
@@ -320,9 +328,39 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         cursor: pointer;
         white-space: nowrap;
       }
-      #sw-update-banner button:hover:not(:disabled) { filter: brightness(1.08); }
-      #sw-update-banner button:focus-visible { outline: 2px solid var(--rm-accent); outline-offset: 2px; }
+      #sw-update-banner button:hover:not(:disabled) { filter: brightness(1.12); }
+      #sw-update-banner button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
       #sw-update-banner button:disabled { opacity: 0.7; cursor: wait; }
+
+      /* Modo superadmin (RMR-TSK-0228): halo degradado en los bordes de la
+         página + etiqueta textual (no solo color, por accesibilidad). Lo activa
+         client/layout.js tras resolver el acceso, en TODAS las páginas. */
+      #superadmin-halo {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9990;
+        pointer-events: none;
+        border: 4px solid transparent;
+        border-image: linear-gradient(135deg, var(--gr-teal, #2a9d8f), var(--gr-navy, #1e3a5f), var(--gr-coral, #f2887a)) 1;
+      }
+      #superadmin-tag {
+        display: none;
+        position: fixed;
+        left: 8px;
+        bottom: 8px;
+        z-index: 2147483000;
+        font: 700 11px/1.4 system-ui, sans-serif;
+        color: #fff;
+        background: #1e3a5f;
+        border: 1px solid #2a9d8f;
+        border-radius: 999px;
+        padding: 3px 10px;
+      }
+      html.is-superadmin #superadmin-halo,
+      html.is-superadmin #superadmin-tag {
+        display: block;
+      }
     </style>
 
     <!-- Define <auth-button> y aplica el guard de rutas protegidas. -->
