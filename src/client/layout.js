@@ -5,6 +5,7 @@
  */
 import '../components/auth-button.js';
 import { onUserChanged, isAdmin } from '../lib/auth.js';
+import { resolveAccess } from '../lib/access.js';
 
 const requireAuth = document.body.dataset.requireAuth === 'true';
 const requireAdmin = document.body.dataset.requireAdmin === 'true';
@@ -21,6 +22,22 @@ if (requireAuth || requireAdmin) {
     }
   });
 }
+
+// Modo superadmin (RMR-TSK-0228): halo + etiqueta en TODAS las páginas, para no
+// confundir acciones de superadmin con las de líder (subscripción independiente
+// del guard de arriba; onAuthStateChanged admite varios listeners).
+onUserChanged(async (user) => {
+  if (!user) {
+    document.documentElement.classList.remove('is-superadmin');
+    return;
+  }
+  try {
+    const { role } = await resolveAccess(user);
+    document.documentElement.classList.toggle('is-superadmin', role === 'superadmin');
+  } catch {
+    document.documentElement.classList.remove('is-superadmin');
+  }
+});
 
 // Tema claro/oscuro (RMR-TSK-0151). El script inline del <head> ya aplicó el
 // tema antes del primer paint; aquí solo se cablea el conmutador de la nav.
