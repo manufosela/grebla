@@ -64,9 +64,15 @@ export class CareerMapView extends LitElement {
       border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px);
       padding: 0.5rem;
-      overflow: hidden;
+      overflow: auto;
     }
     svg { width: 100%; height: auto; display: block; }
+    /* Modo «single» (mi-espacio, RMR-BUG-0031): sin zoom/expandir, TODOS los
+       temas de la isla se etiquetan a la vez. Forzar el ancho al contenedor
+       (100%) los amontona si hay muchos; con un lienzo más ancho que el
+       contenedor y scroll horizontal, cada tema tiene sitio real y el texto
+       no se pisa (en vez de encogerse hasta ilegible). */
+    .wrap.single svg { width: 900px; max-width: none; }
     .world { transition: transform 0.45s ease; }
     @media (prefers-reduced-motion: reduce) {
       .world { transition: none; }
@@ -306,7 +312,7 @@ export class CareerMapView extends LitElement {
             text-anchor="middle"
           >${circle.name}</text>`;
     const themes = islandMap
-      ? spots.map((spot) => this._renderTheme(spot, circle, islandMap, labeled || expandedHere, ui))
+      ? spots.map((spot) => this._renderTheme(spot, circle, islandMap, labeled || expandedHere, ui, lay.single))
       : svg`<text class="count" x=${circle.cx} y=${circle.cy} text-anchor="middle" dominant-baseline="central">${total} temas</text>`;
     return svg`
       <g
@@ -328,12 +334,17 @@ export class CareerMapView extends LitElement {
   }
 
   /** Un TEMA (casa) de una isla: círculo por estado, tooltip y etiqueta si toca. */
-  _renderTheme(spot, circle, islandMap, labeled, ui) {
+  _renderTheme(spot, circle, islandMap, labeled, ui, single) {
     const st = cityStatus(islandMap, spot.id, this.journey);
     const status = st === 'unknown' ? 'blocked' : st;
     const name = islandMap.cities.find((c) => c.id === spot.id)?.name ?? spot.id;
     const r = this._spotRadius(circle);
     const sel = this.selected === spot.id ? 'sel' : '';
+    // En modo single TODOS los temas se etiquetan a la vez (sin zoom/expandir
+    // que reparta el espacio): letra más pequeña para que quepan sin pisarse
+    // (RMR-BUG-0031); a escala archipiélago/expandida se mantiene el tamaño de
+    // siempre (pocos temas visibles a la vez, hay hueco de sobra).
+    const fontSize = (single ? 1.8 : 3) * ui;
     return svg`
       <g
         class="node ${status} ${sel}"
@@ -356,7 +367,7 @@ export class CareerMapView extends LitElement {
               class="tlabel"
               x=${spot.x}
               y=${spot.y - (r + 1.1 * ui)}
-              style="font-size:${3 * ui}px"
+              style="font-size:${fontSize}px"
             >${name}</text>`
           : nothing}
       </g>
@@ -479,7 +490,7 @@ export class CareerMapView extends LitElement {
     const transform = expandedCircle
       ? `translate(50px, 50px) scale(${scale}) translate(${-expandedCircle.cx}px, ${-expandedCircle.cy}px)`
       : 'none';
-    return html`<div class="wrap" @keydown=${this._onWrapKeydown}>
+    return html`<div class="wrap ${lay.single ? 'single' : ''}" @keydown=${this._onWrapKeydown}>
       ${expandedCircle
         ? html`<div class="zoombar">
             <button @click=${() => (this.expanded = null)}>⟵ Archipiélago</button>
