@@ -25,7 +25,11 @@ if (requireAuth || requireAdmin) {
 
 // Modo superadmin (RMR-TSK-0228): halo + etiqueta en TODAS las páginas, para no
 // confundir acciones de superadmin con las de líder (subscripción independiente
-// del guard de arriba; onAuthStateChanged admite varios listeners).
+// del guard de arriba; onAuthStateChanged admite varios listeners). RMR-BUG-0033:
+// NO se muestra si ha elegido «usar como líder» (superadmin-panel.js VIEW_FLAG) —
+// en ese modo está deliberadamente viendo las herramientas como si fuera líder.
+const VIEW_FLAG = 'grebla-view';
+
 onUserChanged(async (user) => {
   if (!user) {
     document.documentElement.classList.remove('is-superadmin');
@@ -33,7 +37,8 @@ onUserChanged(async (user) => {
   }
   try {
     const { role } = await resolveAccess(user);
-    document.documentElement.classList.toggle('is-superadmin', role === 'superadmin');
+    const actingAsLeader = sessionStorage.getItem(VIEW_FLAG) === 'leader';
+    document.documentElement.classList.toggle('is-superadmin', role === 'superadmin' && !actingAsLeader);
   } catch {
     document.documentElement.classList.remove('is-superadmin');
   }
