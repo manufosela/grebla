@@ -83,8 +83,22 @@ export const manageAccess = onCall({ region: 'europe-west1' }, async (request) =
   let user;
   try {
     user = await getAuth().getUserByEmail(email);
-  } catch {
-    throw new HttpsError('not-found', `No existe ningún usuario con el email ${email}. Debe iniciar sesión al menos una vez.`);
+  } catch (err) {
+    // Alta (RMR-TSK-0228): el superadmin puede añadir un líder/viewer aunque
+    // nunca haya iniciado sesión — se PROVISIONA la cuenta con el Admin SDK.
+    // Firebase Auth vincula solo (misma cuenta, mismo uid) el primer login real
+    // con Google a este email, por la política por defecto «una cuenta por
+    // email»: no hace falta un patrón de invitación/sellado aparte. Al borrar
+    // acceso no se provisiona nada (no tendría sentido crear una cuenta para
+    // quitarle el rol).
+    if (action !== 'add' || err?.code !== 'auth/user-not-found') {
+      throw new HttpsError('not-found', `No existe ningún usuario con el email ${email}. Debe iniciar sesión al menos una vez.`);
+    }
+    try {
+      user = await getAuth().createUser({ email });
+    } catch {
+      throw new HttpsError('invalid-argument', `No se pudo crear la cuenta para ${email}. Comprueba que el email es correcto.`);
+    }
   }
 
   const ref = getFirestore().doc(`${collectionName}/${user.uid}`);

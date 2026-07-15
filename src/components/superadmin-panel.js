@@ -1465,7 +1465,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <h2>Líderes (${this.leaders.length})</h2>
-        <p class="ro-note">Da de alta a los líderes por su email (deben haber iniciado sesión al menos una vez). Pincha un líder para ver su equipo.</p>
+        <p class="ro-note">Da de alta a los líderes por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login. Pincha un líder para ver su equipo.</p>
         ${this.readOnly
           ? null
           : html`<div class="toolbar">
@@ -1536,7 +1536,7 @@ export class SuperadminPanel extends LitElement {
       <section>
         <h2>Usuarios (${this._users.length})</h2>
         <p class="ro-note">
-          Da de alta un viewer o un líder por su email (deben haber iniciado sesión al menos una vez).
+          Da de alta un viewer o un líder por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
           Para un superadmin nuevo usa <code>pnpm seed:leaders</code> o la función <code>grantAdmin</code> fuera de este panel;
           aquí solo puedes promoverlo a superadmin si ya aparece en la lista.
         </p>
