@@ -203,6 +203,7 @@ export class TeamPersonDetail extends LitElement {
     .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .bias { font-size: 0.78rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 0 0.75rem; }
     section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
+    .career .lead { font-size: 0.85rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.85rem; }
     .career .sub { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); margin: 1.1rem 0 0.35rem; }
     .career .now .code { font-weight: 700; }
     .career .now .desc { font-size: 0.85rem; color: var(--rm-text, #111827); margin: 0.2rem 0 0; }
@@ -430,17 +431,17 @@ export class TeamPersonDetail extends LitElement {
       this._seedDatos();
       this._load();
     }
-    // Los externos no tienen Carrera: si la sub-pestaña activa quedó en «carrera»
-    // (o vino como initialSubtab), la reubicamos en «Datos».
-    if (this.person?.external && this._subtab === 'carrera') {
-      this._subtab = 'datos';
-    }
   }
 
-  /** Sub-pestañas visibles: los externos no tienen Carrera (ni mapa de carrera). */
+  /**
+   * Sub-pestañas visibles: los externos no tienen plan de carrera (journey,
+   * expectativas, aspiraciones), pero SÍ se clasifican por nivel — para saber
+   * la composición de niveles del equipo — así que la pestaña se relabela
+   * «Nivel» en vez de ocultarse (RMR-BUG-0030).
+   */
   _visibleSubtabs() {
-    if (this.person?.external) return SUBTABS.filter((t) => t.id !== 'carrera');
-    return SUBTABS;
+    if (!this.person?.external) return SUBTABS;
+    return SUBTABS.map((t) => (t.id === 'carrera' ? { ...t, label: 'Nivel' } : t));
   }
 
   /** Siembra el borrador de «Datos» desde la persona (RMR-TSK-0173). */
@@ -1218,12 +1219,47 @@ export class TeamPersonDetail extends LitElement {
   }
 
   /**
+   * Sección «Nivel» para personas EXTERNAS (RMR-BUG-0030): a diferencia de la
+   * plantilla, una persona externa no sigue el plan de carrera (sin journey,
+   * expectativas ni aspiraciones — eso es del programa de crecimiento interno),
+   * pero SÍ conviene poder clasificarla por nivel (L1/L2/L3…) para conocer la
+   * composición del equipo. Reutiliza el mismo editor de nivel+disciplinas.
+   * @param {import('../../tools/career/data/framework.js').CareerFramework|null} fw
+   */
+  _renderExternalLevel(fw) {
+    const level = getLevel(fw, this.person.levelId);
+    return html`
+      <section class="career">
+        <h3>Nivel</h3>
+        <p class="lead">Las personas externas no siguen el plan de carrera (sin expectativas ni aspiraciones), pero se pueden clasificar por nivel para conocer la composición del equipo.</p>
+        ${this._renderCareerEditor()}
+        ${level ? this._renderExternalLevelNow(level) : null}
+      </section>
+    `;
+  }
+
+  /** Bloque «Nivel actual» de una persona externa (sin plan de carrera). */
+  _renderExternalLevelNow(level) {
+    const desc = level.description ? html`<p class="desc">${level.description}</p>` : null;
+    const profile = level.typicalProfile ? html`<p class="profile">Perfil típico: ${level.typicalProfile}</p>` : null;
+    return html`
+      <p class="sub">Nivel actual</p>
+      <div class="now">
+        <p><span class="code">${level.code}</span> · ${level.title}</p>
+        ${desc}
+        ${profile}
+      </div>
+    `;
+  }
+
+  /**
    * Sección «Carrera» (F4): solo lectura. Muestra el nivel actual y sus
    * expectativas, el foco por disciplina (addendums) y los niveles a los que
    * aspirar. Se omite si la persona no tiene ni nivel ni disciplinas.
    */
   _renderCareer() {
     const fw = this.framework;
+    if (this.person?.external) return this._renderExternalLevel(fw);
     const disciplineIds = this.person.disciplines ?? [];
     const level = getLevel(fw, this.person.levelId);
 
