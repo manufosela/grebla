@@ -140,6 +140,7 @@ export class EngineerSpace extends LitElement {
     .datos-row dd { margin: 0; font-size: 0.9rem; color: var(--rm-text, #111827); }
     .playlink { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; margin-left: 0.35rem; }
     .playlink:hover { text-decoration: underline; }
+    .map-cta { margin: 0.4rem 0 1.1rem; font-size: 0.88rem; }
     .topmost { color: var(--rm-accent, #2a9d8f); font-size: 0.9rem; font-weight: 600; margin: 0.2rem 0 0; }
 
     /* ── Sección Carrera (marcado espejo de <team-person-detail>) ── */
@@ -668,6 +669,9 @@ export class EngineerSpace extends LitElement {
         .journey=${journey}
         .selected=${null}
       ></career-map>
+      <p class="map-cta">
+        <a class="playlink" href="/tools/career-map">🕹️ Ver mapa completo y jugar en 3D si quieres</a>
+      </p>
 
       <p class="sub">Casa actual</p>
       ${current
