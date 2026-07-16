@@ -41,14 +41,25 @@ export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => 
   let user;
   try {
     user = await getAuth().getUserByEmail(email);
-  } catch {
-    throw new HttpsError('not-found', `No existe ningún usuario con el email ${email}. Debe iniciar sesión al menos una vez.`);
+  } catch (err) {
+    // Alta sin login previo (RMR-TSK-0230, mismo patrón que manageAccess): se
+    // provisiona la cuenta con el Admin SDK; Firebase vincula sola el primer
+    // login real con Google a este email (misma política "una cuenta por email").
+    if (err?.code !== 'auth/user-not-found') {
+      throw new HttpsError('not-found', `No existe ningún usuario con el email ${email}. Debe iniciar sesión al menos una vez.`);
+    }
+    try {
+      user = await getAuth().createUser({ email });
+    } catch {
+      throw new HttpsError('invalid-argument', `No se pudo crear la cuenta para ${email}. Comprueba que el email es correcto.`);
+    }
   }
 
   await getAuth().setCustomUserClaims(user.uid, { admin: true });
   await getFirestore().doc(`admins/${user.uid}`).set(
     {
       email: user.email ?? email,
+      displayName: user.displayName ?? user.email ?? email,
       grantedBy: caller.uid,
       createdAt: FieldValue.serverTimestamp(),
     },

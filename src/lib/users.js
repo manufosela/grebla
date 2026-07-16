@@ -122,3 +122,16 @@ export async function setUserRole(uid, role, profile = {}) {
   }
   await Promise.all(writes);
 }
+
+/**
+ * Corrige el nombre visible de un usuario (lo invoca un superadmin desde la
+ * pestaña Usuarios). Escribe /users/{uid}.displayName, que es el que gana en la
+ * fusión de la lista (accessRoles.mergeAccessUsers antepone el de /users al del
+ * doc de rol). Solo un superadmin puede escribir el /users de otra cuenta
+ * (reglas de Firestore). Un nombre vacío vuelve a null.
+ * @param {string} uid @param {string} displayName
+ * @returns {Promise<void>}
+ */
+export function setUserDisplayName(uid, displayName) {
+  return setDoc(doc(db, 'users', uid), { displayName: displayName.trim() || null }, { merge: true });
+}
