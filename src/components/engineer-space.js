@@ -36,6 +36,7 @@ import './role-result.js';
 import './role-questionnaire.js';
 import './career/career-map.js';
 import './career/player-card.js';
+import './marea/marea-app.js';
 import {
   getLevel,
   expectationsForLevel,
@@ -52,9 +53,9 @@ import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
  * (#carrera / #rolemirror / #mapa) para conservar la pestaña activa al recargar
  * o navegar atrás/adelante, igual que el patrón de <superadmin-panel>.
  * `datos` solo la ven los EXTERNOS (no tienen carrera/rolemirror/mapa).
- * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'|'o2o'|'datos'>}
+ * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'|'o2o'|'datos'|'marea'>}
  */
-const TABS = ['carrera', 'rolemirror', 'mapa', 'o2o', 'datos'];
+const TABS = ['carrera', 'rolemirror', 'mapa', 'o2o', 'datos', 'marea'];
 /** Búsqueda O(1) de existencia (validar el hash de la URL). */
 const TAB_SET = new Set(TABS);
 
@@ -69,6 +70,7 @@ const TAB_META = {
   mapa: { label: 'Mi mapa', heading: 'Mi mapa de carrera', cls: 'map' },
   o2o: { label: 'Mis O2O', heading: 'Mis O2O', cls: 'o2o' },
   datos: { label: 'Mis datos', heading: 'Mis datos', cls: 'datos' },
+  marea: { label: 'Marea', heading: 'Marea', cls: 'marea' },
 };
 
 export class EngineerSpace extends LitElement {
@@ -761,6 +763,7 @@ export class EngineerSpace extends LitElement {
       mapa: () => this._renderMap(),
       o2o: () => this._renderO2O(),
       datos: () => this._renderDatos(),
+      marea: () => this._renderMarea(),
     }[tab];
 
     return html`
@@ -776,6 +779,11 @@ export class EngineerSpace extends LitElement {
         ${panel()}
       </section>
     `;
+  }
+
+  /** Pestaña Marea: el pulso semanal del propio ingeniero (RMR-BUG-0036). */
+  _renderMarea() {
+    return html`<marea-app .uid=${this.person?.uid ?? null}></marea-app>`;
   }
 
   /** Datos básicos del externo (solo lectura): sin carrera ni nivel. */
