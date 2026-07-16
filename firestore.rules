@@ -69,6 +69,17 @@ service cloud.firestore {
       allow write: if (isSignedIn() && request.auth.uid == uid) || isSuperAdmin();
     }
 
+    // Marea (RMR-PCS-0021): pulso afectivo semanal. Cada persona guarda un
+    // registro por día en /pulse/{uid}/entries/{YYYY-MM-DD} y SOLO accede a lo
+    // suyo — el registro individual es privado. El agregado anónimo del equipo lo
+    // calcula una Cloud Function (Admin SDK, omite estas reglas). En la escritura
+    // se exige que el campo uid coincida con el dueño (no se puede suplantar).
+    match /pulse/{uid}/entries/{day} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid;
+    }
+
     // Secretos (token GitHub de DORA): nunca accesibles desde el cliente; solo
     // la Cloud Function vía Admin SDK (omite reglas).
     match /private/{document=**} {
