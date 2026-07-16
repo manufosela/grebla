@@ -26,6 +26,7 @@
  */
 import { LitElement, html, css, svg, nothing } from 'lit';
 import { cityStatus } from '../../tools/career/domain/progress.js';
+import { shapeForArea, houseShapePath } from '../../tools/career/domain/houseShapes.js';
 import { stopNumberByCity } from '../../tools/career/domain/challenge.js';
 import { routeNumberByCity } from '../../tools/career/domain/route.js';
 import {
@@ -337,8 +338,12 @@ export class CareerMapView extends LitElement {
   _renderTheme(spot, circle, islandMap, labeled, ui, single) {
     const st = cityStatus(islandMap, spot.id, this.journey);
     const status = st === 'unknown' ? 'blocked' : st;
-    const name = islandMap.cities.find((c) => c.id === spot.id)?.name ?? spot.id;
+    const city = islandMap.cities.find((c) => c.id === spot.id);
+    const name = city?.name ?? spot.id;
     const r = this._spotRadius(circle);
+    // Forma según la comarca de la casa (RMR-TSK-0233): el color sigue siendo por
+    // estado (CSS .node.X .dot); la forma comunica la comarca. Path vacío = círculo.
+    const shapePath = houseShapePath(shapeForArea(city?.area, islandMap.areas), spot.x, spot.y, r);
     const sel = this.selected === spot.id ? 'sel' : '';
     // En modo single TODOS los temas se etiquetan a la vez (sin zoom/expandir
     // que reparta el espacio): letra más pequeña para que quepan sin pisarse
@@ -361,7 +366,9 @@ export class CareerMapView extends LitElement {
         ${this.journey?.currentCity === spot.id
           ? svg`<circle class="ring current" cx=${spot.x} cy=${spot.y} r=${r + 0.9 * ui} />`
           : nothing}
-        <circle class="dot" cx=${spot.x} cy=${spot.y} r=${r} />
+        ${shapePath
+          ? svg`<path class="dot" d=${shapePath} />`
+          : svg`<circle class="dot" cx=${spot.x} cy=${spot.y} r=${r} />`}
         ${labeled
           ? svg`<text
               class="tlabel"
