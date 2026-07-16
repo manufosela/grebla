@@ -74,6 +74,15 @@ function formatLogin(ts) {
 const VIEW_FLAG = 'grebla-view';
 const TABS = ['leaders', 'areas', 'guilds', 'labels', 'careerMap', 'careerFramework', 'users'];
 
+/** Sub-pestañas del framework de carrera: 4 catálogos + 2 matrices de cruce. */
+const FW_SUBTABS = /** @type {const} */ ([
+  ['tracks', 'Tracks y niveles'],
+  ['disciplines', 'Disciplinas'],
+  ['dimensions', 'Dimensiones'],
+  ['expectations', 'Expectativas'],
+  ['addendums', 'Addendums'],
+]);
+
 export class SuperadminPanel extends LitElement {
   static properties = {
     ready: { attribute: false },
@@ -109,6 +118,7 @@ export class SuperadminPanel extends LitElement {
     _fwError: { state: true },
     _fwNotice: { state: true },
     _fwSaving: { state: true },
+    _fwSubtab: { state: true },
     _users: { state: true },
     _newUserEmail: { state: true },
     _newUserRole: { state: true },
@@ -137,6 +147,22 @@ export class SuperadminPanel extends LitElement {
     }
     .tab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
+    /* Sub-pestañas del framework de carrera: más pequeñas y cuadradas que las
+       pestañas principales (píldoras), para que se lean como un segundo nivel. */
+    .subtabs { display: flex; gap: 0.35rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .subtab {
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border-radius: 8px; padding: 0.35rem 0.85rem; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .subtab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
+    .subtab:hover:not(.active) { color: var(--rm-text, #111827); border-color: var(--rm-accent, #3b82f6); }
+    /* Grupo de track: contenedor plegable con sus niveles anidados dentro. */
+    details.track-group { margin-bottom: 0.9rem; }
+    details.track-group > summary { list-style: none; }
+    details.track-group > summary::-webkit-details-marker { display: none; }
+    .track-group .nested-levels { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1px dashed var(--rm-border, #e5e7eb); }
+    .track-group .nested-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+    .track-group .nested-head .sub { margin: 0; }
     section {
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
@@ -268,6 +294,8 @@ export class SuperadminPanel extends LitElement {
     this._fwError = '';
     this._fwNotice = '';
     this._fwSaving = false;
+    /** @type {typeof FW_SUBTABS[number][0]} sub-pestaña activa del framework de carrera */
+    this._fwSubtab = 'tracks';
     /** @type {import('../lib/accessRoles.js').AccessUser[]} */
     this._users = [];
     this._newUserEmail = '';
@@ -601,6 +629,26 @@ export class SuperadminPanel extends LitElement {
     this._patchFramework({ [kind]: list });
   }
 
+  /**
+   * Reordena un nivel DENTRO de su track (no en la lista global): intercambia su
+   * `order` con el del nivel vecino del mismo track. @param {string} trackId
+   * @param {string} id @param {-1|1} dir
+   */
+  _moveLevelInTrack(trackId, id, dir) {
+    const inTrack = this._framework.levels.filter((l) => l.trackId === trackId).toSorted((a, b) => a.order - b.order);
+    const pos = inTrack.findIndex((l) => l.id === id);
+    const swapPos = pos + dir;
+    if (pos < 0 || swapPos < 0 || swapPos >= inTrack.length) return;
+    const a = inTrack[pos];
+    const b = inTrack[swapPos];
+    const list = this._framework.levels.map((l) => {
+      if (l.id === a.id) return { ...l, order: b.order };
+      if (l.id === b.id) return { ...l, order: a.order };
+      return l;
+    });
+    this._patchFramework({ levels: list });
+  }
+
   /** Añade un track/disciplina/dimensión con id autogenerado y único. @param {'tracks'|'disciplines'|'dimensions'} kind @param {'track'|'discipline'|'dimension'} field @param {string} singular */
   _addNamed(kind, field, singular) {
     const name = this._fwNew[field].trim();
@@ -612,14 +660,17 @@ export class SuperadminPanel extends LitElement {
     this._fwNew = { ...this._fwNew, [field]: '' };
   }
 
-  _addLevel() {
+  /** @param {string} [preTrackId] track al que asignar el nivel (por defecto, el primero) */
+  _addLevel(preTrackId) {
     const code = this._fwNew.levelCode.trim();
     const title = this._fwNew.levelTitle.trim();
     this._fwError = '';
     if (!code || !title) { this._fwError = 'El nivel necesita código y título.'; return; }
     const levels = this._framework.levels;
     const id = uniqueId(slugify(code) || slugify(title), new Set(levels.map((l) => l.id)));
-    const trackId = this._framework.tracks[0]?.id ?? '';
+    const trackId = this._framework.tracks.some((t) => t.id === preTrackId)
+      ? /** @type {string} */ (preTrackId)
+      : (this._framework.tracks[0]?.id ?? '');
     /** @type {import('../tools/career/data/framework.js').Level} */
     const level = { id, code, title, trackId, order: nextOrder(levels), description: '', typicalProfile: '', branchesFrom: null };
     this._patchFramework({ levels: [...levels, level] });
@@ -1261,12 +1312,12 @@ export class SuperadminPanel extends LitElement {
         ${!fw
           ? html`<p class="empty">Cargando el framework…</p>`
           : html`
-              ${this._renderNamedSection('tracks', 'Tracks', 'track', 'track', fw.tracks, 'Itinerarios de carrera dentro de la organización. Ejemplos: Individual Contributor, Management.')}
-              ${this._renderFwLevels(fw)}
-              ${this._renderNamedSection('disciplines', 'Disciplinas', 'disciplina', 'discipline', fw.disciplines, 'Disciplina = familia de carrera que matiza las expectativas de cada nivel; la gestiona el superadmin. Ejemplos: Backend, Web/Frontend, Infra/Platform, Data/ML, Mobile.')}
-              ${this._renderNamedSection('dimensions', 'Dimensiones', 'dimensión', 'dimension', fw.dimensions, 'Ejes de evaluación de cada nivel. Ejemplos: Technical Excellence, Reliability, Product.')}
-              ${this._renderFwExpectations(fw)}
-              ${this._renderFwAddendums(fw)}
+              <div class="subtabs" role="tablist">
+                ${FW_SUBTABS.map(([id, label]) => html`
+                  <button class="subtab ${this._fwSubtab === id ? 'active' : ''}" role="tab" aria-selected=${this._fwSubtab === id}
+                    @click=${() => { this._fwSubtab = id; }}>${label}</button>`)}
+              </div>
+              ${this._renderFwActiveSubtab(fw)}
               ${this.readOnly
                 ? null
                 : html`
@@ -1279,6 +1330,27 @@ export class SuperadminPanel extends LitElement {
             `}
       </section>
     `;
+  }
+
+  /**
+   * Contenido de la sub-pestaña activa del framework. Un dispatch por `switch`
+   * (en vez de ternarios encadenados dentro de la plantilla) mantiene baja la
+   * complejidad de _renderFramework y evita ternarios anidados.
+   * @param {import('../tools/career/data/framework.js').CareerFramework} fw
+   */
+  _renderFwActiveSubtab(fw) {
+    switch (this._fwSubtab) {
+      case 'disciplines':
+        return this._renderNamedSection('disciplines', 'Disciplinas', 'disciplina', 'discipline', fw.disciplines, 'Disciplina = familia de carrera que matiza las expectativas de cada nivel; la gestiona el superadmin. Ejemplos: Backend, Web/Frontend, Infra/Platform, Data/ML, Mobile.');
+      case 'dimensions':
+        return this._renderNamedSection('dimensions', 'Dimensiones', 'dimensión', 'dimension', fw.dimensions, 'Ejes de evaluación de cada nivel. Ejemplos: Technical Excellence, Reliability, Product.');
+      case 'expectations':
+        return this._renderFwExpectations(fw);
+      case 'addendums':
+        return this._renderFwAddendums(fw);
+      default:
+        return this._renderFwTracksAndLevels(fw);
+    }
   }
 
   /**
@@ -1346,26 +1418,99 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
-  /** @param {import('../tools/career/data/framework.js').CareerFramework} fw */
-  _renderFwLevels(fw) {
-    const sorted = [...fw.levels].toSorted((a, b) => a.order - b.order);
+  /**
+   * Sub-pestaña «Tracks y niveles»: los tracks son los itinerarios y cada uno
+   * contiene sus niveles anidados. Realiza la relación track→niveles de forma
+   * visual (antes eran dos listas planas separadas).
+   * @param {import('../tools/career/data/framework.js').CareerFramework} fw
+   */
+  _renderFwTracksAndLevels(fw) {
+    const tracks = [...fw.tracks].toSorted((a, b) => a.order - b.order);
+    const byTrack = Object.groupBy(fw.levels, (l) => l.trackId ?? '');
+    const orphans = fw.levels.filter((l) => !tracks.some((t) => t.id === l.trackId));
     return html`
-      <details open>
-        <summary class="sub">Niveles (${fw.levels.length})</summary>
-        <p class="ro-note">Escalones de cada track (p. ej. L1…L7); a cada persona se le asigna uno.</p>
-        ${this.readOnly
-          ? null
-          : html`<div class="toolbar">
-                <input type="text" placeholder="Código (p. ej. L2)" .value=${this._fwNew.levelCode}
-                  @input=${(e) => { this._fwNew = { ...this._fwNew, levelCode: e.target.value }; }} />
-                <input type="text" placeholder="Título (p. ej. Senior Engineer)" .value=${this._fwNew.levelTitle}
-                  @input=${(e) => { this._fwNew = { ...this._fwNew, levelTitle: e.target.value }; }} />
-                <button class="primary" ?disabled=${!this._fwNew.levelCode.trim() || !this._fwNew.levelTitle.trim() || fw.tracks.length === 0} @click=${() => this._addLevel()}>Añadir nivel</button>
-              </div>
-              ${fw.tracks.length === 0 ? html`<p class="ro-note">Crea al menos un track antes de añadir niveles.</p>` : null}`}
-        ${fw.levels.length === 0
-          ? html`<p class="empty">Aún no hay niveles.</p>`
-          : html`<div class="cities">${sorted.map((l, i) => this._renderLevelCard(fw, l, i, sorted.length))}</div>`}
+      <p class="ro-note">Itinerarios de carrera de la organización (p. ej. Individual Contributor, Management). Cada track contiene sus niveles: expándelo para verlos o añadir uno nuevo.</p>
+      ${this.readOnly
+        ? null
+        : html`<div class="toolbar">
+            <input type="text" placeholder="Nombre del track" .value=${this._fwNew.track}
+              @input=${(e) => { this._fwNew = { ...this._fwNew, track: e.target.value }; }} />
+            <button class="primary" ?disabled=${!this._fwNew.track.trim()} @click=${() => this._addNamed('tracks', 'track', 'track')}>Añadir track</button>
+          </div>`}
+      ${tracks.length === 0
+        ? html`<p class="empty">Aún no hay tracks.</p>`
+        : tracks.map((t, i) => this._renderTrackGroup(fw, t, i, tracks.length, [...(byTrack[t.id] ?? [])].toSorted((a, b) => a.order - b.order)))}
+      ${orphans.length
+        ? html`<div class="city track-group" style="margin-top:0.9rem">
+            <div class="city-head"><span class="cid">Niveles sin track <span class="muted">(${orphans.length})</span></span></div>
+            <p class="ro-note">Estos niveles apuntan a un track que ya no existe. Reasígnalos con su selector de Track.</p>
+            <div class="cities">${[...orphans].toSorted((a, b) => a.order - b.order).map((l, i, arr) => this._renderLevelCard(fw, l, i, arr.length))}</div>
+          </div>`
+        : null}
+    `;
+  }
+
+  /**
+   * Acciones de la cabecera de un track (reordenar y borrar). Extraído para no
+   * anidar el ternario confirmar/borrar dentro del de readOnly (Sonar S3358).
+   * @param {import('../tools/career/data/framework.js').NamedItem} t
+   * @param {number} pos @param {number} total
+   */
+  _renderTrackActions(t, pos, total) {
+    return html`
+      <button class="ord-btn" ?disabled=${pos === 0} title="Subir" @click=${() => this._moveFwItem('tracks', t.id, -1)}>↑</button>
+      <button class="ord-btn" ?disabled=${pos === total - 1} title="Bajar" @click=${() => this._moveFwItem('tracks', t.id, 1)}>↓</button>
+      ${this._isFwConfirm('tracks', t.id)
+        ? html`<span class="confirm">¿Borrar track?
+            <button class="yes" @click=${() => this._deleteFwItem('tracks', t.id)}>Sí</button>
+            <button @click=${() => { this._fwConfirm = null; }}>No</button>
+          </span>`
+        : html`<button class="del-btn" @click=${() => { this._fwConfirm = { kind: 'tracks', id: t.id }; this._fwError = ''; }}>Borrar</button>`}
+    `;
+  }
+
+  /**
+   * Un track como contenedor plegable (colapsado por defecto) con sus niveles
+   * anidados dentro y un alta de nivel pre-asignada a ese track.
+   * @param {import('../tools/career/data/framework.js').CareerFramework} fw
+   * @param {import('../tools/career/data/framework.js').NamedItem} t
+   * @param {number} pos @param {number} total
+   * @param {Array<import('../tools/career/data/framework.js').Level>} levels niveles del track, ya ordenados
+   */
+  _renderTrackGroup(fw, t, pos, total, levels) {
+    return html`
+      <details class="city track-group">
+        <summary class="city-head">
+          <span class="cid">${t.name || t.id} <span class="muted">(${levels.length} nivel${levels.length === 1 ? '' : 'es'})</span></span>
+          <span @click=${(e) => e.stopPropagation()}>
+            ${this.readOnly ? null : this._renderTrackActions(t, pos, total)}
+          </span>
+        </summary>
+        <div class="fields">
+          <label>Nombre
+            <input type="text" .value=${t.name} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('tracks', t.id, { name: e.target.value })} />
+          </label>
+          <label class="full">Descripción
+            <input type="text" .value=${t.description ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('tracks', t.id, { description: e.target.value })} />
+          </label>
+        </div>
+        <div class="nested-levels">
+          <div class="nested-head">
+            <span class="sub">Niveles (${levels.length})</span>
+            ${this.readOnly
+              ? null
+              : html`<div class="toolbar">
+                  <input type="text" placeholder="Código (p. ej. L2)" .value=${this._fwNew.levelCode}
+                    @input=${(e) => { this._fwNew = { ...this._fwNew, levelCode: e.target.value }; }} />
+                  <input type="text" placeholder="Título (p. ej. Senior Engineer)" .value=${this._fwNew.levelTitle}
+                    @input=${(e) => { this._fwNew = { ...this._fwNew, levelTitle: e.target.value }; }} />
+                  <button class="primary" ?disabled=${!this._fwNew.levelCode.trim() || !this._fwNew.levelTitle.trim()} @click=${() => this._addLevel(t.id)}>Añadir nivel</button>
+                </div>`}
+          </div>
+          ${levels.length === 0
+            ? html`<p class="empty">Este track aún no tiene niveles.</p>`
+            : html`<div class="cities">${levels.map((l, i) => this._renderLevelCard(fw, l, i, levels.length))}</div>`}
+        </div>
       </details>
     `;
   }
@@ -1384,8 +1529,8 @@ export class SuperadminPanel extends LitElement {
             ${this.readOnly
               ? null
               : html`
-                  <button class="ord-btn" ?disabled=${pos === 0} title="Subir" @click=${() => this._moveFwItem('levels', l.id, -1)}>↑</button>
-                  <button class="ord-btn" ?disabled=${pos === total - 1} title="Bajar" @click=${() => this._moveFwItem('levels', l.id, 1)}>↓</button>
+                  <button class="ord-btn" ?disabled=${pos === 0} title="Subir" @click=${() => this._moveLevelInTrack(l.trackId, l.id, -1)}>↑</button>
+                  <button class="ord-btn" ?disabled=${pos === total - 1} title="Bajar" @click=${() => this._moveLevelInTrack(l.trackId, l.id, 1)}>↓</button>
                   ${this._isFwConfirm('levels', l.id)
                     ? html`<span class="confirm">¿Borrar nivel?
                         <button class="yes" @click=${() => this._deleteFwItem('levels', l.id)}>Sí</button>
