@@ -94,7 +94,7 @@ export class TeamSettings extends LitElement {
   constructor() {
     super();
     this.persistence = null;
-    /** @type {string|null} uid del líder en sesión (para distinguir sus roles personales) */
+    /** @type {string|null} uid del manager en sesión (para distinguir sus roles personales) */
     this.currentUid = null;
     /** @type {boolean} el superadmin puede editar/borrar los catálogos GLOBALES */
     this.isAdmin = false;

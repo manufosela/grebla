@@ -1,10 +1,10 @@
 /**
  * <o2o-actions> — vista «Acciones» del O2O (FASE 3, sin IA).
  *
- * El líder gestiona los compromisos derivados de los O2O de una persona: crear,
+ * El manager gestiona los compromisos derivados de los O2O de una persona: crear,
  * marcar hecho/abierto y borrar. Las acciones cuelgan de la persona, así que el
  * ingeniero podrá verlas en «Mi espacio» (fase siguiente). No llevan datos
- * sensibles del líder.
+ * sensibles del manager.
  *
  * Recibe `persistence` (con el repo de acciones) y la lista `people` del equipo.
  */
@@ -178,7 +178,7 @@ export class O2OActions extends LitElement {
       <label>Responsable
         <select .value=${this._owner} @change=${(e) => { this._owner = e.target.value; }}>
           <option value="person">La persona</option>
-          <option value="leader">Yo (líder)</option>
+          <option value="leader">Yo (manager)</option>
         </select>
       </label>
       <button class="btn primary" type="button" ?disabled=${this._saving || !this._desc.trim()} @click=${() => this._add()}>
@@ -197,7 +197,7 @@ export class O2OActions extends LitElement {
 
   _renderActionItem(a) {
     const done = a.status === 'done';
-    const who = a.owner === 'leader' ? 'Líder' : 'Persona';
+    const who = a.owner === 'leader' ? 'Manager' : 'Persona';
     const confirming = this._confirmDelete === a.id;
     const delControl = confirming
       ? html`<button class="btn danger" type="button" @click=${() => this._delete(a.id)}>Confirmar</button>

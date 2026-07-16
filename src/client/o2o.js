@@ -1,6 +1,6 @@
 /**
  * Glue de cliente de la herramienta O2O. Define <o2o-app>, resuelve el acceso
- * (superadmin/líder), crea el container (Firestore) e inyecta la persistencia.
+ * (superadmin/manager), crea el container (Firestore) e inyecta la persistencia.
  * El guard de /tools/o2o (requireAuth) ya redirige a /login sin sesión. La parte
  * del ingeniero NO vive aquí: irá en mi-espacio (fase futura).
  */
@@ -14,7 +14,7 @@ import { ROLES } from '../data/roles.js';
 
 const app = document.querySelector('o2o-app');
 
-/** Personas activas del líder (o de toda la org si superadmin) para el selector. */
+/** Personas activas del manager (o de toda la org si superadmin) para el selector. */
 async function loadPeople(uid, viewAll) {
   const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: uid, viewAll });
   const people = await persistence.people.list();
@@ -29,14 +29,14 @@ onUserChanged(async (user) => {
   try {
     const { role, uid } = await resolveAccess(user);
     if (role !== 'superadmin' && role !== 'leader') {
-      app.error = 'Esta herramienta es para líderes. Tu espacio de O2O está en «Mi espacio».';
+      app.error = 'Esta herramienta es para managers. Tu espacio de O2O está en «Mi espacio».';
       return;
     }
     const [{ persistence }, people] = await Promise.all([
       createO2OContainer({ mode: 'firestore', leaderUid: uid }),
       loadPeople(uid, role === 'superadmin'),
     ]);
-    app.canEdit = true; // líder/superadmin
+    app.canEdit = true; // manager/superadmin
     app.people = people;
     app.roles = ROLES; // para mostrar el rol Role Mirror en «Registrar O2O» (RMR-TSK-0226)
     app.aiPropose = proposePrep; // activa «Generar con IA» en «Preparar O2O»

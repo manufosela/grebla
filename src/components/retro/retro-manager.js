@@ -1,10 +1,10 @@
 /**
- * <retro-manager> — gestión de retrospectivas del líder (RMR-TSK-0243). Crea una
+ * <retro-manager> — gestión de retrospectivas del manager (RMR-TSK-0243). Crea una
  * retro (formato, nombre/sprint, ámbito equipo o squad) y lista las suyas con su
  * estado, pudiendo cerrarlas. Abrir una retro para facilitar/ver el tablero es del
  * componente <retro-board> (card 3); aquí solo se gestiona.
  *
- * Props: uid (del líder, lo inyecta el glue de cliente).
+ * Props: uid (del manager, lo inyecta el glue de cliente).
  */
 import { LitElement, html, css } from 'lit';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';

@@ -1,7 +1,7 @@
 /**
  * <retro-actions> — acciones de una retro con owner(s) y estado (RMR-TSK-0245).
- * El líder de la retro (uid === leaderUid) añade acciones y asigna owner(s) del
- * roster del equipo; el owner (o el líder) marca hecha/pendiente. Las acciones
+ * El manager de la retro (uid === leaderUid) añade acciones y asigna owner(s) del
+ * roster del equipo; el owner (o el manager) marca hecha/pendiente. Las acciones
  * persisten a nivel equipo (/retroActions) y se arrastran a la siguiente (card 5).
  *
  * Props: retroId, uid, leaderUid, scope ({type,label}), members ([{uid,name}]).

@@ -1,6 +1,6 @@
 /**
  * Glue de cliente de Retros: define <retro-app> y le inyecta el contexto según el
- * rol. El líder (o superadmin como líder) gestiona sus retros con el roster de su
+ * rol. El manager (o superadmin como manager) gestiona sus retros con el roster de su
  * equipo; el ingeniero participa en las de su equipo (sin roster: los nombres de
  * owner van denormalizados en cada acción).
  */

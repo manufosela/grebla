@@ -129,7 +129,7 @@ export class CareerListView extends LitElement {
     const stops = resolveRoute(this.routeCityIds ?? [], this.islandMaps ?? new Map());
     if (stops.length === 0) {
       return html`<p class="hint">
-        Aún no tienes ruta planificada. Añade paradas desde «Plano» o «Isla 3D», o pide a tu líder una ruta recomendada para tu rol y nivel.
+        Aún no tienes ruta planificada. Añade paradas desde «Plano» o «Isla 3D», o pide a tu manager una ruta recomendada para tu rol y nivel.
       </p>`;
     }
     return html`<ol class="topics">

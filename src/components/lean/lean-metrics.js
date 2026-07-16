@@ -102,7 +102,7 @@ export class LeanMetrics extends LeanView {
   _renderEmpty() {
     const hint = this.refresh
       ? html`Pulsa <strong>«↻ Recalcular desde Linear»</strong> aquí arriba para traerlas.`
-      : html`Pídele a un líder que las recalcule.`;
+      : html`Pídele a un manager que las recalcule.`;
     return html`<p class="empty">
       Aún no hay métricas calculadas. ${hint}
       Si no aparece ninguna unidad, primero «✨ Descubrir equipos» en la pestaña <strong>Equipos</strong>.

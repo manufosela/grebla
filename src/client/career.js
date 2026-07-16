@@ -1,7 +1,7 @@
 /**
  * Glue de cliente del Mapa de Carrera. Define <career-app>, resuelve el acceso de
  * la instancia y construye el container según el rol:
- *  - líder/superadmin: carga las personas de su equipo (igual que Role Mirror) y
+ *  - manager/superadmin: carga las personas de su equipo (igual que Role Mirror) y
  *    juega/gestiona con el selector de persona (canEdit).
  *  - engineer (JG-1, RMR-TSK-0139): EL INGENIERO JUEGA su propio plan. No puede
  *    listar el equipo (las reglas no se lo permiten): se carga SOLO su persona
@@ -29,7 +29,7 @@ onUserChanged(async (user) => {
   try {
     const { role } = await resolveAccess(user);
     if (!role) {
-      app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como líder.';
+      app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
     const { store } = await createCareerContainer({ mode: 'firestore' });
@@ -40,7 +40,7 @@ onUserChanged(async (user) => {
       // listar people), su persona vinculada fijada y sin gestión de equipo.
       const person = await getMyPerson(user.uid);
       if (!person) {
-        app.error = 'No se encontró tu persona vinculada. Habla con tu líder.';
+        app.error = 'No se encontró tu persona vinculada. Habla con tu manager.';
         return;
       }
       // El objetivo de carrera declarado viaja con la persona: el catálogo de
@@ -57,7 +57,7 @@ onUserChanged(async (user) => {
       app.store = store;
       return;
     }
-    // Personas del equipo del líder (reusa la tool Equipo), como en Role Mirror.
+    // Personas del equipo del manager (reusa la tool Equipo), como en Role Mirror.
     const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid });
     const people = await listActivePeople(persistence);
     // El uid vinculado viaja con la persona: el panel del brujo (MC-22) decide
@@ -71,7 +71,7 @@ onUserChanged(async (user) => {
       external: p.external ?? false, // los externos no tienen carrera: el selector los deshabilita
     }));
     // Rol para el brujo (MC-22) y la gestión de equipo: canEdit habilita la
-    // cola del líder, el tiempo agregado y el selector de persona.
+    // cola del manager, el tiempo agregado y el selector de persona.
     app.canEdit = role === 'leader' || role === 'superadmin';
     app.store = store;
   } catch (err) {

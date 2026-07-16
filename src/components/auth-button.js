@@ -14,7 +14,7 @@ import { resolveAccess } from '../lib/access.js';
 const ROLE_LABELS = {
   superadmin: 'Superadmin',
   viewer: 'Viewer',
-  leader: 'Líder',
+  leader: 'Manager',
   engineer: 'Ingeniero',
 };
 

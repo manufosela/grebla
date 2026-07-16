@@ -6,8 +6,8 @@
  *
  * Propiedades:
  *  - persistence: PersistencePort (inyectado por <team-app>)
- *  - members: Leader[] (líderes de la instancia, para compartir/transferir)
- *  - currentUid: string (uid del líder en sesión)
+ *  - members: Leader[] (managers de la instancia, para compartir/transferir)
+ *  - currentUid: string (uid del manager en sesión)
  *  - isAdmin: boolean
  */
 import { LitElement, html, css } from 'lit';
@@ -30,7 +30,7 @@ import { listUsers, unlinkedUsers } from '../../lib/users.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
-/** Valor sentinela del selector de transferencia para «soltar» (dejar sin líder). */
+/** Valor sentinela del selector de transferencia para «soltar» (dejar sin manager). */
 const RELEASE_OWNER = '__release__';
 
 /** @param {string} iso */
@@ -214,9 +214,9 @@ export class TeamPeople extends LitElement {
     this.persistence = null;
     /** @type {boolean} Solo un admin puede añadir roles al catálogo global. */
     this.isAdmin = false;
-    /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (compartir/transferir) */
+    /** @type {import('../../lib/leaders.js').Leader[]} managers de la instancia (compartir/transferir) */
     this.members = [];
-    /** @type {string|null} uid del líder en sesión */
+    /** @type {string|null} uid del manager en sesión */
     this.currentUid = null;
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
     this.framework = null;
@@ -254,7 +254,7 @@ export class TeamPeople extends LitElement {
     this._confirmOff = null;
     /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Compartir */
     this._shareFor = null;
-    /** @type {string} líder seleccionado en el modal Compartir */
+    /** @type {string} manager seleccionado en el modal Compartir */
     this._shareSel = '';
     /** @type {import('../../tools/team/domain/types.js').SharePermission} */
     this._sharePerm = 'view';
@@ -296,7 +296,7 @@ export class TeamPeople extends LitElement {
   }
 
   /**
-   * uids de cuentas ya vinculadas a las personas cargadas del líder. `exceptUid`
+   * uids de cuentas ya vinculadas a las personas cargadas del manager. `exceptUid`
    * (p. ej. la cuenta de la persona en edición) se excluye para que siga siendo
    * una opción seleccionable del selector.
    * @param {string} [exceptUid]
@@ -461,10 +461,10 @@ export class TeamPeople extends LitElement {
     );
   }
 
-  /** Celda «Líder» de la tabla (solo superadmin): nombre del dueño o «Sin líder».
+  /** Celda «Manager» de la tabla (solo superadmin): nombre del dueño o «Sin manager».
    * Reutiliza `_leaderName` (displayName › email › uid). */
   _renderLeaderCell(person) {
-    if (!person.ownerLeaderUid) return html`<span class="muted">Sin líder</span>`;
+    if (!person.ownerLeaderUid) return html`<span class="muted">Sin manager</span>`;
     return html`<span class="leader">${this._leaderName(person.ownerLeaderUid)}</span>`;
   }
 
@@ -479,7 +479,7 @@ export class TeamPeople extends LitElement {
         <thead>
           <tr>
             ${this._sortableTh('name', 'Nombre')}
-            ${this.isAdmin ? this._sortableTh('leader', 'Líder') : null}
+            ${this.isAdmin ? this._sortableTh('leader', 'Manager') : null}
             <th>Carrera</th><th>Gremios</th><th>Labels</th>
             ${this._sortableTh('startDate', 'Desde')}
             <th>Acciones</th>
@@ -808,7 +808,7 @@ export class TeamPeople extends LitElement {
         ${person
           ? html`
               <div class="modal-body">
-                <p>Comparte esta persona con otro líder para que colabore en su seguimiento.</p>
+                <p>Comparte esta persona con otro manager para que colabore en su seguimiento.</p>
                 ${sharedUids.length === 0
                   ? html`<p>Aún no la has compartido con nadie.</p>`
                   : html`<ul class="shared-list">
@@ -821,9 +821,9 @@ export class TeamPeople extends LitElement {
                       )}
                     </ul>`}
                 <div class="fields">
-                  <label>Líder
+                  <label>Manager
                     <select .value=${this._shareSel} @change=${(e) => { this._shareSel = e.target.value; }}>
-                      <option value="">— Elige un líder —</option>
+                      <option value="">— Elige un manager —</option>
                       ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
                     </select>
                   </label>
@@ -856,18 +856,18 @@ export class TeamPeople extends LitElement {
     `;
   }
 
-  /** Cuerpo del modal de transferencia (destino: otro líder o «sin líder»). */
+  /** Cuerpo del modal de transferencia (destino: otro manager o «sin manager»). */
   _renderTransferBody(person) {
     const candidates = (this.members ?? []).filter((m) => m.uid !== person.ownerLeaderUid);
     const isRelease = this._transferSel === RELEASE_OWNER;
     const confirmText = isRelease
-      ? 'La persona quedará sin líder (solo el superadmin podrá gestionarla). ¿Confirmas?'
+      ? 'La persona quedará sin manager (solo el superadmin podrá gestionarla). ¿Confirmas?'
       : 'Perderás el acceso a esta persona. ¿Confirmas la transferencia?';
     const primaryLabel = this._transferPrimaryLabel(isRelease);
     const onPrimary = this._confirmTransfer ? () => this._transfer() : () => { this._confirmTransfer = true; };
     return html`
       <div class="modal-body">
-        <p>Cede esta persona a otro líder, o suéltala para dejarla sin líder. Es una transferencia total: dejarás de tener acceso.</p>
+        <p>Cede esta persona a otro manager, o suéltala para dejarla sin manager. Es una transferencia total: dejarás de tener acceso.</p>
         <div class="fields">
           <label>Nuevo dueño
             <select
@@ -876,7 +876,7 @@ export class TeamPeople extends LitElement {
             >
               <option value="">— Elige un destino —</option>
               ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
-              <option value=${RELEASE_OWNER}>— Sin líder (soltar) —</option>
+              <option value=${RELEASE_OWNER}>— Sin manager (soltar) —</option>
             </select>
           </label>
         </div>

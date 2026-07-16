@@ -514,7 +514,7 @@ export class TeamPersonDetail extends LitElement {
 
   /**
    * Guarda el nivel y las disciplinas de la persona (la asignación que hace el
-   * líder). Reutiliza `updatePerson`, el mismo caso de uso que la sección Personas,
+   * manager). Reutiliza `updatePerson`, el mismo caso de uso que la sección Personas,
    * y refresca `this.person` reasignando un objeto nuevo para re-renderizar.
    * @returns {Promise<void>}
    */
@@ -1462,7 +1462,7 @@ export class TeamPersonDetail extends LitElement {
 
   /**
    * Editor inline de carrera: nivel (agrupado por track) y disciplinas (checkboxes)
-   * de la persona. Es la asignación que hace el líder; la escala y expectativas del
+   * de la persona. Es la asignación que hace el manager; la escala y expectativas del
    * framework siguen siendo de solo lectura. Precargado con `person.levelId` y
    * `person.disciplines` y guardado con `updatePerson`.
    * @returns {import('lit').TemplateResult}
@@ -1527,7 +1527,7 @@ export class TeamPersonDetail extends LitElement {
 
   /**
    * Objetivo de carrera declarado por la propia persona (`careerTargetLevelId`),
-   * en SOLO LECTURA para el líder (informativo). Si no hay objetivo, muestra un
+   * en SOLO LECTURA para el manager (informativo). Si no hay objetivo, muestra un
    * texto discreto.
    * @param {import('../../tools/career/data/framework.js').CareerFramework|null} fw
    * @returns {import('lit').TemplateResult}
@@ -1545,7 +1545,7 @@ export class TeamPersonDetail extends LitElement {
   /**
    * Historial de rutas de carrera COMPLETADAS por la persona (F3, RMR-TSK-0171):
    * de su bitácora (completedRoutes), con el reto, las fechas inicio→fin y el
-   * tiempo. Solo lectura; las reglas de Firestore ya permiten al líder dueño leer
+   * tiempo. Solo lectura; las reglas de Firestore ya permiten al manager dueño leer
    * /people/{id}/career/logbook.
    */
   _renderCompletedRoutes() {
@@ -1565,7 +1565,7 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
-  /** Meta de una ruta completada para el líder: «Del {inicio} al {fin} · {tiempo}»
+  /** Meta de una ruta completada para el manager: «Del {inicio} al {fin} · {tiempo}»
    * (o «Completada el {fin}» si no hay inicio registrado).
    * @param {import('../../tools/career/domain/logbook.js').CompletedRoute} r */
   _routeDoneMeta(r) {

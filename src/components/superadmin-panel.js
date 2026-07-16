@@ -1,15 +1,15 @@
 /**
  * <superadmin-panel>
- * Vista de gestión del superadmin (separada de la vista de líder). Lista los
- * líderes de la instancia (alta por email vía Cloud Function, baja) y permite
- * ver el equipo de cada líder (personas y su perfil Role Mirror) en LECTURA.
- * Si el superadmin es además líder, "Usar como líder" lo lleva a las herramientas.
+ * Vista de gestión del superadmin (separada de la vista de manager). Lista los
+ * managers de la instancia (alta por email vía Cloud Function, baja) y permite
+ * ver el equipo de cada manager (personas y su perfil Role Mirror) en LECTURA.
+ * Si el superadmin es además manager, "Usar como manager" lo lleva a las herramientas.
  * También gestiona el catálogo de accesos (pestaña Usuarios): quién tiene
- * acceso (superadmin/viewer/líder) y permite cambiar el rol de cada uno.
+ * acceso (superadmin/viewer/manager) y permite cambiar el rol de cada uno.
  *
  * Propiedades:
  *  - ready: boolean  (lo activa el glue cuando hay sesión de gestión)
- *  - isLeader: boolean  (si el superadmin también es líder → botón "Usar como líder")
+ *  - isLeader: boolean  (si el superadmin también es manager → botón "Usar como manager")
  *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
 import { LitElement, html, css, svg } from 'lit';
@@ -61,7 +61,7 @@ function nextOrder(items) {
 }
 
 /** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
-const ROLE_LABEL = { superadmin: 'Superadmin', viewer: 'Viewer', leader: 'Líder', none: 'Sin rol' };
+const ROLE_LABEL = { superadmin: 'Superadmin', viewer: 'Viewer', leader: 'Manager', none: 'Sin rol' };
 const ROLE_COLOR = { superadmin: '#dc2626', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af' };
 const loginFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short' });
 /** @param {unknown} ts Firestore Timestamp | number | null */
@@ -271,7 +271,7 @@ export class SuperadminPanel extends LitElement {
     this.teamLoading = false;
     this._email = '';
     this._error = '';
-    /** @type {string|null} uid del líder cuyo nombre se está editando (RMR-BUG-0032), o null */
+    /** @type {string|null} uid del manager cuyo nombre se está editando (RMR-BUG-0032), o null */
     this._editLeaderUid = null;
     this._editLeaderName = '';
     this._superadminEmail = '';
@@ -324,7 +324,7 @@ export class SuperadminPanel extends LitElement {
     this._linkedUids = [];
     /** @type {import('../lib/accessRoles.js').AccessUser|null} usuario del modal "Asignar a equipo" */
     this._assignFor = null;
-    /** @type {string} líder seleccionado en el modal "Asignar a equipo" */
+    /** @type {string} manager seleccionado en el modal "Asignar a equipo" */
     this._assignLeader = '';
     this._loaded = false;
   }
@@ -808,7 +808,7 @@ export class SuperadminPanel extends LitElement {
     try {
       this.leaders = await listLeaders();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudieron cargar los líderes.';
+      this._error = err instanceof Error ? err.message : 'No se pudieron cargar los managers.';
     }
   }
 
@@ -821,7 +821,7 @@ export class SuperadminPanel extends LitElement {
       this._email = '';
       await this._loadLeaders();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo añadir el líder.';
+      this._error = err instanceof Error ? err.message : 'No se pudo añadir el manager.';
     }
   }
 
@@ -856,7 +856,7 @@ export class SuperadminPanel extends LitElement {
       this._editLeaderName = '';
       await this._loadLeaders();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo renombrar el líder.';
+      this._error = err instanceof Error ? err.message : 'No se pudo renombrar el manager.';
     }
   }
 
@@ -922,11 +922,11 @@ export class SuperadminPanel extends LitElement {
       if (this.selected?.uid === uid) this.selected = null;
       await this._loadLeaders();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo quitar el líder.';
+      this._error = err instanceof Error ? err.message : 'No se pudo quitar el manager.';
     }
   }
 
-  // ── Usuarios (accesos: superadmin / viewer / líder) ─────────────────────────
+  // ── Usuarios (accesos: superadmin / viewer / manager) ─────────────────────────
 
   async _loadUsers() {
     this._usersError = '';
@@ -963,7 +963,7 @@ export class SuperadminPanel extends LitElement {
   }
 
   /**
-   * Crea una persona vinculada al usuario dentro del equipo del líder elegido y
+   * Crea una persona vinculada al usuario dentro del equipo del manager elegido y
    * refresca la lista (el usuario pasará a estar vinculado).
    */
   async _assign() {
@@ -1097,11 +1097,11 @@ export class SuperadminPanel extends LitElement {
           ? null
           : html`<a class="gamelink" href="/admin/juego">🎮 Editor del juego</a>`}
         ${this.isLeader && !this.readOnly
-          ? html`<button class="primary" @click=${this._useAsLeader}>Usar como líder →</button>`
+          ? html`<button class="primary" @click=${this._useAsLeader}>Usar como manager →</button>`
           : null}
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
-        <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Líderes</button>
+        <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Managers</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
@@ -1765,8 +1765,8 @@ export class SuperadminPanel extends LitElement {
   _renderLeaders() {
     return html`
       <section>
-        <h2>Líderes (${this.leaders.length})</h2>
-        <p class="ro-note">Da de alta a los líderes por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login. Pincha un líder para ver su equipo.</p>
+        <h2>Managers (${this.leaders.length})</h2>
+        <p class="ro-note">Da de alta a los managers por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login. Pincha un manager para ver su equipo.</p>
         ${this.readOnly
           ? null
           : html`<div class="toolbar">
@@ -1776,10 +1776,10 @@ export class SuperadminPanel extends LitElement {
                 .value=${this._email}
                 @input=${(e) => { this._email = e.target.value; }}
               />
-              <button class="primary" ?disabled=${!this._email.trim()} @click=${() => this._addLeader()}>Añadir líder</button>
+              <button class="primary" ?disabled=${!this._email.trim()} @click=${() => this._addLeader()}>Añadir manager</button>
             </div>`}
         ${this.leaders.length === 0
-          ? html`<p class="empty">Aún no hay líderes dados de alta.</p>`
+          ? html`<p class="empty">Aún no hay managers dados de alta.</p>`
           : html`<table>
               <thead><tr><th>Nombre</th><th>Email</th><th></th></tr></thead>
               <tbody>
@@ -1842,11 +1842,11 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <h2>Equipo de ${name}</h2>
-        <p class="ro-note">Vista de solo lectura. La gestión de cada persona la hace su líder.</p>
+        <p class="ro-note">Vista de solo lectura. La gestión de cada persona la hace su manager.</p>
         ${this.teamLoading
           ? html`<p class="empty">Cargando equipo…</p>`
           : this.team.length === 0
-            ? html`<p class="empty">Este líder aún no tiene personas en su equipo.</p>`
+            ? html`<p class="empty">Este manager aún no tiene personas en su equipo.</p>`
             : html`<table>
                 <thead><tr><th>Persona</th><th>Gremios</th><th>Rol dominante</th><th>Completitud</th></tr></thead>
                 <tbody>
@@ -1874,7 +1874,7 @@ export class SuperadminPanel extends LitElement {
       <section>
         <h2>Usuarios (${this._users.length})</h2>
         <p class="ro-note">
-          Da de alta un viewer o un líder por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
+          Da de alta un viewer o un manager por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
           Cambia el rol de quien ya aparece en la lista con «Cambiar rol…». «Quitar acceso» solo revoca el rol: no borra la cuenta ni la saca de su equipo.
         </p>
         <div class="toolbar">
@@ -1886,7 +1886,7 @@ export class SuperadminPanel extends LitElement {
           />
           <select @change=${(e) => { this._newUserRole = e.target.value; }}>
             <option value="viewer" ?selected=${this._newUserRole === 'viewer'}>Viewer</option>
-            <option value="leader" ?selected=${this._newUserRole === 'leader'}>Líder</option>
+            <option value="leader" ?selected=${this._newUserRole === 'leader'}>Manager</option>
           </select>
           <button class="primary" ?disabled=${!this._newUserEmail.trim()} @click=${() => this._addUser()}>Añadir usuario</button>
         </div>
@@ -1966,7 +1966,7 @@ export class SuperadminPanel extends LitElement {
         <option value="" disabled selected>Cambiar rol…</option>
         <option value="superadmin">Superadmin</option>
         <option value="viewer">Viewer</option>
-        <option value="leader">Líder</option>
+        <option value="leader">Manager</option>
         <option value="none">Quitar acceso</option>
       </select>
       ${user.role === 'none' && !linked
@@ -1985,12 +1985,12 @@ export class SuperadminPanel extends LitElement {
           ? html`
               <div class="assign-body">
                 <p class="ro-note">
-                  Se creará una persona vinculada a esta cuenta en el equipo del líder elegido. La
+                  Se creará una persona vinculada a esta cuenta en el equipo del manager elegido. La
                   cuenta podrá ver su propia ficha en solo lectura.
                 </p>
-                <label class="assign-field">Líder
+                <label class="assign-field">Manager
                   <select .value=${this._assignLeader} @change=${(e) => { this._assignLeader = e.target.value; }}>
-                    <option value="">— Elige un líder —</option>
+                    <option value="">— Elige un manager —</option>
                     ${this.leaders.map((l) => html`<option value=${l.uid}>${l.displayName ?? l.email ?? l.uid}</option>`)}
                   </select>
                 </label>

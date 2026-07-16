@@ -1,7 +1,7 @@
 /**
  * <motivators-aggregates> — resultados PÚBLICOS de un juego (los lee cualquiera).
  * Nunca muestra datos individuales: ranking por posición media, distribución top-3,
- * evolución entre rondas y desglose por equipo/líder. Lee el documento agregado que
+ * evolución entre rondas y desglose por equipo/manager. Lee el documento agregado que
  * escribe la Cloud Function (`getAggregates`). Barras/tablas CSS, sin charts.
  */
 import { LitElement, html, css } from 'lit';

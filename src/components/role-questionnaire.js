@@ -9,7 +9,7 @@
  *  - roles:  import('../data/roles.js').Role[]
  *  - dimensions: { key: string, label: string }[]
  *  - orgConfig: import('../lib/scoring.js').OrgConfig|null
- *  - personId: string|null   (si null, modo local sin persistencia; el líder evalúa a la persona)
+ *  - personId: string|null   (si null, modo local sin persistencia; el manager evalúa a la persona)
  *  - sessionId: string|null   (si null y hay uid, se crea una sesión)
  *  - editorKind: 'leader'|'engineer'   quién edita (para la atribución de RMR-TSK-0226)
  *  - editorUid, editorName: string|null   identidad de quien edita, para `updatedBy`
@@ -234,7 +234,7 @@ export class RoleQuestionnaire extends LitElement {
     this.dimensions = [];
     /** @type {import('../lib/scoring.js').OrgConfig|null} */
     this.orgConfig = null;
-    /** @type {string|null} persona evaluada (el líder rellena su perfil) */
+    /** @type {string|null} persona evaluada (el manager rellena su perfil) */
     this.personId = null;
     /** @type {string|null} */
     this.sessionId = null;
@@ -380,7 +380,7 @@ export class RoleQuestionnaire extends LitElement {
         completion: Math.round(profile.completion),
         orgPhase: this.orgConfig?.phase ?? null,
         // Atribución (RMR-TSK-0226): quién hizo este cambio — el rol se fija de
-        // forma conjunta y conviene saber si fue el líder o la propia persona.
+        // forma conjunta y conviene saber si fue el manager o la propia persona.
         updatedBy: { kind: this.editorKind, uid: this.editorUid ?? null, name: this.editorName ?? null },
       });
       await upsertUserSummary(

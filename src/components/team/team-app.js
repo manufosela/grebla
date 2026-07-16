@@ -73,7 +73,7 @@ export class TeamApp extends LitElement {
     this.uid = null;
     /** @type {boolean} */
     this.isAdmin = false;
-    /** @type {import('../../lib/leaders.js').Leader[]} líderes de la instancia (para compartir) */
+    /** @type {import('../../lib/leaders.js').Leader[]} managers de la instancia (para compartir) */
     this.members = [];
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
     this.framework = null;

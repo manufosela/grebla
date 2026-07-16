@@ -111,7 +111,7 @@ export class O2OPrepare extends LitElement {
           kind="form" .value=${this.form}></o2o-questions-editor>
       </section>
       <section>
-        <h3>Guía · temas y preguntas para el líder DURANTE el O2O</h3>
+        <h3>Guía · temas y preguntas para el manager DURANTE el O2O</h3>
         <o2o-questions-editor data-kind="guide" .persistence=${this.persistence} .periodId=${this.periodId}
           kind="guide" .value=${this.guide}></o2o-questions-editor>
       </section>

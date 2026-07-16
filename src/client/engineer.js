@@ -1,7 +1,7 @@
 /**
  * Glue de «Mi espacio» (página personal del ingeniero, G2). Protege la ruta en
  * cliente: solo un usuario con persona vinculada (rol engineer) la usa; cualquier
- * otro (sin sesión, superadmin/viewer/líder o sin vínculo) vuelve a la home. Pinta
+ * otro (sin sesión, superadmin/viewer/manager o sin vínculo) vuelve a la home. Pinta
  * la cabecera de identidad —nombre + título compuesto del framework— en solo
  * lectura, sin ningún control de edición. El contenido de las secciones llega en
  * G3; la protección real de datos la dan además las reglas de Firestore.
