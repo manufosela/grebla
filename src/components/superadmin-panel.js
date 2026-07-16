@@ -14,10 +14,10 @@
  */
 import { LitElement, html, css } from 'lit';
 import './app-modal.js';
-import { listLeaders, addLeaderByEmail, removeLeader, renameLeader } from '../lib/leaders.js';
+import { listLeaders, addLeaderByEmail, removeLeader, renameLeader, grantAdminByEmail } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
-import { listAllUsers, setUserRole, listLinkedUids, assignUserToLeader } from '../lib/users.js';
+import { listAllUsers, setUserRole, setUserDisplayName, listLinkedUids, assignUserToLeader } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -99,6 +99,10 @@ export class SuperadminPanel extends LitElement {
     _error: { state: true },
     _editLeaderUid: { state: true },
     _editLeaderName: { state: true },
+    _superadminEmail: { state: true },
+    _superadminNotice: { state: true },
+    _editUserUid: { state: true },
+    _editUserName: { state: true },
     _careerMap: { state: true },
     _archipelago: { state: true },
     _mapIsland: { state: true },
@@ -201,6 +205,8 @@ export class SuperadminPanel extends LitElement {
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
     .row-actions { display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+    .superadmin-alta { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rm-border, #e5e7eb); }
+    .superadmin-alta h3 { font-size: 0.95rem; margin: 0 0 0.35rem; color: var(--rm-text, #111827); }
     .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act:hover { border-color: var(--rm-accent, #3b82f6); color: var(--rm-accent, #3b82f6); }
     .badge.linked { background: #0d9488; margin-left: 0.35rem; }
@@ -264,6 +270,11 @@ export class SuperadminPanel extends LitElement {
     /** @type {string|null} uid del líder cuyo nombre se está editando (RMR-BUG-0032), o null */
     this._editLeaderUid = null;
     this._editLeaderName = '';
+    this._superadminEmail = '';
+    this._superadminNotice = '';
+    /** @type {string|null} uid del usuario cuyo nombre se está editando en la pestaña Usuarios, o null */
+    this._editUserUid = null;
+    this._editUserName = '';
     /** @type {import('../tools/team/domain/ports.js').PersistencePort|null} persistencia del superadmin (viewAll) para los catálogos */
     this.persistence = null;
     /** @type {string|null} uid del superadmin (para <catalog-manager>) */
@@ -839,6 +850,60 @@ export class SuperadminPanel extends LitElement {
       await this._loadLeaders();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo renombrar el líder.';
+    }
+  }
+
+  /**
+   * Nombra superadmin por email desde la pestaña Usuarios (RMR-TSK-0230). Usa la
+   * Cloud Function grantAdmin, que provisiona la cuenta si el email nunca ha
+   * iniciado sesión, así el superadmin queda preparado para su primer login.
+   */
+  async _grantSuperadminByEmail() {
+    const email = this._superadminEmail.trim();
+    if (!email) return;
+    this._usersError = '';
+    this._superadminNotice = '';
+    try {
+      await grantAdminByEmail(email);
+      this._superadminEmail = '';
+      this._superadminNotice = `${email} ya es superadmin.`;
+      await this._loadUsers();
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo conceder superadmin.';
+    }
+  }
+
+  /** @param {import('../lib/accessRoles.js').AccessUser} user */
+  _startEditUserName(user) {
+    this._editUserUid = user.uid;
+    this._editUserName = user.displayName ?? '';
+    this._usersError = '';
+    this._usersNotice = '';
+  }
+
+  _cancelEditUserName() {
+    this._editUserUid = null;
+    this._editUserName = '';
+  }
+
+  /** @param {KeyboardEvent} e */
+  _onEditUserNameKey(e) {
+    if (e.key === 'Enter') this._saveUserName();
+    else if (e.key === 'Escape') this._cancelEditUserName();
+  }
+
+  /** Persiste el nombre editado en /users/{uid}.displayName y recarga la lista. */
+  async _saveUserName() {
+    const uid = this._editUserUid;
+    if (!uid) return;
+    this._usersError = '';
+    try {
+      await setUserDisplayName(uid, this._editUserName);
+      this._editUserUid = null;
+      this._editUserName = '';
+      await this._loadUsers();
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo guardar el nombre.';
     }
   }
 
@@ -1674,6 +1739,22 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
+  /** Nombrar superadmin por email desde la pestaña Usuarios (RMR-TSK-0230). */
+  _renderSuperadminAlta() {
+    return html`
+      <div class="superadmin-alta">
+        <h3>Nombrar superadmin</h3>
+        <p class="ro-note">Concede superadmin directamente por email, aunque nunca haya iniciado sesión (la cuenta se prepara para su primer login).</p>
+        <div class="toolbar">
+          <input type="email" placeholder="email@dominio.com" .value=${this._superadminEmail}
+            @input=${(e) => { this._superadminEmail = e.target.value; }} />
+          <button class="primary" ?disabled=${!this._superadminEmail.trim()} @click=${() => this._grantSuperadminByEmail()}>Hacer superadmin</button>
+        </div>
+        ${this._superadminNotice ? html`<p class="notice">${this._superadminNotice}</p>` : null}
+      </div>
+    `;
+  }
+
   /** @param {import('../lib/leaders.js').Leader} l */
   _renderLeaderRow(l) {
     const editing = this._editLeaderUid === l.uid;
@@ -1743,8 +1824,7 @@ export class SuperadminPanel extends LitElement {
         <h2>Usuarios (${this._users.length})</h2>
         <p class="ro-note">
           Da de alta un viewer o un líder por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
-          Para un superadmin nuevo usa <code>pnpm seed:leaders</code> o la función <code>grantAdmin</code> fuera de este panel;
-          aquí solo puedes promoverlo a superadmin si ya aparece en la lista.
+          Cambia el rol de quien ya aparece en la lista con «Cambiar rol…». «Quitar acceso» solo revoca el rol: no borra la cuenta ni la saca de su equipo.
         </p>
         <div class="toolbar">
           <input
@@ -1759,6 +1839,7 @@ export class SuperadminPanel extends LitElement {
           </select>
           <button class="primary" ?disabled=${!this._newUserEmail.trim()} @click=${() => this._addUser()}>Añadir usuario</button>
         </div>
+        ${this._renderSuperadminAlta()}
         ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
         ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
         ${this._users.length === 0
@@ -1776,38 +1857,71 @@ export class SuperadminPanel extends LitElement {
 
   /** @param {import('../lib/accessRoles.js').AccessUser} user */
   _renderUserRow(user) {
-    const pending = this._confirmRoleChange?.uid === user.uid ? this._confirmRoleChange : null;
+    if (this._editUserUid === user.uid) return this._renderUserEditRow(user);
     const linked = this._isLinked(user);
     return html`
       <tr>
         <td>${user.displayName ?? '—'}</td>
         <td class="muted">${user.email ?? '—'}</td>
+        ${this._renderUserRoleCell(user, linked)}
+        <td class="muted">${formatLogin(user.lastLogin)}</td>
+        <td>${this._renderUserActions(user, linked)}</td>
+      </tr>
+    `;
+  }
+
+  /** Fila en modo edición del nombre (RMR-TSK-0230). @param {import('../lib/accessRoles.js').AccessUser} user */
+  _renderUserEditRow(user) {
+    return html`
+      <tr>
         <td>
-          <span class="badge" style=${`background:${ROLE_COLOR[user.role]}`}>${ROLE_LABEL[user.role]}</span>
-          ${linked ? html`<span class="badge linked" title="Vinculado a una persona">Vinculado</span>` : null}
+          <input type="text" .value=${this._editUserName} placeholder="Nombre"
+            @input=${(e) => { this._editUserName = e.target.value; }}
+            @keydown=${(e) => this._onEditUserNameKey(e)} />
         </td>
+        <td class="muted">${user.email ?? '—'}</td>
+        ${this._renderUserRoleCell(user, this._isLinked(user))}
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>
-          ${pending
-            ? html`<span class="confirm">¿Aplicar «${this._roleChangeLabel(pending.role)}»?
-                <button class="yes" @click=${() => this._changeUserRole(user, pending.role)}>Sí</button>
-                <button @click=${() => { this._confirmRoleChange = null; }}>No</button>
-              </span>`
-            : html`<div class="row-actions">
-                <select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
-                  <option value="" disabled selected>Cambiar rol…</option>
-                  <option value="superadmin">Superadmin</option>
-                  <option value="viewer">Viewer</option>
-                  <option value="leader">Líder</option>
-                  <option value="none">Quitar acceso</option>
-                </select>
-                ${user.role === 'none' && !linked
-                  ? html`<button class="act" type="button" @click=${() => this._openAssign(user)}>Asignar a equipo</button>`
-                  : null}
-              </div>`}
+          <button class="act" @click=${() => this._saveUserName()}>Guardar</button>
+          <button @click=${() => this._cancelEditUserName()}>Cancelar</button>
         </td>
       </tr>
     `;
+  }
+
+  /** Celda de rol + badge «Vinculado». @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
+  _renderUserRoleCell(user, linked) {
+    return html`
+      <td>
+        <span class="badge" style=${`background:${ROLE_COLOR[user.role]}`}>${ROLE_LABEL[user.role]}</span>
+        ${linked ? html`<span class="badge linked" title="Vinculado a una persona">Vinculado</span>` : null}
+      </td>
+    `;
+  }
+
+  /** Acciones de la fila de usuario. @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
+  _renderUserActions(user, linked) {
+    const pending = this._confirmRoleChange?.uid === user.uid ? this._confirmRoleChange : null;
+    if (pending) {
+      return html`<span class="confirm">¿Aplicar «${this._roleChangeLabel(pending.role)}»?
+        <button class="yes" @click=${() => this._changeUserRole(user, pending.role)}>Sí</button>
+        <button @click=${() => { this._confirmRoleChange = null; }}>No</button>
+      </span>`;
+    }
+    return html`<div class="row-actions">
+      <button class="act" @click=${() => this._startEditUserName(user)}>Renombrar</button>
+      <select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
+        <option value="" disabled selected>Cambiar rol…</option>
+        <option value="superadmin">Superadmin</option>
+        <option value="viewer">Viewer</option>
+        <option value="leader">Líder</option>
+        <option value="none">Quitar acceso</option>
+      </select>
+      ${user.role === 'none' && !linked
+        ? html`<button class="act" type="button" @click=${() => this._openAssign(user)}>Asignar a equipo</button>`
+        : null}
+    </div>`;
   }
 
   _renderAssignModal() {

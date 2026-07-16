@@ -73,3 +73,18 @@ export async function addLeaderByEmail(email) {
   const res = await httpsCallable(fns, 'manageAccess')({ action: 'add', role: 'leader', email: String(email).trim() });
   return /** @type {any} */ (res.data);
 }
+
+/**
+ * Concede superadmin por email (lo invoca un superadmin), aunque nunca haya
+ * iniciado sesión: usa la Cloud Function `grantAdmin`, que provisiona la
+ * cuenta si hace falta (mismo patrón que `addLeaderByEmail`).
+ * @param {string} email
+ * @returns {Promise<{ ok: boolean, uid: string }>}
+ */
+export async function grantAdminByEmail(email) {
+  const { app } = await import('./firebase.js');
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const fns = getFunctions(app, 'europe-west1');
+  const res = await httpsCallable(fns, 'grantAdmin')({ email: String(email).trim() });
+  return /** @type {any} */ (res.data);
+}

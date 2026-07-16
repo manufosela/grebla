@@ -64,7 +64,9 @@ service cloud.firestore {
     // acceso: el rol se decide en /admins, /viewers, /leaders.
     match /users/{uid} {
       allow read: if isSuperAdmin() || isViewer() || isLeader();
-      allow write: if isSignedIn() && request.auth.uid == uid;
+      // El propio usuario escribe su doc al iniciar sesión; un superadmin puede
+      // corregir el nombre visible de cualquier cuenta (pestaña Usuarios).
+      allow write: if (isSignedIn() && request.auth.uid == uid) || isSuperAdmin();
     }
 
     // Secretos (token GitHub de DORA): nunca accesibles desde el cliente; solo
