@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Marea (RMR-PCS-0021): pantalla «Mi marea». Ruta compartible protegida — el
+ * link se comparte en la Weekly y quien esté logado entra directo a rellenar.
+ * El componente <marea-fill> recibe el uid desde client/marea.js.
+ */
+---
+
+<Base title="GREBLA — Marea" requireAuth={true}>
+  <h1 class="page-title">Marea</h1>
+  <p class="page-lead">
+    El pulso de tu semana: cómo navegas. Se rellena una vez al día y puedes
+    ajustarlo hasta medianoche. Es tu registro privado; los resultados del equipo
+    se ven siempre en agregado y anónimos.
+  </p>
+
+  <marea-fill></marea-fill>
+</Base>
+
+<script>
+  import '../client/marea.js';
+</script>
