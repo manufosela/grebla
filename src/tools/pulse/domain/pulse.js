@@ -45,6 +45,20 @@ export function isoWeekKey(date = new Date()) {
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
 }
 
+/**
+ * Lectura (nombre náutico + matiz) del cuadrante según energía y ánimo (0..100).
+ * Compartida por la pantalla de rellenar y por Resultados.
+ * @param {number} energia @param {number} animo
+ * @returns {{ name: string, sub: string }}
+ */
+export function pulseReading(energia, animo) {
+  if (Math.abs(energia - 50) < 14 && Math.abs(animo - 50) < 14) return { name: 'Aguas medias', sub: 'ni fu ni fa esta semana' };
+  if (energia >= 50 && animo >= 50) return { name: 'Viento a favor', sub: 'con energía y a gusto' };
+  if (energia >= 50) return { name: 'Mar de fondo', sub: 'con marcha, pero a la contra' };
+  if (animo < 50) return { name: 'Calma chicha', sub: 'sin viento y cuesta arriba' };
+  return { name: 'Fondeado', sub: 'en calma, con poca marcha' };
+}
+
 /** Redondea y acota un valor de dimensión al rango 0..100. */
 function clampDim(value) {
   const n = Math.round(Number(value));
