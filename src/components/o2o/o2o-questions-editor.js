@@ -11,6 +11,7 @@
 import { LitElement, html, css } from 'lit';
 import { savePeriodGuide, savePeriodForm } from '../../tools/o2o/application/usecases/periods.js';
 import { parseQuestionsMarkdown } from '../../tools/o2o/application/markdown.js';
+import { buildO2ODocHtml, o2oDocMeta, WORD_DOC_MIME } from '../../tools/o2o/application/wordExport.js';
 
 const uid = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `id-${Math.round(performance.now() * 1000)}`);
 
@@ -136,6 +137,24 @@ export class O2OQuestionsEditor extends LitElement {
       : g)));
   }
 
+  /**
+   * Descarga el contenido actual del editor como documento Word (.doc): HTML con
+   * los namespaces de Office, servido como application/msword. Refleja lo que se
+   * ve ahora (incluidos cambios sin guardar). No usa document.write ni deps.
+   */
+  _download() {
+    const { title, filename } = o2oDocMeta(this.kind);
+    const groups = this._groups.map((g) => ({ title: g.title, questions: g.questions }));
+    const intro = this.kind === 'form' ? this._intro : '';
+    const html = buildO2ODocHtml({ title, intro, groups });
+    const url = URL.createObjectURL(new Blob([html], { type: WORD_DOC_MIME }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async _onMdFile(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -197,6 +216,7 @@ export class O2OQuestionsEditor extends LitElement {
         <button class="btn" @click=${() => this._addGroup()}>+ ${groupWord}</button>
         <button class="btn" @click=${() => this.renderRoot.querySelector('.file')?.click()}>Importar .md</button>
         <input class="file" type="file" accept=".md,.markdown,text/markdown,text/plain" @change=${(e) => this._onMdFile(e)} />
+        <button class="btn" ?disabled=${!this._groups.length} title="Descargar como documento Word (.doc)" @click=${() => this._download()}>Descargar</button>
       </div>
       ${this.kind === 'form' ? this._renderIntro() : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
