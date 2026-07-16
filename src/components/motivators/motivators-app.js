@@ -107,7 +107,7 @@ export class MotivatorsApp extends LitElement {
   _renderPlay() {
     const deck = this._deck;
     if (!deck) return html`<p class="state error">Juego no válido.</p>`;
-    if (!this._canPlay) return html`<p class="state">Este juego lo juegan ingenieros y líderes del equipo.</p>`;
+    if (!this._canPlay) return html`<p class="state">Este juego lo juegan ingenieros y managers del equipo.</p>`;
     if (!this.round) return html`<p class="state">No hay ninguna ronda abierta ahora mismo. Vuelve cuando se active la próxima.</p>`;
     if (this._saved) {
       return html`<div class="done">

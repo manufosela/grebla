@@ -1,11 +1,11 @@
 /**
- * <retro-app> — orquesta la herramienta de Retros (RMR-TSK-0247). El líder crea y
+ * <retro-app> — orquesta la herramienta de Retros (RMR-TSK-0247). El manager crea y
  * gestiona (retro-manager); al abrir una retro se muestra su detalle: el bucle de
  * acciones anteriores + el tablero colaborativo + las acciones de esta retro. El
  * ingeniero ve la lista de retros de su equipo y participa igual (sin crear).
  *
- * Props: uid, leaderUid (líder cuyas retros se ven), members ([{uid,name}]),
- * canManage (true para el líder dueño).
+ * Props: uid, leaderUid (manager cuyas retros se ven), members ([{uid,name}]),
+ * canManage (true para el manager dueño).
  */
 import { LitElement, html, css } from 'lit';
 import './retro-manager.js';
@@ -57,7 +57,7 @@ export class RetroApp extends LitElement {
   }
 
   updated(changed) {
-    // El ingeniero necesita la lista (el líder la trae dentro de retro-manager).
+    // El ingeniero necesita la lista (el manager la trae dentro de retro-manager).
     if ((changed.has('leaderUid') || changed.has('canManage')) && this.leaderUid && !this.canManage
         && this.leaderUid !== this._loadedFor) {
       this._loadedFor = this.leaderUid;

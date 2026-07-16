@@ -1,13 +1,13 @@
 /**
  * <o2o-register> — vista «Registrar O2O» (FASE 2, sin IA).
  *
- * El líder elige una persona de su equipo, ve el histórico de sus O2O y registra
+ * El manager elige una persona de su equipo, ve el histórico de sus O2O y registra
  * uno nuevo A MANO: fecha, respuestas a la guía, notas privadas, transcripción,
  * resumen y qué comparte con la persona. El botón «Rellenar con IA» está presente
  * pero deshabilitado hasta configurar la IA (fase siguiente).
  *
- * Las sesiones son PRIVADAS del líder (se guardan bajo /leaders/{uid}/o2o); el
- * componente recibe `persistence` ya acotada a ese líder, la lista `people` de su
+ * Las sesiones son PRIVADAS del manager (se guardan bajo /leaders/{uid}/o2o); el
+ * componente recibe `persistence` ya acotada a ese manager, la lista `people` de su
  * equipo y la `guide` cargada (para pintar las preguntas a responder).
  */
 import { LitElement, html, css } from 'lit';
@@ -140,7 +140,7 @@ export class O2ORegister extends LitElement {
    * última vez, para comentarlo/ajustarlo durante el O2O (RMR-TSK-0226). */
   _renderRoleMirrorContext() {
     if (this._isExternalPerson || !this._rmProfile?.dominantRole) return null;
-    const who = this._rmProfile.updatedBy?.kind === 'engineer' ? 'la propia persona' : 'el líder';
+    const who = this._rmProfile.updatedBy?.kind === 'engineer' ? 'la propia persona' : 'el manager';
     const name = this._rmProfile.updatedBy?.name ? ` (${this._rmProfile.updatedBy.name})` : '';
     return html`<p class="rm-context">
       🔎 <strong>Role Mirror:</strong> ${this._roleLabel(this._rmProfile.dominantRole)} · ${this._rmProfile.completion ?? 0}% completado.

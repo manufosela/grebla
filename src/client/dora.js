@@ -1,6 +1,6 @@
 /**
  * Glue de cliente de la herramienta DORA. Define <dora-app>, resuelve el acceso
- * de la instancia (superadmin/líder), crea el container (Firestore) e inyecta la
+ * de la instancia (superadmin/manager), crea el container (Firestore) e inyecta la
  * persistencia. El guard de /tools/dora (requireAuth) ya redirige a /login sin sesión.
  */
 import '../components/dora/dora-app.js';
@@ -16,7 +16,7 @@ onUserChanged(async (user) => {
   try {
     const { role } = await resolveAccess(user);
     if (!role) {
-      app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como líder.';
+      app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
     const { persistence, refresh } = await createDoraContainer({
@@ -24,7 +24,7 @@ onUserChanged(async (user) => {
       leaderUid: user.uid,
       viewAll: role === 'superadmin', // el superadmin ve y gestiona los repos de toda la organización
     });
-    // El líder gestiona SUS repos; el superadmin, todos. El viewer (solo lectura,
+    // El manager gestiona SUS repos; el superadmin, todos. El viewer (solo lectura,
     // tipo C-level) nunca edita: solo ve la lista.
     app.canEdit = role === 'superadmin' || role === 'leader';
     app.refresh = refresh;

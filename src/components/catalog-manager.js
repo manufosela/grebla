@@ -1,11 +1,11 @@
 /**
  * <catalog-manager> — gestión ÚNICA de un catálogo con ámbito (areas|guilds|
- * labels). Se reutiliza en Ajustes del Equipo (líder) y en el panel de superadmin,
+ * labels). Se reutiliza en Ajustes del Equipo (manager) y en el panel de superadmin,
  * para no tener dos UIs divergentes de lo mismo. Una sola capa de datos: la
  * fachada de usecases del tool Equipo (rename cascadea a /people en gremios/labels).
  *
  * Props:
- *  - persistence  puerto de Equipo (líder → sus personales; superadmin viewAll → todos)
+ *  - persistence  puerto de Equipo (manager → sus personales; superadmin viewAll → todos)
  *  - kind         'areas' | 'guilds' | 'labels'
  *  - isAdmin      superadmin: gestiona globales y promueve personales
  *  - currentUid   uid del que mira (para decidir quién edita un personal)
@@ -248,7 +248,7 @@ export class CatalogManager extends LitElement {
       <p class="sub">Globales</p>
       ${globals.length ? html`<ul>${globalItems}</ul>` : html`<p class="empty">Aún no hay globales.</p>`}
       ${personals.length
-        ? html`<p class="sub">Personales de líderes</p><ul>${personalItems}</ul>`
+        ? html`<p class="sub">Personales de managers</p><ul>${personalItems}</ul>`
         : null}
     `;
   }

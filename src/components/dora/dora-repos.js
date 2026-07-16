@@ -1,14 +1,14 @@
 /**
  * <dora-repos>
- * Configuración de repositorios DORA: alta (superadmin y líderes) con solo el
+ * Configuración de repositorios DORA: alta (superadmin y managers) con solo el
  * repo (owner/repo) y una fecha de inicio opcional (si se omite, se mide desde la
- * creación del repo); lista, métricas y baja. Cada líder gestiona SUS repos; el
+ * creación del repo); lista, métricas y baja. Cada manager gestiona SUS repos; el
  * superadmin, todos. El viewer solo ve la lista. La agrupación por equipos/gremios
  * se hará más adelante, a posteriori, una vez haya métricas.
  *
  * Propiedades:
  *  - persistence: DoraPersistence (inyectada por <dora-app>)
- *  - canEdit: boolean  (superadmin o líder pueden añadir/editar/borrar sus repos)
+ *  - canEdit: boolean  (superadmin o manager pueden añadir/editar/borrar sus repos)
  */
 import { LitElement, html, css } from 'lit';
 import {

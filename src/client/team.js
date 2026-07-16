@@ -1,6 +1,6 @@
 /**
  * Glue de cliente de la herramienta de seguimiento de equipo. Define <team-app>,
- * resuelve el acceso de la instancia (superadmin/líder) y construye el container
+ * resuelve el acceso de la instancia (superadmin/manager) y construye el container
  * Firestore a nivel raíz (las personas viven a nivel de instancia con
  * ownerLeaderUid). El guard de /tools/team (requireAuth) ya redirige a /login.
  */
@@ -18,7 +18,7 @@ onUserChanged(async (user) => {
   try {
     const { role } = await resolveAccess(user);
     if (!role) {
-      app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como líder.';
+      app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
     const { persistence, storage } = await createTeamContainer({
@@ -29,7 +29,7 @@ onUserChanged(async (user) => {
     app.uid = user.uid;
     app.storage = storage;
     app.isAdmin = role === 'superadmin'; // el superadmin gobierna el catálogo de roles
-    // Líderes de la instancia (compartir personas) y framework de carrera
+    // Managers de la instancia (compartir personas) y framework de carrera
     // (disciplinas/niveles y composición del título), en paralelo.
     const [members, framework] = await Promise.all([listLeaders(), getFramework()]);
     app.members = members;

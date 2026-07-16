@@ -168,7 +168,7 @@
  *
  * La CABAÑA DEL BRUJO (MC-22): cada isla tiene una edificación SINGULAR —
  * torre cónica púrpura con estrellas (CanvasTexture), tejado ladeado, farol y
- * cartel «El brujo» — donde el jugador deja consultas asíncronas al líder. Su
+ * cartel «El brujo» — donde el jugador deja consultas asíncronas al manager. Su
  * posición es determinista y cercana al puerto (wizardSpot, puro: barrido de
  * candidatos con holgura a todas las casas) y entra en las exclusiones de la
  * vegetación. La prop `wizardState` pinta el INDICADOR de estado: 'none' =

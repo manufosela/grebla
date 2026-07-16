@@ -125,7 +125,7 @@ export class EngineerSpace extends LitElement {
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
     section.o2o { border-left: 4px solid var(--rm-navy, #1e3a5f); }
 
-    /* ── Sección Mis O2O (solo lo compartido por el líder) ── */
+    /* ── Sección Mis O2O (solo lo compartido por el manager) ── */
     .o2o-list { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
     .o2o-card { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem; }
     .o2o-card .date { font-weight: 700; font-size: 0.88rem; }
@@ -572,7 +572,7 @@ export class EngineerSpace extends LitElement {
 
   /**
    * Sección «Mi Role Mirror»: el rol se fija de forma CONJUNTA (RMR-TSK-0224). El
-   * líder propone un perfil de partida; aquí el ingeniero lo AFINA él mismo con su
+   * manager propone un perfil de partida; aquí el ingeniero lo AFINA él mismo con su
    * propio cuestionario editable (<role-questionnaire> con su personId), que guarda
    * en Firestore y recalcula el rol. Incluye el resultado calculado. Si aún no hay
    * items cargados, mientras tanto no se puede editar.
@@ -581,7 +581,7 @@ export class EngineerSpace extends LitElement {
   _renderRoleMirror() {
     if (!this.person?.id) return html`<p class="empty">Cargando tu Role Mirror…</p>`;
     return html`
-      <p class="rm-intro">Tu líder ha propuesto un perfil de partida. Aquí puedes <strong>afinarlo tú</strong>: ajusta las respuestas según lo que consideras y se guarda solo (el rol se recalcula). En tus O2O podéis comentarlo y seguir ajustándolo entre los dos.</p>
+      <p class="rm-intro">Tu manager ha propuesto un perfil de partida. Aquí puedes <strong>afinarlo tú</strong>: ajusta las respuestas según lo que consideras y se guarda solo (el rol se recalcula). En tus O2O podéis comentarlo y seguir ajustándolo entre los dos.</p>
       <role-questionnaire
         .items=${this.items ?? []}
         .roles=${this.roles ?? []}
@@ -712,10 +712,10 @@ export class EngineerSpace extends LitElement {
   }
 
   /**
-   * Sección «Mis O2O»: SOLO lo que el líder decidió compartir (resúmenes) y mis
+   * Sección «Mis O2O»: SOLO lo que el manager decidió compartir (resúmenes) y mis
    * acciones. Nunca notas privadas, transcripción ni el resumen privado del
-   * líder — eso lo filtra la Cloud Function `getMyO2O` (fuente única bajo el
-   * líder). De solo lectura.
+   * manager — eso lo filtra la Cloud Function `getMyO2O` (fuente única bajo el
+   * manager). De solo lectura.
    * @returns {import('lit').TemplateResult}
    */
   _renderO2O() {
@@ -723,18 +723,18 @@ export class EngineerSpace extends LitElement {
     const sessions = data?.sessions ?? [];
     const actions = data?.actions ?? [];
     if (!sessions.length && !actions.length) {
-      return html`<p class="empty">Aún no hay O2O compartidos contigo. Cuando tu líder comparta un resumen o te asigne acciones, aparecerán aquí.</p>`;
+      return html`<p class="empty">Aún no hay O2O compartidos contigo. Cuando tu manager comparta un resumen o te asigne acciones, aparecerán aquí.</p>`;
     }
     return html`
       <p class="sub">Resúmenes compartidos</p>
       ${sessions.length
         ? html`<ul class="o2o-list">${sessions.map((s) => this._renderSharedSession(s))}</ul>`
-        : html`<p class="empty">Tu líder aún no ha compartido ningún resumen.</p>`}
+        : html`<p class="empty">Tu manager aún no ha compartido ningún resumen.</p>`}
       <p class="sub">Mis acciones</p>
       ${actions.length
         ? html`<ul class="o2o-list">${actions.map((a) => this._renderMyAction(a))}</ul>`
         : html`<p class="empty">No tienes acciones asignadas.</p>`}
-      <p class="o2o-note">Solo ves lo que tu líder ha marcado como compartido; sus notas privadas no son visibles.</p>
+      <p class="o2o-note">Solo ves lo que tu manager ha marcado como compartido; sus notas privadas no son visibles.</p>
     `;
   }
 
@@ -749,7 +749,7 @@ export class EngineerSpace extends LitElement {
   /** Una acción del ingeniero (marcada hecha o no). @returns {import('lit').TemplateResult} */
   _renderMyAction(a) {
     const done = a.status === 'done';
-    const who = a.owner === 'leader' ? '(líder)' : '';
+    const who = a.owner === 'leader' ? '(manager)' : '';
     return html`<li class="o2o-act ${done ? 'done' : ''}">
       ${done ? '✓' : '○'} <span>${a.description}</span> <span class="track">${who}</span>
     </li>`;

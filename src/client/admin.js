@@ -2,7 +2,7 @@
  * Glue de cliente del panel admin: define <admin-dashboard>, le pasa los roles y
  * dispara la carga de perfiles cuando hay sesión admin. Ajusta el título y el
  * lead de la página según el rol (RMR-TSK-0227): el superadmin ve «Panel de
- * administración» (toda la organización); el líder, «Perfiles de mi equipo».
+ * administración» (toda la organización); el manager, «Perfiles de mi equipo».
  */
 import '../components/admin-dashboard.js';
 import { ROLES } from '../data/roles.js';
@@ -29,7 +29,7 @@ if (el) {
     if (!user) return; // el guard del layout redirige a /login
     try {
       const { role } = await resolveAccess(user);
-      // Acceden superadmin y líderes (cada líder gestiona sus propios perfiles).
+      // Acceden superadmin y managers (cada manager gestiona sus propios perfiles).
       if (!role) {
         location.replace('/');
         return;

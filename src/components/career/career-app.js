@@ -2,7 +2,7 @@
  * <career-app>
  * Shell del Mapa de Carrera: selector de PERSONA del equipo, barra de progreso/
  * nivel, el mapa de la isla y un panel de acciones/evidencias para la ciudad
- * seleccionada. Igual que Role Mirror, el líder elige a quién edita y el journey
+ * seleccionada. Igual que Role Mirror, el manager elige a quién edita y el journey
  * se persiste en el subárbol de esa persona.
  *
  * CONSOLA DE JUEGO (JG-4): el componente ES el marco de consola — :host pinta
@@ -123,12 +123,12 @@
  *
  * El brujo (MC-22, conversación JG-8): cada isla tiene la cabaña del brujo
  * (edificación singular de <career-island-3d>) donde el jugador deja
- * CONSULTAS ASÍNCRONAS al líder. El evento `open-wizard` (clic aéreo, [E] o
+ * CONSULTAS ASÍNCRONAS al manager. El evento `open-wizard` (clic aéreo, [E] o
  * choque a pie) abre aquí el panel overlay «🧙 El brujo de {isla}»: una
  * CONVERSACIÓN estilo Monkey Island (<game-dialog>: retrato voodoo,
  * bocadillos con texto progresivo) cuyo guion se construye al abrir
  * (_buildWizardScript) — saludo, entrega de respuestas listas con «Entendido»
- * (markSeen) y la consulta como paso 'ask' (quien puede escribir: líder
+ * (markSeen) y la consulta como paso 'ask' (quien puede escribir: manager
  * jugando o jugador vinculado; si no, el brujo lo deja en solo escuchar). Al
  * enviarla el brujo entra en TRANCE y promete la LUZ VIOLETA. La lista
  * clásica de consultas de la isla queda tras «ver mis consultas». El estado
@@ -136,7 +136,7 @@
  * de la isla actual: pendiente = farol ámbar, respuesta lista = farol VIOLETA
  * — y esa luz también se ve DESDE EL MAR: en el mapa del tesoro las islas con
  * respuesta lista emiten un halo violeta pulsante (JG-8). Con `canEdit`
- * (líder/superadmin) la
+ * (manager/superadmin) la
  * barra ofrece «🧙 Consultas (N)» con las PENDIENTES de todas sus personas
  * (carga en paralelo, cap MAX_TEAM_JOURNEYS como los journeys) y un overlay
  * de cola FIFO para responder (autoría del login, campo opcional «Con ayuda
@@ -144,7 +144,7 @@
  * Todas las Q&A quedan en la ficha del jugador (<player-card>, MC-21).
  *
  * Tiempo de juego (MC-23): con permiso de JUGAR (canPlay || canEdit: el
- * ingeniero con su propia persona, o líder/superadmin jugando a la persona
+ * ingeniero con su propia persona, o manager/superadmin jugando a la persona
  * seleccionada) un cronómetro de sesión activa
  * (src/lib/playtime.js) corre mientras la pestaña está visible Y hubo
  * interacción en los últimos 120 s; acumula en memoria y vuelca cada 60 s (y
@@ -153,7 +153,7 @@
  * si el navegador mata la pestaña sin avisar (best-effort documentado). El
  * histórico por día se poda a los últimos 30 días al cargar a la persona
  * (dispara con >35 claves). La ficha 🏅 muestra el tiempo de la persona
- * cargada (hoy / 7 días / total) y el líder tiene el botón «⏱ Tiempo» con la
+ * cargada (hoy / 7 días / total) y el manager tiene el botón «⏱ Tiempo» con la
  * vista agregada de sus personas (carga en paralelo, cap MAX_TEAM_JOURNEYS).
  *
  * EL INGENIERO JUEGA (JG-1, RMR-TSK-0139): el gating se divide en DOS ejes.
@@ -163,8 +163,8 @@
  *    El glue pone canPlay = true SOLO para el ingeniero vinculado, cuyo
  *    personId queda fijado a su propia persona (y las reglas de Firestore
  *    solo le abren journey/playtime/achievements de la SUYA).
- *  - Gestionar el EQUIPO (selector de persona, cola del brujo del líder,
- *    tiempo agregado del equipo): solo `canEdit` (líder/superadmin).
+ *  - Gestionar el EQUIPO (selector de persona, cola del brujo del manager,
+ *    tiempo agregado del equipo): solo `canEdit` (manager/superadmin).
  * Con una sola persona y canPlay el selector ni se pinta.
  *
  * Onboarding (MC-13): la primera vez que se entra al mapa 3D (flag en
@@ -176,8 +176,8 @@
  *
  * Propiedades (inyectadas desde client/career.js):
  *  - store: CareerStore
- *  - people: { id: string, name: string, uid?: string|null, careerTargetLevelId?: string|null }[]   personas visibles (equipo del líder; solo la propia con canPlay); el objetivo de carrera alimenta la ruta sugerida (JG-14)
- *  - canEdit: boolean                          líder/superadmin: juega Y gestiona el equipo (cola del brujo, tiempo agregado, selector)
+ *  - people: { id: string, name: string, uid?: string|null, careerTargetLevelId?: string|null }[]   personas visibles (equipo del manager; solo la propia con canPlay); el objetivo de carrera alimenta la ruta sugerida (JG-14)
+ *  - canEdit: boolean                          manager/superadmin: juega Y gestiona el equipo (cola del brujo, tiempo agregado, selector)
  *  - canPlay: boolean                          ingeniero vinculado (JG-1): juega SU plan, sin gestión de equipo
  *  - currentUser: { uid: string, name: string }|null   login (autoría de consultas/respuestas)
  */
@@ -1244,7 +1244,7 @@ export class CareerApp extends LitElement {
     .ruta-info strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
     .ruta-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
     .ruta-actions { display: flex; gap: 0.3rem; flex: 0 0 auto; }
-    /* ── Tiempo de juego (MC-23): bloque de la ficha y tabla del líder. ── */
+    /* ── Tiempo de juego (MC-23): bloque de la ficha y tabla del manager. ── */
     .playblock {
       margin: 0 0 0.75rem;
       padding: 0.45rem 0.7rem;
@@ -1269,7 +1269,7 @@ export class CareerApp extends LitElement {
     .timesheet td.who { font-weight: 600; color: var(--rm-navy, #1e3a5f); }
     .timesheet .zero { color: var(--rm-muted, #9ca3af); }
     .playlead { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
-    /* ── El brujo (MC-22): panel del jugador y cola del líder (hermanos de la
+    /* ── El brujo (MC-22): panel del jugador y cola del manager (hermanos de la
        ficha: mismo backdrop/section, contenido de consultas). ── */
     /* La escena de conversación (JG-8) vive sobre el pergamino del panel. */
     .wizpanel game-dialog { margin: 0.25rem 0 0; }
@@ -2021,7 +2021,7 @@ export class CareerApp extends LitElement {
     /** @type {string|null} */
     this.evidencePrompt = null;
     this.showPlayerCard = false;
-    // El brujo (MC-22): rol del usuario (canEdit habilita la cola del líder),
+    // El brujo (MC-22): rol del usuario (canEdit habilita la cola del manager),
     // login para la autoría, consultas de la persona cargada (TODAS las islas;
     // el panel del brujo filtra por la actual y la ficha las lista completas),
     // overlays y caché de consultas del equipo para el contador de pendientes.
@@ -2040,7 +2040,7 @@ export class CareerApp extends LitElement {
      * @type {import('./dialogScript.js').DialogStep[]|null} */
     this.wizardScript = null;
     this.showWizardQueue = false;
-    /** Nº de consultas PENDIENTES de todas las personas visibles (cola del líder). */
+    /** Nº de consultas PENDIENTES de todas las personas visibles (cola del manager). */
     this.wizardPending = 0;
     this.wizardBusy = false;
     this.wizardError = '';
@@ -2049,7 +2049,7 @@ export class CareerApp extends LitElement {
     this._teamQuestions = new Map();
     this._teamQuestionsLoaded = false;
     // Tiempo de juego (MC-23): registro de la persona cargada (para la ficha),
-    // overlay del líder con sus filas cargadas en paralelo, y el cronómetro
+    // overlay del manager con sus filas cargadas en paralelo, y el cronómetro
     // vivo (solo canEdit; se rearma al cambiar de persona con volcado final).
     /** @type {import('../../tools/career/domain/playtime.js').Playtime|null} */
     this.playtime = null;
@@ -2092,7 +2092,7 @@ export class CareerApp extends LitElement {
     /** La carga del plano (índice + 13 mapas) se lanza UNA vez por sesión. */
     this._planoStarted = false;
     /** Miembros de mis carpools cuyo journey NO se pudo leer (privacidad
-     * entre líderes): su avance se muestra como «sin datos». @type {Set<string>} */
+     * entre managers): su avance se muestra como «sin datos». @type {Set<string>} */
     this._carpoolJourneysMissing = new Set();
     // Modo de juego (JG-5): el reto ACTIVO vive en el journey
     // (journey.challenge) — aquí solo el overlay del catálogo de retos, su
@@ -2366,14 +2366,14 @@ export class CareerApp extends LitElement {
     if (changed.has('showPlayerCard') && this.showPlayerCard) {
       this.renderRoot.querySelector('.ficha')?.focus();
     }
-    // El panel del brujo y la cola del líder reciben el foco al abrirse (MC-22).
+    // El panel del brujo y la cola del manager reciben el foco al abrirse (MC-22).
     if (changed.has('showWizard') && this.showWizard) {
       this.renderRoot.querySelector('.wizpanel')?.focus();
     }
     if (changed.has('showWizardQueue') && this.showWizardQueue) {
       this.renderRoot.querySelector('.wizqueue')?.focus();
     }
-    // El resumen de tiempo del líder recibe el foco al abrirse (MC-23).
+    // El resumen de tiempo del manager recibe el foco al abrirse (MC-23).
     if (changed.has('showPlaytime') && this.showPlaytime) {
       this.renderRoot.querySelector('.timesheet')?.focus();
     }
@@ -4144,7 +4144,7 @@ export class CareerApp extends LitElement {
     </p>`;
   }
 
-  /** Botón «⏱ Tiempo» de la barra: solo con canEdit (vista agregada del líder). */
+  /** Botón «⏱ Tiempo» de la barra: solo con canEdit (vista agregada del manager). */
   _renderPlaytimeButton() {
     if (!this.canEdit) return null;
     return html`<button
@@ -4154,7 +4154,7 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Abre la vista agregada del líder (MC-23): carga EN PARALELO el playtime de
+   * Abre la vista agregada del manager (MC-23): carga EN PARALELO el playtime de
    * las personas visibles (misma política y cap que los journeys del equipo) y
    * lo resume por filas. Una persona ilegible no tumba al resto (console.warn
    * y fila a cero). Se recarga en cada apertura: el tiempo cambia jugando.
@@ -4201,7 +4201,7 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Overlay «⏱ Tiempo de juego» del líder (MC-23): tabla sencilla y legible —
+   * Overlay «⏱ Tiempo de juego» del manager (MC-23): tabla sencilla y legible —
    * persona, hoy, últimos 7 días y total — de las personas visibles. Modal
    * hermano de la ficha (mismo backdrop/section): foco al abrir, Escape/✕/
    * fondo cierran.
@@ -4307,7 +4307,7 @@ export class CareerApp extends LitElement {
    * Asegura los journeys de los MIEMBROS de mis carpools para derivar su
    * avance (mismo patrón que MC-12: 1 lectura por persona, cap
    * MAX_TEAM_JOURNEYS, caché compartida en _teamJourneys). Un journey
-   * ilegible (persona de otro líder: las reglas protegen su subárbol) no
+   * ilegible (persona de otro manager: las reglas protegen su subárbol) no
    * tumba al resto — ese miembro queda como «sin datos».
    */
   async _ensureCarpoolJourneys() {
@@ -5377,7 +5377,7 @@ export class CareerApp extends LitElement {
 
   /**
    * true si el usuario JUEGA el plan de la persona cargada (JG-1): el
-   * ingeniero vinculado (canPlay, su propia persona) o el líder/superadmin
+   * ingeniero vinculado (canPlay, su propia persona) o el manager/superadmin
    * (canEdit, la persona seleccionada). Gatea TODAS las acciones de juego:
    * visitadas/actual/ruta, evidencias, viajar, carpools (crear/unirse/salir),
    * preguntar al brujo, cronómetro de playtime y registro de achievements.
@@ -5391,7 +5391,7 @@ export class CareerApp extends LitElement {
    * true si el usuario puede DEJAR consultas y marcarlas como vistas: quien
    * JUEGA (canPlay || canEdit, JG-1) o el jugador vinculado a la persona
    * seleccionada (Person.uid == su uid: la excepción acotada de las reglas,
-   * que cubre al ingeniero cuando un líder carga SU persona). Si no, el
+   * que cubre al ingeniero cuando un manager carga SU persona). Si no, el
    * panel del brujo queda en solo lectura.
    */
   get _canAskWizard() {
@@ -5421,7 +5421,7 @@ export class CareerApp extends LitElement {
 
   /**
    * Carga EN PARALELO las consultas al brujo de las personas visibles (cola
-   * del líder, MC-22): misma política y cap que los journeys del equipo. Una
+   * del manager, MC-22): misma política y cap que los journeys del equipo. Una
    * persona ilegible no tumba al resto (se avisa por consola y no cuenta).
    */
   async _loadTeamQuestions() {
@@ -5455,7 +5455,7 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Cola FIFO del líder: las consultas pendientes de TODAS las personas en
+   * Cola FIFO del manager: las consultas pendientes de TODAS las personas en
    * caché, la más antigua primero, con su persona para responder en contexto.
    * @returns {{ personId: string, personName: string, question: import('../../tools/career/domain/wizard.js').WizardQuestion }[]}
    */
@@ -5693,20 +5693,20 @@ export class CareerApp extends LitElement {
     }
   }
 
-  /** Abre la cola de consultas del líder (botón «🧙 Consultas (N)»). */
+  /** Abre la cola de consultas del manager (botón «🧙 Consultas (N)»). */
   _openWizardQueue() {
     if (!this.canEdit) return;
     this.wizardError = '';
     this.showWizardQueue = true;
   }
 
-  /** Cierra la cola del líder y devuelve el foco al HUD. */
+  /** Cierra la cola del manager y devuelve el foco al HUD. */
   _closeWizardQueue() {
     this.showWizardQueue = false;
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
 
-  /** Escape dentro de la cola del líder la cierra. @param {KeyboardEvent} event */
+  /** Escape dentro de la cola del manager la cierra. @param {KeyboardEvent} event */
   _onWizardQueueKeydown(event) {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
@@ -5714,7 +5714,7 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * «Responder» desde la cola del líder: usecase answerQuestion con la autoría
+   * «Responder» desde la cola del manager: usecase answerQuestion con la autoría
    * del login y el «Con ayuda de» opcional (creditedTo). Al responder, la
    * consulta sale de pendientes; si era de la persona cargada, su lista (y la
    * cabaña de su isla) se refrescan también.
@@ -5756,7 +5756,7 @@ export class CareerApp extends LitElement {
     }
   }
 
-  /** Botón «🧙 Consultas (N)» de la barra: solo con canEdit (cola del líder). */
+  /** Botón «🧙 Consultas (N)» de la barra: solo con canEdit (cola del manager). */
   _renderWizardQueueButton() {
     if (!this.canEdit) return null;
     return html`<button
@@ -6692,7 +6692,7 @@ export class CareerApp extends LitElement {
   /**
    * true si el usuario puede AVALAR/retirar avales de la persona cargada
    * (JG-6): manager (canEdit) con login, avales ya cargados y — clave — la
-   * persona NO es la suya (el jugador no se auto-avala, ni siquiera un líder
+   * persona NO es la suya (el jugador no se auto-avala, ni siquiera un manager
    * sobre su propia persona vinculada).
    */
   get _canEndorse() {

@@ -1,6 +1,6 @@
 /**
  * Glue de cliente de los juegos de Motivadores. Resuelve el acceso, construye la
- * identidad del jugador (ingeniero o líder), crea el container Firestore e inyecta
+ * identidad del jugador (ingeniero o manager), crea el container Firestore e inyecta
  * persistence, identity y la ronda abierta en <motivators-app>. El juego se toma
  * del atributo `deck` del elemento (moving_motivators | affective_motivators).
  */
@@ -15,7 +15,7 @@ import { listLeaders } from '../lib/leaders.js';
 
 const app = document.querySelector('motivators-app');
 
-/** Mapa uid → nombre visible del líder (para etiquetar el desglose por equipo). */
+/** Mapa uid → nombre visible del manager (para etiquetar el desglose por equipo). */
 async function leaderNameMap() {
   try {
     const leaders = await listLeaders();

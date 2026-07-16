@@ -1,5 +1,5 @@
 /**
- * Glue de la home (modelo multi-leader): con sesión y acceso (superadmin o líder)
+ * Glue de la home (modelo multi-leader): con sesión y acceso (superadmin o manager)
  * muestra las tarjetas de herramientas; sin acceso, la landing pública de
  * presentación. Por defecto el HTML muestra la landing y oculta las tools.
  */
@@ -22,19 +22,19 @@ onUserChanged(async (user) => {
     const { role } = await resolveAccess(user);
     if (!role) return showLanding();
     // El ingeniero (persona vinculada) tiene su propio espacio personal: ni
-    // landing pública ni herramientas de líder.
+    // landing pública ni herramientas de manager.
     if (role === 'engineer') {
       location.replace('/mi-espacio');
       return;
     }
     // El viewer siempre entra al panel de gestión en modo solo lectura: no
-    // gestiona personas propias, así que no hay "usar como líder" para él.
+    // gestiona personas propias, así que no hay "usar como manager" para él.
     if (role === 'viewer') {
       location.replace('/admin');
       return;
     }
     // El superadmin entra al panel de gestión, salvo que haya elegido "usar
-    // como líder" en esta sesión (entonces ve las herramientas, con vuelta).
+    // como manager" en esta sesión (entonces ve las herramientas, con vuelta).
     if (role === 'superadmin' && sessionStorage.getItem(VIEW_FLAG) !== 'leader') {
       location.replace('/admin');
       return;
