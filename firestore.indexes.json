@@ -1,5 +1,22 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "retros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerLeaderUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "retroActions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerLeaderUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": [
     {
       "collectionGroup": "entries",

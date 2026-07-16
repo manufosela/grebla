@@ -476,6 +476,51 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // RETROS (RMR-PCS-0022): retrospectivas de equipo. La retro la crea/gestiona su
+    // líder dueño (ownerLeaderUid); la lee cualquier autenticado (colaborativa). Las
+    // notas se muestran ANÓNIMAS pero guardan authorUid: cada uno edita/borra las
+    // suyas y cualquiera vota (solo toca el array `voters`, idempotente). Las
+    // acciones (/retroActions) son de equipo y persisten entre retros: las crea el
+    // líder y su owner (o el líder) marca hecha/pendiente.
+    match /retros/{retroId} {
+      allow read: if isSignedIn();
+      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+      allow update, delete: if isSuperAdmin()
+        || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
+
+      match /notes/{noteId} {
+        // Votar solo puede cambiar el array `voters` (nada más de la nota).
+        function onlyVotersChanged() {
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voters']);
+        }
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.authorUid == request.auth.uid;
+        // El autor edita su nota; cualquier autenticado vota (solo `voters`).
+        allow update: if isSignedIn()
+          && (resource.data.authorUid == request.auth.uid || onlyVotersChanged());
+        // Borra el autor de la nota o el líder dueño de la retro (o superadmin).
+        allow delete: if isSuperAdmin()
+          || (isSignedIn() && resource.data.authorUid == request.auth.uid)
+          || (isSignedIn()
+              && get(/databases/$(database)/documents/retros/$(retroId)).data.ownerLeaderUid == request.auth.uid);
+      }
+    }
+
+    // Acciones de retro (nivel equipo, persisten entre retros hasta cerrarse).
+    match /retroActions/{actionId} {
+      // El owner (o el líder) solo cambia el estado (status + doneAt).
+      function onlyStatusChanged() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneAt']);
+      }
+      allow read: if isSignedIn();
+      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+      allow update: if isSuperAdmin()
+        || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
+        || (isSignedIn() && request.auth.uid in resource.data.owners && onlyStatusChanged());
+      allow delete: if isSuperAdmin()
+        || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
