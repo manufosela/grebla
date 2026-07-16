@@ -10,6 +10,22 @@ import { doc, collection, getDoc, getDocs, setDoc, query, orderBy, limit, server
 import { db } from './firebase.js';
 import { dayKey, isoWeekKey, sanitizePulse } from '../tools/pulse/domain/pulse.js';
 
+/** Clave de la semana actual (para leer su agregado). @param {Date} [date] */
+export function currentWeekKey(date = new Date()) {
+  return isoWeekKey(date);
+}
+
+/**
+ * Agregado anónimo de una semana (/pulseAggregates/{weekIso}), o null si aún no
+ * se ha calculado. Lo escribe la Cloud Function; el cliente solo lee.
+ * @param {string} weekIso
+ * @returns {Promise<import('firebase/firestore').DocumentData|null>}
+ */
+export async function getPulseAggregate(weekIso) {
+  const snap = await getDoc(doc(db, 'pulseAggregates', weekIso));
+  return snap.exists() ? snap.data() : null;
+}
+
 /** @param {string} uid @param {string} day @returns {import('firebase/firestore').DocumentReference} */
 const entryRef = (uid, day) => doc(db, 'pulse', uid, 'entries', day);
 

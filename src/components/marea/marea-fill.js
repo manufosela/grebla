@@ -9,16 +9,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { saveMyPulse, getMyPulse } from '../../lib/pulse.js';
-
-/** Lectura (nombre + matiz) del cuadrante según energía/ánimo (0..100). */
-function reading(energia, animo) {
-  const nearCenter = Math.abs(energia - 50) < 14 && Math.abs(animo - 50) < 14;
-  if (nearCenter) return { name: 'Aguas medias', sub: 'ni fu ni fa esta semana' };
-  if (energia >= 50 && animo >= 50) return { name: 'Viento a favor', sub: 'con energía y a gusto' };
-  if (energia >= 50 && animo < 50) return { name: 'Mar de fondo', sub: 'con marcha, pero a la contra' };
-  if (energia < 50 && animo < 50) return { name: 'Calma chicha', sub: 'sin viento y cuesta arriba' };
-  return { name: 'Fondeado', sub: 'en calma, con poca marcha' };
-}
+import { pulseReading } from '../../tools/pulse/domain/pulse.js';
 
 /** Anclas: clave de estado, etiqueta y extremos (bajo↔alto). */
 const ANCHORS = [
@@ -189,7 +180,7 @@ export class MareaFill extends LitElement {
   }
 
   render() {
-    const read = reading(this._energia, this._animo);
+    const read = pulseReading(this._energia, this._animo);
     let dragging = false;
     return html`
       <p class="lead">Coloca tu boya según tu <b>energía</b> y tu <b>ánimo</b>, y ajusta las cuatro anclas. No hay respuesta correcta: una marea sube y baja.</p>
