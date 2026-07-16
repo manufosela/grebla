@@ -140,18 +140,37 @@ function showNoFicha() {
   const box = document.createElement('div');
   box.id = 'no-ficha-notice';
   Object.assign(box.style, {
-    marginTop: '0.5rem', padding: '1rem 1.25rem', background: 'var(--rm-surface)',
-    border: '1px solid var(--rm-border)', borderRadius: 'var(--rm-radius, 14px)',
+    marginTop: '0.5rem', padding: '1.1rem 1.35rem', background: 'var(--rm-surface)',
+    border: '1px solid var(--rm-border)', borderLeft: '4px solid var(--rm-accent)',
+    borderRadius: 'var(--rm-radius, 14px)',
   });
   const title = document.createElement('p');
   Object.assign(title.style, { margin: '0', fontSize: '1.1rem', fontWeight: '700', color: 'var(--rm-text)' });
-  title.textContent = 'Estás viendo «Mi espacio» como lo ve un ingeniero';
+  title.textContent = '👷 Vista de ingeniero';
   const body = document.createElement('p');
-  Object.assign(body.style, { margin: '0.4rem 0 0', color: 'var(--rm-muted)', maxWidth: '60ch' });
+  Object.assign(body.style, { margin: '0.5rem 0 0', color: 'var(--rm-muted)', maxWidth: '62ch' });
   body.textContent =
-    'Tu cuenta no tiene ficha de persona, así que aquí no hay carrera ni mapa que mostrar. '
-    + 'Esta es la vista que verá cualquier ingeniero de tu equipo. '
-    + 'Vuelve a tu vista habitual con el conmutador de arriba a la derecha.';
-  box.append(title, body);
+    'Esta es la vista que ve una persona de tu equipo en su «Mi espacio». Como tu cuenta '
+    + 'no tiene ficha de persona propia, no hay datos personales que mostrar aquí. Un ingeniero '
+    + 'con ficha vería, con sus propios datos:';
+  const list = document.createElement('ul');
+  Object.assign(list.style, { margin: '0.6rem 0 0', paddingLeft: '1.2rem', color: 'var(--rm-muted)', maxWidth: '62ch' });
+  for (const item of [
+    'Carrera — su nivel y disciplinas según el framework',
+    'Mi Role Mirror — su autodiagnóstico de perfil (lo edita él)',
+    'Mapa de carrera — su ruta de crecimiento gamificada',
+    'Mis O2O — resúmenes y acciones de sus one-to-ones',
+    'Marea — su pulso afectivo semanal (privado)',
+    'Retros — participa en las retrospectivas de su equipo',
+  ]) {
+    const li = document.createElement('li');
+    li.textContent = item;
+    li.style.margin = '0.15rem 0';
+    list.appendChild(li);
+  }
+  const hint = document.createElement('p');
+  Object.assign(hint.style, { margin: '0.7rem 0 0', color: 'var(--rm-muted)', fontSize: '0.9rem' });
+  hint.textContent = 'Vuelve a tu vista habitual con el conmutador de arriba a la derecha.';
+  box.append(title, body, list, hint);
   header.appendChild(box);
 }
