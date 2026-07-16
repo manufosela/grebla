@@ -39,8 +39,21 @@ export class RetroBoard extends LitElement {
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
 
     .board { display: grid; gap: 1rem; grid-template-columns: repeat(var(--cols, 3), 1fr); }
-    .barco { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; }
-    @media (max-width: 760px) { .board, .barco { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) { .board { grid-template-columns: 1fr; } }
+    /* Escena de velero: viento arriba, ancla abajo, rocas y meta a los lados,
+       y el barco (SVG) en el centro (RMR-TSK-0248). */
+    .barco-scene {
+      display: grid; gap: 1rem; align-items: start;
+      grid-template-columns: 1fr 1.15fr 1fr;
+      grid-template-areas: "viento viento viento" "rocas boat isla" "ancla ancla ancla";
+    }
+    @media (max-width: 820px) {
+      .barco-scene { grid-template-columns: 1fr; grid-template-areas: "viento" "boat" "rocas" "isla" "ancla"; }
+    }
+    .zone.z-viento { grid-area: viento; } .zone.z-ancla { grid-area: ancla; }
+    .zone.z-rocas { grid-area: rocas; } .zone.z-isla { grid-area: isla; }
+    .boat-cell { grid-area: boat; display: grid; place-items: center; align-self: center; }
+    .boat-svg { width: 100%; max-width: 300px; height: auto; }
 
     .col, .zone { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec); border-radius: 14px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.55rem; }
     .col-h { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 0.92rem; }
@@ -204,12 +217,49 @@ export class RetroBoard extends LitElement {
 
   _renderZone(col) {
     const notes = this._notesFor(col.id);
-    return html`<div class="zone a-${col.accent}">
+    return html`<div class="zone a-${col.accent} z-${col.id}">
       <div class="col-h a-${col.accent}">${BARCO_ICON[col.id] ?? ''} ${col.title}</div>
       ${col.hint ? html`<p class="zhint">${col.hint}</p>` : null}
       ${notes.length ? notes.map((n) => this._renderNote(n)) : html`<p class="empty">Sin notas aún.</p>`}
       ${this._renderAdd(col.id)}
     </div>`;
+  }
+
+  /** Escena de velero con las 4 zonas colocadas alrededor según la metáfora. */
+  _renderBarco(cols) {
+    return html`
+      <div class="barco-scene">
+        ${cols.map((c) => this._renderZone(c))}
+        <div class="boat-cell">${this._boatScene()}</div>
+      </div>`;
+  }
+
+  /** Ilustración SVG del velero: viento, vela, casco, ancla, rocas, isla y sol. */
+  _boatScene() {
+    return html`
+      <svg class="boat-svg" viewBox="0 0 320 220" role="img" aria-label="Velero navegando hacia una isla">
+        <circle cx="272" cy="46" r="20" fill="var(--amber)" opacity="0.85"></circle>
+        <path d="M22 46 q30 -10 60 0" stroke="var(--teal)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"></path>
+        <path d="M16 64 q34 -10 70 0" stroke="var(--teal)" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"></path>
+        <path d="M0 150 q40 -12 80 0 t80 0 t80 0 t80 0 V220 H0 Z" fill="color-mix(in srgb, var(--teal) 22%, transparent)"></path>
+        <path d="M0 166 q40 -12 80 0 t80 0 t80 0 t80 0 V220 H0 Z" fill="color-mix(in srgb, var(--navy) 14%, transparent)"></path>
+        <path d="M252 150 q24 -20 50 0 Z" fill="var(--amber)" opacity="0.8"></path>
+        <path d="M277 132 v-16 M277 120 q-9 -7 -15 -3 M277 120 q9 -7 15 -3" stroke="var(--teal)" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
+        <path d="M28 156 l15 -24 l15 24 Z" fill="color-mix(in srgb, var(--navy) 55%, var(--coral))"></path>
+        <path d="M52 158 l11 -15 l11 15 Z" fill="color-mix(in srgb, var(--navy) 38%, var(--coral))"></path>
+        <path d="M120 150 h80 l-14 22 h-52 z" fill="var(--navy)"></path>
+        <line x1="160" y1="150" x2="160" y2="58" stroke="var(--navy)" stroke-width="3"></line>
+        <path d="M164 64 L164 145 L216 145 Z" fill="var(--teal)"></path>
+        <path d="M156 72 L156 145 L117 145 Z" fill="color-mix(in srgb, var(--teal) 65%, #ffffff)"></path>
+        <path d="M160 58 l17 5 l-17 5 z" fill="var(--coral)"></path>
+        <line x1="150" y1="170" x2="150" y2="198" stroke="var(--navy)" stroke-width="2" opacity="0.55"></line>
+        <g stroke="var(--navy)" stroke-width="2.5" fill="none" opacity="0.7" stroke-linecap="round">
+          <circle cx="150" cy="199" r="4"></circle>
+          <line x1="150" y1="203" x2="150" y2="216"></line>
+          <path d="M141 210 q9 11 18 0"></path>
+          <line x1="143" y1="207" x2="157" y2="207"></line>
+        </g>
+      </svg>`;
   }
 
   render() {
@@ -227,7 +277,7 @@ export class RetroBoard extends LitElement {
       <p class="ro-note">${this._open ? 'Aporta tus notas (anónimas) y vota las que veas clave.' : 'Retro cerrada: solo lectura.'}</p>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${format?.kind === 'barco'
-        ? html`<div class="barco">${cols.map((c) => this._renderZone(c))}</div>`
+        ? this._renderBarco(cols)
         : html`<div class="board" style=${boardStyle}>${cols.map((c) => this._renderColumn(c))}</div>`}
     `;
   }
