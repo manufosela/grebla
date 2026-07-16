@@ -12,8 +12,9 @@
  *  - isLeader: boolean  (si el superadmin también es líder → botón "Usar como líder")
  *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, svg } from 'lit';
 import './app-modal.js';
+import { shapeForArea, houseShapePath, HOUSE_SHAPE_LABEL } from '../tools/career/domain/houseShapes.js';
 import { listLeaders, addLeaderByEmail, removeLeader, renameLeader, grantAdminByEmail } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
@@ -167,6 +168,9 @@ export class SuperadminPanel extends LitElement {
     .track-group .nested-levels { margin-top: 0.9rem; padding-top: 0.75rem; border-top: 1px dashed var(--rm-border, #e5e7eb); }
     .track-group .nested-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
     .track-group .nested-head .sub { margin: 0; }
+    /* Glifo de la forma de casa de una comarca (RMR-TSK-0233): pista visual de
+       qué silueta usarán sus casas en el mapa. */
+    .shape-glyph { fill: var(--rm-accent, #2a9d8f); vertical-align: -3px; margin-right: 0.4rem; }
     section {
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
@@ -1212,6 +1216,14 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
+  /** Glifo SVG de la forma de casa de una comarca (RMR-TSK-0233). @param {string} shape */
+  _renderShapeGlyph(shape) {
+    const d = houseShapePath(shape, 10, 10, 7);
+    const mark = d ? svg`<path d=${d} />` : svg`<circle cx="10" cy="10" r="7" />`;
+    const label = `Forma: ${HOUSE_SHAPE_LABEL[shape] ?? shape}`;
+    return html`<svg class="shape-glyph" viewBox="0 0 20 20" width="16" height="16" role="img" aria-label=${label}>${mark}</svg>`;
+  }
+
   /** Acciones de la cabecera de una comarca (borrar, con confirmación). @param {import('../tools/career/domain/types.js').Area} area */
   _renderComarcaActions(area) {
     if (this._confirmArea === area.id) {
@@ -1234,7 +1246,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <details class="city track-group">
         <summary class="city-head">
-          <span class="cid">${area.name || area.id} <span class="muted">(${items.length} casa${items.length === 1 ? '' : 's'})</span></span>
+          <span class="cid">${this._renderShapeGlyph(shapeForArea(area.id, map.areas))}${area.name || area.id} <span class="muted">(${items.length} casa${items.length === 1 ? '' : 's'})</span></span>
           <span @click=${(e) => e.stopPropagation()}>${this.readOnly ? null : this._renderComarcaActions(area)}</span>
         </summary>
         <div class="fields">
