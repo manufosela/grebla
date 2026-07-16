@@ -1,0 +1,70 @@
+/**
+ * Tests del agregado anónimo de Marea (RMR-TSK-0236): medias por ámbito, umbral
+ * de privacidad y «una marea por persona (la última)». Puro, sin firebase.
+ */
+import { describe, it, expect } from 'vitest';
+import { computePulseAggregate } from './pulseAggregate.js';
+
+const P = (uid, day, vals) => ({ uid, day, ...vals });
+const full = { energia: 60, animo: 60, carga: 50, rumbo: 50, tripulacion: 50, reconocimiento: 50 };
+
+const people = {
+  u1: { guilds: ['Backend'], labels: ['Pagos'] },
+  u2: { guilds: ['Backend'], labels: ['Onboarding'] },
+  u3: { guilds: ['Frontend'], labels: ['Pagos'] },
+  u4: { guilds: ['Backend'], labels: ['Pagos'] },
+};
+
+describe('computePulseAggregate', () => {
+  it('promedia por dimensión en general', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', { ...full, energia: 40 }),
+      P('u2', '2026-07-13', { ...full, energia: 80 }),
+      P('u3', '2026-07-13', { ...full, energia: 60 }),
+    ], people, { minCount: 3 });
+    expect(agg.respondents).toBe(3);
+    expect(agg.general.means.energia).toBe(60); // (40+80+60)/3
+  });
+
+  it('cuenta UNA marea por persona: la del día más reciente', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', { ...full, energia: 10 }),
+      P('u1', '2026-07-16', { ...full, energia: 90 }), // más reciente → gana
+      P('u2', '2026-07-14', { ...full, energia: 50 }),
+      P('u3', '2026-07-14', { ...full, energia: 50 }),
+    ], people, { minCount: 3 });
+    expect(agg.respondents).toBe(3); // 3 personas, no 4 registros
+    expect(agg.general.means.energia).toBe(63); // (90+50+50)/3 = 63.3 → 63
+  });
+
+  it('oculta las medias de un grupo con menos del umbral', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full), // Backend+Pagos
+      P('u2', '2026-07-13', full), // Backend+Onboarding
+      P('u4', '2026-07-13', full), // Backend+Pagos
+    ], people, { minCount: 3 });
+    const backend = agg.guilds.find((g) => g.id === 'Backend');
+    expect(backend.count).toBe(3);
+    expect(backend.means).not.toBeNull();
+    // Pagos solo tiene 2 (u1, u4) → no aparece
+    expect(agg.labels.find((l) => l.id === 'Pagos')).toBeUndefined();
+    // Onboarding tiene 1 → tampoco
+    expect(agg.labels.length).toBe(0);
+  });
+
+  it('la general se oculta si hay menos del umbral (protege el anonimato)', () => {
+    const agg = computePulseAggregate('2026-W29', [P('u1', '2026-07-13', full), P('u2', '2026-07-13', full)], people, { minCount: 3 });
+    expect(agg.respondents).toBe(2);
+    expect(agg.general.means).toBeNull();
+  });
+
+  it('una persona en varios grupos cuenta en cada uno', () => {
+    // 3 personas en Pagos (u1,u3,u4) y 3 en Backend (u1,u2,u4)
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full), P('u2', '2026-07-13', full),
+      P('u3', '2026-07-13', full), P('u4', '2026-07-13', full),
+    ], people, { minCount: 3 });
+    expect(agg.guilds.find((g) => g.id === 'Backend').count).toBe(3);
+    expect(agg.labels.find((l) => l.id === 'Pagos').count).toBe(3);
+  });
+});

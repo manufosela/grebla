@@ -80,6 +80,15 @@ service cloud.firestore {
         && request.resource.data.uid == uid;
     }
 
+    // Agregados anónimos de Marea por semana (medias por dimensión: general, por
+    // gremio y por label/squad, solo grupos con >=3). Los calcula y escribe SOLO
+    // la Cloud Function aggregatePulse (Admin SDK, omite reglas); los lee toda la
+    // tripulación autenticada (la vista Resultados). El cliente nunca escribe.
+    match /pulseAggregates/{weekIso} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // Secretos (token GitHub de DORA): nunca accesibles desde el cliente; solo
     // la Cloud Function vía Admin SDK (omite reglas).
     match /private/{document=**} {

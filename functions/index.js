@@ -14,6 +14,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import * as coins from './coins.js';
 import { sign, coinsKmsKeyName } from './signer.js';
+import { computePulseAggregate } from './pulseAggregate.js';
 
 initializeApp();
 
@@ -1494,5 +1495,44 @@ export const onMotivatorSessionWritten = onDocumentWritten(
     const aggregates = motComputeAggregates(sessions, MOTIVATOR_DECK_IDS[game], game, orderedRoundIds, MOTIVATOR_DECK_SIZE);
     await db.doc(`motivatorAggregates/${game}`).set(aggregates);
     console.log(`[motivators] agregados de ${game} recalculados (${sessions.length} sesiones).`);
+  },
+);
+
+/**
+ * Marea (RMR-TSK-0236): recalcula /pulseAggregates/{weekIso} cada vez que alguien
+ * registra o edita su marea. Solo expone AGREGADOS ANÓNIMOS (medias por dimensión,
+ * general + por gremio + por label/squad) y solo de grupos con >=3 respuestas.
+ * Los registros individuales (/pulse/{uid}/entries) NUNCA se exponen. Admin SDK.
+ */
+export const aggregatePulse = onDocumentWritten(
+  { region: 'europe-west1', document: 'pulse/{uid}/entries/{day}' },
+  async (event) => {
+    const after = event.data?.after;
+    const before = event.data?.before;
+    const weekIso = after?.exists ? after.data()?.weekIso : before?.data()?.weekIso;
+    if (!weekIso) {
+      console.warn('[marea] entrada sin weekIso, se ignora');
+      return;
+    }
+    const db = getFirestore();
+    // collectionGroup('entries') roza el ledger de coins, pero esas entradas no
+    // tienen weekIso, así que el filtro las excluye (y el índice solo indexa las
+    // que sí lo tienen). El mapa uid→persona da los gremios/labels (nombres).
+    const [entriesSnap, peopleSnap] = await Promise.all([
+      db.collectionGroup('entries').where('weekIso', '==', weekIso).get(),
+      db.collection('people').get(),
+    ]);
+    const entries = entriesSnap.docs.map((d) => d.data());
+    /** @type {Record<string, { guilds: string[], labels: string[] }>} */
+    const peopleByUid = {};
+    let totalPeople = 0;
+    for (const doc of peopleSnap.docs) {
+      const p = doc.data();
+      if (p.active !== false) totalPeople += 1;
+      if (p.uid) peopleByUid[p.uid] = { guilds: p.guilds || [], labels: p.labels || [] };
+    }
+    const aggregate = computePulseAggregate(weekIso, entries, peopleByUid, { minCount: 3, totalPeople });
+    await db.doc(`pulseAggregates/${weekIso}`).set({ ...aggregate, updatedAt: FieldValue.serverTimestamp() });
+    console.log(`[marea] agregado ${weekIso} recalculado (${aggregate.respondents} personas).`);
   },
 );
