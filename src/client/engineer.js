@@ -9,7 +9,7 @@
 import '../components/engineer-space.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
-import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap } from '../lib/engineer.js';
+import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap, createMyPerson } from '../lib/engineer.js';
 import { getMyO2O } from '../lib/o2o.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { getOrgConfig } from '../lib/firestore.js';
@@ -30,16 +30,20 @@ onUserChanged(async (user) => {
     const access = await resolveAccess(user);
     const person = await getMyPerson(user.uid);
     if (!person) {
-      // Conmutador de vistas (RMR-TSK-0250): un manager/superadmin sin ficha ha
-      // entrado a «vista de ingeniero» para previsualizarla → aviso (no se le
-      // expulsa: el conmutador de la nav le deja volver). El resto vuelve a la home.
+      // Conmutador de vistas (RMR-TSK-0250) + self-ficha (RMR-TSK-0251): un
+      // manager/superadmin sin ficha ve la vista de ingeniero y puede CREAR su
+      // propia ficha para rellenarla. No se le expulsa: el conmutador le deja
+      // volver. El resto (rol nulo, viewer) vuelve a la home.
       if (access.role === 'superadmin' || access.role === 'leader') {
-        showNoFicha();
+        showNoFicha(user);
         return;
       }
       location.replace('/');
       return;
     }
+    // ¿Es su propia ficha? (self-ficha o ficha de la que es dueño) → puede editar
+    // sus datos básicos (nombre/nivel/disciplinas) desde «Mi espacio».
+    const selfOwned = person.self === true || person.ownerLeaderUid === user.uid;
     // Carga en paralelo del contenido de las secciones (de solo lectura). El
     // O2O va por Cloud Function y es NO crítico: si falla, la vista sigue con el
     // resto y «Mis O2O» queda vacío (no tumba «Mi espacio»).
@@ -52,6 +56,7 @@ onUserChanged(async (user) => {
     ]);
     renderIdentity(person, framework);
     renderSpace(person, framework, profile, career, o2o, orgConfig);
+    if (space) space.selfOwned = selfOwned;
   } catch {
     showError('No se pudo cargar tu espacio. Vuelve a intentarlo en unos minutos.');
   }
@@ -131,7 +136,7 @@ function showError(message) {
  * Oculta el contenido de <engineer-space> (que quedaría vacío).
  * @returns {void}
  */
-function showNoFicha() {
+function showNoFicha(user) {
   space?.setAttribute('hidden', '');
   const header = document.querySelector('.me-header');
   if (!header || document.getElementById('no-ficha-notice')) return;
@@ -170,7 +175,28 @@ function showNoFicha() {
   }
   const hint = document.createElement('p');
   Object.assign(hint.style, { margin: '0.7rem 0 0', color: 'var(--rm-muted)', fontSize: '0.9rem' });
-  hint.textContent = 'Vuelve a tu vista habitual con el conmutador de arriba a la derecha.';
-  box.append(title, body, list, hint);
+  hint.textContent = 'Crea tu propia ficha para rellenarla y ver la vista completa con tus datos, '
+    + 'o vuelve a tu vista habitual con el conmutador de arriba a la derecha.';
+  // Acción: crear la propia ficha (self-ficha, RMR-TSK-0251) y recargar a Mi espacio.
+  const create = document.createElement('button');
+  create.type = 'button';
+  create.textContent = '➕ Crear mi ficha';
+  Object.assign(create.style, {
+    marginTop: '0.9rem', border: '0', background: 'var(--rm-accent)', color: 'var(--rm-on-accent, #fff)',
+    borderRadius: '999px', padding: '0.55rem 1.2rem', font: 'inherit', fontWeight: '700', cursor: 'pointer',
+  });
+  create.addEventListener('click', async () => {
+    create.disabled = true;
+    create.textContent = 'Creando…';
+    try {
+      await createMyPerson(user);
+      location.reload();
+    } catch {
+      create.disabled = false;
+      create.textContent = '➕ Crear mi ficha';
+      showError('No se pudo crear tu ficha. Vuelve a intentarlo en unos minutos.');
+    }
+  });
+  box.append(title, body, list, hint, create);
   header.appendChild(box);
 }

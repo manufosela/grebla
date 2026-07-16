@@ -38,6 +38,7 @@ import './career/career-map.js';
 import './career/player-card.js';
 import './marea/marea-app.js';
 import './retro/retro-app.js';
+import './my-ficha-editor.js';
 import {
   getLevel,
   expectationsForLevel,
@@ -91,6 +92,9 @@ export class EngineerSpace extends LitElement {
     endorsements: { attribute: false },
     questions: { attribute: false },
     o2o: { attribute: false },
+    // self-ficha (RMR-TSK-0251): el usuario es dueño de su propia ficha y puede
+    // editar sus datos básicos (nombre/nivel/disciplinas) desde aquí.
+    selfOwned: { attribute: false },
     _tab: { state: true },
     _targetError: { state: true },
     _targetSaving: { state: true },
@@ -257,6 +261,8 @@ export class EngineerSpace extends LitElement {
     this.questions = [];
     /** @type {import('../lib/o2o.js').MyO2O|null} proyección compartida de mis O2O (F4) */
     this.o2o = null;
+    /** @type {boolean} el usuario es dueño de su propia ficha (self-ficha, RMR-TSK-0251) */
+    this.selfOwned = false;
     /** @type {string|null} aviso in-place si falla la escritura del objetivo */
     this._targetError = null;
     /** @type {boolean} true mientras se persiste el objetivo (deshabilita controles) */
@@ -770,6 +776,13 @@ export class EngineerSpace extends LitElement {
     }[tab];
 
     return html`
+      ${this.selfOwned
+        ? html`<my-ficha-editor
+            .person=${this.person}
+            .framework=${this.framework}
+            @ficha-updated=${this._onFichaUpdated}
+          ></my-ficha-editor>`
+        : null}
       ${this._renderTabs()}
       <section
         id="panel-${tab}"
@@ -782,6 +795,11 @@ export class EngineerSpace extends LitElement {
         ${panel()}
       </section>
     `;
+  }
+
+  /** Refresca la persona tras editar la self-ficha (RMR-TSK-0251). */
+  _onFichaUpdated(event) {
+    this.person = event.detail;
   }
 
   /** Pestaña Marea: el pulso semanal del propio ingeniero (RMR-BUG-0036). */
