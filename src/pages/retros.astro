@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Retros (RMR-PCS-0022): el líder crea y facilita retrospectivas de equipo. El
+ * componente <retro-app> recibe el rol/roster desde client/retros.js.
+ */
+---
+
+<Base title="GREBLA — Retros" requireAuth={true}>
+  <tool-nav href="/" name="Retros" icon="⛵"></tool-nav>
+  <h1 class="page-title">Retros</h1>
+  <p class="page-lead">
+    Crea y facilita retrospectivas de equipo (Start/Stop/Continue, +/−/Start/Stop
+    o Barco). El equipo aporta en anónimo y vota; de cada retro salen acciones con
+    owner que se arrastran a la siguiente hasta cerrarse.
+  </p>
+
+  <retro-app></retro-app>
+</Base>
+
+<script>
+  import '../client/retros.js';
+</script>

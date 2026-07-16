@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 
 describe('engineer-space: pestañas por tipo de persona', () => {
-  it('un externo ve datos + o2o + marea', () => {
-    expect(visibleTabsFor({ external: true })).toEqual(['datos', 'o2o', 'marea']);
+  it('un externo ve datos + o2o + marea + retros', () => {
+    expect(visibleTabsFor({ external: true })).toEqual(['datos', 'o2o', 'marea', 'retros']);
   });
 
-  it('un interno ve carrera/rolemirror/mapa/o2o + marea', () => {
-    expect(visibleTabsFor({ external: false })).toEqual(['carrera', 'rolemirror', 'mapa', 'o2o', 'marea']);
-    expect(visibleTabsFor({})).toEqual(['carrera', 'rolemirror', 'mapa', 'o2o', 'marea']);
-    expect(visibleTabsFor(null)).toEqual(['carrera', 'rolemirror', 'mapa', 'o2o', 'marea']);
+  it('un interno ve carrera/rolemirror/mapa/o2o + marea + retros', () => {
+    expect(visibleTabsFor({ external: false })).toEqual(['carrera', 'rolemirror', 'mapa', 'o2o', 'marea', 'retros']);
+    expect(visibleTabsFor({})).toEqual(['carrera', 'rolemirror', 'mapa', 'o2o', 'marea', 'retros']);
+    expect(visibleTabsFor(null)).toEqual(['carrera', 'rolemirror', 'mapa', 'o2o', 'marea', 'retros']);
   });
 
   it('effectiveTabFor reubica una pestaña oculta a la primera visible', () => {
