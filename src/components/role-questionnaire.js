@@ -185,16 +185,25 @@ export class RoleQuestionnaire extends LitElement {
       color: var(--rm-muted, #6b7280);
     }
     .measurement-new {
-      border: 1px solid var(--rm-border, #d1d5db);
-      background: var(--rm-surface, #fff);
-      color: var(--rm-accent, #4f46e5);
+      border: 1px solid var(--rm-accent, #2a9d8f);
+      background: var(--rm-accent, #2a9d8f);
+      color: var(--rm-on-accent, #fff);
       border-radius: 999px;
-      padding: 0.3rem 0.9rem;
-      font-size: 0.78rem;
-      font-weight: 600;
+      padding: 0.45rem 1.1rem;
+      font-size: 0.82rem;
+      font-weight: 700;
       cursor: pointer;
     }
-    .measurement-new:hover { border-color: var(--rm-accent, #4f46e5); }
+    .measurement-new:hover { filter: brightness(1.08); }
+    .measurement-new:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    /* Segunda aparición al final del formulario: no scroll para guardar. */
+    .measurement-bottom {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--rm-border, #e5e7eb);
+    }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; margin: 0.5rem 0; }
     .notice {
       background: var(--rm-surface-hover, #f3f4f6);
@@ -429,6 +438,7 @@ export class RoleQuestionnaire extends LitElement {
           ${this._renderMeasurementBar()}
           ${this.error ? html`<p class="error">${this.error}</p>` : null}
           ${this._renderGroups(visible)}
+          ${this.personId ? html`<div class="measurement-bottom">${this._renderMeasurementButton()}</div>` : null}
         </div>
         <div class="result">
           <role-result
@@ -465,10 +475,17 @@ export class RoleQuestionnaire extends LitElement {
     return html`
       <div class="measurement">
         <span class="measurement-when">${when ? `Medición del ${when}` : 'Nueva medición'}</span>
-        <button type="button" class="measurement-new" @click=${this._startNewMeasurement}>
-          Guardar como nueva medición
-        </button>
+        ${this._renderMeasurementButton()}
       </div>
+    `;
+  }
+
+  /** El botón de guardar, reutilizado arriba (en la barra) y al final del form. */
+  _renderMeasurementButton() {
+    return html`
+      <button type="button" class="measurement-new" @click=${this._startNewMeasurement}>
+        Guardar como nueva medición
+      </button>
     `;
   }
 
