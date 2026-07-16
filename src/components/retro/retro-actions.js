@@ -7,6 +7,7 @@
  * Props: retroId, uid, leaderUid, scope ({type,label}), members ([{uid,name}]).
  */
 import { LitElement, html, css } from 'lit';
+import './retro-action-row.js';
 import { listRetroActions, addAction, setActionStatus } from '../../lib/retros.js';
 
 export class RetroActions extends LitElement {
@@ -26,14 +27,6 @@ export class RetroActions extends LitElement {
   static styles = css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); --amber: #d1902f; --navy: var(--gr-navy, #1e3a5f); }
     .h { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); font-weight: 700; margin: 0 0 0.8rem; }
-    .row { display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0; border-top: 1px solid var(--rm-border, #eef0f2); flex-wrap: wrap; }
-    .row:first-of-type { border-top: 0; }
-    .txt { flex: 1; min-width: 12rem; font-size: 0.9rem; }
-    .who { font-size: 0.74rem; color: var(--rm-muted, #5b6b7d); }
-    .toggle { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface-2, #f5fafa); font: inherit; font-size: 0.74rem; font-weight: 700; padding: 0.28rem 0.7rem; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-    .toggle:disabled { opacity: 0.6; cursor: default; }
-    .toggle.done { background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--rm-accent-700, var(--teal)); border-color: color-mix(in srgb, var(--teal) 40%, transparent); }
-    .toggle.pending { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
     .add { margin-top: 1rem; border-top: 1px dashed var(--rm-border, #dde7ec); padding-top: 0.9rem; }
     .add input[type="text"] { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 9px; background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); }
     .owners { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; }
@@ -81,19 +74,6 @@ export class RetroActions extends LitElement {
     }
   }
 
-  _memberName(uid) {
-    return this.members.find((m) => m.uid === uid)?.name ?? 'Alguien';
-  }
-
-  _ownersText(action) {
-    const names = (action.owners ?? []).map((u) => this._memberName(u));
-    return names.length ? names.join(', ') : 'Sin owner';
-  }
-
-  _canToggle(action) {
-    return this._canManage || (!!this.uid && (action.owners ?? []).includes(this.uid));
-  }
-
   _toggleOwner(uid) {
     this._newOwners = this._newOwners.includes(uid)
       ? this._newOwners.filter((u) => u !== uid)
@@ -115,24 +95,12 @@ export class RetroActions extends LitElement {
   }
 
   async _toggle(action) {
-    if (!this._canToggle(action)) return;
     try {
       await setActionStatus(action.id, action.status === 'done' ? 'pending' : 'done');
       await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cambiar el estado.';
     }
-  }
-
-  _renderRow(action) {
-    const done = action.status === 'done';
-    return html`
-      <div class="row">
-        <span class="txt">${action.text} <span class="who">· ${this._ownersText(action)}</span></span>
-        <button class="toggle ${done ? 'done' : 'pending'}" ?disabled=${!this._canToggle(action)} @click=${() => this._toggle(action)}>
-          ${done ? '✓ Hecha' : '⏳ Pendiente'}
-        </button>
-      </div>`;
   }
 
   _renderAdd() {
@@ -156,7 +124,11 @@ export class RetroActions extends LitElement {
     return html`
       <p class="h">✚ Acciones de esta retro</p>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
-      ${this._actions.length ? this._actions.map((a) => this._renderRow(a)) : html`<p class="empty">Aún no hay acciones.</p>`}
+      <div @retro-toggle=${(e) => this._toggle(e.detail.action)}>
+        ${this._actions.length
+          ? this._actions.map((a) => html`<retro-action-row .action=${a} .uid=${this.uid} .leaderUid=${this.leaderUid} .members=${this.members}></retro-action-row>`)
+          : html`<p class="empty">Aún no hay acciones.</p>`}
+      </div>
       ${this._renderAdd()}
     `;
   }
