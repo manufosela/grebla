@@ -60,11 +60,15 @@ const mapDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 function peopleRepo(db, base, leaderUid, viewAll = false) {
   return {
     async list() {
+      // Las self-fichas (RMR-TSK-0251) son la ficha PERSONAL de un manager/superadmin
+      // (self:true, ownerLeaderUid == su propio uid). No son personas del equipo, así
+      // que se excluyen del roster (su dueño las gestiona desde «Mi espacio»).
+      const notSelf = (p) => p.self !== true;
       // El superadmin (viewAll) ve TODAS las personas de la organización (las
       // reglas ya se lo permiten), para poder gestionarlas y hacerles notas/O2O.
       if (viewAll) {
         const all = await getDocs(peopleCol(db, base));
-        return all.docs.map((d) => ({ id: d.id, ...d.data() }));
+        return all.docs.map((d) => ({ id: d.id, ...d.data() })).filter(notSelf);
       }
       // Las personas visibles para este líder: las suyas (ownerLeaderUid) + las
       // compartidas con él (sharedWithUids array-contains). Firestore no hace OR
@@ -75,7 +79,7 @@ function peopleRepo(db, base, leaderUid, viewAll = false) {
       ]);
       const byId = new Map();
       for (const d of [...owned.docs, ...shared.docs]) byId.set(d.id, { id: d.id, ...d.data() });
-      return [...byId.values()];
+      return [...byId.values()].filter(notSelf);
     },
     async getById(id) {
       const d = await getDoc(personDoc(db, base, id));

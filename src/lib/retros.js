@@ -145,6 +145,8 @@ export async function listOpenActions(ownerLeaderUid) {
 export async function listTeamMembers(leaderUid) {
   const snap = await getDocs(query(collection(db, 'people'), where('ownerLeaderUid', '==', leaderUid)));
   return snap.docs
+    // Excluye la self-ficha del propio líder (RMR-TSK-0251): no es del equipo.
+    .filter((d) => d.data().self !== true)
     .map((d) => ({ uid: d.data().uid, name: d.data().name ?? 'Sin nombre' }))
     .filter((m) => m.uid);
 }

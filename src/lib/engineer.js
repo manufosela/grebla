@@ -8,7 +8,7 @@
  *
  * @typedef {import('../tools/team/domain/types.js').Person} Person
  */
-import { collection, query, where, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { getPersonProfile, getSession, getOrgConfig } from './firestore.js';
 import { getCareerMap, getArchipelago } from './careerMap.js';
@@ -33,6 +33,52 @@ export async function getMyPerson(uid) {
   );
   const personDoc = snap.docs.at(0);
   return personDoc ? { id: personDoc.id, ...personDoc.data() } : null;
+}
+
+/**
+ * Crea la ficha PROPIA de un manager/superadmin (self-ficha, RMR-TSK-0251): una
+ * /people con `uid` y `ownerLeaderUid` = su propio uid, marcada `self: true`. Al
+ * ser su dueño puede editarla (regla isOwner) y, al ser el titular (`uid` propio),
+ * hereda Role Mirror y el mapa self-editables. El marcador `self` la excluye del
+ * roster del equipo. Las reglas permiten el create a un líder (ownerLeaderUid ==
+ * su uid) y a un superadmin (para cualquiera).
+ * @param {{ uid: string, displayName?: string|null, email?: string|null }} user
+ * @returns {Promise<string>}  id de la persona creada
+ */
+export async function createMyPerson(user) {
+  if (!user?.uid) throw new Error('createMyPerson requiere el uid de la cuenta');
+  const name = user.displayName ?? user.email ?? 'Mi ficha';
+  const ref = await addDoc(collection(db, 'people'), {
+    name,
+    uid: user.uid,
+    ownerLeaderUid: user.uid,
+    self: true,
+    active: true,
+    startDate: new Date().toISOString().slice(0, 10),
+    levelId: null,
+    guilds: [],
+    disciplines: [],
+    labels: [],
+    githubLogin: null,
+  });
+  return ref.id;
+}
+
+/**
+ * Actualiza los datos básicos de la propia self-ficha (RMR-TSK-0251): nombre,
+ * nivel y disciplinas. Solo el dueño puede escribir estos campos (regla isOwner);
+ * el `hasOnly` del cliente no relaja las reglas, solo evita mandar campos de más.
+ * @param {string} personId
+ * @param {{ name?: string, levelId?: string|null, disciplines?: string[] }} basics
+ * @returns {Promise<void>}
+ */
+export async function updateMyPersonBasics(personId, basics = {}) {
+  if (!personId) throw new Error('updateMyPersonBasics requiere personId');
+  const patch = {};
+  if (typeof basics.name === 'string') patch.name = basics.name.trim() || 'Mi ficha';
+  if ('levelId' in basics) patch.levelId = basics.levelId || null;
+  if (Array.isArray(basics.disciplines)) patch.disciplines = basics.disciplines;
+  await updateDoc(doc(db, 'people', personId), patch);
 }
 
 /**
