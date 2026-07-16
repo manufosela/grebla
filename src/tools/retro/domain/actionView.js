@@ -4,8 +4,14 @@
  * <retro-carryover> y <retro-action-row> para no duplicar.
  */
 
-/** Nombres de los owners de una acción (o «Sin owner»). @param {any} action @param {Array<{uid:string,name:string}>} members */
+/**
+ * Nombres de los owners de una acción (o «Sin owner»). Prefiere los ownerNames
+ * denormalizados (para que los vea quien no tiene el roster, p. ej. el ingeniero);
+ * si no, resuelve los uids contra `members`.
+ * @param {any} action @param {Array<{uid:string,name:string}>} members
+ */
 export function ownersText(action, members = []) {
+  if (action?.ownerNames?.length) return action.ownerNames.join(', ');
   const name = (uid) => members.find((m) => m.uid === uid)?.name ?? 'Alguien';
   const names = (action?.owners ?? []).map(name);
   return names.length ? names.join(', ') : 'Sin owner';

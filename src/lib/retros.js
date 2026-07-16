@@ -103,6 +103,7 @@ export async function addAction(data) {
   const ref = await addDoc(collection(db, 'retroActions'), {
     text: String(data.text ?? '').trim(),
     owners: data.owners ?? [],
+    ownerNames: data.ownerNames ?? [],
     ownerLeaderUid: data.ownerLeaderUid,
     scope: { type: data.scope?.type ?? 'team', label: data.scope?.label ?? null },
     fromRetroId: data.fromRetroId,
@@ -132,4 +133,18 @@ export async function listOpenActions(ownerLeaderUid) {
   const q = query(collection(db, 'retroActions'), where('ownerLeaderUid', '==', ownerLeaderUid), where('status', '==', 'pending'));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Roster del equipo de un líder ({uid, name} de sus personas con cuenta), para el
+ * selector de owner. Solo lo puede leer el propio líder (reglas de /people); el
+ * ingeniero ve los nombres de owner denormalizados en cada acción (ownerNames).
+ * @param {string} leaderUid
+ * @returns {Promise<Array<{ uid: string, name: string }>>}
+ */
+export async function listTeamMembers(leaderUid) {
+  const snap = await getDocs(query(collection(db, 'people'), where('ownerLeaderUid', '==', leaderUid)));
+  return snap.docs
+    .map((d) => ({ uid: d.data().uid, name: d.data().name ?? 'Sin nombre' }))
+    .filter((m) => m.uid);
 }

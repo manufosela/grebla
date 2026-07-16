@@ -117,6 +117,10 @@ export class RetroManager extends LitElement {
     return retro.scope?.type === 'squad' ? `Squad · ${retro.scope.label ?? '—'}` : 'Equipo';
   }
 
+  _open(retro) {
+    this.dispatchEvent(new CustomEvent('retro-select', { detail: { retro }, bubbles: true, composed: true }));
+  }
+
   _renderRow(retro) {
     const open = retro.status === 'open';
     return html`
@@ -125,7 +129,10 @@ export class RetroManager extends LitElement {
         <td>${RETRO_FORMATS[retro.format]?.name ?? retro.format}</td>
         <td><span class="chip scope-chip">${this._scopeText(retro)}</span></td>
         <td><span class="chip ${open ? 'open' : 'closed'}">${open ? 'Abierta' : 'Cerrada'}</span></td>
-        <td>${open ? html`<button class="act" @click=${() => this._close(retro.id)}>Cerrar</button>` : html`<span class="empty">—</span>`}</td>
+        <td>
+          <button class="act" @click=${() => this._open(retro)}>Abrir</button>
+          ${open ? html`<button class="act" @click=${() => this._close(retro.id)}>Cerrar</button>` : null}
+        </td>
       </tr>
     `;
   }

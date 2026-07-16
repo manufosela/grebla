@@ -85,7 +85,8 @@ export class RetroActions extends LitElement {
     if (!text || !this._canManage) return;
     this._error = '';
     try {
-      await addAction({ text, owners: this._newOwners, ownerLeaderUid: this.leaderUid, scope: this.scope, fromRetroId: this.retroId });
+      const ownerNames = this._newOwners.map((uid) => this.members.find((m) => m.uid === uid)?.name ?? 'Alguien');
+      await addAction({ text, owners: this._newOwners, ownerNames, ownerLeaderUid: this.leaderUid, scope: this.scope, fromRetroId: this.retroId });
       this._newText = '';
       this._newOwners = [];
       await this._load();

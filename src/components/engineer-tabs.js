@@ -6,10 +6,10 @@
  * @typedef {{ external?: boolean }} PersonLike
  */
 
-/** Pestañas visibles para un externo (no tiene carrera/rolemirror/mapa; Marea sí). */
-export const EXTERNAL_TABS = ['datos', 'o2o', 'marea'];
-/** Pestañas visibles para un interno (las de siempre + Marea). */
-export const INTERNAL_TABS = ['carrera', 'rolemirror', 'mapa', 'o2o', 'marea'];
+/** Pestañas visibles para un externo (no tiene carrera/rolemirror/mapa; Marea y Retros sí). */
+export const EXTERNAL_TABS = ['datos', 'o2o', 'marea', 'retros'];
+/** Pestañas visibles para un interno (las de siempre + Marea + Retros). */
+export const INTERNAL_TABS = ['carrera', 'rolemirror', 'mapa', 'o2o', 'marea', 'retros'];
 
 /**
  * Pestañas visibles según el tipo de persona.
