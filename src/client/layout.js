@@ -4,6 +4,7 @@
  * por eso el guard es client-side.
  */
 import '../components/auth-button.js';
+import '../components/view-switcher.js';
 import { onUserChanged, isAdmin } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 
@@ -26,8 +27,9 @@ if (requireAuth || requireAdmin) {
 // Modo superadmin (RMR-TSK-0228): halo + etiqueta en TODAS las páginas, para no
 // confundir acciones de superadmin con las de manager (subscripción independiente
 // del guard de arriba; onAuthStateChanged admite varios listeners). RMR-BUG-0033:
-// NO se muestra si ha elegido «usar como manager» (superadmin-panel.js VIEW_FLAG) —
-// en ese modo está deliberadamente viendo las herramientas como si fuera manager.
+// NO se muestra cuando el superadmin ha conmutado a otra vista (manager o
+// ingeniero, superadmin-panel.js / view-switcher VIEW_FLAG) — en ese modo está
+// viendo la app deliberadamente como ese otro rol.
 const VIEW_FLAG = 'grebla-view';
 
 onUserChanged(async (user) => {
@@ -37,8 +39,8 @@ onUserChanged(async (user) => {
   }
   try {
     const { role } = await resolveAccess(user);
-    const actingAsLeader = sessionStorage.getItem(VIEW_FLAG) === 'leader';
-    document.documentElement.classList.toggle('is-superadmin', role === 'superadmin' && !actingAsLeader);
+    const actingAsOther = ['leader', 'engineer'].includes(sessionStorage.getItem(VIEW_FLAG));
+    document.documentElement.classList.toggle('is-superadmin', role === 'superadmin' && !actingAsOther);
   } catch {
     document.documentElement.classList.remove('is-superadmin');
   }

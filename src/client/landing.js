@@ -21,6 +21,12 @@ onUserChanged(async (user) => {
   try {
     const { role } = await resolveAccess(user);
     if (!role) return showLanding();
+    // Conmutador de vistas (RMR-TSK-0250): un manager/superadmin que ha elegido
+    // «vista de ingeniero» va a su propio «Mi espacio», no a las herramientas.
+    if (sessionStorage.getItem(VIEW_FLAG) === 'engineer' && (role === 'superadmin' || role === 'leader')) {
+      location.replace('/mi-espacio');
+      return;
+    }
     // El ingeniero (persona vinculada) tiene su propio espacio personal: ni
     // landing pública ni herramientas de manager.
     if (role === 'engineer') {

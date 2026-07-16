@@ -95,6 +95,9 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
           <span class="icon-sun" aria-hidden="true">☀️</span>
           <span class="icon-moon" aria-hidden="true">🌙</span>
         </button>
+        <!-- Conmutador de vistas (RMR-TSK-0250): solo se pinta para quien tiene
+             2+ vistas (superadmin/manager); resuelto en client/view-switcher.js. -->
+        <view-switcher></view-switcher>
         <!-- Web component definido e hidratado desde el <script> de cliente de
              abajo. No usamos client:only para no importar firebase en el build. -->
         <auth-button></auth-button>

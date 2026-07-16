@@ -28,12 +28,15 @@ onUserChanged(async (user) => {
   }
   try {
     const access = await resolveAccess(user);
-    if (access.role !== 'engineer') {
-      location.replace('/');
-      return;
-    }
     const person = await getMyPerson(user.uid);
     if (!person) {
+      // Conmutador de vistas (RMR-TSK-0250): un manager/superadmin sin ficha ha
+      // entrado a «vista de ingeniero» para previsualizarla → aviso (no se le
+      // expulsa: el conmutador de la nav le deja volver). El resto vuelve a la home.
+      if (access.role === 'superadmin' || access.role === 'leader') {
+        showNoFicha();
+        return;
+      }
       location.replace('/');
       return;
     }
@@ -119,4 +122,36 @@ function showError(message) {
   if (!errorBox) return;
   errorBox.textContent = message;
   errorBox.hidden = false;
+}
+
+/**
+ * Aviso para un manager/superadmin que entra a «vista de ingeniero» sin ficha
+ * de persona propia (RMR-TSK-0250): no hay carrera/mapa que mostrar, pero se le
+ * explica que es la vista que verá un ingeniero y que vuelva con el conmutador.
+ * Oculta el contenido de <engineer-space> (que quedaría vacío).
+ * @returns {void}
+ */
+function showNoFicha() {
+  space?.setAttribute('hidden', '');
+  const header = document.querySelector('.me-header');
+  if (!header || document.getElementById('no-ficha-notice')) return;
+  // Estilos inline (tokens --rm-*): el nodo se crea en JS, sin el atributo de
+  // scope de Astro, así que las clases scoped de la página no le aplicarían.
+  const box = document.createElement('div');
+  box.id = 'no-ficha-notice';
+  Object.assign(box.style, {
+    marginTop: '0.5rem', padding: '1rem 1.25rem', background: 'var(--rm-surface)',
+    border: '1px solid var(--rm-border)', borderRadius: 'var(--rm-radius, 14px)',
+  });
+  const title = document.createElement('p');
+  Object.assign(title.style, { margin: '0', fontSize: '1.1rem', fontWeight: '700', color: 'var(--rm-text)' });
+  title.textContent = 'Estás viendo «Mi espacio» como lo ve un ingeniero';
+  const body = document.createElement('p');
+  Object.assign(body.style, { margin: '0.4rem 0 0', color: 'var(--rm-muted)', maxWidth: '60ch' });
+  body.textContent =
+    'Tu cuenta no tiene ficha de persona, así que aquí no hay carrera ni mapa que mostrar. '
+    + 'Esta es la vista que verá cualquier ingeniero de tu equipo. '
+    + 'Vuelve a tu vista habitual con el conmutador de arriba a la derecha.';
+  box.append(title, body);
+  header.appendChild(box);
 }
