@@ -485,13 +485,16 @@ export class SuperadminPanel extends LitElement {
     this._confirmArea = null;
   }
 
-  _addCity() {
+  /** @param {string} [preAreaId] comarca a la que asignar la casa (por defecto, la primera) */
+  _addCity(preAreaId) {
     const id = this._newCity.id.trim();
     const name = this._newCity.name.trim();
     this._mapError = '';
     if (!id || !name) { this._mapError = 'La casa necesita id y nombre.'; return; }
     if (this._careerMap.cities.some((c) => c.id === id)) { this._mapError = `Ya existe la casa «${id}».`; return; }
-    const area = this._careerMap.areas[0]?.id ?? '';
+    const area = this._careerMap.areas.some((a) => a.id === preAreaId)
+      ? /** @type {string} */ (preAreaId)
+      : (this._careerMap.areas[0]?.id ?? '');
     /** @type {import('../tools/career/domain/types.js').City} */
     const city = { id, name, kind: 'tech', area, x: 50, y: 50, weight: 1, prereqs: [] };
     this._patchMap({ cities: [...this._careerMap.cities, city] });
@@ -1121,8 +1124,7 @@ export class SuperadminPanel extends LitElement {
         ${!map
           ? html`<p class="empty">Cargando el mapa…</p>`
           : html`
-              ${this._renderAreas(map)}
-              ${this._renderCities(map)}
+              ${this._renderComarcasWithCities(map)}
               ${this.readOnly
                 ? null
                 : html`
@@ -1182,63 +1184,100 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
-  /** @param {import('../tools/career/domain/types.js').CareerMap} map */
-  _renderAreas(map) {
+  /**
+   * Comarcas como contenedores colapsables con sus casas anidadas (RMR-TSK-0231).
+   * Agrupa las casas por City.area preservando el índice original (que _patchCity
+   * necesita). Las que no tienen comarca válida caen en el grupo «Sin comarca».
+   * @param {import('../tools/career/domain/types.js').CareerMap} map
+   */
+  _renderComarcasWithCities(map) {
+    const withIdx = map.cities.map((city, idx) => ({ city, idx }));
+    const areaIds = new Set(map.areas.map((a) => a.id));
+    const orphans = withIdx.filter(({ city }) => !city.area || !areaIds.has(city.area));
     return html`
-      <details open>
-      <summary class="sub">Comarcas (${map.areas.length})</summary>
+      <p class="ro-note">Cada comarca agrupa sus casas: despliégala para ver o añadir las suyas. Para mover una casa de comarca, usa su selector «Comarca».</p>
       ${this.readOnly
         ? null
         : html`<div class="toolbar">
-            <input type="text" placeholder="id (p. ej. frontend)" .value=${this._newArea.id}
+            <input type="text" placeholder="id de comarca (p. ej. frontend)" .value=${this._newArea.id}
               @input=${(e) => { this._newArea = { ...this._newArea, id: e.target.value }; }} />
-            <input type="text" placeholder="Nombre" .value=${this._newArea.name}
+            <input type="text" placeholder="Nombre de la comarca" .value=${this._newArea.name}
               @input=${(e) => { this._newArea = { ...this._newArea, name: e.target.value }; }} />
             <button class="primary" ?disabled=${!this._newArea.id.trim() || !this._newArea.name.trim()} @click=${() => this._addArea()}>Añadir comarca</button>
           </div>`}
       ${map.areas.length === 0
-        ? html`<p class="empty">Aún no hay comarcas.</p>`
-        : html`<table>
-            <thead><tr><th>Id</th><th>Nombre</th><th></th></tr></thead>
-            <tbody>
-              ${map.areas.map(
-                (a) => html`<tr>
-                  <td class="muted">${a.id}</td>
-                  <td><input type="text" .value=${a.name} ?disabled=${this.readOnly} @input=${(e) => this._renameArea(a.id, e.target.value)} /></td>
-                  <td>${this.readOnly
-                    ? null
-                    : this._confirmArea === a.id
-                      ? html`<span class="confirm">¿Borrar?
-                          <button class="yes" @click=${() => this._deleteArea(a.id)}>Sí</button>
-                          <button @click=${() => { this._confirmArea = null; }}>No</button>
-                        </span>`
-                      : html`<button class="del-btn" @click=${() => { this._confirmArea = a.id; this._mapError = ''; }}>Borrar</button>`}
-                  </td>
-                </tr>`,
-              )}
-            </tbody>
-          </table>`}
+        ? html`<p class="empty">Aún no hay comarcas. Crea una para empezar a colocar casas.</p>`
+        : map.areas.map((a) => this._renderComarcaGroup(map, a, withIdx.filter(({ city }) => city.area === a.id)))}
+      ${orphans.length ? this._renderOrphanCities(map, orphans) : null}
+    `;
+  }
+
+  /** Acciones de la cabecera de una comarca (borrar, con confirmación). @param {import('../tools/career/domain/types.js').Area} area */
+  _renderComarcaActions(area) {
+    if (this._confirmArea === area.id) {
+      return html`<span class="confirm">¿Borrar comarca?
+        <button class="yes" @click=${() => this._deleteArea(area.id)}>Sí</button>
+        <button @click=${() => { this._confirmArea = null; }}>No</button>
+      </span>`;
+    }
+    return html`<button class="del-btn" @click=${() => { this._confirmArea = area.id; this._mapError = ''; }}>Borrar</button>`;
+  }
+
+  /**
+   * Una comarca plegable (colapsada por defecto) con sus casas anidadas y un alta
+   * de casa pre-asignada a esa comarca.
+   * @param {import('../tools/career/domain/types.js').CareerMap} map
+   * @param {import('../tools/career/domain/types.js').Area} area
+   * @param {Array<{ city: import('../tools/career/domain/types.js').City, idx: number }>} items
+   */
+  _renderComarcaGroup(map, area, items) {
+    return html`
+      <details class="city track-group">
+        <summary class="city-head">
+          <span class="cid">${area.name || area.id} <span class="muted">(${items.length} casa${items.length === 1 ? '' : 's'})</span></span>
+          <span @click=${(e) => e.stopPropagation()}>${this.readOnly ? null : this._renderComarcaActions(area)}</span>
+        </summary>
+        <div class="fields">
+          <label>Nombre
+            <input type="text" .value=${area.name} ?disabled=${this.readOnly} @input=${(e) => this._renameArea(area.id, e.target.value)} />
+          </label>
+          <label>Id
+            <input type="text" .value=${area.id} disabled />
+          </label>
+        </div>
+        <div class="nested-levels">
+          <div class="nested-head">
+            <span class="sub">Casas (${items.length})</span>
+            ${this.readOnly
+              ? null
+              : html`<div class="toolbar">
+                  <input type="text" placeholder="id (p. ej. react)" .value=${this._newCity.id}
+                    @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
+                  <input type="text" placeholder="Nombre" .value=${this._newCity.name}
+                    @input=${(e) => { this._newCity = { ...this._newCity, name: e.target.value }; }} />
+                  <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity(area.id)}>Añadir casa</button>
+                </div>`}
+          </div>
+          ${items.length === 0
+            ? html`<p class="empty">Esta comarca aún no tiene casas.</p>`
+            : html`<div class="cities">${items.map(({ city, idx }) => this._renderCity(map, city, idx))}</div>`}
+        </div>
       </details>
     `;
   }
 
-  /** @param {import('../tools/career/domain/types.js').CareerMap} map */
-  _renderCities(map) {
+  /**
+   * Grupo «Sin comarca»: casas sin comarca asignada o cuya comarca ya no existe.
+   * Abierto por defecto porque requieren atención (reasignar comarca).
+   * @param {import('../tools/career/domain/types.js').CareerMap} map
+   * @param {Array<{ city: import('../tools/career/domain/types.js').City, idx: number }>} orphans
+   */
+  _renderOrphanCities(map, orphans) {
     return html`
-      <details open>
-      <summary class="sub">Casas (${map.cities.length})</summary>
-      ${this.readOnly
-        ? null
-        : html`<div class="toolbar">
-            <input type="text" placeholder="id (p. ej. react)" .value=${this._newCity.id}
-              @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
-            <input type="text" placeholder="Nombre" .value=${this._newCity.name}
-              @input=${(e) => { this._newCity = { ...this._newCity, name: e.target.value }; }} />
-            <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity()}>Añadir casa</button>
-          </div>`}
-      ${map.cities.length === 0
-        ? html`<p class="empty">Aún no hay casas.</p>`
-        : html`<div class="cities">${map.cities.map((c, idx) => this._renderCity(map, c, idx))}</div>`}
+      <details class="city track-group" open>
+        <summary class="city-head"><span class="cid">Sin comarca <span class="muted">(${orphans.length})</span></span></summary>
+        <p class="ro-note">Casas sin comarca (o con una comarca que ya no existe). Asígnalas con su selector «Comarca».</p>
+        <div class="cities">${orphans.map(({ city, idx }) => this._renderCity(map, city, idx))}</div>
       </details>
     `;
   }
