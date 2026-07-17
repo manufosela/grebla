@@ -35,25 +35,27 @@ onUserChanged(async (user) => {
     const { store } = await createCareerContainer({ mode: 'firestore' });
     // El login firma la autoría (brujo, carpools) en TODOS los roles.
     app.currentUser = { uid: user.uid, name: user.displayName ?? user.email ?? 'Usuario' };
-    if (role === 'engineer') {
-      // El ingeniero juega SU plan (JG-1): sin container de equipo (no puede
-      // listar people), su persona vinculada fijada y sin gestión de equipo.
-      const person = await getMyPerson(user.uid);
-      if (!person) {
-        app.error = 'No se encontró tu persona vinculada. Habla con tu manager.';
-        return;
-      }
-      // El objetivo de carrera declarado viaja con la persona: el catálogo de
-      // retos (JG-14) sugiere con él la ruta de su hito.
+    // EL INGENIERO JUEGA SU PLAN (JG-1). También un manager/superadmin en VISTA
+    // INGENIERO (conmutador de vistas, RMR-BUG-0042): con su self-ficha juega su
+    // propio plan igual que un ingeniero — no el selector de equipo.
+    const asEngineerView = sessionStorage.getItem('grebla-view') === 'engineer';
+    const ownPerson = (role === 'engineer' || asEngineerView) ? await getMyPerson(user.uid) : null;
+    if (role === 'engineer' && !ownPerson) {
+      app.error = 'No se encontró tu persona vinculada. Habla con tu manager.';
+      return;
+    }
+    if (ownPerson) {
+      // Sin container de equipo (no lista people): su persona fijada. El objetivo
+      // de carrera viaja con la persona (el catálogo de retos, JG-14, sugiere su ruta).
       app.people = [{
-        id: person.id,
-        name: person.name,
-        uid: person.uid ?? null,
-        careerTargetLevelId: person.careerTargetLevelId ?? null,
+        id: ownPerson.id,
+        name: ownPerson.name,
+        uid: ownPerson.uid ?? null,
+        careerTargetLevelId: ownPerson.careerTargetLevelId ?? null,
       }];
       app.canPlay = true;
       app.canEdit = false;
-      app.personId = person.id;
+      app.personId = ownPerson.id;
       app.store = store;
       return;
     }
