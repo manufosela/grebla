@@ -33,19 +33,8 @@ import Base from '../../layouts/Base.astro';
     <p id="engineer-error" class="me-error" role="alert" hidden></p>
   </section>
 
-  <!-- Juegos de motivadores: reflexión personal por rondas (ingeniero y manager). -->
-  <section class="games" aria-label="Juegos de motivadores">
-    <a class="game-card moving" href="/tools/motivators/moving">
-      <span class="game-emoji" aria-hidden="true">🃏</span>
-      <span class="game-text"><strong>Moving Motivators</strong><small>Qué te mueve en el trabajo</small></span>
-    </a>
-    <a class="game-card affective" href="/tools/motivators/affective">
-      <span class="game-emoji" aria-hidden="true">💗</span>
-      <span class="game-text"><strong>Affective Motivators</strong><small>Qué necesitas sentir en tu equipo</small></span>
-    </a>
-  </section>
-
-  <!-- Contenido de las tres secciones (lo rellena engineer.js en solo lectura). -->
+  <!-- Contenido de las secciones (lo rellena engineer.js). Los motivadores viven
+       ahora como pestaña dentro de <engineer-space> (RMR-TSK-0260). -->
   <engineer-space></engineer-space>
 
   <script>
@@ -85,29 +74,4 @@ import Base from '../../layouts/Base.astro';
   .play-cta:hover { filter: brightness(1.08); }
   .play-cta:focus-visible { outline: 2px solid var(--rm-accent); outline-offset: 2px; }
   .me-error { color: var(--rm-danger); font-size: 0.9rem; margin: 0.75rem 0 0; }
-
-  .games {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 0.75rem;
-    margin: 0 0 1.75rem;
-  }
-  .game-card {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.85rem 1rem;
-    border: 1px solid var(--rm-border);
-    border-left: 4px solid var(--rm-accent);
-    border-radius: var(--rm-radius);
-    background: var(--rm-surface);
-    text-decoration: none;
-  }
-  .game-card.affective { border-left-color: var(--gr-coral, #e26d5e); }
-  .game-card:hover { background: var(--rm-surface-hover); }
-  .game-card:focus-visible { outline: 2px solid var(--rm-accent); outline-offset: 2px; }
-  .game-emoji { font-size: 1.5rem; }
-  .game-text { display: flex; flex-direction: column; }
-  .game-text strong { color: var(--rm-text); font-size: 0.98rem; }
-  .game-text small { color: var(--rm-muted); font-size: 0.82rem; }
 </style>
