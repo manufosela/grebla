@@ -1,7 +1,7 @@
 /**
  * Editor del juego (JG-16): VALIDACIONES puras del contenido del mapa.
  *
- * El superadmin edita casas de las islas y rutas de rol desde /admin/juego;
+ * El superadmin edita casas de las islas y rutas de rol desde el panel (pestaña «Mapa de carrera»);
  * antes de escribir en Firestore, estas funciones (sin Firestore ni DOM)
  * deciden si el contenido es coherente: ids con formato y únicos, prereqs
  * existentes y sin ciclos, comarca existente, paradas de ruta reales y sin
