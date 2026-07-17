@@ -6,7 +6,7 @@
  *
  * La lógica pura (claves de día/semana, saneado) vive en tools/pulse/domain.
  */
-import { doc, collection, getDoc, getDocs, setDoc, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, getDoc, getDocs, setDoc, onSnapshot, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { dayKey, isoWeekKey, sanitizePulse } from '../tools/pulse/domain/pulse.js';
 
@@ -24,6 +24,36 @@ export function currentWeekKey(date = new Date()) {
 export async function getPulseAggregate(weekIso) {
   const snap = await getDoc(doc(db, 'pulseAggregates', weekIso));
   return snap.exists() ? snap.data() : null;
+}
+
+/**
+ * Suscripción EN VIVO al agregado de una semana (RMR-TSK-0252): Firestore es
+ * realtime, así que la vista se actualiza sola cuando cambia el agregado (sin
+ * botón «Actualizar»). Devuelve la función para desuscribir.
+ * @param {string} weekIso
+ * @param {(agg: import('firebase/firestore').DocumentData|null) => void} onData
+ * @param {(err: Error) => void} [onError]
+ * @returns {import('firebase/firestore').Unsubscribe}
+ */
+export function watchPulseAggregate(weekIso, onData, onError) {
+  return onSnapshot(
+    doc(db, 'pulseAggregates', weekIso),
+    (snap) => onData(snap.exists() ? snap.data() : null),
+    onError,
+  );
+}
+
+/**
+ * Suscripción EN VIVO al histórico reciente de mareas del usuario (RMR-TSK-0252),
+ * para que «Mi evolución» se actualice sola. Devuelve la función para desuscribir.
+ * @param {string} uid @param {number} max
+ * @param {(entries: import('firebase/firestore').DocumentData[]) => void} onData
+ * @param {(err: Error) => void} [onError]
+ * @returns {import('firebase/firestore').Unsubscribe}
+ */
+export function watchMyPulseHistory(uid, max, onData, onError) {
+  const q = query(collection(db, 'pulse', uid, 'entries'), orderBy('day', 'desc'), limit(max));
+  return onSnapshot(q, (snap) => onData(snap.docs.map((d) => d.data())), onError);
 }
 
 /**
