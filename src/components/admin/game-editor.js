@@ -26,11 +26,13 @@ import {
   getArchipelago,
   getCareerMap,
   saveCareerMap,
+  deleteCareerMap,
   saveArchipelago,
   listAllCareerRoutes,
   saveCareerRoute,
   deleteCareerRoute,
 } from '../../lib/careerMap.js';
+import { START_ISLAND_ID } from '../../tools/career/data/archipelago.js';
 import { RESOURCE_KINDS } from '../../tools/career/domain/types.js';
 import {
   validateCity,
@@ -170,7 +172,8 @@ export class GameEditor extends LitElement {
     _routes: { state: true },
     _islandId: { state: true },
     _areaTab: { state: true },
-    _addIslandDraft: { state: true },
+    _islandDraft: { state: true },
+    _confirmIsland: { state: true },
     _comarcaEdit: { state: true },
     _cityForm: { state: true },
     _confirmCity: { state: true },
@@ -218,7 +221,8 @@ export class GameEditor extends LitElement {
     .itab { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-track, #f3f4f6); color: var(--rm-text, #374151); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     .itab:hover { border-color: var(--rm-accent, #3b82f6); }
     .itab.active { background: var(--rm-brand, #1e3a5f); border-color: var(--rm-brand, #1e3a5f); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }
-    .island-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.6rem; }
+    .island-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .island-title-wrap { display: inline-flex; align-items: center; gap: 0.4rem; }
     .island-title { margin: 0; font-size: 1.2rem; color: var(--rm-brand, #1e3a5f); }
     .area-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 1rem; }
     .atab { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
@@ -345,8 +349,10 @@ export class GameEditor extends LitElement {
     this._islandId = '';
     /** Comarca (área) activa dentro de la isla (RMR-TSK-0257). */
     this._areaTab = '';
-    /** Borrador del popup de alta de isla, o null si está cerrado. */
-    this._addIslandDraft = null;
+    /** Borrador del popup de isla (alta o edición), o null si está cerrado. */
+    this._islandDraft = null;
+    /** Isla pendiente de confirmar borrado, o null. */
+    this._confirmIsland = null;
     /** Edición inline de comarca: { areaId|null (null = nueva), name } o null. */
     this._comarcaEdit = null;
     /** @type {{ originalId: string|null, draft: ReturnType<typeof cityDraft>, errors: string[] }|null} */
@@ -627,12 +633,83 @@ export class GameEditor extends LitElement {
     if (ok && this._areaTab === area.id) this._areaTab = areas.at(0)?.id ?? '';
   }
 
-  _openAddIsland() { this._addIslandDraft = { id: '', name: '', shortName: '' }; this._error = ''; }
-  _closeAddIsland() { this._addIslandDraft = null; }
-  _setIslandDraft(key, value) { this._addIslandDraft = { ...this._addIslandDraft, [key]: value }; }
+  _openAddIsland() { this._islandDraft = { editing: false, id: '', name: '', shortName: '' }; this._error = ''; }
+  _openEditIsland() {
+    const island = this._island;
+    if (!island) return;
+    this._islandDraft = { editing: true, id: island.id, name: island.name, shortName: this._archEntry?.shortName ?? '' };
+    this._error = '';
+  }
+  _closeIslandForm() { this._islandDraft = null; }
+  _setIslandDraft(key, value) { this._islandDraft = { ...this._islandDraft, [key]: value }; }
+  _saveIslandForm() { return this._islandDraft?.editing ? this._updateIsland() : this._createIsland(); }
+
+  /** Actualiza nombre (doc + índice) y nombre corto (índice) de la isla actual. */
+  async _updateIsland() {
+    const d = this._islandDraft;
+    const island = this._islands?.get(d?.id);
+    if (!d || !island) return;
+    const name = d.name.trim();
+    const shortName = d.shortName.trim();
+    if (!name) { this._error = 'La isla necesita nombre.'; return; }
+    this._saving = true;
+    this._error = '';
+    try {
+      const nextMap = { ...island, name };
+      await saveCareerMap(d.id, nextMap);
+      this._islands = new Map(this._islands).set(d.id, nextMap);
+      const islands = this._arch.islands.map((i) => {
+        if (i.id !== d.id) return i;
+        const entry = { ...i, name };
+        if (shortName) { entry.shortName = shortName; } else { delete entry.shortName; }
+        return entry;
+      });
+      await saveArchipelago({ islands });
+      this._arch = { islands };
+      this._islandDraft = null;
+      this._flash(`Isla «${name}» actualizada.`);
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo actualizar la isla.';
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  _askDeleteIsland() {
+    const island = this._island;
+    if (!island) return;
+    if (island.id === START_ISLAND_ID) { this._error = 'La isla de inicio no se puede borrar.'; return; }
+    if (island.cities.length > 0) { this._error = `«${island.name}» tiene ${island.cities.length} casa(s): quítalas antes de borrar la isla.`; return; }
+    this._islandDraft = null;
+    this._confirmIsland = island;
+  }
+
+  async _confirmDeleteIsland() {
+    const island = this._confirmIsland;
+    if (!island) return;
+    this._saving = true;
+    this._error = '';
+    try {
+      const islands = this._arch.islands.filter((i) => i.id !== island.id);
+      await saveArchipelago({ islands });
+      await deleteCareerMap(island.id);
+      this._arch = { islands };
+      const next = new Map(this._islands);
+      next.delete(island.id);
+      this._islands = next;
+      this._islandId = islands.at(0)?.id ?? '';
+      this._areaTab = '';
+      this._confirmIsland = null;
+      this._flash(`Isla «${island.name}» borrada.`);
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo borrar la isla.';
+    } finally {
+      this._saving = false;
+    }
+  }
 
   async _createIsland() {
-    const d = this._addIslandDraft;
+    const d = this._islandDraft;
     if (!d) return;
     const name = d.name.trim();
     const id = slugify(d.id.trim() || name);
@@ -652,7 +729,7 @@ export class GameEditor extends LitElement {
       this._islands = new Map(this._islands).set(id, map);
       this._islandId = id;
       this._areaTab = '';
-      this._addIslandDraft = null;
+      this._islandDraft = null;
       this._flash(`Isla «${name}» creada. Añádele comarcas y casas.`);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo crear la isla.';
@@ -814,7 +891,8 @@ export class GameEditor extends LitElement {
         </nav>
         ${island ? this._renderIslandBody(island) : html`<p class="empty">Selecciona una isla o crea una nueva con «＋ Isla».</p>`}
       </section>
-      ${this._addIslandDraft ? this._renderAddIslandModal() : null}
+      ${this._islandDraft ? this._renderIslandFormModal() : null}
+      ${this._renderDeleteIslandModal()}
       ${this._cityForm ? this._renderCityForm(island) : null}
     `;
   }
@@ -826,7 +904,13 @@ export class GameEditor extends LitElement {
     const cities = island.cities.filter((c) => c.area === activeArea);
     return html`
       <div class="island-head">
-        <h3 class="island-title">${island.name}</h3>
+        <div class="island-title-wrap">
+          <h3 class="island-title">${island.name}</h3>
+          <button class="mini" title="Editar isla (nombre, nombre corto)" @click=${this._openEditIsland}>✎</button>
+          ${island.id === START_ISLAND_ID
+            ? null
+            : html`<button class="mini danger" title="Borrar isla" ?disabled=${this._saving} @click=${this._askDeleteIsland}>✕</button>`}
+        </div>
         <button class="primary" ?disabled=${this._saving || !areas.length} @click=${this._openAddCity} title=${areas.length ? '' : 'Añade una comarca antes de crear casas'}>＋ Añadir casa</button>
       </div>
       <nav class="area-tabs" role="tablist" aria-label="Comarcas de la isla">
@@ -892,10 +976,16 @@ export class GameEditor extends LitElement {
       </div>`;
   }
 
-  /** Popup de alta de isla (RMR-TSK-0257). */
-  _renderAddIslandModal() {
-    const d = this._addIslandDraft;
-    return html`<app-modal .open=${true} heading="Añadir isla" @close=${this._closeAddIsland}>
+  /** Popup de isla: alta (RMR-TSK-0257) o edición (RMR-TSK-0258). */
+  _renderIslandFormModal() {
+    const d = this._islandDraft;
+    const editing = d.editing === true;
+    let saveLabel = editing ? 'Guardar cambios' : 'Crear isla';
+    if (this._saving) saveLabel = 'Guardando…';
+    const idHint = editing
+      ? 'El id no se cambia: lo referencian casas, rutas y journeys.'
+      : 'Id del doc y prefijo de las casas. No se puede cambiar luego.';
+    return html`<app-modal .open=${true} heading=${editing ? 'Editar isla' : 'Añadir isla'} @close=${this._closeIslandForm}>
       <div class="island-form">
         <label>Nombre
           <input type="text" .value=${d.name} placeholder="p. ej. Frontend"
@@ -904,14 +994,30 @@ export class GameEditor extends LitElement {
           <input type="text" .value=${d.shortName} placeholder="p. ej. FE"
             @input=${(e) => this._setIslandDraft('shortName', e.target.value)} /></label>
         <label>Id / disciplina
-          <input type="text" .value=${d.id} placeholder="se genera del nombre si lo dejas vacío"
+          <input type="text" .value=${d.id} ?disabled=${editing}
+            placeholder="se genera del nombre si lo dejas vacío"
             @input=${(e) => this._setIslandDraft('id', e.target.value)} />
-          <small class="muted">Id del doc y prefijo de las casas. No se puede cambiar luego.</small></label>
+          <small class="muted">${idHint}</small></label>
         ${this._error ? html`<p class="error">${this._error}</p>` : null}
       </div>
       <div class="modal-actions">
-        <button ?disabled=${this._saving} @click=${this._closeAddIsland}>Cancelar</button>
-        <button class="primary" ?disabled=${this._saving} @click=${this._createIsland}>${this._saving ? 'Creando…' : 'Crear isla'}</button>
+        <button ?disabled=${this._saving} @click=${this._closeIslandForm}>Cancelar</button>
+        <button class="primary" ?disabled=${this._saving} @click=${this._saveIslandForm}>${saveLabel}</button>
+      </div>
+    </app-modal>`;
+  }
+
+  /** Confirmación de borrado de isla (RMR-TSK-0258). */
+  _renderDeleteIslandModal() {
+    const island = this._confirmIsland;
+    if (!island) return null;
+    const heading = `Borrar «${island.name}»`;
+    return html`<app-modal .open=${true} heading=${heading} @close=${() => { this._confirmIsland = null; }}>
+      <p>Se borrará la isla <strong>${island.id}</strong> del archipiélago y su documento.</p>
+      <p class="muted">Solo se borran islas sin casas: sus rutas y journeys no se ven afectados.</p>
+      <div class="modal-actions">
+        <button ?disabled=${this._saving} @click=${() => { this._confirmIsland = null; }}>Cancelar</button>
+        <button class="danger" ?disabled=${this._saving} @click=${this._confirmDeleteIsland}>${this._saving ? 'Borrando…' : 'Borrar isla'}</button>
       </div>
     </app-modal>`;
   }
