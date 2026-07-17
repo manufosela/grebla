@@ -68,6 +68,20 @@ export async function saveCareerMap(islandId, map) {
 }
 
 /**
+ * Borra el documento de una isla (RMR-TSK-0258). NO toca el índice del
+ * archipiélago (lo hace el editor aparte). Nunca borra el doc índice.
+ * @param {string} islandId
+ * @returns {Promise<void>}
+ */
+export async function deleteCareerMap(islandId) {
+  const id = String(islandId ?? '').trim();
+  if (!id || id === ARCHIPELAGO_DOC) {
+    throw new Error(`Id de isla inválido para borrar el mapa: "${islandId}".`);
+  }
+  await deleteDoc(mapDoc(id));
+}
+
+/**
  * Lee el índice del archipiélago. Si el documento no existe todavía devuelve
  * la semilla en código (las 13 islas del ADR).
  * @returns {Promise<Archipelago>}

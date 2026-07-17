@@ -113,7 +113,7 @@ function normalizeIslandRef(ref) {
   const discipline = String(ref?.discipline ?? '').trim();
   if (discipline) out.discipline = discipline;
   // Nombre corto para las pestañas del editor (RMR-TSK-0257); opcional.
-  const shortName = String(ref?.shortName ?? '').trim();
+  const shortName = typeof ref?.shortName === 'string' ? ref.shortName.trim() : '';
   if (shortName) out.shortName = shortName;
   if (ref?.startIsland === true) out.startIsland = true;
   return out;
