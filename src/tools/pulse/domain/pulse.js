@@ -46,6 +46,18 @@ export function isoWeekKey(date = new Date()) {
 }
 
 /**
+ * Descompone una clave de semana ISO ("2026-W29") en año y número de semana, para
+ * mostrar el título («Semana 29 · 2026»). Devuelve null si el formato no encaja.
+ * @param {string} weekIso
+ * @returns {{ year: number, week: number }|null}
+ */
+export function parseWeekIso(weekIso) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(String(weekIso ?? ''));
+  if (!match) return null;
+  return { year: Number(match[1]), week: Number(match[2]) };
+}
+
+/**
  * Lectura (nombre náutico + matiz) del cuadrante según energía y ánimo (0..100).
  * Compartida por la pantalla de rellenar y por Resultados.
  * @param {number} energia @param {number} animo

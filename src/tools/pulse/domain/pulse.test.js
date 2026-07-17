@@ -2,7 +2,7 @@
  * Tests del dominio puro de Marea (RMR-TSK-0234): claves de día/semana y saneado.
  */
 import { describe, it, expect } from 'vitest';
-import { dayKey, isoWeekKey, sanitizePulse, PULSE_DIMS, PULSE_WORD_MAX } from './pulse.js';
+import { dayKey, isoWeekKey, parseWeekIso, sanitizePulse, PULSE_DIMS, PULSE_WORD_MAX } from './pulse.js';
 
 describe('dayKey', () => {
   it('formatea YYYY-MM-DD en hora local con ceros', () => {
@@ -25,6 +25,18 @@ describe('isoWeekKey', () => {
     const vie = isoWeekKey(new Date(Date.UTC(2026, 6, 17))); // viernes
     expect(lun).toBe('2026-W29');
     expect(vie).toBe('2026-W29');
+  });
+});
+
+describe('parseWeekIso', () => {
+  it('descompone año y semana', () => {
+    expect(parseWeekIso('2026-W29')).toEqual({ year: 2026, week: 29 });
+    expect(parseWeekIso('2025-W01')).toEqual({ year: 2025, week: 1 });
+  });
+  it('devuelve null con formato inválido', () => {
+    expect(parseWeekIso('2026-29')).toBeNull();
+    expect(parseWeekIso('')).toBeNull();
+    expect(parseWeekIso(null)).toBeNull();
   });
 });
 

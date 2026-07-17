@@ -5,8 +5,8 @@
  * Solo medias y recuentos; nunca datos individuales, y solo grupos con >=3.
  */
 import { LitElement, html, css } from 'lit';
-import { getPulseAggregate, getRecentPulseAggregates, currentWeekKey } from '../../lib/pulse.js';
-import { pulseReading } from '../../tools/pulse/domain/pulse.js';
+import { watchPulseAggregate, getRecentPulseAggregates } from '../../lib/pulse.js';
+import { pulseReading, isoWeekKey, parseWeekIso } from '../../tools/pulse/domain/pulse.js';
 import { teamSignals } from '../../tools/pulse/domain/trends.js';
 import { sparkline } from './sparkline.js';
 
@@ -44,14 +44,6 @@ function readingColor(name) {
 }
 
 export class MareaResults extends LitElement {
-  static properties = {
-    _agg: { state: true },
-    _weeks: { state: true },
-    _scope: { state: true },
-    _loading: { state: true },
-    _error: { state: true },
-  };
-
   static styles = css`
     :host { display: block; --coral: var(--gr-coral, #f2887a); --teal: var(--gr-teal, #2a9d8f); --navy: var(--gr-navy, #1e3a5f); --amber: #d1902f; }
     .meta { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
@@ -114,9 +106,23 @@ export class MareaResults extends LitElement {
     .signal.warn { border-left-color: var(--amber); } .signal.warn .dot { background: var(--amber); }
     .signal.good { border-left-color: var(--teal); } .signal.good .dot { background: var(--teal); }
     .signal.info { border-left-color: var(--rm-border, #dde7ec); }
-    .refresh { margin-top: 1.2rem; }
-    .refresh button { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .weeknav { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.15rem; }
+    .weeknav .wk { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 999px; width: 32px; height: 32px; font-size: 1.15rem; line-height: 1; cursor: pointer; display: inline-grid; place-items: center; }
+    .weeknav .wk:disabled { opacity: 0.4; cursor: default; }
+    .weeknav .wk:hover:not(:disabled) { border-color: var(--teal); }
+    .weeknav .wk:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+    .weeknav .wk-title { font-weight: 700; font-size: 0.95rem; color: var(--rm-text, #1e3a5f); font-variant-numeric: tabular-nums; }
+    .weeknav .wk-now { font-weight: 400; font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
   `;
+
+  static properties = {
+    _agg: { state: true },
+    _weeks: { state: true },
+    _scope: { state: true },
+    _weekOffset: { state: true },
+    _loading: { state: true },
+    _error: { state: true },
+  };
 
   constructor() {
     super();
@@ -124,26 +130,48 @@ export class MareaResults extends LitElement {
     this._weeks = [];
     this._weeksLoaded = false;
     this._scope = 'general';
+    this._weekOffset = 0; // 0 = semana actual; N = N semanas atrás
     this._loading = false;
     this._error = '';
-    this._loaded = false;
+    this._unsub = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    if (!this._loaded) { this._loaded = true; this._load(); }
+    this._subscribe();
   }
 
-  async _load() {
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._unsub?.();
+    this._unsub = null;
+  }
+
+  /** Clave ISO de la semana que se está viendo (según el offset). */
+  _weekIso() {
+    const ms = Date.now() - this._weekOffset * 7 * 24 * 60 * 60 * 1000;
+    return isoWeekKey(new Date(ms));
+  }
+
+  /** (Re)suscribe EN VIVO al agregado de la semana visible (RMR-TSK-0252). */
+  _subscribe() {
+    this._unsub?.();
     this._loading = true;
     this._error = '';
-    try {
-      this._agg = await getPulseAggregate(currentWeekKey());
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudieron cargar los resultados.';
-    } finally {
-      this._loading = false;
-    }
+    this._agg = null;
+    this._unsub = watchPulseAggregate(
+      this._weekIso(),
+      (agg) => { this._agg = agg; this._loading = false; },
+      (err) => { this._error = err instanceof Error ? err.message : 'No se pudieron cargar los resultados.'; this._loading = false; },
+    );
+  }
+
+  /** Navega a una semana anterior (offset+1) o posterior (offset−1, tope en 0). */
+  _shiftWeek(delta) {
+    const next = Math.max(0, this._weekOffset + delta);
+    if (next === this._weekOffset) return;
+    this._weekOffset = next;
+    this._subscribe();
   }
 
   /** ¿La barra merece color de atención? Carga alta o el resto bajo. */
@@ -285,8 +313,27 @@ export class MareaResults extends LitElement {
       ${this._renderSignals(teamSignals(weeks))}`;
   }
 
-  render() {
+  /** Título de la semana visible + navegación (RMR-TSK-0252). Solo semanas pasadas y la actual. */
+  _renderWeekNav() {
+    const parsed = parseWeekIso(this._weekIso());
+    const title = parsed ? `Semana ${parsed.week} · ${parsed.year}` : this._weekIso();
+    const isCurrent = this._weekOffset === 0;
+    return html`
+      <div class="weeknav">
+        <button class="wk" @click=${() => this._shiftWeek(1)} aria-label="Semana anterior" title="Semana anterior">‹</button>
+        <span class="wk-title">${title}${isCurrent ? html` <span class="wk-now">· esta semana</span>` : ''}</span>
+        <button class="wk" @click=${() => this._shiftWeek(-1)} ?disabled=${isCurrent} aria-label="Semana siguiente" title="Semana siguiente">›</button>
+      </div>`;
+  }
+
+  _renderBody() {
+    if (this._error) return html`<p class="error">${this._error}</p>`;
+    if (this._scope === 'trends') return this._renderTrends();
     if (this._loading && !this._agg) return html`<p class="empty">Cargando resultados…</p>`;
+    return this._renderScope();
+  }
+
+  render() {
     const respondents = this._agg?.respondents ?? 0;
     const total = this._agg?.totalPeople;
     return html`
@@ -298,8 +345,8 @@ export class MareaResults extends LitElement {
         ${SCOPES.map(([id, label]) => html`
           <button role="tab" aria-selected=${this._scope === id} @click=${() => { this._scope = id; if (id === 'trends') this._loadTrends(); }}>${label}</button>`)}
       </div>
-      ${this._error ? html`<p class="error">${this._error}</p>` : this._renderScope()}
-      <div class="refresh"><button @click=${() => this._load()} ?disabled=${this._loading}>${this._loading ? 'Actualizando…' : 'Actualizar'}</button></div>
+      ${this._scope === 'trends' ? null : this._renderWeekNav()}
+      ${this._renderBody()}
     `;
   }
 }

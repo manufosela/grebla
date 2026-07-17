@@ -6,7 +6,7 @@
  * empeora). Nadie más la ve: no hay agregado ni exposición al manager.
  */
 import { LitElement, html, css } from 'lit';
-import { getMyPulseHistory } from '../../lib/pulse.js';
+import { watchMyPulseHistory } from '../../lib/pulse.js';
 import { pulseReading } from '../../tools/pulse/domain/pulse.js';
 import { weeklyMeans, netTrend, trendSentiment } from '../../tools/pulse/domain/evolution.js';
 import { sparkline } from './sparkline.js';
@@ -69,8 +69,6 @@ export class MareaEvolution extends LitElement {
     .chip.up { color: #0c1420; background: color-mix(in srgb, var(--teal) 35%, transparent); }
     .chip.down { color: var(--rm-danger, #b91c1c); background: color-mix(in srgb, var(--coral) 30%, transparent); }
     .chip.flat { color: var(--rm-muted, #5b6b7d); background: var(--rm-surface-hover, #eef3f5); }
-    .refresh { margin-top: 1.2rem; }
-    .refresh button { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
   `;
 
   constructor() {
@@ -79,31 +77,37 @@ export class MareaEvolution extends LitElement {
     this._weeks = [];
     this._loading = false;
     this._error = '';
-    this._loaded = false;
+    this._unsub = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    if (!this._loaded && this.uid) { this._loaded = true; this._load(); }
+    if (this.uid) this._subscribe();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._unsub?.();
+    this._unsub = null;
   }
 
   updated(changed) {
     // El uid puede llegar después de montar (lo inyecta el glue tras resolver auth).
-    if (changed.has('uid') && this.uid && !this._loaded) { this._loaded = true; this._load(); }
+    if (changed.has('uid') && this.uid && !this._unsub) this._subscribe();
   }
 
-  async _load() {
+  /** Suscripción EN VIVO al histórico: la evolución se actualiza sola (RMR-TSK-0252). */
+  _subscribe() {
     if (!this.uid) return;
+    this._unsub?.();
     this._loading = true;
     this._error = '';
-    try {
-      const history = await getMyPulseHistory(this.uid, 90);
-      this._weeks = weeklyMeans(history);
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo cargar tu evolución.';
-    } finally {
-      this._loading = false;
-    }
+    this._unsub = watchMyPulseHistory(
+      this.uid,
+      90,
+      (history) => { this._weeks = weeklyMeans(history); this._loading = false; },
+      (err) => { this._error = err instanceof Error ? err.message : 'No se pudo cargar tu evolución.'; this._loading = false; },
+    );
   }
 
   /** Sparkline (helper compartido): values (0..100) de más antigua a más reciente. */
@@ -146,7 +150,6 @@ export class MareaEvolution extends LitElement {
         ? html`<p class="empty">Con una sola semana aún no hay tendencia: la trayectoria gana sentido a partir de la segunda.</p>`
         : null}
       <div class="rows">${DIMS.map((d) => this._renderRow(d))}</div>
-      <div class="refresh"><button @click=${() => this._load()} ?disabled=${this._loading}>${this._loading ? 'Actualizando…' : 'Actualizar'}</button></div>
     `;
   }
 }
