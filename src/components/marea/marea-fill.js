@@ -9,7 +9,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { saveMyPulse, getMyCurrentWeekPulse } from '../../lib/pulse.js';
-import { pulseReading, dayKey } from '../../tools/pulse/domain/pulse.js';
+import { pulseReading, dayKey, isoWeekKey, parseWeekIso } from '../../tools/pulse/domain/pulse.js';
 
 /** Anclas: clave de estado, etiqueta y extremos (bajo↔alto). */
 const ANCHORS = [
@@ -39,6 +39,9 @@ export class MareaFill extends LitElement {
 
   static styles = css`
     :host { display: block; --coral: var(--gr-coral, #f2887a); --teal: var(--gr-teal, #2a9d8f); --navy: var(--gr-navy, #1e3a5f); }
+    .wk-head { display: flex; flex-direction: column; gap: 0.1rem; margin: 0 0 0.9rem; }
+    .wk-head .wk-title { font-weight: 800; font-size: 1.55rem; line-height: 1.05; color: var(--rm-text, #1e3a5f); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+    .wk-head .wk-sub { font-weight: 500; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     .lead { margin: 0 0 1.2rem; color: var(--rm-muted, #5b6b7d); font-size: 0.92rem; max-width: 54ch; }
     .lead b { color: var(--rm-text, #1e3a5f); }
     .fill { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(1.1rem, 3vw, 2rem); align-items: start; }
@@ -217,7 +220,9 @@ export class MareaFill extends LitElement {
   render() {
     const read = pulseReading(this._energia, this._animo);
     let dragging = false;
+    const week = parseWeekIso(isoWeekKey());
     return html`
+      ${week ? html`<h2 class="wk-head"><span class="wk-title">Semana ${week.week}</span><span class="wk-sub">${week.year} · tu marea de esta semana</span></h2>` : null}
       <p class="lead">Coloca tu boya según tu <b>energía</b> y tu <b>ánimo</b>, y ajusta las cuatro anclas. No hay respuesta correcta: una marea sube y baja.</p>
       ${this._renderStatus()}
       <div class="fill">
