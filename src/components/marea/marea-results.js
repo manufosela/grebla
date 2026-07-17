@@ -317,9 +317,10 @@ export class MareaResults extends LitElement {
   /** Título de la semana visible + navegación (RMR-TSK-0252, RMR-BUG-0039). */
   _renderWeekNav() {
     const parsed = parseWeekIso(this._weekIso());
-    const week = parsed ? `Semana ${parsed.week}` : this._weekIso();
-    const sub = parsed ? `${parsed.year}${this._weekOffset === 0 ? ' · esta semana' : ''}` : '';
     const isCurrent = this._weekOffset === 0;
+    const week = parsed ? `Semana ${parsed.week}` : this._weekIso();
+    let sub = '';
+    if (parsed) sub = isCurrent ? `${parsed.year} · esta semana` : String(parsed.year);
     return html`
       <div class="weeknav">
         <button class="wk" @click=${() => this._shiftWeek(1)} aria-label="Semana anterior" title="Semana anterior">‹</button>
