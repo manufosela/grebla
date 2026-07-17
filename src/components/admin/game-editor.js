@@ -20,7 +20,7 @@
  * Propiedades:
  *  - ready: boolean  (lo activa el glue cuando hay sesión de superadmin)
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, svg } from 'lit';
 import '../app-modal.js';
 import {
   getArchipelago,
@@ -46,6 +46,7 @@ import {
 } from '../../tools/career/domain/mapEditor.js';
 import { ROUTE_TIER_KEYS, routeDocId } from '../../tools/career/domain/careerRoutes.js';
 import { insertRouteAt } from '../../tools/career/domain/route.js';
+import { shapeForArea, houseShapePath, HOUSE_SHAPE_LABEL } from '../../tools/career/domain/houseShapes.js';
 
 /** Rótulos humanos del tipo de casa. */
 const KIND_LABEL = Object.freeze({ tech: 'Tecnología', skill: 'Skill', milestone: 'Hito' });
@@ -64,6 +65,13 @@ function slugify(text) {
     .replaceAll(/[^a-z0-9]+/gu, '-')
     .replace(/^-/u, '')
     .replace(/-$/u, '');
+}
+
+/** Coordenada de isla en el mar: entero 0..100 (por defecto 50). */
+function clampCoord(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 50;
+  return Math.min(100, Math.max(0, n));
 }
 
 /** Borrador del formulario de casa a partir de una casa existente (o vacío).
@@ -166,6 +174,7 @@ function routeDraft(route) {
 export class GameEditor extends LitElement {
   static properties = {
     ready: { attribute: false },
+    embedded: { attribute: false },
     _tab: { state: true },
     _arch: { state: true },
     _islands: { state: true },
@@ -229,6 +238,9 @@ export class GameEditor extends LitElement {
     .atab:hover { color: var(--rm-text, #111827); border-color: var(--rm-accent, #3b82f6); }
     .atab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
     .atab .cnt { font-variant-numeric: tabular-nums; opacity: 0.75; margin-left: 0.2rem; }
+    .shape-glyph { vertical-align: -1px; fill: currentColor; opacity: 0.85; }
+    .island-xy { display: flex; gap: 0.8rem; }
+    .island-xy label { flex: 1; }
     .comarca-actions, .comarca-edit { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: 0.4rem; }
     .comarca-edit input { padding: 0.28rem 0.5rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; font: inherit; font-size: 0.82rem; }
     .house-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
@@ -337,6 +349,7 @@ export class GameEditor extends LitElement {
   constructor() {
     super();
     this.ready = false;
+    this.embedded = false; // true cuando vive dentro del panel (oculta su cabecera)
     this._loaded = false;
     /** @type {'islands'|'routes'} */
     this._tab = 'islands';
@@ -633,11 +646,15 @@ export class GameEditor extends LitElement {
     if (ok && this._areaTab === area.id) this._areaTab = areas.at(0)?.id ?? '';
   }
 
-  _openAddIsland() { this._islandDraft = { editing: false, id: '', name: '', shortName: '' }; this._error = ''; }
+  _openAddIsland() { this._islandDraft = { editing: false, id: '', name: '', shortName: '', x: '50', y: '50' }; this._error = ''; }
   _openEditIsland() {
     const island = this._island;
     if (!island) return;
-    this._islandDraft = { editing: true, id: island.id, name: island.name, shortName: this._archEntry?.shortName ?? '' };
+    const entry = this._archEntry;
+    this._islandDraft = {
+      editing: true, id: island.id, name: island.name, shortName: entry?.shortName ?? '',
+      x: String(entry?.x ?? 50), y: String(entry?.y ?? 50),
+    };
     this._error = '';
   }
   _closeIslandForm() { this._islandDraft = null; }
@@ -652,6 +669,8 @@ export class GameEditor extends LitElement {
     const name = d.name.trim();
     const shortName = d.shortName.trim();
     if (!name) { this._error = 'La isla necesita nombre.'; return; }
+    const x = clampCoord(d.x);
+    const y = clampCoord(d.y);
     this._saving = true;
     this._error = '';
     try {
@@ -660,7 +679,7 @@ export class GameEditor extends LitElement {
       this._islands = new Map(this._islands).set(d.id, nextMap);
       const islands = this._arch.islands.map((i) => {
         if (i.id !== d.id) return i;
-        const entry = { ...i, name };
+        const entry = { ...i, name, x, y };
         if (shortName) { entry.shortName = shortName; } else { delete entry.shortName; }
         return entry;
       });
@@ -721,7 +740,7 @@ export class GameEditor extends LitElement {
     this._error = '';
     try {
       await saveCareerMap(id, map);
-      const entry = { id, name, discipline: id, x: 50, y: 50, citizenshipPct: 60, citiesTotal: 0 };
+      const entry = { id, name, discipline: id, x: clampCoord(d.x), y: clampCoord(d.y), citizenshipPct: 60, citiesTotal: 0 };
       if (shortName) entry.shortName = shortName;
       const islands = [...(this._arch?.islands ?? []), entry];
       await saveArchipelago({ islands });
@@ -856,10 +875,12 @@ export class GameEditor extends LitElement {
     const islandsClass = this._tab === 'islands' ? 'tab active' : 'tab';
     const routesClass = this._tab === 'routes' ? 'tab active' : 'tab';
     return html`
-      <div class="bar">
-        <h1>🎮 Editor del juego</h1>
-        <a href="/admin">← Volver a gestión</a>
-      </div>
+      ${this.embedded
+        ? null
+        : html`<div class="bar">
+            <h1>🎮 Editor del juego</h1>
+            <a href="/admin">← Volver a gestión</a>
+          </div>`}
       <nav class="tabs" aria-label="Secciones del editor">
         <button class=${islandsClass} @click=${() => { this._tab = 'islands'; }}>🏝️ Islas</button>
         <button class=${routesClass} @click=${() => { this._tab = 'routes'; }}>🗺️ Rutas</button>
@@ -918,7 +939,7 @@ export class GameEditor extends LitElement {
           const n = island.cities.filter((c) => c.area === a.id).length;
           return html`<button role="tab" aria-selected=${a.id === activeArea}
             class=${a.id === activeArea ? 'atab active' : 'atab'}
-            @click=${() => { this._areaTab = a.id; }}>${a.name} <span class="cnt">${n}</span></button>`;
+            @click=${() => { this._areaTab = a.id; }}>${this._renderShapeGlyph(shapeForArea(a.id, areas))} ${a.name} <span class="cnt">${n}</span></button>`;
         })}
         ${this._renderComarcaControls(activeArea, areas)}
       </nav>
@@ -935,6 +956,13 @@ export class GameEditor extends LitElement {
       return html`<p class="empty">Esta comarca no tiene casas. Añade la primera con «＋ Añadir casa».</p>`;
     }
     return html`<div class="house-grid">${cities.map((c) => this._renderHouseCard(c))}</div>`;
+  }
+
+  /** Glifo de la forma de casa de una comarca (pista visual, RMR-TSK-0259). */
+  _renderShapeGlyph(shape) {
+    const d = houseShapePath(shape, 10, 10, 7);
+    const inner = d ? svg`<path d=${d} />` : svg`<circle cx="10" cy="10" r="7" />`;
+    return svg`<svg class="shape-glyph" width="13" height="13" viewBox="0 0 20 20" role="img" aria-label=${HOUSE_SHAPE_LABEL[shape] ?? shape}>${inner}</svg>`;
   }
 
   /** Controles de comarca: editar en curso, o botones de renombrar/quitar/añadir. */
@@ -998,6 +1026,15 @@ export class GameEditor extends LitElement {
             placeholder="se genera del nombre si lo dejas vacío"
             @input=${(e) => this._setIslandDraft('id', e.target.value)} />
           <small class="muted">${idHint}</small></label>
+        <div class="island-xy">
+          <label>Posición X (mar)
+            <input type="number" min="0" max="100" .value=${d.x}
+              @input=${(e) => this._setIslandDraft('x', e.target.value)} /></label>
+          <label>Posición Y (mar)
+            <input type="number" min="0" max="100" .value=${d.y}
+              @input=${(e) => this._setIslandDraft('y', e.target.value)} /></label>
+        </div>
+        <small class="muted">Dónde aparece la isla en el mapa del archipiélago (0–100).</small>
         ${this._error ? html`<p class="error">${this._error}</p>` : null}
       </div>
       <div class="modal-actions">

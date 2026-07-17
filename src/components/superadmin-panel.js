@@ -12,9 +12,9 @@
  *  - isLeader: boolean  (si el superadmin también es manager → botón "Usar como manager")
  *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
-import { LitElement, html, css, svg } from 'lit';
+import { LitElement, html, css } from 'lit';
 import './app-modal.js';
-import { shapeForArea, houseShapePath, HOUSE_SHAPE_LABEL } from '../tools/career/domain/houseShapes.js';
+import './admin/game-editor.js';
 import { listLeaders, addLeaderByEmail, removeLeader, renameLeader, grantAdminByEmail } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
@@ -22,9 +22,6 @@ import { listAllUsers, setUserRole, setUserDisplayName, listLinkedUids, assignUs
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
-import { getCareerMap, saveCareerMap, getArchipelago, saveArchipelago } from '../lib/careerMap.js';
-import { emptyCareerMap } from '../tools/career/data/maps.js';
-import { RESOURCE_KINDS, RESOURCE_FORMATS } from '../tools/career/domain/types.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 
 const CITY_KINDS = ['tech', 'skill', 'milestone'];
@@ -104,17 +101,6 @@ export class SuperadminPanel extends LitElement {
     _superadminNotice: { state: true },
     _editUserUid: { state: true },
     _editUserName: { state: true },
-    _careerMap: { state: true },
-    _archipelago: { state: true },
-    _mapIsland: { state: true },
-    _newIsland: { state: true },
-    _newArea: { state: true },
-    _newCity: { state: true },
-    _confirmArea: { state: true },
-    _confirmCity: { state: true },
-    _mapError: { state: true },
-    _mapNotice: { state: true },
-    _mapSaving: { state: true },
     _framework: { state: true },
     _fwNew: { state: true },
     _fwExpLevel: { state: true },
@@ -139,12 +125,6 @@ export class SuperadminPanel extends LitElement {
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .bar h1 { font-size: 1.4rem; margin: 0; }
-    .gamelink {
-      display: inline-block; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
-      color: var(--rm-text, #111827); border-radius: 8px; padding: 0.45rem 0.9rem;
-      font-size: 0.85rem; font-weight: 600; text-decoration: none;
-    }
-    .gamelink:hover { border-color: var(--rm-accent, #3b82f6); }
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .tab {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
@@ -170,7 +150,6 @@ export class SuperadminPanel extends LitElement {
     .track-group .nested-head .sub { margin: 0; }
     /* Glifo de la forma de casa de una comarca (RMR-TSK-0233): pista visual de
        qué silueta usarán sus casas en el mapa. */
-    .shape-glyph { fill: var(--rm-accent, #2a9d8f); vertical-align: -3px; margin-right: 0.4rem; }
     section {
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
@@ -283,20 +262,6 @@ export class SuperadminPanel extends LitElement {
     this.persistence = null;
     /** @type {string|null} uid del superadmin (para <catalog-manager>) */
     this.currentUid = null;
-    /** @type {import('../tools/career/domain/types.js').CareerMap|null} */
-    this._careerMap = null;
-    /** @type {import('../tools/career/domain/types.js').Archipelago|null} índice de islas (MC-14) */
-    this._archipelago = null;
-    /** @type {string} isla seleccionada en el editor del mapa (MC-14) */
-    this._mapIsland = 'island';
-    this._newIsland = { id: '', name: '' };
-    this._newArea = { id: '', name: '' };
-    this._newCity = { id: '', name: '' };
-    this._confirmArea = null;
-    this._confirmCity = null;
-    this._mapError = '';
-    this._mapNotice = '';
-    this._mapSaving = false;
     /** @type {import('../tools/career/data/framework.js').CareerFramework|null} */
     this._framework = null;
     this._fwNew = { track: '', discipline: '', dimension: '', levelCode: '', levelTitle: '' };
@@ -351,257 +316,12 @@ export class SuperadminPanel extends LitElement {
     if (this.ready && !this._loaded) {
       this._loaded = true;
       this._loadLeaders();
-      this._loadCareerMap();
       this._loadFramework();
       // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
       if (!this.readOnly) this._loadUsers();
     }
   }
 
-
-  // ── Mapa de carrera (editor, multi-isla MC-14) ─────────────────────────────
-
-  /** Nombre de una isla en el índice del archipiélago. @param {string} islandId */
-  _islandName(islandId) {
-    return (this._archipelago?.islands ?? []).find((i) => i.id === islandId)?.name ?? '';
-  }
-
-  /** Carga el índice del archipiélago (una vez) y el mapa de la isla seleccionada. */
-  async _loadCareerMap() {
-    this._mapError = '';
-    try {
-      this._archipelago ??= await getArchipelago();
-      this._careerMap = await getCareerMap(this._mapIsland, this._islandName(this._mapIsland));
-    } catch (err) {
-      this._mapError = err instanceof Error ? err.message : 'No se pudo cargar el mapa de carrera.';
-    }
-  }
-
-  /** Cambia la isla en edición y carga su mapa. @param {string} islandId */
-  async _selectIsland(islandId) {
-    if (islandId === this._mapIsland) return;
-    this._mapIsland = islandId;
-    this._careerMap = null; // «Cargando…» mientras llega la isla nueva
-    this._mapNotice = '';
-    this._confirmArea = null;
-    this._confirmCity = null;
-    await this._loadCareerMap();
-  }
-
-  /**
-   * «Nueva isla» (MC-14): la añade al índice del archipiélago (posición al
-   * centro del mar, editable después) y crea su doc vacío en /careerMap; luego
-   * la deja seleccionada para editarla.
-   */
-  async _addIsland() {
-    const id = slugify(this._newIsland.id || this._newIsland.name);
-    const name = this._newIsland.name.trim();
-    this._mapError = '';
-    if (!id || !name) { this._mapError = 'La isla necesita id y nombre.'; return; }
-    const islands = this._archipelago?.islands ?? [];
-    if (id === '_archipelago' || islands.some((i) => i.id === id)) {
-      this._mapError = `Ya existe la isla «${id}» (o el id está reservado).`;
-      return;
-    }
-    this._mapSaving = true;
-    try {
-      const next = { islands: [...islands, { id, name, x: 50, y: 50 }] };
-      await saveArchipelago(next);
-      await saveCareerMap(id, emptyCareerMap(id, name));
-      this._archipelago = next;
-      this._newIsland = { id: '', name: '' };
-      this._mapNotice = `Isla «${name}» creada.`;
-      this._mapIsland = id;
-      this._careerMap = null;
-      await this._loadCareerMap();
-    } catch (err) {
-      this._mapError = err instanceof Error ? err.message : 'No se pudo crear la isla.';
-    } finally {
-      this._mapSaving = false;
-    }
-  }
-
-  /**
-   * Edición mínima del índice (MC-14): nombre y posición x/y de la isla
-   * seleccionada en el mapa del mar. Se aplica en local; «Guardar índice»
-   * persiste el documento completo.
-   * @param {Partial<import('../tools/career/domain/types.js').IslandRef>} patch
-   */
-  _patchIslandRef(patch) {
-    const islands = (this._archipelago?.islands ?? []).map((i) =>
-      i.id === this._mapIsland ? { ...i, ...patch } : i,
-    );
-    this._archipelago = { islands };
-    this._mapNotice = '';
-  }
-
-  /** Persiste el índice del archipiélago (nombre/posición editados). */
-  async _saveArchipelago() {
-    this._mapError = '';
-    this._mapSaving = true;
-    try {
-      await saveArchipelago(this._archipelago ?? { islands: [] });
-      this._mapNotice = 'Índice del archipiélago guardado.';
-    } catch (err) {
-      this._mapError = err instanceof Error ? err.message : 'No se pudo guardar el índice.';
-    } finally {
-      this._mapSaving = false;
-    }
-  }
-
-  /** Reemplaza el mapa de trabajo (copia inmutable para refrescar Lit). @param {Partial<import('../tools/career/domain/types.js').CareerMap>} patch */
-  _patchMap(patch) {
-    this._careerMap = { ...this._careerMap, ...patch };
-    this._mapNotice = '';
-  }
-
-  /** @param {number} idx @param {Partial<import('../tools/career/domain/types.js').City>} patch */
-  _patchCity(idx, patch) {
-    const cities = this._careerMap.cities.map((c, i) => (i === idx ? { ...c, ...patch } : c));
-    this._patchMap({ cities });
-  }
-
-  _addArea() {
-    const id = this._newArea.id.trim();
-    const name = this._newArea.name.trim();
-    this._mapError = '';
-    if (!id || !name) { this._mapError = 'La comarca necesita id y nombre.'; return; }
-    if (this._careerMap.areas.some((a) => a.id === id)) { this._mapError = `Ya existe la comarca «${id}».`; return; }
-    this._patchMap({ areas: [...this._careerMap.areas, { id, name }] });
-    this._newArea = { id: '', name: '' };
-  }
-
-  /** @param {string} id @param {string} name */
-  _renameArea(id, name) {
-    this._patchMap({ areas: this._careerMap.areas.map((a) => (a.id === id ? { ...a, name } : a)) });
-  }
-
-  /** @param {string} id */
-  _deleteArea(id) {
-    this._mapError = '';
-    const inUse = this._careerMap.cities.filter((c) => c.area === id);
-    if (inUse.length) {
-      this._confirmArea = null;
-      this._mapError = `No se puede borrar «${id}»: ${inUse.length} casa(s) la usan. Reasígnalas antes.`;
-      return;
-    }
-    this._patchMap({ areas: this._careerMap.areas.filter((a) => a.id !== id) });
-    this._confirmArea = null;
-  }
-
-  /** @param {string} [preAreaId] comarca a la que asignar la casa (por defecto, la primera) */
-  _addCity(preAreaId) {
-    const id = this._newCity.id.trim();
-    const name = this._newCity.name.trim();
-    this._mapError = '';
-    if (!id || !name) { this._mapError = 'La casa necesita id y nombre.'; return; }
-    if (this._careerMap.cities.some((c) => c.id === id)) { this._mapError = `Ya existe la casa «${id}».`; return; }
-    const area = this._careerMap.areas.some((a) => a.id === preAreaId)
-      ? /** @type {string} */ (preAreaId)
-      : (this._careerMap.areas[0]?.id ?? '');
-    /** @type {import('../tools/career/domain/types.js').City} */
-    const city = { id, name, kind: 'tech', area, x: 50, y: 50, weight: 1, prereqs: [] };
-    this._patchMap({ cities: [...this._careerMap.cities, city] });
-    this._newCity = { id: '', name: '' };
-  }
-
-  /** @param {string} id */
-  _deleteCity(id) {
-    // Quita la ciudad y la elimina de los prereqs de las demás.
-    const cities = this._careerMap.cities
-      .filter((c) => c.id !== id)
-      .map((c) => (c.prereqs.includes(id) ? { ...c, prereqs: c.prereqs.filter((p) => p !== id) } : c));
-    this._patchMap({ cities });
-    this._confirmCity = null;
-  }
-
-  /** @param {number} idx @param {HTMLSelectElement} select */
-  _setPrereqs(idx, select) {
-    const prereqs = [...select.selectedOptions].map((o) => o.value);
-    this._patchCity(idx, { prereqs });
-  }
-
-  /** @param {number} idx */
-  _addRecommendation(idx) {
-    const city = this._careerMap.cities[idx];
-    const recommendations = [...(city.recommendations ?? []), { kind: 'doc', label: '', url: '' }];
-    this._patchCity(idx, { recommendations });
-  }
-
-  /** @param {number} idx @param {number} recIdx @param {Partial<import('../tools/career/domain/types.js').Recommendation>} patch */
-  _patchRecommendation(idx, recIdx, patch) {
-    const recommendations = (this._careerMap.cities[idx].recommendations ?? []).map((r, i) => (i === recIdx ? { ...r, ...patch } : r));
-    this._patchCity(idx, { recommendations });
-  }
-
-  /** @param {number} idx @param {number} recIdx */
-  _removeRecommendation(idx, recIdx) {
-    const recommendations = (this._careerMap.cities[idx].recommendations ?? []).filter((_, i) => i !== recIdx);
-    this._patchCity(idx, { recommendations });
-  }
-
-  // ── Contenido de la tarjeta de la ciudad (MC-15) ────────────────────────────
-  // keyPoints/aiFocus se editan en crudo (el saneo — trim, líneas vacías fuera,
-  // kinds inválidos descartados — lo aplica serializeCareerMap al guardar).
-
-  /** Añade una fila de recurso vacía a la ciudad. @param {number} idx */
-  _addResource(idx) {
-    const city = this._careerMap.cities[idx];
-    const resources = [...(city.resources ?? []), { kind: 'curso', label: '', url: '' }];
-    this._patchCity(idx, { resources });
-  }
-
-  /**
-   * Edita un recurso de la ciudad. Al cambiar el tipo a algo que no es libro,
-   * el formato (papel/online) deja de tener sentido y se retira.
-   * @param {number} idx @param {number} resIdx @param {Partial<import('../tools/career/domain/types.js').Resource>} patch
-   */
-  _patchResource(idx, resIdx, patch) {
-    const resources = (this._careerMap.cities[idx].resources ?? []).map((r, i) => {
-      if (i !== resIdx) return r;
-      const next = { ...r, ...patch };
-      if (next.kind !== 'libro') delete next.format;
-      return next;
-    });
-    this._patchCity(idx, { resources });
-  }
-
-  /** Quita un recurso de la ciudad. @param {number} idx @param {number} resIdx */
-  _removeResource(idx, resIdx) {
-    const resources = (this._careerMap.cities[idx].resources ?? []).filter((_, i) => i !== resIdx);
-    this._patchCity(idx, { resources });
-  }
-
-  /** Valida el mapa antes de guardar. @returns {string|null} mensaje de error o null */
-  _validateMap() {
-    const { areas, cities } = this._careerMap;
-    const areaIds = new Set(areas.map((a) => a.id));
-    const cityIds = new Set();
-    for (const c of cities) {
-      if (!c.id.trim() || !c.name.trim()) return 'Hay casas sin id o sin nombre.';
-      if (cityIds.has(c.id)) return `Casa duplicada: «${c.id}».`;
-      cityIds.add(c.id);
-      if (c.area && !areaIds.has(c.area)) return `La casa «${c.id}» apunta a una comarca inexistente.`;
-      if (c.x < 0 || c.x > 100 || c.y < 0 || c.y > 100) return `La casa «${c.id}» tiene una posición fuera de 0..100.`;
-    }
-    return null;
-  }
-
-  async _saveCareerMap() {
-    this._mapError = '';
-    this._mapNotice = '';
-    const invalid = this._validateMap();
-    if (invalid) { this._mapError = invalid; return; }
-    this._mapSaving = true;
-    try {
-      await saveCareerMap(this._mapIsland, this._careerMap);
-      this._mapNotice = 'Mapa guardado.';
-    } catch (err) {
-      this._mapError = err instanceof Error ? err.message : 'No se pudo guardar el mapa.';
-    } finally {
-      this._mapSaving = false;
-    }
-  }
 
   // ── Framework de carrera (editor) ──────────────────────────────────────────
 
@@ -1093,9 +813,6 @@ export class SuperadminPanel extends LitElement {
       <div class="bar">
         <h1>Gestión de la organización</h1>
         ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #6b7280)">Modo solo lectura (viewer)</span>` : null}
-        ${this.readOnly
-          ? null
-          : html`<a class="gamelink" href="/admin/juego">🎮 Editor del juego</a>`}
         ${this.isLeader && !this.readOnly
           ? html`<button class="primary" @click=${this._useAsLeader}>Usar como manager →</button>`
           : null}
@@ -1116,303 +833,16 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
+  /** El editor del mapa (RMR-TSK-0259): el game-editor rediseñado, embebido en el
+   *  panel (sin su cabecera propia). Un viewer no lo edita. */
   _renderCareerMap() {
-    const map = this._careerMap;
-    return html`
-      <section>
+    if (this.readOnly) {
+      return html`<section>
         <h2>Mapa de carrera</h2>
-        <p class="ro-note">Edita cada isla del archipiélago: comarcas y casas (hitos, skills y tecnologías). Los cambios se aplican al guardar.</p>
-        ${this._mapError ? html`<p class="error">${this._mapError}</p>` : null}
-        ${this._mapNotice ? html`<p class="notice">${this._mapNotice}</p>` : null}
-        ${this._renderIslandPicker()}
-        ${!map
-          ? html`<p class="empty">Cargando el mapa…</p>`
-          : html`
-              ${this._renderComarcasWithCities(map)}
-              ${this.readOnly
-                ? null
-                : html`
-                    <div class="toolbar" style="margin-top:1rem">
-                      <button class="primary" ?disabled=${this._mapSaving} @click=${() => this._saveCareerMap()}>
-                        ${this._mapSaving ? 'Guardando…' : `Guardar mapa (${this._islandName(this._mapIsland) || this._mapIsland})`}
-                      </button>
-                    </div>
-                  `}
-            `}
-      </section>
-    `;
-  }
-
-  /**
-   * Selector de isla del archipiélago (MC-14), alta de islas nuevas y edición
-   * mínima del índice (nombre y posición x/y en el mapa del mar).
-   */
-  _renderIslandPicker() {
-    const islands = this._archipelago?.islands ?? [];
-    const current = islands.find((i) => i.id === this._mapIsland) ?? null;
-    return html`
-      <details open>
-        <summary class="sub">Archipiélago (${islands.length} islas)</summary>
-        <div class="toolbar">
-          <label>Isla en edición
-            <select @change=${(e) => this._selectIsland(e.target.value)}>
-              ${islands.map(
-                (i) => html`<option value=${i.id} ?selected=${i.id === this._mapIsland}>
-                  ${i.name} (${i.id})${i.startIsland ? ' · inicio' : ''}
-                </option>`,
-              )}
-            </select>
-          </label>
-          ${this.readOnly || !current
-            ? null
-            : html`
-                <input type="text" style="width:12rem" placeholder="Nombre en el mapa del mar" .value=${current.name}
-                  @input=${(e) => this._patchIslandRef({ name: e.target.value })} />
-                <label>x <input type="number" min="0" max="100" step="1" style="width:4.5rem" .value=${String(current.x)}
-                  @input=${(e) => this._patchIslandRef({ x: Number(e.target.value) })} /></label>
-                <label>y <input type="number" min="0" max="100" step="1" style="width:4.5rem" .value=${String(current.y)}
-                  @input=${(e) => this._patchIslandRef({ y: Number(e.target.value) })} /></label>
-                <button ?disabled=${this._mapSaving} @click=${() => this._saveArchipelago()}>Guardar índice</button>
-              `}
-        </div>
-        ${this.readOnly
-          ? null
-          : html`<div class="toolbar">
-              <input type="text" placeholder="id (p. ej. data-engineer)" .value=${this._newIsland.id}
-                @input=${(e) => { this._newIsland = { ...this._newIsland, id: e.target.value }; }} />
-              <input type="text" placeholder="Nombre (p. ej. Isla Data Engineer)" .value=${this._newIsland.name}
-                @input=${(e) => { this._newIsland = { ...this._newIsland, name: e.target.value }; }} />
-              <button class="primary" ?disabled=${this._mapSaving || !this._newIsland.name.trim()} @click=${() => this._addIsland()}>Nueva isla</button>
-            </div>`}
-      </details>
-    `;
-  }
-
-  /**
-   * Comarcas como contenedores colapsables con sus casas anidadas (RMR-TSK-0231).
-   * Agrupa las casas por City.area preservando el índice original (que _patchCity
-   * necesita). Las que no tienen comarca válida caen en el grupo «Sin comarca».
-   * @param {import('../tools/career/domain/types.js').CareerMap} map
-   */
-  _renderComarcasWithCities(map) {
-    const withIdx = map.cities.map((city, idx) => ({ city, idx }));
-    const areaIds = new Set(map.areas.map((a) => a.id));
-    const orphans = withIdx.filter(({ city }) => !city.area || !areaIds.has(city.area));
-    return html`
-      <p class="ro-note">Cada comarca agrupa sus casas: despliégala para ver o añadir las suyas. Para mover una casa de comarca, usa su selector «Comarca».</p>
-      ${this.readOnly
-        ? null
-        : html`<div class="toolbar">
-            <input type="text" placeholder="id de comarca (p. ej. frontend)" .value=${this._newArea.id}
-              @input=${(e) => { this._newArea = { ...this._newArea, id: e.target.value }; }} />
-            <input type="text" placeholder="Nombre de la comarca" .value=${this._newArea.name}
-              @input=${(e) => { this._newArea = { ...this._newArea, name: e.target.value }; }} />
-            <button class="primary" ?disabled=${!this._newArea.id.trim() || !this._newArea.name.trim()} @click=${() => this._addArea()}>Añadir comarca</button>
-          </div>`}
-      ${map.areas.length === 0
-        ? html`<p class="empty">Aún no hay comarcas. Crea una para empezar a colocar casas.</p>`
-        : map.areas.map((a) => this._renderComarcaGroup(map, a, withIdx.filter(({ city }) => city.area === a.id)))}
-      ${orphans.length ? this._renderOrphanCities(map, orphans) : null}
-    `;
-  }
-
-  /** Glifo SVG de la forma de casa de una comarca (RMR-TSK-0233). @param {string} shape */
-  _renderShapeGlyph(shape) {
-    const d = houseShapePath(shape, 10, 10, 7);
-    const mark = d ? svg`<path d=${d} />` : svg`<circle cx="10" cy="10" r="7" />`;
-    const label = `Forma: ${HOUSE_SHAPE_LABEL[shape] ?? shape}`;
-    return html`<svg class="shape-glyph" viewBox="0 0 20 20" width="16" height="16" role="img" aria-label=${label}>${mark}</svg>`;
-  }
-
-  /** Acciones de la cabecera de una comarca (borrar, con confirmación). @param {import('../tools/career/domain/types.js').Area} area */
-  _renderComarcaActions(area) {
-    if (this._confirmArea === area.id) {
-      return html`<span class="confirm">¿Borrar comarca?
-        <button class="yes" @click=${() => this._deleteArea(area.id)}>Sí</button>
-        <button @click=${() => { this._confirmArea = null; }}>No</button>
-      </span>`;
+        <p class="ro-note">El editor del mapa de carrera es solo para superadmin.</p>
+      </section>`;
     }
-    return html`<button class="del-btn" @click=${() => { this._confirmArea = area.id; this._mapError = ''; }}>Borrar</button>`;
-  }
-
-  /**
-   * Una comarca plegable (colapsada por defecto) con sus casas anidadas y un alta
-   * de casa pre-asignada a esa comarca.
-   * @param {import('../tools/career/domain/types.js').CareerMap} map
-   * @param {import('../tools/career/domain/types.js').Area} area
-   * @param {Array<{ city: import('../tools/career/domain/types.js').City, idx: number }>} items
-   */
-  _renderComarcaGroup(map, area, items) {
-    return html`
-      <details class="city track-group">
-        <summary class="city-head">
-          <span class="cid">${this._renderShapeGlyph(shapeForArea(area.id, map.areas))}${area.name || area.id} <span class="muted">(${items.length} casa${items.length === 1 ? '' : 's'})</span></span>
-          <span @click=${(e) => e.stopPropagation()}>${this.readOnly ? null : this._renderComarcaActions(area)}</span>
-        </summary>
-        <div class="fields">
-          <label>Nombre
-            <input type="text" .value=${area.name} ?disabled=${this.readOnly} @input=${(e) => this._renameArea(area.id, e.target.value)} />
-          </label>
-          <label>Id
-            <input type="text" .value=${area.id} disabled />
-          </label>
-        </div>
-        <div class="nested-levels">
-          <div class="nested-head">
-            <span class="sub">Casas (${items.length})</span>
-            ${this.readOnly
-              ? null
-              : html`<div class="toolbar">
-                  <input type="text" placeholder="id (p. ej. react)" .value=${this._newCity.id}
-                    @input=${(e) => { this._newCity = { ...this._newCity, id: e.target.value }; }} />
-                  <input type="text" placeholder="Nombre" .value=${this._newCity.name}
-                    @input=${(e) => { this._newCity = { ...this._newCity, name: e.target.value }; }} />
-                  <button class="primary" ?disabled=${!this._newCity.id.trim() || !this._newCity.name.trim()} @click=${() => this._addCity(area.id)}>Añadir casa</button>
-                </div>`}
-          </div>
-          ${items.length === 0
-            ? html`<p class="empty">Esta comarca aún no tiene casas.</p>`
-            : html`<div class="cities">${items.map(({ city, idx }) => this._renderCity(map, city, idx))}</div>`}
-        </div>
-      </details>
-    `;
-  }
-
-  /**
-   * Grupo «Sin comarca»: casas sin comarca asignada o cuya comarca ya no existe.
-   * Abierto por defecto porque requieren atención (reasignar comarca).
-   * @param {import('../tools/career/domain/types.js').CareerMap} map
-   * @param {Array<{ city: import('../tools/career/domain/types.js').City, idx: number }>} orphans
-   */
-  _renderOrphanCities(map, orphans) {
-    return html`
-      <details class="city track-group" open>
-        <summary class="city-head"><span class="cid">Sin comarca <span class="muted">(${orphans.length})</span></span></summary>
-        <p class="ro-note">Casas sin comarca (o con una comarca que ya no existe). Asígnalas con su selector «Comarca».</p>
-        <div class="cities">${orphans.map(({ city, idx }) => this._renderCity(map, city, idx))}</div>
-      </details>
-    `;
-  }
-
-  /**
-   * @param {import('../tools/career/domain/types.js').CareerMap} map
-   * @param {import('../tools/career/domain/types.js').City} c
-   * @param {number} idx
-   */
-  _renderCity(map, c, idx) {
-    return html`
-      <details class="city">
-        <summary class="city-head">
-          <span class="cid">${c.name || c.id} <span class="muted">(${c.id})</span>${c.deprecated ? html` · <span class="muted">deprecada</span>` : null}</span>
-          <span @click=${(e) => e.stopPropagation()}>
-            ${this.readOnly
-              ? null
-              : this._confirmCity === c.id
-                ? html`<span class="confirm">¿Borrar casa?
-                    <button class="yes" @click=${() => this._deleteCity(c.id)}>Sí</button>
-                    <button @click=${() => { this._confirmCity = null; }}>No</button>
-                  </span>`
-                : html`<button class="del-btn" @click=${() => { this._confirmCity = c.id; this._mapError = ''; }}>Borrar</button>`}
-          </span>
-        </summary>
-        <div class="fields">
-          <label>Nombre
-            <input type="text" .value=${c.name} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { name: e.target.value })} />
-          </label>
-          <label>Comarca
-            <select ?disabled=${this.readOnly} @change=${(e) => this._patchCity(idx, { area: e.target.value })}>
-              <option value="" ?selected=${!c.area}>— sin comarca —</option>
-              ${map.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === c.area}>${a.name}</option>`)}
-            </select>
-          </label>
-          <label>Tipo
-            <select ?disabled=${this.readOnly} @change=${(e) => this._patchCity(idx, { kind: e.target.value })}>
-              ${CITY_KINDS.map((k) => html`<option value=${k} ?selected=${k === c.kind}>${k}</option>`)}
-            </select>
-          </label>
-          <label>Peso
-            <input type="number" min="0" step="1" .value=${String(c.weight)} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { weight: Number(e.target.value) })} />
-          </label>
-          <label>X (0..100)
-            <input type="number" min="0" max="100" step="1" .value=${String(c.x)} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { x: Number(e.target.value) })} />
-          </label>
-          <label>Y (0..100)
-            <input type="number" min="0" max="100" step="1" .value=${String(c.y)} ?disabled=${this.readOnly} @input=${(e) => this._patchCity(idx, { y: Number(e.target.value) })} />
-          </label>
-          <label class="check">
-            <input type="checkbox" .checked=${c.deprecated === true} ?disabled=${this.readOnly} @change=${(e) => this._patchCity(idx, { deprecated: e.target.checked || undefined })} />
-            Deprecada
-          </label>
-          <label class="full">Prerequisitos
-            <select multiple size="4" ?disabled=${this.readOnly} @change=${(e) => this._setPrereqs(idx, e.target)}>
-              ${map.cities
-                .filter((other) => other.id !== c.id)
-                .map((other) => html`<option value=${other.id} ?selected=${c.prereqs.includes(other.id)}>${other.name} (${other.id})</option>`)}
-            </select>
-          </label>
-          <label class="full">Qué aprender — puntos fundamentales (uno por línea)
-            <textarea
-              rows="4"
-              placeholder="Un punto fundamental por línea…"
-              .value=${(c.keyPoints ?? []).join('\n')}
-              ?disabled=${this.readOnly}
-              @input=${(e) => this._patchCity(idx, { keyPoints: e.target.value.split('\n') })}
-            ></textarea>
-          </label>
-          <label class="full">Con IA — qué puede hacer la IA por ti y dónde profundizar tú
-            <textarea
-              rows="3"
-              placeholder="Lente era-IA: qué delega el jugador en la IA y qué debe dominar él…"
-              .value=${c.aiFocus ?? ''}
-              ?disabled=${this.readOnly}
-              @input=${(e) => this._patchCity(idx, { aiFocus: e.target.value })}
-            ></textarea>
-          </label>
-        </div>
-        <div class="recs-edit">
-          <div class="recs-head">
-            <span>Recursos</span>
-            ${this.readOnly ? null : html`<button @click=${() => this._addResource(idx)}>+ Añadir</button>`}
-          </div>
-          ${(c.resources ?? []).length === 0
-            ? html`<p class="empty">Sin recursos todavía.</p>`
-            : (c.resources ?? []).map(
-                (r, resIdx) => html`<div class="res-row">
-                  <select aria-label="Tipo de recurso" ?disabled=${this.readOnly} @change=${(e) => this._patchResource(idx, resIdx, { kind: e.target.value })}>
-                    ${RESOURCE_KINDS.map((k) => html`<option value=${k} ?selected=${k === r.kind}>${k}</option>`)}
-                  </select>
-                  <input type="text" placeholder="Etiqueta" .value=${r.label ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchResource(idx, resIdx, { label: e.target.value })} />
-                  <input type="url" placeholder="https://… (opcional)" .value=${r.url ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchResource(idx, resIdx, { url: e.target.value })} />
-                  ${r.kind === 'libro'
-                    ? html`<select aria-label="Formato del libro" ?disabled=${this.readOnly} @change=${(e) => this._patchResource(idx, resIdx, { format: e.target.value })}>
-                        <option value="" ?selected=${!r.format}>— formato —</option>
-                        ${RESOURCE_FORMATS.map((f) => html`<option value=${f} ?selected=${f === r.format}>${f}</option>`)}
-                      </select>`
-                    : html`<span></span>`}
-                  ${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeResource(idx, resIdx)}>×</button>`}
-                </div>`,
-              )}
-        </div>
-        <div class="recs-edit">
-          <div class="recs-head">
-            <span>Recomendaciones (legado — la tarjeta las usa solo si no hay recursos)</span>
-            ${this.readOnly ? null : html`<button @click=${() => this._addRecommendation(idx)}>+ Añadir</button>`}
-          </div>
-          ${(c.recommendations ?? []).length === 0
-            ? html`<p class="empty">Sin recomendaciones.</p>`
-            : (c.recommendations ?? []).map(
-                (r, recIdx) => html`<div class="rec-row">
-                  <select ?disabled=${this.readOnly} @change=${(e) => this._patchRecommendation(idx, recIdx, { kind: e.target.value })}>
-                    ${REC_KINDS.map((k) => html`<option value=${k} ?selected=${k === r.kind}>${k}</option>`)}
-                  </select>
-                  <input type="text" placeholder="Etiqueta" .value=${r.label ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchRecommendation(idx, recIdx, { label: e.target.value })} />
-                  <input type="url" placeholder="https://… (opcional)" .value=${r.url ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchRecommendation(idx, recIdx, { url: e.target.value })} />
-                  ${this.readOnly ? null : html`<button class="del-btn" @click=${() => this._removeRecommendation(idx, recIdx)}>×</button>`}
-                </div>`,
-              )}
-        </div>
-      </details>
-    `;
+    return html`<game-editor .ready=${this.ready} .embedded=${true}></game-editor>`;
   }
 
   // ── Framework de carrera (render) ──────────────────────────────────────────
