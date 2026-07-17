@@ -77,6 +77,13 @@ export class MareaResults extends LitElement {
     .mini { display: flex; flex-direction: column; gap: 0.35rem; }
     .mb { display: grid; grid-template-columns: 3.6rem 1fr; align-items: center; gap: 0.5rem; font-size: 0.66rem; color: var(--rm-muted, #5b6b7d); }
     .mb .track { margin-top: 0; height: 6px; }
+    .cloudwrap { margin-top: 1.5rem; }
+    .cloudwrap h3 { margin: 0 0 0.35rem; font-size: 0.92rem; color: var(--rm-text, #1e3a5f); }
+    .cloudwrap .note { font-size: 0.7rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.7rem; border-left: 2px solid var(--rm-border, #dde7ec); padding-left: 0.55rem; }
+    .cloud { display: flex; flex-wrap: wrap; gap: 0.35rem 0.8rem; align-items: baseline; }
+    .cloud .w { color: var(--rm-text, #1e3a5f); line-height: 1.25; }
+    .cloud.compact { gap: 0.15rem 0.5rem; margin-top: 0.5rem; }
+    .cloud.compact .w { color: var(--rm-muted, #5b6b7d); }
     .refresh { margin-top: 1.2rem; }
     .refresh button { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
   `;
@@ -128,6 +135,31 @@ export class MareaResults extends LitElement {
     return html`<div class="mb"><span>${bar.name}</span><div class="track"><div class="fill ${warn ? 'warn' : ''}" style="width:${v}%"></div></div></div>`;
   }
 
+  /** Una palabra de la nube: tamaño según su frecuencia relativa (anónima). */
+  _renderWord(word, max) {
+    const size = (0.85 + (word.count / max) * 0.95).toFixed(2);
+    const weight = word.count > 1 ? 700 : 500;
+    const times = `${word.count}×`;
+    return html`<span class="w" style="font-size:${size}rem;font-weight:${weight}" title=${times}>${word.text}</span>`;
+  }
+
+  /**
+   * Nube de palabras anónima de un ámbito. `compact` para las tarjetas de grupo.
+   * @param {Array<{text:string,count:number}>|undefined} words
+   */
+  _renderWordCloud(words, compact = false) {
+    if (!words?.length) return null;
+    const max = Math.max(...words.map((w) => w.count));
+    const cloud = html`<div class="cloud ${compact ? 'compact' : ''}">${words.map((w) => this._renderWord(w, max))}</div>`;
+    if (compact) return cloud;
+    return html`
+      <div class="cloudwrap">
+        <h3>Palabras de la semana</h3>
+        <p class="note">Compartidas de forma voluntaria (opt-in) y anónima · nunca por persona.</p>
+        ${cloud}
+      </div>`;
+  }
+
   _renderGeneral() {
     const g = this._agg?.general;
     if (!g?.means) {
@@ -144,7 +176,8 @@ export class MareaResults extends LitElement {
           <p class="team-read" style="margin:0.6rem 0 0">${read.name} <span>· ${read.sub}</span></p>
         </div>
         <div class="bars">${BARS.map((b) => this._renderBar(g.means, b))}</div>
-      </div>`;
+      </div>
+      ${this._renderWordCloud(g.words)}`;
   }
 
   /** @param {{id:string,count:number,means:Record<string,number>}} group */
@@ -155,6 +188,7 @@ export class MareaResults extends LitElement {
         <div class="seg-h"><span class="seg-name">${group.id}</span><span class="seg-part">${group.count} pers.</span></div>
         <div class="seg-read"><span class="rdot" style="background:${readingColor(read.name)}"></span>${read.name}</div>
         <div class="mini">${BARS.map((b) => this._renderMiniBar(group.means, b))}</div>
+        ${this._renderWordCloud(group.words, true)}
       </div>`;
   }
 

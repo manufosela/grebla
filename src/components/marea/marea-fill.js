@@ -29,6 +29,7 @@ export class MareaFill extends LitElement {
     _tripulacion: { state: true },
     _reconocimiento: { state: true },
     _palabra: { state: true },
+    _shareWord: { state: true },
     _loading: { state: true },
     _saving: { state: true },
     _savedToday: { state: true },
@@ -81,6 +82,9 @@ export class MareaFill extends LitElement {
     .word input { width: 100%; box-sizing: border-box; margin-top: 0.4rem; padding: 0.6rem 0.8rem; border-radius: 10px; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); font: inherit; font-size: 0.9rem; }
     .word input:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; border-color: var(--teal); }
     .word .priv { font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); margin-top: 0.35rem; }
+    .word .share { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.55rem; font-size: 0.82rem; font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--rm-text, #1e3a5f); cursor: pointer; }
+    .word .share input { width: auto; margin: 0; accent-color: var(--teal); }
+    .word .share b { font-weight: 700; }
 
     .actions { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
     .btn { border: 0; background: var(--navy); color: var(--rm-on-accent, #fff); font: inherit; font-weight: 700; font-size: 0.92rem; padding: 0.7rem 1.3rem; border-radius: 11px; cursor: pointer; }
@@ -103,6 +107,7 @@ export class MareaFill extends LitElement {
     this._tripulacion = 50;
     this._reconocimiento = 50;
     this._palabra = '';
+    this._shareWord = false;
     this._loading = false;
     this._saving = false;
     this._savedToday = false;
@@ -130,6 +135,7 @@ export class MareaFill extends LitElement {
         this._tripulacion = pulse.tripulacion ?? 50;
         this._reconocimiento = pulse.reconocimiento ?? 50;
         this._palabra = pulse.palabra ?? '';
+        this._shareWord = pulse.shareWord === true;
         this._savedToday = true;
       }
     } catch (err) {
@@ -165,6 +171,7 @@ export class MareaFill extends LitElement {
         energia: this._energia, animo: this._animo, carga: this._carga,
         rumbo: this._rumbo, tripulacion: this._tripulacion,
         reconocimiento: this._reconocimiento, palabra: this._palabra,
+        shareWord: this._shareWord,
       });
       this._savedToday = true;
     } catch (err) {
@@ -223,7 +230,16 @@ export class MareaFill extends LitElement {
             <label for="w">Una palabra para tu semana</label>
             <input id="w" type="text" maxlength="40" placeholder="p. ej. remando, en calma, a tope…"
               .value=${this._palabra} @input=${(e) => { this._palabra = e.target.value; }} />
-            <div class="priv">Solo para ti — puede servirte en tu próximo O2O.</div>
+            <label class="share">
+              <input type="checkbox" .checked=${this._shareWord}
+                @change=${(e) => { this._shareWord = e.target.checked; }} />
+              <span>Compartir mi palabra en la nube <b>anónima</b> del equipo</span>
+            </label>
+            <div class="priv">
+              ${this._shareWord
+                ? 'Aparecerá sin tu nombre, junto a las de tu equipo (solo si responden 3 o más).'
+                : 'Privada: solo para ti — puede servirte en tu próximo O2O.'}
+            </div>
           </div>
           <div class="actions">
             <button class="btn" ?disabled=${this._saving || this._loading || !this.uid} @click=${() => this._save()}>

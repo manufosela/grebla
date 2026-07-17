@@ -12,17 +12,38 @@
 /** Dimensiones que se promedian. */
 export const PULSE_DIMS = ['energia', 'animo', 'carga', 'rumbo', 'tripulacion', 'reconocimiento'];
 
-const emptyAcc = () => ({ count: 0, sums: Object.fromEntries(PULSE_DIMS.map((d) => [d, 0])) });
+/** Máximo de palabras distintas por nube (las más frecuentes). */
+const MAX_WORDS = 40;
+
+const emptyAcc = () => ({ count: 0, sums: Object.fromEntries(PULSE_DIMS.map((d) => [d, 0])), words: new Map() });
+
+/** Normaliza una palabra para la nube: minúsculas, sin espacios sobrantes. */
+export function normalizeWord(value) {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 function addToAcc(acc, entry) {
   acc.count += 1;
   for (const d of PULSE_DIMS) acc.sums[d] += Number(entry[d]) || 0;
+  // Solo cuenta la palabra si la persona hizo opt-in explícito (shareWord).
+  if (entry.shareWord === true) {
+    const word = normalizeWord(entry.palabra);
+    if (word) acc.words.set(word, (acc.words.get(word) ?? 0) + 1);
+  }
 }
 
 /** Medias redondeadas de un acumulador (o null si no hay datos). */
 function meansOf(acc) {
   if (!acc.count) return null;
   return Object.fromEntries(PULSE_DIMS.map((d) => [d, Math.round(acc.sums[d] / acc.count)]));
+}
+
+/** Nube de palabras de un acumulador: [{text, count}] por frecuencia (top MAX_WORDS). */
+function wordsOf(acc) {
+  return [...acc.words.entries()]
+    .map(([text, count]) => ({ text, count }))
+    .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
+    .slice(0, MAX_WORDS);
 }
 
 /** Deja una entrada por uid: la de `day` más reciente (YYYY-MM-DD ordena lexicográficamente). */
@@ -65,9 +86,11 @@ export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts =
   }
 
   // Solo grupos con suficientes respuestas (privacidad), ordenados por nombre.
+  // La nube de palabras va con cada grupo que supera el umbral: al gatearse por
+  // el mismo `count >= minCount`, nunca se expone la palabra de un grupo pequeño.
   const groups = (map) => [...map.entries()]
     .filter(([, acc]) => acc.count >= minCount)
-    .map(([id, acc]) => ({ id, count: acc.count, means: meansOf(acc) }))
+    .map(([id, acc]) => ({ id, count: acc.count, means: meansOf(acc), words: wordsOf(acc) }))
     .sort((a, b) => a.id.localeCompare(b.id));
 
   return {
@@ -76,8 +99,8 @@ export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts =
     respondents: general.count,
     totalPeople: opts.totalPeople ?? null,
     general: general.count >= minCount
-      ? { count: general.count, means: meansOf(general) }
-      : { count: general.count, means: null },
+      ? { count: general.count, means: meansOf(general), words: wordsOf(general) }
+      : { count: general.count, means: null, words: [] },
     guilds: groups(guilds),
     labels: groups(labels),
   };

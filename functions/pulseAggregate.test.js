@@ -3,7 +3,7 @@
  * de privacidad y «una marea por persona (la última)». Puro, sin firebase.
  */
 import { describe, it, expect } from 'vitest';
-import { computePulseAggregate } from './pulseAggregate.js';
+import { computePulseAggregate, normalizeWord } from './pulseAggregate.js';
 
 const P = (uid, day, vals) => ({ uid, day, ...vals });
 const full = { energia: 60, animo: 60, carga: 50, rumbo: 50, tripulacion: 50, reconocimiento: 50 };
@@ -66,5 +66,33 @@ describe('computePulseAggregate', () => {
     ], people, { minCount: 3 });
     expect(agg.guilds.find((g) => g.id === 'Backend').count).toBe(3);
     expect(agg.labels.find((l) => l.id === 'Pagos').count).toBe(3);
+  });
+
+  it('nube de palabras: solo cuenta las de opt-in (shareWord), normalizadas y por frecuencia', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', { ...full, palabra: 'Remando', shareWord: true }),
+      P('u2', '2026-07-13', { ...full, palabra: '  remando ', shareWord: true }), // misma tras normalizar
+      P('u3', '2026-07-13', { ...full, palabra: 'en calma', shareWord: true }),
+      P('u4', '2026-07-13', { ...full, palabra: 'privada', shareWord: false }), // no opt-in → fuera
+    ], people, { minCount: 3 });
+    expect(agg.general.words).toEqual([
+      { text: 'remando', count: 2 },
+      { text: 'en calma', count: 1 },
+    ]);
+    expect(agg.general.words.some((w) => w.text === 'privada')).toBe(false);
+  });
+
+  it('nube de palabras: se oculta si el ámbito no llega al umbral (anonimato)', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', { ...full, palabra: 'sola', shareWord: true }),
+      P('u2', '2026-07-13', { ...full, palabra: 'otra', shareWord: true }),
+    ], people, { minCount: 3 });
+    expect(agg.general.means).toBeNull();
+    expect(agg.general.words).toEqual([]); // 2 < 3 → ni medias ni nube
+  });
+
+  it('normalizeWord: minúsculas, trim y espacios colapsados', () => {
+    expect(normalizeWord('  A   TOPE  ')).toBe('a tope');
+    expect(normalizeWord(null)).toBe('');
   });
 });
