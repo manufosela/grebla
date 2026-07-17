@@ -59,6 +59,23 @@ export async function getMyPulse(uid, date = new Date()) {
 }
 
 /**
+ * Última marea de la SEMANA en curso del usuario (RMR-BUG-0038): la de hoy si
+ * existe, o si no la más reciente de la misma semana ISO. Así «Mi marea» muestra
+ * el pulso de la semana y no aparece en blanco al día siguiente. null si esta
+ * semana aún no ha registrado ninguna.
+ * @param {string} uid @param {Date} [date]
+ * @returns {Promise<import('firebase/firestore').DocumentData|null>}
+ */
+export async function getMyCurrentWeekPulse(uid, date = new Date()) {
+  if (!uid) throw new Error('getMyCurrentWeekPulse requiere el uid del usuario');
+  const week = isoWeekKey(date);
+  // getMyPulseHistory viene ordenada por día DESC: el primer match de la semana
+  // es el más reciente. 10 cubre de sobra los ≤7 días de una semana.
+  const recent = await getMyPulseHistory(uid, 10);
+  return recent.find((entry) => entry.weekIso === week) ?? null;
+}
+
+/**
  * Histórico reciente de mareas del usuario (para su evolución personal), más
  * nuevas primero.
  * @param {string} uid @param {number} [max]

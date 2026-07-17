@@ -8,8 +8,8 @@
  * Props: uid (lo inyecta el glue de cliente tras resolver la sesión).
  */
 import { LitElement, html, css } from 'lit';
-import { saveMyPulse, getMyPulse } from '../../lib/pulse.js';
-import { pulseReading } from '../../tools/pulse/domain/pulse.js';
+import { saveMyPulse, getMyCurrentWeekPulse } from '../../lib/pulse.js';
+import { pulseReading, dayKey } from '../../tools/pulse/domain/pulse.js';
 
 /** Anclas: clave de estado, etiqueta y extremos (bajo↔alto). */
 const ANCHORS = [
@@ -30,6 +30,7 @@ export class MareaFill extends LitElement {
     _reconocimiento: { state: true },
     _palabra: { state: true },
     _shareWord: { state: true },
+    _entryDay: { state: true },
     _loading: { state: true },
     _saving: { state: true },
     _savedToday: { state: true },
@@ -108,6 +109,7 @@ export class MareaFill extends LitElement {
     this._reconocimiento = 50;
     this._palabra = '';
     this._shareWord = false;
+    this._entryDay = null; // día (YYYY-MM-DD) de la marea precargada de esta semana
     this._loading = false;
     this._saving = false;
     this._savedToday = false;
@@ -126,7 +128,10 @@ export class MareaFill extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      const pulse = await getMyPulse(this.uid);
+      // Pulso de la SEMANA (RMR-BUG-0038): precarga la marea más reciente de la
+      // semana en curso (la de hoy si existe), no solo la de hoy, para no aparecer
+      // en blanco al día siguiente de haberla registrado.
+      const pulse = await getMyCurrentWeekPulse(this.uid);
       if (pulse) {
         this._energia = pulse.energia ?? 50;
         this._animo = pulse.animo ?? 50;
@@ -136,7 +141,10 @@ export class MareaFill extends LitElement {
         this._reconocimiento = pulse.reconocimiento ?? 50;
         this._palabra = pulse.palabra ?? '';
         this._shareWord = pulse.shareWord === true;
-        this._savedToday = true;
+        this._entryDay = pulse.day ?? null;
+        // «Editable hasta medianoche» solo si la entrada es de HOY; si es de un día
+        // anterior de la semana, el botón registra la de hoy (nueva entrada).
+        this._savedToday = pulse.day === dayKey();
       }
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cargar tu marea de hoy.';
@@ -174,6 +182,7 @@ export class MareaFill extends LitElement {
         shareWord: this._shareWord,
       });
       this._savedToday = true;
+      this._entryDay = dayKey();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo guardar tu marea.';
     } finally {
@@ -186,12 +195,31 @@ export class MareaFill extends LitElement {
     return this._savedToday ? 'Ajustar mi marea' : 'Fijar mi marea';
   }
 
+  /** Etiqueta legible de un día YYYY-MM-DD (p. ej. «martes 14 de julio»). */
+  _weekdayLabel(day) {
+    const [y, m, d] = String(day).split('-').map(Number);
+    if (!y || !m || !d) return '';
+    return new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+      .format(new Date(y, m - 1, d));
+  }
+
+  /** Aviso de estado: registrada hoy (editable), o de un día anterior de la semana. */
+  _renderStatus() {
+    if (this._savedToday) {
+      return html`<p class="today">Ya registraste tu marea hoy · puedes ajustarla hasta medianoche.</p>`;
+    }
+    if (this._entryDay) {
+      return html`<p class="today">Tu marea de esta semana la registraste el ${this._weekdayLabel(this._entryDay)}. Puedes registrar la de hoy para actualizar el pulso de la semana.</p>`;
+    }
+    return null;
+  }
+
   render() {
     const read = pulseReading(this._energia, this._animo);
     let dragging = false;
     return html`
       <p class="lead">Coloca tu boya según tu <b>energía</b> y tu <b>ánimo</b>, y ajusta las cuatro anclas. No hay respuesta correcta: una marea sube y baja.</p>
-      ${this._savedToday ? html`<p class="today">Ya registraste tu marea hoy · puedes ajustarla hasta medianoche.</p>` : null}
+      ${this._renderStatus()}
       <div class="fill">
         <div class="gridwrap">
           <div class="axis">▲ Más energía</div>
