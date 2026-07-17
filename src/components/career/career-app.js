@@ -365,6 +365,7 @@ export class CareerApp extends LitElement {
     error: { state: true },
     journey: { state: true },
     selected: { state: true },
+    _cityTab: { state: true },
     loading: { state: true },
     map: { state: true },
     viewMode: { state: true },
@@ -567,8 +568,11 @@ export class CareerApp extends LitElement {
       .hud { top: 0.5rem; left: 0.5rem; gap: 0.35rem; }
       .hud button { padding: 0.32rem 0.5rem; font-size: 0.78rem; }
     }
-    /* Hoja de pergamino CENTRADA que ocupa ~80% del área de juego (RMR-TSK-0254):
-       más espacio y menos scroll que la antigua columna estrecha de la derecha. */
+    /* ═══ PANEL DE CASA = MAPA DEL TESORO (RMR-TSK-0256) ═══
+       Pergamino LITERAL: papel asimétrico rasgado (filtro SVG #citytorn),
+       extremos curvados (enrollado), tinta serif y contenido en pestañas.
+       .citypanel = envoltorio 80% del área de juego; .paper = papel rasgado
+       (fondo, filtrado); .ink = contenido nítido encima. */
     .citypanel {
       position: absolute;
       z-index: 5;
@@ -576,18 +580,18 @@ export class CareerApp extends LitElement {
       left: 50%;
       transform: translate(-50%, -50%);
       width: 80%;
-      height: 80%;
+      height: 82%;
       max-width: 1000px;
       box-sizing: border-box;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      background: color-mix(in srgb, var(--rm-surface, #fff) 90%, transparent);
-      backdrop-filter: blur(6px);
-      border: 1px solid var(--rm-border, #e5e7eb);
-      border-radius: var(--rm-radius, 12px);
-      padding: 1rem 1.25rem;
-      box-shadow: 0 18px 50px rgba(6, 12, 22, 0.5);
       outline: none;
+      /* Tokens de papel para las superficies interiores de las secciones. */
+      --rm-surface: #f4e7c3;
+      --rm-border: #cdb183;
+      --rm-track: #e9d9af;
+      --rm-muted: var(--parch-muted, #6b5433);
+      --rm-text: var(--parch-ink, #33240f);
+      color: var(--parch-ink, #33240f);
+      filter: drop-shadow(0 18px 36px rgba(6, 12, 22, 0.55));
     }
     /* Backdrop que atenúa el escenario detrás de la hoja (click = cerrar). */
     .citypanel-backdrop {
@@ -596,36 +600,108 @@ export class CareerApp extends LitElement {
       z-index: 4;
       background: rgba(6, 12, 22, 0.5);
     }
-    /* En móvil la hoja ocupa casi toda la pantalla (sigue centrada, una columna). */
+    /* En móvil la hoja ocupa casi toda la pantalla. */
     @media (max-width: 760px) {
       .citypanel { width: 94%; height: 90%; max-width: none; }
     }
-    /* Cuerpo del panel en rejilla: en ancho reparte las secciones didácticas en
-       dos columnas (menos scroll); en estrecho/móvil y en la vista plana, una. */
-    .citybody {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-      gap: 0.9rem 1.3rem;
-      align-items: start;
+    /* Papel envejecido con bordes RASGADOS (filtro) y manchas de mugre. */
+    .citypanel .paper {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      filter: url(#citytorn);
+      background:
+        radial-gradient(90px 60px at 18% 24%, rgba(110, 70, 20, 0.20), transparent 70%),
+        radial-gradient(130px 80px at 82% 30%, rgba(80, 50, 12, 0.18), transparent 70%),
+        radial-gradient(70px 50px at 68% 82%, rgba(110, 70, 20, 0.20), transparent 70%),
+        radial-gradient(60px 90px at 8% 70%, rgba(80, 50, 12, 0.16), transparent 70%),
+        radial-gradient(50px 40px at 40% 92%, rgba(70, 45, 10, 0.20), transparent 70%),
+        linear-gradient(180deg, #e7d3a1, #dcc389 48%, #cdb072 100%);
+      box-shadow: inset 0 0 60px rgba(110, 70, 18, 0.5), inset 0 0 14px rgba(60, 38, 8, 0.7);
     }
-    /* Cabecera oscura de la tarjeta: armoniza el panel claro con la consola. */
-    .citypanel header {
+    /* Sombras de CURVATURA (enrollado) en los extremos superior e inferior. */
+    .citypanel .paper::before,
+    .citypanel .paper::after {
+      content: "";
+      position: absolute;
+      left: 4%;
+      right: 4%;
+      height: 42px;
+      pointer-events: none;
+    }
+    .citypanel .paper::before {
+      top: 0;
+      background: linear-gradient(180deg, rgba(60, 38, 8, 0.45), transparent);
+      border-radius: 100% 100% 40% 40% / 42px 42px 0 0;
+    }
+    .citypanel .paper::after {
+      bottom: 0;
+      background: linear-gradient(0deg, rgba(60, 38, 8, 0.5), transparent);
+      border-radius: 40% 40% 100% 100% / 0 0 42px 42px;
+    }
+    /* Contenido (tinta): SIN filtro para que el texto quede nítido. */
+    .citypanel .ink {
+      position: absolute;
+      inset: 22px 32px;
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.5rem;
-      margin: -1rem -1.25rem 0.7rem;
-      padding: 0.6rem 1.1rem;
-      background: linear-gradient(180deg, var(--game-bg-2, #16283f), var(--game-bg, #0f1b2d));
-      border-bottom: 2px solid var(--game-accent, #3dd6c3);
-      border-radius: calc(var(--rm-radius, 12px) - 2px) calc(var(--rm-radius, 12px) - 2px) 0 0;
+      flex-direction: column;
+      min-height: 0;
     }
-    .citypanel h3 { margin: 0; font-size: 1.05rem; }
-    .citypanel header h3 { color: var(--game-text, #e8eef7); }
-    .citypanel .kind { margin-bottom: 0; }
-    .citypanel header .kind { color: var(--game-muted, #a7bad3); }
-    .citypanel header .close { color: var(--game-muted, #a7bad3); }
-    .citypanel header .close:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+    .citypanel .ctitle {
+      font-family: var(--parch-title, Georgia, serif);
+      font-variant: small-caps;
+      letter-spacing: 0.03em;
+      margin: 0.2rem 0 0.05rem;
+      font-size: 1.5rem;
+      color: #5a3d16;
+    }
+    .citypanel .ckind { margin: 0; font-size: 0.82rem; color: #7a5a2c; }
+    .citypanel .ctabs {
+      display: flex;
+      gap: 0.15rem;
+      flex-wrap: wrap;
+      margin: 0.6rem 0 0;
+      border-bottom: 2px solid rgba(110, 70, 20, 0.45);
+    }
+    .citypanel .ctabs button {
+      border: 0;
+      background: transparent;
+      font-family: var(--parch-title, Georgia, serif);
+      font-size: 0.9rem;
+      color: #8a6a3a;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+    .citypanel .ctabs button.on { color: #4a3416; border-bottom-color: #8a4a18; font-weight: 700; }
+    .citypanel .ctabs button:focus-visible { outline: 2px solid #8a4a18; outline-offset: 2px; }
+    .citypanel .cbody {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0.85rem 0.1rem 0;
+    }
+    /* Sello de LACRE = cerrar. */
+    .citypanel .seal {
+      position: absolute;
+      z-index: 3;
+      top: 10px;
+      right: 18px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 0;
+      cursor: pointer;
+      font-family: var(--parch-title, Georgia, serif);
+      font-size: 1rem;
+      color: #f4d9a0;
+      background: radial-gradient(circle at 38% 34%, #c0392b, #7a1d16);
+      box-shadow: inset 0 2px 3px rgba(255, 180, 160, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.5), 0 3px 7px rgba(0, 0, 0, 0.45);
+    }
+    .citypanel .seal:hover { filter: brightness(1.1); }
+    .citypanel .seal:focus-visible { outline: 2px solid #f4d9a0; outline-offset: 2px; }
     .close { border: none; background: transparent; font-size: 1.05rem; line-height: 1; padding: 0.25rem 0.45rem; color: var(--rm-muted, #6b7280); }
     .close:hover { color: var(--rm-text, #111827); background: var(--rm-track, #e9f0f2); }
     .badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0 0.75rem; }
@@ -1852,9 +1928,10 @@ export class CareerApp extends LitElement {
        superficie: chips, inputs, bordes y botones interiores se re-tiñen
        solos (todos usan var(--rm-*) con fallback) sin tocar su CSS. La
        consola navy (JG-4) queda como chasis; el pergamino vive DENTRO. ═══ */
-    .sea, .ficha, .retos, .ruta, .onboard, .citypanel, .matepop {
+    .sea, .ficha, .retos, .ruta, .onboard, .matepop {
       /* Re-tinte de los tokens claros hacia el papel (hereda al subárbol,
-         shadow DOM de <player-card> incluido). */
+         shadow DOM de <player-card> incluido). El panel de casa (.citypanel)
+         tiene su propio pergamino «mapa del tesoro» (RMR-TSK-0256), aparte. */
       --rm-surface: #f9efd8;
       --rm-border: #cdb183;
       --rm-track: #e9d9af;
@@ -1877,8 +1954,7 @@ export class CareerApp extends LitElement {
     /* Cabeceras como TABLÓN de madera claveteado (sustituyen el navy del
        marco dentro del pergamino); título en serif del sistema con
        small-caps — crema sobre madera oscura: AA holgado. */
-    .sea-head,
-    .citypanel header {
+    .sea-head {
       background:
         repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 46px, rgba(30, 16, 4, 0.22) 46px 48px),
         linear-gradient(180deg, var(--wood-1, #7a5a33) 0%, var(--wood-2, #55391c) 100%);
@@ -1886,21 +1962,16 @@ export class CareerApp extends LitElement {
       border-radius: 12px 8px 3px 3px / 9px 12px 3px 3px;
       box-shadow: inset 0 1px 0 rgba(255, 240, 210, 0.22), inset 0 -3px 8px rgba(20, 10, 2, 0.35);
     }
-    .sea-head h3,
-    .citypanel header h3 {
+    .sea-head h3 {
       font-family: var(--parch-title, Georgia, serif);
       font-variant: small-caps;
       letter-spacing: 0.06em;
       color: var(--wood-text, #f6e8c9);
       text-shadow: 0 1px 2px rgba(20, 10, 2, 0.65);
     }
-    .citypanel header .kind { color: #d9c294; }
-    .sea-head .close,
-    .citypanel header .close { color: #e8d5ab; }
-    .sea-head .close:hover,
-    .citypanel header .close:hover { color: #fff; background: rgba(255, 240, 210, 0.16); }
-    .sea-head .close:focus-visible,
-    .citypanel header .close:focus-visible { outline: 2px solid var(--wood-text, #f6e8c9); outline-offset: 2px; }
+    .sea-head .close { color: #e8d5ab; }
+    .sea-head .close:hover { color: #fff; background: rgba(255, 240, 210, 0.16); }
+    .sea-head .close:focus-visible { outline: 2px solid var(--wood-text, #f6e8c9); outline-offset: 2px; }
     /* Títulos interiores de las superficies pergamino: la misma serif. */
     .onboard h3, .cphead h4, .rol-name, .reto-info strong, .ruta-info strong, .wmeta strong {
       font-family: var(--parch-title, Georgia, serif);
@@ -1983,6 +2054,7 @@ export class CareerApp extends LitElement {
     this.error = '';
     this.journey = { visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} };
     this.selected = null;
+    this._cityTab = 'what'; // pestaña activa del panel de casa (RMR-TSK-0256)
     this.loading = false;
     /** @type {import('../../tools/career/domain/types.js').CareerMap|null} */
     this.map = null;
@@ -2636,6 +2708,7 @@ export class CareerApp extends LitElement {
 
   _onSelect(event) {
     this.selected = event.detail.cityId;
+    this._cityTab = 'what'; // abrir siempre por «Qué es» (RMR-TSK-0256)
     this.teammatePopover = null; // la tarjeta de la casa releva al mini-resumen
     this.routePicker = null; // el selector «¿Dónde?» era de otra casa (JG-9)
   }
@@ -6928,13 +7001,11 @@ export class CareerApp extends LitElement {
    */
   _renderCityBody(sel) {
     return html`
-      <div class="citybody">
-        ${this._renderCityWhat(sel)}
-        ${this._renderCityLearn(sel)}
-        ${this._renderCityAiFocus(sel)}
-        ${this._renderCityResources(sel)}
-        ${this._renderCityReferences(sel)}
-      </div>
+      ${this._renderCityWhat(sel)}
+      ${this._renderCityLearn(sel)}
+      ${this._renderCityAiFocus(sel)}
+      ${this._renderCityResources(sel)}
+      ${this._renderCityReferences(sel)}
       ${this._renderCityCertificate(sel)}
     `;
   }
@@ -7078,16 +7149,44 @@ export class CareerApp extends LitElement {
       tabindex="-1"
       @keydown=${this._onPanelKeydown}
     >
-      <header>
-        <div>
-          <h3>${sel.name}</h3>
-          <p class="kind">${areaName ? html`${areaName} · ` : null}${sel.kind} · ${sel.weight} pts</p>
-          ${this._renderCityStatusBadge(sel)}
-        </div>
-        <button class="close" aria-label="Cerrar panel" title="Cerrar (Esc)" @click=${this._closeCityPanel}>✕</button>
-      </header>
-      ${this._renderCityBody(sel)}
+      <div class="paper"></div>
+      <svg class="torn-def" width="0" height="0" aria-hidden="true">
+        <filter id="citytorn" x="-6%" y="-6%" width="112%" height="112%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="3" seed="7" result="n"></feTurbulence>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="17" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+        </filter>
+      </svg>
+      <button class="seal" aria-label="Cerrar panel" title="Cerrar (Esc)" @click=${this._closeCityPanel}>✕</button>
+      <div class="ink">
+        <h3 class="ctitle">${sel.name}</h3>
+        <p class="ckind">${areaName ? html`${areaName} · ` : null}${sel.kind} · ${sel.weight} pts ${this._renderCityStatusBadge(sel)}</p>
+        ${this._renderCityTabs(sel)}
+      </div>
     </aside>`;
+  }
+
+  /** Cuerpo del panel de casa en PESTAÑAS (RMR-TSK-0256): una sección a la vez,
+   *  para que quepa en el pergamino sin scroll. */
+  _renderCityTabs(sel) {
+    const tab = this._cityTab;
+    const TABS = [
+      ['what', 'Qué es'], ['learn', 'Aprender'], ['resources', 'Recursos'],
+      ['crew', 'Tripulación'], ['certify', 'Certificarte'],
+    ];
+    return html`
+      <div class="ctabs" role="tablist" aria-label="Secciones de la casa">
+        ${TABS.map(([id, label]) => html`
+          <button role="tab" aria-selected=${tab === id} class=${tab === id ? 'on' : ''}
+            @click=${() => { this._cityTab = id; }}>${label}</button>`)}
+      </div>
+      <div class="cbody" role="tabpanel">
+        ${tab === 'what' ? this._renderCityWhat(sel) : null}
+        ${tab === 'learn' ? html`${this._renderCityLearn(sel)}${this._renderCityAiFocus(sel)}` : null}
+        ${tab === 'resources' ? this._renderCityResources(sel) : null}
+        ${tab === 'crew' ? this._renderCityReferences(sel) : null}
+        ${tab === 'certify' ? this._renderCityCertificate(sel) : null}
+      </div>
+    `;
   }
 
   /** Etiqueta de la opción del selector: marca a los externos (no tienen carrera). */
