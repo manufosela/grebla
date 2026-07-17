@@ -169,6 +169,9 @@ export class GameEditor extends LitElement {
     _islands: { state: true },
     _routes: { state: true },
     _islandId: { state: true },
+    _areaTab: { state: true },
+    _addIslandDraft: { state: true },
+    _comarcaEdit: { state: true },
     _cityForm: { state: true },
     _confirmCity: { state: true },
     _routeForm: { state: true },
@@ -204,6 +207,46 @@ export class GameEditor extends LitElement {
     }
     h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
     h3 { font-size: 0.95rem; margin: 1rem 0 0.5rem; }
+
+    /* ── Archipiélago → islas (tabs) → comarcas (sub-tabs) → casas (RMR-TSK-0257) ── */
+    .arch-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .arch-head h2 { margin: 0; }
+    .add-island { border: 1px solid var(--rm-accent, #3b82f6); background: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); border-radius: 999px; padding: 0.4rem 0.95rem; font: inherit; font-weight: 700; cursor: pointer; }
+    .add-island:hover:not(:disabled) { filter: brightness(1.08); }
+    .add-island:disabled { opacity: 0.5; cursor: default; }
+    .island-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 2px solid var(--rm-border, #e5e7eb); }
+    .itab { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-track, #f3f4f6); color: var(--rm-text, #374151); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .itab:hover { border-color: var(--rm-accent, #3b82f6); }
+    .itab.active { background: var(--rm-brand, #1e3a5f); border-color: var(--rm-brand, #1e3a5f); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }
+    .island-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.6rem; }
+    .island-title { margin: 0; font-size: 1.2rem; color: var(--rm-brand, #1e3a5f); }
+    .area-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 1rem; }
+    .atab { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+    .atab:hover { color: var(--rm-text, #111827); border-color: var(--rm-accent, #3b82f6); }
+    .atab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
+    .atab .cnt { font-variant-numeric: tabular-nums; opacity: 0.75; margin-left: 0.2rem; }
+    .comarca-actions, .comarca-edit { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: 0.4rem; }
+    .comarca-edit input { padding: 0.28rem 0.5rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; font: inherit; font-size: 0.82rem; }
+    .house-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
+    .house-card { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-muted, #9ca3af); border-radius: 10px; background: var(--rm-surface, #fff); padding: 0.7rem 0.8rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.35rem; transition: box-shadow 0.12s, transform 0.12s, border-color 0.12s; }
+    .house-card:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); transform: translateY(-2px); border-color: var(--rm-accent, #3b82f6); }
+    .house-card:focus-visible { outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 2px; }
+    .house-card.tech { border-left-color: #3b82f6; }
+    .house-card.skill { border-left-color: #16a34a; }
+    .house-card.milestone { border-left-color: #d97706; }
+    .hc-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+    .hc-name { font-weight: 700; font-size: 0.95rem; color: var(--rm-text, #111827); }
+    .hc-kind { flex: none; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; border-radius: 999px; padding: 0.08rem 0.5rem; color: #fff; }
+    .hc-kind.tech { background: #3b82f6; }
+    .hc-kind.skill { background: #16a34a; }
+    .hc-kind.milestone { background: #d97706; }
+    .hc-id { font-size: 0.72rem; color: var(--rm-muted, #6b7280); font-family: ui-monospace, SFMono-Regular, monospace; word-break: break-all; }
+    .hc-meta { display: flex; align-items: center; gap: 0.7rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin-top: auto; }
+    .hc-meta .mini { margin-left: auto; }
+    .island-form { display: grid; gap: 0.8rem; }
+    .island-form label { display: grid; gap: 0.25rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-text, #111827); }
+    .island-form input { padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; font: inherit; }
+    .island-form small { font-weight: 400; }
     .toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
     button {
       border: 1px solid var(--rm-border, #d1d5db);
@@ -300,6 +343,12 @@ export class GameEditor extends LitElement {
     /** @type {import('../../tools/career/domain/careerRoutes.js').CareerRoute[]|null} */
     this._routes = null;
     this._islandId = '';
+    /** Comarca (área) activa dentro de la isla (RMR-TSK-0257). */
+    this._areaTab = '';
+    /** Borrador del popup de alta de isla, o null si está cerrado. */
+    this._addIslandDraft = null;
+    /** Edición inline de comarca: { areaId|null (null = nueva), name } o null. */
+    this._comarcaEdit = null;
     /** @type {{ originalId: string|null, draft: ReturnType<typeof cityDraft>, errors: string[] }|null} */
     this._cityForm = null;
     /** @type {import('../../tools/career/domain/types.js').City|null} casa pendiente de confirmar borrado */
@@ -368,7 +417,8 @@ export class GameEditor extends LitElement {
   _openAddCity() {
     const discipline = this._archEntry?.discipline ?? this._islandId;
     const draft = cityDraft(null, discipline);
-    draft.area = this._island?.areas.at(0)?.id ?? '';
+    // Preselecciona la comarca activa (RMR-TSK-0257), o la primera de la isla.
+    draft.area = this._activeArea(this._island) || (this._island?.areas.at(0)?.id ?? '');
     this._cityIdTouched = false;
     this._cityForm = { originalId: null, draft, errors: [] };
   }
@@ -493,6 +543,122 @@ export class GameEditor extends LitElement {
     const islands = this._arch.islands.map((i) => (i.id === entry.id ? { ...i, citiesTotal: total } : i));
     await saveArchipelago({ islands });
     this._arch = { islands };
+  }
+
+  // ── Islas, comarcas y navegación (RMR-TSK-0257) ──────────────────────────
+
+  /** Etiqueta corta de una isla para las pestañas (shortName o nombre sin «Isla »). */
+  _islandShort(entry) {
+    return (entry?.shortName ?? '').trim() || String(entry?.name ?? entry?.id ?? '').replace(/^Isla\s+/i, '');
+  }
+
+  /** Comarca activa de la isla (la seleccionada si existe, o la primera). */
+  _activeArea(island) {
+    const areas = island?.areas ?? [];
+    if (this._areaTab && areas.some((a) => a.id === this._areaTab)) return this._areaTab;
+    return areas.at(0)?.id ?? '';
+  }
+
+  _selectIsland(id) {
+    this._islandId = id;
+    this._areaTab = '';
+    this._cityForm = null;
+    this._comarcaEdit = null;
+    this._error = '';
+  }
+
+  /** Guarda el mapa de la isla con nuevas comarcas (areas). */
+  async _persistAreas(areas, successMsg) {
+    const island = this._island;
+    if (!island) return false;
+    const nextMap = { ...island, areas };
+    this._saving = true;
+    this._error = '';
+    try {
+      await saveCareerMap(island.id, nextMap);
+      this._islands = new Map(this._islands).set(island.id, nextMap);
+      this._flash(successMsg);
+      return true;
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudieron guardar las comarcas.';
+      return false;
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  _startAddComarca() { this._comarcaEdit = { areaId: null, name: '' }; this._error = ''; }
+  _startRenameComarca(area) { this._comarcaEdit = { areaId: area.id, name: area.name }; this._error = ''; }
+  _cancelComarca() { this._comarcaEdit = null; }
+  _setComarcaName(name) { this._comarcaEdit = { ...this._comarcaEdit, name }; }
+
+  async _saveComarca() {
+    const edit = this._comarcaEdit;
+    const island = this._island;
+    if (!edit || !island) return;
+    const name = edit.name.trim();
+    if (!name) { this._error = 'La comarca necesita un nombre.'; return; }
+    let areas;
+    if (edit.areaId) {
+      areas = island.areas.map((a) => (a.id === edit.areaId ? { ...a, name } : a));
+    } else {
+      const id = slugify(name);
+      if (!id) { this._error = 'Nombre de comarca inválido.'; return; }
+      if (island.areas.some((a) => a.id === id)) { this._error = `Ya existe una comarca «${id}».`; return; }
+      areas = [...island.areas, { id, name }];
+    }
+    const ok = await this._persistAreas(areas, edit.areaId ? 'Comarca renombrada.' : 'Comarca añadida.');
+    if (ok) {
+      if (!edit.areaId) this._areaTab = slugify(name);
+      this._comarcaEdit = null;
+    }
+  }
+
+  async _removeComarca(area) {
+    const island = this._island;
+    if (!island) return;
+    const used = island.cities.filter((c) => c.area === area.id).length;
+    if (used > 0) {
+      this._error = `«${area.name}» tiene ${used} casa(s): muévelas o quítalas antes de borrar la comarca.`;
+      return;
+    }
+    const areas = island.areas.filter((a) => a.id !== area.id);
+    const ok = await this._persistAreas(areas, `Comarca «${area.name}» quitada.`);
+    if (ok && this._areaTab === area.id) this._areaTab = areas.at(0)?.id ?? '';
+  }
+
+  _openAddIsland() { this._addIslandDraft = { id: '', name: '', shortName: '' }; this._error = ''; }
+  _closeAddIsland() { this._addIslandDraft = null; }
+  _setIslandDraft(key, value) { this._addIslandDraft = { ...this._addIslandDraft, [key]: value }; }
+
+  async _createIsland() {
+    const d = this._addIslandDraft;
+    if (!d) return;
+    const name = d.name.trim();
+    const id = slugify(d.id.trim() || name);
+    const shortName = d.shortName.trim();
+    if (!id || !name) { this._error = 'La isla necesita id y nombre.'; return; }
+    if (this._arch?.islands.some((i) => i.id === id)) { this._error = `Ya existe una isla con id «${id}».`; return; }
+    const map = { id, name, areas: [], cities: [], startPort: { x: 50, y: 92 } };
+    this._saving = true;
+    this._error = '';
+    try {
+      await saveCareerMap(id, map);
+      const entry = { id, name, discipline: id, x: 50, y: 50, citizenshipPct: 60, citiesTotal: 0 };
+      if (shortName) entry.shortName = shortName;
+      const islands = [...(this._arch?.islands ?? []), entry];
+      await saveArchipelago({ islands });
+      this._arch = { islands };
+      this._islands = new Map(this._islands).set(id, map);
+      this._islandId = id;
+      this._areaTab = '';
+      this._addIslandDraft = null;
+      this._flash(`Isla «${name}» creada. Añádele comarcas y casas.`);
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo crear la isla.';
+    } finally {
+      this._saving = false;
+    }
   }
 
   // ── Pestaña Rutas: acciones ───────────────────────────────────────────────
@@ -635,67 +801,119 @@ export class GameEditor extends LitElement {
     const island = this._island;
     return html`
       <section>
-        <h2>Casas por isla</h2>
-        <div class="toolbar">
-          <label for="island">Isla</label>
-          <select
-            id="island"
-            .value=${this._islandId}
-            @change=${(e) => { this._islandId = e.target.value; this._cityForm = null; }}
-          >
-            ${this._arch.islands.map((i) => {
-              const label = `${i.name} — ${i.discipline ?? i.id}`;
-              return html`<option value=${i.id} ?selected=${i.id === this._islandId}>${label}</option>`;
-            })}
-          </select>
-          <button class="primary" ?disabled=${!island || this._saving} @click=${this._openAddCity}>
-            Añadir casa
-          </button>
+        <div class="arch-head">
+          <h2>🗺️ Archipiélago</h2>
+          <button class="add-island" ?disabled=${this._saving} @click=${this._openAddIsland} title="Añadir una isla nueva">＋ Isla</button>
         </div>
-        ${this._renderCityTable(island)}
+        <nav class="island-tabs" role="tablist" aria-label="Islas del archipiélago">
+          ${this._arch.islands.map((i) => html`
+            <button role="tab" aria-selected=${i.id === this._islandId}
+              class=${i.id === this._islandId ? 'itab active' : 'itab'}
+              @click=${() => this._selectIsland(i.id)}
+              title=${i.name}>${this._islandShort(i)}</button>`)}
+        </nav>
+        ${island ? this._renderIslandBody(island) : html`<p class="empty">Selecciona una isla o crea una nueva con «＋ Isla».</p>`}
       </section>
+      ${this._addIslandDraft ? this._renderAddIslandModal() : null}
       ${this._cityForm ? this._renderCityForm(island) : null}
     `;
   }
 
-  /** @param {import('../../tools/career/domain/types.js').CareerMap|null} island */
-  _renderCityTable(island) {
-    if (!island) return html`<p class="empty">Selecciona una isla.</p>`;
-    if (island.cities.length === 0) {
-      return html`<p class="empty">La isla no tiene casas todavía: añade la primera.</p>`;
-    }
-    const areaName = new Map(island.areas.map((a) => [a.id, a.name]));
+  /** @param {import('../../tools/career/domain/types.js').CareerMap} island */
+  _renderIslandBody(island) {
+    const areas = island.areas ?? [];
+    const activeArea = this._activeArea(island);
+    const cities = island.cities.filter((c) => c.area === activeArea);
     return html`
-      <table>
-        <thead>
-          <tr><th>Casa</th><th>Comarca</th><th>Tipo</th><th>Peso</th><th>Prereqs</th><th></th></tr>
-        </thead>
-        <tbody>
-          ${island.cities.map((city) => this._renderCityRow(city, areaName))}
-        </tbody>
-      </table>
+      <div class="island-head">
+        <h3 class="island-title">${island.name}</h3>
+        <button class="primary" ?disabled=${this._saving || !areas.length} @click=${this._openAddCity} title=${areas.length ? '' : 'Añade una comarca antes de crear casas'}>＋ Añadir casa</button>
+      </div>
+      <nav class="area-tabs" role="tablist" aria-label="Comarcas de la isla">
+        ${areas.map((a) => {
+          const n = island.cities.filter((c) => c.area === a.id).length;
+          return html`<button role="tab" aria-selected=${a.id === activeArea}
+            class=${a.id === activeArea ? 'atab active' : 'atab'}
+            @click=${() => { this._areaTab = a.id; }}>${a.name} <span class="cnt">${n}</span></button>`;
+        })}
+        ${this._renderComarcaControls(activeArea, areas)}
+      </nav>
+      ${this._renderHousesOrEmpty(areas, cities)}
     `;
   }
 
-  /** @param {import('../../tools/career/domain/types.js').City} city @param {Map<string,string>} areaName */
-  _renderCityRow(city, areaName) {
+  /** Casas de la comarca activa como tarjetas, o el estado vacío que toque. */
+  _renderHousesOrEmpty(areas, cities) {
+    if (areas.length === 0) {
+      return html`<p class="empty">Esta isla no tiene comarcas todavía. Crea la primera para poder añadir casas.</p>`;
+    }
+    if (cities.length === 0) {
+      return html`<p class="empty">Esta comarca no tiene casas. Añade la primera con «＋ Añadir casa».</p>`;
+    }
+    return html`<div class="house-grid">${cities.map((c) => this._renderHouseCard(c))}</div>`;
+  }
+
+  /** Controles de comarca: editar en curso, o botones de renombrar/quitar/añadir. */
+  _renderComarcaControls(activeArea, areas) {
+    if (this._comarcaEdit) {
+      return html`<span class="comarca-edit">
+        <input type="text" .value=${this._comarcaEdit.name} placeholder="Nombre de la comarca"
+          @input=${(e) => this._setComarcaName(e.target.value)}
+          @keydown=${(e) => { if (e.key === 'Enter') this._saveComarca(); if (e.key === 'Escape') this._cancelComarca(); }} />
+        <button class="mini primary" ?disabled=${this._saving} @click=${this._saveComarca}>Guardar</button>
+        <button class="mini" @click=${this._cancelComarca}>Cancelar</button>
+      </span>`;
+    }
+    const current = areas.find((a) => a.id === activeArea);
+    return html`<span class="comarca-actions">
+      ${current ? html`<button class="mini" title="Renombrar comarca" @click=${() => this._startRenameComarca(current)}>✎</button>
+        <button class="mini danger" title="Quitar comarca" @click=${() => this._removeComarca(current)}>✕</button>` : null}
+      <button class="mini add" title="Añadir comarca" @click=${this._startAddComarca}>＋ comarca</button>
+    </span>`;
+  }
+
+  /** @param {import('../../tools/career/domain/types.js').City} city */
+  _renderHouseCard(city) {
     return html`
-      <tr>
-        <td>
-          ${city.name}
-          ${city.deprecated ? html` <span class="badge dep">deprecada</span>` : null}
-          <div class="muted">${city.id}</div>
-        </td>
-        <td>${areaName.get(city.area) ?? city.area}</td>
-        <td>${KIND_LABEL[city.kind] ?? city.kind}</td>
-        <td>${city.weight}</td>
-        <td>${city.prereqs.length}</td>
-        <td>
-          <button class="mini" ?disabled=${this._saving} @click=${() => this._openEditCity(city)}>Editar</button>
-          <button class="mini danger" ?disabled=${this._saving} @click=${() => this._askDeleteCity(city)}>Quitar</button>
-        </td>
-      </tr>
-    `;
+      <div class="house-card ${city.kind}" role="button" tabindex="0"
+        @click=${() => this._openEditCity(city)}
+        @keydown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._openEditCity(city); } }}>
+        <div class="hc-top">
+          <span class="hc-name">${city.name}</span>
+          <span class="hc-kind ${city.kind}">${KIND_LABEL[city.kind] ?? city.kind}</span>
+        </div>
+        <div class="hc-id">${city.id}${city.deprecated ? html` · <span class="badge dep">deprecada</span>` : null}</div>
+        <div class="hc-meta">
+          <span title="Peso">⚖️ ${city.weight}</span>
+          <span title="Prerrequisitos">🔗 ${city.prereqs.length}</span>
+          <button class="mini danger" ?disabled=${this._saving}
+            @click=${(e) => { e.stopPropagation(); this._askDeleteCity(city); }}>Quitar</button>
+        </div>
+      </div>`;
+  }
+
+  /** Popup de alta de isla (RMR-TSK-0257). */
+  _renderAddIslandModal() {
+    const d = this._addIslandDraft;
+    return html`<app-modal .open=${true} heading="Añadir isla" @close=${this._closeAddIsland}>
+      <div class="island-form">
+        <label>Nombre
+          <input type="text" .value=${d.name} placeholder="p. ej. Frontend"
+            @input=${(e) => this._setIslandDraft('name', e.target.value)} /></label>
+        <label>Nombre corto (para la pestaña)
+          <input type="text" .value=${d.shortName} placeholder="p. ej. FE"
+            @input=${(e) => this._setIslandDraft('shortName', e.target.value)} /></label>
+        <label>Id / disciplina
+          <input type="text" .value=${d.id} placeholder="se genera del nombre si lo dejas vacío"
+            @input=${(e) => this._setIslandDraft('id', e.target.value)} />
+          <small class="muted">Id del doc y prefijo de las casas. No se puede cambiar luego.</small></label>
+        ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      </div>
+      <div class="modal-actions">
+        <button ?disabled=${this._saving} @click=${this._closeAddIsland}>Cancelar</button>
+        <button class="primary" ?disabled=${this._saving} @click=${this._createIsland}>${this._saving ? 'Creando…' : 'Crear isla'}</button>
+      </div>
+    </app-modal>`;
   }
 
   /** @param {import('../../tools/career/domain/types.js').CareerMap|null} island */

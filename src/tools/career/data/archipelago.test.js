@@ -83,6 +83,15 @@ describe('career — archipiélago (índice de islas, helpers puros)', () => {
     expect(normalizeArchipelago({})).toEqual({ islands: [] });
   });
 
+  it('preserva shortName si está presente y lo omite si está vacío (RMR-TSK-0257)', () => {
+    const arch = normalizeArchipelago({ islands: [
+      { id: 'fe', name: 'Frontend', shortName: '  FE ' },
+      { id: 'be', name: 'Backend', shortName: '   ' },
+    ] });
+    expect(arch.islands[0].shortName).toBe('FE');
+    expect('shortName' in arch.islands[1]).toBe(false);
+  });
+
   it('serializeArchipelago no persiste undefined ni opcionales vacíos (Firestore-safe)', () => {
     const serialized = serializeArchipelago({
       islands: [
