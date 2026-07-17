@@ -42,6 +42,11 @@ describe('sanitizePulse', () => {
     const out = sanitizePulse({});
     for (const dim of PULSE_DIMS) expect(out[dim]).toBe(0);
   });
+  it('shareWord es opt-in explícito (por defecto false)', () => {
+    expect(sanitizePulse({}).shareWord).toBe(false);
+    expect(sanitizePulse({ shareWord: true }).shareWord).toBe(true);
+    expect(sanitizePulse({ shareWord: 'yes' }).shareWord).toBe(false); // solo true literal
+  });
   it('recorta la palabra y hace trim', () => {
     expect(sanitizePulse({ palabra: '  remando  ' }).palabra).toBe('remando');
     expect(sanitizePulse({ palabra: 'x'.repeat(60) }).palabra).toHaveLength(PULSE_WORD_MAX);

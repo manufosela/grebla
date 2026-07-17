@@ -68,10 +68,10 @@ function clampDim(value) {
 
 /**
  * Sanea la entrada del usuario a un registro de marea válido: cada dimensión
- * acotada a 0..100 y la palabra recortada. No incluye metadatos (uid, fechas):
- * los pone la capa de IO.
+ * acotada a 0..100, la palabra recortada y el opt-in de compartirla (shareWord).
+ * No incluye metadatos (uid, fechas): los pone la capa de IO.
  * @param {Record<string, unknown>} [input]
- * @returns {{ energia: number, animo: number, carga: number, rumbo: number, tripulacion: number, reconocimiento: number, palabra: string }}
+ * @returns {{ energia: number, animo: number, carga: number, rumbo: number, tripulacion: number, reconocimiento: number, palabra: string, shareWord: boolean }}
  */
 export function sanitizePulse(input = {}) {
   /** @type {Record<string, unknown>} */
@@ -79,5 +79,8 @@ export function sanitizePulse(input = {}) {
   for (const dim of PULSE_DIMS) out[dim] = clampDim(input[dim]);
   const palabra = typeof input.palabra === 'string' ? input.palabra : '';
   out.palabra = palabra.trim().slice(0, PULSE_WORD_MAX);
+  // Opt-in explícito: la palabra solo entra en la nube anónima del equipo si el
+  // usuario lo marca; por defecto es privada (RMR-TSK-0240).
+  out.shareWord = input.shareWord === true;
   return /** @type {any} */ (out);
 }
