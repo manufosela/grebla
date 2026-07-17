@@ -179,6 +179,13 @@ export class CityReferences extends LitElement {
       </form>`;
   }
 
+  /** Zona de alta: form abierto, o el botón para abrirlo. Solo con sesión. */
+  _renderAdd() {
+    if (!this.user?.uid) return null;
+    const opener = html`<button class="add-open" type="button" @click=${() => { this._open = true; }}>➕ Añadir referencia</button>`;
+    return html`<div class="add">${this._open ? this._renderForm() : opener}</div>`;
+  }
+
   render() {
     return html`
       <div class="sec">
@@ -186,11 +193,7 @@ export class CityReferences extends LitElement {
         ${this._refs.length
           ? html`<ul>${this._refs.map((r) => this._renderItem(r))}</ul>`
           : html`<p class="empty">Aún no hay aportes. ¿Encontraste algo que te ayudó a certificarte? Compártelo con la tripulación.</p>`}
-        ${this.user?.uid
-          ? html`<div class="add">
-              ${this._open ? this._renderForm() : html`<button class="add-open" type="button" @click=${() => { this._open = true; }}>➕ Añadir referencia</button>`}
-            </div>`
-          : null}
+        ${this._renderAdd()}
       </div>`;
   }
 }
