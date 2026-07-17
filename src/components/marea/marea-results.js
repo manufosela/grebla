@@ -106,13 +106,14 @@ export class MareaResults extends LitElement {
     .signal.warn { border-left-color: var(--amber); } .signal.warn .dot { background: var(--amber); }
     .signal.good { border-left-color: var(--teal); } .signal.good .dot { background: var(--teal); }
     .signal.info { border-left-color: var(--rm-border, #dde7ec); }
-    .weeknav { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.15rem; }
-    .weeknav .wk { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 999px; width: 32px; height: 32px; font-size: 1.15rem; line-height: 1; cursor: pointer; display: inline-grid; place-items: center; }
-    .weeknav .wk:disabled { opacity: 0.4; cursor: default; }
-    .weeknav .wk:hover:not(:disabled) { border-color: var(--teal); }
+    .weeknav { display: flex; align-items: center; justify-content: center; gap: 0.9rem; margin: 0.2rem 0 1.3rem; }
+    .weeknav .wk { flex: none; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 999px; width: 36px; height: 36px; font-size: 1.3rem; line-height: 1; cursor: pointer; display: inline-grid; place-items: center; }
+    .weeknav .wk:disabled { opacity: 0.35; cursor: default; }
+    .weeknav .wk:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
     .weeknav .wk:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-    .weeknav .wk-title { font-weight: 700; font-size: 0.95rem; color: var(--rm-text, #1e3a5f); font-variant-numeric: tabular-nums; }
-    .weeknav .wk-now { font-weight: 400; font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
+    .weeknav .wk-head { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; margin: 0; min-width: 10rem; }
+    .weeknav .wk-title { font-weight: 800; font-size: 1.55rem; line-height: 1.05; color: var(--rm-text, #1e3a5f); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+    .weeknav .wk-sub { font-weight: 500; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
   `;
 
   static properties = {
@@ -313,15 +314,19 @@ export class MareaResults extends LitElement {
       ${this._renderSignals(teamSignals(weeks))}`;
   }
 
-  /** Título de la semana visible + navegación (RMR-TSK-0252). Solo semanas pasadas y la actual. */
+  /** Título de la semana visible + navegación (RMR-TSK-0252, RMR-BUG-0039). */
   _renderWeekNav() {
     const parsed = parseWeekIso(this._weekIso());
-    const title = parsed ? `Semana ${parsed.week} · ${parsed.year}` : this._weekIso();
+    const week = parsed ? `Semana ${parsed.week}` : this._weekIso();
+    const sub = parsed ? `${parsed.year}${this._weekOffset === 0 ? ' · esta semana' : ''}` : '';
     const isCurrent = this._weekOffset === 0;
     return html`
       <div class="weeknav">
         <button class="wk" @click=${() => this._shiftWeek(1)} aria-label="Semana anterior" title="Semana anterior">‹</button>
-        <span class="wk-title">${title}${isCurrent ? html` <span class="wk-now">· esta semana</span>` : ''}</span>
+        <h2 class="wk-head">
+          <span class="wk-title">${week}</span>
+          ${sub ? html`<span class="wk-sub">${sub}</span>` : null}
+        </h2>
         <button class="wk" @click=${() => this._shiftWeek(-1)} ?disabled=${isCurrent} aria-label="Semana siguiente" title="Semana siguiente">›</button>
       </div>`;
   }
