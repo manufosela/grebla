@@ -329,7 +329,7 @@ const RESOURCE_GROUPS = {
  *  URL o, en su defecto, de la etiqueta. Sin puntos/barras → clave de mapa sana. */
 function resourceKey(r) {
   const base = (r.url || r.label || '').toLowerCase();
-  return base.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'res';
+  return base.replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/(?:^-+)|(?:-+$)/g, '').slice(0, 80) || 'res';
 }
 
 /**

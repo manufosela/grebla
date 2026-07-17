@@ -247,11 +247,11 @@ export async function setEvidence(store, personId, journey, cityId, evidence) {
  * @returns {Promise<Journey>}
  */
 export async function toggleResourceDone(store, personId, journey, cityId, resKey, iso) {
-  const city = { ...(journey.resourcesDone?.[cityId] ?? {}) };
+  const city = { ...journey.resourcesDone?.[cityId] };
   city[resKey] = iso || null;
   const next = {
     ...journey,
-    resourcesDone: { ...(journey.resourcesDone ?? {}), [cityId]: city },
+    resourcesDone: { ...journey.resourcesDone, [cityId]: city },
   };
   await store.journeys.save(personId, next);
   return next;
