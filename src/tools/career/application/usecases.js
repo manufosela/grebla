@@ -49,6 +49,7 @@ function normalizeJourney(j) {
       plannedRoute: [],
       visitedIslands: [DEFAULT_ISLAND_ID],
       evidences: {},
+      resourcesDone: {},
       challenge: null,
     };
   }
@@ -72,10 +73,33 @@ function normalizeJourney(j) {
     currentIsland,
     visitedIslands,
     evidences: { ...(j.evidences ?? {}) },
+    // Recursos marcados como hechos (RMR-TSK-0261). Journeys previos no lo traen.
+    resourcesDone: normalizeResourcesDone(j.resourcesDone),
     // Reto activo del modo Reto (JG-5): saneado; corrupto o ausente → null
     // (modo Libre). Journeys previos a JG-5 no traen el campo.
     challenge: normalizeChallenge(j.challenge),
   };
+}
+
+/**
+ * Sanea el mapa de recursos consumidos (RMR-TSK-0261): objeto de objetos con
+ * hojas de fecha ISO (string). Las hojas null/vacías (recurso desmarcado) se
+ * descartan al leer — «ausente» equivale a «pendiente».
+ * @param {unknown} rd
+ * @returns {Record<string, Record<string, string>>}
+ */
+function normalizeResourcesDone(rd) {
+  if (!rd || typeof rd !== 'object') return {};
+  const out = {};
+  for (const [cityId, marks] of Object.entries(rd)) {
+    if (!marks || typeof marks !== 'object') continue;
+    const clean = {};
+    for (const [key, val] of Object.entries(marks)) {
+      if (typeof val === 'string' && val) clean[key] = val;
+    }
+    if (Object.keys(clean).length) out[cityId] = clean;
+  }
+  return out;
 }
 
 /**
@@ -207,6 +231,27 @@ export async function setEvidence(store, personId, journey, cityId, evidence) {
   const next = {
     ...journey,
     evidences: { ...(journey.evidences ?? {}), [cityId]: { ...evidence } },
+  };
+  await store.journeys.save(personId, next);
+  return next;
+}
+
+/**
+ * Marca/desmarca un recurso de una casa como consumido (RMR-TSK-0261). Con `iso`
+ * (fecha ISO) lo marca; con `null` lo devuelve a pendiente. Se persiste en
+ * `journey.resourcesDone[cityId][resKey]`: como el store guarda con merge, el
+ * desmarcado escribe `null` (no borra la clave) y `normalizeJourney` lo descarta
+ * al leer, así que «null» ≡ «pendiente».
+ * @param {CareerStore} store @param {string} personId @param {Journey} journey
+ * @param {string} cityId @param {string} resKey @param {string|null} iso
+ * @returns {Promise<Journey>}
+ */
+export async function toggleResourceDone(store, personId, journey, cityId, resKey, iso) {
+  const city = { ...journey.resourcesDone?.[cityId] };
+  city[resKey] = iso || null;
+  const next = {
+    ...journey,
+    resourcesDone: { ...journey.resourcesDone, [cityId]: city },
   };
   await store.journeys.save(personId, next);
   return next;

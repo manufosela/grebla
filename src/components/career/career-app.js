@@ -196,6 +196,7 @@ import {
   setCurrentIsland,
   toggleRoute,
   setEvidence,
+  toggleResourceDone,
   getAchievements,
   recordAchievements,
   getLogbook,
@@ -323,6 +324,18 @@ const RESOURCE_GROUPS = {
   libro: { icon: '📚', title: 'Libros' },
   doc: { icon: '📄', title: 'Docs' },
 };
+
+/** Clave estable de un recurso para marcarlo hecho (RMR-TSK-0261): slug de su
+ *  URL o, en su defecto, de la etiqueta. Sin puntos/barras → clave de mapa sana. */
+function resourceKey(r) {
+  // Un solo `-` de ancla (no `-+`) para evitar backtracking super-lineal: el
+  // colapso previo de no-alfanuméricos ya deja como mucho un guión en cada extremo.
+  const base = (r.url || r.label || '').toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, '-')
+    .replace(/^-/u, '')
+    .replace(/-$/u, '');
+  return base.slice(0, 80) || 'res';
+}
 
 /**
  * Caché de siluetas de isla del mar (JG-12): islandBlobPath es determinista
@@ -1662,7 +1675,6 @@ export class CareerApp extends LitElement {
     .headbadge.deprecated { color: var(--rm-danger, #dc2626); text-decoration: line-through; }
     /* Sección final del certificado: el flujo explicado antes del botón. */
     .certflow { margin: 0 0 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--rm-muted, #6b7280); }
-    .ressec > summary { cursor: pointer; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 800; }
     .ressec .resgroup { margin-top: 0.55rem; }
     .ressec h5 { margin: 0 0 0.25rem; font-size: 0.8rem; color: var(--rm-navy, #1e3a5f); }
     /* Pestaña «Qué aprender»: puntos con check visual y bloque destacado IA. */
@@ -1916,8 +1928,17 @@ export class CareerApp extends LitElement {
     .resgroup { margin: 0.7rem 0 0; }
     .resgroup h4 { margin: 0 0 0.25rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
     .res { list-style: none; margin: 0; padding: 0; font-size: 0.83rem; }
-    .res li { display: flex; gap: 0.4rem; align-items: baseline; padding: 0.2rem 0; color: var(--rm-text, #111827); }
-    .res a { color: var(--rm-accent, #2a9d8f); }
+    .res li { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.22rem 0; color: var(--rm-text, #111827); }
+    /* El check «hecho» del recurso (RMR-TSK-0261): no se estira con el texto. */
+    .res .reschk { flex: 0 0 auto; width: 1rem; height: 1rem; margin: 0; accent-color: var(--rm-accent, #2a9d8f); cursor: pointer; align-self: center; }
+    .res .reschk:disabled { cursor: default; }
+    .res .resmain { display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
+    /* Enlace legible sobre el pergamino: --rm-accent NO se re-tiñe en el papel,
+       así que se usa navy (que sí es oscuro) + subrayado como afordancia. */
+    .res a { color: var(--rm-navy, #1e3a5f); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+    .res a:hover { text-decoration-thickness: 2px; }
+    .res .resdate { font-size: 0.66rem; font-weight: 800; color: #2f6f3e; white-space: nowrap; }
+    .res li.resdone .resmain > a, .res li.resdone .resmain > span:first-child { opacity: 0.62; }
     .res .fmt {
       font-size: 0.66rem; font-weight: 700; padding: 0.08rem 0.45rem; border-radius: 999px;
       background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.03em;
@@ -6973,22 +6994,55 @@ export class CareerApp extends LitElement {
     const groups = Object.entries(RESOURCE_GROUPS)
       .map(([kind, meta]) => ({ meta, items: resources.filter((r) => r.kind === kind) }))
       .filter((g) => g.items.length);
-    return html`<details class="cardsec ressec">
-      <summary>Recursos para el viaje (${resources.length})</summary>
+    const editable = this._canPlayJourney;
+    const done = this.journey.resourcesDone?.[sel.id] ?? {};
+    return html`<section class="cardsec ressec">
+      <h4>Recursos para el viaje (${resources.length})</h4>
       ${groups.map(
         ({ meta, items }) => html`<div class="resgroup">
           <h5>${meta.icon} ${meta.title}</h5>
           <ul class="res">
-            ${items.map(
-              (r) => html`<li>
-                ${r.url ? html`<a href=${r.url} target="_blank" rel="noopener">${r.label}</a>` : html`<span>${r.label}</span>`}
-                ${r.format ? html`<span class="fmt">${r.format}</span>` : null}
-              </li>`,
-            )}
+            ${items.map((r) => this._renderResourceItem(sel, r, done, editable))}
           </ul>
         </div>`,
       )}
-    </details>`;
+    </section>`;
+  }
+
+  /** Una fila de recurso: el enlace/etiqueta y un check «hecho» con su fecha
+   *  (RMR-TSK-0261). El check solo es editable si la persona juega su plan; en
+   *  solo lectura muestra el estado sin poder cambiarlo. */
+  _renderResourceItem(sel, r, done, editable) {
+    const key = resourceKey(r);
+    const doneAt = done[key] ?? null;
+    const link = r.url
+      ? html`<a href=${r.url} target="_blank" rel="noopener">${r.label}</a>`
+      : html`<span>${r.label}</span>`;
+    const dateLabel = doneAt ? wizardDateFmt.format(new Date(doneAt)) : '';
+    return html`<li class=${doneAt ? 'resdone' : ''}>
+      <input
+        class="reschk"
+        type="checkbox"
+        aria-label=${doneAt ? `Hecho el ${dateLabel}` : `Marcar «${r.label}» como hecho`}
+        title=${doneAt ? `Hecho el ${dateLabel}` : 'Marcar como hecho'}
+        .checked=${!!doneAt}
+        ?disabled=${!editable}
+        @change=${(e) => this._toggleResource(sel.id, key, e.target.checked)}
+      />
+      <span class="resmain">
+        ${link}
+        ${r.format ? html`<span class="fmt">${r.format}</span>` : null}
+        ${doneAt ? html`<span class="resdate">✓ ${dateLabel}</span>` : null}
+      </span>
+    </li>`;
+  }
+
+  /** Marca/desmarca un recurso como consumido (RMR-TSK-0261): solo si se juega
+   *  el plan; sella la fecha de hoy al marcar. */
+  async _toggleResource(cityId, resKey, checked) {
+    if (!this._canPlayJourney || !this.personId) return;
+    const iso = checked ? new Date().toISOString() : null;
+    this.journey = await toggleResourceDone(this.store, this.personId, this.journey, cityId, resKey, iso);
   }
 
   /**
