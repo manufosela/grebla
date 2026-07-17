@@ -44,6 +44,7 @@ import {
   expectationsForLevel,
   addendumsForDisciplines,
   aspirationalLevels,
+  composeTitle,
 } from '../tools/career/data/framework.js';
 import { stats } from '../tools/career/application/usecases.js';
 import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
@@ -57,7 +58,7 @@ import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
  * `datos` solo la ven los EXTERNOS (no tienen carrera/rolemirror/mapa).
  * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'|'o2o'|'datos'|'marea'|'retros'>}
  */
-const TABS = ['carrera', 'rolemirror', 'mapa', 'o2o', 'datos', 'marea', 'retros'];
+const TABS = ['ficha', 'carrera', 'rolemirror', 'mapa', 'motivadores', 'o2o', 'datos', 'marea', 'retros'];
 /** Búsqueda O(1) de existencia (validar el hash de la URL). */
 const TAB_SET = new Set(TABS);
 
@@ -67,9 +68,11 @@ const TAB_SET = new Set(TABS);
  * @type {Record<typeof TABS[number], { label: string, heading: string, cls: string }>}
  */
 const TAB_META = {
+  ficha: { label: 'Mi ficha', heading: 'Mi ficha', cls: 'ficha' },
   carrera: { label: 'Mi carrera', heading: 'Mi carrera', cls: 'career' },
   rolemirror: { label: 'Mi Role Mirror', heading: 'Mi Role Mirror', cls: 'rolemirror' },
   mapa: { label: 'Mi mapa', heading: 'Mi mapa de carrera', cls: 'map' },
+  motivadores: { label: 'Motivadores', heading: 'Motivadores', cls: 'motivadores' },
   o2o: { label: 'Mis O2O', heading: 'Mis O2O', cls: 'o2o' },
   datos: { label: 'Mis datos', heading: 'Mis datos', cls: 'datos' },
   marea: { label: 'Marea', heading: 'Marea', cls: 'marea' },
@@ -146,6 +149,17 @@ export class EngineerSpace extends LitElement {
     .datos-row { display: flex; gap: 0.75rem; border-bottom: 1px solid var(--rm-border, #eef0f2); padding: 0 0 0.5rem; }
     .datos-row dt { flex: 0 0 7rem; font-weight: 700; font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); margin: 0; }
     .datos-row dd { margin: 0; font-size: 0.9rem; color: var(--rm-text, #111827); }
+    /* Motivadores integrados como pestaña (RMR-TSK-0260). */
+    .mot-lead { font-size: 0.9rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; max-width: 60ch; }
+    .mot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; }
+    .mot-card { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1rem; border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f); border-radius: var(--rm-radius, 14px); background: var(--rm-surface, #fff); text-decoration: none; transition: background 0.12s, transform 0.12s; }
+    .mot-card.affective { border-left-color: var(--gr-coral, #e26d5e); }
+    .mot-card:hover { background: var(--rm-surface-hover, #eef3f5); transform: translateY(-2px); }
+    .mot-card:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .mot-emoji { font-size: 1.6rem; }
+    .mot-text { display: flex; flex-direction: column; }
+    .mot-text strong { color: var(--rm-text, #111827); font-size: 1rem; }
+    .mot-text small { color: var(--rm-muted, #6b7280); font-size: 0.82rem; }
     .playlink { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; margin-left: 0.35rem; }
     .playlink:hover { text-decoration: underline; }
     .map-cta { margin: 0.4rem 0 1.1rem; font-size: 0.88rem; }
@@ -270,7 +284,7 @@ export class EngineerSpace extends LitElement {
     /** @type {typeof TABS[number]} pestaña activa (inicializada desde el hash) */
     this._tab = TAB_SET.has(location.hash.slice(1))
       ? /** @type {typeof TABS[number]} */ (location.hash.slice(1))
-      : 'carrera';
+      : 'ficha';
     // Mantiene la pestaña activa sincronizada con el hash (recarga / atrás-adelante).
     this._onHashChange = () => {
       const t = location.hash.slice(1);
@@ -766,9 +780,11 @@ export class EngineerSpace extends LitElement {
     const meta = TAB_META[tab];
     // Cada pestaña reutiliza su método de render existente (sin duplicar lógica).
     const panel = {
+      ficha: () => this._renderFicha(),
       carrera: () => this._renderCareer(),
       rolemirror: () => this._renderRoleMirror(),
       mapa: () => this._renderMap(),
+      motivadores: () => this._renderMotivadores(),
       o2o: () => this._renderO2O(),
       datos: () => this._renderDatos(),
       marea: () => this._renderMarea(),
@@ -776,13 +792,6 @@ export class EngineerSpace extends LitElement {
     }[tab];
 
     return html`
-      ${this.selfOwned
-        ? html`<my-ficha-editor
-            .person=${this.person}
-            .framework=${this.framework}
-            @ficha-updated=${this._onFichaUpdated}
-          ></my-ficha-editor>`
-        : null}
       ${this._renderTabs()}
       <section
         id="panel-${tab}"
@@ -810,6 +819,54 @@ export class EngineerSpace extends LitElement {
   /** Pestaña Retros: las retros del equipo del ingeniero, para participar (RMR-TSK-0247). */
   _renderRetros() {
     return html`<retro-app .uid=${this.person?.uid ?? null} .leaderUid=${this.person?.ownerLeaderUid ?? null} .canManage=${false} .members=${[]}></retro-app>`;
+  }
+
+  /** Pestaña «Mi ficha» (RMR-TSK-0260): datos de la persona; si es su propia
+   *  ficha, el editor debajo para cambiarlos. Un externo ve sus datos básicos. */
+  _renderFicha() {
+    const p = this.person ?? {};
+    if (p.external) return this._renderDatos();
+    const fw = this.framework;
+    const title = fw ? composeTitle(fw, p.levelId, p.disciplines) : '';
+    const discNames = (p.disciplines ?? []).map((id) => fw?.disciplines?.find((d) => d.id === id)?.name ?? id);
+    const rows = [
+      ['Nombre', p.name],
+      ['Título', title || null],
+      ['Disciplinas', discNames.join(', ') || null],
+      ['Fecha de alta', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${p.startDate}T00:00:00`)) : null],
+      ['Gremios', (p.guilds ?? []).join(', ') || null],
+      ['Equipos', (p.labels ?? []).join(', ') || null],
+    ].filter(([, v]) => v);
+    return html`
+      <dl class="datos-dl">
+        ${rows.map(([k, v]) => html`<div class="datos-row"><dt>${k}</dt><dd>${v}</dd></div>`)}
+      </dl>
+      ${this.selfOwned
+        ? html`<my-ficha-editor
+            .person=${this.person}
+            .framework=${this.framework}
+            @ficha-updated=${this._onFichaUpdated}
+          ></my-ficha-editor>`
+        : null}
+    `;
+  }
+
+  /** Pestaña «Motivadores» (RMR-TSK-0260): los juegos de cartas, integrados aquí
+   *  (antes eran dos tarjetas sueltas fuera de las pestañas). */
+  _renderMotivadores() {
+    return html`
+      <p class="mot-lead">Juegos de reflexión personal por rondas: ordena qué te mueve y qué necesitas sentir en tu equipo.</p>
+      <div class="mot-grid">
+        <a class="mot-card moving" href="/tools/motivators/moving">
+          <span class="mot-emoji" aria-hidden="true">🃏</span>
+          <span class="mot-text"><strong>Moving Motivators</strong><small>Qué te mueve en el trabajo</small></span>
+        </a>
+        <a class="mot-card affective" href="/tools/motivators/affective">
+          <span class="mot-emoji" aria-hidden="true">💗</span>
+          <span class="mot-text"><strong>Affective Motivators</strong><small>Qué necesitas sentir en tu equipo</small></span>
+        </a>
+      </div>
+    `;
   }
 
   /** Datos básicos del externo (solo lectura): sin carrera ni nivel. */
