@@ -420,6 +420,23 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Referencias de aprendizaje aportadas por la TRIPULACIÓN (RMR-TSK-0255): un
+    // ingeniero añade a una casa recursos que le ayudaron a certificarse; los ven
+    // todos, con el nombre de quien los aportó. Viven aquí (no en /careerMap, que
+    // es write-solo-superadmin). Cada uno crea firmando con su propio uid; borra
+    // sus aportes (o cualquiera un manager/superadmin, para moderar spam). Sin
+    // update: una referencia se borra y se vuelve a crear, no se edita.
+    match /cityReferences/{refId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.url is string
+        && request.resource.data.title is string
+        && request.resource.data.cityKey is string;
+      allow delete: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isSuperAdmin() || isLeader());
+    }
+
     // Rutas de ROL y NIVEL del Modo Reto (JG-14): un doc por hito
     // /careerRoutes/{disciplina}--{hito} con {discipline, levelKey, name,
     // description, stops, active}. Las leen los autenticados (el selector de

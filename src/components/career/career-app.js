@@ -187,6 +187,7 @@ import './career-list.js';
 import './career-island-3d.js';
 import './player-card.js';
 import './game-dialog.js';
+import './city-references.js';
 import { readStoredMuted, writeStoredMuted } from './islandAudio.js';
 import {
   getJourney,
@@ -6932,9 +6933,20 @@ export class CareerApp extends LitElement {
         ${this._renderCityLearn(sel)}
         ${this._renderCityAiFocus(sel)}
         ${this._renderCityResources(sel)}
+        ${this._renderCityReferences(sel)}
       </div>
       ${this._renderCityCertificate(sel)}
     `;
+  }
+
+  /** Referencias de aprendizaje aportadas por la tripulación para esta casa
+   *  (RMR-TSK-0255): componente en vivo, firmado por el ingeniero logado. */
+  _renderCityReferences(sel) {
+    return html`<city-references
+      .islandId=${this._selectedMap?.id ?? this.currentIsland}
+      .cityId=${sel.id}
+      .user=${this.currentUser}
+    ></city-references>`;
   }
 
   /**
