@@ -11,6 +11,7 @@ import {
   toggleRoute,
   insertRouteStop,
   setEvidence,
+  toggleResourceDone,
   getAchievements,
   recordAchievements,
   getEndorsements,
@@ -117,6 +118,30 @@ describe('career — casos de uso', () => {
     j = await setEvidence(store, 'p1', j, 'js', { priorExperienceYears: 3, cursos: ['ES2025'] });
     const saved = await getJourney(store, 'p1');
     expect(saved.evidences.js).toMatchObject({ priorExperienceYears: 3, cursos: ['ES2025'] });
+  });
+
+  it('toggleResourceDone marca un recurso con fecha y persiste (RMR-TSK-0261)', async () => {
+    let j = await getJourney(store, 'p1');
+    expect(j.resourcesDone).toEqual({});
+    j = await toggleResourceDone(store, 'p1', j, 'js', 'mdn-guide', '2026-07-17T10:00:00.000Z');
+    const saved = await getJourney(store, 'p1');
+    expect(saved.resourcesDone.js['mdn-guide']).toBe('2026-07-17T10:00:00.000Z');
+  });
+
+  it('toggleResourceDone con null desmarca el recurso (queda pendiente al leer)', async () => {
+    let j = await getJourney(store, 'p1');
+    j = await toggleResourceDone(store, 'p1', j, 'js', 'mdn-guide', '2026-07-17T10:00:00.000Z');
+    j = await toggleResourceDone(store, 'p1', j, 'js', 'mdn-guide', null);
+    const saved = await getJourney(store, 'p1');
+    expect(saved.resourcesDone.js).toBeUndefined();
+  });
+
+  it('toggleResourceDone no pisa otros recursos ya marcados de la misma casa', async () => {
+    let j = await getJourney(store, 'p1');
+    j = await toggleResourceDone(store, 'p1', j, 'js', 'mdn-guide', '2026-07-17T10:00:00.000Z');
+    j = await toggleResourceDone(store, 'p1', j, 'js', 'yt-course', '2026-07-18T10:00:00.000Z');
+    const saved = await getJourney(store, 'p1');
+    expect(Object.keys(saved.resourcesDone.js)).toEqual(['mdn-guide', 'yt-course']);
   });
 
   it('el journey es independiente entre personas', async () => {
