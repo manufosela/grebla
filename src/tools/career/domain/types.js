@@ -54,6 +54,7 @@
  * @property {string} id         Id del doc /careerMap/{id}
  * @property {string} name
  * @property {string} [discipline]   Disciplina del ADR (frontend, devops…)
+ * @property {string} [shortName]    Nombre corto para las pestañas del editor (RMR-TSK-0257)
  * @property {number} x          Posición 0..100 en el mapa del mar
  * @property {number} y          Posición 0..100 en el mapa del mar
  * @property {boolean} [startIsland] Isla de inicio (la del doc actual)
