@@ -566,13 +566,17 @@ export class CareerApp extends LitElement {
       .hud { top: 0.5rem; left: 0.5rem; gap: 0.35rem; }
       .hud button { padding: 0.32rem 0.5rem; font-size: 0.78rem; }
     }
+    /* Hoja de pergamino CENTRADA que ocupa ~80% del área de juego (RMR-TSK-0254):
+       más espacio y menos scroll que la antigua columna estrecha de la derecha. */
     .citypanel {
       position: absolute;
-      z-index: 3;
-      top: 0.75rem;
-      right: 0.75rem;
-      bottom: 0.75rem;
-      width: min(360px, calc(100% - 1.5rem));
+      z-index: 5;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      height: 80%;
+      max-width: 1000px;
       box-sizing: border-box;
       overflow-y: auto;
       overscroll-behavior: contain;
@@ -581,12 +585,27 @@ export class CareerApp extends LitElement {
       border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px);
       padding: 1rem 1.25rem;
-      box-shadow: 0 10px 30px rgba(17, 24, 39, 0.18);
+      box-shadow: 0 18px 50px rgba(6, 12, 22, 0.5);
       outline: none;
     }
-    /* En móvil el panel pasa a hoja inferior: el mapa sigue visible encima. */
+    /* Backdrop que atenúa el escenario detrás de la hoja (click = cerrar). */
+    .citypanel-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      background: rgba(6, 12, 22, 0.5);
+    }
+    /* En móvil la hoja ocupa casi toda la pantalla (sigue centrada, una columna). */
     @media (max-width: 760px) {
-      .citypanel { top: auto; left: 0.5rem; right: 0.5rem; bottom: 0.5rem; width: auto; max-height: 60%; }
+      .citypanel { width: 94%; height: 90%; max-width: none; }
+    }
+    /* Cuerpo del panel en rejilla: en ancho reparte las secciones didácticas en
+       dos columnas (menos scroll); en estrecho/móvil y en la vista plana, una. */
+    .citybody {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+      gap: 0.9rem 1.3rem;
+      align-items: start;
     }
     /* Cabecera oscura de la tarjeta: armoniza el panel claro con la consola. */
     .citypanel header {
@@ -6908,10 +6927,12 @@ export class CareerApp extends LitElement {
    */
   _renderCityBody(sel) {
     return html`
-      ${this._renderCityWhat(sel)}
-      ${this._renderCityLearn(sel)}
-      ${this._renderCityAiFocus(sel)}
-      ${this._renderCityResources(sel)}
+      <div class="citybody">
+        ${this._renderCityWhat(sel)}
+        ${this._renderCityLearn(sel)}
+        ${this._renderCityAiFocus(sel)}
+        ${this._renderCityResources(sel)}
+      </div>
       ${this._renderCityCertificate(sel)}
     `;
   }
@@ -7037,7 +7058,8 @@ export class CareerApp extends LitElement {
    */
   _renderCityPanel(sel) {
     const areaName = this._selectedMap.areas.find((a) => a.id === sel.area)?.name;
-    return html`<aside
+    return html`<div class="citypanel-backdrop" @click=${this._closeCityPanel}></div>
+    <aside
       class="citypanel"
       role="dialog"
       aria-label="Tarjeta de ${sel.name}"
