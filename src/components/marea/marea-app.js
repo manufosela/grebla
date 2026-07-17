@@ -7,6 +7,7 @@
 import { LitElement, html, css } from 'lit';
 import './marea-fill.js';
 import './marea-results.js';
+import './marea-evolution.js';
 
 export class MareaApp extends LitElement {
   static properties = {
@@ -33,9 +34,11 @@ export class MareaApp extends LitElement {
     return html`
       <div class="seg" role="tablist" aria-label="Marea">
         <button role="tab" aria-selected=${this._tab === 'mine'} @click=${() => { this._tab = 'mine'; }}>Mi marea</button>
+        <button role="tab" aria-selected=${this._tab === 'evolution'} @click=${() => { this._tab = 'evolution'; }}>Mi evolución</button>
         <button role="tab" aria-selected=${this._tab === 'results'} @click=${() => { this._tab = 'results'; }}>Resultados</button>
       </div>
       <div ?hidden=${this._tab !== 'mine'}><marea-fill .uid=${this.uid}></marea-fill></div>
+      <div ?hidden=${this._tab !== 'evolution'}><marea-evolution .uid=${this.uid}></marea-evolution></div>
       <div ?hidden=${this._tab !== 'results'}><marea-results></marea-results></div>
     `;
   }
