@@ -328,8 +328,13 @@ const RESOURCE_GROUPS = {
 /** Clave estable de un recurso para marcarlo hecho (RMR-TSK-0261): slug de su
  *  URL o, en su defecto, de la etiqueta. Sin puntos/barras → clave de mapa sana. */
 function resourceKey(r) {
-  const base = (r.url || r.label || '').toLowerCase();
-  return base.replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/(?:^-+)|(?:-+$)/g, '').slice(0, 80) || 'res';
+  // Un solo `-` de ancla (no `-+`) para evitar backtracking super-lineal: el
+  // colapso previo de no-alfanuméricos ya deja como mucho un guión en cada extremo.
+  const base = (r.url || r.label || '').toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, '-')
+    .replace(/^-/u, '')
+    .replace(/-$/u, '');
+  return base.slice(0, 80) || 'res';
 }
 
 /**
