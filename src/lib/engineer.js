@@ -69,7 +69,7 @@ export async function createMyPerson(user) {
  * nivel y disciplinas. Solo el dueño puede escribir estos campos (regla isOwner);
  * el `hasOnly` del cliente no relaja las reglas, solo evita mandar campos de más.
  * @param {string} personId
- * @param {{ name?: string, levelId?: string|null, disciplines?: string[] }} basics
+ * @param {{ name?: string, levelId?: string|null, disciplines?: string[], startDate?: string }} basics
  * @returns {Promise<void>}
  */
 export async function updateMyPersonBasics(personId, basics = {}) {
@@ -78,7 +78,24 @@ export async function updateMyPersonBasics(personId, basics = {}) {
   if (typeof basics.name === 'string') patch.name = basics.name.trim() || 'Mi ficha';
   if ('levelId' in basics) patch.levelId = basics.levelId || null;
   if (Array.isArray(basics.disciplines)) patch.disciplines = basics.disciplines;
+  // Fecha de alta (YYYY-MM-DD); solo se escribe si viene con valor.
+  if (typeof basics.startDate === 'string' && basics.startDate) patch.startDate = basics.startDate;
   await updateDoc(doc(db, 'people', personId), patch);
+}
+
+/**
+ * Borra la propia self-ficha (RMR-TSK-0253): la marca de baja (active:false, que
+ * el dueño puede escribir) y llama a la Cloud Function deletePerson, que exige
+ * que sea el dueño y que esté dada de baja, y borra en cascada su subárbol. Como
+ * el manager es dueño de su self-ficha (ownerLeaderUid = su uid), puede borrarla.
+ * @param {string} personId
+ * @returns {Promise<void>}
+ */
+export async function deleteMyPerson(personId) {
+  if (!personId) throw new Error('deleteMyPerson requiere personId');
+  await updateDoc(doc(db, 'people', personId), { active: false });
+  const { deletePerson } = await import('./people.js');
+  await deletePerson(personId);
 }
 
 /**
