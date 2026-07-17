@@ -26,6 +26,26 @@ export async function getPulseAggregate(weekIso) {
   return snap.exists() ? snap.data() : null;
 }
 
+/**
+ * Agregados semanales anónimos de las últimas `weeks` semanas (RMR-TSK-0239), de
+ * MÁS ANTIGUA a MÁS RECIENTE, saltando las que no existen. Genera las claves ISO
+ * hacia atrás (una consulta directa por doc, sin índice). Solo lectura del
+ * agregado; nunca toca registros individuales.
+ * @param {number} [weeks]
+ * @param {Date} [date]
+ * @returns {Promise<import('firebase/firestore').DocumentData[]>}
+ */
+export async function getRecentPulseAggregates(weeks = 8, date = new Date()) {
+  const seen = new Set();
+  const keys = [];
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const key = isoWeekKey(new Date(date.getTime() - i * 7 * 24 * 60 * 60 * 1000));
+    if (!seen.has(key)) { seen.add(key); keys.push(key); }
+  }
+  const snaps = await Promise.all(keys.map((key) => getDoc(doc(db, 'pulseAggregates', key))));
+  return snaps.filter((snap) => snap.exists()).map((snap) => snap.data());
+}
+
 /** @param {string} uid @param {string} day @returns {import('firebase/firestore').DocumentReference} */
 const entryRef = (uid, day) => doc(db, 'pulse', uid, 'entries', day);
 

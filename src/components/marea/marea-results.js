@@ -5,13 +5,26 @@
  * Solo medias y recuentos; nunca datos individuales, y solo grupos con >=3.
  */
 import { LitElement, html, css } from 'lit';
-import { getPulseAggregate, currentWeekKey } from '../../lib/pulse.js';
+import { getPulseAggregate, getRecentPulseAggregates, currentWeekKey } from '../../lib/pulse.js';
 import { pulseReading } from '../../tools/pulse/domain/pulse.js';
+import { teamSignals } from '../../tools/pulse/domain/trends.js';
+import { sparkline } from './sparkline.js';
 
 const SCOPES = [
   ['general', 'Toda ingeniería'],
   ['guilds', 'Por gremio'],
   ['squads', 'Por squad'],
+  ['trends', 'Tendencias'],
+];
+
+/** Dimensiones para la vista de tendencias (mismas 6, con nombre y sentido). */
+const TREND_DIMS = [
+  { key: 'energia', name: 'Energía', warnHigh: false },
+  { key: 'animo', name: 'Ánimo', warnHigh: false },
+  { key: 'carga', name: 'Carga', warnHigh: true },
+  { key: 'rumbo', name: 'Rumbo', warnHigh: false },
+  { key: 'tripulacion', name: 'Tripulación', warnHigh: false },
+  { key: 'reconocimiento', name: 'Reconocimiento', warnHigh: false },
 ];
 
 /** Anclas mostradas como barras. `warnHigh`: la atención es cuando el valor sube. */
@@ -33,6 +46,7 @@ function readingColor(name) {
 export class MareaResults extends LitElement {
   static properties = {
     _agg: { state: true },
+    _weeks: { state: true },
     _scope: { state: true },
     _loading: { state: true },
     _error: { state: true },
@@ -84,6 +98,22 @@ export class MareaResults extends LitElement {
     .cloud .w { color: var(--rm-text, #1e3a5f); line-height: 1.25; }
     .cloud.compact { gap: 0.15rem 0.5rem; margin-top: 0.5rem; }
     .cloud.compact .w { color: var(--rm-muted, #5b6b7d); }
+
+    .trends { display: grid; gap: 0.55rem; margin-bottom: 1.4rem; }
+    .trow { display: grid; grid-template-columns: 8rem 1fr auto; align-items: center; gap: 0.8rem; padding: 0.55rem 0.8rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; background: var(--rm-surface, #fff); }
+    @media (max-width: 560px) { .trow { grid-template-columns: 1fr auto; } .trow .tspark { grid-column: 1 / -1; } }
+    .tname { font-weight: 600; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
+    .tspark { display: block; }
+    .tval { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.02rem; color: var(--rm-text, #1e3a5f); }
+    .tval small { font-weight: 400; color: var(--rm-muted, #5b6b7d); font-size: 0.7rem; }
+    .note { font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); } .note b { font-variant-numeric: tabular-nums; }
+    .signals h3 { margin: 0 0 0.3rem; font-size: 0.92rem; color: var(--rm-text, #1e3a5f); }
+    .signals .note { font-size: 0.7rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.7rem; border-left: 2px solid var(--rm-border, #dde7ec); padding-left: 0.55rem; }
+    .signal { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.7rem 0.85rem; border-radius: 12px; margin-bottom: 0.5rem; font-size: 0.88rem; line-height: 1.35; background: var(--rm-surface-hover, #f5fafa); border-left: 4px solid var(--rm-border, #dde7ec); color: var(--rm-text, #1e3a5f); }
+    .signal .dot { flex: none; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-top: 0.35rem; background: var(--rm-muted, #5b6b7d); }
+    .signal.warn { border-left-color: var(--amber); } .signal.warn .dot { background: var(--amber); }
+    .signal.good { border-left-color: var(--teal); } .signal.good .dot { background: var(--teal); }
+    .signal.info { border-left-color: var(--rm-border, #dde7ec); }
     .refresh { margin-top: 1.2rem; }
     .refresh button { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
   `;
@@ -91,6 +121,8 @@ export class MareaResults extends LitElement {
   constructor() {
     super();
     this._agg = null;
+    this._weeks = [];
+    this._weeksLoaded = false;
     this._scope = 'general';
     this._loading = false;
     this._error = '';
@@ -200,7 +232,57 @@ export class MareaResults extends LitElement {
   _renderScope() {
     if (this._scope === 'guilds') return this._renderGroups(this._agg?.guilds, 'Aún no hay gremios con 3 o más respuestas esta semana.');
     if (this._scope === 'squads') return this._renderGroups(this._agg?.labels, 'Aún no hay squads con 3 o más respuestas esta semana.');
+    if (this._scope === 'trends') return this._renderTrends();
     return this._renderGeneral();
+  }
+
+  /** Carga perezosa de los agregados de las últimas semanas (para Tendencias). */
+  async _loadTrends() {
+    if (this._weeksLoaded) return;
+    try {
+      const aggs = await getRecentPulseAggregates(8);
+      this._weeks = aggs
+        .filter((a) => a.general?.means)
+        .map((a) => ({ weekIso: a.weekIso, means: a.general.means, respondents: a.respondents, totalPeople: a.totalPeople }));
+      this._weeksLoaded = true;
+    } catch {
+      /* sin histórico las tendencias quedan vacías (estado explicado) */
+    }
+  }
+
+  _renderTrendRow(weeks, dim) {
+    const values = weeks.map((w) => w.means[dim.key]);
+    const latest = values.at(-1) ?? 0;
+    const stroke = dim.warnHigh ? 'var(--coral)' : 'var(--teal)';
+    return html`
+      <div class="trow">
+        <span class="tname">${dim.name}</span>
+        <span class="tspark">${sparkline(values, { width: 160, stroke })}</span>
+        <span class="tval">${latest}<small>/100</small></span>
+      </div>`;
+  }
+
+  _renderSignals(signals) {
+    if (!signals.length) {
+      return html`<p class="empty">Sin señales destacadas: el equipo se mantiene estable estas semanas.</p>`;
+    }
+    return html`
+      <div class="signals">
+        <h3>Señales del equipo</h3>
+        <p class="note">Para llevar a la Weekly o a los O2O · siempre del equipo, nunca de una persona.</p>
+        ${signals.map((s) => html`<div class="signal ${s.level}"><span class="dot"></span><span>${s.text}</span></div>`)}
+      </div>`;
+  }
+
+  _renderTrends() {
+    const weeks = this._weeks;
+    if (weeks.length < 2) {
+      return html`<p class="empty">Necesitas al menos dos semanas con datos (mínimo ${this._agg?.minCount ?? 3} respuestas cada una) para ver tendencias. En cuanto se acumulen, aquí verás la evolución del equipo y señales para la Weekly y los O2O.</p>`;
+    }
+    return html`
+      <p class="note" style="margin:0 0 0.9rem">Evolución del equipo en las últimas <b>${weeks.length}</b> semanas con datos (agregado anónimo).</p>
+      <div class="trends">${TREND_DIMS.map((d) => this._renderTrendRow(weeks, d))}</div>
+      ${this._renderSignals(teamSignals(weeks))}`;
   }
 
   render() {
@@ -214,7 +296,7 @@ export class MareaResults extends LitElement {
       </div>
       <div class="scopebar" role="tablist" aria-label="Ámbito de los resultados">
         ${SCOPES.map(([id, label]) => html`
-          <button role="tab" aria-selected=${this._scope === id} @click=${() => { this._scope = id; }}>${label}</button>`)}
+          <button role="tab" aria-selected=${this._scope === id} @click=${() => { this._scope = id; if (id === 'trends') this._loadTrends(); }}>${label}</button>`)}
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : this._renderScope()}
       <div class="refresh"><button @click=${() => this._load()} ?disabled=${this._loading}>${this._loading ? 'Actualizando…' : 'Actualizar'}</button></div>

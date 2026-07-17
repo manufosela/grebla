@@ -9,6 +9,7 @@ import { LitElement, html, css } from 'lit';
 import { getMyPulseHistory } from '../../lib/pulse.js';
 import { pulseReading } from '../../tools/pulse/domain/pulse.js';
 import { weeklyMeans, netTrend, trendSentiment } from '../../tools/pulse/domain/evolution.js';
+import { sparkline } from './sparkline.js';
 
 /** Dimensiones mostradas. `warnHigh`: un valor alto es señal de atención (carga). */
 const DIMS = [
@@ -105,26 +106,10 @@ export class MareaEvolution extends LitElement {
     }
   }
 
-  /** Sparkline: values (0..100) de más antigua a más reciente. */
+  /** Sparkline (helper compartido): values (0..100) de más antigua a más reciente. */
   _spark(values, warn) {
-    if (!values.length) return null;
     const stroke = warn ? 'var(--coral)' : 'var(--teal)';
-    const x = (i) => (values.length === 1 ? SPARK_W / 2 : (i / (values.length - 1)) * SPARK_W);
-    const y = (v) => SPARK_H - (v / 100) * SPARK_H;
-    const last = values.at(-1);
-    // Puntos de la polilínea en una variable: evita literales de plantilla
-    // anidados dentro del html`` (SonarQube S4624).
-    const points = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
-    // El color va por `style` (CSS real): como ATRIBUTO de presentación SVG, un
-    // stroke="var(--teal)" no resuelve la custom property y la línea sale invisible.
-    return html`
-      <svg class="spark" width=${SPARK_W} height=${SPARK_H} viewBox="0 0 ${SPARK_W} ${SPARK_H}" aria-hidden="true">
-        <line x1="0" y1=${SPARK_H / 2} x2=${SPARK_W} y2=${SPARK_H / 2} style="stroke:var(--rm-border, #dde7ec)" stroke-width="1" />
-        ${values.length > 1
-          ? html`<polyline fill="none" style="stroke:${stroke}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points=${points} />`
-          : null}
-        <circle cx=${x(values.length - 1)} cy=${y(last)} r="3.2" style="fill:${stroke}" />
-      </svg>`;
+    return sparkline(values, { width: SPARK_W, height: SPARK_H, stroke });
   }
 
   _renderRow(dim) {
@@ -136,7 +121,7 @@ export class MareaEvolution extends LitElement {
     return html`
       <div class="row">
         <span class="name">${dim.name}</span>
-        ${this._spark(values, dim.warnHigh)}
+        <span class="spark">${this._spark(values, dim.warnHigh)}</span>
         <span class="val">${latest}<small>/100</small></span>
         <span class="chip ${sentiment.cls}">${arrow} ${sentiment.label}</span>
       </div>`;
