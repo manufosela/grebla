@@ -7,7 +7,7 @@
  * `ficha-updated` con la persona ya actualizada para que el contenedor refresque.
  */
 import { LitElement, html, css } from 'lit';
-import { updateMyPersonBasics } from '../lib/engineer.js';
+import { updateMyPersonBasics, deleteMyPerson } from '../lib/engineer.js';
 
 export class MyFichaEditor extends LitElement {
   static properties = {
@@ -17,8 +17,11 @@ export class MyFichaEditor extends LitElement {
     _name: { state: true },
     _levelId: { state: true },
     _disciplines: { state: true },
+    _startDate: { state: true },
     _saving: { state: true },
     _error: { state: true },
+    _confirmDelete: { state: true },
+    _deleting: { state: true },
   };
 
   static styles = css`
@@ -48,7 +51,7 @@ export class MyFichaEditor extends LitElement {
     .toggle:hover { border-color: var(--rm-accent); }
     form { display: grid; gap: 0.9rem; margin-top: 0.9rem; }
     label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--rm-text); margin-bottom: 0.3rem; }
-    input[type='text'], select {
+    input[type='text'], input[type='date'], select {
       width: 100%; padding: 0.5rem 0.6rem; font: inherit;
       border: 1px solid var(--rm-border); border-radius: 8px;
       background: var(--rm-surface); color: var(--rm-text);
@@ -74,6 +77,19 @@ export class MyFichaEditor extends LitElement {
       border-radius: 999px; padding: 0.5rem 1rem; font: inherit; font-weight: 600; cursor: pointer;
     }
     .error { color: var(--rm-danger); font-size: 0.85rem; margin: 0; }
+    .danger { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px dashed var(--rm-border); }
+    .danger.confirm { border-top-color: var(--rm-danger); }
+    .danger p { margin: 0 0 0.7rem; color: var(--rm-text); font-size: 0.85rem; }
+    .del-open {
+      border: 1px solid var(--rm-danger); background: transparent; color: var(--rm-danger);
+      border-radius: 999px; padding: 0.4rem 0.9rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    }
+    .del-open:hover { background: var(--rm-danger); color: #fff; }
+    .del {
+      border: 0; background: var(--rm-danger); color: #fff;
+      border-radius: 999px; padding: 0.5rem 1.1rem; font: inherit; font-weight: 700; cursor: pointer;
+    }
+    .del:disabled { opacity: 0.6; cursor: wait; }
   `;
 
   constructor() {
@@ -84,8 +100,11 @@ export class MyFichaEditor extends LitElement {
     this._name = '';
     this._levelId = '';
     this._disciplines = [];
+    this._startDate = '';
     this._saving = false;
     this._error = '';
+    this._confirmDelete = false;
+    this._deleting = false;
   }
 
   _startEdit() {
@@ -93,7 +112,9 @@ export class MyFichaEditor extends LitElement {
     this._name = p.name ?? '';
     this._levelId = p.levelId ?? '';
     this._disciplines = [...(p.disciplines ?? [])];
+    this._startDate = p.startDate ?? '';
     this._error = '';
+    this._confirmDelete = false;
     this._open = true;
   }
 
@@ -109,15 +130,30 @@ export class MyFichaEditor extends LitElement {
     this._saving = true;
     this._error = '';
     try {
-      const basics = { name: this._name, levelId: this._levelId || null, disciplines: this._disciplines };
+      const basics = { name: this._name, levelId: this._levelId || null, disciplines: this._disciplines, startDate: this._startDate };
       await updateMyPersonBasics(this.person.id, basics);
-      const updated = { ...this.person, name: this._name.trim() || 'Mi ficha', levelId: basics.levelId, disciplines: this._disciplines };
+      const updated = { ...this.person, name: this._name.trim() || 'Mi ficha', levelId: basics.levelId, disciplines: this._disciplines, startDate: this._startDate || this.person.startDate };
       this.dispatchEvent(new CustomEvent('ficha-updated', { detail: updated, bubbles: true, composed: true }));
       this._open = false;
     } catch {
       this._error = 'No se pudo guardar tu ficha. Vuelve a intentarlo en unos minutos.';
     } finally {
       this._saving = false;
+    }
+  }
+
+  /** Borra la propia ficha (con confirmación inline). Al terminar, recarga: Mi
+   *  espacio queda en «sin ficha», con opción de crearla de nuevo. */
+  async _delete() {
+    if (!this.person?.id) return;
+    this._deleting = true;
+    this._error = '';
+    try {
+      await deleteMyPerson(this.person.id);
+      location.reload();
+    } catch {
+      this._deleting = false;
+      this._error = 'No se pudo borrar tu ficha. Vuelve a intentarlo en unos minutos.';
     }
   }
 
@@ -150,13 +186,37 @@ export class MyFichaEditor extends LitElement {
             })}
           </div>
         </div>
+        <div>
+          <label for="ficha-date">Fecha de alta</label>
+          <input id="ficha-date" type="date" .value=${this._startDate}
+            @input=${(e) => { this._startDate = e.target.value; }} />
+        </div>
         ${this._error ? html`<p class="error">${this._error}</p>` : null}
         <div class="actions">
           <button class="save" type="submit" ?disabled=${this._saving}>${this._saving ? 'Guardando…' : 'Guardar ficha'}</button>
-          <button class="cancel" type="button" @click=${() => { this._open = false; }}>Cancelar</button>
+          <button class="cancel" type="button" @click=${() => { this._open = false; this._confirmDelete = false; }}>Cancelar</button>
         </div>
       </form>
+      ${this._renderDanger()}
     `;
+  }
+
+  /** Zona de borrado: botón + confirmación inline (sin confirm nativo). */
+  _renderDanger() {
+    if (!this._confirmDelete) {
+      return html`
+        <div class="danger">
+          <button class="del-open" type="button" @click=${() => { this._confirmDelete = true; }}>🗑 Eliminar mi ficha</button>
+        </div>`;
+    }
+    return html`
+      <div class="danger confirm">
+        <p>Esto borra tu ficha y <b>todos tus datos</b> (carrera, mapa, Role Mirror…). Es <b>irreversible</b>. ¿Seguro?</p>
+        <div class="actions">
+          <button class="del" type="button" ?disabled=${this._deleting} @click=${this._delete}>${this._deleting ? 'Borrando…' : 'Sí, borrar mi ficha'}</button>
+          <button class="cancel" type="button" ?disabled=${this._deleting} @click=${() => { this._confirmDelete = false; }}>Cancelar</button>
+        </div>
+      </div>`;
   }
 
   render() {
@@ -166,7 +226,7 @@ export class MyFichaEditor extends LitElement {
         <div class="head">
           <div>
             <h3>Mi ficha</h3>
-            <p>Es tu propia ficha: rellena tu nombre, nivel y disciplinas. Role Mirror y el mapa los editas en sus pestañas.</p>
+            <p>Es tu propia ficha: nombre, nivel, disciplinas y fecha de alta. Role Mirror y el mapa los editas en sus pestañas. También puedes borrarla.</p>
           </div>
           ${this._open ? null : html`<button class="toggle" type="button" @click=${this._startEdit}>✏️ Editar mi ficha</button>`}
         </div>
