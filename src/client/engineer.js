@@ -63,8 +63,8 @@ onUserChanged(async (user) => {
     renderIdentity(person, framework);
     renderSpace(person, framework, profile, career, o2o, orgConfig);
     if (space) space.selfOwned = selfOwned;
-    // Todo listo: se revela de una vez (cabecera + espacio) y se quita el
-    // skeleton — sin salto de layout (RMR-TSK-0263).
+    // Con los datos ya cargados se revela de una vez (cabecera + espacio) y se
+    // quita el skeleton — sin salto de layout (RMR-TSK-0263).
     if (space) space.hidden = false;
     hideSkeleton();
   } catch {
