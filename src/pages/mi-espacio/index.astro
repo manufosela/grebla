@@ -33,11 +33,30 @@ import Base from '../../layouts/Base.astro';
     <p id="engineer-error" class="me-error" role="alert" hidden></p>
   </section>
 
-  <!-- Contenido de las secciones (lo rellena engineer.js). Los motivadores viven
-       ahora como pestaña dentro de <engineer-space> (RMR-TSK-0260). -->
-  <engineer-space></engineer-space>
+  <!-- Skeleton con la FORMA FINAL (cabecera + pestañas + contenido): reserva el
+       hueco desde el primer pintado para que no haya salto de layout (CLS,
+       RMR-TSK-0263). engineer.js lo quita y revela el contenido de una vez. -->
+  <div id="me-skeleton" class="me-skeleton" aria-hidden="true">
+    <div class="sk-identity">
+      <app-skeleton w="190px" h="1.2rem"></app-skeleton>
+      <app-skeleton w="260px" h="0.9rem"></app-skeleton>
+    </div>
+    <div class="sk-tabs">
+      <app-skeleton w="88px" h="2.1rem" radius="999px"></app-skeleton>
+      <app-skeleton w="104px" h="2.1rem" radius="999px"></app-skeleton>
+      <app-skeleton w="120px" h="2.1rem" radius="999px"></app-skeleton>
+      <app-skeleton w="96px" h="2.1rem" radius="999px"></app-skeleton>
+    </div>
+    <app-skeleton h="320px"></app-skeleton>
+  </div>
+
+  <!-- Contenido de las secciones (lo rellena engineer.js). Arranca oculto y se
+       revela junto con la cabecera cuando los datos están listos. Los motivadores
+       viven como pestaña dentro de <engineer-space> (RMR-TSK-0260). -->
+  <engineer-space hidden></engineer-space>
 
   <script>
+    import '../../components/app-skeleton.js';
     import '../../client/engineer.js';
   </script>
 </Base>
@@ -74,4 +93,12 @@ import Base from '../../layouts/Base.astro';
   .play-cta:hover { filter: brightness(1.08); }
   .play-cta:focus-visible { outline: 2px solid var(--rm-accent); outline-offset: 2px; }
   .me-error { color: var(--rm-danger); font-size: 0.9rem; margin: 0.75rem 0 0; }
+  /* Skeleton de carga (RMR-TSK-0263): misma forma que el contenido final. */
+  .me-skeleton { display: flex; flex-direction: column; gap: 1.25rem; }
+  .me-skeleton .sk-identity {
+    display: flex; flex-direction: column; gap: 0.55rem;
+    padding: 1rem 1.25rem; background: var(--rm-surface); border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius);
+  }
+  .me-skeleton .sk-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 </style>

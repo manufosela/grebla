@@ -20,6 +20,12 @@ import { ITEMS, DIMENSIONS } from '../data/items.js';
 const identity = document.getElementById('engineer-identity');
 const errorBox = document.getElementById('engineer-error');
 const space = document.querySelector('engineer-space');
+const skeleton = document.getElementById('me-skeleton');
+
+/** Quita el skeleton de carga (RMR-TSK-0263). Idempotente. */
+function hideSkeleton() {
+  skeleton?.remove();
+}
 
 onUserChanged(async (user) => {
   if (!user) {
@@ -57,7 +63,12 @@ onUserChanged(async (user) => {
     renderIdentity(person, framework);
     renderSpace(person, framework, profile, career, o2o, orgConfig);
     if (space) space.selfOwned = selfOwned;
+    // Todo listo: se revela de una vez (cabecera + espacio) y se quita el
+    // skeleton — sin salto de layout (RMR-TSK-0263).
+    if (space) space.hidden = false;
+    hideSkeleton();
   } catch {
+    hideSkeleton();
     showError('No se pudo cargar tu espacio. Vuelve a intentarlo en unos minutos.');
   }
 });
@@ -137,6 +148,7 @@ function showError(message) {
  * @returns {void}
  */
 function showNoFicha(user) {
+  hideSkeleton();
   space?.setAttribute('hidden', '');
   const header = document.querySelector('.me-header');
   if (!header || document.getElementById('no-ficha-notice')) return;
