@@ -132,7 +132,14 @@ export class SuperadminPanel extends LitElement {
   };
 
   static styles = css`
-    :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
+    :host {
+      display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827);
+      /* Fondo sutil de los campos (RMR-TSK-0266): los diferencia de la tarjeta
+         sin rechinar. Derivado del tema (mezcla texto→superficie), así vale en
+         claro (gris muy claro) y en oscuro (un pelín más claro que la tarjeta);
+         al enfocar pasan a la superficie (campo activo). */
+      --rm-field: color-mix(in srgb, var(--rm-text, #111827) 5%, var(--rm-surface, #fff));
+    }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .bar h1 { font-size: 1.4rem; margin: 0; }
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
@@ -179,8 +186,9 @@ export class SuperadminPanel extends LitElement {
     .toolbar { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
     input {
       padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
-      font: inherit; font-size: 0.9rem; min-width: 16rem; background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
+      font: inherit; font-size: 0.9rem; min-width: 16rem; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
+    input:focus, select:focus, textarea:focus { background: var(--rm-surface, #fff); }
     button {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
@@ -217,7 +225,7 @@ export class SuperadminPanel extends LitElement {
     .assign-body { display: flex; flex-direction: column; gap: 0.9rem; }
     .assign-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
     .assign-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-    select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
+    select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
     .cities { display: grid; gap: 0.9rem; }
     .city { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.8rem 1rem; background: var(--rm-surface, #fff); }
     .city-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
@@ -271,7 +279,7 @@ export class SuperadminPanel extends LitElement {
     textarea {
       font: inherit; font-size: 0.85rem; width: 100%; box-sizing: border-box;
       padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px;
-      background: var(--rm-surface, #fff); color: var(--rm-text, #111827); resize: vertical;
+      background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); resize: vertical;
     }
     textarea:disabled { opacity: 0.6; cursor: not-allowed; }
     .matrix { display: grid; gap: 0.7rem; }
