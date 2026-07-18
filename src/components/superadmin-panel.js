@@ -132,7 +132,14 @@ export class SuperadminPanel extends LitElement {
   };
 
   static styles = css`
-    :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
+    :host {
+      display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827);
+      /* Fondo sutil de los campos (RMR-TSK-0266): los diferencia de la tarjeta
+         sin rechinar. Derivado del tema (mezcla texto→superficie), así vale en
+         claro (gris muy claro) y en oscuro (un pelín más claro que la tarjeta);
+         al enfocar pasan a la superficie (campo activo). */
+      --rm-field: color-mix(in srgb, var(--rm-text, #111827) 5%, var(--rm-surface, #fff));
+    }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .bar h1 { font-size: 1.4rem; margin: 0; }
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
@@ -179,8 +186,9 @@ export class SuperadminPanel extends LitElement {
     .toolbar { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
     input {
       padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
-      font: inherit; font-size: 0.9rem; min-width: 16rem; background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
+      font: inherit; font-size: 0.9rem; min-width: 16rem; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
+    input:focus, select:focus, textarea:focus { background: var(--rm-surface, #fff); }
     button {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
@@ -217,12 +225,42 @@ export class SuperadminPanel extends LitElement {
     .assign-body { display: flex; flex-direction: column; gap: 0.9rem; }
     .assign-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
     .assign-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-    select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
+    select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
     .cities { display: grid; gap: 0.9rem; }
     .city { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.8rem 1rem; background: var(--rm-surface, #fff); }
     .city-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
     .city-head .cid { font-weight: 700; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+    /* ── Tarjeta de NIVEL destacada (RMR-TSK-0266): badge de código + rail de
+       acento, para que los niveles de un track se distingan de un vistazo. ── */
+    .city.level { border-left: 4px solid var(--rm-accent, #3b82f6); background: linear-gradient(90deg, color-mix(in srgb, var(--rm-accent, #3b82f6) 5%, var(--rm-surface, #fff)) 0%, var(--rm-surface, #fff) 30%); }
+    .lvl-id { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+    .lvl-badge {
+      flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+      min-width: 2.6rem; height: 1.95rem; padding: 0 0.55rem;
+      background: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff);
+      border-radius: 8px; font-weight: 800; font-size: 0.9rem; letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+    .lvl-title { font-weight: 700; font-size: 0.95rem; color: var(--rm-navy, #1e3a5f); min-width: 0; }
+    .lvl-title .muted { font-weight: 500; font-family: ui-monospace, monospace; font-size: 0.76rem; }
+    /* Cabecera del TRACK: acento propio + chevron de plegado, distinta de los
+       niveles que contiene (jerarquía visual). */
+    details.track-group > summary.city-head {
+      background: color-mix(in srgb, var(--rm-navy, #1e3a5f) 8%, var(--rm-surface, #fff));
+      margin: -0.8rem -1rem 0; padding: 0.7rem 1rem; border-radius: 9px 9px 0 0;
+    }
+    details.track-group > summary .cid::before {
+      content: '▸'; display: inline-block; margin-right: 0.5rem; color: var(--rm-accent, #3b82f6);
+      transition: transform 0.15s; font-size: 0.85em;
+    }
+    details.track-group[open] > summary .cid::before { transform: rotate(90deg); }
+    details.track-group > summary .cid { color: var(--rm-navy, #1e3a5f); font-family: inherit; font-size: 0.95rem; }
     .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.6rem; }
+    /* Afordancia de edición (RMR-TSK-0266): foco con acento; solo-lectura apagado. */
+    .fields input:focus-visible, .fields select:focus-visible, .fields textarea:focus-visible {
+      outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 1px; border-color: var(--rm-accent, #3b82f6);
+    }
+    .fields input:disabled, .fields select:disabled { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #6b7280); cursor: not-allowed; }
     .fields label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
     .fields label.check { flex-direction: row; align-items: center; gap: 0.4rem; }
     .fields label.full { grid-column: 1 / -1; }
@@ -241,7 +279,7 @@ export class SuperadminPanel extends LitElement {
     textarea {
       font: inherit; font-size: 0.85rem; width: 100%; box-sizing: border-box;
       padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px;
-      background: var(--rm-surface, #fff); color: var(--rm-text, #111827); resize: vertical;
+      background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); resize: vertical;
     }
     textarea:disabled { opacity: 0.6; cursor: not-allowed; }
     .matrix { display: grid; gap: 0.7rem; }
@@ -1116,9 +1154,12 @@ export class SuperadminPanel extends LitElement {
    */
   _renderLevelCard(fw, l, pos, total) {
     return html`
-      <div class="city">
+      <div class="city level">
         <div class="city-head">
-          <span class="cid">${l.code || l.title} <span class="muted">(${l.id})</span></span>
+          <span class="lvl-id">
+            <span class="lvl-badge">${l.code || '—'}</span>
+            <span class="lvl-title">${l.title || l.code || l.id}<span class="muted"> · ${l.id}</span></span>
+          </span>
           <span>
             ${this.readOnly
               ? null
