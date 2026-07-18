@@ -175,7 +175,7 @@ export class TeamPersonDetail extends LitElement {
     .form { display: grid; gap: 0.6rem; margin: 0.5rem 0 1rem; }
     textarea, input[type='date'] {
       border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem;
-      font: inherit; font-size: 0.9rem; color: var(--rm-text, #111827); background: var(--rm-surface, #fff);
+      font: inherit; font-size: 0.9rem; color: var(--rm-text, #111827); background: var(--rm-field, #eef2f6);
     }
     textarea { resize: vertical; min-height: 2.4rem; }
     .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
@@ -192,7 +192,7 @@ export class TeamPersonDetail extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     label.fld { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
-    select { border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem; font: inherit; font-size: 0.9rem; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+    select { border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem; font: inherit; font-size: 0.9rem; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     section.support { border-left: 4px solid var(--rm-warning, #f2887a); }
     .disclaimer { font-size: 0.8rem; color: var(--rm-muted, #6b7280); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0 0 0.75rem; }
     .hist .del { margin-left: auto; white-space: nowrap; }

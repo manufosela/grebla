@@ -54,7 +54,7 @@ export class MyFichaEditor extends LitElement {
     input[type='text'], input[type='date'], select {
       width: 100%; padding: 0.5rem 0.6rem; font: inherit;
       border: 1px solid var(--rm-border); border-radius: 8px;
-      background: var(--rm-surface); color: var(--rm-text);
+      background: var(--rm-field, #eef2f6); color: var(--rm-text);
     }
     input:focus-visible, select:focus-visible { outline: 2px solid var(--rm-accent); outline-offset: 1px; }
     .disciplines { display: flex; flex-wrap: wrap; gap: 0.4rem; }

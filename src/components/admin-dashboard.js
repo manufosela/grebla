@@ -82,7 +82,7 @@ export class AdminDashboard extends LitElement {
     .compare-bar-row { display: grid; grid-template-columns: 16ch 1fr 4ch; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; font-size: 0.8rem; }
     .compare-track { height: 10px; background: var(--rm-track, #f3f4f6); border-radius: 999px; overflow: hidden; }
     .compare-fill { height: 100%; }
-    select { padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
+    select { padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .detail { border-left: 4px solid var(--rm-accent, #3b82f6); }
     .check { width: 16px; height: 16px; }

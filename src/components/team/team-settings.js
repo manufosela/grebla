@@ -48,7 +48,7 @@ export class TeamSettings extends LitElement {
     .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
     input, select {
       border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem;
-      font: inherit; font-size: 0.9rem; background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
+      font: inherit; font-size: 0.9rem; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
     label.fld { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }

@@ -49,7 +49,7 @@ export class CatalogManager extends LitElement {
     .toolbar { display: flex; gap: 0.5rem; margin: 0 0 0.8rem; flex-wrap: wrap; }
     input[type='text'], .edit-in {
       font: inherit; padding: 0.4rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db);
-      border-radius: 8px; background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
+      border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
     .toolbar input { min-width: 14rem; }
     .btn {

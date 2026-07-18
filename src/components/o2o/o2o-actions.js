@@ -35,7 +35,7 @@ export class O2OActions extends LitElement {
     label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     select, input[type='text'] {
       font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db);
-      border-radius: 8px; background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
+      border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
     .add input[type='text'] { min-width: 18rem; }
     .btn {

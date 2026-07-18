@@ -310,7 +310,7 @@ export class GameEditor extends LitElement {
     /* Las opciones del multiselect no heredan el fondo del select en Chrome:
        sin esto quedan blancas en tema oscuro. El gradiente en :checked es el
        truco necesario para que Chrome respete el resaltado de seleccionadas. */
-    option { background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+    option { background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     option:checked {
       background: linear-gradient(var(--rm-accent, #3b82f6), var(--rm-accent, #3b82f6));
       color: var(--rm-on-accent, #fff);
