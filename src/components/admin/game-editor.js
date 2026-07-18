@@ -1269,9 +1269,9 @@ export class GameEditor extends LitElement {
     // Solo interesan los AVISOS en vivo (orden vs prereqs); los errores se
     // calculan y muestran al pulsar Guardar.
     const { warnings } = validateRoute({ ...draft }, islands);
+    const close = () => { this._routeForm = null; };
     return html`
-      <section>
-        <h2>${heading}</h2>
+      <app-modal .open=${true} heading=${heading} @close=${close}>
         <div class="grid">
           <div class="field">
             <label for="r-discipline">Rol (disciplina)</label>
@@ -1310,13 +1310,13 @@ export class GameEditor extends LitElement {
         ${this._renderStopsList(draft.stops)}
         ${this._renderAddStop()}
         ${this._renderErrorList(errors)}
-        <div class="form-actions">
+        <div class="modal-actions">
+          <button ?disabled=${this._saving} @click=${close}>Cancelar</button>
           <button class="primary" ?disabled=${this._saving} @click=${this._saveRoute}>
             ${this._saving ? 'Guardando…' : 'Guardar ruta'}
           </button>
-          <button ?disabled=${this._saving} @click=${() => { this._routeForm = null; }}>Cancelar</button>
         </div>
-      </section>
+      </app-modal>
     `;
   }
 
