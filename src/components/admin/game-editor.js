@@ -190,6 +190,7 @@ export class GameEditor extends LitElement {
     _confirmIsland: { state: true },
     _comarcaEdit: { state: true },
     _cityForm: { state: true },
+    _cityFormTab: { state: true },
     _confirmCity: { state: true },
     _routeForm: { state: true },
     _routeFormTab: { state: true },
@@ -201,7 +202,12 @@ export class GameEditor extends LitElement {
   };
 
   static styles = css`
-    :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
+    :host {
+      display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827);
+      /* Fondo sutil de los campos (RMR-TSK-0267): los diferencia de la tarjeta
+         sin rechinar; derivado del tema → vale en claro y oscuro. */
+      --rm-field: color-mix(in srgb, var(--rm-text, #111827) 5%, var(--rm-surface, #fff));
+    }
     h1 { font-size: 1.4rem; margin: 0; }
     .bar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
@@ -292,12 +298,14 @@ export class GameEditor extends LitElement {
       padding: 0.45rem 0.6rem;
       border-radius: 8px;
       border: 1px solid var(--rm-border, #d1d5db);
-      background: var(--rm-surface, #fff);
+      background: var(--rm-field, #eef2f6);
       color: var(--rm-text, #111827);
       font-size: 0.88rem;
       font-family: inherit;
       box-sizing: border-box;
     }
+    select:focus, input:focus, textarea:focus { background: var(--rm-surface, #fff); outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 1px; border-color: var(--rm-accent, #3b82f6); }
+    select:disabled, input:disabled, textarea:disabled { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #6b7280); cursor: not-allowed; }
     textarea { width: 100%; min-height: 4.5rem; resize: vertical; }
     /* Las opciones del multiselect no heredan el fondo del select en Chrome:
        sin esto quedan blancas en tema oscuro. El gradiente en :checked es el
@@ -312,6 +320,9 @@ export class GameEditor extends LitElement {
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem 1rem; margin-bottom: 0.75rem; }
     .field-wide { grid-column: 1 / -1; }
     .field input, .field select { width: 100%; }
+    .field.check { display: flex; align-items: center; gap: 0.5rem; }
+    .field.check label { margin-bottom: 0; }
+    .field.check input[type='checkbox'] { width: auto; }
     .muted { color: var(--rm-muted, #9ca3af); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .notice { color: var(--rm-success, #16a34a); font-size: 0.85rem; font-weight: 600; }
@@ -401,6 +412,8 @@ export class GameEditor extends LitElement {
     this._comarcaEdit = null;
     /** @type {{ originalId: string|null, draft: ReturnType<typeof cityDraft>, errors: string[] }|null} */
     this._cityForm = null;
+    /** @type {'datos'|'contenido'} pestaña activa del editor de casa (RMR-TSK-0267) */
+    this._cityFormTab = 'datos';
     /** @type {import('../../tools/career/domain/types.js').City|null} casa pendiente de confirmar borrado */
     this._confirmCity = null;
     /** @type {{ originalId: string|null, draft: ReturnType<typeof routeDraft>, errors: string[] }|null} */
@@ -472,12 +485,14 @@ export class GameEditor extends LitElement {
     // Preselecciona la comarca activa (RMR-TSK-0257), o la primera de la isla.
     draft.area = this._activeArea(this._island) || (this._island?.areas.at(0)?.id ?? '');
     this._cityIdTouched = false;
+    this._cityFormTab = 'datos';
     this._cityForm = { originalId: null, draft, errors: [] };
   }
 
   /** @param {import('../../tools/career/domain/types.js').City} city */
   _openEditCity(city) {
     this._cityIdTouched = true;
+    this._cityFormTab = 'datos';
     this._cityForm = { originalId: city.id, draft: cityDraft(city, ''), errors: [] };
   }
 
@@ -1124,89 +1139,101 @@ export class GameEditor extends LitElement {
     if (!island || !this._cityForm) return null;
     const { originalId, draft, errors } = this._cityForm;
     const idLocked = originalId !== null;
-    const heading = originalId === null ? 'Añadir casa' : `Editar «${originalId}»`;
+    const heading = originalId === null ? 'Añadir casa' : 'Editar casa';
     const others = island.cities.filter((c) => c.id !== originalId);
-    // Avisos EN VIVO (no bloquean el guardado), como en el formulario de ruta:
-    // hoy, el resumen didáctico demasiado corto (JG-18).
+    // Avisos EN VIVO (no bloquean el guardado): p. ej. resumen didáctico corto.
     const { warnings } = validateCity(draftToCity(draft), { areas: island.areas, cities: others });
+    const close = () => { this._cityForm = null; };
+    const tab = this._cityFormTab === 'contenido' ? 'contenido' : 'datos';
     return html`
-      <section>
-        <h2>${heading}</h2>
-        <div class="grid">
-          <div class="field">
-            <label for="c-name">Nombre</label>
-            <input id="c-name" type="text" .value=${draft.name} @input=${(e) => this._onCityName(e.target.value)} />
-          </div>
-          <div class="field">
-            <label for="c-id">Id (disciplina/slug)</label>
-            <input
-              id="c-id" type="text" .value=${draft.id}
-              ?disabled=${idLocked}
-              title=${idLocked ? 'El id no se cambia: lo referencian prereqs, rutas y journeys.' : ''}
-              @input=${(e) => { this._cityIdTouched = true; this._setCityField('id', e.target.value); }}
-            />
-          </div>
-          <div class="field">
-            <label for="c-kind">Tipo</label>
-            <select id="c-kind" .value=${draft.kind} @change=${(e) => this._setCityField('kind', e.target.value)}>
-              ${CITY_KINDS.map((k) => html`<option value=${k} ?selected=${k === draft.kind}>${KIND_LABEL[k]}</option>`)}
-            </select>
-          </div>
-          <div class="field">
-            <label for="c-area">Comarca</label>
-            <select id="c-area" .value=${draft.area} @change=${(e) => this._setCityField('area', e.target.value)}>
-              ${island.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === draft.area}>${a.name}</option>`)}
-            </select>
-          </div>
-          <div class="field">
-            <label for="c-weight">Peso (${CITY_WEIGHT_MIN}-${CITY_WEIGHT_MAX})</label>
-            <input id="c-weight" type="number" min=${CITY_WEIGHT_MIN} max=${CITY_WEIGHT_MAX} .value=${draft.weight}
-              @input=${(e) => this._setCityField('weight', e.target.value)} />
-          </div>
-          <div class="field">
-            <label for="c-x">Posición x (0-100)</label>
-            <input id="c-x" type="number" min="0" max="100" .value=${draft.x} @input=${(e) => this._setCityField('x', e.target.value)} />
-          </div>
-          <div class="field">
-            <label for="c-y">Posición y (0-100)</label>
-            <input id="c-y" type="number" min="0" max="100" .value=${draft.y} @input=${(e) => this._setCityField('y', e.target.value)} />
-          </div>
-          <div class="field">
-            <label for="c-dep">Deprecada</label>
-            <input id="c-dep" type="checkbox" .checked=${draft.deprecated}
-              @change=${(e) => this._setCityField('deprecated', e.target.checked)} />
-          </div>
-          <div class="field field-wide">
-            <label for="c-prereqs">Prerequisitos (casas de esta isla; Ctrl/Cmd para varios)</label>
-            <select id="c-prereqs" class="prereqs" multiple @change=${(e) => this._onPrereqsChange(e.target)}>
-              ${others.map((c) => html`<option value=${c.id} ?selected=${draft.prereqs.includes(c.id)}>${c.name}</option>`)}
-            </select>
-          </div>
-          <div class="field field-wide">
-            <label for="c-summary">¿Qué es? (resumen didáctico)</label>
-            <textarea id="c-summary" .value=${draft.summary} @input=${(e) => this._setCityField('summary', e.target.value)}></textarea>
-          </div>
-          <div class="field field-wide">
-            <label for="c-keypoints">Qué aprenderás (uno por línea)</label>
-            <textarea id="c-keypoints" .value=${draft.keyPoints} @input=${(e) => this._setCityField('keyPoints', e.target.value)}></textarea>
-          </div>
-          <div class="field field-wide">
-            <label for="c-aifocus">En la era IA</label>
-            <textarea id="c-aifocus" .value=${draft.aiFocus} @input=${(e) => this._setCityField('aiFocus', e.target.value)}></textarea>
+      <app-modal .open=${true} size="wide" heading=${heading} @close=${close}>
+        <div class="rtabs" role="tablist" aria-label="Secciones de la casa">
+          <button role="tab" aria-selected=${tab === 'datos'} class="rtab ${tab === 'datos' ? 'on' : ''}"
+            @click=${() => { this._cityFormTab = 'datos'; }}>Datos</button>
+          <button role="tab" aria-selected=${tab === 'contenido'} class="rtab ${tab === 'contenido' ? 'on' : ''}"
+            @click=${() => { this._cityFormTab = 'contenido'; }}>Contenido didáctico</button>
+        </div>
+        <div role="tabpanel" ?hidden=${tab !== 'datos'}>
+          <div class="grid">
+            <div class="field">
+              <label for="c-name">Nombre</label>
+              <input id="c-name" type="text" .value=${draft.name} @input=${(e) => this._onCityName(e.target.value)} />
+            </div>
+            <div class="field">
+              <label for="c-id">Id (disciplina/slug)</label>
+              <input
+                id="c-id" type="text" .value=${draft.id}
+                ?disabled=${idLocked}
+                title=${idLocked ? 'El id no se cambia: lo referencian prereqs, rutas y journeys.' : ''}
+                @input=${(e) => { this._cityIdTouched = true; this._setCityField('id', e.target.value); }}
+              />
+            </div>
+            <div class="field">
+              <label for="c-kind">Tipo</label>
+              <select id="c-kind" .value=${draft.kind} @change=${(e) => this._setCityField('kind', e.target.value)}>
+                ${CITY_KINDS.map((k) => html`<option value=${k} ?selected=${k === draft.kind}>${KIND_LABEL[k]}</option>`)}
+              </select>
+            </div>
+            <div class="field">
+              <label for="c-area">Comarca</label>
+              <select id="c-area" .value=${draft.area} @change=${(e) => this._setCityField('area', e.target.value)}>
+                ${island.areas.map((a) => html`<option value=${a.id} ?selected=${a.id === draft.area}>${a.name}</option>`)}
+              </select>
+            </div>
+            <div class="field">
+              <label for="c-weight">Peso (${CITY_WEIGHT_MIN}-${CITY_WEIGHT_MAX})</label>
+              <input id="c-weight" type="number" min=${CITY_WEIGHT_MIN} max=${CITY_WEIGHT_MAX} .value=${draft.weight}
+                @input=${(e) => this._setCityField('weight', e.target.value)} />
+            </div>
+            <div class="field">
+              <label for="c-x">Posición x (0-100)</label>
+              <input id="c-x" type="number" min="0" max="100" .value=${draft.x} @input=${(e) => this._setCityField('x', e.target.value)} />
+            </div>
+            <div class="field">
+              <label for="c-y">Posición y (0-100)</label>
+              <input id="c-y" type="number" min="0" max="100" .value=${draft.y} @input=${(e) => this._setCityField('y', e.target.value)} />
+            </div>
+            <div class="field check">
+              <label for="c-dep">Deprecada</label>
+              <input id="c-dep" type="checkbox" .checked=${draft.deprecated}
+                @change=${(e) => this._setCityField('deprecated', e.target.checked)} />
+            </div>
+            <div class="field field-wide">
+              <label for="c-prereqs">Prerequisitos (casas de esta isla; Ctrl/Cmd para varios)</label>
+              <select id="c-prereqs" class="prereqs" multiple @change=${(e) => this._onPrereqsChange(e.target)}>
+                ${others.map((c) => html`<option value=${c.id} ?selected=${draft.prereqs.includes(c.id)}>${c.name}</option>`)}
+              </select>
+            </div>
           </div>
         </div>
-        <h3>Recursos para el viaje</h3>
-        ${this._renderResourceRows(draft.resources)}
-        <button class="mini" @click=${this._addResource}>+ Añadir recurso</button>
+        <div role="tabpanel" ?hidden=${tab !== 'contenido'}>
+          <div class="grid">
+            <div class="field field-wide">
+              <label for="c-summary">¿Qué es? (resumen didáctico)</label>
+              <textarea id="c-summary" .value=${draft.summary} @input=${(e) => this._setCityField('summary', e.target.value)}></textarea>
+            </div>
+            <div class="field field-wide">
+              <label for="c-keypoints">Qué aprenderás (uno por línea)</label>
+              <textarea id="c-keypoints" .value=${draft.keyPoints} @input=${(e) => this._setCityField('keyPoints', e.target.value)}></textarea>
+            </div>
+            <div class="field field-wide">
+              <label for="c-aifocus">En la era IA</label>
+              <textarea id="c-aifocus" .value=${draft.aiFocus} @input=${(e) => this._setCityField('aiFocus', e.target.value)}></textarea>
+            </div>
+          </div>
+          <h3>Recursos para el viaje</h3>
+          ${this._renderResourceRows(draft.resources)}
+          <button class="mini" @click=${this._addResource}>+ Añadir recurso</button>
+        </div>
         ${this._renderErrorList(errors)}
         ${warnings.map((w) => html`<p class="warn">⚠ ${w}</p>`)}
-        <div class="form-actions">
+        <div class="modal-actions">
+          <button ?disabled=${this._saving} @click=${close}>Cancelar</button>
           <button class="primary" ?disabled=${this._saving} @click=${this._saveCity}>
             ${this._saving ? 'Guardando…' : 'Guardar casa'}
           </button>
-          <button ?disabled=${this._saving} @click=${() => { this._cityForm = null; }}>Cancelar</button>
         </div>
-      </section>
+      </app-modal>
     `;
   }
 
