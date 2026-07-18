@@ -23,6 +23,8 @@ export class AppModal extends LitElement {
   static properties = {
     open: { type: Boolean, reflect: true },
     heading: { type: String },
+    /** Tamaño del panel: '' (normal, 32rem) o 'wide' (52rem). */
+    size: { type: String, reflect: true },
   };
 
   static styles = css`
@@ -45,10 +47,15 @@ export class AppModal extends LitElement {
       border-radius: var(--rm-radius, 12px);
       box-shadow: var(--rm-shadow, 0 10px 30px rgba(0, 0, 0, 0.2));
       width: min(32rem, 100%);
-      max-height: calc(100vh - 2rem);
+      /* Deja siempre ≥10% de aire arriba y abajo (RMR-TSK-0265): el panel nunca
+         pasa del 80% del alto y el backdrop lo centra. Si el contenido es más
+         alto, scrollea dentro. */
+      max-height: 80vh;
       overflow: auto;
       padding: 1.25rem 1.5rem 1.5rem;
     }
+    /* Variante ancha para formularios densos (p. ej. el editor de rutas). */
+    :host([size='wide']) .panel { width: min(52rem, 100%); }
     .head {
       display: flex;
       align-items: center;

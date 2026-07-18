@@ -44,8 +44,13 @@ import {
   CITY_WEIGHT_MIN,
   CITY_WEIGHT_MAX,
 } from '../../tools/career/domain/mapEditor.js';
-import { ROUTE_TIER_KEYS, routeDocId } from '../../tools/career/domain/careerRoutes.js';
-import { insertRouteAt } from '../../tools/career/domain/route.js';
+import {
+  ROUTE_TIER_KEYS,
+  routeDocId,
+  groupStopsByIsland,
+  contiguousStops,
+  appendStopToIsland,
+} from '../../tools/career/domain/careerRoutes.js';
 import { shapeForArea, houseShapePath, HOUSE_SHAPE_LABEL } from '../../tools/career/domain/houseShapes.js';
 
 /** Rótulos humanos del tipo de casa. */
@@ -187,6 +192,7 @@ export class GameEditor extends LitElement {
     _cityForm: { state: true },
     _confirmCity: { state: true },
     _routeForm: { state: true },
+    _routeFormTab: { state: true },
     _confirmRoute: { state: true },
     _addStop: { state: true },
     _saving: { state: true },
@@ -341,9 +347,34 @@ export class GameEditor extends LitElement {
     .route-group h3 { margin-top: 0; }
     .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem; }
     .empty { color: var(--rm-muted, #9ca3af); padding: 0.75rem 0; }
-    .add-stop { display: flex; gap: 0.5rem; align-items: end; flex-wrap: wrap; margin-top: 0.5rem; }
+    .add-stop { display: flex; gap: 0.5rem; align-items: end; flex-wrap: wrap; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--rm-border, #e5e7eb); }
     .add-stop .field { min-width: 10rem; }
-    .pos { width: 6rem; }
+    /* ── Editor de ruta rediseñado (RMR-TSK-0265): pestañas + datos aireados ── */
+    .rtabs { display: flex; gap: 1.1rem; margin: 0 0 1.1rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); flex-wrap: wrap; }
+    .rtab { border: 0; background: none; color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.92rem; font-weight: 700; padding: 0.45rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer; }
+    .rtab.on { color: var(--rm-accent, #3b82f6); border-bottom-color: var(--rm-accent, #3b82f6); }
+    .rtab:hover:not(.on) { color: var(--rm-text, #111827); }
+    .rdatos { display: flex; flex-direction: column; gap: 0.5rem; }
+    .rrow { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
+    .rcell { display: flex; flex-direction: column; gap: 0.3rem; min-width: 12rem; flex: 1; }
+    .rlabel { font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.5rem; }
+    .robadge { align-self: flex-start; background: var(--rm-track, #eef2f4); border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; padding: 0.3rem 0.85rem; font-weight: 700; font-size: 0.9rem; }
+    .rhint { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.1rem 0 0; }
+    .rhint code { background: var(--rm-track, #eef2f4); padding: 0.05rem 0.35rem; border-radius: 5px; font-size: 0.9em; }
+    .rdatos input[type='text'], .rdatos textarea { width: 100%; box-sizing: border-box; }
+    .rdatos textarea { min-height: 5rem; resize: vertical; }
+    .rcheck { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; font-size: 0.9rem; }
+    .rcheck input { width: auto; }
+    /* Paradas agrupadas por isla */
+    .rparadas { display: flex; flex-direction: column; }
+    .stopgroups { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 0.25rem; }
+    .stopgroup { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; overflow: hidden; }
+    .sghead { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; background: var(--rm-track, #f3f6f7); border-bottom: 1px solid var(--rm-border, #e5e7eb); }
+    .sgbadge { font-weight: 800; font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
+    .sgcount { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    .sgmove { margin-left: auto; display: flex; gap: 0.25rem; }
+    .stopgroup .stops { margin: 0; padding: 0.25rem 0.5rem; }
+    .stopgroup .stops li:last-child { border-bottom: 0; }
   `;
 
   constructor() {
@@ -374,10 +405,12 @@ export class GameEditor extends LitElement {
     this._confirmCity = null;
     /** @type {{ originalId: string|null, draft: ReturnType<typeof routeDraft>, errors: string[] }|null} */
     this._routeForm = null;
+    /** @type {'datos'|'paradas'} pestaña activa del editor de ruta (RMR-TSK-0265) */
+    this._routeFormTab = 'datos';
     /** @type {import('../../tools/career/domain/careerRoutes.js').CareerRoute|null} ruta pendiente de confirmar borrado */
     this._confirmRoute = null;
     /** Selector de parada nueva del formulario de ruta. */
-    this._addStop = { islandId: '', cityId: '', position: '' };
+    this._addStop = { islandId: '', cityId: '' };
     this._saving = false;
     this._error = '';
     this._notice = '';
@@ -763,13 +796,19 @@ export class GameEditor extends LitElement {
     const draft = routeDraft(null);
     draft.discipline = this._arch?.islands.at(0)?.discipline ?? '';
     this._routeForm = { originalId: null, draft, errors: [] };
-    this._addStop = { islandId: this._arch?.islands.at(0)?.id ?? '', cityId: '', position: '' };
+    this._routeFormTab = 'datos';
+    this._addStop = { islandId: this._arch?.islands.at(0)?.id ?? '', cityId: '' };
   }
 
   /** @param {import('../../tools/career/domain/careerRoutes.js').CareerRoute} route */
   _openEditRoute(route) {
-    this._routeForm = { originalId: route.routeId, draft: routeDraft(route), errors: [] };
-    this._addStop = { islandId: this._arch?.islands.at(0)?.id ?? '', cityId: '', position: '' };
+    const draft = routeDraft(route);
+    // Descruza cualquier ruta legada que intercale islas: al abrir queda contigua
+    // por isla (RMR-TSK-0265). Sin islas cargadas aún, se deja tal cual.
+    draft.stops = contiguousStops(draft.stops, [...(this._islands?.values() ?? [])]);
+    this._routeForm = { originalId: route.routeId, draft, errors: [] };
+    this._routeFormTab = 'datos';
+    this._addStop = { islandId: this._arch?.islands.at(0)?.id ?? '', cityId: '' };
   }
 
   /** Cambia un campo simple del borrador de ruta. @param {string} field @param {unknown} value */
@@ -778,31 +817,52 @@ export class GameEditor extends LitElement {
     this._routeForm = { ...this._routeForm, draft: { ...this._routeForm.draft, [field]: value } };
   }
 
-  /** Mueve la parada `index` una posición (delta ±1). @param {number} index @param {number} delta */
-  _moveStop(index, delta) {
+  /** Grupos de paradas por isla del borrador actual (RMR-TSK-0265). */
+  _stopGroups() {
     const stops = this._routeForm?.draft.stops ?? [];
-    const target = index + delta;
-    if (target < 0 || target >= stops.length) return;
-    const next = stops.with(index, stops[target]).with(target, stops[index]);
-    this._setRouteField('stops', next);
+    return groupStopsByIsland(stops, [...(this._islands?.values() ?? [])]);
   }
 
-  /** @param {number} index */
-  _removeStop(index) {
-    const stops = this._routeForm?.draft.stops ?? [];
-    this._setRouteField('stops', stops.toSpliced(index, 1));
+  /** Reordena una parada DENTRO de su isla (delta ±1): no se salta a otra isla,
+   *  las islas quedan contiguas (RMR-TSK-0265). @param {number} groupIdx @param {number} localIdx @param {number} delta */
+  _moveStopInGroup(groupIdx, localIdx, delta) {
+    const groups = this._stopGroups();
+    const group = groups[groupIdx];
+    if (!group) return;
+    const target = localIdx + delta;
+    if (target < 0 || target >= group.stops.length) return;
+    group.stops = group.stops.with(localIdx, group.stops[target]).with(target, group.stops[localIdx]);
+    this._setRouteField('stops', groups.flatMap((g) => g.stops));
   }
 
-  /** Añade la casa del selector isla→casa en la posición pedida (1-based;
-   * vacía = al final). Reutiliza insertRouteAt (JG-9): mueve sin duplicar. */
+  /** Mueve un GRUPO de isla entero (delta ±1): cambia el orden en que la ruta
+   *  visita las islas, sin romper la contigüidad (RMR-TSK-0265). @param {number} groupIdx @param {number} delta */
+  _moveIslandGroup(groupIdx, delta) {
+    const groups = this._stopGroups();
+    const target = groupIdx + delta;
+    if (target < 0 || target >= groups.length) return;
+    const next = groups.with(groupIdx, groups[target]).with(target, groups[groupIdx]);
+    this._setRouteField('stops', next.flatMap((g) => g.stops));
+  }
+
+  /** Quita una parada por su id (RMR-TSK-0265). @param {string} cityId */
+  _removeStopById(cityId) {
+    const stops = this._routeForm?.draft.stops ?? [];
+    this._setRouteField('stops', stops.filter((s) => s !== cityId));
+  }
+
+  /** Añade la casa del selector isla→casa al FINAL de las paradas de SU isla
+   *  (RMR-TSK-0265): sin posición manual, siempre contiguo por isla. */
   _insertStop() {
-    const { cityId, position } = this._addStop;
+    const { cityId } = this._addStop;
     if (!cityId || !this._routeForm) return;
-    const raw = position.trim();
-    const index = raw === '' ? undefined : Number(raw) - 1;
-    if (index !== undefined && !Number.isInteger(index)) return;
-    this._setRouteField('stops', insertRouteAt(this._routeForm.draft.stops, cityId, index));
-    this._addStop = { ...this._addStop, cityId: '', position: '' };
+    const next = appendStopToIsland(
+      this._routeForm.draft.stops,
+      cityId,
+      [...(this._islands?.values() ?? [])],
+    );
+    this._setRouteField('stops', next);
+    this._addStop = { ...this._addStop, cityId: '' };
   }
 
   /** Guarda la ruta del formulario (alta o edición) en /careerRoutes. */
@@ -1264,51 +1324,21 @@ export class GameEditor extends LitElement {
 
   _renderRouteForm() {
     const { originalId, draft, errors } = this._routeForm;
-    const heading = originalId === null ? 'Nueva ruta' : `Editar «${originalId}»`;
-    const islands = [...(this._islands?.values() ?? [])];
-    // Solo interesan los AVISOS en vivo (orden vs prereqs); los errores se
-    // calculan y muestran al pulsar Guardar.
-    const { warnings } = validateRoute({ ...draft }, islands);
+    const editing = originalId !== null;
+    const heading = editing ? 'Editar ruta' : 'Nueva ruta';
     const close = () => { this._routeForm = null; };
+    const tab = this._routeFormTab === 'paradas' ? 'paradas' : 'datos';
     return html`
-      <app-modal .open=${true} heading=${heading} @close=${close}>
-        <div class="grid">
-          <div class="field">
-            <label for="r-discipline">Rol (disciplina)</label>
-            <select id="r-discipline" .value=${draft.discipline} ?disabled=${originalId !== null}
-              @change=${(e) => this._setRouteField('discipline', e.target.value)}>
-              ${this._arch.islands.map((i) => {
-                const d = i.discipline ?? i.id;
-                return html`<option value=${d} ?selected=${d === draft.discipline}>${i.name}</option>`;
-              })}
-            </select>
-          </div>
-          <div class="field">
-            <label for="r-tier">Hito</label>
-            <select id="r-tier" .value=${draft.levelKey} ?disabled=${originalId !== null}
-              @change=${(e) => this._setRouteField('levelKey', e.target.value)}>
-              ${ROUTE_TIER_KEYS.map((k) => html`<option value=${k} ?selected=${k === draft.levelKey}>${TIER_LABEL[k]}</option>`)}
-            </select>
-          </div>
-          <div class="field">
-            <label for="r-name">Nombre</label>
-            <input id="r-name" type="text" placeholder="Backend PHP · Peritus" .value=${draft.name}
-              @input=${(e) => this._setRouteField('name', e.target.value)} />
-          </div>
-          <div class="field">
-            <label for="r-active">Activa (visible en el selector)</label>
-            <input id="r-active" type="checkbox" .checked=${draft.active}
-              @change=${(e) => this._setRouteField('active', e.target.checked)} />
-          </div>
-          <div class="field field-wide">
-            <label for="r-desc">Descripción</label>
-            <textarea id="r-desc" .value=${draft.description} @input=${(e) => this._setRouteField('description', e.target.value)}></textarea>
-          </div>
+      <app-modal .open=${true} size="wide" heading=${heading} @close=${close}>
+        <div class="rtabs" role="tablist" aria-label="Secciones de la ruta">
+          <button role="tab" aria-selected=${tab === 'datos'} class="rtab ${tab === 'datos' ? 'on' : ''}"
+            @click=${() => { this._routeFormTab = 'datos'; }}>Datos</button>
+          <button role="tab" aria-selected=${tab === 'paradas'} class="rtab ${tab === 'paradas' ? 'on' : ''}"
+            @click=${() => { this._routeFormTab = 'paradas'; }}>Paradas (${draft.stops.length})</button>
         </div>
-        <h3>Paradas en orden de visita (${draft.stops.length})</h3>
-        ${warnings.map((w) => html`<p class="warn">⚠ ${w}</p>`)}
-        ${this._renderStopsList(draft.stops)}
-        ${this._renderAddStop()}
+        <div role="tabpanel">
+          ${tab === 'datos' ? this._renderRouteDatos(draft, editing) : this._renderRouteParadas(draft)}
+        </div>
         ${this._renderErrorList(errors)}
         <div class="modal-actions">
           <button ?disabled=${this._saving} @click=${close}>Cancelar</button>
@@ -1320,42 +1350,126 @@ export class GameEditor extends LitElement {
     `;
   }
 
-  /** @param {string[]} stops */
-  _renderStopsList(stops) {
-    if (stops.length === 0) return html`<p class="empty">Sin paradas: añádelas con el selector de abajo.</p>`;
+  /** Pestaña «Datos» del editor de ruta (RMR-TSK-0265): rol/hito como badges de
+   *  solo lectura al editar (definen el id) o selects al crear; nombre visible
+   *  separado del id técnico; descripción amplia; activa. */
+  _renderRouteDatos(draft, editing) {
+    const roleName = this._arch.islands.find((i) => (i.discipline ?? i.id) === draft.discipline)?.name ?? draft.discipline;
+    let techId = '';
+    try { techId = routeDocId(draft.discipline, draft.levelKey); } catch { techId = ''; }
+    return html`
+      <div class="rdatos">
+        <div class="rrow">
+          <div class="rcell">
+            <span class="rlabel">Rol (disciplina)</span>
+            ${editing
+              ? html`<span class="robadge">${roleName}</span>`
+              : html`<select aria-label="Rol" .value=${draft.discipline}
+                  @change=${(e) => this._setRouteField('discipline', e.target.value)}>
+                  ${this._arch.islands.map((i) => {
+                    const d = i.discipline ?? i.id;
+                    return html`<option value=${d} ?selected=${d === draft.discipline}>${i.name}</option>`;
+                  })}
+                </select>`}
+          </div>
+          <div class="rcell">
+            <span class="rlabel">Hito</span>
+            ${editing
+              ? html`<span class="robadge">${TIER_LABEL[draft.levelKey] ?? draft.levelKey}</span>`
+              : html`<select aria-label="Hito" .value=${draft.levelKey}
+                  @change=${(e) => this._setRouteField('levelKey', e.target.value)}>
+                  ${ROUTE_TIER_KEYS.map((k) => html`<option value=${k} ?selected=${k === draft.levelKey}>${TIER_LABEL[k]}</option>`)}
+                </select>`}
+          </div>
+        </div>
+        ${editing ? html`<p class="rhint">Rol e hito no se cambian: definen el ID de la ruta.</p>` : null}
+
+        <label class="rlabel" for="r-name">Nombre visible de la ruta</label>
+        <input id="r-name" type="text" placeholder="p. ej. Backend PHP · Grumete" .value=${draft.name}
+          @input=${(e) => this._setRouteField('name', e.target.value)} />
+        ${techId ? html`<p class="rhint">ID técnico: <code>${techId}</code> — se genera de rol + hito y no lo ven los jugadores.</p>` : null}
+
+        <label class="rlabel" for="r-desc">Descripción</label>
+        <textarea id="r-desc" rows="4" placeholder="Qué aprende y demuestra quien recorre esta ruta."
+          .value=${draft.description} @input=${(e) => this._setRouteField('description', e.target.value)}></textarea>
+
+        <label class="rcheck">
+          <input type="checkbox" .checked=${draft.active}
+            @change=${(e) => this._setRouteField('active', e.target.checked)} />
+          <span>Activa (visible en el selector de rutas del juego)</span>
+        </label>
+      </div>
+    `;
+  }
+
+  /** Pestaña «Paradas» del editor de ruta (RMR-TSK-0265): agrupadas por isla y
+   *  contiguas; se reordena dentro de la isla o moviendo el grupo entero. */
+  _renderRouteParadas(draft) {
+    const islands = [...(this._islands?.values() ?? [])];
+    const { warnings } = validateRoute({ ...draft }, islands);
+    return html`
+      <div class="rparadas">
+        <p class="rhint">Las paradas van agrupadas por isla y se recorren de arriba abajo. Reordena dentro de cada isla con ↑↓; para cambiar el orden de las islas, mueve el grupo entero.</p>
+        ${warnings.map((w) => html`<p class="warn">⚠ ${w}</p>`)}
+        ${this._renderStopGroups()}
+        ${this._renderAddStop()}
+      </div>
+    `;
+  }
+
+  /** Paradas agrupadas por isla (RMR-TSK-0265): cabecera con badge de isla +
+   *  reordenar el grupo entero; dentro, ↑↓ mueve solo dentro de la isla. */
+  _renderStopGroups() {
+    const groups = this._stopGroups();
+    if (groups.length === 0) return html`<p class="empty">Sin paradas: añade la primera abajo.</p>`;
     const index = buildCityIndex([...(this._islands?.values() ?? [])]);
     const islandName = new Map(this._arch.islands.map((i) => [i.id, i.name]));
+    const flat = groups.flatMap((g) => g.stops);
     return html`
-      <ol class="stops">
-        ${stops.map((stop, i) => {
-          const entry = index.get(stop);
-          const where = entry ? (islandName.get(entry.islandId) ?? entry.islandId) : 'no existe';
-          const detail = `— ${where} · ${stop}`;
-          const upLabel = `Subir la parada ${stop}`;
-          const downLabel = `Bajar la parada ${stop}`;
-          const removeLabel = `Quitar la parada ${stop}`;
+      <div class="stopgroups">
+        ${groups.map((group, gi) => {
+          const where = group.islandId ? (islandName.get(group.islandId) ?? group.islandId) : 'Isla desconocida';
+          const plural = group.stops.length === 1 ? 'parada' : 'paradas';
           return html`
-            <li>
-              <span class="n">${i + 1}</span>
-              <span class="what">
-                ${entry ? entry.city.name : html`<span class="error">${stop}</span>`}
-                <span class="muted isl">${detail}</span>
-              </span>
-              <button class="mini" title="Subir" aria-label=${upLabel}
-                ?disabled=${i === 0 || this._saving} @click=${() => this._moveStop(i, -1)}>↑</button>
-              <button class="mini" title="Bajar" aria-label=${downLabel}
-                ?disabled=${i === stops.length - 1 || this._saving} @click=${() => this._moveStop(i, 1)}>↓</button>
-              <button class="mini danger" title="Quitar" aria-label=${removeLabel}
-                ?disabled=${this._saving} @click=${() => this._removeStop(i)}>✕</button>
-            </li>
+            <section class="stopgroup">
+              <header class="sghead">
+                <span class="sgbadge">🏝️ ${where}</span>
+                <span class="sgcount">${group.stops.length} ${plural}</span>
+                <span class="sgmove">
+                  <button class="mini" title="Subir isla" aria-label="Subir la isla ${where}"
+                    ?disabled=${gi === 0 || this._saving} @click=${() => this._moveIslandGroup(gi, -1)}>↑</button>
+                  <button class="mini" title="Bajar isla" aria-label="Bajar la isla ${where}"
+                    ?disabled=${gi === groups.length - 1 || this._saving} @click=${() => this._moveIslandGroup(gi, 1)}>↓</button>
+                </span>
+              </header>
+              <ol class="stops">
+                ${group.stops.map((stop, li) => {
+                  const entry = index.get(stop);
+                  return html`
+                    <li>
+                      <span class="n">${flat.indexOf(stop) + 1}</span>
+                      <span class="what">
+                        ${entry ? entry.city.name : html`<span class="error">${stop} (no existe)</span>`}
+                      </span>
+                      <button class="mini" title="Subir" aria-label="Subir ${stop}"
+                        ?disabled=${li === 0 || this._saving} @click=${() => this._moveStopInGroup(gi, li, -1)}>↑</button>
+                      <button class="mini" title="Bajar" aria-label="Bajar ${stop}"
+                        ?disabled=${li === group.stops.length - 1 || this._saving} @click=${() => this._moveStopInGroup(gi, li, 1)}>↓</button>
+                      <button class="mini danger" title="Quitar" aria-label="Quitar ${stop}"
+                        ?disabled=${this._saving} @click=${() => this._removeStopById(stop)}>✕</button>
+                    </li>
+                  `;
+                })}
+              </ol>
+            </section>
           `;
         })}
-      </ol>
+      </div>
     `;
   }
 
   _renderAddStop() {
-    const { islandId, cityId, position } = this._addStop;
+    const { islandId, cityId } = this._addStop;
     const cities = this._islands?.get(islandId)?.cities ?? [];
     return html`
       <div class="add-stop">
@@ -1374,12 +1488,7 @@ export class GameEditor extends LitElement {
             ${cities.map((c) => html`<option value=${c.id} ?selected=${c.id === cityId}>${c.name}</option>`)}
           </select>
         </div>
-        <div class="field">
-          <label for="s-pos">Posición (vacío = al final)</label>
-          <input id="s-pos" class="pos" type="number" min="1" .value=${position}
-            @input=${(e) => { this._addStop = { ...this._addStop, position: e.target.value }; }} />
-        </div>
-        <button ?disabled=${!cityId || this._saving} @click=${this._insertStop}>Añadir parada</button>
+        <button ?disabled=${!cityId || this._saving} @click=${this._insertStop}>Añadir al final de su isla</button>
       </div>
     `;
   }

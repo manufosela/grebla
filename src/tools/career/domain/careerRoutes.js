@@ -216,6 +216,74 @@ export function islandOfStop(cityId, islands) {
 }
 
 /**
+ * Agrupa las paradas de una ruta por isla, en el orden en que cada isla APARECE
+ * por primera vez, y dentro de cada grupo conserva el orden relativo de las
+ * paradas (RMR-TSK-0265). Convierte una lista posiblemente intercalada en grupos
+ * contiguos por isla — la base para editar sin saltar entre islas. Las paradas
+ * sin isla reconocible caen en un grupo `islandId: null` al final de su aparición.
+ * @param {ReadonlyArray<string>} stops
+ * @param {ReadonlyArray<IslandRef>} islands Índice del archipiélago.
+ * @returns {Array<{ islandId: string|null, stops: string[] }>}
+ */
+export function groupStopsByIsland(stops, islands) {
+  /** @type {Array<{ islandId: string|null, stops: string[] }>} */
+  const groups = [];
+  const byIsland = new Map();
+  for (const stop of stops ?? []) {
+    const islandId = islandOfStop(stop, islands);
+    let group = byIsland.get(islandId);
+    if (!group) {
+      group = { islandId, stops: [] };
+      byIsland.set(islandId, group);
+      groups.push(group);
+    }
+    group.stops.push(stop);
+  }
+  return groups;
+}
+
+/**
+ * Aplana grupos de paradas a una lista contigua por isla (RMR-TSK-0265).
+ * @param {ReadonlyArray<{ stops: string[] }>} groups
+ * @returns {string[]}
+ */
+export function flattenStopGroups(groups) {
+  return (groups ?? []).flatMap((g) => g.stops);
+}
+
+/**
+ * Normaliza las paradas para que las islas queden CONTIGUAS (sin intercalar),
+ * respetando el orden de aparición de islas y de casas dentro de cada isla
+ * (RMR-TSK-0265). Idempotente: si ya están agrupadas, las devuelve igual.
+ * @param {ReadonlyArray<string>} stops
+ * @param {ReadonlyArray<IslandRef>} islands
+ * @returns {string[]}
+ */
+export function contiguousStops(stops, islands) {
+  return flattenStopGroups(groupStopsByIsland(stops, islands));
+}
+
+/**
+ * Añade una casa al FINAL de las paradas de SU isla (RMR-TSK-0265). Si la isla
+ * aún no tiene paradas, crea su grupo al final. No duplica: si la casa ya está,
+ * devuelve la lista sin cambios. El resultado siempre queda contiguo por isla.
+ * @param {ReadonlyArray<string>} stops
+ * @param {string} cityId
+ * @param {ReadonlyArray<IslandRef>} islands
+ * @returns {string[]}
+ */
+export function appendStopToIsland(stops, cityId, islands) {
+  const current = stops ?? [];
+  if (!cityId || current.includes(cityId)) return [...current];
+  const islandId = islandOfStop(cityId, islands);
+  const groups = groupStopsByIsland(current, islands);
+  const group = groups.find((g) => g.islandId === islandId);
+  if (group) group.stops.push(cityId);
+  else groups.push({ islandId, stops: [cityId] });
+  return flattenStopGroups(groups);
+}
+
+/**
  * Disciplina del JUGADOR para la insignia «Sugerida para ti», INFERIDA del
  * juego (no hay un campo de disciplina en la persona) y acotada a las
  * disciplinas que tienen ruta en el catálogo. Cadena de señales, de más a
