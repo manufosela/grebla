@@ -5,6 +5,7 @@
  * refresh, discover.
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import { addUnit, listUnits, removeUnit } from '../../tools/lean/application/usecases.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
@@ -155,7 +156,7 @@ export class LeanTeams extends LitElement {
       ${this._info ? html`<p class="info">${this._info}</p>` : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this.canEdit ? this._renderManual() : null}
-      ${this._loading ? html`<p class="empty">Cargando…</p>` : this._renderGroups()}
+      ${this._loading ? skeletonLines(4) : this._renderGroups()}
     `;
   }
 

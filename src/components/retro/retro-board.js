@@ -8,6 +8,7 @@
  * Props: retroId, uid (usuario logado).
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
 import { getRetro, listNotes, addNote, voteNote, unvoteNote, editNote, deleteNote } from '../../lib/retros.js';
 
@@ -263,7 +264,7 @@ export class RetroBoard extends LitElement {
   }
 
   render() {
-    if (this._loading && !this._retro) return html`<p class="empty">Cargando el tablero…</p>`;
+    if (this._loading && !this._retro) return skeletonBlock('240px');
     if (!this._retro) return html`<p class="error">${this._error || 'Retro no encontrada.'}</p>`;
     const format = getFormat(this._retro.format);
     const cols = format?.columns ?? [];

@@ -5,6 +5,7 @@
  * esa vista. Reutiliza el summary de LEAN; puede recalcular desde aquí mismo.
  */
 import { html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import { recalcBarStyles } from './recalc-bar.js';
 import { LeanView } from './lean-view.js';
 
@@ -65,7 +66,7 @@ export class LeanOldIssues extends LeanView {
   }
 
   render() {
-    if (this._loading && !this._summary) return html`<p class="empty">Cargando…</p>`;
+    if (this._loading && !this._summary) return skeletonLines(4);
     const squads = this._summary?.squads?.units ?? [];
     const chapters = this._summary?.chapters?.units ?? [];
     const hasAny = squads.some((u) => (u.metrics?.oldestWip ?? []).length)

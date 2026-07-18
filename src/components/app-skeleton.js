@@ -82,3 +82,16 @@ export class AppSkeleton extends LitElement {
 }
 
 customElements.define('app-skeleton', AppSkeleton);
+
+// Helpers de forma para los estados de carga de las herramientas (RMR-TSK-0263):
+// importar cualquiera registra <app-skeleton> (efecto de carga del módulo).
+
+/** Skeleton de un bloque (gráfica, panel, mapa). @param {string} [h] alto CSS. */
+export function skeletonBlock(h = '180px') {
+  return html`<app-skeleton h=${h}></app-skeleton>`;
+}
+
+/** Skeleton de varias líneas (listas, tablas, resúmenes). @param {number} [n] @param {string} [h] */
+export function skeletonLines(n = 4, h = '0.95rem') {
+  return html`<app-skeleton lines=${n} h=${h} gap="0.7rem"></app-skeleton>`;
+}

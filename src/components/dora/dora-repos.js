@@ -11,6 +11,7 @@
  *  - canEdit: boolean  (superadmin o manager pueden añadir/editar/borrar sus repos)
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import {
   addRepo,
   listRepos,
@@ -574,7 +575,7 @@ export class DoraRepos extends LitElement {
         ${this.canEdit ? this._renderDeployForm(repo) : null}
         ${this._depError ? html`<p class="error">${this._depError}</p>` : null}
         ${this._deployLoading
-          ? html`<p class="deploy-empty">Cargando despliegues…</p>`
+          ? skeletonLines(3)
           : this._renderDeployList(repo)}
       </div>
     `;
@@ -652,7 +653,7 @@ export class DoraRepos extends LitElement {
         ${this.canEdit ? this._renderIncidentForm(repo) : null}
         ${this._incError ? html`<p class="error">${this._incError}</p>` : null}
         ${this._incLoading
-          ? html`<p class="deploy-empty">Cargando incidentes…</p>`
+          ? skeletonLines(3)
           : this._renderIncidentList(repo)}
       </div>
     `;
@@ -787,7 +788,7 @@ export class DoraRepos extends LitElement {
             : null}
         </div>
         ${this.loading
-          ? html`<p class="empty">Cargando…</p>`
+          ? skeletonLines(4)
           : this.repos.length === 0
             ? html`<p class="empty">Aún no hay repositorios configurados.</p>`
             : html`

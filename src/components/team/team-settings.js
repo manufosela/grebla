@@ -9,6 +9,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import { getSettings, updateSettings } from '../../tools/team/application/usecases/index.js';
 import { LEVELS } from '../../tools/team/domain/levels.js';
 import '../catalog-manager.js';
@@ -201,7 +202,7 @@ export class TeamSettings extends LitElement {
   }
 
   render() {
-    if (this.loading) return html`<p class="empty">Cargando…</p>`;
+    if (this.loading) return skeletonLines(4);
     const active = this._subtab;
     const panel = {
       areas: () => this._renderAreas(),

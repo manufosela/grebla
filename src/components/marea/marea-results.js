@@ -5,6 +5,7 @@
  * Solo medias y recuentos; nunca datos individuales, y solo grupos con >=3.
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { watchPulseAggregate, getRecentPulseAggregates } from '../../lib/pulse.js';
 import { pulseReading, isoWeekKey, parseWeekIso } from '../../tools/pulse/domain/pulse.js';
 import { teamSignals } from '../../tools/pulse/domain/trends.js';
@@ -335,7 +336,7 @@ export class MareaResults extends LitElement {
   _renderBody() {
     if (this._error) return html`<p class="error">${this._error}</p>`;
     if (this._scope === 'trends') return this._renderTrends();
-    if (this._loading && !this._agg) return html`<p class="empty">Cargando resultados…</p>`;
+    if (this._loading && !this._agg) return skeletonBlock('260px');
     return this._renderScope();
   }
 

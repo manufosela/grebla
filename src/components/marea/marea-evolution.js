@@ -6,6 +6,7 @@
  * empeora). Nadie más la ve: no hay agregado ni exposición al manager.
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { watchMyPulseHistory } from '../../lib/pulse.js';
 import { pulseReading } from '../../tools/pulse/domain/pulse.js';
 import { weeklyMeans, netTrend, trendSentiment } from '../../tools/pulse/domain/evolution.js';
@@ -132,7 +133,7 @@ export class MareaEvolution extends LitElement {
   }
 
   render() {
-    if (this._loading && !this._weeks.length) return html`<p class="empty">Cargando tu evolución…</p>`;
+    if (this._loading && !this._weeks.length) return skeletonBlock('220px');
     if (this._error) return html`<p class="error">${this._error}</p>`;
     const n = this._weeks.length;
     if (n === 0) {

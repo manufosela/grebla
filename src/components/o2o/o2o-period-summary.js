@@ -7,6 +7,7 @@
  * Props: persistence, people, periodId.
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import { listAllSessions } from '../../tools/o2o/application/usecases/sessions.js';
 import { listActions } from '../../tools/o2o/application/usecases/actions.js';
 import { coverageOf } from '../../tools/o2o/application/usecases/periodStats.js';
@@ -88,7 +89,7 @@ export class O2OPeriodSummary extends LitElement {
   }
 
   render() {
-    if (this._loading) return html`<p class="empty">Cargando…</p>`;
+    if (this._loading) return skeletonLines(4);
     if (this._error) return html`<p class="error">${this._error}</p>`;
     const cov = coverageOf(this._sessions, this.people);
     const openActions = this._actions.filter((a) => a.status !== 'done').length;

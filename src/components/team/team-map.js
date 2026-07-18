@@ -10,6 +10,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { getTeamMap, listAreas } from '../../tools/team/application/usecases/index.js';
 import { LEVELS, LEVEL_BY_ORDER, levelLabel } from '../../tools/team/domain/levels.js';
 
@@ -178,7 +179,7 @@ export class TeamMap extends LitElement {
   }
 
   render() {
-    if (this.loading) return html`<p class="empty">Cargando mapa…</p>`;
+    if (this.loading) return skeletonBlock('320px');
     if (this.error) return html`<p class="error">${this.error}</p>`;
     return html`
       <section>

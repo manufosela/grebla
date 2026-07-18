@@ -8,6 +8,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css, svg } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import {
   getTeamHealth,
   getDiagnosis,
@@ -245,7 +246,7 @@ export class TeamOverview extends LitElement {
   }
 
   render() {
-    if (this.loading) return html`<p class="empty">Cargando panel…</p>`;
+    if (this.loading) return skeletonBlock('260px');
     if (this.error) return html`<p class="error">${this.error}</p>`;
     const h = this.health;
     if (!h) return html`<p class="empty">Sin datos.</p>`;

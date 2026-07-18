@@ -19,6 +19,7 @@
  *  - selected: string|null cityId seleccionado (para resaltar la fila).
  */
 import { LitElement, html, css, nothing } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import { topicState, groupTopicsByArea, resolveRoute } from '../../tools/career/domain/listView.js';
 
 export class CareerListView extends LitElement {
@@ -145,7 +146,7 @@ export class CareerListView extends LitElement {
     return islands.map((isl) => {
       const map = maps.get(isl.id);
       if (!map) {
-        return html`<div class="island"><h4>${isl.name}</h4><p class="hint small">Cargando temas…</p></div>`;
+        return html`<div class="island"><h4>${isl.name}</h4>${skeletonLines(3)}</div>`;
       }
       const groups = groupTopicsByArea(map);
       return html`<div class="island">

@@ -11,6 +11,7 @@
  */
 import { LitElement, html } from 'lit';
 import { toolShellStyles, toolDisclaimer } from './toolShellStyles.js';
+import { skeletonBlock, skeletonLines } from '../app-skeleton.js';
 
 export class MetricsToolApp extends LitElement {
   static properties = {
@@ -37,7 +38,7 @@ export class MetricsToolApp extends LitElement {
 
   render() {
     if (this.error) return html`<p class="error">${this.error}</p>`;
-    if (!this.persistence) return html`<p class="loading">Cargando configuración…</p>`;
+    if (!this.persistence) return html`${skeletonLines(1, '2rem')}${skeletonBlock('300px')}`;
     return html`
       <nav class="tabs">
         ${this.constructor.tabs.map((t) => html`<button

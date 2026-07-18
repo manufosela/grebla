@@ -11,6 +11,7 @@
  *  - person: Person
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import './team-level-input.js';
 import {
   addReading,
@@ -1759,7 +1760,7 @@ export class TeamPersonDetail extends LitElement {
       </div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
       ${this.loading
-        ? html`<p class="empty">Cargando…</p>`
+        ? skeletonLines(3)
         : html`
             ${this._renderSubtabs()}
             <div

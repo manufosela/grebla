@@ -25,6 +25,7 @@
  *    sin archipiélago se sintetiza un plano de un único círculo ya expandido.
  */
 import { LitElement, html, css, svg, nothing } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { cityStatus } from '../../tools/career/domain/progress.js';
 import { shapeForArea, houseShapePath } from '../../tools/career/domain/houseShapes.js';
 import { stopNumberByCity } from '../../tools/career/domain/challenge.js';
@@ -486,7 +487,7 @@ export class CareerMapView extends LitElement {
   render() {
     const lay = this._layout;
     if (!lay || lay.circles.length === 0) {
-      return html`<div class="wrap"><p class="empty">Cargando el plano del archipiélago…</p></div>`;
+      return html`<div class="wrap">${skeletonBlock('360px')}</div>`;
     }
     const expandedCircle =
       !lay.single && this.expanded ? (lay.circlesById.get(this.expanded) ?? null) : null;
