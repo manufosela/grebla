@@ -6,11 +6,16 @@ describe('engineer-space: pestañas por tipo de persona', () => {
     expect(visibleTabsFor({ external: true })).toEqual(['ficha', 'motivadores', 'o2o', 'marea', 'retros']);
   });
 
-  it('un interno ve ficha primera + carrera/rolemirror/mapa/motivadores/o2o + marea + retros', () => {
-    const internal = ['ficha', 'carrera', 'rolemirror', 'mapa', 'motivadores', 'o2o', 'marea', 'retros'];
+  it('un interno ve ficha primera + carrera/rolemirror/motivadores/o2o + marea + retros (mapa va dentro de carrera)', () => {
+    const internal = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros'];
     expect(visibleTabsFor({ external: false })).toEqual(internal);
     expect(visibleTabsFor({})).toEqual(internal);
     expect(visibleTabsFor(null)).toEqual(internal);
+  });
+
+  it('«mapa» ya no es una pestaña de primer nivel (RMR-TSK-0262)', () => {
+    expect(visibleTabsFor({})).not.toContain('mapa');
+    expect(effectiveTabFor('mapa', {})).toBe('ficha');
   });
 
   it('la primera pestaña de todos es «ficha»', () => {
@@ -26,7 +31,7 @@ describe('engineer-space: pestañas por tipo de persona', () => {
 
   it('effectiveTabFor respeta una pestaña que sí es visible', () => {
     expect(effectiveTabFor('o2o', { external: true })).toBe('o2o');
-    expect(effectiveTabFor('mapa', { external: false })).toBe('mapa');
+    expect(effectiveTabFor('carrera', { external: false })).toBe('carrera');
     expect(effectiveTabFor('motivadores', { external: true })).toBe('motivadores');
   });
 });

@@ -53,12 +53,13 @@ import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 
 /**
  * Pestañas de «Mi espacio». El id (clave) sincroniza con `location.hash`
- * (#carrera / #rolemirror / #mapa) para conservar la pestaña activa al recargar
- * o navegar atrás/adelante, igual que el patrón de <superadmin-panel>.
- * `datos` solo la ven los EXTERNOS (no tienen carrera/rolemirror/mapa).
- * @type {ReadonlyArray<'carrera'|'rolemirror'|'mapa'|'o2o'|'datos'|'marea'|'retros'>}
+ * (#carrera / #rolemirror) para conservar la pestaña activa al recargar o navegar
+ * atrás/adelante, igual que el patrón de <superadmin-panel>. El mapa vive como
+ * sub-pestaña dentro de «carrera» (RMR-TSK-0262); el hash legado `#mapa` sigue
+ * aterrizando ahí. `datos` solo la ven los EXTERNOS (no tienen carrera/rolemirror).
+ * @type {ReadonlyArray<'ficha'|'carrera'|'rolemirror'|'motivadores'|'o2o'|'datos'|'marea'|'retros'>}
  */
-const TABS = ['ficha', 'carrera', 'rolemirror', 'mapa', 'motivadores', 'o2o', 'datos', 'marea', 'retros'];
+const TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'datos', 'marea', 'retros'];
 /** Búsqueda O(1) de existencia (validar el hash de la URL). */
 const TAB_SET = new Set(TABS);
 
@@ -71,7 +72,6 @@ const TAB_META = {
   ficha: { label: 'Mi ficha', heading: 'Mi ficha', cls: 'ficha' },
   carrera: { label: 'Mi carrera', heading: 'Mi carrera', cls: 'career' },
   rolemirror: { label: 'Mi Role Mirror', heading: 'Mi Role Mirror', cls: 'rolemirror' },
-  mapa: { label: 'Mi mapa', heading: 'Mi mapa de carrera', cls: 'map' },
   motivadores: { label: 'Motivadores', heading: 'Motivadores', cls: 'motivadores' },
   o2o: { label: 'Mis O2O', heading: 'Mis O2O', cls: 'o2o' },
   datos: { label: 'Mis datos', heading: 'Mis datos', cls: 'datos' },
@@ -99,6 +99,7 @@ export class EngineerSpace extends LitElement {
     // editar sus datos básicos (nombre/nivel/disciplinas) desde aquí.
     selfOwned: { attribute: false },
     _tab: { state: true },
+    _careerSub: { state: true },
     _targetError: { state: true },
     _targetSaving: { state: true },
   };
@@ -116,6 +117,16 @@ export class EngineerSpace extends LitElement {
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     section:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    /* Sub-pestañas dentro de «Mi carrera» (RMR-TSK-0262): más discretas que las
+       de primer nivel — subrayado en la activa, sin píldora. */
+    .subtabs { display: flex; gap: 1.1rem; margin: 0 0 1.1rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); flex-wrap: wrap; }
+    .subtab {
+      border: 0; background: none; color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.9rem; font-weight: 700;
+      padding: 0.4rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer;
+    }
+    .subtab.on { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
+    .subtab:hover:not(.on) { color: var(--rm-text, #111827); }
+    .subtab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
 
     section {
       background: var(--rm-surface, #fff);
@@ -281,15 +292,26 @@ export class EngineerSpace extends LitElement {
     this._targetError = null;
     /** @type {boolean} true mientras se persiste el objetivo (deshabilita controles) */
     this._targetSaving = false;
+    /** @type {'nivel'|'mapa'} sub-pestaña activa dentro de «Mi carrera» (RMR-TSK-0262). */
+    this._careerSub = location.hash.slice(1) === 'mapa' ? 'mapa' : 'nivel';
     /** @type {typeof TABS[number]} pestaña activa (inicializada desde el hash) */
-    this._tab = TAB_SET.has(location.hash.slice(1))
-      ? /** @type {typeof TABS[number]} */ (location.hash.slice(1))
-      : 'ficha';
+    this._tab = this._tabFromHash(location.hash.slice(1));
     // Mantiene la pestaña activa sincronizada con el hash (recarga / atrás-adelante).
     this._onHashChange = () => {
-      const t = location.hash.slice(1);
-      if (this._visibleTabs().includes(t)) this._tab = /** @type {typeof TABS[number]} */ (t);
+      const raw = location.hash.slice(1);
+      if (raw === 'mapa') this._careerSub = 'mapa';
+      const t = this._tabFromHash(raw);
+      if (this._visibleTabs().includes(t)) this._tab = t;
     };
+  }
+
+  /** Resuelve el hash a una pestaña visible. El hash legado `#mapa` (RMR-TSK-0262)
+   *  ya no es pestaña propia: cae en «carrera» (su sub-pestaña Mapa la fija el
+   *  propio hash). Cualquier otro hash desconocido cae en «ficha».
+   *  @param {string} raw @returns {typeof TABS[number]} */
+  _tabFromHash(raw) {
+    if (raw === 'mapa') return 'carrera';
+    return TAB_SET.has(raw) ? /** @type {typeof TABS[number]} */ (raw) : 'ficha';
   }
 
   connectedCallback() {
@@ -534,6 +556,31 @@ export class EngineerSpace extends LitElement {
    * sección «Carrera» de <team-person-detail>, con los mismos helpers puros.
    * @returns {import('lit').TemplateResult|null}
    */
+  /** «Mi carrera» con dos sub-pestañas (RMR-TSK-0262): el nivel/expectativas
+   *  (textual) y el mapa/ruta (visual), antes dos pestañas de primer nivel. */
+  _renderCareerTabbed() {
+    const sub = this._careerSub === 'mapa' ? 'mapa' : 'nivel';
+    const subs = [
+      ['nivel', 'Nivel y expectativas'],
+      ['mapa', 'Mapa y ruta'],
+    ];
+    return html`
+      <div class="subtabs" role="tablist" aria-label="Secciones de Mi carrera">
+        ${subs.map(
+          ([id, label]) => html`<button
+            role="tab"
+            aria-selected=${sub === id}
+            class="subtab ${sub === id ? 'on' : ''}"
+            @click=${() => { this._careerSub = id; }}
+          >${label}</button>`,
+        )}
+      </div>
+      <div role="tabpanel">
+        ${sub === 'mapa' ? this._renderMap() : this._renderCareer()}
+      </div>
+    `;
+  }
+
   _renderCareer() {
     const fw = this.framework;
     const person = this.person;
@@ -781,9 +828,8 @@ export class EngineerSpace extends LitElement {
     // Cada pestaña reutiliza su método de render existente (sin duplicar lógica).
     const panel = {
       ficha: () => this._renderFicha(),
-      carrera: () => this._renderCareer(),
+      carrera: () => this._renderCareerTabbed(),
       rolemirror: () => this._renderRoleMirror(),
-      mapa: () => this._renderMap(),
       motivadores: () => this._renderMotivadores(),
       o2o: () => this._renderO2O(),
       datos: () => this._renderDatos(),

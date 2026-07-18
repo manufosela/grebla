@@ -70,7 +70,16 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'areas', 'guilds', 'labels', 'careerMap', 'careerFramework', 'users'];
+const TABS = ['leaders', 'areas', 'guilds', 'labels', 'career', 'users'];
+/** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
+ *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
+const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
+/** Traduce un hash a { tab, sub? }: los hashes legados de carrera van a «career». */
+function resolveHash(raw) {
+  if (raw in LEGACY_CAREER_HASH) return { tab: 'career', sub: LEGACY_CAREER_HASH[raw] };
+  if (TABS.includes(raw)) return { tab: raw };
+  return { tab: 'leaders' };
+}
 
 /** Sub-pestañas del framework de carrera: 4 catálogos + 2 matrices de cruce. */
 const FW_SUBTABS = /** @type {const} */ ([
@@ -89,6 +98,7 @@ export class SuperadminPanel extends LitElement {
     persistence: { attribute: false },
     currentUid: { attribute: false },
     _tab: { state: true },
+    _careerSub: { state: true },
     leaders: { state: true },
     selected: { state: true },
     team: { state: true },
@@ -141,6 +151,17 @@ export class SuperadminPanel extends LitElement {
     }
     .subtab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
     .subtab:hover:not(.active) { color: var(--rm-text, #111827); border-color: var(--rm-accent, #3b82f6); }
+    /* Sub-pestañas de «Carrera» (RMR-TSK-0262): estilo SUBRAYADO —distinto de las
+       píldoras .subtab del editor de framework— para que no se apilen dos filas
+       idénticas cuando el framework pinta sus propias sub-pestañas dentro. */
+    .csubtabs { display: flex; gap: 1.1rem; margin: 0 0 1.25rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); flex-wrap: wrap; }
+    .csubtab {
+      border: 0; background: none; color: var(--rm-muted, #6b7280); font-size: 0.92rem; font-weight: 700;
+      padding: 0.45rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer;
+    }
+    .csubtab.on { color: var(--rm-accent, #3b82f6); border-bottom-color: var(--rm-accent, #3b82f6); }
+    .csubtab:hover:not(.on) { color: var(--rm-text, #111827); }
+    .csubtab:focus-visible { outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 2px; }
     /* Grupo de track: contenedor plegable con sus niveles anidados dentro. */
     details.track-group { margin-bottom: 0.9rem; }
     details.track-group > summary { list-style: none; }
@@ -235,11 +256,15 @@ export class SuperadminPanel extends LitElement {
     this.ready = false;
     this.isLeader = false;
     this.readOnly = false;
-    /** @type {'leaders'|'areas'|'guilds'|'labels'|'careerMap'|'careerFramework'|'users'} pestaña activa */
-    this._tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'leaders';
+    const initial = resolveHash(location.hash.slice(1));
+    /** @type {'leaders'|'areas'|'guilds'|'labels'|'career'|'users'} pestaña activa */
+    this._tab = initial.tab;
+    /** @type {'framework'|'map'} sub-pestaña de «Carrera» (RMR-TSK-0262). */
+    this._careerSub = initial.sub ?? 'framework';
     this._onHashChange = () => {
-      const t = location.hash.slice(1);
-      if (TABS.includes(t)) this._tab = t;
+      const r = resolveHash(location.hash.slice(1));
+      this._tab = r.tab;
+      if (r.sub) this._careerSub = r.sub;
     };
     /** @type {import('../lib/leaders.js').Leader[]} */
     this.leaders = [];
@@ -797,10 +822,8 @@ export class SuperadminPanel extends LitElement {
         return this._renderCatalogTab('guilds', 'Gremios (organización)');
       case 'labels':
         return this._renderCatalogTab('labels', 'Labels (organización)');
-      case 'careerMap':
-        return this._renderCareerMap();
-      case 'careerFramework':
-        return this._renderFramework();
+      case 'career':
+        return this._renderCareer();
       case 'users':
         return this._renderUsers();
       default:
@@ -822,14 +845,39 @@ export class SuperadminPanel extends LitElement {
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
-        <button class="tab ${this._tab === 'careerMap' ? 'active' : ''}" @click=${() => this._setTab('careerMap')}>Mapa de carrera</button>
-        <button class="tab ${this._tab === 'careerFramework' ? 'active' : ''}" @click=${() => this._setTab('careerFramework')}>Carrera</button>
+        <button class="tab ${this._tab === 'career' ? 'active' : ''}" @click=${() => this._setTab('career')}>Carrera</button>
         ${this.readOnly
           ? null
           : html`<button class="tab ${this._tab === 'users' ? 'active' : ''}" @click=${() => this._setTab('users')}>Usuarios</button>`}
       </nav>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderTabContent()}
+    `;
+  }
+
+  /** «Carrera» con dos sub-pestañas (RMR-TSK-0262): el framework de rol (niveles/
+   *  disciplinas/expectativas) y el mapa/archipiélago, antes dos pestañas de
+   *  primer nivel con nombres casi iguales. Simétrico a «Mi carrera» del ingeniero. */
+  _renderCareer() {
+    const sub = this._careerSub === 'map' ? 'map' : 'framework';
+    const subs = [
+      ['framework', 'Framework (niveles y disciplinas)'],
+      ['map', 'Mapa (archipiélago)'],
+    ];
+    return html`
+      <div class="csubtabs" role="tablist" aria-label="Secciones de Carrera">
+        ${subs.map(
+          ([id, label]) => html`<button
+            role="tab"
+            aria-selected=${sub === id}
+            class="csubtab ${sub === id ? 'on' : ''}"
+            @click=${() => { this._careerSub = id; }}
+          >${label}</button>`,
+        )}
+      </div>
+      <div role="tabpanel">
+        ${sub === 'map' ? this._renderCareerMap() : this._renderFramework()}
+      </div>
     `;
   }
 

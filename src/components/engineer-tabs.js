@@ -8,8 +8,9 @@
 
 /** Pestañas visibles para un externo (sin carrera/rolemirror/mapa; ficha + motivadores + Marea + Retros). */
 export const EXTERNAL_TABS = ['ficha', 'motivadores', 'o2o', 'marea', 'retros'];
-/** Pestañas visibles para un interno (ficha primera + motivadores integrados). */
-export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror', 'mapa', 'motivadores', 'o2o', 'marea', 'retros'];
+/** Pestañas visibles para un interno. «Carrera» integra nivel/expectativas y el
+ *  mapa de carrera como sub-pestañas (RMR-TSK-0262): ya no hay pestaña «mapa» suelta. */
+export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros'];
 
 /**
  * Pestañas visibles según el tipo de persona.
