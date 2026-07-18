@@ -10,6 +10,10 @@ import {
   groupRoutesByRole,
   islandOfStop,
   playerRouteDiscipline,
+  groupStopsByIsland,
+  flattenStopGroups,
+  contiguousStops,
+  appendStopToIsland,
 } from './careerRoutes.js';
 
 /** Índice de islas de prueba (Bases con doc id 'island' y disciplina 'bases'). */
@@ -200,5 +204,48 @@ describe('playerRouteDiscipline', () => {
 
   it('sin ninguna señal → null (no se destaca nada)', () => {
     expect(playerRouteDiscipline(journey(), ISLANDS, withRoutes)).toBeNull();
+  });
+});
+
+describe('groupStopsByIsland / contiguousStops / appendStopToIsland (RMR-TSK-0265)', () => {
+  it('agrupa por isla en orden de aparición, conservando el orden dentro del grupo', () => {
+    const stops = ['bases/git', 'backend-php/php-8', 'bases/oop', 'backend-php/psr'];
+    const groups = groupStopsByIsland(stops, ISLANDS);
+    expect(groups).toEqual([
+      { islandId: 'island', stops: ['bases/git', 'bases/oop'] },
+      { islandId: 'backend-php', stops: ['backend-php/php-8', 'backend-php/psr'] },
+    ]);
+  });
+
+  it('contiguousStops descruza una lista intercalada (islas contiguas)', () => {
+    const stops = ['bases/git', 'backend-php/php-8', 'bases/oop'];
+    expect(contiguousStops(stops, ISLANDS)).toEqual(['bases/git', 'bases/oop', 'backend-php/php-8']);
+  });
+
+  it('contiguousStops es idempotente sobre una lista ya contigua', () => {
+    const stops = ['bases/git', 'bases/oop', 'backend-php/php-8'];
+    expect(contiguousStops(stops, ISLANDS)).toEqual(stops);
+  });
+
+  it('appendStopToIsland mete la casa al final de las paradas de SU isla', () => {
+    const stops = ['bases/git', 'backend-php/php-8'];
+    expect(appendStopToIsland(stops, 'bases/oop', ISLANDS)).toEqual(
+      ['bases/git', 'bases/oop', 'backend-php/php-8'],
+    );
+  });
+
+  it('appendStopToIsland crea un grupo nuevo al final si la isla no tenía paradas', () => {
+    const stops = ['bases/git'];
+    expect(appendStopToIsland(stops, 'postgres/index', ISLANDS)).toEqual(['bases/git', 'postgres/index']);
+  });
+
+  it('appendStopToIsland no duplica una casa ya presente', () => {
+    const stops = ['bases/git', 'backend-php/php-8'];
+    expect(appendStopToIsland(stops, 'bases/git', ISLANDS)).toEqual(stops);
+  });
+
+  it('flattenStopGroups deshace la agrupación', () => {
+    const groups = [{ islandId: 'island', stops: ['bases/git'] }, { islandId: 'postgres', stops: ['postgres/index'] }];
+    expect(flattenStopGroups(groups)).toEqual(['bases/git', 'postgres/index']);
   });
 });
