@@ -11,6 +11,7 @@
  *  - uid: string
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonBlock, skeletonLines } from '../app-skeleton.js';
 import './team-people.js';
 import './team-departures.js';
 import './team-person-detail.js';
@@ -222,7 +223,7 @@ export class TeamApp extends LitElement {
 
   render() {
     if (this.error) return html`<p class="error">${this.error}</p>`;
-    if (!this.persistence) return html`<p class="loading">Cargando tu equipo…</p>`;
+    if (!this.persistence) return html`${skeletonLines(1, '2rem')}${skeletonBlock('300px')}`;
     return html`
       <nav class="sections" aria-label="Secciones">
         ${this._tab('people', 'Personas')}

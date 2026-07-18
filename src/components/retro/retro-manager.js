@@ -7,6 +7,7 @@
  * Props: uid (del manager, lo inyecta el glue de cliente).
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';
 import { createRetro, listRetros, closeRetro } from '../../lib/retros.js';
 
@@ -181,7 +182,7 @@ export class RetroManager extends LitElement {
   }
 
   _renderList() {
-    if (this._loading) return html`<p class="empty">Cargando…</p>`;
+    if (this._loading) return skeletonLines(4);
     if (this._retros.length === 0) return html`<p class="empty">Aún no has creado ninguna retro.</p>`;
     return html`<table>
         <thead><tr><th>Nombre</th><th>Formato</th><th>Ámbito</th><th>Estado</th><th></th></tr></thead>

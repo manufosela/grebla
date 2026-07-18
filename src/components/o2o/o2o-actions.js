@@ -9,6 +9,7 @@
  * Recibe `persistence` (con el repo de acciones) y la lista `people` del equipo.
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import {
   listActions, createAction, toggleAction, removeAction,
 } from '../../tools/o2o/application/usecases/actions.js';
@@ -160,7 +161,7 @@ export class O2OActions extends LitElement {
 
   _renderBody() {
     if (!this._personId) return html`<p class="empty">Elige una persona para gestionar sus acciones.</p>`;
-    if (this._loading) return html`<p class="empty">Cargando acciones…</p>`;
+    if (this._loading) return skeletonLines(4);
     return html`${this._renderAdd()}${this._renderList()}`;
   }
 

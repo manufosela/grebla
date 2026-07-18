@@ -11,6 +11,7 @@
  * equipo y la `guide` cargada (para pintar las preguntas a responder).
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import {
   listSessions, createSession, updateSession, removeSession,
 } from '../../tools/o2o/application/usecases/sessions.js';
@@ -258,7 +259,7 @@ export class O2ORegister extends LitElement {
   _renderBody() {
     if (!this._personId) return html`<p class="empty">Elige una persona para ver y registrar sus O2O.</p>`;
     if (this._draft) return this._renderForm();
-    if (this._loadingList) return html`<p class="empty">Cargando O2O…</p>`;
+    if (this._loadingList) return skeletonLines(4);
     return this._renderList();
   }
 

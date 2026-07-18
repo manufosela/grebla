@@ -7,6 +7,7 @@
  *  - persistence: DoraPersistence
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { getDoraSummary } from '../../tools/dora/application/usecases.js';
 import { leadTimeLevel, deployFrequencyLevel, changeFailureRateLevel, mttrLevel } from '../../tools/dora/domain/levels.js';
 import { levelBadge, levelStyles } from './level-badge.js';
@@ -121,7 +122,7 @@ export class DoraMetrics extends LitElement {
   }
 
   render() {
-    if (this.loading) return html`<p class="empty">Cargando métricas…</p>`;
+    if (this.loading) return skeletonBlock('280px');
     if (this.error) return html`<p class="error">${this.error}</p>`;
     const s = this.summary;
     if (!s) return html`<p class="empty">Sin datos.</p>`;

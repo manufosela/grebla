@@ -11,6 +11,7 @@
  *  - isAdmin: boolean
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import '../app-modal.js';
 import {
   addPerson,
@@ -470,7 +471,7 @@ export class TeamPeople extends LitElement {
 
   /** Lista de personas activas: cargando / vacío / tabla (sin ternarios anidados). */
   _renderPeopleList() {
-    if (this.loading) return html`<p class="empty">Cargando…</p>`;
+    if (this.loading) return skeletonLines(5);
     if (this.people.length === 0) {
       return html`<p class="empty">Aún no has añadido a nadie. Despliega «Añadir persona» para empezar.</p>`;
     }

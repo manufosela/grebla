@@ -8,6 +8,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import { listDepartedPeople, getTurnover, reactivatePerson } from '../../tools/team/application/usecases/index.js';
 import { deletePerson } from '../../lib/people.js';
 
@@ -161,7 +162,7 @@ export class TeamDepartures extends LitElement {
   }
 
   render() {
-    if (this.loading) return html`<p class="empty">Cargando…</p>`;
+    if (this.loading) return skeletonLines(4);
     if (this.error) return html`<p class="error">${this.error}</p>`;
     const t = this.turnover;
     return html`

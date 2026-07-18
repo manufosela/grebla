@@ -9,6 +9,7 @@
  * Recibe `persistence` (inyectada por src/client/o2o.js), `people` y `canEdit`.
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import './o2o-register.js';
 import './o2o-actions.js';
 import './o2o-period-summary.js';
@@ -171,7 +172,7 @@ export class O2OApp extends LitElement {
 
   render() {
     if (this.error && !this._period) return html`<section class="panel"><p class="error">${this.error}</p></section>`;
-    if (this.loading) return html`<section class="panel"><p class="empty">Cargando…</p></section>`;
+    if (this.loading) return html`<section class="panel">${skeletonLines(5)}</section>`;
     return this._period ? this._renderWorkspace() : this._renderPeriodsList();
   }
 

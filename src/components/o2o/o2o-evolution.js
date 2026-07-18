@@ -6,6 +6,7 @@
  * Props: persistence, people.
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { listPeriods } from '../../tools/o2o/application/usecases/periods.js';
 import { listAllSessions } from '../../tools/o2o/application/usecases/sessions.js';
 import { evolutionOf } from '../../tools/o2o/application/usecases/periodStats.js';
@@ -67,7 +68,7 @@ export class O2OEvolution extends LitElement {
   }
 
   render() {
-    if (this._loading) return html`<p class="empty">Cargando…</p>`;
+    if (this._loading) return skeletonBlock('200px');
     if (this._error) return html`<p class="error">${this._error}</p>`;
     if (!this._rows.length) return html`<p class="empty">Aún no hay periodos que comparar.</p>`;
     return html`

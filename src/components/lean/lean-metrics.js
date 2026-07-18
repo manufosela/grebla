@@ -4,6 +4,7 @@
  * (p50/p85), WIP, aging y flow efficiency. Solo lectura. Reutiliza `formatHours` de DORA.
  */
 import { html, css } from 'lit';
+import { skeletonBlock } from '../app-skeleton.js';
 import { flowEfficiencyLevel, agingLevel } from '../../tools/lean/domain/levels.js';
 import { formatHours } from '../dora/format.js';
 import { levelBadge, levelStyles } from '../dora/level-badge.js';
@@ -75,7 +76,7 @@ export class LeanMetrics extends LeanView {
   }
 
   render() {
-    if (this._loading && !this._summary) return html`<p class="empty">Cargando métricas…</p>`;
+    if (this._loading && !this._summary) return skeletonBlock('280px');
     const squads = this._summary?.squads ?? { units: [], global: {} };
     const chapters = this._summary?.chapters ?? { units: [], global: {} };
     const hasAny = this._withMetrics(squads.units).length || this._withMetrics(chapters.units).length;

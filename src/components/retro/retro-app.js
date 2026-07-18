@@ -8,6 +8,7 @@
  * canManage (true para el manager dueño).
  */
 import { LitElement, html, css } from 'lit';
+import { skeletonLines } from '../app-skeleton.js';
 import './retro-manager.js';
 import './retro-carryover.js';
 import './retro-board.js';
@@ -92,7 +93,7 @@ export class RetroApp extends LitElement {
   }
 
   _renderEngineerList() {
-    if (this._loading) return html`<p class="empty">Cargando retros…</p>`;
+    if (this._loading) return skeletonLines(4);
     if (this._error) return html`<p class="empty">${this._error}</p>`;
     if (!this._retros.length) return html`<p class="empty">Tu equipo aún no tiene retros.</p>`;
     return html`
