@@ -131,6 +131,11 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         --rm-bg: #f6f9fa;
         --rm-surface: #ffffff;
         --rm-surface-hover: #eef3f5;
+        /* Fondo sutil de los campos de formulario (RMR-TSK-0268): diferencia los
+           inputs de la tarjeta sin rechinar. Se define una sola vez con color-mix
+           (texto→superficie), que se resuelve al USARSE, así se adapta solo al
+           tema oscuro sin redeclararlo. */
+        --rm-field: color-mix(in srgb, var(--rm-text) 5%, var(--rm-surface));
         --rm-text: var(--gr-navy);
         --rm-muted: #5b6b7d;
         --rm-border: #dde7ec;

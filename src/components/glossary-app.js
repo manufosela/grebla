@@ -72,7 +72,7 @@ export class GlossaryApp extends LitElement {
       padding: 0.6rem 0.85rem;
       font: inherit;
       color: var(--rm-text, #1e3a5f);
-      background: var(--rm-surface, #fff);
+      background: var(--rm-field, #eef2f6);
       border: 1px solid var(--rm-border, #dde7ec);
       border-radius: var(--rm-radius, 14px);
     }

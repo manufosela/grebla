@@ -169,7 +169,7 @@ export class RoleQuestionnaire extends LitElement {
       padding: 0.35rem 0.6rem;
       border-radius: 8px;
       border: 1px solid var(--rm-border, #d1d5db);
-      background: var(--rm-surface, #fff);
+      background: var(--rm-field, #eef2f6);
       color: var(--rm-text, #111827);
       font-size: 0.85rem;
     }

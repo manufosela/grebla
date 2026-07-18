@@ -28,7 +28,7 @@ export class RetroActions extends LitElement {
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); --amber: #d1902f; --navy: var(--gr-navy, #1e3a5f); }
     .h { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); font-weight: 700; margin: 0 0 0.8rem; }
     .add { margin-top: 1rem; border-top: 1px dashed var(--rm-border, #dde7ec); padding-top: 0.9rem; }
-    .add input[type="text"] { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 9px; background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); }
+    .add input[type="text"] { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 9px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); }
     .owners { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; }
     .owner-chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.78rem; cursor: pointer; color: var(--rm-text, #1e3a5f); }
     .owner-chip.on { background: color-mix(in srgb, var(--navy) 12%, transparent); border-color: var(--navy); font-weight: 600; }

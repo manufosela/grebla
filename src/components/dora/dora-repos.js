@@ -111,7 +111,7 @@ export class DoraRepos extends LitElement {
     .row { display: grid; grid-template-columns: 2fr 1.2fr auto; gap: 0.75rem; align-items: end; }
     @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
     label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
-    input { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
+    input { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font-size: 0.9rem; }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
@@ -145,7 +145,7 @@ export class DoraRepos extends LitElement {
     .deploy-form { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 0.6rem; align-items: end; }
     @media (max-width: 720px) { .deploy-form { grid-template-columns: 1fr; } }
     .deploy-form label { font-size: 0.72rem; }
-    .deploy-form input, .deploy-form select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.82rem; }
+    .deploy-form input, .deploy-form select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font-size: 0.82rem; }
     .deploy-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
     .deploy-list li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; padding: 0.35rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     .deploy-list .when { font-variant-numeric: tabular-nums; }

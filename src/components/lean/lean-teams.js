@@ -43,7 +43,7 @@ export class LeanTeams extends LitElement {
     details.manual summary { cursor: pointer; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
     .manual .row { display: flex; gap: 0.6rem; align-items: end; flex-wrap: wrap; margin: 0.6rem 0 0; }
     label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.76rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
-    input, select { font: inherit; padding: 0.4rem 0.55rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+    input, select { font: inherit; padding: 0.4rem 0.55rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     h4 { font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); margin: 1.1rem 0 0.4rem; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }

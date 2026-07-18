@@ -42,7 +42,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
     .field { display: grid; gap: 0.25rem; }
     label { font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
     input { font: inherit; padding: 0.4rem 0.55rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
-      background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+      background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     input[type="text"] { min-width: 220px; }
     .create { border: none; background: var(--accent); color: var(--accent-on); border-radius: 8px;
       padding: 0.5rem 1.1rem; font: inherit; font-weight: 800; cursor: pointer; }

@@ -61,7 +61,7 @@ export class CityReferences extends LitElement {
     input, textarea {
       width: 100%; box-sizing: border-box; font: inherit; font-size: 0.85rem;
       padding: 0.4rem 0.55rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 8px;
-      background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
+      background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
     textarea { resize: vertical; min-height: 2.2rem; }
     input:focus-visible, textarea:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 1px; }

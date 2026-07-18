@@ -43,7 +43,7 @@ export class O2ORegister extends LitElement {
     label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     select, input[type='date'], textarea, input[type='text'] {
       font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db);
-      border-radius: 8px; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); width: 100%;
+      border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); width: 100%;
     }
     textarea { min-height: 3.5rem; resize: vertical; }
     .btn {

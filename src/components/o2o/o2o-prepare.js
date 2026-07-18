@@ -31,7 +31,7 @@ export class O2OPrepare extends LitElement {
     .ai h3 { margin: 0 0 0.5rem; font-size: 0.98rem; color: var(--rm-text, #111827); }
     .ai label { display: block; font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; margin: 0 0 0.3rem; }
     textarea { font: inherit; width: 100%; padding: 0.5rem 0.65rem; border: 1px solid var(--rm-border, #d1d5db);
-      border-radius: 8px; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); resize: vertical; }
+      border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); resize: vertical; }
     .actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.6rem; flex-wrap: wrap; }
     .btn { border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: #fff;
       border-radius: 8px; padding: 0.5rem 1.1rem; font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; }

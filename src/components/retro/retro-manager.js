@@ -29,7 +29,7 @@ export class RetroManager extends LitElement {
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
     @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
     label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.75rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
-    input, select { font: inherit; font-size: 0.9rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 9px; background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); }
+    input, select { font: inherit; font-size: 0.9rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 9px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); }
     input:focus-visible, select:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
     .scope { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: var(--rm-text, #1e3a5f); font-weight: 600; }
     .scope label { flex-direction: row; align-items: center; gap: 0.35rem; font-weight: 600; color: var(--rm-text, #1e3a5f); }

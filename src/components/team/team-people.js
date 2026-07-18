@@ -120,7 +120,7 @@ export class TeamPeople extends LitElement {
     .fw-hint a { color: var(--rm-accent, #2a9d8f); font-weight: 700; }
     input, select {
       padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
-      background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem;
+      background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font-size: 0.9rem;
     }
     button {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
@@ -198,7 +198,7 @@ export class TeamPeople extends LitElement {
     .modal-body { display: flex; flex-direction: column; gap: 1rem; }
     .modal-body p { margin: 0; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     .modal-body .fields { display: flex; flex-direction: column; gap: 0.75rem; }
-    .modal-body select { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
+    .modal-body select { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font-size: 0.9rem; }
     .modal-body .actions-row { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
     .shared-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
     .shared-list li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.4rem; }

@@ -30,7 +30,7 @@ export class MotivatorsAggregates extends LitElement {
     .legend { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; line-height: 1.45; }
     label { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
     select { font: inherit; padding: 0.3rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
-      background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+      background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     h4 { margin: 1.25rem 0 0.6rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
     .row { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 0.6rem; padding: 0.35rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     .rank { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);

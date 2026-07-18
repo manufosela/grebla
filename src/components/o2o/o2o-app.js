@@ -69,7 +69,7 @@ export class O2OApp extends LitElement {
     .btn.danger { color: var(--rm-danger, #dc2626); border-color: var(--rm-danger, #dc2626); }
     .btn.link { border: 0; background: none; color: var(--rm-accent, #2a9d8f); font-weight: 700; padding: 0; }
     .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; }
-    input[type='text'] { font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); min-width: 16rem; }
+    input[type='text'] { font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); min-width: 16rem; }
     ul.periods { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
     ul.periods li { display: flex; align-items: center; gap: 0.6rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.55rem 0.85rem; }
     ul.periods .name { flex: 1; font-weight: 600; }

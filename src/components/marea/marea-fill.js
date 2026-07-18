@@ -83,7 +83,7 @@ export class MareaFill extends LitElement {
     input[type="range"]:focus-visible { outline: 2px solid var(--navy); outline-offset: 3px; }
 
     .word label { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); font-weight: 700; }
-    .word input { width: 100%; box-sizing: border-box; margin-top: 0.4rem; padding: 0.6rem 0.8rem; border-radius: 10px; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); font: inherit; font-size: 0.9rem; }
+    .word input { width: 100%; box-sizing: border-box; margin-top: 0.4rem; padding: 0.6rem 0.8rem; border-radius: 10px; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); font: inherit; font-size: 0.9rem; }
     .word input:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; border-color: var(--teal); }
     .word .priv { font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); margin-top: 0.35rem; }
     .word .share { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.55rem; font-size: 0.82rem; font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--rm-text, #1e3a5f); cursor: pointer; }
