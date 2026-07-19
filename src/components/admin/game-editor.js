@@ -22,6 +22,7 @@
  */
 import { LitElement, html, css, svg } from 'lit';
 import '../app-modal.js';
+import '@manufosela/multi-select';
 import {
   getArchipelago,
   getCareerMap,
@@ -352,7 +353,24 @@ export class GameEditor extends LitElement {
     .stops .what { flex: 1; min-width: 0; }
     .stops .isl { font-size: 0.75rem; }
     .res-row { display: grid; grid-template-columns: 2fr 2fr 8rem auto; gap: 0.5rem; margin-bottom: 0.4rem; align-items: center; }
-    .prereqs { width: 100%; min-height: 7rem; }
+    /* Prereqs con @manufosela/multi-select (RMR-TSK-0269): desplegable de
+       checkboxes; se tiñe con los tokens del tema (claro/oscuro) vía sus vars. */
+    multi-select.prereqs {
+      display: block; width: 100%;
+      --multi-select-min-width: 100%;
+      --multi-select-bg: var(--rm-field, #eef2f6);
+      --multi-select-border-color: var(--rm-border, #d1d5db);
+      --multi-select-border-hover: var(--rm-accent, #3b82f6);
+      --multi-select-border-focus: var(--rm-accent, #3b82f6);
+      --multi-select-radius: 8px;
+      --multi-select-text-color: var(--rm-text, #111827);
+      --multi-select-placeholder-color: var(--rm-muted, #6b7280);
+      --multi-select-checkbox-color: var(--rm-accent, #3b82f6);
+      --multi-select-option-hover-bg: var(--rm-surface-hover, #eef3f5);
+      --multi-select-option-selected-bg: var(--rm-track, #e9f0f2);
+      --multi-select-max-height: 260px;
+      --multi-select-z-index: 1100;
+    }
     .form-actions { display: flex; gap: 0.75rem; margin-top: 1rem; }
     .route-group { margin-bottom: 1.25rem; }
     .route-group h3 { margin-top: 0; }
@@ -512,11 +530,6 @@ export class GameEditor extends LitElement {
       next.id = `${discipline}/${slugify(name)}`;
     }
     this._cityForm = { ...this._cityForm, draft: next };
-  }
-
-  /** @param {HTMLSelectElement} select */
-  _onPrereqsChange(select) {
-    this._setCityField('prereqs', [...select.selectedOptions].map((o) => o.value));
   }
 
   _addResource() {
@@ -1199,10 +1212,15 @@ export class GameEditor extends LitElement {
                 @change=${(e) => this._setCityField('deprecated', e.target.checked)} />
             </div>
             <div class="field field-wide">
-              <label for="c-prereqs">Prerequisitos (casas de esta isla; Ctrl/Cmd para varios)</label>
-              <select id="c-prereqs" class="prereqs" multiple @change=${(e) => this._onPrereqsChange(e.target)}>
-                ${others.map((c) => html`<option value=${c.id} ?selected=${draft.prereqs.includes(c.id)}>${c.name}</option>`)}
-              </select>
+              <label for="c-prereqs">Prerequisitos (casas de esta isla que hay que dominar antes)</label>
+              <multi-select
+                id="c-prereqs"
+                class="prereqs"
+                placeholder="Elige las casas previas…"
+                .options=${others.map((c) => ({ value: c.id, label: c.name }))}
+                .selectedValues=${[...draft.prereqs]}
+                @change=${(e) => this._setCityField('prereqs', e.detail.selectedValues)}
+              ></multi-select>
             </div>
           </div>
         </div>

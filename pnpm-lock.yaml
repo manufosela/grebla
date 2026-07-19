@@ -14,6 +14,9 @@ importers:
       '@lit-labs/ssr-client':
         specifier: ^1.1.8
         version: 1.1.8
+      '@manufosela/multi-select':
+        specifier: ^2.1.0
+        version: 2.1.0
       '@webcomponents/template-shadowroot':
         specifier: ^0.2.1
         version: 0.2.1
@@ -733,6 +736,9 @@ packages:
 
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
+
+  '@manufosela/multi-select@2.1.0':
+    resolution: {integrity: sha512-UMjfdg7DQ5iPhj0dqgPJok0+BEEolK+V6oy7jzqE40zVqGiAoIFGc0Dvdkk8kLANxlXZKJgAdGBTHEpHKXa/iA==}
 
   '@nodable/entities@2.1.1':
     resolution: {integrity: sha512-Pig3HxDIoMgjdEH8OCf/dkcTmLFjJRjWuq8jSnklu284/TKOPibSRERmOykiwmyXTtv61mP+44f3GMx0tLAyjg==}
@@ -3490,6 +3496,10 @@ snapshots:
   '@lit/reactive-element@2.1.2':
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.6.0
+
+  '@manufosela/multi-select@2.1.0':
+    dependencies:
+      lit: 3.3.3
 
   '@nodable/entities@2.1.1':
     optional: true
