@@ -359,6 +359,8 @@ export class GameEditor extends LitElement {
       display: block; width: 100%;
       --multi-select-min-width: 100%;
       --multi-select-bg: var(--rm-field, #eef2f6);
+      --multi-select-dropdown-bg: var(--rm-surface, #fff);
+      --multi-select-arrow-color: var(--rm-muted, #6b7280);
       --multi-select-border-color: var(--rm-border, #d1d5db);
       --multi-select-border-hover: var(--rm-accent, #3b82f6);
       --multi-select-border-focus: var(--rm-accent, #3b82f6);

@@ -35,9 +35,13 @@ export class AppModal extends LitElement {
       inset: 0;
       background: var(--rm-overlay, rgba(17, 24, 39, 0.5));
       display: flex;
-      align-items: center;
+      /* El SCROLL vive en el backdrop, no en el panel (RMR-BUG-0044): así el
+         panel no recorta los desplegables internos (p. ej. <multi-select>) y la
+         rueda del ratón no los cierra. Alineado arriba con aire vertical (≥8vh). */
+      align-items: flex-start;
       justify-content: center;
-      padding: 1rem;
+      overflow-y: auto;
+      padding: 8vh 1rem;
       z-index: 1000;
     }
     .panel {
@@ -47,11 +51,9 @@ export class AppModal extends LitElement {
       border-radius: var(--rm-radius, 12px);
       box-shadow: var(--rm-shadow, 0 10px 30px rgba(0, 0, 0, 0.2));
       width: min(32rem, 100%);
-      /* Deja siempre ≥10% de aire arriba y abajo (RMR-TSK-0265): el panel nunca
-         pasa del 80% del alto y el backdrop lo centra. Si el contenido es más
-         alto, scrollea dentro. */
-      max-height: 80vh;
-      overflow: auto;
+      /* Sin recorte: el contenido alto hace scroll en el backdrop, y los
+         desplegables internos pueden desbordar el panel sin cortarse. */
+      overflow: visible;
       padding: 1.25rem 1.5rem 1.5rem;
     }
     /* Variante ancha para formularios densos (p. ej. el editor de rutas). */
