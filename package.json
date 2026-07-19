@@ -28,6 +28,7 @@
   "dependencies": {
     "@astrojs/lit": "^4.3.0",
     "@lit-labs/ssr-client": "^1.1.8",
+    "@manufosela/multi-select": "^2.1.0",
     "@webcomponents/template-shadowroot": "^0.2.1",
     "astro": "^6.4.4",
     "firebase": "^12.14.0",
