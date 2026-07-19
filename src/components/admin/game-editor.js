@@ -835,7 +835,7 @@ export class GameEditor extends LitElement {
     const draft = routeDraft(route);
     // Descruza cualquier ruta legada que intercale islas: al abrir queda contigua
     // por isla (RMR-TSK-0265). Sin islas cargadas aún, se deja tal cual.
-    draft.stops = contiguousStops(draft.stops, [...(this._islands?.values() ?? [])]);
+    draft.stops = contiguousStops(draft.stops, this._arch?.islands ?? []);
     this._routeForm = { originalId: route.routeId, draft, errors: [] };
     this._routeFormTab = 'datos';
     this._addStop = { islandId: this._arch?.islands.at(0)?.id ?? '', cityId: '' };
@@ -850,7 +850,9 @@ export class GameEditor extends LitElement {
   /** Grupos de paradas por isla del borrador actual (RMR-TSK-0265). */
   _stopGroups() {
     const stops = this._routeForm?.draft.stops ?? [];
-    return groupStopsByIsland(stops, [...(this._islands?.values() ?? [])]);
+    // La agrupación resuelve la isla por `discipline`, que vive en el ÍNDICE del
+    // archipiélago (_arch.islands), no en el contenido de cada isla (_islands).
+    return groupStopsByIsland(stops, this._arch?.islands ?? []);
   }
 
   /** Reordena una parada DENTRO de su isla (delta ±1): no se salta a otra isla,
@@ -889,7 +891,7 @@ export class GameEditor extends LitElement {
     const next = appendStopToIsland(
       this._routeForm.draft.stops,
       cityId,
-      [...(this._islands?.values() ?? [])],
+      this._arch?.islands ?? [],
     );
     this._setRouteField('stops', next);
     this._addStop = { ...this._addStop, cityId: '' };
