@@ -25,6 +25,7 @@ import {
   updatePerson,
   listLabels,
   listGuilds,
+  listSquads,
   normalizeInviteEmail,
 } from '../../tools/team/application/usecases/index.js';
 import { listUsers } from '../../lib/users.js';
@@ -147,6 +148,7 @@ export class TeamPersonDetail extends LitElement {
     _datos: { state: true },
     _guildsCat: { state: true },
     _labelsCat: { state: true },
+    _squadsCat: { state: true },
     _usersCat: { state: true },
     _datosSaving: { state: true },
     _datosError: { state: true },
@@ -390,10 +392,12 @@ export class TeamPersonDetail extends LitElement {
     this._logbook = null;
     /** Borrador editable de la pestaña «Datos» (RMR-TSK-0173). Se siembra desde
      * la persona al abrirla. @type {{ name: string, githubLogin: string, startDate: string, guilds: string[], labels: string[], uid: string }} */
-    this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], labels: [], uid: '' };
+    this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], labels: [], squadIds: [], uid: '' };
     /** Catálogos para los selectores de Datos (gremios, labels, cuentas). */
     this._guildsCat = [];
     this._labelsCat = [];
+    /** Catálogo de squads de la organización (RMR-TSK-0275). */
+    this._squadsCat = [];
     this._usersCat = [];
     this._datosSaving = false;
     this._datosError = '';
@@ -454,6 +458,7 @@ export class TeamPersonDetail extends LitElement {
       startDate: p?.startDate ?? '',
       guilds: [...(p?.guilds ?? [])],
       labels: [...(p?.labels ?? [])],
+      squadIds: [...(p?.squadIds ?? [])],
       uid: p?.uid ?? '',
       pendingEmail: p?.pendingEmail ?? '',
       location: p?.location ?? '',
@@ -646,7 +651,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat] =
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -660,6 +665,7 @@ export class TeamPersonDetail extends LitElement {
           listLabels(this.persistence).catch(() => []),
           listGuilds(this.persistence).catch(() => []),
           listUsers().catch(() => []),
+          listSquads(this.persistence).catch(() => []),
         ]);
       this.timeline = timeline;
       this.areas = areas;
@@ -670,6 +676,7 @@ export class TeamPersonDetail extends LitElement {
       this._labelsCat = labelsCat;
       this._guildsCat = guildsCat;
       this._usersCat = usersCat;
+      this._squadsCat = squadsCat;
       this._seedAssessmentDraft();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
@@ -1584,6 +1591,35 @@ export class TeamPersonDetail extends LitElement {
     this._datos = { ...this._datos, guilds };
   }
 
+  /** Los squads se guardan por ID (el catálogo puede renombrarse sin tocar
+   *  a las personas), de ahí que no use el toggle genérico por nombre.
+   *  @param {string} id @param {boolean} checked */
+  _toggleDatosSquad(id, checked) {
+    const squadIds = checked
+      ? [...new Set([...this._datos.squadIds, id])]
+      : this._datos.squadIds.filter((s) => s !== id);
+    this._datos = { ...this._datos, squadIds };
+  }
+
+  /** Checkboxes de squads: etiqueta por nombre, valor por id. */
+  _renderDatosSquads(selectedIds) {
+    const cat = this._squadsCat ?? [];
+    if (cat.length === 0) {
+      return html`<fieldset class="datos-checks">
+        <legend>Squads</legend>
+        <span class="empty">Aún no hay squads (los crea el superadmin en el panel).</span>
+      </fieldset>`;
+    }
+    return html`<fieldset class="datos-checks">
+      <legend>Squads</legend>
+      ${cat.map((sq) => html`<label class="chk">
+        <input type="checkbox" .checked=${selectedIds.includes(sq.id)}
+          @change=${(e) => this._toggleDatosSquad(sq.id, e.target.checked)} />
+        <span>${sq.name}</span>
+      </label>`)}
+    </fieldset>`;
+  }
+
   /** @param {string} name @param {boolean} checked */
   _toggleDatosLabel(name, checked) {
     const labels = checked ? [...this._datos.labels, name] : this._datos.labels.filter((l) => l !== name);
@@ -1609,6 +1645,7 @@ export class TeamPersonDetail extends LitElement {
         startDate: this._datos.startDate || null,
         guilds: [...this._datos.guilds],
         labels: [...this._datos.labels],
+        squadIds: [...this._datos.squadIds],
         location: this._datos.location.trim() || null,
         external: !!this._datos.external,
       };
@@ -1728,6 +1765,7 @@ export class TeamPersonDetail extends LitElement {
         </label>
         ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
         ${this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c))}
+        ${this._renderDatosSquads(d.squadIds ?? [])}
         ${this._renderEmailBlock()}
         ${this._datosError ? html`<p class="error">${this._datosError}</p>` : null}
         <div class="datos-actions">

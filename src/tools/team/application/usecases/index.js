@@ -20,6 +20,7 @@ export {
 export { addArea, listAreas, removeArea, renameArea } from './areas.js';
 export { getSettings, updateSettings } from './config.js';
 export { addGuild, listGuilds, removeGuild, renameGuild } from './guilds.js';
+export { addSquad, listSquads, removeSquad, renameSquad, normalizeSquadIds, squadNames } from './squads.js';
 export { addLabel, listLabels, removeLabel, renameLabel } from './labels.js';
 export { addReading, getCurrentReading, getPersonTimeline } from './readings.js';
 export { registerConversation, listConversations, updateConversation } from './conversations.js';

@@ -285,6 +285,14 @@ service cloud.firestore {
     }
 
     // Catálogo de labels: mismo modelo de ámbito que guilds.
+    // Squads: catálogo de la ORGANIZACIÓN (RMR-TSK-0275). Lo lee cualquiera con
+    // acceso (para pintar a qué squad pertenece cada persona) y lo gestiona el
+    // superadmin; un manager NO crea squads porque son transversales a managers.
+    match /squads/{squadId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     match /labels/{labelId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()

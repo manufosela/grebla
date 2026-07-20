@@ -70,7 +70,7 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'areas', 'guilds', 'labels', 'career', 'users'];
+const TABS = ['leaders', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
  *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
 const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
@@ -858,6 +858,8 @@ export class SuperadminPanel extends LitElement {
         return this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)');
       case 'guilds':
         return this._renderCatalogTab('guilds', 'Gremios (organización)');
+      case 'squads':
+        return this._renderCatalogTab('squads', 'Squads (organización)');
       case 'labels':
         return this._renderCatalogTab('labels', 'Labels (organización)');
       case 'career':
@@ -882,6 +884,7 @@ export class SuperadminPanel extends LitElement {
         <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Managers</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
+        <button class="tab ${this._tab === 'squads' ? 'active' : ''}" @click=${() => this._setTab('squads')}>Squads</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
         <button class="tab ${this._tab === 'career' ? 'active' : ''}" @click=${() => this._setTab('career')}>Carrera</button>
         ${this.readOnly

@@ -5,18 +5,19 @@
  * `promote` (personal → global) es genérico: quita el ownerLeaderUid del repo.
  *
  * @typedef {import('../../domain/ports.js').PersistencePort} PersistencePort
- * @typedef {'areas'|'guilds'|'labels'} CatalogKind
+ * @typedef {'areas'|'guilds'|'labels'|'squads'} CatalogKind
  */
 import { addArea, listAreas, removeArea, renameArea } from './areas.js';
 import { addGuild, listGuilds, removeGuild, renameGuild } from './guilds.js';
+import { addSquad, listSquads, removeSquad, renameSquad } from './squads.js';
 import {
   addLabel, listLabels, removeLabel, renameLabel, updateLabelMeta,
 } from './labels.js';
 
-const LIST = { areas: listAreas, guilds: listGuilds, labels: listLabels };
-const ADD = { areas: addArea, guilds: addGuild, labels: addLabel };
-const RENAME = { areas: renameArea, guilds: renameGuild, labels: renameLabel };
-const REMOVE = { areas: removeArea, guilds: removeGuild, labels: removeLabel };
+const LIST = { areas: listAreas, guilds: listGuilds, labels: listLabels, squads: listSquads };
+const ADD = { areas: addArea, guilds: addGuild, labels: addLabel, squads: addSquad };
+const RENAME = { areas: renameArea, guilds: renameGuild, labels: renameLabel, squads: renameSquad };
+const REMOVE = { areas: removeArea, guilds: removeGuild, labels: removeLabel, squads: removeSquad };
 
 /** @param {CatalogKind} kind */
 function repoOf(persistence, kind) {
