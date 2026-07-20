@@ -17,6 +17,7 @@ export class RetroManager extends LitElement {
     uid: { attribute: false },
     _retros: { state: true },
     _squads: { state: true },
+    _copiedId: { state: true },
     _new: { state: true },
     _loading: { state: true },
     _saving: { state: true },
@@ -59,6 +60,8 @@ export class RetroManager extends LitElement {
     this._new = { format: 'ssc', name: '', sprint: '', scopeType: 'team', squadId: '' };
     /** @type {Array<{id:string,name:string}>} catálogo de squads (RMR-TSK-0278) */
     this._squads = [];
+    /** id de la retro cuyo enlace se acaba de copiar (feedback efímero) */
+    this._copiedId = null;
     this._loading = false;
     this._saving = false;
     this._error = '';
@@ -141,6 +144,19 @@ export class RetroManager extends LitElement {
     </label>`;
   }
 
+  /** Copia el enlace público de la retro (RMR-TSK-0279): quien lo abra y se
+   *  logue con correo de tribbu puede participar aunque no sea de este equipo. */
+  async _copyLink(retroId) {
+    const url = `${location.origin}/retro?id=${encodeURIComponent(retroId)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      this._copiedId = retroId;
+      setTimeout(() => { if (this._copiedId === retroId) this._copiedId = null; }, 2000);
+    } catch {
+      this._error = `No se pudo copiar. El enlace es: ${url}`;
+    }
+  }
+
   _scopeText(retro) {
     if (retro.scope?.type !== 'squad') return 'Equipo';
     // Retros nuevas guardan squadId; las antiguas, el nombre como texto libre.
@@ -162,6 +178,8 @@ export class RetroManager extends LitElement {
         <td><span class="chip ${open ? 'open' : 'closed'}">${open ? 'Abierta' : 'Cerrada'}</span></td>
         <td>
           <button class="act" @click=${() => this._open(retro)}>Abrir</button>
+          <button class="act" title="Copiar el enlace para compartir la retro"
+            @click=${() => this._copyLink(retro.id)}>${this._copiedId === retro.id ? '✓ Copiado' : 'Copiar enlace'}</button>
           ${open ? html`<button class="act" @click=${() => this._close(retro.id)}>Cerrar</button>` : null}
         </td>
       </tr>
