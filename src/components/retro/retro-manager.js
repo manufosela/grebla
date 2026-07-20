@@ -9,7 +9,7 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';
-import { createRetro, listRetros, closeRetro } from '../../lib/retros.js';
+import { createRetro, listRetros, closeRetro, deleteRetro } from '../../lib/retros.js';
 import { listSquadsCatalog } from '../../lib/squads.js';
 
 export class RetroManager extends LitElement {
@@ -18,6 +18,7 @@ export class RetroManager extends LitElement {
     _retros: { state: true },
     _squads: { state: true },
     _copiedId: { state: true },
+    _confirmDeleteId: { state: true },
     _new: { state: true },
     _loading: { state: true },
     _saving: { state: true },
@@ -50,6 +51,12 @@ export class RetroManager extends LitElement {
     .chip.closed { background: var(--rm-surface-hover, #eef3f5); color: var(--rm-muted, #5b6b7d); }
     .scope-chip { background: color-mix(in srgb, var(--gr-coral, #f2887a) 16%, transparent); color: var(--gr-coral, #f2887a); }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.6rem; font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+    .act.danger { color: var(--rm-danger, #dc2626); border-color: var(--rm-danger, #dc2626); }
+    /* Confirmación en línea del borrado (RMR-TSK-0280): mismo patrón que en
+       los catálogos, sin modal para una acción de una fila. */
+    .confirm { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
+    .confirm button { border: 0; background: none; cursor: pointer; font: inherit; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #1e3a5f); }
+    .confirm .yes { color: var(--rm-danger, #dc2626); }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
   `;
 
@@ -62,6 +69,8 @@ export class RetroManager extends LitElement {
     this._squads = [];
     /** id de la retro cuyo enlace se acaba de copiar (feedback efímero) */
     this._copiedId = null;
+    /** id de la retro pendiente de confirmar borrado */
+    this._confirmDeleteId = null;
     this._loading = false;
     this._saving = false;
     this._error = '';
@@ -146,6 +155,19 @@ export class RetroManager extends LitElement {
 
   /** Copia el enlace público de la retro (RMR-TSK-0279): quien lo abra y se
    *  logue con correo de tribbu puede participar aunque no sea de este equipo. */
+  /** Borra la retro y sus notas. Las acciones se conservan (persisten entre
+   *  retros por diseño), y así se le dice al usuario. */
+  async _delete(retroId) {
+    this._error = '';
+    try {
+      await deleteRetro(retroId);
+      this._confirmDeleteId = null;
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo borrar la retro.';
+    }
+  }
+
   async _copyLink(retroId) {
     const url = `${location.origin}/retro?id=${encodeURIComponent(retroId)}`;
     try {
@@ -181,6 +203,12 @@ export class RetroManager extends LitElement {
           <button class="act" title="Copiar el enlace para compartir la retro"
             @click=${() => this._copyLink(retro.id)}>${this._copiedId === retro.id ? '✓ Copiado' : 'Copiar enlace'}</button>
           ${open ? html`<button class="act" @click=${() => this._close(retro.id)}>Cerrar</button>` : null}
+          ${this._confirmDeleteId === retro.id
+            ? html`<span class="confirm">¿Borrar la retro y sus notas?
+                <button class="yes" @click=${() => this._delete(retro.id)}>Sí</button>
+                <button @click=${() => { this._confirmDeleteId = null; }}>No</button>
+              </span>`
+            : html`<button class="act danger" @click=${() => { this._confirmDeleteId = retro.id; this._error = ''; }}>Borrar</button>`}
         </td>
       </tr>
     `;
