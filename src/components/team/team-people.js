@@ -538,18 +538,18 @@ export class TeamPeople extends LitElement {
     return html`<span class="chip" style=${style}>${text}</span>`;
   }
 
-  /** Color del label en el catálogo (o '' si no tiene). */
-  _labelColor(name) {
-    const label = (this.labels ?? []).find((l) => l.name === name);
-    return label?.color || '';
+  /** Color de una entrada del catálogo por nombre (o '' si no tiene). Vale para
+   *  labels y para squads (RMR-TSK-0277): ambos guardan `color`. */
+  _catalogColor(name, catalog) {
+    return (catalog ?? []).find((c) => c.name === name)?.color || '';
   }
 
-  /** Celda de chips (gremios o labels), o «—» si está vacía. Con `withColor`,
-   * cada chip usa el color de su label del catálogo. */
-  _renderChips(items, withColor = false) {
+  /** Celda de chips, o «—» si está vacía. Con `catalog`, cada chip se tiñe con
+   *  el color de su entrada en ese catálogo. */
+  _renderChips(items, catalog = null) {
     const list = items ?? [];
     if (list.length === 0) return html`<span class="muted">—</span>`;
-    return html`<span class="chips">${list.map((x) => this._chipEl(x, withColor ? this._labelColor(x) : ''))}</span>`;
+    return html`<span class="chips">${list.map((x) => this._chipEl(x, catalog ? this._catalogColor(x, catalog) : ''))}</span>`;
   }
 
   /** Una fila de la tabla de personas. */
@@ -565,7 +565,7 @@ export class TeamPeople extends LitElement {
         ${this.isAdmin ? html`<td>${this._renderLeaderCell(p)}</td>` : null}
         <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
         <td>${this._renderChips(p.guilds)}</td>
-        <td>${this._renderChips(squadNames(p.squadIds, this.squads))}</td>
+        <td>${this._renderChips(squadNames(p.squadIds, this.squads), this.squads)}</td>
         <td>${formatDate(p.startDate)}</td>
         <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
       </tr>`;
