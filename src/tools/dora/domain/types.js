@@ -11,7 +11,8 @@
  * @property {string|null} [team] Equipo al que pertenece el repo.
  * @property {string[]} guilds    Gremios (cross-team) del repo.
  * @property {string} baseBranch  Rama base para lead time y, si la señal es "branch", la frecuencia.
- * @property {'branch'|'release'|'tag'|'manual'} deploySignal  Qué cuenta como despliegue (default "branch"):
+ * @property {string} [workflowFile]  Fichero del workflow de Actions cuando deploySignal='workflow' (p. ej. "testflight.yml").
+ * @property {'branch'|'release'|'tag'|'workflow'|'manual'} deploySignal  Qué cuenta como despliegue (default "branch"):
  *   'branch' = merges a baseBranch; 'release' = GitHub Releases; 'tag' = tags que
  *   casan tagPattern; 'manual' = deploy fuera de GitHub (cron/Forge/móvil), la
  *   frecuencia sale solo de los eventos registrados en /deployments.

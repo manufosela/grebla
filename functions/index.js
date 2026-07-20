@@ -567,8 +567,40 @@ function computeMeanTimeToRecovery(incidents, from, to) {
   };
 }
 
-/** Tope de PRs por repo a los que pedimos el primer commit (mitiga el rate-limit 60/h sin token). */
+/**
+ * Tope de PRs por repo a los que pedimos el primer commit (lead time exacto).
+ * Sin token se queda bajo para no agotar la cuota pública (60/h); CON token el
+ * llamante sube el tope (5000/h), ver `maxLookups` en refreshDora. Por encima
+ * del tope, el lead time de esa PR se aproxima.
+ */
 const MAX_COMMIT_LOOKUPS = 50;
+
+/**
+ * Despliegues observados como runs de un workflow de GitHub Actions
+ * (deploySignal='workflow'): el job nocturno de Fastlane, un push→Cloud Run, etc.
+ * SOLO LECTURA (GET). Devuelve runs completados en la ventana, separando
+ * exitosos de fallidos para poder derivar el Change Failure Rate.
+ * @returns {Promise<{ success: number, failed: number }>}
+ */
+async function fetchWorkflowRunCounts(fullName, workflowFile, sinceMs, toMs2, headers) {
+  const file = String(workflowFile ?? '').trim();
+  if (!file) return { success: 0, failed: 0 };
+  const created = `>=${new Date(sinceMs).toISOString().slice(0, 10)}`;
+  const url = `https://api.github.com/repos/${fullName}/actions/workflows/${encodeURIComponent(file)}`
+    + `/runs?per_page=100&status=completed&created=${encodeURIComponent(created)}`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw githubError(res.status, fullName, Boolean(headers.Authorization));
+  const body = await res.json();
+  let success = 0;
+  let failed = 0;
+  for (const run of body.workflow_runs ?? []) {
+    const at = Date.parse(run.updated_at ?? run.created_at ?? '');
+    if (!Number.isFinite(at) || at < sinceMs || at > toMs2) continue;
+    if (run.conclusion === 'success') success += 1;
+    else if (run.conclusion === 'failure') failed += 1;
+  }
+  return { success, failed };
+}
 
 /** Nº de releases publicados de un repo en [sinceMs, toMs2] (despliegue real). */
 async function fetchReleaseCount(fullName, sinceMs, toMs2, headers) {
@@ -584,7 +616,7 @@ async function fetchReleaseCount(fullName, sinceMs, toMs2, headers) {
 
 /** Señal de deploy normalizada (espejo de normalizeDeploySignal de usecases.js). */
 function normalizeSignal(v) {
-  return ['release', 'tag', 'manual'].includes(v) ? v : 'branch';
+  return ['release', 'tag', 'workflow', 'manual'].includes(v) ? v : 'branch';
 }
 
 /** Tope de tags a los que resolvemos la fecha del commit (mitiga el rate-limit). */
@@ -687,6 +719,16 @@ export const refreshDora = onCall(
         const tags = await fetchTagCount(repo.fullName, toMs(from), toMs(now), repo.tagPattern || '', headers);
         metrics.deployments = tags;
         metrics.deployFrequencyPerWeek = round1(tags / weeks);
+      } else if (signal === 'workflow') {
+        // El despliegue es un JOB de Actions (nocturno de Fastlane, push→Cloud
+        // Run…): cada run exitoso es un despliegue y los fallidos dan el CFR sin
+        // registrar nada a mano.
+        const runs = await fetchWorkflowRunCounts(
+          repo.fullName, repo.workflowFile, toMs(from), toMs(now), headers,
+        );
+        metrics.deployments = runs.success;
+        metrics.deployFrequencyPerWeek = round1(runs.success / weeks);
+        metrics.workflowRunsFailed = runs.failed;
       } else if (signal === 'manual') {
         const successInWindow = deployEvents.filter((e) => {
           const at = toMs(e?.at);
@@ -754,6 +796,18 @@ export const refreshDora = onCall(
       metrics.changeFailureRatePct = cfr.cfrPct;
       metrics.deploymentsFailed = cfr.failed;
       metrics.deploymentsTotal = cfr.total;
+      // Con señal 'workflow' el CFR sale de los propios runs (fallidos/total) si
+      // no se han registrado despliegues a mano: es observable, no hay que
+      // teclear nada. Los eventos manuales, si los hay, mandan sobre esto.
+      if (signal === 'workflow' && cfr.total === 0) {
+        const failed = metrics.workflowRunsFailed ?? 0;
+        const total = (metrics.deployments ?? 0) + failed;
+        if (total > 0) {
+          metrics.deploymentsFailed = failed;
+          metrics.deploymentsTotal = total;
+          metrics.changeFailureRatePct = round1((failed / total) * 100);
+        }
+      }
       metrics.leadTimeApproxCount = leadTimeApproxCount;
 
       // ── Mean Time to Recovery (DORA D4) ─────────────────────────────────────
