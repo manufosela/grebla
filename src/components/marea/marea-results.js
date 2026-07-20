@@ -8,6 +8,7 @@ import { LitElement, html, css } from 'lit';
 import { skeletonBlock } from '../app-skeleton.js';
 import { watchPulseAggregate, getRecentPulseAggregates } from '../../lib/pulse.js';
 import { pulseReading, isoWeekKey, parseWeekIso } from '../../tools/pulse/domain/pulse.js';
+import { weekRangeLabel } from './weekLabel.js';
 import { teamSignals } from '../../tools/pulse/domain/trends.js';
 import { sparkline } from './sparkline.js';
 
@@ -115,6 +116,7 @@ export class MareaResults extends LitElement {
     .weeknav .wk-head { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; margin: 0; min-width: 10rem; }
     .weeknav .wk-title { font-weight: 800; font-size: 1.55rem; line-height: 1.05; color: var(--rm-text, #1e3a5f); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
     .weeknav .wk-sub { font-weight: 500; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
+    .weeknav .wk-range { font-weight: 700; }
   `;
 
   static properties = {
@@ -317,17 +319,26 @@ export class MareaResults extends LitElement {
 
   /** Título de la semana visible + navegación (RMR-TSK-0252, RMR-BUG-0039). */
   _renderWeekNav() {
-    const parsed = parseWeekIso(this._weekIso());
+    const weekIso = this._weekIso();
+    const parsed = parseWeekIso(weekIso);
     const isCurrent = this._weekOffset === 0;
-    const week = parsed ? `Semana ${parsed.week}` : this._weekIso();
+    const week = parsed ? `Semana ${parsed.week}` : weekIso;
+    // El rango de días da contexto a «Semana 30» (RMR-TSK-0273).
+    const range = weekRangeLabel(weekIso);
     let sub = '';
     if (parsed) sub = isCurrent ? `${parsed.year} · esta semana` : String(parsed.year);
+    // Se compone en JS (no en la plantilla) para no anidar ternarios.
+    const rangeChip = range ? html`<span class="wk-range">${range}</span>` : null;
+    let subContent = null;
+    if (rangeChip && sub) subContent = html`${rangeChip} · ${sub}`;
+    else if (rangeChip) subContent = rangeChip;
+    else if (sub) subContent = html`${sub}`;
     return html`
       <div class="weeknav">
         <button class="wk" @click=${() => this._shiftWeek(1)} aria-label="Semana anterior" title="Semana anterior">‹</button>
         <h2 class="wk-head">
           <span class="wk-title">${week}</span>
-          ${sub ? html`<span class="wk-sub">${sub}</span>` : null}
+          ${subContent ? html`<span class="wk-sub">${subContent}</span>` : null}
         </h2>
         <button class="wk" @click=${() => this._shiftWeek(-1)} ?disabled=${isCurrent} aria-label="Semana siguiente" title="Semana siguiente">›</button>
       </div>`;

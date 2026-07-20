@@ -2,7 +2,7 @@
  * Tests del dominio puro de Marea (RMR-TSK-0234): claves de día/semana y saneado.
  */
 import { describe, it, expect } from 'vitest';
-import { dayKey, isoWeekKey, parseWeekIso, sanitizePulse, PULSE_DIMS, PULSE_WORD_MAX } from './pulse.js';
+import { dayKey, isoWeekKey, parseWeekIso, weekRange, sanitizePulse, PULSE_DIMS, PULSE_WORD_MAX } from './pulse.js';
 
 describe('dayKey', () => {
   it('formatea YYYY-MM-DD en hora local con ceros', () => {
@@ -67,5 +67,32 @@ describe('sanitizePulse', () => {
     const out = sanitizePulse({ energia: 10, uid: 'hacker', foo: 1 });
     expect(out.uid).toBeUndefined();
     expect(out.foo).toBeUndefined();
+  });
+});
+
+describe('weekRange (RMR-TSK-0273)', () => {
+  const iso = (d) => d.toISOString().slice(0, 10);
+
+  it('da el lunes→viernes de la semana ISO', () => {
+    const r = weekRange('2026-W30');
+    expect(iso(r.start)).toBe('2026-07-20');
+    expect(iso(r.end)).toBe('2026-07-24');
+  });
+
+  it('es el inverso de isoWeekKey (el lunes cae en su propia semana)', () => {
+    for (const w of ['2026-W01', '2026-W30', '2025-W52']) {
+      expect(isoWeekKey(weekRange(w).start)).toBe(w);
+    }
+  });
+
+  it('semanas a caballo del año: la 1 puede empezar en diciembre', () => {
+    expect(iso(weekRange('2026-W01').start)).toBe('2025-12-29');
+    expect(iso(weekRange('2026-W53').end)).toBe('2027-01-01');
+  });
+
+  it('devuelve null si la clave no parsea', () => {
+    expect(weekRange('no-va')).toBeNull();
+    expect(weekRange('')).toBeNull();
+    expect(weekRange(undefined)).toBeNull();
   });
 });
