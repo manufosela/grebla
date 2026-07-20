@@ -882,6 +882,9 @@ function computeFlowMetricsFn(issues, period) {
       url: x.issue.url ?? null,
       title: x.issue.title ?? '',
       agingDays: flowRound1(x.days),
+      // Columna de Linear: sin ella un atasco de 10 d en «In Review» se lee
+      // igual que en «In Progress», y no es lo mismo (RMR-TSK-0271).
+      stateName: x.issue.stateName ?? null,
     }));
   const p50 = flowPercentile(cycle, 0.5);
   const p85 = flowPercentile(cycle, 0.85);
@@ -903,7 +906,7 @@ const LINEAR_ISSUES_QUERY = `
     issues(first: 100, after: $after, filter: $filter) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id identifier url title createdAt startedAt completedAt canceledAt state { type }
+        id identifier url title createdAt startedAt completedAt canceledAt state { type name }
         history(first: 50) { nodes { toState { type name } createdAt } }
       }
     }
@@ -977,6 +980,7 @@ async function fetchLinearIssues(label, sinceIso, apiKey) {
         url: n.url ?? null,
         title: n.title ?? '',
         stateType: n.state?.type ?? 'backlog',
+        stateName: n.state?.name ?? null,
         createdAt: n.createdAt,
         startedAt: n.startedAt ?? null,
         completedAt: n.completedAt ?? null,

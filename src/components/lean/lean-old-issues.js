@@ -24,6 +24,13 @@ export class LeanOldIssues extends LeanView {
     .id { font-weight: 700; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
     .title { color: var(--rm-text, #1a1a1a); }
     .days { font-weight: 700; color: var(--rm-coral-600, #e26d5e); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* Columna de Linear donde está atascada (RMR-TSK-0271): chip discreto, para
+       leer el atasco en contexto sin competir con el título. */
+    .col {
+      font-size: 0.72rem; font-weight: 700; white-space: nowrap;
+      background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280);
+      border-radius: 999px; padding: 0.05rem 0.5rem;
+    }
     .empty { color: var(--rm-muted, #6b7280); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.75rem 0 0; }
@@ -34,7 +41,10 @@ export class LeanOldIssues extends LeanView {
   }
 
   _issueLink(i) {
-    const body = html`<span class="id">${i.identifier}</span> <span class="title">${i.title}</span> <span class="days">${i.agingDays} d</span>`;
+    // La COLUMNA de Linear da el contexto del atasco: 10 d en «In Review» no es
+    // lo mismo que en «In Progress» o «Blocked» (RMR-TSK-0271).
+    const col = i.stateName ? html`<span class="col">${i.stateName}</span>` : null;
+    const body = html`<span class="id">${i.identifier}</span> <span class="title">${i.title}</span> ${col} <span class="days">${i.agingDays} d</span>`;
     return i.url
       ? html`<a class="link" href=${i.url} target="_blank" rel="noopener noreferrer">${body}</a>`
       : html`<span class="link">${body}</span>`;
