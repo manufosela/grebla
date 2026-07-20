@@ -1,6 +1,6 @@
 {
   "name": "grebla",
-  "version": "1.74.1",
+  "version": "1.75.0",
   "type": "module",
   "private": true,
   "description": "GREBLA — Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo. Framework de herramientas para equipos y personas (primera: Role Mirror).",
