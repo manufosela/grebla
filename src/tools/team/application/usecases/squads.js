@@ -41,7 +41,10 @@ export function listSquads(persistence) {
 export function renameSquad(persistence, id, name) {
   const trimmed = String(name ?? '').trim();
   if (!trimmed) throw new Error('El nombre del squad es obligatorio');
-  return persistence.squads.rename(id, trimmed);
+  // El repo genérico de catálogos NO tiene `rename`: se renombra con `update`.
+  // Y aquí NO hay cascada a /people (a diferencia de gremios/labels) porque las
+  // personas guardan el squad por id, no por nombre.
+  return persistence.squads.update(id, { name: trimmed });
 }
 
 /**

@@ -32,12 +32,36 @@ describe('squadNames', () => {
 });
 
 describe('addSquad / renameSquad validan el nombre', () => {
-  const fake = { squads: { create: async (n) => n, rename: async (id, n) => `${id}:${n}` } };
+  // El fake replica la superficie REAL de catalogRepo (list/create/update/
+  // remove/promote). Antes tenía un `rename` inventado y por eso no cazó que
+  // renameSquad llamaba a un método inexistente (RMR-BUG-0047).
+  const makeFake = () => {
+    const calls = [];
+    return {
+      calls,
+      squads: {
+        list: async () => [],
+        create: async (n) => { calls.push(['create', n]); return n; },
+        update: async (id, patch) => { calls.push(['update', id, patch]); },
+        remove: async (id) => { calls.push(['remove', id]); },
+        promote: async (id) => { calls.push(['promote', id]); },
+      },
+    };
+  };
+
   it('exigen nombre no vacío', async () => {
+    const fake = makeFake();
     await expect(async () => addSquad(fake, '   ')).rejects.toThrow(/obligatorio/i);
     await expect(async () => renameSquad(fake, 's1', '')).rejects.toThrow(/obligatorio/i);
   });
+
   it('recortan el nombre al crear', async () => {
-    await expect(addSquad(fake, '  Squad Pagos  ')).resolves.toBe('Squad Pagos');
+    await expect(addSquad(makeFake(), '  Squad Pagos  ')).resolves.toBe('Squad Pagos');
+  });
+
+  it('renombrar usa update() del repo (no existe rename)', async () => {
+    const fake = makeFake();
+    await renameSquad(fake, 's1', '  Squad Cobros ');
+    expect(fake.calls).toEqual([['update', 's1', { name: 'Squad Cobros' }]]);
   });
 });

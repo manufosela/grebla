@@ -1,0 +1,39 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * Retro compartida por ENLACE (RMR-TSK-0279): `/retro?id=<retroId>`.
+ *
+ * Query param y no ruta dinámica (`/retro/[id]`) porque el sitio es `output:
+ * 'static'` y una ruta dinámica exigiría conocer los ids en build.
+ *
+ * Sirve para incorporar a una retro a gente de tribbu que NO está asociada a
+ * ningún manager en GREBLA: las reglas ya permiten leer/participar a quien tenga
+ * correo @tribbuapp.com o sea miembro de la instancia (RMR-TSK-0274). Esta
+ * persona no verá nada más de GREBLA: solo esta retro.
+ *
+ * El guard de acceso y la carga los hace el glue de cliente.
+ */
+---
+
+<Base title="GREBLA — Retro">
+  <section class="retro-page">
+    <p id="retro-status" class="status">Cargando la retro…</p>
+    <div id="retro-host" hidden></div>
+  </section>
+
+  <script>
+    import '../../client/retroShared.js';
+  </script>
+</Base>
+
+<style>
+  .retro-page { max-width: var(--rm-max); margin: 0 auto; }
+  .status { color: var(--rm-muted); font-size: 0.95rem; padding: 1.5rem 0; }
+  .status.error { color: var(--rm-danger); font-weight: 600; }
+  .status .signin {
+    display: inline-block; margin-top: 0.75rem; padding: 0.55rem 1.1rem;
+    background: var(--rm-accent); color: var(--rm-on-accent, #fff);
+    border: 0; border-radius: 999px; font: inherit; font-weight: 700; cursor: pointer;
+  }
+</style>
