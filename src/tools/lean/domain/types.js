@@ -31,6 +31,7 @@
  * @property {string|null} url
  * @property {string} title
  * @property {number} agingDays        Días que lleva abierta (en curso).
+ * @property {string|null} [stateName] Columna de Linear donde está atascada (p. ej. «In Review»).
  *
  * @typedef {Object} FlowMetrics   Métricas de flujo de un equipo en una ventana.
  * @property {number} completed              Issues completadas en la ventana.
