@@ -1,10 +1,11 @@
 /**
  * Acceso a las retrospectivas (RMR-TSK-0242). El líder crea/gestiona una retro
- * (/retros/{id}); el equipo aporta notas ANÓNIMAS (/retros/{id}/notes) y vota; de
+ * (/retros/{id}); el equipo aporta notas (/retros/{id}/notes) y vota; de
  * la retro salen acciones (/retroActions) que persisten entre retros hasta
- * cerrarse. Las notas se muestran anónimas (el autor no se expone en la UI) pero
- * guardan authorUid para que cada uno edite/borre las suyas. Los votos son un
- * array `voters` (idempotente, sin voto doble); el recuento = voters.length.
+ * cerrarse. Las notas se muestran anónimas MIENTRAS su zona esté oculta y se
+ * firman al revelarla (RMR-TSK-0285); guardan authorUid para que cada uno
+ * edite/borre las suyas. Los votos son un array `voters` (idempotente, sin voto
+ * doble); el recuento = voters.length.
  *
  * La lógica pura de formatos vive en tools/retro/domain/formats.js.
  */
@@ -93,16 +94,25 @@ export async function deleteRetro(retroId) {
   await deleteDoc(doc(db, 'retros', retroId));
 }
 
-// ── Notas (anónimas + votos) ─────────────────────────────────────────────────
+// ── Notas (anónimas hasta revelar + votos) ─────────────────────────────────────────────────
 
 /**
  * Añade una nota. Nace con el VOTO DE SU AUTOR (RMR-TSK-0283): quien la escribe
  * ya está votándola al proponerla, y así el recuento no arranca en cero.
- * @param {string} retroId @param {string} columnId @param {string} text @param {string} authorUid
+ *
+ * El nombre del autor se guarda DENORMALIZADO (RMR-TSK-0285) porque un
+ * participante no puede leer las fichas de sus compañeros (reglas de /people):
+ * sin copiarlo aquí, solo el manager podría poner cara a las tarjetas. La UI lo
+ * enseña únicamente cuando la zona se revela — anónimas al escribir, firmadas al
+ * debatir.
+ *
+ * @param {string} retroId @param {string} columnId @param {string} text
+ * @param {string} authorUid @param {string} [authorName]
  */
-export async function addNote(retroId, columnId, text, authorUid) {
+export async function addNote(retroId, columnId, text, authorUid, authorName = '') {
   const ref = await addDoc(collection(db, 'retros', retroId, 'notes'), {
     columnId, text: String(text ?? '').trim(), authorUid,
+    authorName: String(authorName ?? '').trim(),
     voters: authorUid ? [authorUid] : [],
     createdAt: serverTimestamp(),
   });

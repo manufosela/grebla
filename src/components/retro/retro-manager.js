@@ -216,7 +216,7 @@ export class RetroManager extends LitElement {
 
   render() {
     return html`
-      <p class="lead">Crea una retrospectiva y gestiónala. El equipo aporta en anónimo desde su espacio; de la retro salen acciones con owner que se arrastran a la siguiente.</p>
+      <p class="lead">Crea una retrospectiva y gestiónala. El equipo aporta desde su espacio (en anónimo hasta que reveles cada zona); de la retro salen acciones con owner que se arrastran a la siguiente.</p>
 
       <div class="create">
         <h3>Nueva retro</h3>
