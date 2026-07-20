@@ -1594,3 +1594,41 @@ export const aggregatePulse = onDocumentWritten(
     console.log(`[marea] agregado ${weekIso} recalculado (${aggregate.respondents} personas).`);
   },
 );
+
+/**
+ * Registro de MIEMBROS de la instancia por uid (RMR-TSK-0274).
+ *
+ * Las reglas de Firestore no pueden preguntar «¿este uid es una persona de la
+ * instancia?»: las personas viven en /people con id propio y el `uid` es un
+ * campo, no la clave (y un get() por documento no es viable dentro de una
+ * query). Este trigger mantiene un espejo /members/{uid} — el mismo patrón que
+ * ya usan /admins, /viewers y /leaders — para que las reglas puedan resolverlo
+ * con un exists() barato.
+ *
+ * Se hace con un trigger, y no escribiendo desde el cliente, porque hay DOS vías
+ * de vinculación (la Cloud Function `sealInvite` y `assignUserToLeader` desde el
+ * panel) y porque dejar que el cliente escriba en /members permitiría a
+ * cualquiera auto-registrarse como miembro.
+ */
+export const syncMemberRegistry = onDocumentWritten(
+  { region: 'europe-west1', document: 'people/{personId}' },
+  async (event) => {
+    const before = event.data?.before;
+    const after = event.data?.after;
+    const beforeUid = before?.exists ? before.data()?.uid : null;
+    const afterUid = after?.exists ? after.data()?.uid : null;
+    if (beforeUid === afterUid) return; // el uid no cambió: nada que sincronizar
+    const db = getFirestore();
+    // Se desvinculó (o se borró la persona): fuera del registro.
+    if (beforeUid && beforeUid !== afterUid) {
+      await db.doc(`members/${beforeUid}`).delete().catch(() => {});
+    }
+    if (afterUid) {
+      await db.doc(`members/${afterUid}`).set({
+        personId: event.params.personId,
+        ownerLeaderUid: after.data()?.ownerLeaderUid ?? null,
+        linkedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  },
+);
