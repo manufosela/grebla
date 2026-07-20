@@ -22,6 +22,7 @@ export class RetroApp extends LitElement {
     leaderUid: { attribute: false },
     squadIds: { attribute: false },
     members: { attribute: false },
+    authorName: { attribute: false },
     canManage: { attribute: false },
     _selected: { state: true },
     _retros: { state: true },
@@ -51,6 +52,8 @@ export class RetroApp extends LitElement {
     this.leaderUid = null;
     /** @type {string[]} squads a los que pertenece (una persona puede estar en varios) */
     this.squadIds = [];
+    /** Nombre con el que firmar sus tarjetas: el de su ficha de GREBLA. */
+    this.authorName = '';
     this.members = [];
     this.canManage = false;
     this._selected = null;
@@ -117,7 +120,8 @@ export class RetroApp extends LitElement {
       <div class="detail">
         <button class="back" @click=${() => this._backToList()}>← Volver a las retros</button>
         <retro-carryover .retroId=${r.id} .uid=${this.uid} .leaderUid=${r.ownerLeaderUid} .scope=${r.scope} .members=${this.members}></retro-carryover>
-        <retro-board .retroId=${r.id} .uid=${this.uid} .members=${this.members ?? []}></retro-board>
+        <retro-board .retroId=${r.id} .uid=${this.uid} .members=${this.members ?? []}
+          .authorName=${this.authorName ?? ''}></retro-board>
       </div>`;
   }
 

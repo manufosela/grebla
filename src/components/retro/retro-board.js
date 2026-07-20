@@ -29,6 +29,7 @@ export class RetroBoard extends LitElement {
     retroId: { attribute: false },
     uid: { attribute: false },
     members: { attribute: false },
+    authorName: { attribute: false },
     isSuperAdmin: { attribute: false },
     _retro: { state: true },
     _notes: { state: true },
@@ -192,6 +193,8 @@ export class RetroBoard extends LitElement {
     this._drafts = {};
     /** @type {Array<{uid:string,name:string}>} miembros, para asignar acciones */
     this.members = [];
+    /** Nombre de la ficha de GREBLA de quien mira, si el contenedor lo sabe. */
+    this.authorName = '';
     /** Un superadmin también facilita (revelar zonas), aunque no sea el dueño. */
     this.isSuperAdmin = false;
     /** Pestaña visible del tablero. @type {'tablero'|'resumen'|'acciones'} */
@@ -263,12 +266,18 @@ export class RetroBoard extends LitElement {
       .toSorted((a, b) => (b.voters?.length ?? 0) - (a.voters?.length ?? 0));
   }
 
-  /** Nombre con el que firmar: el del roster si está, si no el de la sesión.
-   *  Se resuelve AL ESCRIBIR porque el resto de participantes no puede leer las
-   *  fichas de sus compañeros; la nota se lo lleva denormalizado. */
+  /**
+   * Nombre con el que firmar, por orden: el de su ficha de GREBLA, el del roster
+   * del equipo, y como último recurso el de la cuenta de Google. Manda GREBLA
+   * porque es el nombre con el que el equipo se ve en el resto del producto; el
+   * de Google puede ser un apodo o venir con otra grafía.
+   *
+   * Se resuelve AL ESCRIBIR porque el resto de participantes no puede leer las
+   * fichas de sus compañeros; la nota se lo lleva denormalizado.
+   */
   get _myName() {
     const fromRoster = (this.members ?? []).find((m) => m.uid === this.uid)?.name;
-    return fromRoster || getCurrentUser()?.displayName || '';
+    return this.authorName?.trim() || fromRoster || getCurrentUser()?.displayName || '';
   }
 
   async _addNote(columnId) {
