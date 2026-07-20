@@ -868,7 +868,7 @@ export class EngineerSpace extends LitElement {
 
   /** Pestaña Retros: las retros del equipo del ingeniero, para participar (RMR-TSK-0247). */
   _renderRetros() {
-    return html`<retro-app .uid=${this.person?.uid ?? null} .leaderUid=${this.person?.ownerLeaderUid ?? null} .canManage=${false} .members=${[]}></retro-app>`;
+    return html`<retro-app .uid=${this.person?.uid ?? null} .leaderUid=${this.person?.ownerLeaderUid ?? null} .squadIds=${this.person?.squadIds ?? []} .canManage=${false} .members=${[]}></retro-app>`;
   }
 
   /** Pestaña «Mi ficha» (RMR-TSK-0260): datos de la persona; si es su propia

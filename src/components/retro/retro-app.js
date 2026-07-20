@@ -14,12 +14,13 @@ import './retro-carryover.js';
 import './retro-board.js';
 import './retro-actions.js';
 import { RETRO_FORMATS } from '../../tools/retro/domain/formats.js';
-import { listRetros } from '../../lib/retros.js';
+import { listRetros, listRetrosBySquads } from '../../lib/retros.js';
 
 export class RetroApp extends LitElement {
   static properties = {
     uid: { attribute: false },
     leaderUid: { attribute: false },
+    squadIds: { attribute: false },
     members: { attribute: false },
     canManage: { attribute: false },
     _selected: { state: true },
@@ -70,7 +71,17 @@ export class RetroApp extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._retros = await listRetros(this.leaderUid);
+      // Las retros de un squad puede haberlas creado OTRO manager, así que no
+      // salen por ownerLeaderUid: se unen ambas fuentes y se deduplica por id
+      // (una retro de mi squad creada por mi manager saldría dos veces).
+      const [mine, ofSquads] = await Promise.all([
+        this.leaderUid ? listRetros(this.leaderUid) : Promise.resolve([]),
+        listRetrosBySquads(this.squadIds ?? []).catch(() => []),
+      ]);
+      const byId = new Map([...mine, ...ofSquads].map((r) => [r.id, r]));
+      this._retros = [...byId.values()].toSorted(
+        (a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0),
+      );
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las retros.';
     } finally {

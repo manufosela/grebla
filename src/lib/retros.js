@@ -19,7 +19,7 @@ import { db } from './firebase.js';
 /**
  * Crea una retro (la invoca el líder).
  * @param {{ format: string, name: string, sprint?: string|null, ownerLeaderUid: string,
- *           scope: { type: 'team'|'squad', label?: string|null } }} data
+ *           scope: { type: 'team'|'squad', squadId?: string|null, label?: string|null } }} data
  * @returns {Promise<string>} id de la retro
  */
 export async function createRetro(data) {
@@ -30,7 +30,13 @@ export async function createRetro(data) {
     name: data.name ?? '',
     sprint: data.sprint ?? null,
     ownerLeaderUid: data.ownerLeaderUid,
-    scope: { type: data.scope?.type ?? 'team', label: data.scope?.label ?? null },
+    // `squadId` referencia el catálogo /squads (RMR-TSK-0278); `label` se
+    // conserva por las retros/acciones antiguas, con el squad como texto libre.
+    scope: {
+      type: data.scope?.type ?? 'team',
+      squadId: data.scope?.squadId ?? null,
+      label: data.scope?.label ?? null,
+    },
     status: 'open',
     createdAt: serverTimestamp(),
     closedAt: null,
@@ -96,7 +102,7 @@ export function unvoteNote(retroId, noteId, uid) {
 
 /**
  * @param {{ text: string, owners: string[], ownerLeaderUid: string, fromRetroId: string,
- *           scope: { type: 'team'|'squad', label?: string|null } }} data
+ *           scope: { type: 'team'|'squad', squadId?: string|null, label?: string|null } }} data
  * @returns {Promise<string>}
  */
 export async function addAction(data) {
@@ -105,7 +111,13 @@ export async function addAction(data) {
     owners: data.owners ?? [],
     ownerNames: data.ownerNames ?? [],
     ownerLeaderUid: data.ownerLeaderUid,
-    scope: { type: data.scope?.type ?? 'team', label: data.scope?.label ?? null },
+    // `squadId` referencia el catálogo /squads (RMR-TSK-0278); `label` se
+    // conserva por las retros/acciones antiguas, con el squad como texto libre.
+    scope: {
+      type: data.scope?.type ?? 'team',
+      squadId: data.scope?.squadId ?? null,
+      label: data.scope?.label ?? null,
+    },
     fromRetroId: data.fromRetroId,
     status: 'pending',
     createdAt: serverTimestamp(),
@@ -148,4 +160,24 @@ export async function listTeamMembers(leaderUid) {
   return snap.docs
     .map((d) => ({ uid: d.data().uid, name: d.data().name ?? 'Sin nombre' }))
     .filter((m) => m.uid);
+}
+
+/**
+ * Retros de uno o varios squads (RMR-TSK-0278). Un squad puede tener gente de
+ * varios managers, así que sus retros no se encuentran por `ownerLeaderUid`.
+ * Firestore limita el `in` a 30 valores; con más squads se trocea.
+ * @param {ReadonlyArray<string>} squadIds
+ * @returns {Promise<Array<Record<string, unknown>>>}
+ */
+export async function listRetrosBySquads(squadIds) {
+  const ids = [...new Set((squadIds ?? []).filter(Boolean))];
+  if (ids.length === 0) return [];
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+  const results = await Promise.all(chunks.map(async (chunk) => {
+    const q = query(collection(db, 'retros'), where('scope.squadId', 'in', chunk));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }));
+  return results.flat();
 }
