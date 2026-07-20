@@ -25,6 +25,34 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/leaders/$(request.auth.uid));
     }
+    // MIEMBRO de la instancia: persona asociada a un manager/equipo. El espejo
+    // /members/{uid} lo mantiene el trigger `syncMemberRegistry` (las personas
+    // viven en /people con id propio, así que el uid no es consultable desde
+    // una regla). RMR-TSK-0274.
+    function isMember() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+    // Correo corporativo: permite participar en una retro por enlace aunque aún
+    // no se esté asociado a ningún manager (no da acceso a nada más de GREBLA).
+    function isOrgEmail() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.matches('.*@tribbuapp[.]com');
+    }
+    // Quién puede leer/participar en una retro (RMR-TSK-0274): roles de la
+    // instancia, miembros asociados a un manager (aunque su correo sea externo)
+    // y cualquiera de tribbuapp.com con el enlace. Un gmail suelto, no.
+    function canAccessRetro() {
+      return isSuperAdmin() || isViewer() || isLeader() || isMember() || isOrgEmail();
+    }
+
+    // Espejo de miembros por uid: lo escribe SOLO el trigger (Admin SDK, que se
+    // salta las reglas). Ningún cliente puede auto-registrarse aquí.
+    match /members/{memberUid} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
 
     // Superadmins: legible por autenticados; escritura solo por un superadmin
     // existente (el primero se crea con el Admin SDK, que omite las reglas).
@@ -500,7 +528,7 @@ service cloud.firestore {
     // acciones (/retroActions) son de equipo y persisten entre retros: las crea el
     // líder y su owner (o el líder) marca hecha/pendiente.
     match /retros/{retroId} {
-      allow read: if isSignedIn();
+      allow read: if canAccessRetro();
       allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
       allow update, delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
@@ -510,10 +538,10 @@ service cloud.firestore {
         function onlyVotersChanged() {
           return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voters']);
         }
-        allow read: if isSignedIn();
-        allow create: if isSignedIn() && request.resource.data.authorUid == request.auth.uid;
-        // El autor edita su nota; cualquier autenticado vota (solo `voters`).
-        allow update: if isSignedIn()
+        allow read: if canAccessRetro();
+        allow create: if canAccessRetro() && request.resource.data.authorUid == request.auth.uid;
+        // El autor edita su nota; cualquiera con acceso a la retro vota (solo `voters`).
+        allow update: if canAccessRetro()
           && (resource.data.authorUid == request.auth.uid || onlyVotersChanged());
         // Borra el autor de la nota o el líder dueño de la retro (o superadmin).
         allow delete: if isSuperAdmin()
@@ -529,11 +557,11 @@ service cloud.firestore {
       function onlyStatusChanged() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneAt']);
       }
-      allow read: if isSignedIn();
+      allow read: if canAccessRetro();
       allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
       allow update: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
-        || (isSignedIn() && request.auth.uid in resource.data.owners && onlyStatusChanged());
+        || (canAccessRetro() && request.auth.uid in resource.data.owners && onlyStatusChanged());
       allow delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
     }
