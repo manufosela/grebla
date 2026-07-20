@@ -10,11 +10,13 @@ import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';
 import { createRetro, listRetros, closeRetro } from '../../lib/retros.js';
+import { listSquadsCatalog } from '../../lib/squads.js';
 
 export class RetroManager extends LitElement {
   static properties = {
     uid: { attribute: false },
     _retros: { state: true },
+    _squads: { state: true },
     _new: { state: true },
     _loading: { state: true },
     _saving: { state: true },
@@ -54,7 +56,9 @@ export class RetroManager extends LitElement {
     super();
     this.uid = null;
     this._retros = [];
-    this._new = { format: 'ssc', name: '', sprint: '', scopeType: 'team', label: '' };
+    this._new = { format: 'ssc', name: '', sprint: '', scopeType: 'team', squadId: '' };
+    /** @type {Array<{id:string,name:string}>} catálogo de squads (RMR-TSK-0278) */
+    this._squads = [];
     this._loading = false;
     this._saving = false;
     this._error = '';
@@ -72,7 +76,12 @@ export class RetroManager extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._retros = await listRetros(this.uid);
+      const [retros, squads] = await Promise.all([
+        listRetros(this.uid),
+        listSquadsCatalog().catch(() => []),
+      ]);
+      this._retros = retros;
+      this._squads = squads;
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las retros.';
     } finally {
@@ -91,9 +100,13 @@ export class RetroManager extends LitElement {
         name: n.name.trim(),
         sprint: n.sprint.trim() || null,
         ownerLeaderUid: this.uid,
-        scope: { type: n.scopeType, label: n.scopeType === 'squad' ? (n.label.trim() || null) : null },
+        scope: {
+          type: n.scopeType,
+          squadId: n.scopeType === 'squad' ? (n.squadId || null) : null,
+          label: null,
+        },
       });
-      this._new = { format: n.format, name: '', sprint: '', scopeType: n.scopeType, label: n.label };
+      this._new = { format: n.format, name: '', sprint: '', scopeType: n.scopeType, squadId: n.squadId };
       await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo crear la retro.';
@@ -114,8 +127,25 @@ export class RetroManager extends LitElement {
 
   _patch(key, value) { this._new = { ...this._new, [key]: value }; }
 
+  /** Selector de squad del catálogo (RMR-TSK-0278): antes era texto libre, lo
+   *  que hacía imposible cruzar la retro con el squad de las personas. */
+  _renderSquadPicker() {
+    if (this._squads.length === 0) {
+      return html`<p class="hint">Aún no hay squads en el catálogo: los crea el superadmin en el panel.</p>`;
+    }
+    return html`<label>Squad
+      <select .value=${this._new.squadId} @change=${(e) => this._patch('squadId', e.target.value)}>
+        <option value="">— elige un squad —</option>
+        ${this._squads.map((sq) => html`<option value=${sq.id} ?selected=${sq.id === this._new.squadId}>${sq.name}</option>`)}
+      </select>
+    </label>`;
+  }
+
   _scopeText(retro) {
-    return retro.scope?.type === 'squad' ? `Squad · ${retro.scope.label ?? '—'}` : 'Equipo';
+    if (retro.scope?.type !== 'squad') return 'Equipo';
+    // Retros nuevas guardan squadId; las antiguas, el nombre como texto libre.
+    const byId = this._squads.find((sq) => sq.id === retro.scope?.squadId)?.name;
+    return `Squad · ${byId ?? retro.scope?.label ?? '—'}`;
   }
 
   _open(retro) {
@@ -162,14 +192,10 @@ export class RetroManager extends LitElement {
               <label><input type="radio" name="scope" ?checked=${this._new.scopeType === 'squad'} @change=${() => this._patch('scopeType', 'squad')} /> Squad</label>
             </span>
           </label>
-          ${this._new.scopeType === 'squad'
-            ? html`<label>Squad (label)
-                <input type="text" placeholder="p. ej. Pagos" .value=${this._new.label} @input=${(e) => this._patch('label', e.target.value)} />
-              </label>`
-            : null}
+          ${this._new.scopeType === 'squad' ? this._renderSquadPicker() : null}
         </div>
         <div class="bar">
-          <button class="btn" ?disabled=${this._saving || !this._new.name.trim() || !this.uid} @click=${() => this._create()}>
+          <button class="btn" ?disabled=${this._saving || !this._new.name.trim() || !this.uid || (this._new.scopeType === 'squad' && !this._new.squadId)} @click=${() => this._create()}>
             ${this._saving ? 'Creando…' : 'Crear retro'}
           </button>
           ${this._error ? html`<span class="error">${this._error}</span>` : null}
