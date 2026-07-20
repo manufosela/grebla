@@ -19,7 +19,7 @@ import './retro-actions.js';
 
 /** Etiqueta de una columna en el selector del composer («Viento · nos empuja»). */
 const colLabel = (col) => (col.hint ? `${col.title} · ${col.hint}` : col.title);
-import { getRetro, listNotes, addNote, voteNote, unvoteNote, editNote, deleteNote, setNoteGroups, setRetroReveal } from '../../lib/retros.js';
+import { watchRetro, watchNotes, addNote, voteNote, unvoteNote, editNote, deleteNote, setNoteGroups, setRetroReveal } from '../../lib/retros.js';
 
 /** Emoji de cada zona del Barco. */
 const BARCO_ICON = { viento: '🌬️', ancla: '⚓', rocas: '🪨', isla: '🏝️' };
@@ -208,29 +208,51 @@ export class RetroBoard extends LitElement {
     this._loading = false;
     this._error = '';
     this._loadedFor = null;
+    /** Suscripciones vivas (retro + notas), para cortarlas al desmontar. */
+    this._subs = [];
   }
 
   updated(changed) {
     if (changed.has('retroId') && this.retroId && this.retroId !== this._loadedFor) {
       this._loadedFor = this.retroId;
-      this._load();
+      this._subscribe();
     }
   }
 
-  async _load() {
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._unsubscribe();
+  }
+
+  /** Corta las suscripciones vivas (al desmontar o al cambiar de retro). */
+  _unsubscribe() {
+    for (const stop of this._subs) stop();
+    this._subs = [];
+  }
+
+  /**
+   * Se suscribe a la retro y a sus notas EN VIVO (RMR-TSK-0286). Antes se leía
+   * una vez y se recargaba a mano tras cada acción propia, así que las tarjetas
+   * de los demás no aparecían y —peor— revelar una zona no se veía en el resto
+   * de pantallas, que es justo lo que la mecánica necesita.
+   */
+  _subscribe() {
+    this._unsubscribe();
     this._loading = true;
     this._error = '';
-    try {
-      const [retro, notes] = await Promise.all([getRetro(this.retroId), listNotes(this.retroId)]);
-      this._retro = retro;
-      this._notes = notes;
-      // El composer arranca en la primera columna del formato.
-      if (!this._composerCol) this._composerCol = getFormat(retro?.format)?.columns?.[0]?.id ?? '';
-    } catch (err) {
+    const fail = (err) => {
       this._error = err instanceof Error ? err.message : 'No se pudo cargar el tablero.';
-    } finally {
       this._loading = false;
-    }
+    };
+    this._subs = [
+      watchRetro(this.retroId, (retro) => {
+        this._retro = retro;
+        // El composer arranca en la primera columna del formato.
+        if (!this._composerCol) this._composerCol = getFormat(retro?.format)?.columns?.[0]?.id ?? '';
+        this._loading = false;
+      }, fail),
+      watchNotes(this.retroId, (notes) => { this._notes = notes; }, fail),
+    ];
   }
 
   get _open() { return this._retro?.status === 'open'; }
@@ -256,7 +278,6 @@ export class RetroBoard extends LitElement {
     try {
       await addNote(this.retroId, columnId, text, this.uid, this._myName);
       this._drafts = { ...this._drafts, [columnId]: '' };
-      await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo añadir la nota.';
     }
@@ -267,7 +288,6 @@ export class RetroBoard extends LitElement {
     const voted = (note.voters ?? []).includes(this.uid);
     try {
       await (voted ? unvoteNote(this.retroId, note.id, this.uid) : voteNote(this.retroId, note.id, this.uid));
-      await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo votar.';
     }
@@ -279,7 +299,6 @@ export class RetroBoard extends LitElement {
     try {
       await editNote(this.retroId, note.id, text);
       this._editingId = null;
-      await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo editar la nota.';
     }
@@ -288,7 +307,6 @@ export class RetroBoard extends LitElement {
   async _delete(note) {
     try {
       await deleteNote(this.retroId, note.id);
-      await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo borrar la nota.';
     }
@@ -346,7 +364,6 @@ export class RetroBoard extends LitElement {
     try {
       await setNoteGroups(this.retroId, groupPatch(ids));
       this._selected = [];
-      await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo agrupar.';
     }
@@ -357,7 +374,6 @@ export class RetroBoard extends LitElement {
     try {
       await setNoteGroups(this.retroId, ungroupPatch(this._notes, groupId));
       this._openNoteId = null;
-      await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo deshacer el grupo.';
     }
@@ -464,7 +480,7 @@ export class RetroBoard extends LitElement {
       ${this._renderPopGroup(group)}
       <div class="modal-actions">
         <button class="vote ${voted ? 'voted' : ''}" ?disabled=${!this._open}
-          @click=${async () => { await this._toggleVote(primary); this.requestUpdate(); }}>👍 ${group.votes}</button>
+          @click=${() => this._toggleVote(primary)}>👍 ${group.votes}</button>
         ${mine && this._open
           ? html`<button class="ghost" @click=${() => { this._editingId = primary.id; this._editText = primary.text; this._openNoteId = null; }}>Editar</button>
                  <button class="ghost del" @click=${async () => { await this._delete(primary); this._openNoteId = null; }}>Borrar</button>`
@@ -537,7 +553,6 @@ export class RetroBoard extends LitElement {
   async _setRevealed(columnIds, revealed) {
     try {
       await setRetroReveal(this.retroId, revealPatch(columnIds, revealed));
-      await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cambiar la visibilidad.';
     }

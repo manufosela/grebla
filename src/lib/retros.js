@@ -10,7 +10,7 @@
  * La lógica pura de formatos vive en tools/retro/domain/formats.js.
  */
 import {
-  doc, collection, addDoc, getDoc, getDocs, updateDoc, deleteDoc,
+  doc, collection, addDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
@@ -70,6 +70,43 @@ export async function listRetros(ownerLeaderUid) {
 export async function getRetro(retroId) {
   const snap = await getDoc(doc(db, 'retros', retroId));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+/**
+ * Observa una retro EN VIVO (RMR-TSK-0286). Una retro se facilita entre varias
+ * personas a la vez: cuando quien facilita revela una zona, tiene que abrirse en
+ * todas las pantallas, no cuando a cada cual le dé por recargar.
+ *
+ * Se queda en Firestore (no RTDB): el modelo, las reglas y las queries ya viven
+ * aquí, y el coste de una retro en tiempo real son céntimos — una lectura por
+ * documento cambiado y cliente conectado.
+ *
+ * @param {string} retroId
+ * @param {(retro: Record<string, unknown>|null) => void} onData
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} función para cancelar la suscripción
+ */
+export function watchRetro(retroId, onData, onError) {
+  return onSnapshot(
+    doc(db, 'retros', retroId),
+    (snap) => onData(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    onError,
+  );
+}
+
+/**
+ * Observa las notas de una retro EN VIVO (RMR-TSK-0286).
+ * @param {string} retroId
+ * @param {(notes: Array<Record<string, unknown>>) => void} onData
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} función para cancelar la suscripción
+ */
+export function watchNotes(retroId, onData, onError) {
+  return onSnapshot(
+    collection(db, 'retros', retroId, 'notes'),
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    onError,
+  );
 }
 
 /** Cierra una retro: deja de admitir aportaciones. @param {string} retroId */
