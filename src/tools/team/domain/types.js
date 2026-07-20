@@ -20,6 +20,7 @@
  * @property {string|null} [uid]            Cuenta vinculada (acceso de solo lectura de la persona). Se vincula al dar acceso.
  * @property {string|null} [pendingEmail]   Invitación por email a alguien que aún no se ha logado: la persona se prepara con uid null y, en su primer login con ese email, una Cloud Function sella el uid y limpia este campo.
  * @property {string[]} [labels]            Etiquetas libres (gremios/equipos) asignadas a la persona.
+ * @property {string[]} [squadIds]          Squads a los que pertenece (por ID del catálogo /squads; puede estar en varios).
  * @property {string|null} [location]       Ubicación: «Madrid» si está en la sede, o la ciudad/lugar (remoto) si no; null/ausente si sin indicar.
  * @property {string} [ownerLeaderUid]      Líder dueño de la persona (la gestiona y comparte).
  * @property {Record<string, SharePermission>} [sharedWith]   Compartición con otros líderes: uid → permiso.
@@ -109,3 +110,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
 });
 
 export {};
+
+/**
+ * @typedef {Object} Squad   Unidad de la ORGANIZACIÓN (no de un manager): varios
+ *   EMs pueden tener gente en el mismo squad y una persona puede estar en varios.
+ * @property {string} id
+ * @property {string} name
+ * @property {string} [ownerLeaderUid]  Ausente = global (lo normal en squads).
+ */

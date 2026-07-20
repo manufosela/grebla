@@ -259,6 +259,9 @@ export function createFirestorePersistence(db, leaderUid, options = {}) {
     areas: catalogRepo(db, base, 'areas', leaderUid, viewAll), // catálogo con ámbito
     guilds: catalogRepo(db, base, 'guilds', leaderUid, viewAll),
     labels: catalogRepo(db, base, 'labels', leaderUid, viewAll),
+    // Squads: catálogo de la organización (RMR-TSK-0275). Reusa el repo
+    // genérico; en la práctica se crean globales desde el panel.
+    squads: catalogRepo(db, base, 'squads', leaderUid, viewAll),
     conversations: conversationRepo(db, base),
     supportNotes: supportNoteRepo(db, base),
     config: configRepo(db, base),
