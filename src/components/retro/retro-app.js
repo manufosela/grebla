@@ -49,6 +49,8 @@ export class RetroApp extends LitElement {
     super();
     this.uid = null;
     this.leaderUid = null;
+    /** @type {string[]} squads a los que pertenece (una persona puede estar en varios) */
+    this.squadIds = [];
     this.members = [];
     this.canManage = false;
     this._selected = null;
@@ -58,13 +60,30 @@ export class RetroApp extends LitElement {
     this._loadedFor = null;
   }
 
+  /**
+   * De dónde salen las retros de esta persona: su manager y sus squads. Cadena
+   * vacía = no hay ninguna fuente, así que no hay nada que pedir.
+   *
+   * Se mira TAMBIÉN el squad (RMR-BUG-0049): antes solo se cargaba si había
+   * manager, así que quien tenía squad pero no `ownerLeaderUid` se quedaba sin
+   * ver ni una retro. Y como la clave incluye los squads, si estos llegan
+   * después que el manager la lista se recalcula en vez de quedarse corta.
+   */
+  get _sourcesKey() {
+    // Ordenados para que reordenar los mismos squads no cuente como cambio.
+    const squads = [...(this.squadIds ?? [])].toSorted((a, b) => String(a).localeCompare(String(b))).join(',');
+    if (!this.leaderUid && !squads) return '';
+    return `${this.leaderUid ?? ''}|${squads}`;
+  }
+
   updated(changed) {
     // El ingeniero necesita la lista (el manager la trae dentro de retro-manager).
-    if ((changed.has('leaderUid') || changed.has('canManage')) && this.leaderUid && !this.canManage
-        && this.leaderUid !== this._loadedFor) {
-      this._loadedFor = this.leaderUid;
-      this._loadList();
-    }
+    if (this.canManage) return;
+    if (!changed.has('leaderUid') && !changed.has('squadIds') && !changed.has('canManage')) return;
+    const key = this._sourcesKey;
+    if (!key || key === this._loadedFor) return;
+    this._loadedFor = key;
+    this._loadList();
   }
 
   async _loadList() {
