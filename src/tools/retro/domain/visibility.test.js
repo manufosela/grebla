@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isColumnRevealed, canReadGroup, canReveal, revealPatch } from './visibility.js';
+import { isColumnRevealed, areAllRevealed, canReadGroup, canReveal, revealPatch } from './visibility.js';
 
 const openRetro = (revealed = {}) => ({ status: 'open', ownerLeaderUid: 'leader', revealed });
 
@@ -20,6 +20,22 @@ describe('isColumnRevealed', () => {
 
   it('sin retro no revela nada', () => {
     expect(isColumnRevealed(null, 'viento')).toBe(false);
+  });
+});
+
+describe('areAllRevealed', () => {
+  const zones = ['viento', 'ancla', 'rocas', 'isla'];
+
+  it('es falso si queda una sola zona oculta', () => {
+    expect(areAllRevealed(openRetro({ viento: true, ancla: true, rocas: true }), zones)).toBe(false);
+  });
+
+  it('es cierto con todas reveladas', () => {
+    expect(areAllRevealed(openRetro({ viento: true, ancla: true, rocas: true, isla: true }), zones)).toBe(true);
+  });
+
+  it('es cierto en una retro cerrada aunque nunca se revelara', () => {
+    expect(areAllRevealed({ status: 'closed', revealed: {} }, zones)).toBe(true);
   });
 });
 
