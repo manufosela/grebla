@@ -1,16 +1,18 @@
 /**
  * <retro-board> — tablero colaborativo de una retro (RMR-TSK-0244). Pinta las
- * columnas (formato clásico) o las zonas del Barco con las notas ANÓNIMAS del
- * equipo. Cualquiera añade notas y vota (voters idempotente; el recuento =
- * voters.length); cada uno edita/borra solo las suyas. Si la retro está cerrada,
- * es de solo lectura.
+ * columnas (formato clásico) o las zonas del Barco con las notas del equipo.
+ * Se aportan en ANÓNIMO y se FIRMAN al revelar la zona (RMR-TSK-0285): el
+ * anonimato protege el momento de escribir, no el de debatir. Cualquiera añade
+ * notas y vota (voters idempotente; el recuento = voters.length); cada uno
+ * edita/borra solo las suyas. Si la retro está cerrada, es de solo lectura.
  *
  * Props: retroId, uid (usuario logado).
  */
 import { LitElement, html, css } from 'lit';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
-import { groupNotes, summaryGroups, groupPatch, ungroupPatch } from '../../tools/retro/domain/grouping.js';
+import { groupNotes, summaryGroups, groupPatch, ungroupPatch, groupAuthors } from '../../tools/retro/domain/grouping.js';
+import { getCurrentUser } from '../../lib/auth.js';
 import { isColumnRevealed, areAllRevealed, canReadGroup, canReveal, revealPatch } from '../../tools/retro/domain/visibility.js';
 import '../app-modal.js';
 import './retro-actions.js';
@@ -134,6 +136,9 @@ export class RetroBoard extends LitElement {
     .reveal-bar .reveal-note { margin: 0; flex: 1; min-width: 12rem; }
     .reveal-all { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 999px; font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.35rem 0.9rem; cursor: pointer; }
     .reveal-all:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
+    .authors { font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
+    .card .authors { margin-top: 0.1rem; }
+    .pop-authors { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; margin: -0.4rem 0 0.8rem; }
     .locked { border: 1px dashed var(--rm-border, #dde7ec); border-radius: 12px; padding: 1.4rem 1.2rem; text-align: center; background: var(--rm-surface, #fff); }
     .locked-t { margin: 0 0 0.3rem; font-weight: 700; font-size: 0.95rem; }
     .locked-s { margin: 0 0 0.9rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
@@ -236,12 +241,20 @@ export class RetroBoard extends LitElement {
       .toSorted((a, b) => (b.voters?.length ?? 0) - (a.voters?.length ?? 0));
   }
 
+  /** Nombre con el que firmar: el del roster si está, si no el de la sesión.
+   *  Se resuelve AL ESCRIBIR porque el resto de participantes no puede leer las
+   *  fichas de sus compañeros; la nota se lo lleva denormalizado. */
+  get _myName() {
+    const fromRoster = (this.members ?? []).find((m) => m.uid === this.uid)?.name;
+    return fromRoster || getCurrentUser()?.displayName || '';
+  }
+
   async _addNote(columnId) {
     const text = (this._drafts[columnId] ?? '').trim();
     if (!text || !this.uid) return;
     this._error = '';
     try {
-      await addNote(this.retroId, columnId, text, this.uid);
+      await addNote(this.retroId, columnId, text, this.uid, this._myName);
       this._drafts = { ...this._drafts, [columnId]: '' };
       await this._load();
     } catch (err) {
@@ -367,8 +380,19 @@ export class RetroBoard extends LitElement {
           ${many ? html`<span class="xn" title="${group.notes.length} tarjetas agrupadas">×${group.notes.length}</span>` : null}
           <span class="votes">👍 ${group.votes}</span>
         </span>
+        ${this._renderAuthors(group, hidden)}
       </button>
     </div>`;
+  }
+
+  /** Firma de la tarjeta (RMR-TSK-0285). No se pinta mientras la zona esté
+   *  oculta: el anonimato protege el momento de ESCRIBIR, no el de debatir.
+   *  Al revelar, cada tarjeta lleva su nombre — y las agrupadas, todos. */
+  _renderAuthors(group, hidden) {
+    if (hidden) return null;
+    const authors = groupAuthors(group);
+    if (authors.length === 0) return null;
+    return html`<span class="authors">${authors.join(', ')}</span>`;
   }
 
   /** Contenido de la pestaña activa (extraído: evita ternarios anidados). */
@@ -436,6 +460,7 @@ export class RetroBoard extends LitElement {
     const close = () => { this._openNoteId = null; };
     return html`<app-modal .open=${true} heading="Tarjeta" @close=${close}>
       <p class="pop-text">${group.text}</p>
+      ${groupAuthors(group).length ? html`<p class="pop-authors">✍️ ${groupAuthors(group).join(', ')}</p>` : null}
       ${this._renderPopGroup(group)}
       <div class="modal-actions">
         <button class="vote ${voted ? 'voted' : ''}" ?disabled=${!this._open}
@@ -488,6 +513,7 @@ export class RetroBoard extends LitElement {
                 : null}
               <span class="res-votes">👍 ${g.votes}</span>
               <span class="res-text">${g.text}</span>
+              ${groupAuthors(g).length ? html`<span class="authors">${groupAuthors(g).join(', ')}</span>` : null}
               ${this._renderGroupBadge(g)}
             </li>`)}
           </ol>
@@ -616,7 +642,7 @@ export class RetroBoard extends LitElement {
         <span class="chip fmt">${format?.name ?? this._retro.format}</span>
         <span class="chip ${this._open ? 'open' : 'closed'}">${this._open ? 'Abierta' : 'Cerrada'}</span>
       </div>
-      <p class="ro-note">${this._open ? 'Aporta tus notas (anónimas) y vota las que veas clave.' : 'Retro cerrada: solo lectura.'}</p>
+      <p class="ro-note">${this._open ? 'Aporta tus notas y vota las que veas clave. Se muestran anónimas hasta que se revele su zona; entonces llevan tu nombre.' : 'Retro cerrada: solo lectura.'}</p>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="btabs" role="tablist" aria-label="Vistas de la retro">
         <button role="tab" aria-selected=${this._tab === 'tablero'} class="btab ${this._tab === 'tablero' ? 'on' : ''}"

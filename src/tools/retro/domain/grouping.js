@@ -47,6 +47,25 @@ export function groupNotes(notes) {
 }
 
 /**
+ * Autores de un grupo, sin repetir y en orden de aparición (RMR-TSK-0285).
+ *
+ * Las tarjetas se escriben anónimas y se FIRMAN al revelarse: quien propone algo
+ * lo defiende en el debate. Cuando varias personas dicen lo mismo y se agrupan,
+ * interesan todos los nombres — «esto lo dicen tres» no es lo mismo que «esto lo
+ * ha dicho una persona tres veces».
+ *
+ * Las notas anteriores a este cambio no tienen `authorName`: se descartan en vez
+ * de inventar un nombre, así que un grupo antiguo simplemente no muestra firma.
+ *
+ * @param {{ notes?: ReadonlyArray<{ authorName?: string }> }} group
+ * @returns {string[]}
+ */
+export function groupAuthors(group) {
+  const names = (group?.notes ?? []).map((n) => String(n.authorName ?? '').trim()).filter(Boolean);
+  return [...new Set(names)];
+}
+
+/**
  * Grupos ordenados por votos (desc) para la pestaña Resumen; a igualdad de
  * votos, las más grandes primero (más gente lo dijo).
  * @param {ReadonlyArray<Note>} notes

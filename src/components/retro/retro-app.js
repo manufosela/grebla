@@ -107,7 +107,7 @@ export class RetroApp extends LitElement {
     if (this._error) return html`<p class="empty">${this._error}</p>`;
     if (!this._retros.length) return html`<p class="empty">Tu equipo aún no tiene retros.</p>`;
     return html`
-      <p class="lead">Retros de tu equipo. Ábrela para aportar tus notas (anónimas), votar y ver las acciones.</p>
+      <p class="lead">Retros de tu equipo. Ábrela para aportar tus notas, votar y ver las acciones.</p>
       <table>
         <thead><tr><th>Nombre</th><th>Formato</th><th>Estado</th><th></th></tr></thead>
         <tbody>${this._retros.map((r) => html`<tr>

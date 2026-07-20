@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupNotes, summaryGroups, groupPatch, ungroupPatch, groupKeyOf } from './grouping.js';
+import { groupNotes, summaryGroups, groupPatch, ungroupPatch, groupKeyOf, groupAuthors } from './grouping.js';
 
 const n = (id, text, extra = {}) => ({ id, columnId: 'viento', text, voters: [], ...extra });
 
@@ -63,5 +63,24 @@ describe('groupPatch / ungroupPatch', () => {
   it('groupKeyOf cae a su propio id si no está agrupada', () => {
     expect(groupKeyOf(n('a', 'A'))).toBe('a');
     expect(groupKeyOf(n('a', 'A', { groupId: 'g' }))).toBe('g');
+  });
+});
+
+describe('groupAuthors', () => {
+  it('firma una tarjeta con su autor', () => {
+    expect(groupAuthors({ notes: [{ authorName: 'Ana' }] })).toEqual(['Ana']);
+  });
+
+  it('lista a todos los autores de un grupo, sin repetir', () => {
+    const group = { notes: [{ authorName: 'Ana' }, { authorName: 'Beto' }, { authorName: 'Ana' }] };
+    expect(groupAuthors(group)).toEqual(['Ana', 'Beto']);
+  });
+
+  it('descarta las notas antiguas sin autor en vez de inventarlo', () => {
+    expect(groupAuthors({ notes: [{ authorName: 'Ana' }, {}, { authorName: '  ' }] })).toEqual(['Ana']);
+  });
+
+  it('sin notas no devuelve firmas', () => {
+    expect(groupAuthors({})).toEqual([]);
   });
 });
