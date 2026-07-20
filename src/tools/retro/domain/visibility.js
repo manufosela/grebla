@@ -30,6 +30,19 @@ export function isColumnRevealed(retro, columnId) {
 }
 
 /**
+ * ¿Están reveladas TODAS las zonas? Es la condición para abrir el Resumen
+ * (RMR-TSK-0284): un resumen a medias sería una puerta trasera al contenido que
+ * aún no se ha revelado, y una lista de líneas difuminadas no le sirve a nadie.
+ *
+ * @param {{ status?: string, revealed?: Record<string, boolean>|null }|null} retro
+ * @param {ReadonlyArray<string>} columnIds
+ * @returns {boolean}
+ */
+export function areAllRevealed(retro, columnIds) {
+  return (columnIds ?? []).every((id) => isColumnRevealed(retro, id));
+}
+
+/**
  * ¿Puede este usuario leer el texto de esta tarjeta?
  *
  * Las propias SIEMPRE se leen: quien las escribió ya conoce su contenido, y

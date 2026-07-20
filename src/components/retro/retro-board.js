@@ -11,7 +11,7 @@ import { LitElement, html, css } from 'lit';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
 import { groupNotes, summaryGroups, groupPatch, ungroupPatch } from '../../tools/retro/domain/grouping.js';
-import { isColumnRevealed, canReadGroup, canReveal, revealPatch } from '../../tools/retro/domain/visibility.js';
+import { isColumnRevealed, areAllRevealed, canReadGroup, canReveal, revealPatch } from '../../tools/retro/domain/visibility.js';
 import '../app-modal.js';
 import './retro-actions.js';
 
@@ -134,6 +134,9 @@ export class RetroBoard extends LitElement {
     .reveal-bar .reveal-note { margin: 0; flex: 1; min-width: 12rem; }
     .reveal-all { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 999px; font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.35rem 0.9rem; cursor: pointer; }
     .reveal-all:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
+    .locked { border: 1px dashed var(--rm-border, #dde7ec); border-radius: 12px; padding: 1.4rem 1.2rem; text-align: center; background: var(--rm-surface, #fff); }
+    .locked-t { margin: 0 0 0.3rem; font-weight: 700; font-size: 0.95rem; }
+    .locked-s { margin: 0 0 0.9rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
     .cards { display: flex; flex-wrap: wrap; gap: 0.45rem; }
     .card { position: relative; display: flex; align-items: flex-start; gap: 0.3rem; background: var(--rm-field, #eef2f6); border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; max-width: 12rem; }
     .card.sel { border-color: var(--rm-accent, #2a9d8f); box-shadow: 0 0 0 2px color-mix(in srgb, var(--rm-accent, #2a9d8f) 30%, transparent); }
@@ -446,8 +449,27 @@ export class RetroBoard extends LitElement {
     </app-modal>`;
   }
 
+  /** Resumen cerrado: a quien facilita se le da aquí mismo la llave. */
+  _renderResumenLocked(cols) {
+    const pending = cols.filter((c) => !isColumnRevealed(this._retro, c.id)).map((c) => c.title);
+    return html`<div class="locked">
+      <p class="locked-t">🙈 El resumen se abre cuando estén reveladas todas las zonas.</p>
+      <p class="locked-s">Sin revelar: ${pending.join(', ')}.</p>
+      ${this._canReveal
+        ? html`<button class="reveal-all" @click=${() => this._setRevealed(cols.map((c) => c.id), true)}>
+            👁️ Mostrar todas y abrir el resumen
+          </button>`
+        : null}
+    </div>`;
+  }
+
   /** Pestaña «Resumen»: grupos ordenados por votos. */
   _renderResumen(cols) {
+    // Con zonas sin revelar, el Resumen NO se abre (RMR-TSK-0284): sería la
+    // puerta de atrás al contenido oculto. Se cierra entero en vez de difuminar
+    // fila a fila — una lista borrosa no le sirve a nadie y la lógica de bloque
+    // no tiene los casos borde de la lógica por fila.
+    if (!areAllRevealed(this._retro, cols.map((c) => c.id))) return this._renderResumenLocked(cols);
     const all = summaryGroups(this._notes);
     if (all.length === 0) return html`<p class="empty">Aún no hay tarjetas.</p>`;
     return html`<div class="resumen">
@@ -465,7 +487,7 @@ export class RetroBoard extends LitElement {
                     @change=${() => this._toggleSelect(g.id)} />`
                 : null}
               <span class="res-votes">👍 ${g.votes}</span>
-              <span class="res-text ${this._canRead(g) ? '' : 'blurred'}">${g.text}</span>
+              <span class="res-text">${g.text}</span>
               ${this._renderGroupBadge(g)}
             </li>`)}
           </ol>
