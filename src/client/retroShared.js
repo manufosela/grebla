@@ -37,9 +37,7 @@ function showSignIn() {
   statusEl.hidden = false;
 }
 
-if (!retroId) {
-  showStatus('Falta el identificador de la retro en el enlace.', true);
-} else {
+if (retroId) {
   onUserChanged(async (user) => {
     if (!user) {
       showSignIn();
@@ -68,4 +66,6 @@ if (!retroId) {
       );
     }
   });
+} else {
+  showStatus('Falta el identificador de la retro en el enlace.', true);
 }
