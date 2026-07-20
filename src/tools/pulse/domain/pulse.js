@@ -96,3 +96,27 @@ export function sanitizePulse(input = {}) {
   out.shareWord = input.shareWord === true;
   return /** @type {any} */ (out);
 }
+
+/**
+ * Rango de fechas LABORAL (lunes→viernes) de una semana ISO, para dar contexto
+ * al «Semana 30» de Marea (RMR-TSK-0273). Inverso de `isoWeekKey`: el jueves de
+ * la semana ISO siempre cae en su año, así que se ancla ahí y se retrocede al
+ * lunes. Devuelve fechas UTC a medianoche (sin horas, sin saltos por DST).
+ * @param {string} weekIso Clave «YYYY-Www» (p. ej. «2026-W30»).
+ * @returns {{ start: Date, end: Date }|null} lunes y viernes, o null si no parsea.
+ */
+export function weekRange(weekIso) {
+  const parsed = parseWeekIso(weekIso);
+  if (!parsed) return null;
+  const { year, week } = parsed;
+  // 4 de enero siempre pertenece a la semana ISO 1.
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7; // lunes=1 … domingo=7
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+  const start = new Date(week1Monday);
+  start.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 4); // viernes
+  return { start, end };
+}

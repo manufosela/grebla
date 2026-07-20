@@ -420,14 +420,16 @@ export class RoleQuestionnaire extends LitElement {
             ? null
             : html`<div class="notice">Estás en modo local: inicia sesión con Google para guardar tu progreso.</div>`}
           ${this.sessionId ? null : html`<p class="default-hint">📋 Propuesta inicial (sin guardar): el rol se fija de forma conjunta. Ajusta lo que consideres y se guardará al primer cambio.</p>`}
-          <div class="template">
-            <label for="role-template">Empezar desde un rol:</label>
-            <select id="role-template" @change=${this._applyRoleTemplate}>
-              <option value="">— Autorrellenar según un rol —</option>
-              ${this.roles.map((r) => html`<option value=${r.key}>${r.label}</option>`)}
-            </select>
-            <span class="template-hint">Rellena el cuestionario con el perfil tipo de ese rol; luego ajústalo.</span>
-          </div>
+          ${this._isManagerView
+            ? html`<div class="template">
+                <label for="role-template">Empezar desde un rol:</label>
+                <select id="role-template" @change=${this._applyRoleTemplate}>
+                  <option value="">— Autorrellenar según un rol —</option>
+                  ${this.roles.map((r) => html`<option value=${r.key}>${r.label}</option>`)}
+                </select>
+                <span class="template-hint">Rellena el cuestionario con el perfil tipo de ese rol; luego ajústalo.</span>
+              </div>`
+            : null}
           <div class="progress">
             <span class="progress-track">
               <span class="progress-fill" style=${`width:${profile.completion}%`}></span>
@@ -438,7 +440,9 @@ export class RoleQuestionnaire extends LitElement {
           ${this._renderMeasurementBar()}
           ${this.error ? html`<p class="error">${this.error}</p>` : null}
           ${this._renderGroups(visible)}
-          ${this.personId ? html`<div class="measurement-bottom">${this._renderMeasurementButton()}</div>` : null}
+          ${this.personId && this._isManagerView
+            ? html`<div class="measurement-bottom">${this._renderMeasurementButton()}</div>`
+            : null}
         </div>
         <div class="result">
           <role-result
@@ -475,9 +479,19 @@ export class RoleQuestionnaire extends LitElement {
     return html`
       <div class="measurement">
         <span class="measurement-when">${when ? `Medición del ${when}` : 'Nueva medición'}</span>
-        ${this._renderMeasurementButton()}
+        ${this._isManagerView ? this._renderMeasurementButton() : null}
       </div>
     `;
+  }
+
+  /**
+   * ¿Vista de GESTIÓN? El ingeniero afina su propio Role Mirror (se autoguarda),
+   * pero no dispone de las herramientas de manager: la plantilla «autorrellenar
+   * según un rol» y el guardado como NUEVA medición son de manager/superadmin
+   * (RMR-TSK-0272).
+   */
+  get _isManagerView() {
+    return this.editorKind !== 'engineer';
   }
 
   /** El botón de guardar, reutilizado arriba (en la barra) y al final del form. */
