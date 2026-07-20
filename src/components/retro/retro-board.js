@@ -306,6 +306,29 @@ export class RetroBoard extends LitElement {
     </div>`;
   }
 
+  /** Bloque «agrupada con» del popup (extraído: evita ternarios anidados). */
+  _renderPopGroup(group) {
+    if (group.notes.length <= 1) return null;
+    const others = group.notes.filter((n) => n.id !== group.id);
+    const undo = this._open
+      ? html`<button class="ghost" @click=${() => this._ungroup(group.id)}>Deshacer grupo</button>`
+      : null;
+    return html`<div class="pop-group">
+      <p class="pop-sub">Agrupada con:</p>
+      <ul>${others.map((n) => html`<li>${n.text}</li>`)}</ul>
+      ${undo}
+    </div>`;
+  }
+
+  /** Badge ×N + «deshacer» de una fila del resumen (extraído por lo mismo). */
+  _renderGroupBadge(group) {
+    if (group.notes.length <= 1) return null;
+    const undo = this._open
+      ? html`<button class="ghost mini" @click=${() => this._ungroup(group.id)}>deshacer</button>`
+      : null;
+    return html`<span class="xn">×${group.notes.length}</span>${undo}`;
+  }
+
   /** Popup con la tarjeta a tamaño grande y sus acciones. */
   _renderCardPopup() {
     if (!this._openNoteId) return null;
@@ -317,13 +340,7 @@ export class RetroBoard extends LitElement {
     const close = () => { this._openNoteId = null; };
     return html`<app-modal .open=${true} heading="Tarjeta" @close=${close}>
       <p class="pop-text">${group.text}</p>
-      ${group.notes.length > 1
-        ? html`<div class="pop-group">
-            <p class="pop-sub">Agrupada con:</p>
-            <ul>${group.notes.filter((n) => n.id !== group.id).map((n) => html`<li>${n.text}</li>`)}</ul>
-            ${this._open ? html`<button class="ghost" @click=${() => this._ungroup(group.id)}>Deshacer grupo</button>` : null}
-          </div>`
-        : null}
+      ${this._renderPopGroup(group)}
       <div class="modal-actions">
         <button class="vote ${voted ? 'voted' : ''}" ?disabled=${!this._open}
           @click=${async () => { await this._toggleVote(primary); this.requestUpdate(); }}>👍 ${group.votes}</button>
@@ -356,10 +373,7 @@ export class RetroBoard extends LitElement {
                 : null}
               <span class="res-votes">👍 ${g.votes}</span>
               <span class="res-text">${g.text}</span>
-              ${g.notes.length > 1
-                ? html`<span class="xn">×${g.notes.length}</span>
-                       ${this._open ? html`<button class="ghost mini" @click=${() => this._ungroup(g.id)}>deshacer</button>` : null}`
-                : null}
+              ${this._renderGroupBadge(g)}
             </li>`)}
           </ol>
         </section>`;
