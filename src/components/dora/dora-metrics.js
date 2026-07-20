@@ -15,6 +15,13 @@ import { formatHours } from './format.js';
 import '../shared/metrics-interpretation.js';
 
 const lt = (v) => (v != null ? `${v} h` : '—');
+
+/** Aviso de lead times aproximados (helper: evita un ternario anidado en la plantilla). */
+function approxLeadTimeNote(n) {
+  const sujeto = n === 1 ? 'lead time es aproximado' : 'lead times son aproximados';
+  return `${n} ${sujeto}: no se pudo leer el primer commit de esas PRs `
+    + '(límite de la API de GitHub o PR sin fecha). El resto son exactos.';
+}
 /**
  * MTTR para tablas de grupo. Muestra la duración legible si hay incidentes
  * resueltos; si no, '—' (no medible). Sin badge de nivel: los umbrales son de D5.
@@ -177,7 +184,7 @@ export class DoraMetrics extends LitElement {
           ? html`<p class="note">${g.changesPending} ${g.changesPending === 1 ? 'cambio sin desplegar' : 'cambios sin desplegar'} (mergeados pero aún no en producción).</p>`
           : null}
         ${g.leadTimeApproxCount > 0
-          ? html`<p class="note">${g.leadTimeApproxCount} ${g.leadTimeApproxCount === 1 ? 'lead time es aproximado' : 'lead times son aproximados'}: no se pudo leer el primer commit de esas PRs (límite de la API de GitHub o PR sin fecha). El resto son exactos.</p>`
+          ? html`<p class="note">${approxLeadTimeNote(g.leadTimeApproxCount)}</p>`
           : null}
         ${hasDeploys
           ? html`<p class="note">Change Failure Rate = % de despliegues en producción que fallaron (${g.deploymentsFailed}/${g.deploymentsTotal}), sobre los despliegues registrados manualmente (D1). Métrica real, no proxy.</p>`
