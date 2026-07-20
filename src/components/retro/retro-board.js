@@ -10,7 +10,9 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
-import { getRetro, listNotes, addNote, voteNote, unvoteNote, editNote, deleteNote } from '../../lib/retros.js';
+import { groupNotes, summaryGroups, groupPatch, ungroupPatch } from '../../tools/retro/domain/grouping.js';
+import '../app-modal.js';
+import { getRetro, listNotes, addNote, voteNote, unvoteNote, editNote, deleteNote , setNoteGroups } from '../../lib/retros.js';
 
 /** Emoji de cada zona del Barco. */
 const BARCO_ICON = { viento: '🌬️', ancla: '⚓', rocas: '🪨', isla: '🏝️' };
@@ -26,6 +28,11 @@ export class RetroBoard extends LitElement {
     _editText: { state: true },
     _loading: { state: true },
     _error: { state: true },
+    _tab: { state: true },
+    _selected: { state: true },
+    _openNoteId: { state: true },
+    _composerCol: { state: true },
+    _composerText: { state: true },
   };
 
   static styles = css`
@@ -65,7 +72,35 @@ export class RetroBoard extends LitElement {
     .a-amber { color: var(--amber); } .a-amber .dot { background: var(--amber); } .zone.a-amber { border-top: 4px solid var(--amber); }
     .zhint { font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); margin: -0.3rem 0 0.2rem; }
 
-    .note { background: var(--rm-surface-2, #f5fafa); border: 1px solid var(--rm-border, #e7f0f0); border-radius: 10px; padding: 0.55rem 0.65rem; font-size: 0.85rem; }
+    /* ── Tablero rediseñado (RMR-TSK-0281) ─────────────────────────────── */
+    .btabs { display: flex; gap: 1.1rem; margin: 0 0 1rem; border-bottom: 1px solid var(--rm-border, #dde7ec); flex-wrap: wrap; }
+    .btab { border: 0; background: none; color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.92rem; font-weight: 700; padding: 0.45rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer; }
+    .btab.on { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
+    .composer { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr auto; gap: 0.6rem; align-items: start; margin-bottom: 1.1rem; }
+    @media (max-width: 640px) { .composer { grid-template-columns: 1fr; } }
+    .composer select, .composer textarea { font: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); box-sizing: border-box; width: 100%; resize: vertical; }
+    .composer .primary { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); border: 0; border-radius: 8px; padding: 0.55rem 1.1rem; font: inherit; font-weight: 700; cursor: pointer; align-self: start; }
+    .composer .primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cards { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+    .card { position: relative; display: flex; align-items: flex-start; gap: 0.3rem; background: var(--rm-field, #eef2f6); border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; max-width: 12rem; }
+    .card.sel { border-color: var(--rm-accent, #2a9d8f); box-shadow: 0 0 0 2px color-mix(in srgb, var(--rm-accent, #2a9d8f) 30%, transparent); }
+    .card .pick { margin: 0.5rem 0 0 0.45rem; flex: 0 0 auto; accent-color: var(--rm-accent, #2a9d8f); }
+    .card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; text-align: left; background: none; border: 0; padding: 0.5rem 0.6rem; font: inherit; color: inherit; cursor: pointer; }
+    .card-text { font-size: 0.8rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-foot { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); }
+    .xn { font-weight: 800; color: var(--rm-accent, #2a9d8f); }
+    .groupbar { position: sticky; bottom: 0.75rem; display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; padding: 0.6rem 0.9rem; background: var(--rm-surface, #fff); border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 999px; box-shadow: var(--rm-shadow, 0 6px 18px rgba(0,0,0,.15)); font-size: 0.85rem; }
+    .groupbar .primary { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); border: 0; border-radius: 999px; padding: 0.35rem 0.9rem; font: inherit; font-weight: 700; cursor: pointer; }
+    .groupbar .ghost { border: 0; background: none; color: var(--rm-muted, #5b6b7d); font: inherit; cursor: pointer; }
+    .pop-text { font-size: 1.05rem; line-height: 1.5; margin: 0 0 0.75rem; }
+    .pop-sub { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-weight: 700; margin: 0 0 0.3rem; }
+    .pop-group ul { margin: 0 0 0.75rem; padding-left: 1.1rem; font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); }
+    .resumen { display: grid; gap: 1.25rem; }
+    .res-col h4 { margin: 0 0 0.4rem; font-size: 0.95rem; }
+    .res-col ol { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.35rem; }
+    .res-col li { font-size: 0.88rem; display: flex; align-items: baseline; gap: 0.5rem; }
+    .res-votes { font-weight: 800; color: var(--rm-accent, #2a9d8f); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .note { background: var(--rm-field, #eef2f6); border: 1px solid var(--rm-border, #e7f0f0); border-radius: 10px; padding: 0.55rem 0.65rem; font-size: 0.85rem; }
     .note .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 0.45rem; gap: 0.4rem; }
     .anon { font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); }
     .n-actions { display: inline-flex; gap: 0.35rem; align-items: center; }
@@ -91,6 +126,15 @@ export class RetroBoard extends LitElement {
     this._retro = null;
     this._notes = [];
     this._drafts = {};
+    /** Pestaña visible del tablero (RMR-TSK-0281). @type {'tablero'|'resumen'} */
+    this._tab = 'tablero';
+    /** Ids de nota seleccionados para agrupar. @type {string[]} */
+    this._selected = [];
+    /** Id del grupo abierto en el popup, o null. @type {string|null} */
+    this._openNoteId = null;
+    /** Composer ÚNICO: columna elegida y texto (antes había un input por columna). */
+    this._composerCol = '';
+    this._composerText = '';
     this._editingId = null;
     this._editText = '';
     this._loading = false;
@@ -112,6 +156,8 @@ export class RetroBoard extends LitElement {
       const [retro, notes] = await Promise.all([getRetro(this.retroId), listNotes(this.retroId)]);
       this._retro = retro;
       this._notes = notes;
+      // El composer arranca en la primera columna del formato.
+      if (!this._composerCol) this._composerCol = getFormat(retro?.format)?.columns?.[0]?.id ?? '';
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cargar el tablero.';
     } finally {
@@ -172,57 +218,169 @@ export class RetroBoard extends LitElement {
     }
   }
 
-  _renderNote(note) {
-    const voters = note.voters ?? [];
-    const voted = voters.includes(this.uid);
-    const mine = note.authorUid === this.uid;
-    if (this._editingId === note.id) {
-      return html`<div class="note"><div class="edit">
-        <input .value=${this._editText} @input=${(e) => { this._editText = e.target.value; }}
-          @keydown=${(e) => { if (e.key === 'Enter') this._saveEdit(note); }} />
-        <button @click=${() => this._saveEdit(note)}>Guardar</button>
-        <button class="ghost" @click=${() => { this._editingId = null; }}>Cancelar</button>
-      </div></div>`;
-    }
-    return html`<div class="note">
-      ${note.text}
-      <div class="foot">
-        <span class="anon">Anónimo</span>
-        <span class="n-actions">
-          ${mine && this._open ? html`<button class="mini" @click=${() => { this._editingId = note.id; this._editText = note.text; }}>Editar</button>` : null}
-          ${mine && this._open ? html`<button class="mini del" @click=${() => this._delete(note)}>Borrar</button>` : null}
-          <button class="vote ${voted ? 'voted' : ''}" ?disabled=${!this._open} @click=${() => this._toggleVote(note)}>👍 ${voters.length}</button>
-        </span>
-      </div>
+  // ── Composer único, selección y agrupación (RMR-TSK-0281) ──────────────────
+
+  /** Un ÚNICO formulario para todo el tablero: se elige el tipo y se escribe. */
+  _renderComposer(cols) {
+    if (!this._open) return null;
+    const text = this._composerText.trim();
+    return html`<div class="composer">
+      <select aria-label="Tipo de tarjeta" .value=${this._composerCol}
+        @change=${(e) => { this._composerCol = e.target.value; }}>
+        ${cols.map((c) => html`<option value=${c.id} ?selected=${c.id === this._composerCol}>${c.title}${c.hint ? ` · ${c.hint}` : ''}</option>`)}
+      </select>
+      <textarea rows="2" placeholder="Escribe tu tarjeta…" .value=${this._composerText}
+        @input=${(e) => { this._composerText = e.target.value; }}></textarea>
+      <button class="primary" ?disabled=${!text} @click=${() => this._addFromComposer()}>Añadir</button>
     </div>`;
   }
 
-  _renderAdd(columnId) {
-    if (!this._open) return null;
-    return html`<div class="add">
-      <input placeholder="Añadir nota…" .value=${this._drafts[columnId] ?? ''}
-        @input=${(e) => { this._drafts = { ...this._drafts, [columnId]: e.target.value }; }}
-        @keydown=${(e) => { if (e.key === 'Enter') this._addNote(columnId); }} />
-      <button ?disabled=${!(this._drafts[columnId] ?? '').trim()} @click=${() => this._addNote(columnId)}>+</button>
+  async _addFromComposer() {
+    const text = this._composerText.trim();
+    if (!text || !this._composerCol) return;
+    this._composerText = '';
+    this._drafts = { ...this._drafts, [this._composerCol]: text };
+    await this._addNote(this._composerCol);
+  }
+
+  /** @param {string} groupId */
+  _toggleSelect(groupId) {
+    this._selected = this._selected.includes(groupId)
+      ? this._selected.filter((id) => id !== groupId)
+      : [...this._selected, groupId];
+  }
+
+  /** Barra flotante que aparece al marcar 2 o más tarjetas. */
+  _renderGroupBar() {
+    if (this._selected.length < 2) return null;
+    return html`<div class="groupbar">
+      <span>${this._selected.length} tarjetas seleccionadas</span>
+      <button class="primary" @click=${() => this._group()}>Agrupar</button>
+      <button class="ghost" @click=${() => { this._selected = []; }}>Cancelar</button>
     </div>`;
+  }
+
+  /** Agrupa las seleccionadas: todas las notas de esos grupos pasan a uno solo. */
+  async _group() {
+    // Al seleccionar se marcan GRUPOS; hay que agrupar todas sus notas, no solo
+    // la principal, o las secundarias se quedarían fuera.
+    const ids = groupNotes(this._notes)
+      .filter((g) => this._selected.includes(g.id))
+      .flatMap((g) => g.notes.map((n) => n.id));
+    try {
+      await setNoteGroups(this.retroId, groupPatch(ids));
+      this._selected = [];
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo agrupar.';
+    }
+  }
+
+  /** @param {string} groupId */
+  async _ungroup(groupId) {
+    try {
+      await setNoteGroups(this.retroId, ungroupPatch(this._notes, groupId));
+      this._openNoteId = null;
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo deshacer el grupo.';
+    }
+  }
+
+  /** Tarjeta PEQUEÑA: se abre en popup al hacer clic (RMR-TSK-0281). */
+  _renderCard(group) {
+    const selected = this._selected.includes(group.id);
+    const many = group.notes.length > 1;
+    return html`<div class="card ${selected ? 'sel' : ''}">
+      ${this._open
+        ? html`<input class="pick" type="checkbox" .checked=${selected}
+            aria-label="Seleccionar para agrupar"
+            @click=${(e) => e.stopPropagation()}
+            @change=${() => this._toggleSelect(group.id)} />`
+        : null}
+      <button class="card-body" @click=${() => { this._openNoteId = group.id; }}>
+        <span class="card-text">${group.text}</span>
+        <span class="card-foot">
+          ${many ? html`<span class="xn" title="${group.notes.length} tarjetas agrupadas">×${group.notes.length}</span>` : null}
+          <span class="votes">👍 ${group.votes}</span>
+        </span>
+      </button>
+    </div>`;
+  }
+
+  /** Popup con la tarjeta a tamaño grande y sus acciones. */
+  _renderCardPopup() {
+    if (!this._openNoteId) return null;
+    const group = groupNotes(this._notes).find((g) => g.id === this._openNoteId);
+    if (!group) return null;
+    const primary = group.notes.find((n) => n.id === group.id) ?? group.notes[0];
+    const mine = primary?.authorUid === this.uid;
+    const voted = (primary?.voters ?? []).includes(this.uid);
+    const close = () => { this._openNoteId = null; };
+    return html`<app-modal .open=${true} heading="Tarjeta" @close=${close}>
+      <p class="pop-text">${group.text}</p>
+      ${group.notes.length > 1
+        ? html`<div class="pop-group">
+            <p class="pop-sub">Agrupada con:</p>
+            <ul>${group.notes.filter((n) => n.id !== group.id).map((n) => html`<li>${n.text}</li>`)}</ul>
+            ${this._open ? html`<button class="ghost" @click=${() => this._ungroup(group.id)}>Deshacer grupo</button>` : null}
+          </div>`
+        : null}
+      <div class="modal-actions">
+        <button class="vote ${voted ? 'voted' : ''}" ?disabled=${!this._open}
+          @click=${async () => { await this._toggleVote(primary); this.requestUpdate(); }}>👍 ${group.votes}</button>
+        ${mine && this._open
+          ? html`<button class="ghost" @click=${() => { this._editingId = primary.id; this._editText = primary.text; this._openNoteId = null; }}>Editar</button>
+                 <button class="ghost del" @click=${async () => { await this._delete(primary); this._openNoteId = null; }}>Borrar</button>`
+          : null}
+        <button @click=${close}>Cerrar</button>
+      </div>
+    </app-modal>`;
+  }
+
+  /** Pestaña «Resumen»: grupos ordenados por votos. */
+  _renderResumen(cols) {
+    const all = summaryGroups(this._notes);
+    if (all.length === 0) return html`<p class="empty">Aún no hay tarjetas.</p>`;
+    return html`<div class="resumen">
+      ${cols.map((col) => {
+        const groups = all.filter((g) => g.columnId === col.id);
+        if (groups.length === 0) return null;
+        return html`<section class="res-col">
+          <h4 class="a-${col.accent}">${col.title}</h4>
+          <ol>
+            ${groups.map((g) => html`<li>
+              <span class="res-votes">👍 ${g.votes}</span>
+              <span class="res-text">${g.text}</span>
+              ${g.notes.length > 1 ? html`<span class="xn">×${g.notes.length}</span>` : null}
+            </li>`)}
+          </ol>
+        </section>`;
+      })}
+    </div>`;
+  }
+
+
+
+  /** Grupos de una columna (una tarjeta por grupo, no por nota). */
+  _groupsFor(columnId) {
+    return groupNotes(this._notesFor(columnId));
   }
 
   _renderColumn(col) {
-    const notes = this._notesFor(col.id);
+    const groups = this._groupsFor(col.id);
     return html`<div class="col">
       <div class="col-h a-${col.accent}"><span class="dot"></span>${col.title}</div>
-      ${notes.length ? notes.map((n) => this._renderNote(n)) : html`<p class="empty">Sin notas aún.</p>`}
-      ${this._renderAdd(col.id)}
+      ${groups.length ? html`<div class="cards">${groups.map((g) => this._renderCard(g))}</div>` : html`<p class="empty">Sin notas aún.</p>`}
     </div>`;
   }
 
   _renderZone(col) {
-    const notes = this._notesFor(col.id);
+    const groups = this._groupsFor(col.id);
     return html`<div class="zone a-${col.accent} z-${col.id}">
       <div class="col-h a-${col.accent}">${BARCO_ICON[col.id] ?? ''} ${col.title}</div>
       ${col.hint ? html`<p class="zhint">${col.hint}</p>` : null}
-      ${notes.length ? notes.map((n) => this._renderNote(n)) : html`<p class="empty">Sin notas aún.</p>`}
-      ${this._renderAdd(col.id)}
+      ${groups.length ? html`<div class="cards">${groups.map((g) => this._renderCard(g))}</div>` : html`<p class="empty">Sin notas aún.</p>`}
     </div>`;
   }
 
@@ -277,9 +435,22 @@ export class RetroBoard extends LitElement {
       </div>
       <p class="ro-note">${this._open ? 'Aporta tus notas (anónimas) y vota las que veas clave.' : 'Retro cerrada: solo lectura.'}</p>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
-      ${format?.kind === 'barco'
-        ? this._renderBarco(cols)
-        : html`<div class="board" style=${boardStyle}>${cols.map((c) => this._renderColumn(c))}</div>`}
+      <div class="btabs" role="tablist" aria-label="Vistas de la retro">
+        <button role="tab" aria-selected=${this._tab === 'tablero'} class="btab ${this._tab === 'tablero' ? 'on' : ''}"
+          @click=${() => { this._tab = 'tablero'; }}>Tablero</button>
+        <button role="tab" aria-selected=${this._tab === 'resumen'} class="btab ${this._tab === 'resumen' ? 'on' : ''}"
+          @click=${() => { this._tab = 'resumen'; }}>Resumen</button>
+      </div>
+      ${this._tab === 'resumen'
+        ? this._renderResumen(cols)
+        : html`
+            ${this._renderComposer(cols)}
+            ${format?.kind === 'barco'
+              ? this._renderBarco(cols)
+              : html`<div class="board" style=${boardStyle}>${cols.map((c) => this._renderColumn(c))}</div>`}
+            ${this._renderGroupBar()}
+          `}
+      ${this._renderCardPopup()}
     `;
   }
 }

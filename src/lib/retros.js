@@ -100,6 +100,17 @@ export function editNote(retroId, noteId, text) {
   return updateDoc(doc(db, 'retros', retroId, 'notes', noteId), { text: String(text ?? '').trim() });
 }
 
+/**
+ * Aplica un parche de agrupación a varias notas (RMR-TSK-0281). Recibe lo que
+ * devuelven `groupPatch`/`ungroupPatch` del dominio: solo las notas que cambian.
+ * @param {string} retroId
+ * @param {ReadonlyArray<{ id: string, groupId: string|null }>} patches
+ */
+export async function setNoteGroups(retroId, patches) {
+  await Promise.all((patches ?? []).map(({ id, groupId }) =>
+    updateDoc(doc(db, 'retros', retroId, 'notes', id), { groupId })));
+}
+
 /** @param {string} retroId @param {string} noteId */
 export function deleteNote(retroId, noteId) {
   return deleteDoc(doc(db, 'retros', retroId, 'notes', noteId));

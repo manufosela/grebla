@@ -22,7 +22,7 @@ export class RetroActionRow extends LitElement {
     :host(:first-of-type) .row { border-top: 0; }
     .txt { flex: 1; min-width: 12rem; font-size: 0.9rem; }
     .who { font-size: 0.74rem; color: var(--rm-muted, #5b6b7d); }
-    .toggle { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface-2, #f5fafa); font: inherit; font-size: 0.74rem; font-weight: 700; padding: 0.28rem 0.7rem; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+    .toggle { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-field, #eef2f6); font: inherit; font-size: 0.74rem; font-weight: 700; padding: 0.28rem 0.7rem; border-radius: 999px; cursor: pointer; white-space: nowrap; }
     .toggle:disabled { opacity: 0.6; cursor: default; }
     .toggle.done { background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--rm-accent-700, var(--teal)); border-color: color-mix(in srgb, var(--teal) 40%, transparent); }
     .toggle.pending { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
