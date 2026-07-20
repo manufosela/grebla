@@ -40,7 +40,8 @@ export async function createDoraContainer(options = {}) {
       const { app } = await import('../../../lib/firebase.js');
       const { getFunctions, httpsCallable } = await import('firebase/functions');
       const fns = getFunctions(app, 'europe-west1');
-      const res = await httpsCallable(fns, 'refreshDora')({});
+      // Timeout de cliente alineado con los 300s de la función (RMR-BUG-0046).
+      const res = await httpsCallable(fns, 'refreshDora', { timeout: 300_000 })({});
       return res.data;
     };
     return { mode, persistence: createFirestoreDoraPersistence(database, leaderUid, { viewAll }), refresh };

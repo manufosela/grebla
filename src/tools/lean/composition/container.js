@@ -37,7 +37,10 @@ export async function createLeanContainer(options = {}) {
       const { app } = await import('../../../lib/firebase.js');
       const { getFunctions, httpsCallable } = await import('firebase/functions');
       const fns = getFunctions(app, 'europe-west1');
-      const res = await httpsCallable(fns, name)({});
+      // El timeout del CLIENTE es 70s por defecto y estas funciones tienen 300s
+      // en servidor: sin esto, un recálculo largo daba «deadline-exceeded» en la
+      // UI aunque la función terminaba bien (RMR-BUG-0046).
+      const res = await httpsCallable(fns, name, { timeout: 300_000 })({});
       return res.data;
     };
     // refresh: recalcula las métricas de flujo desde Linear. discover: auto-descubre
