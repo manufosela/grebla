@@ -12,6 +12,7 @@ import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
 import { groupNotes, summaryGroups, groupPatch, ungroupPatch } from '../../tools/retro/domain/grouping.js';
 import '../app-modal.js';
+import './retro-actions.js';
 
 /** Etiqueta de una columna en el selector del composer («Viento · nos empuja»). */
 const colLabel = (col) => (col.hint ? `${col.title} · ${col.hint}` : col.title);
@@ -24,6 +25,7 @@ export class RetroBoard extends LitElement {
   static properties = {
     retroId: { attribute: false },
     uid: { attribute: false },
+    members: { attribute: false },
     _retro: { state: true },
     _notes: { state: true },
     _drafts: { state: true },
@@ -53,18 +55,43 @@ export class RetroBoard extends LitElement {
     @media (max-width: 760px) { .board { grid-template-columns: 1fr; } }
     /* Escena de velero: viento arriba, ancla abajo, rocas y meta a los lados,
        y el barco (SVG) en el centro (RMR-TSK-0248). */
+    /* ── Escena del barco a lo GRANDE (RMR-TSK-0282) ──────────────────────
+       El dibujo ocupa todo el ancho como lienzo de fondo y las cuatro zonas se
+       colocan ENCIMA, en el sitio que les toca por la metáfora: el viento
+       arriba, las rocas a babor, la isla a estribor y el ancla abajo. Los
+       paneles son translúcidos para que el barco se siga viendo. */
+    /* El barco es una CAPA DE FONDO que ocupa toda la escena; las zonas van en
+       rejilla ENCIMA, con el centro libre para que se vea el dibujo. Se probó
+       posicionarlas en absoluto y se descartó: con contenido de altura variable
+       «Ancla» acababa tapando a «Rocas» e «Isla». */
     .barco-scene {
+      position: relative; min-height: 34rem; padding: 0.5rem 0;
       display: grid; gap: 1rem; align-items: start;
-      grid-template-columns: 1fr 1.15fr 1fr;
-      grid-template-areas: "viento viento viento" "rocas boat isla" "ancla ancla ancla";
+      grid-template-columns: 1fr 1.1fr 1fr;
+      grid-template-areas: "viento viento viento" "rocas . isla" "ancla ancla ancla";
     }
+    .boat-cell {
+      position: absolute; inset: 0; z-index: 0; display: grid; place-items: center;
+      pointer-events: none; /* el dibujo no intercepta clics de las tarjetas */
+    }
+    .boat-svg { width: 100%; height: 100%; max-width: none; opacity: 0.95; }
+    .barco-scene .zone {
+      position: relative; z-index: 1; margin: 0;
+      background: color-mix(in srgb, var(--rm-surface, #fff) 82%, transparent);
+      backdrop-filter: blur(2px);
+    }
+    .zone.z-viento { grid-area: viento; } .zone.z-rocas { grid-area: rocas; }
+    .zone.z-isla { grid-area: isla; } .zone.z-ancla { grid-area: ancla; align-self: end; }
+    /* En pantallas estrechas el solape no cabe: se apila y el barco vuelve a
+       ser una ilustración más, no un lienzo. */
     @media (max-width: 820px) {
-      .barco-scene { grid-template-columns: 1fr; grid-template-areas: "viento" "boat" "rocas" "isla" "ancla"; }
+      .barco-scene { position: static; min-height: 0; grid-template-columns: 1fr; grid-template-areas: none; }
+      .barco-scene .zone { width: auto; background: var(--rm-surface, #fff); backdrop-filter: none; }
+      .boat-cell { position: static; order: 2; }
+      .boat-svg { max-width: 300px; }
+      .zone.z-viento { order: 1; } .zone.z-rocas { order: 3; }
+      .zone.z-isla { order: 4; } .zone.z-ancla { order: 5; }
     }
-    .zone.z-viento { grid-area: viento; } .zone.z-ancla { grid-area: ancla; }
-    .zone.z-rocas { grid-area: rocas; } .zone.z-isla { grid-area: isla; }
-    .boat-cell { grid-area: boat; display: grid; place-items: center; align-self: center; }
-    .boat-svg { width: 100%; max-width: 300px; height: auto; }
 
     .col, .zone { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec); border-radius: 14px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.55rem; }
     .col-h { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 0.92rem; }
@@ -79,7 +106,14 @@ export class RetroBoard extends LitElement {
     .btabs { display: flex; gap: 1.1rem; margin: 0 0 1rem; border-bottom: 1px solid var(--rm-border, #dde7ec); flex-wrap: wrap; }
     .btab { border: 0; background: none; color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.92rem; font-weight: 700; padding: 0.45rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer; }
     .btab.on { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
-    .composer { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr auto; gap: 0.6rem; align-items: start; margin-bottom: 1.1rem; }
+    /* Bloque de inserción: se distingue del tablero con su propia superficie y
+       un filete de acento, para que se lea como «aquí se aporta» (RMR-TSK-0282). */
+    .composer {
+      display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr auto; gap: 0.6rem; align-items: start;
+      margin-bottom: 1.4rem; padding: 0.9rem 1rem;
+      background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec);
+      border-left: 4px solid var(--rm-accent, #2a9d8f); border-radius: 12px;
+    }
     @media (max-width: 640px) { .composer { grid-template-columns: 1fr; } }
     .composer select, .composer textarea { font: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); box-sizing: border-box; width: 100%; resize: vertical; }
     .composer .primary { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); border: 0; border-radius: 8px; padding: 0.55rem 1.1rem; font: inherit; font-weight: 700; cursor: pointer; align-self: start; }
@@ -132,7 +166,9 @@ export class RetroBoard extends LitElement {
     this._retro = null;
     this._notes = [];
     this._drafts = {};
-    /** Pestaña visible del tablero (RMR-TSK-0281). @type {'tablero'|'resumen'} */
+    /** @type {Array<{uid:string,name:string}>} miembros, para asignar acciones */
+    this.members = [];
+    /** Pestaña visible del tablero. @type {'tablero'|'resumen'|'acciones'} */
     this._tab = 'tablero';
     /** Ids de nota seleccionados para agrupar. @type {string[]} */
     this._selected = [];
@@ -309,6 +345,28 @@ export class RetroBoard extends LitElement {
     </div>`;
   }
 
+  /** Contenido de la pestaña activa (extraído: evita ternarios anidados). */
+  _renderTabBody(format, cols, boardStyle) {
+    if (this._tab === 'resumen') {
+      return html`${this._renderResumen(cols)}${this._renderGroupBar()}`;
+    }
+    if (this._tab === 'acciones') {
+      // Las acciones viven aquí (RMR-TSK-0282); antes colgaban sueltas bajo el
+      // tablero, alargando la página y compitiendo con el barco.
+      return html`<retro-actions
+        .retroId=${this.retroId}
+        .uid=${this.uid}
+        .leaderUid=${this._retro?.ownerLeaderUid ?? null}
+        .scope=${this._retro?.scope ?? null}
+        .members=${this.members ?? []}
+      ></retro-actions>`;
+    }
+    return html`
+      ${this._renderComposer(cols)}
+      ${this._renderLayout(format, cols, boardStyle)}
+    `;
+  }
+
   /** Cuerpo del tablero según el formato (extraído: evita ternarios anidados). */
   _renderLayout(format, cols, boardStyle) {
     if (format?.kind === 'barco') return this._renderBarco(cols);
@@ -470,13 +528,10 @@ export class RetroBoard extends LitElement {
           @click=${() => { this._tab = 'tablero'; }}>Tablero</button>
         <button role="tab" aria-selected=${this._tab === 'resumen'} class="btab ${this._tab === 'resumen' ? 'on' : ''}"
           @click=${() => { this._tab = 'resumen'; }}>Resumen</button>
+        <button role="tab" aria-selected=${this._tab === 'acciones'} class="btab ${this._tab === 'acciones' ? 'on' : ''}"
+          @click=${() => { this._tab = 'acciones'; }}>Acciones</button>
       </div>
-      ${this._tab === 'resumen'
-        ? html`${this._renderResumen(cols)}${this._renderGroupBar()}`
-        : html`
-            ${this._renderComposer(cols)}
-            ${this._renderLayout(format, cols, boardStyle)}
-          `}
+      ${this._renderTabBody(format, cols, boardStyle)}
       ${this._renderCardPopup()}
     `;
   }
