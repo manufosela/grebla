@@ -12,6 +12,9 @@ import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
 import { groupNotes, summaryGroups, groupPatch, ungroupPatch } from '../../tools/retro/domain/grouping.js';
 import '../app-modal.js';
+
+/** Etiqueta de una columna en el selector del composer («Viento · nos empuja»). */
+const colLabel = (col) => (col.hint ? `${col.title} · ${col.hint}` : col.title);
 import { getRetro, listNotes, addNote, voteNote, unvoteNote, editNote, deleteNote , setNoteGroups } from '../../lib/retros.js';
 
 /** Emoji de cada zona del Barco. */
@@ -223,14 +226,14 @@ export class RetroBoard extends LitElement {
 
   // ── Composer único, selección y agrupación (RMR-TSK-0281) ──────────────────
 
-  /** Un ÚNICO formulario para todo el tablero: se elige el tipo y se escribe. */
+  /** Un ÚNICO formulario, común a las cuatro zonas: se elige el tipo y se escribe. */
   _renderComposer(cols) {
     if (!this._open) return null;
     const text = this._composerText.trim();
     return html`<div class="composer">
       <select aria-label="Tipo de tarjeta" .value=${this._composerCol}
         @change=${(e) => { this._composerCol = e.target.value; }}>
-        ${cols.map((c) => html`<option value=${c.id} ?selected=${c.id === this._composerCol}>${c.title}${c.hint ? ` · ${c.hint}` : ''}</option>`)}
+        ${cols.map((c) => html`<option value=${c.id} ?selected=${c.id === this._composerCol}>${colLabel(c)}</option>`)}
       </select>
       <textarea rows="2" placeholder="Escribe tu tarjeta…" .value=${this._composerText}
         @input=${(e) => { this._composerText = e.target.value; }}></textarea>
@@ -304,6 +307,12 @@ export class RetroBoard extends LitElement {
         </span>
       </button>
     </div>`;
+  }
+
+  /** Cuerpo del tablero según el formato (extraído: evita ternarios anidados). */
+  _renderLayout(format, cols, boardStyle) {
+    if (format?.kind === 'barco') return this._renderBarco(cols);
+    return html`<div class="board" style=${boardStyle}>${cols.map((c) => this._renderColumn(c))}</div>`;
   }
 
   /** Bloque «agrupada con» del popup (extraído: evita ternarios anidados). */
@@ -466,9 +475,7 @@ export class RetroBoard extends LitElement {
         ? html`${this._renderResumen(cols)}${this._renderGroupBar()}`
         : html`
             ${this._renderComposer(cols)}
-            ${format?.kind === 'barco'
-              ? this._renderBarco(cols)
-              : html`<div class="board" style=${boardStyle}>${cols.map((c) => this._renderColumn(c))}</div>`}
+            ${this._renderLayout(format, cols, boardStyle)}
           `}
       ${this._renderCardPopup()}
     `;
