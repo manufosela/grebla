@@ -99,6 +99,9 @@ export class RetroBoard extends LitElement {
     .res-col h4 { margin: 0 0 0.4rem; font-size: 0.95rem; }
     .res-col ol { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.35rem; }
     .res-col li { font-size: 0.88rem; display: flex; align-items: baseline; gap: 0.5rem; }
+    .res-help { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.25rem; }
+    .res-col li .pick { accent-color: var(--rm-accent, #2a9d8f); flex: 0 0 auto; }
+    .res-col .ghost.mini { border: 0; background: none; color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0; }
     .res-votes { font-weight: 800; color: var(--rm-accent, #2a9d8f); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .note { background: var(--rm-field, #eef2f6); border: 1px solid var(--rm-border, #e7f0f0); border-radius: 10px; padding: 0.55rem 0.65rem; font-size: 0.85rem; }
     .note .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 0.45rem; gap: 0.4rem; }
@@ -287,17 +290,12 @@ export class RetroBoard extends LitElement {
     }
   }
 
-  /** Tarjeta PEQUEÑA: se abre en popup al hacer clic (RMR-TSK-0281). */
+  /** Tarjeta PEQUEÑA del tablero: se abre en popup al hacer clic. Sin checkbox
+   *  a propósito — agrupar se hace en la pestaña Resumen, para no recargar el
+   *  tablero (y menos aún el barco) con controles de facilitación. */
   _renderCard(group) {
-    const selected = this._selected.includes(group.id);
     const many = group.notes.length > 1;
-    return html`<div class="card ${selected ? 'sel' : ''}">
-      ${this._open
-        ? html`<input class="pick" type="checkbox" .checked=${selected}
-            aria-label="Seleccionar para agrupar"
-            @click=${(e) => e.stopPropagation()}
-            @change=${() => this._toggleSelect(group.id)} />`
-        : null}
+    return html`<div class="card">
       <button class="card-body" @click=${() => { this._openNoteId = group.id; }}>
         <span class="card-text">${group.text}</span>
         <span class="card-foot">
@@ -343,6 +341,7 @@ export class RetroBoard extends LitElement {
     const all = summaryGroups(this._notes);
     if (all.length === 0) return html`<p class="empty">Aún no hay tarjetas.</p>`;
     return html`<div class="resumen">
+      ${this._open ? html`<p class="res-help">Marca dos o más tarjetas que digan lo mismo y agrúpalas.</p>` : null}
       ${cols.map((col) => {
         const groups = all.filter((g) => g.columnId === col.id);
         if (groups.length === 0) return null;
@@ -350,9 +349,17 @@ export class RetroBoard extends LitElement {
           <h4 class="a-${col.accent}">${col.title}</h4>
           <ol>
             ${groups.map((g) => html`<li>
+              ${this._open
+                ? html`<input class="pick" type="checkbox" .checked=${this._selected.includes(g.id)}
+                    aria-label="Seleccionar «${g.text}» para agrupar"
+                    @change=${() => this._toggleSelect(g.id)} />`
+                : null}
               <span class="res-votes">👍 ${g.votes}</span>
               <span class="res-text">${g.text}</span>
-              ${g.notes.length > 1 ? html`<span class="xn">×${g.notes.length}</span>` : null}
+              ${g.notes.length > 1
+                ? html`<span class="xn">×${g.notes.length}</span>
+                       ${this._open ? html`<button class="ghost mini" @click=${() => this._ungroup(g.id)}>deshacer</button>` : null}`
+                : null}
             </li>`)}
           </ol>
         </section>`;
@@ -442,13 +449,12 @@ export class RetroBoard extends LitElement {
           @click=${() => { this._tab = 'resumen'; }}>Resumen</button>
       </div>
       ${this._tab === 'resumen'
-        ? this._renderResumen(cols)
+        ? html`${this._renderResumen(cols)}${this._renderGroupBar()}`
         : html`
             ${this._renderComposer(cols)}
             ${format?.kind === 'barco'
               ? this._renderBarco(cols)
               : html`<div class="board" style=${boardStyle}>${cols.map((c) => this._renderColumn(c))}</div>`}
-            ${this._renderGroupBar()}
           `}
       ${this._renderCardPopup()}
     `;
