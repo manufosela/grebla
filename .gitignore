@@ -32,7 +32,11 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 .idea/
-.karajan/
+# Karajan v4: el CONTRATO del método se trackea (gate, hooks, roles y reglas)
+# para que lo herede cualquiera que clone; los veredictos y cachés locales, no.
+.karajan/cache/
+.karajan/verdicts/
+.karajan/*.log
 .reviews/
 coverage/
 .scannerwork/
