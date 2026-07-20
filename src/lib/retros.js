@@ -62,6 +62,23 @@ export function closeRetro(retroId) {
   return updateDoc(doc(db, 'retros', retroId), { status: 'closed', closedAt: serverTimestamp() });
 }
 
+/**
+ * Borra una retro y SUS NOTAS (RMR-TSK-0280).
+ *
+ * Firestore NO borra las subcolecciones al borrar el documento padre: si solo
+ * se borrara `/retros/{id}`, las notas quedarían huérfanas ocupando espacio y
+ * sin forma de llegar a ellas desde la app. Por eso se vacía `notes` primero.
+ *
+ * Las ACCIONES (`/retroActions`) no se tocan a propósito: persisten entre retros
+ * hasta que se cierran, así que sobreviven a la retro que las originó.
+ * @param {string} retroId
+ */
+export async function deleteRetro(retroId) {
+  const notes = await getDocs(collection(db, 'retros', retroId, 'notes'));
+  await Promise.all(notes.docs.map((n) => deleteDoc(n.ref)));
+  await deleteDoc(doc(db, 'retros', retroId));
+}
+
 // ── Notas (anónimas + votos) ─────────────────────────────────────────────────
 
 /** @param {string} retroId @param {string} columnId @param {string} text @param {string} authorUid */
