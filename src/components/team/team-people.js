@@ -22,6 +22,8 @@ import {
   transferOwnership,
   releaseOwnership,
   listLabels,
+  listSquads,
+  squadNames,
   addLabel,
   listGuilds,
   addGuild,
@@ -50,6 +52,7 @@ export class TeamPeople extends LitElement {
     framework: { attribute: false },
     people: { state: true },
     labels: { state: true },
+    squads: { state: true },
     guilds: { state: true },
     users: { state: true },
     loading: { state: true },
@@ -225,6 +228,8 @@ export class TeamPeople extends LitElement {
     this.people = [];
     /** @type {import('../../tools/team/domain/types.js').Label[]} */
     this.labels = [];
+    /** @type {{id:string,name:string}[]} catálogo de squads (RMR-TSK-0276) */
+    this.squads = [];
     /** @type {import('../../tools/team/domain/types.js').Guild[]} */
     this.guilds = [];
     /** @type {Array<{ uid: string, displayName: string|null, email: string|null }>} directorio /users (para vincular cuenta) */
@@ -279,14 +284,16 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [people, labels, guilds, users] = await Promise.all([
+      const [people, labels, guilds, users, squads] = await Promise.all([
         listActivePeople(this.persistence),
         listLabels(this.persistence),
         listGuilds(this.persistence),
         listUsers(),
+        listSquads(this.persistence).catch(() => []),
       ]);
       this.people = people;
       this.labels = labels;
+      this.squads = squads;
       this.guilds = guilds;
       this.users = users;
     } catch (err) {
@@ -481,7 +488,7 @@ export class TeamPeople extends LitElement {
           <tr>
             ${this._sortableTh('name', 'Nombre')}
             ${this.isAdmin ? this._sortableTh('leader', 'Manager') : null}
-            <th>Carrera</th><th>Gremios</th><th>Labels</th>
+            <th>Carrera</th><th>Gremios</th><th>Squads</th>
             ${this._sortableTh('startDate', 'Desde')}
             <th>Acciones</th>
           </tr>
@@ -558,7 +565,7 @@ export class TeamPeople extends LitElement {
         ${this.isAdmin ? html`<td>${this._renderLeaderCell(p)}</td>` : null}
         <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
         <td>${this._renderChips(p.guilds)}</td>
-        <td>${this._renderChips(p.labels, true)}</td>
+        <td>${this._renderChips(squadNames(p.squadIds, this.squads))}</td>
         <td>${formatDate(p.startDate)}</td>
         <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
       </tr>`;
