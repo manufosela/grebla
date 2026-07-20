@@ -11,12 +11,13 @@ import { LitElement, html, css } from 'lit';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
 import { groupNotes, summaryGroups, groupPatch, ungroupPatch } from '../../tools/retro/domain/grouping.js';
+import { isColumnRevealed, canReadGroup, canReveal, revealPatch } from '../../tools/retro/domain/visibility.js';
 import '../app-modal.js';
 import './retro-actions.js';
 
 /** Etiqueta de una columna en el selector del composer («Viento · nos empuja»). */
 const colLabel = (col) => (col.hint ? `${col.title} · ${col.hint}` : col.title);
-import { getRetro, listNotes, addNote, voteNote, unvoteNote, editNote, deleteNote , setNoteGroups } from '../../lib/retros.js';
+import { getRetro, listNotes, addNote, voteNote, unvoteNote, editNote, deleteNote, setNoteGroups, setRetroReveal } from '../../lib/retros.js';
 
 /** Emoji de cada zona del Barco. */
 const BARCO_ICON = { viento: '🌬️', ancla: '⚓', rocas: '🪨', isla: '🏝️' };
@@ -26,6 +27,7 @@ export class RetroBoard extends LitElement {
     retroId: { attribute: false },
     uid: { attribute: false },
     members: { attribute: false },
+    isSuperAdmin: { attribute: false },
     _retro: { state: true },
     _notes: { state: true },
     _drafts: { state: true },
@@ -118,6 +120,20 @@ export class RetroBoard extends LitElement {
     .composer select, .composer textarea { font: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); box-sizing: border-box; width: 100%; resize: vertical; }
     .composer .primary { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); border: 0; border-radius: 8px; padding: 0.55rem 1.1rem; font: inherit; font-weight: 700; cursor: pointer; align-self: start; }
     .composer .primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* ── Tarjetas ocultas hasta revelar (RMR-TSK-0283) ────────────────────
+       Difuminado + sin selección: se ve que HAY tarjeta y cuánta, pero no se
+       puede leer ni copiar de un vistazo. Es ocultación de facilitación, no un
+       secreto: el texto está en el cliente. */
+    .blurred { filter: blur(5px); user-select: none; opacity: 0.85; }
+    .card-body[disabled] { cursor: default; }
+    .col-h .eye { margin-left: auto; }
+    .eye { border: 0; background: none; font-size: 0.95rem; line-height: 1; padding: 0.1rem 0.2rem; cursor: pointer; border-radius: 6px; }
+    .eye:hover { background: var(--rm-surface-hover, #eef3f5); }
+    .reveal-bar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0 0 1rem; }
+    .reveal-note { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
+    .reveal-bar .reveal-note { margin: 0; flex: 1; min-width: 12rem; }
+    .reveal-all { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 999px; font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.35rem 0.9rem; cursor: pointer; }
+    .reveal-all:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .cards { display: flex; flex-wrap: wrap; gap: 0.45rem; }
     .card { position: relative; display: flex; align-items: flex-start; gap: 0.3rem; background: var(--rm-field, #eef2f6); border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; max-width: 12rem; }
     .card.sel { border-color: var(--rm-accent, #2a9d8f); box-shadow: 0 0 0 2px color-mix(in srgb, var(--rm-accent, #2a9d8f) 30%, transparent); }
@@ -168,6 +184,8 @@ export class RetroBoard extends LitElement {
     this._drafts = {};
     /** @type {Array<{uid:string,name:string}>} miembros, para asignar acciones */
     this.members = [];
+    /** Un superadmin también facilita (revelar zonas), aunque no sea el dueño. */
+    this.isSuperAdmin = false;
     /** Pestaña visible del tablero. @type {'tablero'|'resumen'|'acciones'} */
     this._tab = 'tablero';
     /** Ids de nota seleccionados para agrupar. @type {string[]} */
@@ -334,9 +352,14 @@ export class RetroBoard extends LitElement {
    *  tablero (y menos aún el barco) con controles de facilitación. */
   _renderCard(group) {
     const many = group.notes.length > 1;
+    // Oculta: se difumina y NO se abre. Votar o comentar algo que no se ha leído
+    // es justo lo que se quiere evitar hasta que la zona se revele.
+    const hidden = !this._canRead(group);
     return html`<div class="card">
-      <button class="card-body" @click=${() => { this._openNoteId = group.id; }}>
-        <span class="card-text">${group.text}</span>
+      <button class="card-body" ?disabled=${hidden}
+        aria-label=${hidden ? 'Tarjeta oculta hasta que se revele la zona' : ''}
+        @click=${() => { this._openNoteId = group.id; }}>
+        <span class="card-text ${hidden ? 'blurred' : ''}" aria-hidden=${hidden}>${group.text}</span>
         <span class="card-foot">
           ${many ? html`<span class="xn" title="${group.notes.length} tarjetas agrupadas">×${group.notes.length}</span>` : null}
           <span class="votes">👍 ${group.votes}</span>
@@ -363,6 +386,7 @@ export class RetroBoard extends LitElement {
     }
     return html`
       ${this._renderComposer(cols)}
+      ${this._renderRevealBar(cols)}
       ${this._renderLayout(format, cols, boardStyle)}
     `;
   }
@@ -400,7 +424,9 @@ export class RetroBoard extends LitElement {
   _renderCardPopup() {
     if (!this._openNoteId) return null;
     const group = groupNotes(this._notes).find((g) => g.id === this._openNoteId);
-    if (!group) return null;
+    // Si la zona se vuelve a ocultar con el popup abierto, se cierra: nada de
+    // dejar el texto a la vista por una carrera de estados.
+    if (!group || !this._canRead(group)) return null;
     const primary = group.notes.find((n) => n.id === group.id) ?? group.notes[0];
     const mine = primary?.authorUid === this.uid;
     const voted = (primary?.voters ?? []).includes(this.uid);
@@ -439,7 +465,7 @@ export class RetroBoard extends LitElement {
                     @change=${() => this._toggleSelect(g.id)} />`
                 : null}
               <span class="res-votes">👍 ${g.votes}</span>
-              <span class="res-text">${g.text}</span>
+              <span class="res-text ${this._canRead(g) ? '' : 'blurred'}">${g.text}</span>
               ${this._renderGroupBadge(g)}
             </li>`)}
           </ol>
@@ -450,6 +476,53 @@ export class RetroBoard extends LitElement {
 
 
 
+  // ── Tarjetas ocultas y revelado por zona (RMR-TSK-0283) ────────────────────
+
+  /** ¿Facilita esta persona? Solo entonces se pintan los controles de revelado. */
+  get _canReveal() { return canReveal(this._retro, this.uid, this.isSuperAdmin); }
+
+  /** @param {{columnId?: string}} group */
+  _canRead(group) { return canReadGroup(group, this.uid, this._retro); }
+
+  /** Revela u oculta zonas. Es un acto de facilitación: se guarda en la retro
+   *  para que el cambio se vea a la vez en todas las pantallas. */
+  async _setRevealed(columnIds, revealed) {
+    try {
+      await setRetroReveal(this.retroId, revealPatch(columnIds, revealed));
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo cambiar la visibilidad.';
+    }
+  }
+
+  /** Ojo de una zona: la revela u oculta solo a ella. */
+  _renderEye(col) {
+    if (!this._canReveal || !this._open) return null;
+    const shown = isColumnRevealed(this._retro, col.id);
+    const label = `${shown ? 'Ocultar' : 'Mostrar'} las tarjetas de ${col.title}`;
+    return html`<button class="eye" title=${label} aria-label=${label}
+      @click=${() => this._setRevealed([col.id], !shown)}>${shown ? '👁️' : '🙈'}</button>`;
+  }
+
+  /** Barra sobre el tablero: al que facilita le da el interruptor general; al
+   *  resto, la explicación de por qué no ve las tarjetas de los demás. */
+  _renderRevealBar(cols) {
+    if (!this._open) return null;
+    const ids = cols.map((c) => c.id);
+    if (!this._canReveal) {
+      if (ids.every((id) => isColumnRevealed(this._retro, id))) return null;
+      return html`<p class="reveal-note">🙈 Las tarjetas del resto están ocultas hasta que quien
+        facilita revele cada zona. Las tuyas las ves siempre.</p>`;
+    }
+    const allShown = ids.every((id) => isColumnRevealed(this._retro, id));
+    return html`<div class="reveal-bar">
+      <span class="reveal-note">Las tarjetas nacen ocultas. Revélalas por zona con su ojo, o todas de golpe.</span>
+      <button class="reveal-all" @click=${() => this._setRevealed(ids, !allShown)}>
+        ${allShown ? '🙈 Ocultar todas' : '👁️ Mostrar todas'}
+      </button>
+    </div>`;
+  }
+
   /** Grupos de una columna (una tarjeta por grupo, no por nota). */
   _groupsFor(columnId) {
     return groupNotes(this._notesFor(columnId));
@@ -458,7 +531,7 @@ export class RetroBoard extends LitElement {
   _renderColumn(col) {
     const groups = this._groupsFor(col.id);
     return html`<div class="col">
-      <div class="col-h a-${col.accent}"><span class="dot"></span>${col.title}</div>
+      <div class="col-h a-${col.accent}"><span class="dot"></span>${col.title}${this._renderEye(col)}</div>
       ${groups.length ? html`<div class="cards">${groups.map((g) => this._renderCard(g))}</div>` : html`<p class="empty">Sin notas aún.</p>`}
     </div>`;
   }
@@ -466,7 +539,7 @@ export class RetroBoard extends LitElement {
   _renderZone(col) {
     const groups = this._groupsFor(col.id);
     return html`<div class="zone a-${col.accent} z-${col.id}">
-      <div class="col-h a-${col.accent}">${BARCO_ICON[col.id] ?? ''} ${col.title}</div>
+      <div class="col-h a-${col.accent}">${BARCO_ICON[col.id] ?? ''} ${col.title}${this._renderEye(col)}</div>
       ${col.hint ? html`<p class="zhint">${col.hint}</p>` : null}
       ${groups.length ? html`<div class="cards">${groups.map((g) => this._renderCard(g))}</div>` : html`<p class="empty">Sin notas aún.</p>`}
     </div>`;

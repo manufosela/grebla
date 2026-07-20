@@ -38,10 +38,24 @@ export async function createRetro(data) {
       label: data.scope?.label ?? null,
     },
     status: 'open',
+    // Zonas reveladas por quien facilita (RMR-TSK-0283). Arranca vacío: las
+    // tarjetas nacen ocultas para que nadie copie ni se ancle en lo ya escrito.
+    revealed: {},
     createdAt: serverTimestamp(),
     closedAt: null,
   });
   return ref.id;
+}
+
+/**
+ * Revela u oculta zonas de una retro (RMR-TSK-0283). Recibe lo que devuelve
+ * `revealPatch` del dominio: claves `revealed.<columnId>`.
+ * Solo lo puede hacer el líder dueño (o un superadmin): lo imponen las reglas.
+ * @param {string} retroId
+ * @param {Record<string, boolean>} patch
+ */
+export function setRetroReveal(retroId, patch) {
+  return updateDoc(doc(db, 'retros', retroId), patch);
 }
 
 /** Retros de un líder, más recientes primero. @param {string} ownerLeaderUid */
@@ -81,10 +95,16 @@ export async function deleteRetro(retroId) {
 
 // ── Notas (anónimas + votos) ─────────────────────────────────────────────────
 
-/** @param {string} retroId @param {string} columnId @param {string} text @param {string} authorUid */
+/**
+ * Añade una nota. Nace con el VOTO DE SU AUTOR (RMR-TSK-0283): quien la escribe
+ * ya está votándola al proponerla, y así el recuento no arranca en cero.
+ * @param {string} retroId @param {string} columnId @param {string} text @param {string} authorUid
+ */
 export async function addNote(retroId, columnId, text, authorUid) {
   const ref = await addDoc(collection(db, 'retros', retroId, 'notes'), {
-    columnId, text: String(text ?? '').trim(), authorUid, voters: [], createdAt: serverTimestamp(),
+    columnId, text: String(text ?? '').trim(), authorUid,
+    voters: authorUid ? [authorUid] : [],
+    createdAt: serverTimestamp(),
   });
   return ref.id;
 }
