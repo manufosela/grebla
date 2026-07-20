@@ -22,7 +22,8 @@ export async function interpretMetrics({ tool, summary }) {
   const { app } = await import('./firebase.js');
   const { getFunctions, httpsCallable } = await import('firebase/functions');
   const fns = getFunctions(app, 'europe-west1');
-  const res = await httpsCallable(fns, 'interpretMetrics')({ tool, summary });
+  // Timeout de cliente alineado con los 120s de la función (RMR-BUG-0046).
+  const res = await httpsCallable(fns, 'interpretMetrics', { timeout: 120_000 })({ tool, summary });
   const data = /** @type {{ interpretation: unknown }} */ (res.data);
   return withMeta(data?.interpretation);
 }
