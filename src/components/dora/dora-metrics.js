@@ -177,7 +177,7 @@ export class DoraMetrics extends LitElement {
           ? html`<p class="note">${g.changesPending} ${g.changesPending === 1 ? 'cambio sin desplegar' : 'cambios sin desplegar'} (mergeados pero aún no en producción).</p>`
           : null}
         ${g.leadTimeApproxCount > 0
-          ? html`<p class="note">Algunos primeros commits son aproximados por el límite de la API pública de GitHub (60/h sin token); un token de acceso lo resuelve.</p>`
+          ? html`<p class="note">${g.leadTimeApproxCount} ${g.leadTimeApproxCount === 1 ? 'lead time es aproximado' : 'lead times son aproximados'}: no se pudo leer el primer commit de esas PRs (límite de la API de GitHub o PR sin fecha). El resto son exactos.</p>`
           : null}
         ${hasDeploys
           ? html`<p class="note">Change Failure Rate = % de despliegues en producción que fallaron (${g.deploymentsFailed}/${g.deploymentsTotal}), sobre los despliegues registrados manualmente (D1). Métrica real, no proxy.</p>`

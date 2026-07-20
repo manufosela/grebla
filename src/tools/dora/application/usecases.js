@@ -40,18 +40,34 @@ export function normalizeBaseBranch(v) {
  * (no ramas de entorno dev→staging→main): la mayoría de repos despliegan por
  * push/merge a una rama ('branch'); algunos por GitHub Release ('release') o por
  * tag que casa un patrón ('tag', p. ej. hoop-api `YYYY.MM.DD.N` o tribbu-infra
- * `prod-*`); y los que despliegan fuera de GitHub (cron/Forge/móvil) no tienen
- * señal observable ('manual'): su frecuencia sale solo de eventos registrados.
+ * `prod-*`); los que despliegan por un JOB de GitHub Actions ('workflow', p. ej.
+ * el nocturno de Fastlane o un push→Cloud Run) declaran su fichero de workflow y
+ * la frecuencia sale de sus runs exitosos (y el CFR de los fallidos); y los que
+ * despliegan fuera de GitHub sin job observable no tienen señal ('manual'): su
+ * frecuencia sale solo de eventos registrados a mano.
  */
-export const DEPLOY_SIGNALS = Object.freeze(['branch', 'release', 'tag', 'manual']);
+export const DEPLOY_SIGNALS = Object.freeze(['branch', 'release', 'tag', 'workflow', 'manual']);
 
 /**
  * Normaliza la señal de despliegue a una de DEPLOY_SIGNALS. Default 'branch'.
  * @param {string} [v]
- * @returns {'branch'|'release'|'tag'|'manual'}
+ * @returns {'branch'|'release'|'tag'|'workflow'|'manual'}
  */
 export function normalizeDeploySignal(v) {
   return DEPLOY_SIGNALS.includes(v) ? v : 'branch';
+}
+
+/**
+ * Normaliza el fichero de workflow usado cuando la señal es 'workflow'. Acepta
+ * el nombre del fichero (`testflight.yml`) o la ruta completa; se queda con el
+ * basename, que es lo que admite la API de Actions. Vacío si no aplica.
+ * @param {string} [v]
+ * @returns {string}
+ */
+export function normalizeWorkflowFile(v) {
+  const raw = String(v ?? '').trim();
+  if (!raw) return '';
+  return raw.split('/').at(-1) ?? '';
 }
 
 /**
@@ -88,6 +104,7 @@ export function addRepo(persistence, input) {
     baseBranch: normalizeBaseBranch(input.baseBranch),
     deploySignal: normalizeDeploySignal(input.deploySignal),
     tagPattern: normalizeTagPattern(input.tagPattern),
+    workflowFile: normalizeWorkflowFile(input.workflowFile),
     startDate: input.startDate || null,
     createdAt: new Date().toISOString(),
   });
@@ -99,7 +116,7 @@ export function addRepo(persistence, input) {
  * configuración, normalizada igual que en addRepo.
  * @param {DoraPersistence} persistence
  * @param {string} id
- * @param {{ team?: string|null, guilds?: string[], baseBranch?: string, deploySignal?: string, tagPattern?: string }} input
+ * @param {{ team?: string|null, guilds?: string[], baseBranch?: string, deploySignal?: string, tagPattern?: string, workflowFile?: string }} input
  * @returns {Promise<void>}
  */
 export function updateRepoConfig(persistence, id, input) {
@@ -108,6 +125,7 @@ export function updateRepoConfig(persistence, id, input) {
     baseBranch: normalizeBaseBranch(input.baseBranch),
     deploySignal: normalizeDeploySignal(input.deploySignal),
     tagPattern: normalizeTagPattern(input.tagPattern),
+    workflowFile: normalizeWorkflowFile(input.workflowFile),
   });
 }
 

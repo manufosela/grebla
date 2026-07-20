@@ -78,6 +78,7 @@ export class DoraRepos extends LitElement {
     _editBranch: { state: true },
     _editSignal: { state: true },
     _editTagPattern: { state: true },
+    _editWorkflowFile: { state: true },
     _deployOpen: { state: true },
     _deployEvents: { state: true },
     _deployLoading: { state: true },
@@ -183,6 +184,7 @@ export class DoraRepos extends LitElement {
     this._editBranch = '';
     this._editSignal = 'branch';
     this._editTagPattern = '';
+    this._editWorkflowFile = '';
     /** @type {string|null} id del repo con el panel de despliegues abierto */
     this._deployOpen = null;
     /** @type {import('../../tools/dora/domain/types.js').Deployment[]} */
@@ -264,6 +266,7 @@ export class DoraRepos extends LitElement {
     this._editBranch = repo.baseBranch || 'main';
     this._editSignal = repo.deploySignal || 'branch';
     this._editTagPattern = repo.tagPattern || '';
+    this._editWorkflowFile = repo.workflowFile || '';
   }
 
   _cancelEdit() {
@@ -273,6 +276,7 @@ export class DoraRepos extends LitElement {
     this._editBranch = '';
     this._editSignal = 'branch';
     this._editTagPattern = '';
+    this._editWorkflowFile = '';
   }
 
   async _saveEdit(id) {
@@ -284,6 +288,7 @@ export class DoraRepos extends LitElement {
         baseBranch: this._editBranch,
         deploySignal: this._editSignal,
         tagPattern: this._editTagPattern,
+        workflowFile: this._editWorkflowFile,
       });
       this._cancelEdit();
       await this._load();
@@ -748,6 +753,7 @@ export class DoraRepos extends LitElement {
             <option value="branch" ?selected=${this._editSignal === 'branch'}>rama (merge)</option>
             <option value="release" ?selected=${this._editSignal === 'release'}>GitHub Release</option>
             <option value="tag" ?selected=${this._editSignal === 'tag'}>tag (patrón)</option>
+            <option value="workflow" ?selected=${this._editSignal === 'workflow'}>workflow (Actions)</option>
             <option value="manual" ?selected=${this._editSignal === 'manual'}>manual (eventos)</option>
           </select>
           ${this._editSignal === 'branch'
@@ -755,6 +761,10 @@ export class DoraRepos extends LitElement {
             : null}
           ${this._editSignal === 'tag'
             ? html`<input class="edit-in" placeholder="regex, p. ej. ^prod-" .value=${this._editTagPattern} @input=${(e) => { this._editTagPattern = e.target.value; }} />`
+            : null}
+          ${this._editSignal === 'workflow'
+            ? html`<input class="edit-in" placeholder="p. ej. testflight.yml" title="Fichero del workflow de Actions que despliega"
+                .value=${this._editWorkflowFile} @input=${(e) => { this._editWorkflowFile = e.target.value; }} />`
             : null}
         </td>
       `;

@@ -18,6 +18,7 @@ import {
   removeIncident,
   normalizeDeploySignal,
   normalizeTagPattern,
+  normalizeWorkflowFile,
   DEPLOY_SIGNALS,
 } from './usecases.js';
 
@@ -28,17 +29,25 @@ describe('DORA — taxonomía de señal de despliegue', () => {
     p = createMemoryDoraPersistence();
   });
 
-  it('DEPLOY_SIGNALS cubre el modelo real (branch/release/tag/manual)', () => {
-    expect([...DEPLOY_SIGNALS]).toEqual(['branch', 'release', 'tag', 'manual']);
+  it('DEPLOY_SIGNALS cubre el modelo real (branch/release/tag/workflow/manual)', () => {
+    expect([...DEPLOY_SIGNALS]).toEqual(['branch', 'release', 'tag', 'workflow', 'manual']);
   });
 
   it('normalizeDeploySignal acepta los válidos y cae a branch en lo demás', () => {
     expect(normalizeDeploySignal('release')).toBe('release');
     expect(normalizeDeploySignal('tag')).toBe('tag');
     expect(normalizeDeploySignal('manual')).toBe('manual');
+    expect(normalizeDeploySignal('workflow')).toBe('workflow');
     expect(normalizeDeploySignal('branch')).toBe('branch');
     expect(normalizeDeploySignal('cualquiera')).toBe('branch');
     expect(normalizeDeploySignal(undefined)).toBe('branch');
+  });
+
+  it('normalizeWorkflowFile se queda con el basename del workflow', () => {
+    expect(normalizeWorkflowFile('.github/workflows/testflight.yml')).toBe('testflight.yml');
+    expect(normalizeWorkflowFile('  android-nightly.yml  ')).toBe('android-nightly.yml');
+    expect(normalizeWorkflowFile('')).toBe('');
+    expect(normalizeWorkflowFile(undefined)).toBe('');
   });
 
   it('normalizeTagPattern recorta, admite vacío y rechaza regex inválida', () => {
