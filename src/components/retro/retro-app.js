@@ -98,8 +98,7 @@ export class RetroApp extends LitElement {
       <div class="detail">
         <button class="back" @click=${() => this._backToList()}>← Volver a las retros</button>
         <retro-carryover .retroId=${r.id} .uid=${this.uid} .leaderUid=${r.ownerLeaderUid} .scope=${r.scope} .members=${this.members}></retro-carryover>
-        <retro-board .retroId=${r.id} .uid=${this.uid}></retro-board>
-        <retro-actions .retroId=${r.id} .uid=${this.uid} .leaderUid=${r.ownerLeaderUid} .scope=${r.scope} .members=${this.members}></retro-actions>
+        <retro-board .retroId=${r.id} .uid=${this.uid} .members=${this.members ?? []}></retro-board>
       </div>`;
   }
 
