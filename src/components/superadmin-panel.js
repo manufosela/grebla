@@ -843,7 +843,7 @@ export class SuperadminPanel extends LitElement {
           .readOnly=${this.readOnly}
           .currentUid=${this.currentUid}
           .leaders=${this.leaders}
-          .withMeta=${kind === 'labels'}
+          .withMeta=${kind === 'labels' || kind === 'squads'}
           placeholder="Nuevo global…"
         ></catalog-manager>
       </section>

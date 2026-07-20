@@ -16,6 +16,7 @@ import { getOrgConfig } from '../lib/firestore.js';
 import { composeTitle } from '../tools/career/data/framework.js';
 import { ROLES } from '../data/roles.js';
 import { ITEMS, DIMENSIONS } from '../data/items.js';
+import { listSquadsCatalog } from '../lib/squads.js';
 
 const identity = document.getElementById('engineer-identity');
 const errorBox = document.getElementById('engineer-error');
@@ -53,15 +54,17 @@ onUserChanged(async (user) => {
     // Carga en paralelo del contenido de las secciones (de solo lectura). El
     // O2O va por Cloud Function y es NO crítico: si falla, la vista sigue con el
     // resto y «Mis O2O» queda vacío (no tumba «Mi espacio»).
-    const [framework, profile, career, o2o, orgConfig] = await Promise.all([
+    const [framework, profile, career, o2o, orgConfig, squads] = await Promise.all([
       getFramework(),
       getMyRoleMirrorProfile(person.id),
       getMyCareerMap(person.id),
       getMyO2O().catch(() => null),
       getOrgConfig().catch(() => null),
+      // Catálogo de squads: para que el ingeniero vea su squad en su ficha.
+      listSquadsCatalog().catch(() => []),
     ]);
     renderIdentity(person, framework);
-    renderSpace(person, framework, profile, career, o2o, orgConfig);
+    renderSpace(person, framework, profile, career, o2o, orgConfig, squads);
     if (space) space.selfOwned = selfOwned;
     // Con los datos ya cargados se revela de una vez (cabecera + espacio) y se
     // quita el skeleton — sin salto de layout (RMR-TSK-0263).
@@ -85,7 +88,7 @@ onUserChanged(async (user) => {
  * @param {import('../lib/scoring.js').OrgConfig|null} orgConfig  config de organización (para el cálculo del rol)
  * @returns {void}
  */
-function renderSpace(person, framework, profile, career, o2o, orgConfig) {
+function renderSpace(person, framework, profile, career, o2o, orgConfig, squads) {
   if (!space) return;
   space.person = person;
   space.framework = framework;
@@ -96,6 +99,7 @@ function renderSpace(person, framework, profile, career, o2o, orgConfig) {
   space.items = ITEMS;
   space.dimensions = DIMENSIONS;
   space.orgConfig = orgConfig;
+  space.squads = squads;
   space.island = career.island;
   space.journey = career.journey;
   // Ficha de ciudadanía (MC-21): índice del archipiélago y logros registrados.

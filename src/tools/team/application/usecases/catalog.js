@@ -44,9 +44,17 @@ export function addCatalog(persistence, kind, name, extra = {}) {
  * @param {PersistencePort} persistence @param {CatalogKind} kind @param {string} id
  * @param {{ subLabel?: string, color?: string }} patch
  */
+const WITH_META = new Set(['labels', 'squads']);
+
 export function updateCatalogMeta(persistence, kind, id, patch) {
-  if (kind !== 'labels') throw new Error(`El catálogo ${kind} no tiene metadatos`);
-  return updateLabelMeta(persistence, id, patch);
+  if (!WITH_META.has(kind)) throw new Error(`El catálogo ${kind} no tiene metadatos`);
+  if (kind === 'labels') return updateLabelMeta(persistence, id, patch);
+  // Squads (RMR-TSK-0277): mismos metadatos que los labels (color/subtítulo);
+  // el repo genérico ya sabe guardarlos.
+  const meta = {};
+  if (patch.subLabel !== undefined) meta.subLabel = String(patch.subLabel).trim();
+  if (patch.color !== undefined) meta.color = String(patch.color).trim();
+  return repoOf(persistence, kind).update(id, meta);
 }
 
 /** @param {PersistencePort} persistence @param {CatalogKind} kind @param {string} id @param {string} name */
