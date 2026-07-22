@@ -51,7 +51,10 @@ service cloud.firestore {
     // instancia, miembros asociados a un manager (aunque su correo sea externo)
     // y cualquiera de tribbuapp.com con el enlace. Un gmail suelto, no.
     function canAccessRetro() {
-      return isSuperAdmin() || isViewer() || isLeader() || isMember() || isOrgEmail();
+      // El supermanager entra por derecho propio (RMR-TSK-0294): un Head puede no
+      // ser líder de un equipo ni miembro con ficha, y sin esto no vería ni una
+      // retro de su rama.
+      return isSuperAdmin() || isViewer() || isSuperManager() || isLeader() || isMember() || isOrgEmail();
     }
 
     // Espejo de miembros por uid: lo escribe SOLO el trigger (Admin SDK, que se
