@@ -25,6 +25,13 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/leaders/$(request.auth.uid));
     }
+    // Supermanager (Head of X, RMR-PCS-0023): ve y ACTÚA sobre la rama de EMs que
+    // le reportan (leaders.reportsTo == su uid). No es superadmin; su alcance lo
+    // acota la jerarquía, no un rol global.
+    function isSuperManager() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/supermanagers/$(request.auth.uid));
+    }
     // MIEMBRO de la instancia: persona asociada a un manager/equipo. El espejo
     // /members/{uid} lo mantiene el trigger `syncMemberRegistry` (las personas
     // viven en /people con id propio, así que el uid no es consultable desde
@@ -72,6 +79,14 @@ service cloud.firestore {
     // autenticados (para la pestaña Usuarios); alta/baja solo por superadmin.
     // El viewer nunca escribe: ni aquí ni en ninguna otra colección.
     match /viewers/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // Supermanagers de la instancia (Head of X, RMR-PCS-0023): legibles por
+    // autenticados (resolveAccess lee el propio doc; el panel de asignación EM→Head
+    // lista los Heads); alta/baja solo por superadmin. El rol NO se auto-otorga.
+    match /supermanagers/{uid} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
     }
@@ -142,13 +157,24 @@ service cloud.firestore {
       function sharedPerm(data) {
         return isSignedIn() && 'sharedWith' in data ? data.sharedWith[request.auth.uid] : null;
       }
+      // Rama del supermanager (RMR-TSK-0292): el Head ve/edita a la gente de los
+      // EMs que le reportan. La persona la autoriza SU dueño: el doc /leaders del
+      // ownerLeaderUid existe y su reportsTo apunta a este Head. exists() antes del
+      // get() evita romper la regla si el owner quedó huérfano. Casa con la query
+      // del cliente (people por ownerLeaderUid `in` rama): ambos van por propiedad.
+      function ownerReportsToMe() {
+        return isSuperManager()
+          && 'ownerLeaderUid' in resource.data
+          && exists(/databases/$(database)/documents/leaders/$(resource.data.ownerLeaderUid))
+          && get(/databases/$(database)/documents/leaders/$(resource.data.ownerLeaderUid)).data.reportsTo == request.auth.uid;
+      }
       // La lectura (incl. la query por sharedWithUids) se respalda con el MISMO
       // campo que usa la consulta (el array), no con el mapa sharedWith; si no,
       // Firestore rechaza la query del líder (rules are not filters). El viewer
       // (solo lectura, tipo C-level) ve todo, igual que el superadmin. El usuario
       // vinculado (Person.uid == su uid) lee su propia ficha en solo lectura; el
       // guard 'uid' in resource.data evita romper la regla en personas sin campo.
-      allow read: if isSuperAdmin() || isViewer() || isOwner()
+      allow read: if isSuperAdmin() || isViewer() || isOwner() || ownerReportsToMe()
         || ('sharedWithUids' in resource.data && request.auth.uid in resource.data.sharedWithUids)
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid);
       // El líder crea sus personas; el superadmin puede crear una persona para
@@ -160,6 +186,8 @@ service cloud.firestore {
       // de carrera: la última rama restringe el cambio al único campo
       // `careerTargetLevelId` (hasOnly), sin poder tocar ningún otro dato de su ficha.
       allow update: if isSuperAdmin() || isOwner()
+        || (ownerReportsToMe()
+            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
         || (sharedPerm(resource.data) == 'edit'
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid
@@ -236,15 +264,31 @@ service cloud.firestore {
         function person() {
           return get(/databases/$(database)/documents/people/$(personId)).data;
         }
+        // Rama del supermanager: hereda el acceso al subárbol vía el dueño de la
+        // persona (su EM le reporta). Mismo criterio que ownerReportsToMe() del doc
+        // padre, pero leyendo person() (el /people padre de este subdocumento).
+        function ownerReportsToMe() {
+          return isSuperManager()
+            && 'ownerLeaderUid' in person()
+            && exists(/databases/$(database)/documents/leaders/$(person().ownerLeaderUid))
+            && get(/databases/$(database)/documents/leaders/$(person().ownerLeaderUid)).data.reportsTo == request.auth.uid;
+        }
         function canView() {
-          return isSuperAdmin() || isViewer()
+          return isSuperAdmin() || isViewer() || ownerReportsToMe()
             || (isSignedIn()
                 && (person().ownerLeaderUid == request.auth.uid
                     || ('uid' in person() && person().uid == request.auth.uid)
                     || ('sharedWith' in person() && person().sharedWith[request.auth.uid] in ['view', 'edit'])));
         }
         function canEdit() {
+          // El wildcard recursivo también matchea el propio /people padre, así que
+          // el Head no debe transferir la propiedad por esta vía (el `allow update`
+          // de nivel superior ya lo veta). El guard solo aplica al doc padre (los
+          // subdocumentos —lecturas/notas— no llevan ownerLeaderUid, y pasan).
           return isSuperAdmin()
+            || (ownerReportsToMe()
+                && (!('ownerLeaderUid' in request.resource.data)
+                    || request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid))
             || (isSignedIn()
                 && (person().ownerLeaderUid == request.auth.uid
                     || ('sharedWith' in person() && person().sharedWith[request.auth.uid] == 'edit')));
