@@ -1,8 +1,9 @@
 /**
  * Glue de cliente del Mapa de Carrera. Define <career-app>, resuelve el acceso de
  * la instancia y construye el container según el rol:
- *  - manager/superadmin: carga las personas de su equipo (igual que Role Mirror) y
- *    juega/gestiona con el selector de persona (canEdit).
+ *  - manager/supermanager/superadmin: carga las personas de su alcance (igual que
+ *    Role Mirror — su equipo, su rama o toda la organización) y juega/gestiona
+ *    con el selector de persona (canEdit).
  *  - engineer (JG-1, RMR-TSK-0139): EL INGENIERO JUEGA su propio plan. No puede
  *    listar el equipo (las reglas no se lo permiten): se carga SOLO su persona
  *    vinculada (getMyPerson), con personId fijado, canPlay = true y canEdit =
@@ -16,6 +17,8 @@ import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
+import { listLeaders } from '../lib/leaders.js';
+import { leadersReportingTo } from '../lib/accessRoles.js';
 
 const app = document.querySelector('career-app');
 
@@ -60,7 +63,19 @@ onUserChanged(async (user) => {
       return;
     }
     // Personas del equipo del manager (reusa la tool Equipo), como en Role Mirror.
-    const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid });
+    // Alcance (RMR-TSK-0293): el superadmin ve a toda la organización (antes se
+    // quedaba solo con su propio equipo); el supermanager ve la rama de líderes
+    // que le reportan a cualquier profundidad, además de la suya; un líder
+    // normal, solo la suya. Los líderes solo se leen cuando hay rama que resolver.
+    const leaderUids = role === 'supermanager'
+      ? [user.uid, ...leadersReportingTo(await listLeaders(), user.uid)]
+      : null;
+    const { persistence } = await createTeamContainer({
+      mode: 'firestore',
+      leaderUid: user.uid,
+      viewAll: role === 'superadmin',
+      leaderUids,
+    });
     const people = await listActivePeople(persistence);
     // El uid vinculado viaja con la persona: el panel del brujo (MC-22) decide
     // con él si el usuario logado es el jugador vinculado. El objetivo de
@@ -73,8 +88,10 @@ onUserChanged(async (user) => {
       external: p.external ?? false, // los externos no tienen carrera: el selector los deshabilita
     }));
     // Rol para el brujo (MC-22) y la gestión de equipo: canEdit habilita la
-    // cola del manager, el tiempo agregado y el selector de persona.
-    app.canEdit = role === 'leader' || role === 'superadmin';
+    // cola del manager, el tiempo agregado y el selector de persona. El
+    // supermanager actúa sobre su rama como sustituto del líder (RMR-TSK-0293),
+    // igual que ya hace en la tool Equipo.
+    app.canEdit = role === 'leader' || role === 'supermanager' || role === 'superadmin';
     app.store = store;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar el mapa de carrera.';
