@@ -23,7 +23,10 @@ import {
   assertSucceeds,
   assertFails,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  doc, collection, query, where,
+  getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+} from 'firebase/firestore';
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT ?? 'demo-grebla';
 
@@ -105,6 +108,38 @@ try {
   await check(
     'Head ESCRIBE el subárbol de su rama (nota/lectura)',
     assertSucceeds(setDoc(doc(head, 'people', 'pb1', 'seniority', 'r2'), { date: '2026-07-10', valor: 4 })),
+  );
+
+  // Las comprobaciones anteriores usan getDoc (documento a documento), pero la
+  // app LISTA con getDocs + where('ownerLeaderUid','in',[...]). Firestore valida
+  // las queries de forma conservadora ("rules are not filters") y puede
+  // rechazarlas aunque el getDoc equivalente pase — es lo que provocó
+  // RMR-BUG-0009. Así que se valida la QUERY tal y como la lanza la tool Equipo.
+  console.log('El Head LISTA su rama con una QUERY (no solo getDoc):');
+  await check(
+    'Head LISTA con where(ownerLeaderUid, in, [su rama]) — la query de peopleRepo',
+    assertSucceeds(getDocs(query(
+      collection(head, 'people'),
+      where('ownerLeaderUid', 'in', ['em1-uid', 'em2-uid']),
+    ))),
+  );
+  await check(
+    'Head NO LISTA si cuela en el in a un líder que no le reporta',
+    assertFails(getDocs(query(
+      collection(head, 'people'),
+      where('ownerLeaderUid', 'in', ['em1-uid', 'lone-uid']),
+    ))),
+  );
+  await check(
+    'Head NO LISTA la colección entera sin filtro de rama',
+    assertFails(getDocs(collection(head, 'people'))),
+  );
+  await check(
+    'Regresión: un líder normal LISTA lo suyo con where(ownerLeaderUid, ==, su uid)',
+    assertSucceeds(getDocs(query(
+      collection(em1, 'people'),
+      where('ownerLeaderUid', '==', 'em1-uid'),
+    ))),
   );
 
   console.log('El Head NO transfiere propiedad ni crea/borra:');
