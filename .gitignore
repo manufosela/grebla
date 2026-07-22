@@ -35,7 +35,7 @@ pnpm-debug.log*
 # Karajan v4: el CONTRATO del método se trackea (gate, hooks, roles y reglas)
 # para que lo herede cualquiera que clone; los veredictos y cachés locales, no.
 .karajan/cache/
-.karajan/verdicts/
+.karajan/reviews/
 .karajan/*.log
 .reviews/
 coverage/
