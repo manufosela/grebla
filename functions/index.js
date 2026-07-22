@@ -14,7 +14,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import * as coins from './coins.js';
 import { sign, coinsKmsKeyName } from './signer.js';
-import { computePulseAggregate } from './pulseAggregate.js';
+import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
 
 initializeApp();
 
@@ -1585,7 +1585,8 @@ export const onMotivatorSessionWritten = onDocumentWritten(
 /**
  * Marea (RMR-TSK-0236): recalcula /pulseAggregates/{weekIso} cada vez que alguien
  * registra o edita su marea. Solo expone AGREGADOS ANÓNIMOS (medias por dimensión,
- * general + por gremio + por label/squad) y solo de grupos con >=3 respuestas.
+ * general + por gremio + por label/squad + por departamento) y solo de grupos
+ * con >=3 respuestas.
  * Los registros individuales (/pulse/{uid}/entries) NUNCA se exponen. Admin SDK.
  */
 export const aggregatePulse = onDocumentWritten(
@@ -1602,18 +1603,39 @@ export const aggregatePulse = onDocumentWritten(
     // collectionGroup('entries') roza el ledger de coins, pero esas entradas no
     // tienen weekIso, así que el filtro las excluye (y el índice solo indexa las
     // que sí lo tienen). El mapa uid→persona da los gremios/labels (nombres).
-    const [entriesSnap, peopleSnap] = await Promise.all([
+    const [entriesSnap, peopleSnap, leadersSnap, headsSnap] = await Promise.all([
       db.collectionGroup('entries').where('weekIso', '==', weekIso).get(),
       db.collection('people').get(),
+      db.collection('leaders').get(),
+      db.collection('supermanagers').get(),
     ]);
     const entries = entriesSnap.docs.map((d) => d.data());
-    /** @type {Record<string, { guilds: string[], labels: string[] }>} */
+    // Jerarquía para el corte por departamento (RMR-TSK-0296): de cada manager,
+    // a quién reporta; y qué uids son Head, con su nombre visible. El eje se
+    // guarda por NOMBRE, igual que gremios y squads, para que la vista no tenga
+    // que resolver uids.
+    /** @type {Record<string, string|null>} */
+    const reportsToByUid = {};
+    for (const doc of leadersSnap.docs) reportsToByUid[doc.id] = doc.data().reportsTo ?? null;
+    /** @type {Map<string, string>} */
+    const headNames = new Map();
+    for (const doc of headsSnap.docs) {
+      const h = doc.data();
+      headNames.set(doc.id, h.displayName || h.email || doc.id);
+    }
+    /** @type {Record<string, { guilds: string[], labels: string[], department: string|null }>} */
     const peopleByUid = {};
     let totalPeople = 0;
     for (const doc of peopleSnap.docs) {
       const p = doc.data();
       if (p.active !== false) totalPeople += 1;
-      if (p.uid) peopleByUid[p.uid] = { guilds: p.guilds || [], labels: p.labels || [] };
+      if (!p.uid) continue;
+      const headUid = departmentOf(p.ownerLeaderUid ?? null, reportsToByUid, new Set(headNames.keys()));
+      peopleByUid[p.uid] = {
+        guilds: p.guilds || [],
+        labels: p.labels || [],
+        department: headUid ? headNames.get(headUid) : null,
+      };
     }
     const aggregate = computePulseAggregate(weekIso, entries, peopleByUid, { minCount: 3, totalPeople });
     await db.doc(`pulseAggregates/${weekIso}`).set({ ...aggregate, updatedAt: FieldValue.serverTimestamp() });

@@ -3,7 +3,7 @@
  * de privacidad y «una marea por persona (la última)». Puro, sin firebase.
  */
 import { describe, it, expect } from 'vitest';
-import { computePulseAggregate, normalizeWord } from './pulseAggregate.js';
+import { computePulseAggregate, departmentOf, normalizeWord } from './pulseAggregate.js';
 
 const P = (uid, day, vals) => ({ uid, day, ...vals });
 const full = { energia: 60, animo: 60, carga: 50, rumbo: 50, tripulacion: 50, reconocimiento: 50 };
@@ -94,5 +94,73 @@ describe('computePulseAggregate', () => {
   it('normalizeWord: minúsculas, trim y espacios colapsados', () => {
     expect(normalizeWord('  A   TOPE  ')).toBe('a tope');
     expect(normalizeWord(null)).toBe('');
+  });
+});
+
+describe('departmentOf', () => {
+  const heads = new Set(['head1', 'head2']);
+
+  it('sube por reportsTo hasta encontrar el Head del que cuelga', () => {
+    // dirección → jefe de departamento → manager: la persona pertenece al
+    // departamento del Head, aunque su manager esté dos saltos por debajo.
+    const reportsTo = { em1: 'mando1', mando1: 'head1' };
+    expect(departmentOf('em1', reportsTo, heads)).toBe('head1');
+  });
+
+  it('un manager que ya es Head es su propio departamento', () => {
+    expect(departmentOf('head1', {}, heads)).toBe('head1');
+  });
+
+  it('devuelve null si no cuelga de ningún Head', () => {
+    expect(departmentOf('suelto', { suelto: null }, heads)).toBeNull();
+    expect(departmentOf(null, {}, heads)).toBeNull();
+  });
+
+  it('no se cuelga ante un ciclo en reportsTo', () => {
+    expect(departmentOf('a', { a: 'b', b: 'a' }, heads)).toBeNull();
+  });
+});
+
+describe('computePulseAggregate — corte por departamento (RMR-TSK-0296)', () => {
+  const byDept = {
+    u1: { guilds: [], labels: [], department: 'Tecnología' },
+    u2: { guilds: [], labels: [], department: 'Tecnología' },
+    u3: { guilds: [], labels: [], department: 'Tecnología' },
+    u4: { guilds: [], labels: [], department: 'Ventas' },
+  };
+
+  it('agrupa las mareas por departamento', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', { ...full, energia: 40 }),
+      P('u2', '2026-07-13', { ...full, energia: 80 }),
+      P('u3', '2026-07-13', { ...full, energia: 60 }),
+    ], byDept, { minCount: 3 });
+    expect(agg.departments).toEqual([
+      expect.objectContaining({ id: 'Tecnología', count: 3 }),
+    ]);
+    expect(agg.departments[0].means.energia).toBe(60);
+  });
+
+  it('hereda el umbral: un departamento pequeño NO se publica', () => {
+    // Es el primer corte de la marea que sigue la línea de mando, así que el
+    // mínimo importa más que nunca: un departamento de 1 sería mirar a alguien.
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full),
+      P('u2', '2026-07-13', full),
+      P('u3', '2026-07-13', full),
+      P('u4', '2026-07-13', full), // Ventas: solo 1 → no se publica
+    ], byDept, { minCount: 3 });
+    expect(agg.departments.map((d) => d.id)).toEqual(['Tecnología']);
+  });
+
+  it('quien no cuelga de ningún departamento cuenta en general pero no lo ensucia', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full),
+      P('u2', '2026-07-13', full),
+      P('u3', '2026-07-13', full),
+      P('sinDepto', '2026-07-13', full),
+    ], byDept, { minCount: 3 });
+    expect(agg.respondents).toBe(4);
+    expect(agg.departments.map((d) => d.id)).toEqual(['Tecnología']);
   });
 });
