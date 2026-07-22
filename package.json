@@ -3,6 +3,7 @@
   "version": "1.79.0",
   "type": "module",
   "private": true,
+  "packageManager": "pnpm@10.20.0",
   "description": "GREBLA — Gestión Reflexiva de Equipos Bajo un Liderazgo Afectivo. Framework de herramientas para equipos y personas (primera: Role Mirror).",
   "scripts": {
     "dev": "astro dev",
