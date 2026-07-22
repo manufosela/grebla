@@ -103,15 +103,36 @@ function groupBy(sessions, keyOf) {
 }
 
 /**
+ * Mínimo de respuestas para publicar un corte agregado (RMR-BUG-0051). Con menos,
+ * `distribution` y `averagePosition` reconstruyen el orden que eligió cada
+ * persona, así que el corte deja de ser anónimo. Mismo criterio que la marea.
+ */
+export const MIN_RESPONDENTS = 3;
+
+/**
+ * Corte RETENIDO por anonimato: mantiene la forma (y cuánta gente respondió,
+ * que no identifica a nadie) pero sin ningún dato de lo que eligieron.
+ * @param {number} respondents @param {string[]} cardIds @param {number} size
+ * @returns {AggregateBlock}
+ */
+function withheldBlock(respondents, cardIds, size) {
+  return { ...aggregateBlock([], cardIds, size), respondents };
+}
+
+/**
  * Agregados completos de un juego: global, por ronda, por equipo/líder y la
  * evolución de la posición media de cada motivador a lo largo de las rondas.
+ *
+ * Los cortes por debajo de `minCount` NO se publican (RMR-BUG-0051): los de
+ * equipo y ronda se omiten del todo —así ni aparecen en el selector— y el global
+ * se devuelve retenido, conservando solo el recuento.
  * @param {Session[]} sessions
  * @param {string[]} cardIds
- * @param {{ game?: GameId, orderedRoundIds?: string[], size?: number }} [options]
+ * @param {{ game?: GameId, orderedRoundIds?: string[], size?: number, minCount?: number }} [options]
  * @returns {Aggregates}
  */
 export function computeAggregates(sessions, cardIds, options = {}) {
-  const { game, orderedRoundIds = [], size = DECK_SIZE } = options;
+  const { game, orderedRoundIds = [], size = DECK_SIZE, minCount = MIN_RESPONDENTS } = options;
   const all = sessions ?? [];
 
   const byRoundSessions = groupBy(all, (s) => s.roundId);
@@ -119,11 +140,17 @@ export function computeAggregates(sessions, cardIds, options = {}) {
 
   /** @type {Record<string, AggregateBlock>} */
   const byRound = {};
-  for (const [roundId, list] of byRoundSessions) byRound[roundId] = aggregateBlock(list, cardIds, size);
+  for (const [roundId, list] of byRoundSessions) {
+    if (list.length < minCount) continue;
+    byRound[roundId] = aggregateBlock(list, cardIds, size);
+  }
 
   /** @type {Record<string, AggregateBlock>} */
   const byLeader = {};
-  for (const [leaderId, list] of byLeaderSessions) byLeader[leaderId] = aggregateBlock(list, cardIds, size);
+  for (const [leaderId, list] of byLeaderSessions) {
+    if (list.length < minCount) continue;
+    byLeader[leaderId] = aggregateBlock(list, cardIds, size);
+  }
 
   // Evolución: para cada motivador, su posición media por ronda en orden temporal.
   const roundOrder = orderedRoundIds.length > 0 ? orderedRoundIds : [...byRoundSessions.keys()];
@@ -138,7 +165,11 @@ export function computeAggregates(sessions, cardIds, options = {}) {
   return {
     game: /** @type {GameId} */ (game),
     respondents: all.length,
-    global: aggregateBlock(all, cardIds, size),
+    // Se publica para que la interfaz pueda explicar POR QUÉ falta un corte.
+    minCount,
+    global: all.length >= minCount
+      ? aggregateBlock(all, cardIds, size)
+      : withheldBlock(all.length, cardIds, size),
     byRound,
     byLeader,
     evolution,

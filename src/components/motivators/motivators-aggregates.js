@@ -135,11 +135,16 @@ export class MotivatorsAggregates extends LitElement {
   _renderRanking(block) {
     if (!block || block.respondents === 0) return html`<p class="empty">Sin datos para esta vista.</p>`;
     const n = block.respondents;
-    const few = n < 3
-      ? ` Con pocas respuestas (${n}), el ranking refleja casi literalmente lo elegido.`
-      : '';
+    // Corte RETENIDO por anonimato (RMR-BUG-0051): con tan pocas respuestas, la
+    // posición media y la distribución reconstruyen lo que eligió una persona
+    // concreta. No es un fallo ni un dato que falte: es la garantía de que estos
+    // juegos nunca señalan a nadie.
+    const minCount = this._agg?.minCount ?? 3;
+    if (n < minCount) {
+      return html`<p class="empty">Hacen falta al menos ${minCount} respuestas para enseñar el ranking sin que se pueda deducir lo que eligió cada persona. Ahora mismo hay ${n}.</p>`;
+    }
     return html`
-      <p class="legend">Ordenados por <strong>posición media</strong> (1 = lo más prioritario para el equipo). La barra indica la prioridad relativa. Basado en ${n} ${n === 1 ? 'respuesta' : 'respuestas'}.${few}</p>
+      <p class="legend">Ordenados por <strong>posición media</strong> (1 = lo más prioritario para el equipo). La barra indica la prioridad relativa. Basado en ${n} ${n === 1 ? 'respuesta' : 'respuestas'}.</p>
       <div>${block.ranking.map((s, i) => this._renderRow(s, i))}</div>`;
   }
 
