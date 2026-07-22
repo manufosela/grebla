@@ -24,6 +24,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run -s lint --if-present
+      # Sin paso de lint: este proyecto no tiene script `lint`. La plantilla de kj
+      # lo arrastraba con `--if-present`, pero pnpm espera las flags ANTES del
+      # nombre del script, así que ese paso fallaba en vez de saltarse. La calidad
+      # la dan el chequeo de tipos y los tests; si algún día hay linter, se añade.
       - run: pnpm run check
       - run: pnpm test
