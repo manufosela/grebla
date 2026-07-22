@@ -3,16 +3,23 @@
  * Firestore, para poder testearla sin mockear nada). Usada por users.js, que
  * añade la capa de lectura/escritura contra /admins, /viewers, /leaders.
  *
- * @typedef {'superadmin'|'viewer'|'leader'} AccessRole
+ * @typedef {'superadmin'|'supermanager'|'viewer'|'leader'} AccessRole
  * @typedef {AccessRole|'none'} UserRole
  * @typedef {{ uid: string, displayName: string|null, email: string|null, role: UserRole, lastLogin: unknown }} AccessUser
  */
 
 /** @type {Record<AccessRole, string>} */
-export const ROLE_COLLECTION = { superadmin: 'admins', viewer: 'viewers', leader: 'leaders' };
+export const ROLE_COLLECTION = {
+  superadmin: 'admins',
+  // El Head of X (RMR-TSK-0295): sin esta entrada, setUserRole no sabía
+  // concederlo y el rol solo se podía dar creando el doc a mano en Firestore.
+  supermanager: 'supermanagers',
+  viewer: 'viewers',
+  leader: 'leaders',
+};
 
 /** Orden de prioridad (menor a mayor) para aplicar el rol si un uid apareciera en más de una colección. */
-const ROLE_ASC = /** @type {AccessRole[]} */ (['leader', 'viewer', 'superadmin']);
+const ROLE_ASC = /** @type {AccessRole[]} */ (['leader', 'viewer', 'supermanager', 'superadmin']);
 
 /** Milisegundos de un valor lastLogin (Firestore Timestamp, número o null). */
 function toMs(v) {

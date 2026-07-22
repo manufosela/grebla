@@ -80,9 +80,10 @@ export async function assignUserToLeader(user, leaderUid) {
 
 /** @returns {Promise<AccessUser[]>} */
 export async function listAllUsers() {
-  const [usersSnap, adminsSnap, viewersSnap, leadersSnap] = await Promise.all([
+  const [usersSnap, adminsSnap, supermanagersSnap, viewersSnap, leadersSnap] = await Promise.all([
     getDocs(collection(db, 'users')),
     getDocs(collection(db, 'admins')),
+    getDocs(collection(db, 'supermanagers')),
     getDocs(collection(db, 'viewers')),
     getDocs(collection(db, 'leaders')),
   ]);
@@ -90,6 +91,7 @@ export async function listAllUsers() {
   return mergeAccessUsers({
     users: toItems(usersSnap),
     superadmin: toItems(adminsSnap),
+    supermanager: toItems(supermanagersSnap),
     viewer: toItems(viewersSnap),
     leader: toItems(leadersSnap),
   });
