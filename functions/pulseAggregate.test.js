@@ -164,3 +164,34 @@ describe('computePulseAggregate — corte por departamento (RMR-TSK-0296)', () =
     expect(agg.departments.map((d) => d.id)).toEqual(['Tecnología']);
   });
 });
+
+describe('computePulseAggregate — departamento por uid, nombre aparte', () => {
+  it('agrupa por uid del Head y adjunta el nombre solo para mostrarlo', () => {
+    // Dos Heads pueden llamarse igual: si se agrupara por nombre, sus ramas se
+    // fundirían en un corte que mezcla gente de departamentos distintos.
+    const byUid = {
+      u1: { guilds: [], labels: [], department: 'head-a' },
+      u2: { guilds: [], labels: [], department: 'head-a' },
+      u3: { guilds: [], labels: [], department: 'head-a' },
+      u4: { guilds: [], labels: [], department: 'head-b' },
+      u5: { guilds: [], labels: [], department: 'head-b' },
+      u6: { guilds: [], labels: [], department: 'head-b' },
+    };
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full), P('u2', '2026-07-13', full), P('u3', '2026-07-13', full),
+      P('u4', '2026-07-13', full), P('u5', '2026-07-13', full), P('u6', '2026-07-13', full),
+    ], byUid, { minCount: 3, departmentNames: { 'head-a': 'Ana', 'head-b': 'Ana' } });
+
+    expect(agg.departments.map((d) => d.id)).toEqual(['head-a', 'head-b']); // NO se funden
+    expect(agg.departments.map((d) => d.name)).toEqual(['Ana', 'Ana']);
+    expect(agg.departments.every((d) => d.count === 3)).toBe(true);
+  });
+
+  it('sin nombre conocido cae al propio uid', () => {
+    const byUid = { u1: { department: 'h1' }, u2: { department: 'h1' }, u3: { department: 'h1' } };
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full), P('u2', '2026-07-13', full), P('u3', '2026-07-13', full),
+    ], byUid, { minCount: 3 });
+    expect(agg.departments[0].name).toBe('h1');
+  });
+});

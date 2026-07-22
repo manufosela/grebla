@@ -128,15 +128,23 @@ function withheldBlock(respondents, cardIds, size) {
  * se devuelve retenido, conservando solo el recuento.
  * @param {Session[]} sessions
  * @param {string[]} cardIds
- * @param {{ game?: GameId, orderedRoundIds?: string[], size?: number, minCount?: number }} [options]
+ * @param {{ game?: GameId, orderedRoundIds?: string[], size?: number, minCount?: number,
+ *           departmentByLeader?: Record<string, string> }} [options]
  * @returns {Aggregates}
  */
 export function computeAggregates(sessions, cardIds, options = {}) {
-  const { game, orderedRoundIds = [], size = DECK_SIZE, minCount = MIN_RESPONDENTS } = options;
+  const {
+    game, orderedRoundIds = [], size = DECK_SIZE, minCount = MIN_RESPONDENTS,
+    departmentByLeader = {},
+  } = options;
   const all = sessions ?? [];
 
   const byRoundSessions = groupBy(all, (s) => s.roundId);
   const byLeaderSessions = groupBy(all, (s) => s.equipoId);
+  // Corte por departamento (RMR-TSK-0296): junta los equipos que cuelgan del
+  // mismo Head. Al agrupar hacia ARRIBA, un departamento reúne a más gente que
+  // un equipo suelto, así que pasa el umbral donde un equipo pequeño no llega.
+  const byDeptSessions = groupBy(all, (s) => departmentByLeader[s.equipoId] ?? null);
 
   /** @type {Record<string, AggregateBlock>} */
   const byRound = {};
@@ -150,6 +158,13 @@ export function computeAggregates(sessions, cardIds, options = {}) {
   for (const [leaderId, list] of byLeaderSessions) {
     if (list.length < minCount) continue;
     byLeader[leaderId] = aggregateBlock(list, cardIds, size);
+  }
+
+  /** @type {Record<string, AggregateBlock>} */
+  const byDepartment = {};
+  for (const [dept, list] of byDeptSessions) {
+    if (list.length < minCount) continue;
+    byDepartment[dept] = aggregateBlock(list, cardIds, size);
   }
 
   // Evolución: para cada motivador, su posición media por ronda en orden temporal.
@@ -172,6 +187,7 @@ export function computeAggregates(sessions, cardIds, options = {}) {
       : withheldBlock(all.length, cardIds, size),
     byRound,
     byLeader,
+    byDepartment,
     evolution,
   };
 }

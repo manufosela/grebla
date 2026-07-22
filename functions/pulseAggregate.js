@@ -82,7 +82,7 @@ export function departmentOf(leaderUid, reportsToByUid, headUids) {
  * @param {string} weekIso
  * @param {Array<Record<string, any>>} entries  entradas de la semana (crudas)
  * @param {Record<string, { guilds?: string[], labels?: string[], department?: string|null }>} peopleByUid
- * @param {{ minCount?: number, totalPeople?: number }} [opts]
+ * @param {{ minCount?: number, totalPeople?: number, departmentNames?: Record<string, string> }} [opts]
  * @returns {object} documento de agregado
  */
 export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts = {}) {
@@ -130,6 +130,12 @@ export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts =
       : { count: general.count, means: null, words: [] },
     guilds: groups(guilds),
     labels: groups(labels),
-    departments: groups(departments),
+    // El departamento se agrupa por el UID del Head, no por su nombre: dos Heads
+    // pueden llamarse igual y fundir sus ramas en un corte que mezclaría gente de
+    // departamentos distintos. El nombre viaja aparte, solo para mostrarlo.
+    departments: groups(departments).map((d) => ({
+      ...d,
+      name: (opts.departmentNames ?? {})[d.id] ?? d.id,
+    })),
   };
 }

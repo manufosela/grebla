@@ -250,7 +250,7 @@ export class MareaResults extends LitElement {
     const read = pulseReading(group.means.energia, group.means.animo);
     return html`
       <div class="segcard">
-        <div class="seg-h"><span class="seg-name">${group.id}</span><span class="seg-part">${group.count} pers.</span></div>
+        <div class="seg-h"><span class="seg-name">${group.name ?? group.id}</span><span class="seg-part">${group.count} pers.</span></div>
         <div class="seg-read"><span class="rdot" style="background:${readingColor(read.name)}"></span>${read.name}</div>
         <div class="mini">${BARS.map((b) => this._renderMiniBar(group.means, b))}</div>
         ${this._renderWordCloud(group.words, true)}
