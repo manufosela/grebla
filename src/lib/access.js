@@ -10,6 +10,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { getMyPerson, sealInvite } from './engineer.js';
+import { viewsForRole } from './accessRoles.js';
 
 /** @typedef {'superadmin'|'viewer'|'leader'|'engineer'|null} AccessRole */
 
@@ -40,29 +41,18 @@ export async function resolveAccess(user) {
   return { role: null, uid: user.uid };
 }
 
-/** @typedef {'gestion'|'manager'|'engineer'} ViewKey */
+/** @typedef {import('./accessRoles.js').ViewKey} ViewKey */
 
 /**
- * Vistas entre las que el usuario puede conmutar (RMR-TSK-0250). El conmutador
- * solo se muestra con 2+ vistas:
- *  - superadmin: gestion + engineer + (manager si además es líder /leaders/{uid})
- *  - viewer: solo gestion (sin conmutador)
- *  - leader (manager): manager + engineer
- *  - engineer: solo engineer (sin conmutador)
- *  - sin rol: ninguna
- * La vista «engineer» se ofrece SIEMPRE a manager/superadmin para previsualizar
- * la experiencia del ingeniero; si no tienen ficha, «Mi espacio» lo avisa.
+ * Vistas entre las que el usuario puede conmutar (RMR-TSK-0250). Delega la
+ * decisión en `viewsForRole` (pura): el superadmin recibe SIEMPRE gestion +
+ * manager + engineer, sin depender de ser líder de un equipo (RMR-BUG-0050).
+ * La vista «engineer» se ofrece a manager/superadmin para previsualizar la
+ * experiencia del ingeniero; si no tienen ficha, «Mi espacio» lo avisa.
  * @param {import('firebase/auth').User|null} user
  * @returns {Promise<{ role: AccessRole, uid: string|null, views: ViewKey[] }>}
  */
 export async function resolveViews(user) {
   const { role, uid } = await resolveAccess(user);
-  if (!role) return { role, uid, views: [] };
-  if (role === 'viewer') return { role, uid, views: ['gestion'] };
-  if (role === 'engineer') return { role, uid, views: ['engineer'] };
-  if (role === 'leader') return { role, uid, views: ['manager', 'engineer'] };
-  // superadmin: gestión siempre; manager solo si además es líder de un equipo.
-  const leaderSnap = await getDoc(doc(db, 'leaders', uid));
-  const views = leaderSnap.exists() ? ['gestion', 'manager', 'engineer'] : ['gestion', 'engineer'];
-  return { role, uid, views };
+  return { role, uid, views: viewsForRole(role) };
 }

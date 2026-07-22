@@ -78,3 +78,29 @@ export function unlinkedUsers(users, linkedUids) {
     return uid != null && !linked.has(uid);
   });
 }
+
+/** @typedef {'gestion'|'manager'|'engineer'} ViewKey */
+
+/**
+ * Vistas entre las que un rol puede conmutar (RMR-TSK-0250 / RMR-BUG-0050). El
+ * conmutador solo se muestra con 2+ vistas; con una sola, esa vista es la única
+ * (marcada por defecto, sin alternar). Puro (sin Firestore) para poder testearlo.
+ *  - superadmin: gestion (panel /admin) + manager (herramientas) + engineer.
+ *    Las tres SIEMPRE: el superadmin tiene vista de toda la organización
+ *    (`viewAll`) en cada tool, sea o no líder de un equipo propio.
+ *  - leader (manager): manager + engineer.
+ *  - viewer: solo gestion (sin conmutador).
+ *  - engineer: solo su propio espacio.
+ *  - sin rol: ninguna.
+ * @param {'superadmin'|'viewer'|'leader'|'engineer'|null} [role]
+ * @returns {ViewKey[]}
+ */
+export function viewsForRole(role) {
+  switch (role) {
+    case 'superadmin': return ['gestion', 'manager', 'engineer'];
+    case 'leader': return ['manager', 'engineer'];
+    case 'viewer': return ['gestion'];
+    case 'engineer': return ['engineer'];
+    default: return [];
+  }
+}
