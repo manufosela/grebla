@@ -88,19 +88,41 @@ export function unlinkedUsers(users, linkedUids) {
  *  - superadmin: gestion (panel /admin) + manager (herramientas) + engineer.
  *    Las tres SIEMPRE: el superadmin tiene vista de toda la organización
  *    (`viewAll`) en cada tool, sea o no líder de un equipo propio.
+ *  - supermanager (Head of X, RMR-TSK-0291): manager + engineer, igual que un
+ *    líder ampliado. Opera y ve la rama de EMs que le reportan, pero NO
+ *    administra la organización → sin «gestion».
  *  - leader (manager): manager + engineer.
  *  - viewer: solo gestion (sin conmutador).
  *  - engineer: solo su propio espacio.
  *  - sin rol: ninguna.
- * @param {'superadmin'|'viewer'|'leader'|'engineer'|null} [role]
+ * @param {'superadmin'|'supermanager'|'viewer'|'leader'|'engineer'|null} [role]
  * @returns {ViewKey[]}
  */
 export function viewsForRole(role) {
   switch (role) {
     case 'superadmin': return ['gestion', 'manager', 'engineer'];
+    case 'supermanager': return ['manager', 'engineer'];
     case 'leader': return ['manager', 'engineer'];
     case 'viewer': return ['gestion'];
     case 'engineer': return ['engineer'];
     default: return [];
   }
+}
+
+/**
+ * uids de los líderes (EMs) que reportan a un supermanager (Head of X), a partir
+ * de la lista de líderes con su campo `reportsTo`. Puro (sin Firestore) para
+ * poder testearlo. Define el «alcance de rama» del supermanager: las herramientas
+ * (fase 2+) filtran los datos de equipo por estos uids, igual que un líder filtra
+ * por el suyo. Un EM reporta a un único Head; varios Heads coexisten en paralelo.
+ * @param {ReadonlyArray<{ uid?: string, id?: string, reportsTo?: string|null }>} leaders
+ * @param {string} supermanagerUid
+ * @returns {string[]}
+ */
+export function leadersReportingTo(leaders, supermanagerUid) {
+  if (!supermanagerUid) return [];
+  return (leaders ?? [])
+    .filter((l) => l.reportsTo === supermanagerUid)
+    .map((l) => l.uid ?? l.id)
+    .filter((uid) => uid != null);
 }

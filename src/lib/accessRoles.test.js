@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
+import { leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
 
 describe('viewsForRole', () => {
   it('el superadmin recibe SIEMPRE las tres vistas (gestión, herramientas, ingeniero)', () => {
@@ -10,6 +10,12 @@ describe('viewsForRole', () => {
 
   it('el líder conmuta entre manager (herramientas) e ingeniero', () => {
     expect(viewsForRole('leader')).toEqual(['manager', 'engineer']);
+  });
+
+  it('el supermanager (Head of X) ve las herramientas de su rama y el preview de ingeniero, sin gestión', () => {
+    // RMR-TSK-0291: opera su rama de EMs (como un líder ampliado), pero NO
+    // administra la organización → mismas vistas que el líder, sin «gestion».
+    expect(viewsForRole('supermanager')).toEqual(['manager', 'engineer']);
   });
 
   it('el viewer solo tiene gestión (sin conmutador)', () => {
@@ -23,6 +29,28 @@ describe('viewsForRole', () => {
   it('sin rol no hay ninguna vista', () => {
     expect(viewsForRole(null)).toEqual([]);
     expect(viewsForRole(undefined)).toEqual([]);
+  });
+});
+
+describe('leadersReportingTo', () => {
+  it('devuelve los uids de los líderes cuyo reportsTo es ese supermanager', () => {
+    const leaders = [
+      { uid: 'l1', reportsTo: 'head1' },
+      { uid: 'l2', reportsTo: 'head2' },
+      { uid: 'l3', reportsTo: 'head1' },
+      { uid: 'l4', reportsTo: null },
+    ];
+    expect(leadersReportingTo(leaders, 'head1')).toEqual(['l1', 'l3']);
+  });
+
+  it('acepta docs con id (además de uid) y descarta los que no tienen identificador', () => {
+    const leaders = [{ id: 'l1', reportsTo: 'h' }, { reportsTo: 'h' }];
+    expect(leadersReportingTo(leaders, 'h')).toEqual(['l1']);
+  });
+
+  it('sin supermanager o sin líderes devuelve lista vacía', () => {
+    expect(leadersReportingTo([{ uid: 'l1', reportsTo: 'h' }], '')).toEqual([]);
+    expect(leadersReportingTo(undefined, 'h')).toEqual([]);
   });
 });
 
