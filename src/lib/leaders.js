@@ -6,13 +6,15 @@
 import { doc, collection, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 
-/** @typedef {{ uid: string, displayName: string|null, email: string|null }} Leader */
+/** @typedef {{ uid: string, displayName: string|null, email: string|null, reportsTo: string|null }} Leader */
 
 /** @param {import('firebase/firestore').DocumentData} data @param {string} uid @returns {Leader} */
 const toLeader = (data, uid) => ({
   uid,
   displayName: data.displayName ?? null,
   email: data.email ?? null,
+  // Jerarquía supermanager (RMR-TSK-0291): EM → Head. null si no reporta a ninguno.
+  reportsTo: data.reportsTo ?? null,
 });
 
 /** @returns {Promise<Leader[]>} */

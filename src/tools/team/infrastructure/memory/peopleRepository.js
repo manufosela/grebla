@@ -13,21 +13,31 @@
  * @param {string|null} [viewerLeaderUid] Líder que mira: si se indica, list() devuelve
  *   solo sus personas (ownerLeaderUid) + las compartidas con él (sharedWithUids).
  *   Si es null, list() devuelve todas (paridad con el uso sin multi-líder).
+ * @param {string[]|null} [branchLeaderUids] Alcance de rama del supermanager
+ *   (RMR-TSK-0292): si es un array, list() devuelve las personas cuyo
+ *   ownerLeaderUid está en la rama (por PROPIEDAD, sin compartidas de fuera) y
+ *   tiene prioridad sobre viewerLeaderUid. Un array vacío = rama sin EMs = no ve
+ *   a nadie (estado seguro, no escala a «todas»). null = sin alcance de rama.
  * @returns {PeopleRepository}
  */
 export function createMemoryPeopleRepository(
   seed = [],
   now = () => new Date().toISOString(),
   viewerLeaderUid = null,
+  branchLeaderUids = null,
 ) {
   /** @type {Map<string, Person>} */
   const store = new Map(seed.map((p) => [p.id, { ...p }]));
 
+  const branch = Array.isArray(branchLeaderUids) ? new Set(branchLeaderUids) : null;
+
   /** @param {Person} p */
-  const isVisible = (p) =>
-    !viewerLeaderUid
-    || p.ownerLeaderUid === viewerLeaderUid
-    || (Array.isArray(p.sharedWithUids) && p.sharedWithUids.includes(viewerLeaderUid));
+  const isVisible = (p) => {
+    if (branch) return branch.has(p.ownerLeaderUid);
+    return !viewerLeaderUid
+      || p.ownerLeaderUid === viewerLeaderUid
+      || (Array.isArray(p.sharedWithUids) && p.sharedWithUids.includes(viewerLeaderUid));
+  };
 
   return {
     async list() {

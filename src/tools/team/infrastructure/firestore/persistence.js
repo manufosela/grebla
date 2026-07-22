@@ -57,7 +57,32 @@ const settingsDoc = (db, base) => doc(db, ...base, 'config', 'settings');
 /** @param {import('firebase/firestore').QuerySnapshot} snap */
 const mapDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-function peopleRepo(db, base, leaderUid, viewAll = false) {
+/**
+ * Trocea `values` en lotes de como mucho `size` (Firestore limita el operador
+ * `in` a 30 valores). Deduplica y descarta vacíos antes, para no lanzar consultas
+ * repetidas. Puro (sin Firestore) para poder testearlo aislado.
+ * @param {ReadonlyArray<string>} values
+ * @param {number} [size]
+ * @returns {string[][]}
+ */
+export function chunk(values, size = 30) {
+  const unique = [...new Set((values ?? []).filter(Boolean))];
+  const batches = [];
+  for (let i = 0; i < unique.length; i += size) batches.push(unique.slice(i, i + size));
+  return batches;
+}
+
+/**
+ * @param {Firestore} db
+ * @param {string[]} base
+ * @param {string} leaderUid
+ * @param {boolean} [viewAll]  superadmin: todas las personas de la organización.
+ * @param {string[]|null} [branchLeaderUids]  supermanager (RMR-TSK-0292): personas
+ *   cuyo ownerLeaderUid está en la rama (EMs que le reportan). Tiene prioridad
+ *   sobre el filtro de líder; array vacío = no ve a nadie (estado seguro).
+ */
+function peopleRepo(db, base, leaderUid, viewAll = false, branchLeaderUids = null) {
+  const branch = Array.isArray(branchLeaderUids) ? branchLeaderUids : null;
   return {
     async list() {
       // La self-ficha de un manager (RMR-TSK-0251) es un miembro MÁS de su equipo
@@ -68,6 +93,20 @@ function peopleRepo(db, base, leaderUid, viewAll = false) {
       if (viewAll) {
         const all = await getDocs(peopleCol(db, base));
         return all.docs.map((d) => ({ id: d.id, ...d.data() }));
+      }
+      // Alcance de rama (supermanager): personas de los EMs que le reportan, por
+      // PROPIEDAD (ownerLeaderUid `in` rama). Firestore limita el `in` a 30, se
+      // trocea; merge con dedup por id. Va por propiedad para casar con las reglas
+      // (autorizan por leaders/$(ownerLeaderUid).reportsTo == uid). Rama vacía → [].
+      if (branch) {
+        const batches = chunk(branch);
+        if (batches.length === 0) return [];
+        const snaps = await Promise.all(
+          batches.map((b) => getDocs(query(peopleCol(db, base), where('ownerLeaderUid', 'in', b)))),
+        );
+        const byId = new Map();
+        for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...d.data() });
+        return [...byId.values()];
       }
       // Las personas visibles para este líder: las suyas (ownerLeaderUid) + las
       // compartidas con él (sharedWithUids array-contains). Firestore no hace OR
@@ -242,19 +281,21 @@ function configRepo(db, base) {
 /**
  * @param {Firestore} db
  * @param {string} leaderUid
- * @param {{ viewAll?: boolean }} [options]  viewAll=true (superadmin): lista TODAS las personas.
+ * @param {{ viewAll?: boolean, leaderUids?: string[]|null }} [options]
+ *   viewAll=true (superadmin): lista TODAS las personas. leaderUids (supermanager,
+ *   RMR-TSK-0292): alcance de rama — personas cuyo ownerLeaderUid está en la lista.
  * @returns {PersistencePort}
  */
 export function createFirestorePersistence(db, leaderUid, options = {}) {
   if (!db) throw new Error('createFirestorePersistence requiere una instancia de Firestore (db)');
   if (!leaderUid) throw new Error('createFirestorePersistence requiere leaderUid');
-  const { viewAll = false } = options;
+  const { viewAll = false, leaderUids = null } = options;
   const base = [];
   const readings = /** @type {PersistencePort['readings']} */ (
     Object.fromEntries(DIMENSIONS.map((dim) => [dim, readingRepo(db, base, dim)]))
   );
   return {
-    people: peopleRepo(db, base, leaderUid, viewAll),
+    people: peopleRepo(db, base, leaderUid, viewAll, leaderUids),
     readings,
     areas: catalogRepo(db, base, 'areas', leaderUid, viewAll), // catálogo con ámbito
     guilds: catalogRepo(db, base, 'guilds', leaderUid, viewAll),
