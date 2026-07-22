@@ -110,19 +110,45 @@ export function viewsForRole(role) {
 }
 
 /**
- * uids de los líderes (EMs) que reportan a un supermanager (Head of X), a partir
- * de la lista de líderes con su campo `reportsTo`. Puro (sin Firestore) para
- * poder testearlo. Define el «alcance de rama» del supermanager: las herramientas
+ * uids de los líderes que cuelgan de un supermanager (Head of X), a partir de la
+ * lista de líderes con su campo `reportsTo`. Puro (sin Firestore) para poder
+ * testearlo. Define el «alcance de rama» del supermanager: las herramientas
  * (fase 2+) filtran los datos de equipo por estos uids, igual que un líder filtra
- * por el suyo. Un EM reporta a un único Head; varios Heads coexisten en paralelo.
+ * por el suyo. Varios Heads coexisten en paralelo, cada uno con su rama.
+ *
+ * Devuelve el CIERRE TRANSITIVO (RMR-TSK-0293): una organización real encadena
+ * dirección → jefe de departamento → manager, así que la rama son todos los que
+ * cuelgan a cualquier profundidad, no solo el primer salto. El recorrido lleva un
+ * registro de visitados para terminar ante un ciclo accidental en los datos y no
+ * devolver duplicados ni al propio supermanager.
  * @param {ReadonlyArray<{ uid?: string, id?: string, reportsTo?: string|null }>} leaders
  * @param {string} supermanagerUid
- * @returns {string[]}
+ * @returns {string[]} uids de la rama, en orden de cercanía (anchura)
  */
 export function leadersReportingTo(leaders, supermanagerUid) {
   if (!supermanagerUid) return [];
-  return (leaders ?? [])
-    .filter((l) => l.reportsTo === supermanagerUid)
-    .map((l) => l.uid ?? l.id)
-    .filter((uid) => uid != null);
+  // Índice reportsTo → uids que le reportan directamente, en un solo recorrido.
+  const directReports = new Map();
+  for (const leader of leaders ?? []) {
+    const uid = leader.uid ?? leader.id;
+    if (uid == null || leader.reportsTo == null) continue;
+    const reports = directReports.get(leader.reportsTo);
+    if (reports) reports.push(uid);
+    else directReports.set(leader.reportsTo, [uid]);
+  }
+  // Recorrido en anchura desde el supermanager. `seen` arranca con él mismo para
+  // que un ciclo en los datos termine y no se incluya en su propia rama.
+  const seen = new Set([supermanagerUid]);
+  const branch = [];
+  const pending = [supermanagerUid];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    for (const uid of directReports.get(current) ?? []) {
+      if (seen.has(uid)) continue;
+      seen.add(uid);
+      branch.push(uid);
+      pending.push(uid);
+    }
+  }
+  return branch;
 }
