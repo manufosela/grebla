@@ -1,5 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { mergeAccessUsers, unlinkedUsers } from './accessRoles.js';
+import { mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
+
+describe('viewsForRole', () => {
+  it('el superadmin recibe SIEMPRE las tres vistas (gestión, herramientas, ingeniero)', () => {
+    // Regresión RMR-BUG-0050: antes solo veía «manager» (herramientas) si además
+    // era líder de un equipo; ahora las tiene siempre (viewAll en cada tool).
+    expect(viewsForRole('superadmin')).toEqual(['gestion', 'manager', 'engineer']);
+  });
+
+  it('el líder conmuta entre manager (herramientas) e ingeniero', () => {
+    expect(viewsForRole('leader')).toEqual(['manager', 'engineer']);
+  });
+
+  it('el viewer solo tiene gestión (sin conmutador)', () => {
+    expect(viewsForRole('viewer')).toEqual(['gestion']);
+  });
+
+  it('el ingeniero solo tiene su propio espacio', () => {
+    expect(viewsForRole('engineer')).toEqual(['engineer']);
+  });
+
+  it('sin rol no hay ninguna vista', () => {
+    expect(viewsForRole(null)).toEqual([]);
+    expect(viewsForRole(undefined)).toEqual([]);
+  });
+});
 
 describe('mergeAccessUsers', () => {
   it('fusiona el directorio /users con los roles y ordena por última conexión', () => {

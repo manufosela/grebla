@@ -39,12 +39,9 @@ onUserChanged(async (user) => {
       location.replace('/admin');
       return;
     }
-    // El superadmin entra al panel de gestión, salvo que haya elegido "usar
-    // como manager" en esta sesión (entonces ve las herramientas, con vuelta).
-    if (role === 'superadmin' && sessionStorage.getItem(VIEW_FLAG) !== 'leader') {
-      location.replace('/admin');
-      return;
-    }
+    // El superadmin (como el líder) aterriza en las herramientas —con vista de
+    // toda la organización— y llega a la gestión con el conmutador «Gestión» o
+    // el botón «volver a gestión» (RMR-BUG-0050). No se le redirige a /admin.
     showTools();
     if (role === 'superadmin') backToAdmin?.removeAttribute('hidden');
   } catch {
