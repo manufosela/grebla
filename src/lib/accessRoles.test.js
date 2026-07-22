@@ -52,6 +52,48 @@ describe('leadersReportingTo', () => {
     expect(leadersReportingTo([{ uid: 'l1', reportsTo: 'h' }], '')).toEqual([]);
     expect(leadersReportingTo(undefined, 'h')).toEqual([]);
   });
+
+  it('incluye la rama completa a cualquier profundidad (cierre transitivo)', () => {
+    // RMR-TSK-0293: una organización real encadena dirección → jefe de
+    // departamento → manager. La rama de un Head son TODOS los que cuelgan de
+    // él, no solo el primer salto.
+    const leaders = [
+      { uid: 'em1', reportsTo: 'head1' },
+      { uid: 'em2', reportsTo: 'em1' },
+      { uid: 'em3', reportsTo: 'em2' },
+      { uid: 'ajeno', reportsTo: 'head2' },
+    ];
+    expect(leadersReportingTo(leaders, 'head1')).toEqual(['em1', 'em2', 'em3']);
+  });
+
+  it('no arrastra la rama de otro head que cuelga en paralelo', () => {
+    const leaders = [
+      { uid: 'a1', reportsTo: 'head1' },
+      { uid: 'b1', reportsTo: 'head2' },
+      { uid: 'b2', reportsTo: 'b1' },
+    ];
+    expect(leadersReportingTo(leaders, 'head1')).toEqual(['a1']);
+  });
+
+  it('no se cuelga ante un ciclo accidental en reportsTo ni se incluye a sí mismo', () => {
+    // Dato corrupto: head1 → em1 → em2 → head1. Debe terminar y no devolver al
+    // propio supermanager (su alcance ya incluye lo suyo por otra vía).
+    const leaders = [
+      { uid: 'em1', reportsTo: 'head1' },
+      { uid: 'em2', reportsTo: 'em1' },
+      { uid: 'head1', reportsTo: 'em2' },
+    ];
+    expect(leadersReportingTo(leaders, 'head1')).toEqual(['em1', 'em2']);
+  });
+
+  it('devuelve cada uid una sola vez aunque el doc esté duplicado', () => {
+    const leaders = [
+      { uid: 'em1', reportsTo: 'head1' },
+      { uid: 'em1', reportsTo: 'head1' },
+      { uid: 'em2', reportsTo: 'em1' },
+    ];
+    expect(leadersReportingTo(leaders, 'head1')).toEqual(['em1', 'em2']);
+  });
 });
 
 describe('mergeAccessUsers', () => {
