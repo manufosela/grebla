@@ -4,7 +4,8 @@
  * acciones anteriores + el tablero colaborativo + las acciones de esta retro. El
  * ingeniero ve la lista de retros de su equipo y participa igual (sin crear).
  *
- * Props: uid, leaderUid (manager cuyas retros se ven), members ([{uid,name}]),
+ * Props: uid, leaderUid (manager cuyas retros se ven), leaderUids (rama de un
+ * supermanager: varios managers a la vez), members ([{uid,name}]),
  * canManage (true para el manager dueño).
  */
 import { LitElement, html, css } from 'lit';
@@ -20,6 +21,7 @@ export class RetroApp extends LitElement {
   static properties = {
     uid: { attribute: false },
     leaderUid: { attribute: false },
+    leaderUids: { attribute: false },
     squadIds: { attribute: false },
     members: { attribute: false },
     authorName: { attribute: false },
@@ -50,6 +52,12 @@ export class RetroApp extends LitElement {
     super();
     this.uid = null;
     this.leaderUid = null;
+    /**
+     * Rama de un supermanager (RMR-TSK-0294): los líderes cuyos retros ve además
+     * de los suyos. null = solo su propio manager.
+     * @type {string[]|null}
+     */
+    this.leaderUids = null;
     /** @type {string[]} squads a los que pertenece (una persona puede estar en varios) */
     this.squadIds = [];
     /** Nombre con el que firmar sus tarjetas: el de su ficha de GREBLA. */
@@ -72,17 +80,24 @@ export class RetroApp extends LitElement {
    * ver ni una retro. Y como la clave incluye los squads, si estos llegan
    * después que el manager la lista se recalcula en vez de quedarse corta.
    */
+  /** Fuente de retros por dueño: la rama del supermanager, o su manager. */
+  get _ownerScope() {
+    return this.leaderUids?.length ? this.leaderUids : this.leaderUid;
+  }
+
   get _sourcesKey() {
     // Ordenados para que reordenar los mismos squads no cuente como cambio.
     const squads = [...(this.squadIds ?? [])].toSorted((a, b) => String(a).localeCompare(String(b))).join(',');
-    if (!this.leaderUid && !squads) return '';
-    return `${this.leaderUid ?? ''}|${squads}`;
+    const owners = this.leaderUids?.length ? this.leaderUids.join(',') : (this.leaderUid ?? '');
+    if (!owners && !squads) return '';
+    return `${owners}|${squads}`;
   }
 
   updated(changed) {
     // El ingeniero necesita la lista (el manager la trae dentro de retro-manager).
     if (this.canManage) return;
-    if (!changed.has('leaderUid') && !changed.has('squadIds') && !changed.has('canManage')) return;
+    if (!changed.has('leaderUid') && !changed.has('leaderUids')
+      && !changed.has('squadIds') && !changed.has('canManage')) return;
     const key = this._sourcesKey;
     if (!key || key === this._loadedFor) return;
     this._loadedFor = key;
@@ -97,7 +112,7 @@ export class RetroApp extends LitElement {
       // salen por ownerLeaderUid: se unen ambas fuentes y se deduplica por id
       // (una retro de mi squad creada por mi manager saldría dos veces).
       const [mine, ofSquads] = await Promise.all([
-        this.leaderUid ? listRetros(this.leaderUid) : Promise.resolve([]),
+        this._ownerScope ? listRetros(this._ownerScope) : Promise.resolve([]),
         listRetrosBySquads(this.squadIds ?? []).catch(() => []),
       ]);
       const byId = new Map([...mine, ...ofSquads].map((r) => [r.id, r]));
@@ -145,7 +160,7 @@ export class RetroApp extends LitElement {
   render() {
     if (this._selected) return this._renderDetail();
     if (this.canManage) {
-      return html`<retro-manager .uid=${this.leaderUid} @retro-select=${(e) => this._select(e.detail.retro)}></retro-manager>`;
+      return html`<retro-manager .uid=${this.leaderUid} .scopeUids=${this.leaderUids} @retro-select=${(e) => this._select(e.detail.retro)}></retro-manager>`;
     }
     return this._renderEngineerList();
   }

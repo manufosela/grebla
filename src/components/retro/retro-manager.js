@@ -15,6 +15,7 @@ import { listSquadsCatalog } from '../../lib/squads.js';
 export class RetroManager extends LitElement {
   static properties = {
     uid: { attribute: false },
+    scopeUids: { attribute: false },
     _retros: { state: true },
     _squads: { state: true },
     _copiedId: { state: true },
@@ -63,6 +64,12 @@ export class RetroManager extends LitElement {
   constructor() {
     super();
     this.uid = null;
+    /**
+     * Rama de un supermanager (RMR-TSK-0294): uids cuyos retros LISTA además de
+     * los suyos. null = solo los suyos. Crear sigue siendo a nombre de `uid`.
+     * @type {string[]|null}
+     */
+    this.scopeUids = null;
     this._retros = [];
     this._new = { format: 'ssc', name: '', sprint: '', scopeType: 'team', squadId: '' };
     /** @type {Array<{id:string,name:string}>} catálogo de squads (RMR-TSK-0278) */
@@ -77,11 +84,19 @@ export class RetroManager extends LitElement {
     this._loadedFor = null;
   }
 
+  /** Fuente de la lista: la rama del supermanager si la hay, o su propio uid. */
+  get _scopeKey() {
+    return this.scopeUids?.length ? this.scopeUids.join(',') : (this.uid ?? '');
+  }
+
   updated(changed) {
-    if (changed.has('uid') && this.uid && this.uid !== this._loadedFor) {
-      this._loadedFor = this.uid;
-      this._load();
-    }
+    // La rama puede llegar DESPUÉS que el uid (hay que leer /leaders para
+    // resolverla), así que también se recarga cuando cambia.
+    if (!changed.has('uid') && !changed.has('scopeUids')) return;
+    const key = this._scopeKey;
+    if (!key || key === this._loadedFor) return;
+    this._loadedFor = key;
+    this._load();
   }
 
   async _load() {
@@ -89,7 +104,7 @@ export class RetroManager extends LitElement {
     this._error = '';
     try {
       const [retros, squads] = await Promise.all([
-        listRetros(this.uid),
+        listRetros(this.scopeUids?.length ? this.scopeUids : this.uid),
         listSquadsCatalog().catch(() => []),
       ]);
       this._retros = retros;

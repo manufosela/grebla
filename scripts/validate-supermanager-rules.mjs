@@ -23,7 +23,10 @@ import {
   assertSucceeds,
   assertFails,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  doc, collection, query, where,
+  getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+} from 'firebase/firestore';
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT ?? 'demo-grebla';
 
@@ -65,6 +68,9 @@ try {
     await setDoc(doc(db, 'people', 'pout'), { name: 'Fuera de rama', ownerLeaderUid: 'lone-uid' });
     await setDoc(doc(db, 'people', 'pb1', 'seniority', 'r1'), { date: '2026-07-01', valor: 3 });
     await setDoc(doc(db, 'people', 'pout', 'seniority', 'r1'), { date: '2026-07-01', valor: 3 });
+    // Retros y acciones de la rama (RMR-TSK-0294).
+    await setDoc(doc(db, 'retros', 'retro-em1'), { name: 'Retro EM1', ownerLeaderUid: 'em1-uid', status: 'open' });
+    await setDoc(doc(db, 'retroActions', 'act-em1'), { text: 'Acción', ownerLeaderUid: 'em1-uid', status: 'pending', owners: [] });
   });
 
   const head = env.authenticatedContext('head-uid').firestore();
@@ -107,6 +113,38 @@ try {
     assertSucceeds(setDoc(doc(head, 'people', 'pb1', 'seniority', 'r2'), { date: '2026-07-10', valor: 4 })),
   );
 
+  // Las comprobaciones anteriores usan getDoc (documento a documento), pero la
+  // app LISTA con getDocs + where('ownerLeaderUid','in',[...]). Firestore valida
+  // las queries de forma conservadora ("rules are not filters") y puede
+  // rechazarlas aunque el getDoc equivalente pase — es lo que provocó
+  // RMR-BUG-0009. Así que se valida la QUERY tal y como la lanza la tool Equipo.
+  console.log('El Head LISTA su rama con una QUERY (no solo getDoc):');
+  await check(
+    'Head LISTA con where(ownerLeaderUid, in, [su rama]) — la query de peopleRepo',
+    assertSucceeds(getDocs(query(
+      collection(head, 'people'),
+      where('ownerLeaderUid', 'in', ['em1-uid', 'em2-uid']),
+    ))),
+  );
+  await check(
+    'Head NO LISTA si cuela en el in a un líder que no le reporta',
+    assertFails(getDocs(query(
+      collection(head, 'people'),
+      where('ownerLeaderUid', 'in', ['em1-uid', 'lone-uid']),
+    ))),
+  );
+  await check(
+    'Head NO LISTA la colección entera sin filtro de rama',
+    assertFails(getDocs(collection(head, 'people'))),
+  );
+  await check(
+    'Regresión: un líder normal LISTA lo suyo con where(ownerLeaderUid, ==, su uid)',
+    assertSucceeds(getDocs(query(
+      collection(em1, 'people'),
+      where('ownerLeaderUid', '==', 'em1-uid'),
+    ))),
+  );
+
   console.log('El Head NO transfiere propiedad ni crea/borra:');
   await check(
     'Head NO reasigna el ownerLeaderUid (no roba la persona a otra rama)',
@@ -137,6 +175,31 @@ try {
   await check(
     'Head NO ESCRIBE el subárbol de gente fuera de su rama',
     assertFails(setDoc(doc(head, 'people', 'pout', 'seniority', 'r2'), { date: '2026-07-10', valor: 4 })),
+  );
+
+  // El Head puede no ser líder de un equipo ni miembro con ficha, así que sin
+  // isSuperManager() en canAccessRetro() no vería ni una retro. OJO: la lectura de
+  // /retros es amplia a propósito (colaborativa: cualquiera de la organización la
+  // lee); quien acota la rama aquí es la QUERY del cliente, no la regla.
+  console.log('Retros: el Head alcanza las de su rama:');
+  await check(
+    'Head LEE una retro de un líder de su rama',
+    assertSucceeds(getDoc(doc(head, 'retros', 'retro-em1'))),
+  );
+  await check(
+    'Head LISTA retros con where(ownerLeaderUid, in, [su rama])',
+    assertSucceeds(getDocs(query(
+      collection(head, 'retros'),
+      where('ownerLeaderUid', 'in', ['em1-uid', 'em2-uid']),
+    ))),
+  );
+  await check(
+    'Head LISTA las acciones pendientes de su rama',
+    assertSucceeds(getDocs(query(
+      collection(head, 'retroActions'),
+      where('ownerLeaderUid', 'in', ['em1-uid', 'em2-uid']),
+      where('status', '==', 'pending'),
+    ))),
   );
 
   console.log('Regresión: un líder normal no gana poder de rama; el dueño conserva su acceso:');
