@@ -10,7 +10,7 @@
     "publish:version": "node scripts/publish-version.mjs",
     "preview": "astro preview",
     "check": "astro check",
-    "test": "vitest run",
+    "test": "vitest run --no-file-parallelism",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "sonar": "npx @sonar/scan",
