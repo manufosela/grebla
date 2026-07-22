@@ -58,10 +58,31 @@ function latestPerPerson(entries) {
 }
 
 /**
+ * Departamento de un manager: el Head del que cuelga, subiendo por `reportsTo`
+ * hasta dar con alguien que tenga el rol de Head (RMR-TSK-0296). Si el propio
+ * manager es Head, ese es su departamento. Devuelve null si no cuelga de
+ * ninguno. Lleva registro de visitados para terminar ante un ciclo en los datos.
+ * @param {string|null} leaderUid
+ * @param {Record<string, string|null>} reportsToByUid
+ * @param {Set<string>} headUids
+ * @returns {string|null}
+ */
+export function departmentOf(leaderUid, reportsToByUid, headUids) {
+  let current = leaderUid;
+  const seen = new Set();
+  while (current && !seen.has(current)) {
+    if (headUids.has(current)) return current;
+    seen.add(current);
+    current = reportsToByUid[current] ?? null;
+  }
+  return null;
+}
+
+/**
  * @param {string} weekIso
  * @param {Array<Record<string, any>>} entries  entradas de la semana (crudas)
- * @param {Record<string, { guilds?: string[], labels?: string[] }>} peopleByUid
- * @param {{ minCount?: number, totalPeople?: number }} [opts]
+ * @param {Record<string, { guilds?: string[], labels?: string[], department?: string|null }>} peopleByUid
+ * @param {{ minCount?: number, totalPeople?: number, departmentNames?: Record<string, string> }} [opts]
  * @returns {object} documento de agregado
  */
 export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts = {}) {
@@ -72,6 +93,11 @@ export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts =
   /** @type {Map<string, ReturnType<typeof emptyAcc>>} */
   const guilds = new Map();
   const labels = new Map();
+  // Corte por departamento (RMR-TSK-0296). Es el primer eje de la marea que
+  // sigue la línea de mando —gremio y squad son transversales a propósito—, así
+  // que se apoya en el MISMO umbral que los demás: un departamento por debajo
+  // del mínimo no se publica, porque sería mirar a personas concretas.
+  const departments = new Map();
 
   const bump = (map, name, entry) => {
     if (!map.has(name)) map.set(name, emptyAcc());
@@ -83,6 +109,7 @@ export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts =
     const person = peopleByUid[entry.uid] || {};
     for (const g of person.guilds || []) if (g) bump(guilds, g, entry);
     for (const l of person.labels || []) if (l) bump(labels, l, entry);
+    if (person.department) bump(departments, person.department, entry);
   }
 
   // Solo grupos con suficientes respuestas (privacidad), ordenados por nombre.
@@ -103,5 +130,12 @@ export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts =
       : { count: general.count, means: null, words: [] },
     guilds: groups(guilds),
     labels: groups(labels),
+    // El departamento se agrupa por el UID del Head, no por su nombre: dos Heads
+    // pueden llamarse igual y fundir sus ramas en un corte que mezclaría gente de
+    // departamentos distintos. El nombre viaja aparte, solo para mostrarlo.
+    departments: groups(departments).map((d) => ({
+      ...d,
+      name: (opts.departmentNames ?? {})[d.id] ?? d.id,
+    })),
   };
 }

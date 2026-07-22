@@ -14,6 +14,7 @@ import { sparkline } from './sparkline.js';
 
 const SCOPES = [
   ['general', 'Toda ingeniería'],
+  ['departments', 'Por departamento'],
   ['guilds', 'Por gremio'],
   ['squads', 'Por squad'],
   ['trends', 'Tendencias'],
@@ -249,7 +250,7 @@ export class MareaResults extends LitElement {
     const read = pulseReading(group.means.energia, group.means.animo);
     return html`
       <div class="segcard">
-        <div class="seg-h"><span class="seg-name">${group.id}</span><span class="seg-part">${group.count} pers.</span></div>
+        <div class="seg-h"><span class="seg-name">${group.name ?? group.id}</span><span class="seg-part">${group.count} pers.</span></div>
         <div class="seg-read"><span class="rdot" style="background:${readingColor(read.name)}"></span>${read.name}</div>
         <div class="mini">${BARS.map((b) => this._renderMiniBar(group.means, b))}</div>
         ${this._renderWordCloud(group.words, true)}
@@ -262,6 +263,9 @@ export class MareaResults extends LitElement {
   }
 
   _renderScope() {
+    // El departamento agrupa a toda la rama de un Head. Sigue el mismo umbral
+    // que los demás cortes: si no llega al mínimo, no aparece (RMR-TSK-0296).
+    if (this._scope === 'departments') return this._renderGroups(this._agg?.departments, 'Aún no hay departamentos con 3 o más respuestas esta semana.');
     if (this._scope === 'guilds') return this._renderGroups(this._agg?.guilds, 'Aún no hay gremios con 3 o más respuestas esta semana.');
     if (this._scope === 'squads') return this._renderGroups(this._agg?.labels, 'Aún no hay squads con 3 o más respuestas esta semana.');
     if (this._scope === 'trends') return this._renderTrends();

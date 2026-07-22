@@ -115,3 +115,46 @@ describe('computeAggregates — umbral de anonimato (RMR-BUG-0051)', () => {
     expect(agg.byLeader.SOLO).toBeDefined();
   });
 });
+
+describe('computeAggregates — corte por departamento (RMR-TSK-0296)', () => {
+  // L1 y L2 son managers del mismo departamento; L3 es de otro.
+  const departmentByLeader = { L1: 'Tecnología', L2: 'Tecnología', L3: 'Ventas' };
+  const sessions = [
+    sess('r1', 'L1', [['a', 1], ['b', 2], ['c', 3]]),
+    sess('r1', 'L2', [['a', 1], ['b', 3], ['c', 2]]),
+    sess('r1', 'L2', [['a', 2], ['b', 1], ['c', 3]]),
+    sess('r1', 'L3', [['a', 3], ['b', 1], ['c', 2]]),
+  ];
+
+  it('agrupa los equipos de un mismo departamento en un solo corte', () => {
+    const agg = computeAggregates(sessions, IDS, { game: 'g', size, departmentByLeader });
+    expect(agg.byDepartment['Tecnología'].respondents).toBe(3); // L1 + L2
+  });
+
+  it('hereda el umbral: un departamento pequeño NO se publica', () => {
+    const agg = computeAggregates(sessions, IDS, { game: 'g', size, departmentByLeader });
+    expect(agg.byDepartment.Ventas).toBeUndefined(); // L3 solo tiene 1
+  });
+
+  it('sin mapa de departamentos no hay corte, pero nada se rompe', () => {
+    const agg = computeAggregates(sessions, IDS, { game: 'g', size });
+    expect(agg.byDepartment).toEqual({});
+  });
+
+  it('un equipo que no cuelga de ningún departamento no inventa uno', () => {
+    const agg = computeAggregates(sessions, IDS, { game: 'g', size, departmentByLeader: { L1: 'Tecnología' } });
+    expect(Object.keys(agg.byDepartment)).toEqual([]); // L1 solo tiene 1 respuesta
+  });
+});
+
+describe('computeAggregates — departamento fantasma (verificación del review)', () => {
+  it('varios equipos SIN departamento no crean un corte fantasma aunque superen el umbral', () => {
+    const huerfanas = [
+      sess('r1', 'X1', [['a', 1], ['b', 2], ['c', 3]]),
+      sess('r1', 'X2', [['a', 1], ['b', 2], ['c', 3]]),
+      sess('r1', 'X3', [['a', 1], ['b', 2], ['c', 3]]),
+    ];
+    const agg = computeAggregates(huerfanas, IDS, { game: 'g', size, departmentByLeader: {} });
+    expect(Object.keys(agg.byDepartment)).toEqual([]);
+  });
+});

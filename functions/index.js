@@ -14,7 +14,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import * as coins from './coins.js';
 import { sign, coinsKmsKeyName } from './signer.js';
-import { computePulseAggregate } from './pulseAggregate.js';
+import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
 
 initializeApp();
 
@@ -1500,10 +1500,12 @@ function motWithheldBlock(respondents, cardIds, size) {
 }
 
 /** Agregados completos de un juego (espejo de computeAggregates del dominio). */
-function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size, minCount = MOT_MIN_RESPONDENTS) {
+function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size, minCount = MOT_MIN_RESPONDENTS, departmentByLeader = {}) {
   const all = sessions ?? [];
   const byRoundSessions = motGroupBy(all, (s) => s.roundId);
   const byLeaderSessions = motGroupBy(all, (s) => s.equipoId);
+  // Corte por departamento (RMR-TSK-0296): junta los equipos del mismo Head.
+  const byDeptSessions = motGroupBy(all, (s) => departmentByLeader[s.equipoId] ?? null);
 
   // Los cortes por debajo del umbral NO se escriben: el documento es público
   // para cualquier autenticado, así que lo que no se publica es lo único que
@@ -1517,6 +1519,11 @@ function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size, mi
   for (const [leaderId, list] of byLeaderSessions) {
     if (list.length < minCount) continue;
     byLeader[leaderId] = motAggregateBlock(list, cardIds, size);
+  }
+  const byDepartment = {};
+  for (const [dept, list] of byDeptSessions) {
+    if (list.length < minCount) continue;
+    byDepartment[dept] = motAggregateBlock(list, cardIds, size);
   }
 
   const roundOrder = orderedRoundIds.length > 0 ? orderedRoundIds : [...byRoundSessions.keys()];
@@ -1536,6 +1543,7 @@ function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size, mi
       : motWithheldBlock(all.length, cardIds, size),
     byRound,
     byLeader,
+    byDepartment,
     evolution,
     updatedAt: new Date().toISOString(),
   };
@@ -1566,18 +1574,42 @@ export const onMotivatorSessionWritten = onDocumentWritten(
       return;
     }
     const db = getFirestore();
-    const [sessionsSnap, roundsSnap] = await Promise.all([
+    const [sessionsSnap, roundsSnap, leadersSnap, headsSnap] = await Promise.all([
       db.collection('motivatorSessions').where('game', '==', game).get(),
       db.collection('motivatorRounds').where('game', '==', game).get(),
+      db.collection('leaders').get(),
+      db.collection('supermanagers').get(),
     ]);
+    // Jerarquía para el corte por departamento (RMR-TSK-0296): equipoId ya ES un
+    // leaderUid, así que basta con saber de qué Head cuelga cada manager.
+    const reportsToByUid = {};
+    for (const d of leadersSnap.docs) reportsToByUid[d.id] = d.data().reportsTo ?? null;
+    const headNames = new Map();
+    for (const d of headsSnap.docs) headNames.set(d.id, d.data().displayName || d.data().email || d.id);
+    const headUids = new Set(headNames.keys());
+    // Se agrupa por UID del Head (clave estable): dos Heads pueden llamarse
+    // igual, y fundir sus ramas mezclaría departamentos distintos.
+    /** @type {Record<string, string>} leaderUid → uid del Head */
+    const departmentByLeader = {};
+    for (const leaderUid of Object.keys(reportsToByUid)) {
+      const headUid = departmentOf(leaderUid, reportsToByUid, headUids);
+      if (headUid) departmentByLeader[leaderUid] = headUid;
+    }
     const sessions = sessionsSnap.docs.map((d) => d.data());
     const orderedRoundIds = roundsSnap.docs
       .map((d) => ({ id: d.id, startMs: motToMs(d.data().startAt) }))
       .sort((a, b) => a.startMs - b.startMs)
       .map((r) => r.id);
 
-    const aggregates = motComputeAggregates(sessions, MOTIVATOR_DECK_IDS[game], game, orderedRoundIds, MOTIVATOR_DECK_SIZE);
-    await db.doc(`motivatorAggregates/${game}`).set(aggregates);
+    const aggregates = motComputeAggregates(
+      sessions, MOTIVATOR_DECK_IDS[game], game, orderedRoundIds, MOTIVATOR_DECK_SIZE,
+      MOT_MIN_RESPONDENTS, departmentByLeader,
+    );
+    // Nombres aparte de la agrupación, solo para mostrarlos.
+    await db.doc(`motivatorAggregates/${game}`).set({
+      ...aggregates,
+      departmentNames: Object.fromEntries(headNames),
+    });
     console.log(`[motivators] agregados de ${game} recalculados (${sessions.length} sesiones).`);
   },
 );
@@ -1585,7 +1617,8 @@ export const onMotivatorSessionWritten = onDocumentWritten(
 /**
  * Marea (RMR-TSK-0236): recalcula /pulseAggregates/{weekIso} cada vez que alguien
  * registra o edita su marea. Solo expone AGREGADOS ANÓNIMOS (medias por dimensión,
- * general + por gremio + por label/squad) y solo de grupos con >=3 respuestas.
+ * general + por gremio + por label/squad + por departamento) y solo de grupos
+ * con >=3 respuestas.
  * Los registros individuales (/pulse/{uid}/entries) NUNCA se exponen. Admin SDK.
  */
 export const aggregatePulse = onDocumentWritten(
@@ -1602,20 +1635,46 @@ export const aggregatePulse = onDocumentWritten(
     // collectionGroup('entries') roza el ledger de coins, pero esas entradas no
     // tienen weekIso, así que el filtro las excluye (y el índice solo indexa las
     // que sí lo tienen). El mapa uid→persona da los gremios/labels (nombres).
-    const [entriesSnap, peopleSnap] = await Promise.all([
+    const [entriesSnap, peopleSnap, leadersSnap, headsSnap] = await Promise.all([
       db.collectionGroup('entries').where('weekIso', '==', weekIso).get(),
       db.collection('people').get(),
+      db.collection('leaders').get(),
+      db.collection('supermanagers').get(),
     ]);
     const entries = entriesSnap.docs.map((d) => d.data());
-    /** @type {Record<string, { guilds: string[], labels: string[] }>} */
+    // Jerarquía para el corte por departamento (RMR-TSK-0296): de cada manager,
+    // a quién reporta; y qué uids son Head, con su nombre visible. El eje se
+    // guarda por NOMBRE, igual que gremios y squads, para que la vista no tenga
+    // que resolver uids.
+    /** @type {Record<string, string|null>} */
+    const reportsToByUid = {};
+    for (const doc of leadersSnap.docs) reportsToByUid[doc.id] = doc.data().reportsTo ?? null;
+    /** @type {Map<string, string>} */
+    const headNames = new Map();
+    for (const doc of headsSnap.docs) {
+      const h = doc.data();
+      headNames.set(doc.id, h.displayName || h.email || doc.id);
+    }
+    const headUids = new Set(headNames.keys());
+    /** @type {Record<string, { guilds: string[], labels: string[], department: string|null }>} */
     const peopleByUid = {};
     let totalPeople = 0;
     for (const doc of peopleSnap.docs) {
       const p = doc.data();
       if (p.active !== false) totalPeople += 1;
-      if (p.uid) peopleByUid[p.uid] = { guilds: p.guilds || [], labels: p.labels || [] };
+      if (!p.uid) continue;
+      // Se agrupa por UID del Head (clave estable), no por su nombre.
+      peopleByUid[p.uid] = {
+        guilds: p.guilds || [],
+        labels: p.labels || [],
+        department: departmentOf(p.ownerLeaderUid ?? null, reportsToByUid, headUids),
+      };
     }
-    const aggregate = computePulseAggregate(weekIso, entries, peopleByUid, { minCount: 3, totalPeople });
+    const aggregate = computePulseAggregate(weekIso, entries, peopleByUid, {
+      minCount: 3,
+      totalPeople,
+      departmentNames: Object.fromEntries(headNames),
+    });
     await db.doc(`pulseAggregates/${weekIso}`).set({ ...aggregate, updatedAt: FieldValue.serverTimestamp() });
     console.log(`[marea] agregado ${weekIso} recalculado (${aggregate.respondents} personas).`);
   },

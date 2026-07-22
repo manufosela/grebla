@@ -92,9 +92,26 @@ export class MotivatorsAggregates extends LitElement {
     return (this.rounds ?? []).find((r) => r.id === roundId)?.name ?? roundId;
   }
 
+  /** Los departamentos se distinguen de los equipos con un prefijo en el valor. */
+  static DEPT_PREFIX = 'dept:';
+
   _block() {
     if (this._scope === 'global') return this._agg?.global ?? null;
+    if (this._scope.startsWith(MotivatorsAggregates.DEPT_PREFIX)) {
+      return this._agg?.byDepartment?.[this._scope.slice(MotivatorsAggregates.DEPT_PREFIX.length)] ?? null;
+    }
     return this._agg?.byLeader?.[this._scope] ?? null;
+  }
+
+  /**
+   * Nombre del ámbito elegido, sea departamento o equipo. Los departamentos se
+   * agrupan por uid del Head (dos Heads pueden llamarse igual), así que el
+   * nombre visible se resuelve con el mapa que publica el agregado.
+   */
+  _scopeLabel(scope) {
+    if (!scope.startsWith(MotivatorsAggregates.DEPT_PREFIX)) return this._leaderLabel(scope);
+    const uid = scope.slice(MotivatorsAggregates.DEPT_PREFIX.length);
+    return this._agg?.departmentNames?.[uid] ?? uid;
   }
 
   render() {
@@ -110,7 +127,7 @@ export class MotivatorsAggregates extends LitElement {
           <span class="respondents">${this._agg.respondents} ${this._agg.respondents === 1 ? 'respuesta' : 'respuestas'} en total</span>
           ${this._renderScopeSelect()}
         </div>
-        <h4>Ranking${this._scope === 'global' ? ' global' : ` · ${this._leaderLabel(this._scope)}`}</h4>
+        <h4>Ranking${this._scope === 'global' ? ' global' : ` · ${this._scopeLabel(this._scope)}`}</h4>
         ${this._renderRanking(block)}
         ${this._scope === 'global' ? this._renderEvolution() : null}
       </div>`;
@@ -118,14 +135,25 @@ export class MotivatorsAggregates extends LitElement {
 
   _renderScopeSelect() {
     const leaders = Object.keys(this._agg.byLeader ?? {});
-    if (leaders.length === 0) return null;
+    const departments = Object.keys(this._agg.byDepartment ?? {});
+    if (leaders.length === 0 && departments.length === 0) return null;
     return html`<span>
       <label for="scope">Ver: </label>
       <select id="scope" @change=${(e) => { this._scope = e.target.value; }}>
-        <option value="global" ?selected=${this._scope === 'global'}>Global (todo el equipo)</option>
-        ${leaders.map((uid) => this._scopeOption(uid))}
+        <option value="global" ?selected=${this._scope === 'global'}>Global (toda la organización)</option>
+        ${departments.length === 0 ? null : html`<optgroup label="Departamentos">
+          ${departments.map((name) => this._deptOption(name))}
+        </optgroup>`}
+        ${leaders.length === 0 ? null : html`<optgroup label="Equipos">
+          ${leaders.map((uid) => this._scopeOption(uid))}
+        </optgroup>`}
       </select>
     </span>`;
+  }
+
+  _deptOption(uid) {
+    const value = `${MotivatorsAggregates.DEPT_PREFIX}${uid}`;
+    return html`<option value=${value} ?selected=${this._scope === value}>${this._agg?.departmentNames?.[uid] ?? uid}</option>`;
   }
 
   _scopeOption(uid) {
