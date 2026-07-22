@@ -2,7 +2,7 @@
  * Conmutador de vistas (RMR-TSK-0250): un superadmin o un manager (líder) puede
  * cambiar entre sus vistas para ver la app como la ve cada rol. Vive en la nav
  * (Base.astro) y solo se pinta cuando hay 2+ vistas disponibles (resolveViews):
- *  - Gestión  → /admin        (panel de superadmin/viewer; sin flag)
+ *  - Admin (superadmin) → /admin  (panel de superadmin/viewer; sin flag)
  *  - Manager  → /             (herramientas de manager; flag 'leader')
  *  - Ingeniero → /mi-espacio  (su propio «Mi espacio»; flag 'engineer')
  * El flag de vista vive en sessionStorage ('grebla-view'); lo leen landing.js
@@ -17,7 +17,7 @@ const VIEW_FLAG = 'grebla-view';
 
 /** Metadatos de cada vista: etiqueta, destino y flag de sesión que la activa. */
 const VIEW_META = {
-  gestion: { label: 'Gestión', title: 'Panel de gestión (superadmin)', path: '/admin', flag: null },
+  gestion: { label: 'Admin (superadmin)', title: 'Panel de administración (superadmin)', path: '/admin', flag: null },
   manager: { label: 'Manager', title: 'Herramientas de manager', path: '/', flag: 'leader' },
   engineer: { label: 'Ingeniero', title: 'Mi espacio, como lo ve un ingeniero', path: '/mi-espacio', flag: 'engineer' },
 };
