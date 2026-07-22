@@ -46,7 +46,9 @@ describe('computeAggregates', () => {
       sess('r2', 'L1', [['a', 3], ['b', 2], ['c', 1]]),
       sess('r2', 'L2', [['a', 3], ['b', 1], ['c', 2]]),
     ];
-    const agg = computeAggregates(sessions, IDS, { game: 'g', orderedRoundIds: ['r1', 'r2'], size });
+    // minCount: 1 para poder ver el desglose fino; el umbral real (3) se prueba
+    // en el bloque de anonimato de más abajo.
+    const agg = computeAggregates(sessions, IDS, { game: 'g', orderedRoundIds: ['r1', 'r2'], size, minCount: 1 });
 
     expect(agg.respondents).toBe(3);
     expect(agg.byRound.r1.respondents).toBe(1);
@@ -65,5 +67,51 @@ describe('computeAggregates', () => {
     const agg = computeAggregates([], IDS, { game: 'g', size });
     expect(agg.respondents).toBe(0);
     expect(agg.global.ranking).toHaveLength(3);
+  });
+});
+
+describe('computeAggregates — umbral de anonimato (RMR-BUG-0051)', () => {
+  /** Tres sesiones de L1 (llega al umbral) y una sola de SOLO (no llega). */
+  const sessions = [
+    sess('r1', 'L1', [['a', 1], ['b', 2], ['c', 3]]),
+    sess('r1', 'L1', [['a', 1], ['b', 3], ['c', 2]]),
+    sess('r1', 'L1', [['a', 2], ['b', 1], ['c', 3]]),
+    sess('r2', 'SOLO', [['a', 3], ['b', 1], ['c', 2]]),
+  ];
+
+  it('NO publica el corte de un equipo por debajo del umbral', () => {
+    // Con una sola sesión, `distribution` y `averagePosition` reconstruyen el
+    // orden exacto que eligió esa persona: publicar el bloque la identifica.
+    const agg = computeAggregates(sessions, IDS, { game: 'g', size });
+    expect(agg.byLeader.L1).toBeDefined();
+    expect(agg.byLeader.SOLO).toBeUndefined();
+  });
+
+  it('NO publica una ronda por debajo del umbral', () => {
+    const agg = computeAggregates(sessions, IDS, { game: 'g', size });
+    expect(agg.byRound.r1).toBeDefined();
+    expect(agg.byRound.r2).toBeUndefined();
+  });
+
+  it('la evolución salta las rondas retenidas en vez de romperse', () => {
+    const agg = computeAggregates(sessions, IDS, { game: 'g', orderedRoundIds: ['r1', 'r2'], size });
+    expect(agg.evolution.a.map((p) => p.roundId)).toEqual(['r1']);
+  });
+
+  it('el global por debajo del umbral conserva el recuento pero no los datos', () => {
+    const twoOnly = sessions.slice(0, 2);
+    const agg = computeAggregates(twoOnly, IDS, { game: 'g', size });
+    expect(agg.global.respondents).toBe(2); // cuántos respondieron sí se sabe
+    expect(agg.global.ranking.every((s) => s.averagePosition === null)).toBe(true);
+    expect(agg.global.byMotivator.a.distribution.every((n) => n === 0)).toBe(true);
+  });
+
+  it('publica el umbral aplicado para que la interfaz pueda explicarlo', () => {
+    expect(computeAggregates(sessions, IDS, { game: 'g', size }).minCount).toBe(3);
+  });
+
+  it('permite bajar el umbral explícitamente (arneses y tests)', () => {
+    const agg = computeAggregates(sessions, IDS, { game: 'g', size, minCount: 1 });
+    expect(agg.byLeader.SOLO).toBeDefined();
   });
 });

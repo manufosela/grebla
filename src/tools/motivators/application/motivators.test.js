@@ -106,14 +106,18 @@ describe('usecases motivadores (memoria)', () => {
     await createRound(p, { game: GAME, name: 'Julio', startAt: '2026-07-12T00:00:00Z', endAt: '2026-07-15T00:00:00Z' }, NOW);
     const round = await getActiveRound(p, GAME, NOW);
     const ids = deckCardIds(GAME);
-    // dos jugadores ponen 'curiosity' primero
+    // Tres jugadores ponen 'curiosity' primero. Son TRES y no dos porque el
+    // umbral de anonimato (RMR-BUG-0051) retiene los cortes con menos de 3
+    // respuestas, y el adaptador en memoria aplica el mismo criterio que
+    // producción: si aquí se vieran datos que allí se ocultan, engañaría.
     await saveSession(p, { round, identity: identity('p1', 'L1'), orden: ordenFrom(ids) }, NOW);
     await saveSession(p, { round, identity: identity('p2', 'L1'), orden: ordenFrom(ids) }, NOW);
+    await saveSession(p, { round, identity: identity('p3', 'L1'), orden: ordenFrom(ids) }, NOW);
 
     const agg = await getAggregates(p, GAME);
-    expect(agg.respondents).toBe(2);
+    expect(agg.respondents).toBe(3);
     expect(agg.global.byMotivator.curiosity.averagePosition).toBe(1);
     expect(agg.global.ranking[0].motivadorId).toBe('curiosity');
-    expect(agg.byLeader.L1.respondents).toBe(2);
+    expect(agg.byLeader.L1.respondents).toBe(3);
   });
 });

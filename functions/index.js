@@ -1487,16 +1487,37 @@ function motGroupBy(sessions, keyOf) {
   return groups;
 }
 
+/**
+ * Mínimo de respuestas para publicar un corte (RMR-BUG-0051). Espejo de
+ * MIN_RESPONDENTS en src/tools/motivators/domain/aggregate.js. Con menos, la
+ * distribución y la posición media reconstruyen lo que eligió cada persona.
+ */
+const MOT_MIN_RESPONDENTS = 3;
+
+/** Corte retenido por anonimato: conserva el recuento, no lo que eligieron. */
+function motWithheldBlock(respondents, cardIds, size) {
+  return { ...motAggregateBlock([], cardIds, size), respondents };
+}
+
 /** Agregados completos de un juego (espejo de computeAggregates del dominio). */
-function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size) {
+function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size, minCount = MOT_MIN_RESPONDENTS) {
   const all = sessions ?? [];
   const byRoundSessions = motGroupBy(all, (s) => s.roundId);
   const byLeaderSessions = motGroupBy(all, (s) => s.equipoId);
 
+  // Los cortes por debajo del umbral NO se escriben: el documento es público
+  // para cualquier autenticado, así que lo que no se publica es lo único que
+  // de verdad queda protegido.
   const byRound = {};
-  for (const [roundId, list] of byRoundSessions) byRound[roundId] = motAggregateBlock(list, cardIds, size);
+  for (const [roundId, list] of byRoundSessions) {
+    if (list.length < minCount) continue;
+    byRound[roundId] = motAggregateBlock(list, cardIds, size);
+  }
   const byLeader = {};
-  for (const [leaderId, list] of byLeaderSessions) byLeader[leaderId] = motAggregateBlock(list, cardIds, size);
+  for (const [leaderId, list] of byLeaderSessions) {
+    if (list.length < minCount) continue;
+    byLeader[leaderId] = motAggregateBlock(list, cardIds, size);
+  }
 
   const roundOrder = orderedRoundIds.length > 0 ? orderedRoundIds : [...byRoundSessions.keys()];
   const evolution = {};
@@ -1509,7 +1530,10 @@ function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size) {
   return {
     game,
     respondents: all.length,
-    global: motAggregateBlock(all, cardIds, size),
+    minCount,
+    global: all.length >= minCount
+      ? motAggregateBlock(all, cardIds, size)
+      : motWithheldBlock(all.length, cardIds, size),
     byRound,
     byLeader,
     evolution,
@@ -1526,8 +1550,10 @@ const motToMs = (v) => {
 
 /**
  * Recalcula el documento público /motivatorAggregates/{game} cada vez que se
- * crea, edita o borra una sesión. Nunca expone datos individuales: solo medias,
- * medianas, top-3 y distribución por motivador. Admin SDK (omite reglas).
+ * crea, edita o borra una sesión. Publica medias, medianas, top-3 y distribución
+ * por motivador, y SOLO de los cortes que llegan al umbral de anonimato
+ * (RMR-BUG-0051): con una o dos respuestas esos mismos números reconstruyen el
+ * orden que eligió una persona concreta. Admin SDK (omite reglas).
  */
 export const onMotivatorSessionWritten = onDocumentWritten(
   { region: 'europe-west1', document: 'motivatorSessions/{sessionId}' },
