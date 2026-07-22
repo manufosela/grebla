@@ -15,6 +15,64 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 
+// ── Alcance por dueño (uid suelto o rama de un supermanager) ─────────────────
+
+/**
+ * Trocea ids para el límite de 30 valores del operador `in` de Firestore.
+ * Deduplica y descarta vacíos; sin ids no devuelve ningún lote, para que quien
+ * llama no lance una query imposible. Exportado para poder testearlo, igual que
+ * el `chunk` de la tool Equipo.
+ * @param {ReadonlyArray<string>} [values]
+ * @param {number} [size]
+ * @returns {string[][]}
+ */
+export function chunkIds(values, size = 30) {
+  const unique = [...new Set((values ?? []).filter(Boolean))];
+  const chunks = [];
+  for (let i = 0; i < unique.length; i += size) chunks.push(unique.slice(i, i + size));
+  return chunks;
+}
+
+/** Milisegundos de un createdAt (Timestamp de Firestore, número o ausente). */
+function createdAtMs(value) {
+  if (!value) return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  return 0;
+}
+
+/**
+ * Comparador «más recientes primero». Al consultar una rama, cada lote del `in`
+ * llega ordenado por su cuenta, así que la fusión se reordena en cliente.
+ * @param {{ createdAt?: unknown }} a @param {{ createdAt?: unknown }} b
+ */
+export function byCreatedAtDesc(a, b) {
+  return createdAtMs(b?.createdAt) - createdAtMs(a?.createdAt);
+}
+
+/**
+ * Consulta una colección filtrando por dueño, admitiendo un uid suelto o la rama
+ * de un supermanager (RMR-TSK-0294). Con un solo dueño mantiene el `==` de
+ * siempre — mismo plan de consulta y mismas reglas que antes para los líderes—;
+ * con varios trocea el `in` a 30 y fusiona los lotes.
+ * @param {string} path
+ * @param {string|ReadonlyArray<string>} ownerLeaderUid
+ * @param {...import('firebase/firestore').QueryConstraint} constraints
+ * @returns {Promise<Array<Record<string, unknown>>>}
+ */
+async function listByOwner(path, ownerLeaderUid, ...constraints) {
+  const chunks = chunkIds(Array.isArray(ownerLeaderUid) ? ownerLeaderUid : [ownerLeaderUid]);
+  if (chunks.length === 0) return [];
+  const batches = await Promise.all(chunks.map(async (chunk) => {
+    const byOwner = chunk.length === 1
+      ? where('ownerLeaderUid', '==', chunk[0])
+      : where('ownerLeaderUid', 'in', chunk);
+    const snap = await getDocs(query(collection(db, path), byOwner, ...constraints));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }));
+  return batches.flat();
+}
+
 // ── Retros ──────────────────────────────────────────────────────────────────
 
 /**
@@ -59,11 +117,14 @@ export function setRetroReveal(retroId, patch) {
   return updateDoc(doc(db, 'retros', retroId), patch);
 }
 
-/** Retros de un líder, más recientes primero. @param {string} ownerLeaderUid */
+/**
+ * Retros de un líder —o de toda la rama de un supermanager—, más recientes
+ * primero. La fusión de varios lotes se reordena en cliente.
+ * @param {string|ReadonlyArray<string>} ownerLeaderUid
+ */
 export async function listRetros(ownerLeaderUid) {
-  const q = query(collection(db, 'retros'), where('ownerLeaderUid', '==', ownerLeaderUid), orderBy('createdAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const retros = await listByOwner('retros', ownerLeaderUid, orderBy('createdAt', 'desc'));
+  return retros.sort(byCreatedAtDesc);
 }
 
 /** @param {string} retroId */
@@ -235,25 +296,28 @@ export async function listRetroActions(retroId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/** Acciones pendientes de un líder (para arrastrar a la siguiente retro). @param {string} ownerLeaderUid */
-export async function listOpenActions(ownerLeaderUid) {
-  const q = query(collection(db, 'retroActions'), where('ownerLeaderUid', '==', ownerLeaderUid), where('status', '==', 'pending'));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+/**
+ * Acciones pendientes de un líder —o de toda la rama de un supermanager— para
+ * arrastrar a la siguiente retro.
+ * @param {string|ReadonlyArray<string>} ownerLeaderUid
+ */
+export function listOpenActions(ownerLeaderUid) {
+  return listByOwner('retroActions', ownerLeaderUid, where('status', '==', 'pending'));
 }
 
 /**
- * Roster del equipo de un líder ({uid, name} de sus personas con cuenta), para el
- * selector de owner. Solo lo puede leer el propio líder (reglas de /people); el
+ * Roster ({uid, name} de las personas con cuenta) para el selector de owner: el
+ * equipo de un líder o, si se pasa una rama, el de todos sus líderes. Solo lo
+ * puede leer el propio líder o el supermanager de la rama (reglas de /people); el
  * ingeniero ve los nombres de owner denormalizados en cada acción (ownerNames).
- * @param {string} leaderUid
+ * @param {string|ReadonlyArray<string>} leaderUid
  * @returns {Promise<Array<{ uid: string, name: string }>>}
  */
 export async function listTeamMembers(leaderUid) {
-  const snap = await getDocs(query(collection(db, 'people'), where('ownerLeaderUid', '==', leaderUid)));
+  const people = await listByOwner('people', leaderUid);
   // La self-ficha del líder cuenta como un miembro más del equipo (RMR-BUG-0041).
-  return snap.docs
-    .map((d) => ({ uid: d.data().uid, name: d.data().name ?? 'Sin nombre' }))
+  return people
+    .map((p) => ({ uid: p.uid, name: p.name ?? 'Sin nombre' }))
     .filter((m) => m.uid);
 }
 
@@ -265,10 +329,8 @@ export async function listTeamMembers(leaderUid) {
  * @returns {Promise<Array<Record<string, unknown>>>}
  */
 export async function listRetrosBySquads(squadIds) {
-  const ids = [...new Set((squadIds ?? []).filter(Boolean))];
-  if (ids.length === 0) return [];
-  const chunks = [];
-  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+  const chunks = chunkIds(squadIds);
+  if (chunks.length === 0) return [];
   const results = await Promise.all(chunks.map(async (chunk) => {
     const q = query(collection(db, 'retros'), where('scope.squadId', 'in', chunk));
     const snap = await getDocs(q);
