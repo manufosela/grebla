@@ -15,7 +15,10 @@
 import { LitElement, html, css } from 'lit';
 import './app-modal.js';
 import './admin/game-editor.js';
-import { listLeaders, addLeaderByEmail, removeLeader, renameLeader, grantAdminByEmail } from '../lib/leaders.js';
+import {
+  listLeaders, addLeaderByEmail, removeLeader, renameLeader, grantAdminByEmail,
+  listSupermanagers, setLeaderReportsTo,
+} from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
 import { listAllUsers, setUserRole, setUserDisplayName, listLinkedUids, assignUserToLeader } from '../lib/users.js';
@@ -58,8 +61,9 @@ function nextOrder(items) {
 }
 
 /** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
-const ROLE_LABEL = { superadmin: 'Superadmin', viewer: 'Viewer', leader: 'Manager', none: 'Sin rol' };
-const ROLE_COLOR = { superadmin: '#dc2626', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af' };
+const ROLE_LABEL = { superadmin: 'Superadmin', supermanager: 'Head', viewer: 'Viewer', leader: 'Manager', none: 'Sin rol' };
+// El violeta del Head contrasta AA sobre el texto blanco del badge, igual que los demás.
+const ROLE_COLOR = { superadmin: '#dc2626', supermanager: '#6d28d9', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af' };
 const loginFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short' });
 /** @param {unknown} ts Firestore Timestamp | number | null */
 function formatLogin(ts) {
@@ -100,6 +104,7 @@ export class SuperadminPanel extends LitElement {
     _tab: { state: true },
     _careerSub: { state: true },
     leaders: { state: true },
+    _supermanagers: { state: true },
     selected: { state: true },
     team: { state: true },
     teamLoading: { state: true },
@@ -306,6 +311,8 @@ export class SuperadminPanel extends LitElement {
     };
     /** @type {import('../lib/leaders.js').Leader[]} */
     this.leaders = [];
+    /** @type {Array<{uid:string,displayName:string|null,email:string|null}>} Heads para el selector de «reporta a» */
+    this._supermanagers = [];
     /** @type {import('../lib/leaders.js').Leader|null} */
     this.selected = null;
     /** @type {Array<Object>} */
@@ -589,9 +596,32 @@ export class SuperadminPanel extends LitElement {
   async _loadLeaders() {
     this._error = '';
     try {
-      this.leaders = await listLeaders();
+      // Los Heads se cargan a la vez que los managers porque alimentan el
+      // selector de «reporta a» (RMR-TSK-0295), pero son ACCESORIOS: si su
+      // lectura falla, la lista de managers tiene que seguir viéndose igual que
+      // antes de existir la jerarquía. Por eso allSettled y no all.
+      const [leadersResult, headsResult] = await Promise.allSettled([listLeaders(), listSupermanagers()]);
+      if (leadersResult.status === 'rejected') throw leadersResult.reason;
+      this.leaders = leadersResult.value;
+      this._supermanagers = headsResult.status === 'fulfilled' ? headsResult.value : [];
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los managers.';
+    }
+  }
+
+  /**
+   * Asigna o retira el Head al que reporta un manager. Define su rama: las
+   * herramientas resuelven el alcance del Head con el cierre transitivo de
+   * `reportsTo`, así que el cambio se nota en Equipo, Carrera y Retros.
+   * @param {string} uid @param {string} headUid  '' para quitar la asignación
+   */
+  async _setReportsTo(uid, headUid) {
+    this._error = '';
+    try {
+      await setLeaderReportsTo(uid, headUid || null);
+      await this._loadLeaders();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo asignar el Head.';
     }
   }
 
@@ -1303,7 +1333,7 @@ export class SuperadminPanel extends LitElement {
         ${this.leaders.length === 0
           ? html`<p class="empty">Aún no hay managers dados de alta.</p>`
           : html`<table>
-              <thead><tr><th>Nombre</th><th>Email</th><th></th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Reporta a</th><th></th></tr></thead>
               <tbody>
                 ${this.leaders.map((l) => this._renderLeaderRow(l))}
               </tbody>
@@ -1339,6 +1369,7 @@ export class SuperadminPanel extends LitElement {
             @keydown=${(e) => this._onEditLeaderNameKey(e)} />
         </td>
         <td class="muted">${l.email ?? '—'}</td>
+        <td class="muted">${this._headName(l.reportsTo) ?? '—'}</td>
         <td @click=${(e) => e.stopPropagation()}>
           <button class="act" @click=${() => this._saveLeaderName()}>Guardar</button>
           <button @click=${() => this._cancelEditLeaderName()}>Cancelar</button>
@@ -1349,6 +1380,7 @@ export class SuperadminPanel extends LitElement {
       <tr class="clickable ${this.selected?.uid === l.uid ? 'sel' : ''}" @click=${() => this._openTeam(l)}>
         <td>${l.displayName ?? '—'}</td>
         <td class="muted">${l.email ?? '—'}</td>
+        <td @click=${(e) => e.stopPropagation()}>${this._renderReportsTo(l)}</td>
         <td @click=${(e) => e.stopPropagation()}>
           ${this.readOnly
             ? null
@@ -1357,6 +1389,34 @@ export class SuperadminPanel extends LitElement {
         </td>
       </tr>
     `;
+  }
+
+  /** Nombre visible de un Head por su uid. @param {string|null} uid */
+  _headName(uid) {
+    if (!uid) return null;
+    const head = (this._supermanagers ?? []).find((h) => h.uid === uid);
+    return head ? (head.displayName ?? head.email ?? head.uid) : uid;
+  }
+
+  /**
+   * Selector del Head al que reporta un manager (RMR-TSK-0295). Es lo que define
+   * la rama del Head, así que al cambiarlo se mueve su alcance en Equipo,
+   * Carrera y Retros. No se ofrece a sí mismo: nadie se reporta a sí mismo.
+   * @param {import('../lib/leaders.js').Leader} l
+   */
+  _renderReportsTo(l) {
+    const heads = (this._supermanagers ?? []).filter((h) => h.uid !== l.uid);
+    if (this.readOnly) return html`<span class="muted">${this._headName(l.reportsTo) ?? '—'}</span>`;
+    if (heads.length === 0) {
+      return html`<span class="muted">Ningún Head aún — dale el rol a alguien en Usuarios</span>`;
+    }
+    return html`
+      <select aria-label="Head al que reporta ${l.displayName ?? l.email ?? 'el manager'}"
+        @change=${(e) => this._setReportsTo(l.uid, e.target.value)}>
+        <option value="" ?selected=${!l.reportsTo}>— Ninguno —</option>
+        ${heads.map((h) => html`
+          <option value=${h.uid} ?selected=${l.reportsTo === h.uid}>${h.displayName ?? h.email ?? h.uid}</option>`)}
+      </select>`;
   }
 
   _renderTeam() {
@@ -1487,6 +1547,7 @@ export class SuperadminPanel extends LitElement {
       <select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
         <option value="" disabled selected>Cambiar rol…</option>
         <option value="superadmin">Superadmin</option>
+        <option value="supermanager">Head (manager de managers)</option>
         <option value="viewer">Viewer</option>
         <option value="leader">Manager</option>
         <option value="none">Quitar acceso</option>

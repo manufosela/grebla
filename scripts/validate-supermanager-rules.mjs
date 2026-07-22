@@ -212,6 +212,32 @@ try {
     assertFails(getDoc(doc(em1, 'people', 'pb2'))),
   );
 
+  // Fase 4 (RMR-TSK-0295): la jerarquía se monta desde el panel, no a mano en
+  // Firestore. Solo el superadmin escribe el reportsTo de un manager y concede
+  // el rol de Head.
+  const superadmin = env.authenticatedContext('super-uid').firestore();
+  console.log('El superadmin monta la jerarquía desde el panel:');
+  await check(
+    'superadmin ASIGNA a qué Head reporta un manager',
+    assertSucceeds(setDoc(doc(superadmin, 'leaders', 'em1-uid'), { reportsTo: 'head-uid' }, { merge: true })),
+  );
+  await check(
+    'superadmin RETIRA la asignación (reportsTo a null)',
+    assertSucceeds(setDoc(doc(superadmin, 'leaders', 'em1-uid'), { reportsTo: null }, { merge: true })),
+  );
+  await check(
+    'superadmin CONCEDE el rol de Head creando /supermanagers/{uid}',
+    assertSucceeds(setDoc(doc(superadmin, 'supermanagers', 'head2-uid'), { displayName: 'Otra Head' })),
+  );
+  await check(
+    'un manager NO decide a qué Head reporta otro manager',
+    assertFails(setDoc(doc(em1, 'leaders', 'em2-uid'), { reportsTo: null }, { merge: true })),
+  );
+  await check(
+    'un manager NO se cambia a sí mismo el Head (solo el superadmin monta la jerarquía)',
+    assertFails(setDoc(doc(em1, 'leaders', 'em1-uid'), { reportsTo: 'head2-uid' }, { merge: true })),
+  );
+
   console.log(`\n${passed} comprobaciones de reglas del supermanager pasadas.`);
 } finally {
   await env.cleanup();

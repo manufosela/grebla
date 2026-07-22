@@ -50,6 +50,36 @@ export function removeLeader(uid) {
 }
 
 /**
+ * Supermanagers (Head of X) de la instancia, para el selector de «reporta a»
+ * del panel. Viven en /supermanagers/{uid}, legible por cualquier autenticado.
+ * @returns {Promise<Array<{ uid: string, displayName: string|null, email: string|null }>>}
+ */
+export async function listSupermanagers() {
+  const snap = await getDocs(collection(db, 'supermanagers'));
+  return snap.docs.map((d) => ({
+    uid: d.id,
+    displayName: d.data().displayName ?? null,
+    email: d.data().email ?? null,
+  }));
+}
+
+/**
+ * Asigna (o retira) el Head al que reporta un manager — RMR-TSK-0295. Es lo que
+ * define la RAMA del supermanager: las herramientas resuelven su alcance con el
+ * cierre transitivo de este campo. Solo lo escribe un superadmin (reglas).
+ *
+ * `merge: true` para no pisar displayName/email/addedAt; `null` deja al manager
+ * fuera de toda rama sin tocar a sus personas.
+ * @param {string} uid  manager que reporta
+ * @param {string|null} headUid  supermanager al que reporta, o null para quitarlo
+ * @returns {Promise<void>}
+ */
+export function setLeaderReportsTo(uid, headUid) {
+  if (headUid === uid) throw new Error('Un manager no puede reportarse a sí mismo.');
+  return setDoc(doc(db, 'leaders', uid), { reportsTo: headUid || null }, { merge: true });
+}
+
+/**
  * Corrige el nombre visible de un líder (RMR-BUG-0032): al provisionar la
  * cuenta por email antes de su primer login, el nombre cae al propio email
  * (Firebase Auth aún no tiene displayName). Solo toca ese campo — no pisa

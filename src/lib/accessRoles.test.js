@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
+import { ROLE_COLLECTION, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
+
+describe('ROLE_COLLECTION', () => {
+  it('incluye la colección del supermanager, para que el panel pueda concederlo', () => {
+    // RMR-TSK-0295: setUserRole se guía por este mapa; sin la entrada, el rol
+    // solo se podía dar creando /supermanagers/{uid} a mano en Firestore.
+    expect(ROLE_COLLECTION.supermanager).toBe('supermanagers');
+  });
+
+  it('mantiene las colecciones de los roles anteriores', () => {
+    expect(ROLE_COLLECTION.superadmin).toBe('admins');
+    expect(ROLE_COLLECTION.viewer).toBe('viewers');
+    expect(ROLE_COLLECTION.leader).toBe('leaders');
+  });
+});
 
 describe('viewsForRole', () => {
   it('el superadmin recibe SIEMPRE las tres vistas (gestión, herramientas, ingeniero)', () => {
@@ -128,6 +142,13 @@ describe('mergeAccessUsers', () => {
       leader: [{ id: 'seed', displayName: 'Seed', email: 'seed@x.com' }],
     });
     expect(result).toEqual([{ uid: 'seed', displayName: 'Seed', email: 'seed@x.com', lastLogin: null, role: 'leader' }]);
+  });
+
+  it('el supermanager gana al viewer y al leader, y pierde contra el superadmin', () => {
+    const roleOf = (groups) => mergeAccessUsers(groups)[0].role;
+    expect(roleOf({ users: [{ id: 'u1' }], supermanager: [{ id: 'u1' }], leader: [{ id: 'u1' }] })).toBe('supermanager');
+    expect(roleOf({ users: [{ id: 'u1' }], supermanager: [{ id: 'u1' }], viewer: [{ id: 'u1' }] })).toBe('supermanager');
+    expect(roleOf({ users: [{ id: 'u1' }], supermanager: [{ id: 'u1' }], superadmin: [{ id: 'u1' }] })).toBe('superadmin');
   });
 
   it('prioriza superadmin > viewer > leader si un uid está en varias colecciones', () => {
