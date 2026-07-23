@@ -13,15 +13,15 @@ describe('buildPlayerIdentity', () => {
     expect(id.equipoId).toBe(null);
   });
 
-  it('líder y superadmin: son su propio equipo (usuarioId=uid)', () => {
-    expect(buildPlayerIdentity({ role: 'leader', uid: 'L9' }))
+  it('líder (rol funcional) y gobierno de instancia: son su propio equipo (usuarioId=uid)', () => {
+    expect(buildPlayerIdentity({ role: 'leader', functionalRole: 'leader', uid: 'L9' }))
       .toEqual({ usuarioId: 'L9', usuarioKind: 'leader', uid: 'L9', liderId: 'L9', equipoId: 'L9' });
-    expect(buildPlayerIdentity({ role: 'superadmin', uid: 'a1' }))
+    expect(buildPlayerIdentity({ role: 'superadmin', instanceAccess: 'admin', uid: 'a1' }))
       .toEqual({ usuarioId: 'a1', usuarioKind: 'leader', uid: 'a1', liderId: 'a1', equipoId: 'a1' });
   });
 
   it('viewer / sin acceso no juegan (null)', () => {
-    expect(buildPlayerIdentity({ role: 'viewer', uid: 'v1' })).toBe(null);
+    expect(buildPlayerIdentity({ role: 'viewer', instanceAccess: 'viewer', uid: 'v1' })).toBe(null);
     expect(buildPlayerIdentity({ role: null, uid: null })).toBe(null);
   });
 });
