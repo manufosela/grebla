@@ -50,7 +50,8 @@ export default defineConfig({
     command: 'npx astro dev --port 4321',
     url: 'http://127.0.0.1:4321',
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    // En un runner de CI en frío, astro dev tarda más en levantar que en local.
+    timeout: 150_000,
     env: EMULATOR_ENV,
   },
 });
