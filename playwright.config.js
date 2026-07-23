@@ -47,11 +47,17 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: 'npx astro dev --port 4321',
+    // `--host 127.0.0.1`: sin él, astro escucha en ::1 (IPv6) y Playwright, que
+    // sondea 127.0.0.1 (IPv4), nunca lo da por listo en el runner y agota el
+    // timeout. En local no cambia nada.
+    command: 'npx astro dev --host 127.0.0.1 --port 4321',
     url: 'http://127.0.0.1:4321',
     reuseExistingServer: !process.env.CI,
     // En un runner de CI en frío, astro dev tarda más en levantar que en local.
     timeout: 150_000,
+    // Ver la salida de astro dev en el log del job si algo falla al arrancar.
+    stdout: 'pipe',
+    stderr: 'pipe',
     env: EMULATOR_ENV,
   },
 });
