@@ -15,6 +15,9 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import * as coins from './coins.js';
 import { sign, coinsKmsKeyName } from './signer.js';
 import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
+import {
+  MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
+} from './motivatorsAggregate.js';
 
 initializeApp();
 
@@ -1419,135 +1422,10 @@ export const emitCoinsOnJourneyWrite = onDocumentWritten(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOTIVADORES — agregados públicos (espejo de src/tools/motivators/domain/aggregate.js)
+// MOTIVADORES — agregados públicos. El cálculo vive en ./motivatorsAggregate.js
+// (espejo de src/tools/motivators/domain/aggregate.js, atado por un test de
+// equivalencia). Aquí solo queda el trigger y su lectura de datos.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const MOTIVATOR_DECK_SIZE = 10;
-
-// Ids de carta por juego (espejo de src/tools/motivators/domain/decks.js). Solo
-// los ids: los textos viven en el cliente; aquí solo se necesita el universo.
-const MOTIVATOR_DECK_IDS = {
-  moving_motivators: ['curiosity', 'honor', 'acceptance', 'mastery', 'power', 'freedom', 'relatedness', 'order', 'goal', 'status'],
-  affective_motivators: ['listening', 'trust', 'authenticity', 'psychological_safety', 'accompanied_vulnerability', 'holistic_care', 'belonging', 'growth_support', 'mutual_commitment', 'closeness'],
-};
-
-const motRound1 = (n) => (n == null ? null : Math.round(n * 10) / 10);
-const motMean = (xs) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length);
-function motMedian(xs) {
-  if (xs.length === 0) return null;
-  const s = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
-}
-
-/** Estadística de un motivador (espejo de statFor del dominio). */
-function motStatFor(motivadorId, positions, size) {
-  const distribution = Array.from({ length: size }, () => 0);
-  for (const p of positions) {
-    if (p >= 1 && p <= size) distribution[p - 1] += 1;
-  }
-  const respondents = positions.length;
-  const top3Count = positions.filter((p) => p <= 3).length;
-  return {
-    motivadorId,
-    averagePosition: motRound1(motMean(positions)),
-    medianPosition: motRound1(motMedian(positions)),
-    top3Count,
-    top3Pct: respondents === 0 ? null : motRound1((top3Count / respondents) * 100),
-    distribution,
-    respondents,
-  };
-}
-
-/** Corte agregado (espejo de aggregateBlock del dominio). */
-function motAggregateBlock(sessions, cardIds, size) {
-  const positionsByCard = new Map(cardIds.map((id) => [id, []]));
-  for (const s of sessions ?? []) {
-    for (const { motivadorId, posicion } of s.orden ?? []) {
-      const bucket = positionsByCard.get(motivadorId);
-      if (bucket) bucket.push(posicion);
-    }
-  }
-  const byMotivator = {};
-  for (const id of cardIds) byMotivator[id] = motStatFor(id, positionsByCard.get(id) ?? [], size);
-  const rankKey = (stat) => (stat.averagePosition == null ? Number.POSITIVE_INFINITY : stat.averagePosition);
-  const ranking = cardIds.map((id) => byMotivator[id]).sort((a, b) => rankKey(a) - rankKey(b));
-  return { respondents: (sessions ?? []).length, byMotivator, ranking };
-}
-
-function motGroupBy(sessions, keyOf) {
-  const groups = new Map();
-  for (const s of sessions ?? []) {
-    const key = keyOf(s);
-    if (key == null) continue;
-    const list = groups.get(key) ?? [];
-    list.push(s);
-    groups.set(key, list);
-  }
-  return groups;
-}
-
-/**
- * Mínimo de respuestas para publicar un corte (RMR-BUG-0051). Espejo de
- * MIN_RESPONDENTS en src/tools/motivators/domain/aggregate.js. Con menos, la
- * distribución y la posición media reconstruyen lo que eligió cada persona.
- */
-const MOT_MIN_RESPONDENTS = 3;
-
-/** Corte retenido por anonimato: conserva el recuento, no lo que eligieron. */
-function motWithheldBlock(respondents, cardIds, size) {
-  return { ...motAggregateBlock([], cardIds, size), respondents };
-}
-
-/** Agregados completos de un juego (espejo de computeAggregates del dominio). */
-function motComputeAggregates(sessions, cardIds, game, orderedRoundIds, size, minCount = MOT_MIN_RESPONDENTS, departmentByLeader = {}) {
-  const all = sessions ?? [];
-  const byRoundSessions = motGroupBy(all, (s) => s.roundId);
-  const byLeaderSessions = motGroupBy(all, (s) => s.equipoId);
-  // Corte por departamento (RMR-TSK-0296): junta los equipos del mismo Head.
-  const byDeptSessions = motGroupBy(all, (s) => departmentByLeader[s.equipoId] ?? null);
-
-  // Los cortes por debajo del umbral NO se escriben: el documento es público
-  // para cualquier autenticado, así que lo que no se publica es lo único que
-  // de verdad queda protegido.
-  const byRound = {};
-  for (const [roundId, list] of byRoundSessions) {
-    if (list.length < minCount) continue;
-    byRound[roundId] = motAggregateBlock(list, cardIds, size);
-  }
-  const byLeader = {};
-  for (const [leaderId, list] of byLeaderSessions) {
-    if (list.length < minCount) continue;
-    byLeader[leaderId] = motAggregateBlock(list, cardIds, size);
-  }
-  const byDepartment = {};
-  for (const [dept, list] of byDeptSessions) {
-    if (list.length < minCount) continue;
-    byDepartment[dept] = motAggregateBlock(list, cardIds, size);
-  }
-
-  const roundOrder = orderedRoundIds.length > 0 ? orderedRoundIds : [...byRoundSessions.keys()];
-  const evolution = {};
-  for (const id of cardIds) {
-    evolution[id] = roundOrder
-      .filter((roundId) => byRound[roundId])
-      .map((roundId) => ({ roundId, averagePosition: byRound[roundId].byMotivator[id]?.averagePosition ?? null }));
-  }
-
-  return {
-    game,
-    respondents: all.length,
-    minCount,
-    global: all.length >= minCount
-      ? motAggregateBlock(all, cardIds, size)
-      : motWithheldBlock(all.length, cardIds, size),
-    byRound,
-    byLeader,
-    byDepartment,
-    evolution,
-    updatedAt: new Date().toISOString(),
-  };
-}
 
 const motToMs = (v) => {
   if (v == null) return 0;
@@ -1605,10 +1483,13 @@ export const onMotivatorSessionWritten = onDocumentWritten(
       sessions, MOTIVATOR_DECK_IDS[game], game, orderedRoundIds, MOTIVATOR_DECK_SIZE,
       MOT_MIN_RESPONDENTS, departmentByLeader,
     );
-    // Nombres aparte de la agrupación, solo para mostrarlos.
+    // Nombres aparte de la agrupación, solo para mostrarlos. updatedAt se estampa
+    // aquí (serverTimestamp, como marea), no en el módulo puro — que así queda
+    // comparable con el dominio en el test de equivalencia.
     await db.doc(`motivatorAggregates/${game}`).set({
       ...aggregates,
       departmentNames: Object.fromEntries(headNames),
+      updatedAt: FieldValue.serverTimestamp(),
     });
     console.log(`[motivators] agregados de ${game} recalculados (${sessions.length} sesiones).`);
   },
