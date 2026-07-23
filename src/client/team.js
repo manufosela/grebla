@@ -9,7 +9,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listLeaders } from '../lib/leaders.js';
 import { resolveAccess } from '../lib/access.js';
-import { leadersReportingTo } from '../lib/accessRoles.js';
+import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
 
 const app = document.querySelector('team-app');
@@ -17,8 +17,11 @@ const app = document.querySelector('team-app');
 onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
-    const { role } = await resolveAccess(user);
-    if (!role) {
+    // Acceso en dos ejes (RMR-TSK-0305): el gobierno de instancia (canGovern) da
+    // el "ver todo" y el mando del catálogo de roles; el alcance de rama sale del
+    // rol funcional. Independientes: un admin puede además ser manager o head.
+    const access = await resolveAccess(user);
+    if (!access.role) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
@@ -29,18 +32,18 @@ onUserChanged(async (user) => {
     // Alcance de rama (supermanager, RMR-TSK-0292): ve y actúa sobre las personas
     // de los EMs que le reportan + las suyas propias si además es líder. Un líder
     // normal no pasa leaderUids (queda con su filtro por owner + compartidas).
-    const leaderUids = role === 'supermanager'
+    const leaderUids = access.functionalRole === 'supermanager'
       ? [user.uid, ...leadersReportingTo(members, user.uid)]
       : null;
     const { persistence, storage } = await createTeamContainer({
       mode: 'firestore',
       leaderUid: user.uid,
-      viewAll: role === 'superadmin', // el superadmin ve y gestiona a toda la organización
+      viewAll: canGovern(access), // el gobierno (admin) ve y gestiona a toda la organización
       leaderUids,
     });
     app.uid = user.uid;
     app.storage = storage;
-    app.isAdmin = role === 'superadmin'; // el superadmin gobierna el catálogo de roles
+    app.isAdmin = canGovern(access); // el gobierno de instancia manda en el catálogo de roles
     app.members = members;
     app.framework = framework;
     app.persistence = persistence; // dispara la carga inicial en el componente
