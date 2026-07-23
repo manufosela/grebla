@@ -27,6 +27,7 @@ export const ROLES = {
   engineer: 'e2e-engineer',
 };
 const MANAGER = 'e2e-manager'; // reporta al Head; no es usuario que loguee
+const OUTSIDER = 'e2e-outsider'; // líder que NO reporta al Head: prueba la exclusión
 
 export default async function globalSetup() {
   if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
@@ -57,11 +58,28 @@ export default async function globalSetup() {
   await db.doc(`supermanagers/${ROLES.head}`).set({ displayName: 'Head E2E', email: 'head@e2e.test' });
   await db.doc(`leaders/${ROLES.head}`).set({ displayName: 'Head E2E', email: 'head@e2e.test', reportsTo: null });
   await db.doc(`leaders/${MANAGER}`).set({ displayName: 'Manager E2E', email: 'manager@e2e.test', reportsTo: ROLES.head });
+  // Líder fuera de la rama del Head (reportsTo null): su gente NO debe verse.
+  await db.doc(`leaders/${OUTSIDER}`).set({ displayName: 'Ajeno E2E', email: 'ajeno@e2e.test', reportsTo: null });
+  // Líder sin Head asignado, para el test de asignación por UI (no interfiere con
+  // la exclusión: ese lo prueba OUTSIDER).
+  await db.doc('leaders/e2e-unassigned').set({ displayName: 'Sin Head E2E', email: 'sinhead@e2e.test', reportsTo: null });
   await db.doc('people/e2e-person-eng').set({
     name: 'Ingeniero E2E', uid: ROLES.engineer, ownerLeaderUid: MANAGER, active: true,
   });
   await db.doc('people/e2e-person-mgr').set({
     name: 'Persona del manager', uid: null, ownerLeaderUid: MANAGER, active: true,
+  });
+  await db.doc('people/e2e-person-out').set({
+    name: 'Persona de fuera', uid: null, ownerLeaderUid: OUTSIDER, active: true,
+  });
+  // Retros: una del manager de la rama (el Head debe verla) y otra del ajeno (no).
+  await db.doc('retros/e2e-retro-branch').set({
+    name: 'Retro de la rama', ownerLeaderUid: MANAGER, status: 'open',
+    scope: { type: 'team', squadId: null, label: null }, createdAt: new Date(),
+  });
+  await db.doc('retros/e2e-retro-out').set({
+    name: 'Retro ajena', ownerLeaderUid: OUTSIDER, status: 'open',
+    scope: { type: 'team', squadId: null, label: null }, createdAt: new Date(),
   });
 
   // Custom token por rol, para que cada test entre sin pasar por el login.
