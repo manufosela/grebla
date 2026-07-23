@@ -87,31 +87,59 @@ export function unlinkedUsers(users, linkedUids) {
 }
 
 /** @typedef {'gestion'|'manager'|'engineer'} ViewKey */
+/** @typedef {{ functionalRole?: import('./access.js').FunctionalRole, instanceAccess?: import('./access.js').InstanceAccess }} AccessAxes */
+
+/** ¿Ve toda la organización? Tanto admin (gobierna) como viewer (C-level) la ven.
+ * @param {AccessAxes} access @returns {boolean} */
+export function viewAll(access) {
+  return (access?.instanceAccess ?? null) !== null;
+}
+
+/** ¿Gobierna la instancia (catálogos, roles, panel)? Solo el admin.
+ * @param {AccessAxes} access @returns {boolean} */
+export function canGovern(access) {
+  return access?.instanceAccess === 'admin';
+}
 
 /**
- * Vistas entre las que un rol puede conmutar (RMR-TSK-0250 / RMR-BUG-0050). El
- * conmutador solo se muestra con 2+ vistas; con una sola, esa vista es la única
- * (marcada por defecto, sin alternar). Puro (sin Firestore) para poder testearlo.
- *  - superadmin: gestion (panel /admin) + manager (herramientas) + engineer.
- *    Las tres SIEMPRE: el superadmin tiene vista de toda la organización
- *    (`viewAll`) en cada tool, sea o no líder de un equipo propio.
- *  - supermanager (Head of X, RMR-TSK-0291): manager + engineer, igual que un
- *    líder ampliado. Opera y ve la rama de EMs que le reportan, pero NO
- *    administra la organización → sin «gestion».
- *  - leader (manager): manager + engineer.
- *  - viewer: solo gestion (sin conmutador).
- *  - engineer: solo su propio espacio.
- *  - sin rol: ninguna.
+ * Vistas entre las que un usuario puede conmutar (RMR-TSK-0250 / RMR-BUG-0050),
+ * derivadas de sus DOS EJES (RMR-TSK-0304). El conmutador solo se muestra con 2+
+ * vistas. Puro (sin Firestore) para poder testearlo.
+ *  - «gestion» (panel): si tiene gobierno de instancia (admin gestiona, viewer
+ *    observa en solo lectura).
+ *  - «manager» (herramientas): si su rol funcional es leader/supermanager (opera
+ *    su equipo o su rama) o es admin (ve toda la organización).
+ *  - «engineer» (su espacio): si tiene cualquier rol funcional (su ficha, o
+ *    preview siendo manager/head) o es admin.
+ * El orden es fijo: gestion, manager, engineer.
+ * @param {AccessAxes} access
+ * @returns {ViewKey[]}
+ */
+export function viewsFor(access) {
+  const functionalRole = access?.functionalRole ?? null;
+  const isAdmin = access?.instanceAccess === 'admin';
+  /** @type {ViewKey[]} */
+  const views = [];
+  if (viewAll(access)) views.push('gestion');
+  if (functionalRole === 'leader' || functionalRole === 'supermanager' || isAdmin) views.push('manager');
+  if (functionalRole !== null || isAdmin) views.push('engineer');
+  return views;
+}
+
+/**
+ * Wrapper de compatibilidad: vistas a partir del rol único derivado. Se mantiene
+ * mientras haya consumidores del modelo antiguo; delega en `viewsFor` mapeando el
+ * rol a sus ejes, así que su salida es idéntica a la histórica.
  * @param {'superadmin'|'supermanager'|'viewer'|'leader'|'engineer'|null} [role]
  * @returns {ViewKey[]}
  */
 export function viewsForRole(role) {
   switch (role) {
-    case 'superadmin': return ['gestion', 'manager', 'engineer'];
-    case 'supermanager': return ['manager', 'engineer'];
-    case 'leader': return ['manager', 'engineer'];
-    case 'viewer': return ['gestion'];
-    case 'engineer': return ['engineer'];
+    case 'superadmin': return viewsFor({ instanceAccess: 'admin', functionalRole: null });
+    case 'supermanager': return viewsFor({ instanceAccess: null, functionalRole: 'supermanager' });
+    case 'leader': return viewsFor({ instanceAccess: null, functionalRole: 'leader' });
+    case 'viewer': return viewsFor({ instanceAccess: 'viewer', functionalRole: null });
+    case 'engineer': return viewsFor({ instanceAccess: null, functionalRole: 'engineer' });
     default: return [];
   }
 }
