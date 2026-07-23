@@ -1,0 +1,54 @@
+# Batería E2E (RMR-TSK-0302). Va en un workflow APARTE del de calidad porque es
+# mucho más pesada: arranca los emuladores de Firebase (auth+firestore+functions,
+# que necesitan Java) y un navegador de Playwright. El de calidad (unit + tipos)
+# no debe ralentizarse por esto.
+name: E2E
+on:
+  pull_request:
+    branches: [main]
+
+# Una corrida por rama: si llega un push nuevo, cancela la anterior.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # El emulador de Firestore/Functions corre sobre la JVM. firebase-tools 15+
+      # exige Java 21 o superior.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependencias del proyecto
+        run: pnpm install --frozen-lockfile
+
+      # El emulador de Functions carga functions/ con sus propias dependencias.
+      - name: Instalar dependencias de las Cloud Functions
+        run: npm --prefix functions ci
+
+      - name: Instalar el navegador de Playwright
+        run: npx playwright install --with-deps chromium
+
+      # emulators:exec levanta auth+firestore+functions, deja sus HOST en el
+      # entorno (los usa el global-setup) y ejecuta Playwright dentro; el
+      # webServer de Playwright arranca astro dev apuntando a los emuladores.
+      - name: E2E contra los emuladores
+        run: npx firebase-tools emulators:exec --only auth,firestore,functions --project demo-grebla "npx playwright test"
+
+      - name: Subir el reporte de Playwright si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
