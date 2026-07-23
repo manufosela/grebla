@@ -9,6 +9,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { createO2OContainer } from '../tools/o2o/composition/container.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
+import { canGovern } from '../lib/accessRoles.js';
 import { proposePrep } from '../lib/o2oAi.js';
 import { ROLES } from '../data/roles.js';
 
@@ -27,14 +28,15 @@ async function loadPeople(uid, viewAll) {
 onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
-    const { role, uid } = await resolveAccess(user);
-    if (role !== 'superadmin' && role !== 'leader') {
+    const access = await resolveAccess(user);
+    const { role, uid } = access;
+    if (!canGovern(access) && role !== 'leader') {
       app.error = 'Esta herramienta es para managers. Tu espacio de O2O está en «Mi espacio».';
       return;
     }
     const [{ persistence }, people] = await Promise.all([
       createO2OContainer({ mode: 'firestore', leaderUid: uid }),
-      loadPeople(uid, role === 'superadmin'),
+      loadPeople(uid, canGovern(access)),
     ]);
     app.canEdit = true; // manager/superadmin
     app.people = people;

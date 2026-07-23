@@ -18,7 +18,7 @@ import { getMyPerson } from '../lib/engineer.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { listLeaders } from '../lib/leaders.js';
-import { leadersReportingTo } from '../lib/accessRoles.js';
+import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
 
 const app = document.querySelector('career-app');
 
@@ -30,7 +30,11 @@ onUserChanged(async (user) => {
     return;
   }
   try {
-    const { role } = await resolveAccess(user);
+    // Acceso en dos ejes (RMR-PCS-0024): `role` (derivado) distingue "es SOLO
+    // ingeniero" para el branch de jugar su plan; el gobierno (canGovern) da el
+    // "ver todo"; la rama sale del rol funcional.
+    const access = await resolveAccess(user);
+    const { role } = access;
     if (!role) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
@@ -67,13 +71,13 @@ onUserChanged(async (user) => {
     // quedaba solo con su propio equipo); el supermanager ve la rama de líderes
     // que le reportan a cualquier profundidad, además de la suya; un líder
     // normal, solo la suya. Los líderes solo se leen cuando hay rama que resolver.
-    const leaderUids = role === 'supermanager'
+    const leaderUids = access.functionalRole === 'supermanager'
       ? [user.uid, ...leadersReportingTo(await listLeaders(), user.uid)]
       : null;
     const { persistence } = await createTeamContainer({
       mode: 'firestore',
       leaderUid: user.uid,
-      viewAll: role === 'superadmin',
+      viewAll: canGovern(access),
       leaderUids,
     });
     const people = await listActivePeople(persistence);
@@ -91,7 +95,7 @@ onUserChanged(async (user) => {
     // cola del manager, el tiempo agregado y el selector de persona. El
     // supermanager actúa sobre su rama como sustituto del líder (RMR-TSK-0293),
     // igual que ya hace en la tool Equipo.
-    app.canEdit = role === 'leader' || role === 'supermanager' || role === 'superadmin';
+    app.canEdit = role === 'leader' || role === 'supermanager' || canGovern(access);
     app.store = store;
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar el mapa de carrera.';
