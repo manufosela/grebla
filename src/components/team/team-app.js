@@ -31,6 +31,7 @@ export class TeamApp extends LitElement {
     storage: { attribute: false },
     uid: { attribute: false },
     isAdmin: { attribute: false },
+    scopeChoice: { attribute: false },
     members: { attribute: false },
     framework: { attribute: false },
     view: { state: true },
@@ -63,6 +64,11 @@ export class TeamApp extends LitElement {
       border: 1px dashed var(--rm-border, #d1d5db); border-radius: var(--rm-radius, 12px);
     }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; margin: 0.5rem 0; }
+    .scope { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .scope .seg { display: inline-flex; border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; overflow: hidden; }
+    .scope button { border: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.82rem; font-weight: 600; padding: 0.3rem 0.9rem; cursor: pointer; }
+    .scope button[aria-pressed="true"] { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
+    .scope button:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
   `;
 
   constructor() {
@@ -74,6 +80,13 @@ export class TeamApp extends LitElement {
     this.uid = null;
     /** @type {boolean} */
     this.isAdmin = false;
+    /**
+     * Ámbito elegible (RMR-TSK-0309): 'mine' | 'all' cuando el usuario es admin
+     * que además lidera y puede alternar; null cuando no hay elección (líder puro,
+     * head, o admin puro que ve todo). Lo fija el glue de cliente.
+     * @type {'mine'|'all'|null}
+     */
+    this.scopeChoice = null;
     /** @type {import('../../lib/leaders.js').Leader[]} managers de la instancia (para compartir) */
     this.members = [];
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
@@ -225,6 +238,7 @@ export class TeamApp extends LitElement {
     if (this.error) return html`<p class="error">${this.error}</p>`;
     if (!this.persistence) return html`${skeletonLines(1, '2rem')}${skeletonBlock('300px')}`;
     return html`
+      ${this._renderScopeControl()}
       <nav class="sections" aria-label="Secciones">
         ${this._tab('people', 'Personas')}
         ${this._tab('map', 'Mapa')}
@@ -234,6 +248,28 @@ export class TeamApp extends LitElement {
       </nav>
       ${this._renderView()}
     `;
+  }
+
+  /**
+   * Control de ámbito (RMR-TSK-0309): solo para el admin que además lidera. Al
+   * cambiar, guarda la elección en la sesión y recarga (el alcance se decide al
+   * construir el container en el glue, mismo patrón que el conmutador de vistas).
+   */
+  _renderScopeControl() {
+    if (this.scopeChoice !== 'mine' && this.scopeChoice !== 'all') return null;
+    const choose = (value) => {
+      if (value === this.scopeChoice) return;
+      sessionStorage.setItem('grebla-team-scope', value);
+      location.reload();
+    };
+    return html`
+      <div class="scope">
+        <span>Ver:</span>
+        <span class="seg" role="group" aria-label="Ámbito del equipo">
+          <button aria-pressed=${this.scopeChoice === 'mine'} @click=${() => choose('mine')}>Mi equipo</button>
+          <button aria-pressed=${this.scopeChoice === 'all'} @click=${() => choose('all')}>Toda la organización</button>
+        </span>
+      </div>`;
   }
 
   _renderView() {

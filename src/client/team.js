@@ -29,21 +29,34 @@ onUserChanged(async (user) => {
     // compartir personas como para resolver la rama de un supermanager (los EMs
     // que le reportan), así que se cargan ANTES de construir el container.
     const [members, framework] = await Promise.all([listLeaders(), getFramework()]);
-    // Alcance de rama (supermanager, RMR-TSK-0292): ve y actúa sobre las personas
-    // de los EMs que le reportan + las suyas propias si además es líder. Un líder
-    // normal no pasa leaderUids (queda con su filtro por owner + compartidas).
-    const leaderUids = access.functionalRole === 'supermanager'
+    // Ámbito con los dos ejes (RMR-TSK-0309): quien gobierna la instancia (admin)
+    // Y ADEMÁS lidera un equipo/rama puede ELEGIR entre ver lo suyo o toda la
+    // organización — antes el gobierno le tapaba su equipo. La elección vive en la
+    // sesión (mismo patrón que el conmutador de vistas). Un admin puro (sin rol
+    // funcional) ve todo, sin control; un líder/head sin gobierno ve lo suyo.
+    const SCOPE_KEY = 'grebla-team-scope';
+    const branch = access.functionalRole === 'supermanager';
+    const hasOwnScope = access.functionalRole === 'leader' || branch;
+    const canChooseScope = canGovern(access) && hasOwnScope;
+    const scope = canChooseScope
+      ? (sessionStorage.getItem(SCOPE_KEY) || 'mine')
+      : (canGovern(access) ? 'all' : 'mine');
+    const seeAll = scope === 'all';
+    // Rama del supermanager solo cuando mira lo suyo (con «ver todo» sobra).
+    const leaderUids = (!seeAll && branch)
       ? [user.uid, ...leadersReportingTo(members, user.uid)]
       : null;
     const { persistence, storage } = await createTeamContainer({
       mode: 'firestore',
       leaderUid: user.uid,
-      viewAll: canGovern(access), // el gobierno (admin) ve y gestiona a toda la organización
+      viewAll: seeAll,
       leaderUids,
     });
     app.uid = user.uid;
     app.storage = storage;
     app.isAdmin = canGovern(access); // el gobierno de instancia manda en el catálogo de roles
+    // Control de ámbito solo para quien puede elegir (admin que además lidera).
+    app.scopeChoice = canChooseScope ? scope : null;
     app.members = members;
     app.framework = framework;
     app.persistence = persistence; // dispara la carga inicial en el componente
