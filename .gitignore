@@ -22,6 +22,12 @@ serviceAccountKey.json
 firebase-debug.log*
 firestore-debug.log*
 
+# e2e (Playwright): tokens de sesión sembrados y resultados de corrida
+e2e/.auth/
+test-results/
+playwright-report/
+.playwright/
+
 # logs
 *.log
 npm-debug.log*

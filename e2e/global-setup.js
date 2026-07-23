@@ -1,0 +1,73 @@
+/**
+ * Arranque de la batería E2E (RMR-TSK-0299). Corre UNA vez antes de los tests,
+ * con el Admin SDK apuntando a los emuladores (emulators:exec deja puestas
+ * FIREBASE_AUTH_EMULATOR_HOST y FIRESTORE_EMULATOR_HOST). Su trabajo:
+ *
+ *  1. Crear los 3 usuarios de test, uno por rol.
+ *  2. Sembrar la jerarquía y las personas base (un Head con un manager debajo y
+ *     una persona de ingeniero).
+ *  3. Firmar un custom token por rol y dejarlo en e2e/.auth/{rol}.json, que los
+ *     tests canjean por una sesión con window.__e2eSignIn (sin login de Google).
+ *
+ * No toca producción: todo vive en los emuladores y desaparece al apagarlos.
+ */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+
+const AUTH_DIR = join(dirname(fileURLToPath(import.meta.url)), '.auth');
+
+/** uids fijos, uno por rol, para que los tests sepan a quién esperan ver. */
+export const ROLES = {
+  superadmin: 'e2e-superadmin',
+  head: 'e2e-head',       // Head of X y, a la vez, líder con su propio equipo
+  engineer: 'e2e-engineer',
+};
+const MANAGER = 'e2e-manager'; // reporta al Head; no es usuario que loguee
+
+export default async function globalSetup() {
+  if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    throw new Error(
+      'Los E2E deben correr dentro de los emuladores. Usa:\n' +
+      '  firebase emulators:exec --only auth,firestore,functions --project demo-grebla "npx playwright test"',
+    );
+  }
+
+  if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
+  const auth = getAuth();
+  const db = getFirestore();
+
+  // Usuarios de Auth (idempotente: si ya existen de una corrida previa, se reusan).
+  const ensureUser = async (uid, email) => {
+    try { await auth.createUser({ uid, email }); }
+    catch (e) { if (e.code !== 'auth/uid-already-exists') throw e; }
+  };
+  await Promise.all([
+    ensureUser(ROLES.superadmin, 'superadmin@e2e.test'),
+    ensureUser(ROLES.head, 'head@e2e.test'),
+    ensureUser(ROLES.engineer, 'engineer@e2e.test'),
+  ]);
+
+  // Roles y jerarquía. El Head es también líder (para tener equipo propio); el
+  // manager le reporta; la persona del ingeniero cuelga del manager.
+  await db.doc(`admins/${ROLES.superadmin}`).set({ name: 'Super E2E' });
+  await db.doc(`supermanagers/${ROLES.head}`).set({ displayName: 'Head E2E', email: 'head@e2e.test' });
+  await db.doc(`leaders/${ROLES.head}`).set({ displayName: 'Head E2E', email: 'head@e2e.test', reportsTo: null });
+  await db.doc(`leaders/${MANAGER}`).set({ displayName: 'Manager E2E', email: 'manager@e2e.test', reportsTo: ROLES.head });
+  await db.doc('people/e2e-person-eng').set({
+    name: 'Ingeniero E2E', uid: ROLES.engineer, ownerLeaderUid: MANAGER, active: true,
+  });
+  await db.doc('people/e2e-person-mgr').set({
+    name: 'Persona del manager', uid: null, ownerLeaderUid: MANAGER, active: true,
+  });
+
+  // Custom token por rol, para que cada test entre sin pasar por el login.
+  mkdirSync(AUTH_DIR, { recursive: true });
+  for (const [role, uid] of Object.entries(ROLES)) {
+    const token = await auth.createCustomToken(uid);
+    writeFileSync(join(AUTH_DIR, `${role}.json`), JSON.stringify({ role, uid, token }, null, 2));
+  }
+}

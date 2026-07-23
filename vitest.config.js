@@ -7,6 +7,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    // Los E2E (e2e/**) los corre Playwright, no Vitest: usan @playwright/test y
+    // los emuladores. Sin excluirlos, Vitest los recoge por el patrón *.spec y
+    // truena al importar el runner de Playwright.
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
     // Shim de customElements para el smoke test de módulos (RMR-BUG-0015 guard).
     setupFiles: ['./test/smoke-setup.js'],
     // Config Firebase FALSA para que `src/lib/firebase.js` evalúe sin lanzar al
