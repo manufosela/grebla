@@ -7,6 +7,7 @@
 import '../components/superadmin-panel.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
+import { canGovern } from '../lib/accessRoles.js';
 import { getLeader } from '../lib/leaders.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 
@@ -19,15 +20,17 @@ onUserChanged(async (user) => {
     return;
   }
   try {
-    const { role } = await resolveAccess(user);
-    if (role !== 'superadmin' && role !== 'viewer') {
+    const access = await resolveAccess(user);
+    const { role } = access;
+    // Acceden al panel el gobierno de instancia (admin) y el viewer (solo lectura).
+    if (!canGovern(access) && role !== 'viewer') {
       location.replace('/');
       return;
     }
     el.readOnly = role === 'viewer';
     // "Usar como manager" solo aplica a un superadmin que también sea manager; un
     // viewer nunca gestiona personas propias.
-    el.isLeader = role === 'superadmin' && (await getLeader(user.uid)) != null;
+    el.isLeader = canGovern(access) && (await getLeader(user.uid)) != null;
     // Persistencia (viewAll) para <catalog-manager>: el superadmin ve TODOS los
     // catálogos (globales + personales de cualquier manager) y crea globales.
     const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid, viewAll: true });

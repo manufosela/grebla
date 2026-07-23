@@ -7,6 +7,7 @@ import '../components/auth-button.js';
 import '../components/view-switcher.js';
 import { onUserChanged, isAdmin } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
+import { canGovern } from '../lib/accessRoles.js';
 
 const requireAuth = document.body.dataset.requireAuth === 'true';
 const requireAdmin = document.body.dataset.requireAdmin === 'true';
@@ -38,9 +39,9 @@ onUserChanged(async (user) => {
     return;
   }
   try {
-    const { role } = await resolveAccess(user);
+    const access = await resolveAccess(user);
     const actingAsOther = ['leader', 'engineer'].includes(sessionStorage.getItem(VIEW_FLAG));
-    document.documentElement.classList.toggle('is-superadmin', role === 'superadmin' && !actingAsOther);
+    document.documentElement.classList.toggle('is-superadmin', canGovern(access) && !actingAsOther);
   } catch {
     document.documentElement.classList.remove('is-superadmin');
   }

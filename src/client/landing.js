@@ -5,6 +5,7 @@
  */
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
+import { canGovern } from '../lib/accessRoles.js';
 
 const VIEW_FLAG = 'grebla-view';
 const landing = document.getElementById('platform-landing');
@@ -19,11 +20,12 @@ backToAdmin?.querySelector('button')?.addEventListener('click', () => {
 onUserChanged(async (user) => {
   if (!user) return showLanding();
   try {
-    const { role } = await resolveAccess(user);
+    const access = await resolveAccess(user);
+    const { role } = access;
     if (!role) return showLanding();
     // Conmutador de vistas (RMR-TSK-0250): un manager/superadmin que ha elegido
     // «vista de ingeniero» va a su propio «Mi espacio», no a las herramientas.
-    if (sessionStorage.getItem(VIEW_FLAG) === 'engineer' && (role === 'superadmin' || role === 'leader')) {
+    if (sessionStorage.getItem(VIEW_FLAG) === 'engineer' && (canGovern(access) || role === 'leader')) {
       location.replace('/mi-espacio');
       return;
     }
@@ -43,7 +45,7 @@ onUserChanged(async (user) => {
     // toda la organización— y llega a la gestión con el conmutador «Gestión» o
     // el botón «volver a gestión» (RMR-BUG-0050). No se le redirige a /admin.
     showTools();
-    if (role === 'superadmin') backToAdmin?.removeAttribute('hidden');
+    if (canGovern(access)) backToAdmin?.removeAttribute('hidden');
   } catch {
     showLanding();
   }
