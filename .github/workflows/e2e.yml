@@ -22,11 +22,12 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # El emulador de Firestore/Functions corre sobre la JVM.
+      # El emulador de Firestore/Functions corre sobre la JVM. firebase-tools 15+
+      # exige Java 21 o superior.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Instalar dependencias del proyecto
         run: pnpm install --frozen-lockfile
