@@ -117,6 +117,49 @@ export function viewsForRole(role) {
 }
 
 /**
+ * @typedef {'engineer'|'leader'|'supermanager'|null} FunctionalRole
+ * @typedef {'admin'|'viewer'|null} InstanceAccess
+ */
+
+/**
+ * Deriva los DOS EJES ORTOGONALES del acceso (ADR de acceso en dos ejes,
+ * RMR-PCS-0024) a partir de la pertenencia a las colecciones. Puro (sin
+ * Firestore) para poder testear todas las combinaciones sin mockear nada.
+ *
+ *  - `functionalRole` (QUÉ ERES): define el alcance funcional — tu rama
+ *    (supermanager), tu equipo (leader) o tu ficha (engineer). Prioridad por
+ *    alcance: supermanager > leader > engineer.
+ *  - `instanceAccess` (GOBIERNO, transversal): admin (gobierna y ve todo) o
+ *    viewer (ve todo en solo lectura). admin gana a viewer. Es INDEPENDIENTE del
+ *    rol funcional: un admin puede además ser manager o ingeniero.
+ *  - `role`: el rol único DERIVADO por compatibilidad mientras se migran los
+ *    consumidores. Replica EXACTAMENTE la prioridad histórica
+ *    superadmin > supermanager > viewer > leader > engineer.
+ *
+ * @param {{ admin?: boolean, viewer?: boolean, supermanager?: boolean, leader?: boolean, engineer?: boolean }} membership
+ * @returns {{ functionalRole: FunctionalRole, instanceAccess: InstanceAccess, role: import('./access.js').AccessRole }}
+ */
+export function accessAxes(membership = {}) {
+  const instanceAccess = membership.admin ? 'admin' : membership.viewer ? 'viewer' : null;
+  const functionalRole = membership.supermanager
+    ? 'supermanager'
+    : membership.leader
+      ? 'leader'
+      : membership.engineer
+        ? 'engineer'
+        : null;
+  // Compatibilidad: el rol único con la prioridad de siempre.
+  const role = instanceAccess === 'admin'
+    ? 'superadmin'
+    : functionalRole === 'supermanager'
+      ? 'supermanager'
+      : instanceAccess === 'viewer'
+        ? 'viewer'
+        : functionalRole; // 'leader' | 'engineer' | null
+  return { functionalRole, instanceAccess, role };
+}
+
+/**
  * uids de los líderes que cuelgan de un supermanager (Head of X), a partir de la
  * lista de líderes con su campo `reportsTo`. Puro (sin Firestore) para poder
  * testearlo. Define el «alcance de rama» del supermanager: las herramientas
