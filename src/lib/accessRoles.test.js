@@ -1,5 +1,52 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
+
+describe('accessAxes (RMR-TSK-0303: dos ejes ortogonales)', () => {
+  it('separa gobierno (instanceAccess) del rol funcional (functionalRole)', () => {
+    // Un admin que además es líder: gobierna Y tiene su equipo. El role derivado
+    // sigue siendo superadmin por compatibilidad, pero ya no pierde su faceta.
+    expect(accessAxes({ admin: true, leader: true })).toEqual({
+      instanceAccess: 'admin', functionalRole: 'leader', role: 'superadmin',
+    });
+  });
+
+  it('un líder normal: solo eje funcional', () => {
+    expect(accessAxes({ leader: true })).toEqual({
+      instanceAccess: null, functionalRole: 'leader', role: 'leader',
+    });
+  });
+
+  it('un admin con ficha de ingeniero conserva su faceta funcional', () => {
+    expect(accessAxes({ admin: true, engineer: true })).toEqual({
+      instanceAccess: 'admin', functionalRole: 'engineer', role: 'superadmin',
+    });
+  });
+
+  it('el rol funcional prioriza supermanager > leader > engineer', () => {
+    expect(accessAxes({ supermanager: true, leader: true, engineer: true }).functionalRole).toBe('supermanager');
+    expect(accessAxes({ leader: true, engineer: true }).functionalRole).toBe('leader');
+    expect(accessAxes({ engineer: true }).functionalRole).toBe('engineer');
+  });
+
+  it('admin gana a viewer en el eje de gobierno', () => {
+    expect(accessAxes({ admin: true, viewer: true }).instanceAccess).toBe('admin');
+    expect(accessAxes({ viewer: true }).instanceAccess).toBe('viewer');
+  });
+
+  it('el role derivado replica EXACTAMENTE la prioridad actual', () => {
+    const roleOf = (m) => accessAxes(m).role;
+    expect(roleOf({ admin: true, supermanager: true, viewer: true, leader: true, engineer: true })).toBe('superadmin');
+    expect(roleOf({ supermanager: true, viewer: true, leader: true })).toBe('supermanager');
+    expect(roleOf({ viewer: true, leader: true })).toBe('viewer');
+    expect(roleOf({ leader: true, engineer: true })).toBe('leader');
+    expect(roleOf({ engineer: true })).toBe('engineer');
+    expect(roleOf({})).toBe(null);
+  });
+
+  it('sin ninguna pertenencia, ambos ejes son null y role null', () => {
+    expect(accessAxes({})).toEqual({ instanceAccess: null, functionalRole: null, role: null });
+  });
+});
 
 describe('ROLE_COLLECTION', () => {
   it('incluye la colección del supermanager, para que el panel pueda concederlo', () => {

@@ -11,37 +11,61 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { getMyPerson, sealInvite } from './engineer.js';
-import { viewsForRole } from './accessRoles.js';
+import { accessAxes, viewsForRole } from './accessRoles.js';
 
 /** @typedef {'superadmin'|'supermanager'|'viewer'|'leader'|'engineer'|null} AccessRole */
+/** @typedef {import('./accessRoles.js').FunctionalRole} FunctionalRole */
+/** @typedef {import('./accessRoles.js').InstanceAccess} InstanceAccess */
 
 /**
- * Resuelve el rol de acceso del usuario. Prioridad: superadmin > supermanager >
- * viewer > leader > engineer > null (el primero que exista gana). El campo
- * `personId` solo está presente para el rol engineer: es el id de la persona
- * /people/{id} vinculada a su cuenta.
+ * Resuelve el acceso del usuario en DOS EJES ORTOGONALES (ADR RMR-PCS-0024):
+ *  - `functionalRole`: qué es (supermanager/leader/engineer) — define su alcance.
+ *  - `instanceAccess`: gobierno de la instancia (admin/viewer), independiente.
+ *  - `role`: el rol único DERIVADO por compatibilidad (misma prioridad de
+ *    siempre: superadmin > supermanager > viewer > leader > engineer) mientras
+ *    se migran los consumidores; NO cambia respecto al modelo anterior.
+ *  - `personId`: id de la persona /people/{id} vinculada, si la tiene (ahora
+ *    puede acompañar a un admin/leader con ficha; es aditivo, solo lo lee la
+ *    vista de ingeniero).
+ *
+ * La pertenencia a las 4 colecciones se lee en paralelo (antes era secuencial
+ * con return temprano). `getMyPerson` es una lectura sin efectos y se consulta
+ * siempre para poder poblar el eje funcional aunque el uid sea además admin. El
+ * único paso con efecto, `sealInvite`, se mantiene EXACTAMENTE en el mismo caso
+ * que antes: cuando el usuario no tiene ningún acceso (ni funcional ni gobierno).
  * @param {import('firebase/auth').User|null} user
- * @returns {Promise<{ role: AccessRole, uid: string|null, personId?: string }>}
+ * @returns {Promise<{ role: AccessRole, uid: string|null, personId?: string,
+ *   functionalRole: FunctionalRole, instanceAccess: InstanceAccess }>}
  */
 export async function resolveAccess(user) {
-  if (!user) return { role: null, uid: null };
-  const adminSnap = await getDoc(doc(db, 'admins', user.uid));
-  if (adminSnap.exists()) return { role: 'superadmin', uid: user.uid };
-  const supermanagerSnap = await getDoc(doc(db, 'supermanagers', user.uid));
-  if (supermanagerSnap.exists()) return { role: 'supermanager', uid: user.uid };
-  const viewerSnap = await getDoc(doc(db, 'viewers', user.uid));
-  if (viewerSnap.exists()) return { role: 'viewer', uid: user.uid };
-  const leaderSnap = await getDoc(doc(db, 'leaders', user.uid));
-  if (leaderSnap.exists()) return { role: 'leader', uid: user.uid };
-  const person = await getMyPerson(user.uid);
-  if (person) return { role: 'engineer', uid: user.uid, personId: person.id };
-  // Sin persona por uid: quizá esté pre-invitado por email (RMR-TSK-0167). Se
-  // intenta sellar la invitación (Cloud Function) y, si engancha, se reintenta.
-  if (await sealInvite()) {
+  if (!user) return { role: null, uid: null, functionalRole: null, instanceAccess: null };
+  const [adminSnap, supermanagerSnap, viewerSnap, leaderSnap, person] = await Promise.all([
+    getDoc(doc(db, 'admins', user.uid)),
+    getDoc(doc(db, 'supermanagers', user.uid)),
+    getDoc(doc(db, 'viewers', user.uid)),
+    getDoc(doc(db, 'leaders', user.uid)),
+    getMyPerson(user.uid),
+  ]);
+  let membership = {
+    admin: adminSnap.exists(),
+    viewer: viewerSnap.exists(),
+    supermanager: supermanagerSnap.exists(),
+    leader: leaderSnap.exists(),
+    engineer: !!person,
+  };
+  let personId = person?.id;
+
+  // Sin ningún acceso: quizá esté pre-invitado por email (RMR-TSK-0167). Se
+  // intenta sellar la invitación (Cloud Function, único paso con efecto) y, si
+  // engancha, se reintenta cargar la persona — mismo caso y flujo que antes.
+  const axes = accessAxes(membership);
+  if (!axes.functionalRole && !axes.instanceAccess && await sealInvite()) {
     const linked = await getMyPerson(user.uid);
-    if (linked) return { role: 'engineer', uid: user.uid, personId: linked.id };
+    if (linked) { membership = { ...membership, engineer: true }; personId = linked.id; }
   }
-  return { role: null, uid: user.uid };
+
+  const { role, functionalRole, instanceAccess } = accessAxes(membership);
+  return { role, uid: user.uid, personId, functionalRole, instanceAccess };
 }
 
 /** @typedef {import('./accessRoles.js').ViewKey} ViewKey */
