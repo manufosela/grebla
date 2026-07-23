@@ -25,6 +25,7 @@ export const ROLES = {
   superadmin: 'e2e-superadmin',
   head: 'e2e-head',       // Head of X y, a la vez, líder con su propio equipo
   engineer: 'e2e-engineer',
+  adminmgr: 'e2e-adminmgr', // admin de instancia Y ADEMÁS líder de un equipo (RMR-TSK-0309)
 };
 const MANAGER = 'e2e-manager'; // reporta al Head; no es usuario que loguee
 const OUTSIDER = 'e2e-outsider'; // líder que NO reporta al Head: prueba la exclusión
@@ -50,6 +51,7 @@ export default async function globalSetup() {
     ensureUser(ROLES.superadmin, 'superadmin@e2e.test'),
     ensureUser(ROLES.head, 'head@e2e.test'),
     ensureUser(ROLES.engineer, 'engineer@e2e.test'),
+    ensureUser(ROLES.adminmgr, 'adminmgr@e2e.test'),
   ]);
 
   // Roles y jerarquía. El Head es también líder (para tener equipo propio); el
@@ -71,6 +73,13 @@ export default async function globalSetup() {
   });
   await db.doc('people/e2e-person-out').set({
     name: 'Persona de fuera', uid: null, ownerLeaderUid: OUTSIDER, active: true,
+  });
+  // Admin que ADEMÁS lidera (RMR-TSK-0309): gobierna la instancia y tiene equipo
+  // propio, así que puede elegir «mi equipo» vs «toda la organización».
+  await db.doc(`admins/${ROLES.adminmgr}`).set({ name: 'Admin-Manager E2E' });
+  await db.doc(`leaders/${ROLES.adminmgr}`).set({ displayName: 'Admin-Manager E2E', email: 'adminmgr@e2e.test', reportsTo: null });
+  await db.doc('people/e2e-person-adminmgr').set({
+    name: 'Persona del admin-manager', uid: null, ownerLeaderUid: ROLES.adminmgr, active: true,
   });
   // Retros: una del manager de la rama (el Head debe verla) y otra del ajeno (no).
   await db.doc('retros/e2e-retro-branch').set({
