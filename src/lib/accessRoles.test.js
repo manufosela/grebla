@@ -1,5 +1,59 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, accessAxes, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewsForRole } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, canGovern, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
+
+describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
+  it('un admin que además es líder conserva las tres vistas', () => {
+    expect(viewsFor({ instanceAccess: 'admin', functionalRole: 'leader' })).toEqual(['gestion', 'manager', 'engineer']);
+  });
+
+  it('un admin puro (sin rol funcional) también tiene las tres', () => {
+    expect(viewsFor({ instanceAccess: 'admin', functionalRole: null })).toEqual(['gestion', 'manager', 'engineer']);
+  });
+
+  it('un viewer puro solo ve el panel', () => {
+    expect(viewsFor({ instanceAccess: 'viewer', functionalRole: null })).toEqual(['gestion']);
+  });
+
+  it('un viewer que además es líder puede gestionar su equipo (corrige el modelo)', () => {
+    expect(viewsFor({ instanceAccess: 'viewer', functionalRole: 'leader' })).toEqual(['gestion', 'manager', 'engineer']);
+  });
+
+  it('un líder o head: herramientas + su espacio, sin gestión', () => {
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'leader' })).toEqual(['manager', 'engineer']);
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'supermanager' })).toEqual(['manager', 'engineer']);
+  });
+
+  it('un ingeniero: solo su espacio; sin nada: ninguna', () => {
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'engineer' })).toEqual(['engineer']);
+    expect(viewsFor({ instanceAccess: null, functionalRole: null })).toEqual([]);
+  });
+});
+
+describe('viewsForRole sigue siendo equivalente (wrapper de compatibilidad)', () => {
+  it('devuelve lo mismo que antes para cada rol del modelo antiguo', () => {
+    expect(viewsForRole('superadmin')).toEqual(['gestion', 'manager', 'engineer']);
+    expect(viewsForRole('supermanager')).toEqual(['manager', 'engineer']);
+    expect(viewsForRole('leader')).toEqual(['manager', 'engineer']);
+    expect(viewsForRole('viewer')).toEqual(['gestion']);
+    expect(viewsForRole('engineer')).toEqual(['engineer']);
+    expect(viewsForRole(null)).toEqual([]);
+    expect(viewsForRole(undefined)).toEqual([]);
+  });
+});
+
+describe('viewAll y canGovern', () => {
+  it('viewAll cuando hay gobierno (admin o viewer ven todo)', () => {
+    expect(viewAll({ instanceAccess: 'admin' })).toBe(true);
+    expect(viewAll({ instanceAccess: 'viewer' })).toBe(true);
+    expect(viewAll({ instanceAccess: null })).toBe(false);
+  });
+
+  it('canGovern solo el admin (escribe/gestiona la instancia)', () => {
+    expect(canGovern({ instanceAccess: 'admin' })).toBe(true);
+    expect(canGovern({ instanceAccess: 'viewer' })).toBe(false);
+    expect(canGovern({ instanceAccess: null })).toBe(false);
+  });
+});
 
 describe('accessAxes (RMR-TSK-0303: dos ejes ortogonales)', () => {
   it('separa gobierno (instanceAccess) del rol funcional (functionalRole)', () => {

@@ -11,7 +11,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { getMyPerson, sealInvite } from './engineer.js';
-import { accessAxes, viewsForRole } from './accessRoles.js';
+import { accessAxes, viewsFor } from './accessRoles.js';
 
 /** @typedef {'superadmin'|'supermanager'|'viewer'|'leader'|'engineer'|null} AccessRole */
 /** @typedef {import('./accessRoles.js').FunctionalRole} FunctionalRole */
@@ -71,15 +71,15 @@ export async function resolveAccess(user) {
 /** @typedef {import('./accessRoles.js').ViewKey} ViewKey */
 
 /**
- * Vistas entre las que el usuario puede conmutar (RMR-TSK-0250). Delega la
- * decisión en `viewsForRole` (pura): el superadmin recibe SIEMPRE gestion +
- * manager + engineer, sin depender de ser líder de un equipo (RMR-BUG-0050).
- * La vista «engineer» se ofrece a manager/superadmin para previsualizar la
- * experiencia del ingeniero; si no tienen ficha, «Mi espacio» lo avisa.
+ * Vistas entre las que el usuario puede conmutar (RMR-TSK-0250), derivadas de sus
+ * DOS EJES reales (RMR-TSK-0304): así un admin que además es manager conserva su
+ * vista de manager de SU equipo, en vez de que el gobierno le tape la faceta
+ * funcional. La vista «engineer» se ofrece como preview a manager/head; si no
+ * tienen ficha, «Mi espacio» lo avisa.
  * @param {import('firebase/auth').User|null} user
- * @returns {Promise<{ role: AccessRole, uid: string|null, views: ViewKey[] }>}
+ * @returns {Promise<{ role: AccessRole, uid: string|null, functionalRole: FunctionalRole, instanceAccess: InstanceAccess, views: ViewKey[] }>}
  */
 export async function resolveViews(user) {
-  const { role, uid } = await resolveAccess(user);
-  return { role, uid, views: viewsForRole(role) };
+  const { role, uid, functionalRole, instanceAccess } = await resolveAccess(user);
+  return { role, uid, functionalRole, instanceAccess, views: viewsFor({ functionalRole, instanceAccess }) };
 }
