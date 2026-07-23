@@ -7,8 +7,11 @@
  * navegador para auth.
  */
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, connectAuthEmulator, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+
+/** ¿Se apunta a los emuladores? Solo en E2E; en producción NUNCA (env apagada). */
+const useEmulators = import.meta.env.PUBLIC_USE_EMULATORS === 'true';
 
 /** @returns {import('firebase/app').FirebaseOptions} */
 function readConfig() {
@@ -40,5 +43,22 @@ const app = getApps().length > 0 ? getApp() : initializeApp(readConfig());
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// E2E (RMR-TSK-0299): apuntar a los emuladores y exponer un login por custom
+// token para que Playwright entre como cualquier rol sin pasar por el OAuth de
+// Google (que no se puede automatizar). Todo esto queda MUERTO en producción:
+// PUBLIC_USE_EMULATORS solo se pone en el arranque de los tests.
+if (useEmulators && typeof window !== 'undefined') {
+  const authHost = import.meta.env.PUBLIC_AUTH_EMULATOR_URL ?? 'http://127.0.0.1:9099';
+  const fsHost = import.meta.env.PUBLIC_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1';
+  connectAuthEmulator(auth, authHost, { disableWarnings: true });
+  connectFirestoreEmulator(db, fsHost, 8181);
+  // Puerta de entrada SOLO-test: el arnés inyecta el token de un rol y esto lo
+  // canjea por una sesión real del SDK. No existe en el bundle de producción.
+  // __e2eUid deja que el test espere una señal REAL de sesión (el uid ya fijado)
+  // en vez de adivinar por timing.
+  /** @type {any} */ (window).__e2eSignIn = (token) => signInWithCustomToken(auth, token);
+  /** @type {any} */ (window).__e2eUid = () => auth.currentUser?.uid ?? null;
+}
 
 export { app };
