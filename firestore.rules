@@ -632,6 +632,65 @@ service cloud.firestore {
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
     }
 
+    // SCRUM POKER (RMR-PCS-0025): estimación en equipo en tiempo real. La sesión
+    // la crea/gestiona su manager dueño (ownerLeaderUid); la lee cualquiera con
+    // acceso a la organización (mismas condiciones que una retro). La OCULTACIÓN
+    // del voto es real: la presencia (/players) es pública —quién se ha unido y
+    // quién ha votado (votedRound), sin el valor— pero el VALOR (/votes) solo se
+    // puede leer una vez la sesión está `revealed`. «Pasar de tema» solo cambia
+    // la ronda en la sesión, así que nadie borra los documentos de los demás.
+    match /pokerSessions/{sessionId} {
+      // Revelar es colaborativo (RMR-TSK-0317): cualquiera con acceso puede
+      // revelar, pero SOLO en un sentido — poner `revealed` de false a true, y
+      // sin tocar ningún otro campo (ni tema, ni ronda, ni dueño). Volver a
+      // ocultar es cosa del dueño (pasa de tema con `startTopic`): así un
+      // participante no puede re-ocultar los votos ya revelados para fastidiar.
+      function revealsOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealed'])
+          && resource.data.revealed == false
+          && request.resource.data.revealed == true;
+      }
+      function sessionRevealed() {
+        return get(/databases/$(database)/documents/pokerSessions/$(sessionId)).data.revealed == true;
+      }
+      // El dueño de la sesión: gestiona el ciclo y limpia las subcolecciones al
+      // borrarla (Firestore no borra en cascada, así que necesita poder borrar los
+      // documentos de presencia/voto de los demás).
+      function isPokerOwner() {
+        return isSignedIn()
+          && get(/databases/$(database)/documents/pokerSessions/$(sessionId)).data.ownerLeaderUid == request.auth.uid;
+      }
+      allow read: if canAccessRetro();
+      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+      // El dueño gestiona todo (tema, ronda, cerrar); cualquiera con acceso solo revela (false→true).
+      allow update: if isSuperAdmin()
+        || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
+        || (canAccessRetro() && revealsOnly());
+      allow delete: if isSuperAdmin()
+        || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
+
+      // Presencia PÚBLICA: cada uno gestiona la suya (nombre + votedRound). No
+      // lleva el valor, así que verla no filtra ningún voto.
+      match /players/{uid} {
+        allow read: if canAccessRetro();
+        allow create, update: if canAccessRetro() && request.auth.uid == uid;
+        // Cada uno se sale; el dueño (o superadmin) limpia al borrar la sesión.
+        allow delete: if isSuperAdmin() || isPokerOwner() || (isSignedIn() && request.auth.uid == uid);
+      }
+      // Voto SECRETO: cada uno escribe el suyo; se lee solo tras revelar (o el
+      // propio, para rehidratar la carta elegida al recargar). Así el valor ajeno
+      // no es legible antes de tiempo ni con la consola. Una vez REVELADO, el voto
+      // queda congelado: nadie puede cambiarlo ni borrarlo (integridad del
+      // resultado); reabrir es pasar de tema, cosa del dueño.
+      match /votes/{uid} {
+        allow read: if canAccessRetro() && (sessionRevealed() || request.auth.uid == uid);
+        allow create, update: if canAccessRetro() && request.auth.uid == uid && !sessionRevealed();
+        // El propio solo antes de revelar; el dueño/superadmin limpia al borrar la sesión.
+        allow delete: if isSuperAdmin() || isPokerOwner()
+          || (isSignedIn() && request.auth.uid == uid && !sessionRevealed());
+      }
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
