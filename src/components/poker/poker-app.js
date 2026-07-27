@@ -144,10 +144,9 @@ export class PokerApp extends LitElement {
       ${this._sessions.length ? html`
         <p class="lead">${this.canManage ? 'Tus sesiones de estimación.' : 'Sesiones de tu equipo. Ábrela para votar.'}</p>
         <table>
-          <thead><tr><th>Sesión</th><th>Tema actual</th><th></th>${this.canManage ? html`<th></th>` : null}</tr></thead>
+          <thead><tr><th>Sesión</th><th></th>${this.canManage ? html`<th></th>` : null}</tr></thead>
           <tbody>${this._sessions.map((s) => html`<tr>
             <td>${s.name}</td>
-            <td>${s.topic?.trim() || html`<span class="empty">—</span>`}</td>
             <td><button class="act" @click=${() => this._select(s)}>Abrir</button></td>
             ${this.canManage ? html`<td><button class="act danger" @click=${() => this._delete(s)}>Borrar</button></td>` : null}
           </tr>`)}</tbody>
