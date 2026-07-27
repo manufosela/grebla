@@ -225,8 +225,9 @@ export class SuperadminPanel extends LitElement {
     .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act:hover { border-color: var(--rm-accent, #3b82f6); color: var(--rm-accent, #3b82f6); }
     .badge.linked { background: #0d9488; margin-left: 0.35rem; }
-    .admin-check { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: 0.5rem; font-size: 0.78rem; font-weight: 600; color: var(--rm-muted, #6b7280); cursor: pointer; }
-    .admin-check input { cursor: pointer; }
+    .admin-col { text-align: center; }
+    .admin-cell { text-align: center; }
+    .admin-cell input { cursor: pointer; width: 1.1rem; height: 1.1rem; }
     .assign-body { display: flex; flex-direction: column; gap: 0.9rem; }
     .assign-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
     .assign-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
@@ -1440,7 +1441,7 @@ export class SuperadminPanel extends LitElement {
         ${this._users.length === 0
           ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
           : html`<table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Última conexión</th><th></th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th class="admin-col">Superadmin</th>`}<th>Última conexión</th><th></th></tr></thead>
               <tbody>
                 ${this._users.map((u) => this._renderUserRow(u))}
               </tbody>
@@ -1459,6 +1460,7 @@ export class SuperadminPanel extends LitElement {
         <td>${user.displayName ?? '—'}</td>
         <td class="muted">${user.email ?? '—'}</td>
         ${this._renderUserRoleCell(user, linked)}
+        ${this._renderAdminCell(user)}
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>${this._renderUserActions(user, linked)}</td>
       </tr>
@@ -1476,6 +1478,7 @@ export class SuperadminPanel extends LitElement {
         </td>
         <td class="muted">${user.email ?? '—'}</td>
         ${this._renderUserRoleCell(user, this._isLinked(user))}
+        ${this._renderAdminCell(user)}
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>
           <button class="act" @click=${() => this._saveUserName()}>Guardar</button>
@@ -1485,18 +1488,28 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
-  /** Celda de rol + checkbox de superadmin (ortogonal) + badge «Vinculado». @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
+  /** Celda de rol: badge del rol de equipo (teamRole) + badge «Superadmin» si gobierna + «Vinculado». @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
   _renderUserRoleCell(user, linked) {
-    // Los dos ejes por separado: el badge muestra el ROL DE EQUIPO (teamRole) y
-    // el checkbox el GOBIERNO (isAdmin), independientes (ADR de acceso en 2 ejes).
+    // Los dos ejes se ven como dos badges: el ROL DE EQUIPO y, si lo tiene, el
+    // gobierno (Superadmin). El checkbox para cambiarlo vive en su propia columna.
     return html`
       <td>
         <span class="badge" style=${`background:${ROLE_COLOR[user.teamRole]}`}>${ROLE_LABEL[user.teamRole]}</span>
+        ${user.isAdmin ? html`<span class="badge" style=${`background:${ROLE_COLOR.superadmin}`}>Superadmin</span>` : null}
         ${linked ? html`<span class="badge linked" title="Vinculado a una persona">Vinculado</span>` : null}
-        ${this.readOnly ? null : html`<label class="admin-check" title="Gobierno de instancia: ve y gestiona toda la organización. Es independiente de su rol de equipo.">
-          <input type="checkbox" .checked=${user.isAdmin} @change=${(e) => this._toggleAdmin(user, e.target.checked)} />
-          Superadmin
-        </label>`}
+      </td>
+    `;
+  }
+
+  /** Celda del checkbox de superadmin (columna propia, centrado). @param {import('../lib/accessRoles.js').AccessUser} user */
+  _renderAdminCell(user) {
+    if (this.readOnly) return null;
+    const who = user.displayName ?? user.email ?? user.uid;
+    return html`
+      <td class="admin-cell">
+        <input type="checkbox" aria-label=${`Superadmin: ${who}`}
+          title="Gobierno de instancia: ve y gestiona toda la organización, independiente del rol de equipo."
+          .checked=${user.isAdmin} @change=${(e) => this._toggleAdmin(user, e.target.checked)} />
       </td>
     `;
   }
