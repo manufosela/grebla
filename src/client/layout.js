@@ -130,6 +130,15 @@ function showUpdateBanner() {
 // cacheado → el badge avisa y al pulsarlo fuerza la actualización.
 const APP_VERSION = import.meta.env.PUBLIC_APP_VERSION || 'dev';
 
+/**
+ * ¿La versión desplegada difiere de la que ejecutamos? La mantiene al día
+ * `watchDeployedVersion`. El aviso por `controllerchange` del service worker se
+ * apoya en ella: sin este guard, el relevo de SW que ocurre AL RECARGAR volvía a
+ * mostrar el banner aunque ya estuvieras en la última versión (había que darle a
+ * «Recargar» dos veces).
+ */
+let versionMismatch = false;
+
 /** Monta el badge de versión (esquina). Devuelve un setter para marcarlo caducado. */
 function mountVersionBadge() {
   const badge = document.createElement('button');
@@ -167,7 +176,8 @@ async function watchDeployedVersion(setStale) {
     ]);
     onSnapshot(doc(db, 'config', 'appVersion'), (snap) => {
       const deployed = snap.data()?.version;
-      if (deployed && deployed !== APP_VERSION) {
+      versionMismatch = !!(deployed && deployed !== APP_VERSION);
+      if (versionMismatch) {
         setStale(true);
         showUpdateBanner();
       }
@@ -183,10 +193,14 @@ await watchDeployedVersion(setStaleBadge);
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     // Si un SW nuevo toma el control con la pestaña abierta, hay versión nueva.
-    // Solo cuenta el RELEVO (había un controller previo): el primer control
-    // tras instalar el SW inicial no debe avisar.
+    // Solo cuenta el RELEVO (había un controller previo): el primer control tras
+    // instalar el SW inicial no debe avisar. Y solo si SIGUE habiendo desajuste
+    // de versión: tras recargar a la última, `versionMismatch` es false, así que
+    // el relevo de SW que provoca la propia recarga ya no reabre el banner.
     if (navigator.serviceWorker.controller) {
-      navigator.serviceWorker.addEventListener('controllerchange', showUpdateBanner);
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (versionMismatch) showUpdateBanner();
+      });
     }
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');
