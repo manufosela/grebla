@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Scrum Poker (RMR-PCS-0025): estimación en equipo en tiempo real. Ruta
+ * protegida y compartible — el manager crea la sesión y comparte el enlace; quien
+ * esté logado con acceso entra a votar. El componente <poker-app> recibe el
+ * contexto (uid, manager, canManage) desde client/poker.js.
+ */
+---
+
+<Base title="GREBLA — Scrum Poker" requireAuth={true}>
+  <tool-nav href="/" name="Scrum Poker" icon="🃏"></tool-nav>
+  <p class="page-lead">
+    Estimación en equipo: elige una tarea, cada uno vota una carta en oculto y,
+    cuando todos han votado, se revelan a la vez. Sin anclarse en el voto ajeno.
+  </p>
+
+  <poker-app></poker-app>
+</Base>
+
+<script>
+  import '../client/poker.js';
+</script>
