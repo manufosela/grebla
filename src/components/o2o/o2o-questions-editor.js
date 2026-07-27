@@ -9,6 +9,7 @@
  * formulario embebidos del periodo). Emite `saved` tras guardar (con el nuevo valor).
  */
 import { LitElement, html, css } from 'lit';
+import '../app-modal.js';
 import { savePeriodGuide, savePeriodForm } from '../../tools/o2o/application/usecases/periods.js';
 import { parseQuestionsMarkdown } from '../../tools/o2o/application/markdown.js';
 import { buildO2ODocHtml, o2oDocMeta, WORD_DOC_MIME } from '../../tools/o2o/application/wordExport.js';
@@ -26,6 +27,7 @@ export class O2OQuestionsEditor extends LitElement {
     _dirty: { state: true },
     _saving: { state: true },
     _error: { state: true },
+    _preview: { state: true },
   };
 
   static styles = css`
@@ -51,6 +53,14 @@ export class O2OQuestionsEditor extends LitElement {
     .muted { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .file { display: none; }
+    /* Vista previa: cómo lo verá la persona (dentro del modal). */
+    .pv-intro { font-size: 0.95rem; color: var(--rm-text, #111827); white-space: pre-wrap; margin: 0 0 1.25rem; padding: 0.9rem 1rem; background: var(--rm-surface-hover, #eef3f5); border-radius: 10px; }
+    .pv-section { margin: 0 0 1.4rem; }
+    .pv-section h4 { font-size: 0.95rem; color: var(--rm-text, #111827); margin: 0 0 0.6rem; }
+    .pv-q { margin: 0 0 0.9rem; }
+    .pv-q p { margin: 0 0 0.3rem; font-size: 0.9rem; color: var(--rm-text, #111827); }
+    .pv-q .ans { width: 100%; min-height: 2.4rem; border: 1px dashed var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-field, #eef2f6); }
+    .pv-empty { color: var(--rm-muted, #6b7280); font-size: 0.9rem; }
   `;
 
   constructor() {
@@ -64,6 +74,7 @@ export class O2OQuestionsEditor extends LitElement {
     this._dirty = false;
     this._saving = false;
     this._error = '';
+    this._preview = false;
     this._loadedFrom = null;
   }
 
@@ -217,6 +228,9 @@ export class O2OQuestionsEditor extends LitElement {
         <button class="btn" @click=${() => this.renderRoot.querySelector('.file')?.click()}>Importar .md</button>
         <input class="file" type="file" accept=".md,.markdown,text/markdown,text/plain" @change=${(e) => this._onMdFile(e)} />
         <button class="btn" ?disabled=${!this._groups.length} title="Descargar como documento Word (.doc)" @click=${() => this._download()}>Descargar</button>
+        ${this.kind === 'form'
+          ? html`<button class="btn" title="Ver cómo lo recibirá la persona" @click=${() => { this._preview = true; }}>👁 Vista previa</button>`
+          : null}
       </div>
       ${this.kind === 'form' ? this._renderIntro() : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
@@ -227,14 +241,40 @@ export class O2OQuestionsEditor extends LitElement {
         </button>
         ${this._dirty ? html`<span class="muted">Cambios sin guardar</span>` : null}
       </div>
+      ${this.kind === 'form' ? this._renderPreview() : null}
     `;
   }
 
   _renderIntro() {
     return html`<div class="group">
       <p class="muted">Cabecera del formulario (lo que ve la persona)</p>
-      <textarea rows="2" .value=${this._intro} @input=${(e) => { this._intro = e.target.value; this._dirty = true; }}></textarea>
+      <textarea rows="6" .value=${this._intro} @input=${(e) => { this._intro = e.target.value; this._dirty = true; }}></textarea>
     </div>`;
+  }
+
+  /**
+   * Vista previa del formulario tal y como lo recibirá la persona: la cabecera y
+   * las preguntas, con los cambios actuales (aún sin guardar). Solo aplica al
+   * formulario previo (la guía la ve el manager, no la persona). Muestra un campo
+   * de respuesta deshabilitado por pregunta para dar la sensación del real.
+   */
+  _renderPreview() {
+    const sections = this._groups
+      .map((g) => ({ title: g.title.trim(), questions: g.questions.filter((q) => q.text.trim()) }))
+      .filter((g) => g.title || g.questions.length);
+    const intro = this._intro.trim();
+    return html`<app-modal .open=${this._preview} heading="Vista previa · lo que verá la persona" @close=${() => { this._preview = false; }}>
+      ${intro ? html`<div class="pv-intro">${intro}</div>` : null}
+      ${sections.length
+        ? sections.map((s) => html`<div class="pv-section">
+            ${s.title ? html`<h4>${s.title}</h4>` : null}
+            ${s.questions.map((q) => html`<div class="pv-q">
+              <p>${q.text}</p>
+              <div class="ans" aria-hidden="true"></div>
+            </div>`)}
+          </div>`)
+        : html`<p class="pv-empty">Aún no hay preguntas. Añade alguna sección para ver la vista previa.</p>`}
+    </app-modal>`;
   }
 
   _renderGroup(g, groupWord) {
