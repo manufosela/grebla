@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Página PÚBLICA de respuesta a una encuesta (RMR-PCS-0026). Sin login: se abre
+ * con el enlace personal `/encuesta?s=<surveyId>&t=<token>` (funciona en
+ * incógnito). Oculta el nav y el pie para una experiencia limpia y anónima; el
+ * componente <survey-respond> solo habla con las Cloud Functions.
+ */
+---
+
+<Base title="Encuesta — GREBLA" requireAuth={false}>
+  <survey-respond></survey-respond>
+</Base>
+
+<script>
+  import '../client/encuesta.js';
+</script>
+
+<style is:global>
+  /* Página anónima: sin cabecera de app ni pie, para no sugerir que hay sesión. */
+  .site-header,
+  .site-footer { display: none; }
+  .site-main { padding-block: 2.5rem; }
+</style>
