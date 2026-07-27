@@ -1066,6 +1066,67 @@ async function fetchLinearIssues(label, sinceIso, apiKey) {
   return out;
 }
 
+// ── Scrum Poker: backlog de un squad para refinar (RMR-TSK-0322) ─────────────
+const LINEAR_BACKLOG_QUERY = `
+  query Backlog($filter: IssueFilter, $after: String) {
+    issues(first: 100, after: $after, filter: $filter) {
+      pageInfo { hasNextPage endCursor }
+      nodes { id identifier url title sortOrder estimate state { type name } }
+    }
+  }`;
+
+/** Backlog de un LABEL de Linear (triage/backlog/unstarted), ordenado por sortOrder (orden manual del backlog). */
+async function fetchLinearBacklog(label, apiKey) {
+  const filter = { labels: { name: { eq: label } }, state: { type: { in: ['triage', 'backlog', 'unstarted'] } } };
+  const out = [];
+  let after = null;
+  for (let page = 0; page < 20; page += 1) {
+    const res = await fetch('https://api.linear.app/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+      body: JSON.stringify({ query: LINEAR_BACKLOG_QUERY, variables: { filter, after } }),
+    });
+    if (!res.ok) throw new Error(`Linear respondió ${res.status}.`);
+    const json = await res.json();
+    if (json.errors?.length) throw new Error(json.errors[0]?.message || 'Error de la API de Linear.');
+    const conn = json.data?.issues;
+    if (!conn) break;
+    for (const n of conn.nodes) {
+      out.push({
+        id: n.id,
+        identifier: n.identifier ?? n.id,
+        url: n.url ?? null,
+        title: n.title ?? '',
+        estimate: n.estimate ?? null,
+        stateType: n.state?.type ?? 'backlog',
+        stateName: n.state?.name ?? null,
+        sortOrder: typeof n.sortOrder === 'number' ? n.sortOrder : 0,
+      });
+    }
+    if (!conn.pageInfo?.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return out.sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/** Lista el backlog de un squad (label de Linear) para elegir qué refinar. Acceso: superadmin o líder. */
+export const listSquadBacklog = onCall(
+  { region: 'europe-west1', secrets: [LINEAR_API_KEY], timeoutSeconds: 120 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+    const db = getFirestore();
+    const leaderSnap = await db.doc(`leaders/${uid}`).get();
+    if (!(await isAdmin(uid)) && !leaderSnap.exists) {
+      throw new HttpsError('permission-denied', 'Solo un manager o superadmin puede listar el backlog.');
+    }
+    const label = String(request.data?.linearLabel ?? '').trim();
+    if (!label) throw new HttpsError('invalid-argument', 'Falta el squad (linearLabel).');
+    const tasks = await fetchLinearBacklog(label, LINEAR_API_KEY.value());
+    return { tasks };
+  },
+);
+
 /**
  * Recalcula las métricas de flujo (LEAN) de todos los equipos de `/leanTeams` desde
  * Linear (ventana de 8 semanas). Acceso: superadmin o líder (como refreshDora). El

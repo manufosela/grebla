@@ -16,7 +16,7 @@ import {
   doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment,
 } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { db, app } from './firebase.js';
 import { isValidCard } from '../tools/poker/domain/deck.js';
 
 const SESSIONS = 'pokerSessions';
@@ -31,16 +31,27 @@ function createdAtMs(value) {
 // ── Sesiones ─────────────────────────────────────────────────────────────────
 
 /**
- * Crea una sesión de poker (la invoca el manager/head dueño). Nace sin revelar y
- * en la ronda 1: es un juego de voto simple, sin tema.
- * @param {{ name: string, ownerLeaderUid: string }} data
+ * Crea una sesión de poker. Modo `simple` = juego de voto directo (se vota desde
+ * el principio). Modo `linear` = refinamiento del backlog de un squad (se elige la
+ * tarea y se «activa la votación» por tarea).
+ * @param {{ name: string, ownerLeaderUid: string, mode?: 'simple'|'linear', squad?: {linearLabel: string, name: string}|null }} data
  * @returns {Promise<string>} id de la sesión
  */
 export async function createSession(data) {
   if (!data?.ownerLeaderUid) throw new Error('createSession requiere ownerLeaderUid');
+  const mode = data.mode === 'linear' ? 'linear' : 'simple';
   const ref = await addDoc(collection(db, SESSIONS), {
     name: String(data.name ?? '').trim(),
     ownerLeaderUid: data.ownerLeaderUid,
+    mode,
+    squad: mode === 'linear' && data.squad
+      ? { linearLabel: data.squad.linearLabel, name: data.squad.name ?? data.squad.linearLabel }
+      : null,
+    tasks: [],
+    currentTaskId: null,
+    // En simple se vota desde el principio; en linear, tras «activar votación».
+    votingActive: mode === 'simple',
+    results: {},
     revealed: false,
     round: 1,
     status: 'open',
@@ -48,6 +59,52 @@ export async function createSession(data) {
     closedAt: null,
   });
   return ref.id;
+}
+
+// ── Modo Linear: squads y backlog ────────────────────────────────────────────
+
+/** Squads disponibles para refinar (unidades LEAN kind=squad, con label de Linear). */
+export async function listSquads() {
+  const snap = await getDocs(query(collection(db, 'leanTeams'), where('kind', '==', 'squad')));
+  return snap.docs
+    .map((d) => ({ id: d.id, name: d.data().name, linearLabel: d.data().linearLabel }))
+    .filter((s) => s.linearLabel && s.linearLabel !== 'undefined')
+    .sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? '')));
+}
+
+/** Backlog de un squad (issues de Linear con ese label), vía Cloud Function. */
+export async function listSquadBacklog(linearLabel) {
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'listSquadBacklog');
+  const res = await fn({ linearLabel });
+  return res.data?.tasks ?? [];
+}
+
+/** Fija las tareas del backlog a refinar (las que marcó el manager). Denormalizadas. */
+export function setSessionTasks(sessionId, tasks) {
+  const clean = (tasks ?? []).map((t) => ({
+    id: t.id, identifier: t.identifier ?? t.id, title: t.title ?? '', url: t.url ?? null,
+  }));
+  return updateDoc(doc(db, SESSIONS, sessionId), {
+    tasks: clean, currentTaskId: null, votingActive: false, revealed: false,
+  });
+}
+
+/** Marca la tarea actual a refinar: arranca en «discusión» (sin votar aún) y ronda limpia. */
+export function setCurrentTask(sessionId, taskId) {
+  return updateDoc(doc(db, SESSIONS, sessionId), {
+    currentTaskId: taskId, votingActive: false, revealed: false, round: increment(1),
+  });
+}
+
+/** El manager «activa la votación» de la tarea actual. */
+export function activateVoting(sessionId) {
+  return updateDoc(doc(db, SESSIONS, sessionId), { votingActive: true, revealed: false });
+}
+
+/** Guarda la estimación acordada de una tarea, asociada a su id de Linear. */
+export function saveEstimate(sessionId, taskId, value) {
+  return updateDoc(doc(db, SESSIONS, sessionId), { [`results.${taskId}`]: { value, at: serverTimestamp() } });
 }
 
 /**
@@ -106,6 +163,7 @@ export function revote(sessionId) {
   return updateDoc(doc(db, SESSIONS, sessionId), {
     round: increment(1),
     revealed: false,
+    votingActive: true,
   });
 }
 
