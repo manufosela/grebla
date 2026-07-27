@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scaleRange, validateAnswer, validateResponses } from './questions.js';
+import { scaleRange, validateAnswer, validateResponses, sanitizeResponses } from './questions.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const q12a = { id: 'q1', type: 'scale', min: 1, max: 5, required: true };
@@ -29,6 +29,13 @@ describe('validateAnswer', () => {
     expect(validateAnswer(reason, 'porque sí')).toBe(true);
     expect(validateAnswer(reason, '')).toBe(true);
     expect(validateAnswer(reason, 5)).toBe(false);
+  });
+});
+
+describe('sanitizeResponses', () => {
+  it('deja solo las respuestas a preguntas de la encuesta', () => {
+    expect(sanitizeResponses([enps, reason], { enps: 9, reason: 'ok', otro: 'x' }))
+      .toEqual({ enps: 9, reason: 'ok' });
   });
 });
 
