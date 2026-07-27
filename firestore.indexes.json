@@ -15,6 +15,14 @@
         { "fieldPath": "ownerLeaderUid", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "pokerSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerLeaderUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
