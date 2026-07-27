@@ -33,6 +33,19 @@ export function validateAnswer(question, value) {
 }
 
 /**
+ * Deja solo las respuestas cuyas claves son ids de preguntas de la encuesta y
+ * descarta cualquier campo extra (que un cliente no cuele datos arbitrarios).
+ */
+export function sanitizeResponses(questions, responses) {
+  const ids = new Set((questions ?? []).map((q) => q?.id));
+  const clean = {};
+  for (const [id, value] of Object.entries(responses ?? {})) {
+    if (ids.has(id)) clean[id] = value;
+  }
+  return clean;
+}
+
+/**
  * Valida un mapa de respuestas `{ qId: value }` contra la lista de preguntas.
  * Una pregunta `required` sin respuesta es un error; una respuesta presente pero
  * fuera de rango/tipo también. Devuelve `{ valid, errors: [{id, error}] }`.

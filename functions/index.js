@@ -18,6 +18,7 @@ import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
+import { validateResponses, sanitizeResponses, bucketMetadata, answerId } from './survey.js';
 
 initializeApp();
 
@@ -228,6 +229,72 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
 
   return { sessions, actions };
 });
+
+// ── Encuestas anónimas: respuesta por token SIN login (RMR-PCS-0026) ─────────
+// La página de respuesta es PÚBLICA (sin auth): el token largo aleatorio del link
+// es la única credencial. TODA la escritura vive aquí (Admin SDK); las reglas
+// deniegan que el cliente escriba respuestas/tokens. El SALT (Secret Manager) hace
+// answerId = HMAC(salt, token), así se edita la MISMA respuesta sin guardar el
+// mapeo token→respuesta (un admin con la BBDD no puede reidentificar por ahí).
+const SURVEY_SALT = defineSecret('SURVEY_SALT');
+
+/** Carga la encuesta abierta de un token y las respuestas previas (para editar). */
+export const getSurveyForToken = onCall(
+  { region: 'europe-west1', secrets: [SURVEY_SALT] },
+  async (request) => {
+    const { surveyId, token } = request.data ?? {};
+    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
+    const db = getFirestore();
+    const surveySnap = await db.doc(`surveys/${surveyId}`).get();
+    if (!surveySnap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
+    const survey = surveySnap.data();
+    if (survey.status !== 'open') throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
+    const tokenSnap = await db.doc(`surveys/${surveyId}/tokens/${token}`).get();
+    if (!tokenSnap.exists) throw new HttpsError('permission-denied', 'Enlace no válido.');
+    const ansSnap = await db.doc(`surveys/${surveyId}/answers/${answerId(token, SURVEY_SALT.value())}`).get();
+    return {
+      survey: { title: survey.title ?? '', questions: survey.questions ?? [] },
+      responses: ansSnap.exists ? (ansSnap.data().answers ?? null) : null,
+    };
+  },
+);
+
+/** Guarda/sobrescribe la respuesta ANÓNIMA y marca el token usado. Editable hasta el cierre. */
+export const submitSurveyResponse = onCall(
+  { region: 'europe-west1', secrets: [SURVEY_SALT] },
+  async (request) => {
+    const { surveyId, token, responses } = request.data ?? {};
+    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
+    const db = getFirestore();
+    const surveySnap = await db.doc(`surveys/${surveyId}`).get();
+    if (!surveySnap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
+    const survey = surveySnap.data();
+    if (survey.status !== 'open') throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
+    const tokenRef = db.doc(`surveys/${surveyId}/tokens/${token}`);
+    const tokenSnap = await tokenRef.get();
+    if (!tokenSnap.exists) throw new HttpsError('permission-denied', 'Enlace no válido.');
+    // Solo se guardan respuestas a preguntas de la encuesta: un token válido no
+    // debe poder inyectar campos extra en el documento.
+    const clean = sanitizeResponses(survey.questions ?? [], responses ?? {});
+    const { valid, errors } = validateResponses(survey.questions ?? [], clean);
+    if (!valid) throw new HttpsError('invalid-argument', 'Respuestas no válidas.', { errors });
+
+    const nowIso = new Date().toISOString();
+    const answerRef = db.doc(`surveys/${surveyId}/answers/${answerId(token, SURVEY_SALT.value())}`);
+    const prev = await answerRef.get();
+    // Respuesta ANÓNIMA: sin token ni email; metadatos en tramos. Reenviar
+    // sobrescribe la misma (editable) preservando la fecha de la primera vez.
+    await answerRef.set({
+      answers: clean,
+      metadata: bucketMetadata(tokenSnap.data().metadata ?? {}, nowIso),
+      createdAt: prev.exists ? (prev.data().createdAt ?? nowIso) : nowIso,
+      updatedAt: nowIso,
+    });
+    // Participación (para el % por departamento), sin ligar el token a la respuesta.
+    await tokenRef.set({ used: true, respondedAt: nowIso }, { merge: true });
+    return { ok: true };
+  },
+);
 
 /**
  * Propuesta de preguntas para un periodo de O2O con IA. El cliente manda las
