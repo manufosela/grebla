@@ -691,6 +691,32 @@ service cloud.firestore {
       }
     }
 
+    // ENCUESTAS ANÓNIMAS (RMR-PCS-0026): clima/eNPS/Q12 para toda la organización,
+    // primera herramienta «general» de GREBLA. El anonimato es real POR
+    // CONSTRUCCIÓN: las RESPUESTAS y los TOKENS solo los escribe la Cloud Function
+    // (Admin SDK, que se salta las reglas) — NINGÚN cliente escribe aquí, ni
+    // siquiera el admin. Responder se hace en una página PÚBLICA que llama a la CF
+    // (no lee Firestore). Por eso el cliente solo LEE, y solo el admin.
+    // Fase 1: «admin» = superadmin; el rol People como eje propio es card aparte.
+    match /surveys/{surveyId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+
+      // Padrón/tokens: email + metadatos de cada persona (lado admin). Los genera
+      // la CF al importar el CSV; el cliente NO escribe. El admin los lee para el
+      // % de participación por departamento y para reenviar los links.
+      match /tokens/{token} {
+        allow read: if isSuperAdmin();
+        allow write: if false;
+      }
+      // Respuestas ANÓNIMAS (sin email ni token). Las escribe SOLO la CF de canje
+      // (Admin SDK); el admin las lee para los dashboards (ya son anónimas).
+      match /answers/{answerId} {
+        allow read: if isSuperAdmin();
+        allow write: if false;
+      }
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
