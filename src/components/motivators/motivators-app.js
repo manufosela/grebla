@@ -8,7 +8,7 @@
 import { LitElement, html, css } from 'lit';
 import { toolShellStyles, toolDisclaimer } from '../shared/toolShellStyles.js';
 import { getDeck } from '../../tools/motivators/domain/decks.js';
-import { saveSession } from '../../tools/motivators/application/usecases.js';
+import { saveSession, getMyHistory } from '../../tools/motivators/application/usecases.js';
 import './motivators-board.js';
 import './motivators-my-results.js';
 import './motivators-aggregates.js';
@@ -28,6 +28,9 @@ export class MotivatorsApp extends LitElement {
     view: { state: true },
     _saved: { state: true },
     _busy: { state: true },
+    _myRoundSession: { state: true },
+    _replaying: { state: true },
+    _loadingMine: { state: true },
   };
 
   static styles = [toolShellStyles, css`
@@ -58,6 +61,48 @@ export class MotivatorsApp extends LitElement {
     this.view = '';
     this._saved = false;
     this._busy = false;
+    /** Mi sesión ya guardada de la ronda abierta (o null si no he jugado). */
+    this._myRoundSession = null;
+    /** ¿He pulsado «Volver a ordenar» para rehacer aunque ya jugara? */
+    this._replaying = false;
+    this._loadingMine = false;
+    this._checkedFor = null;
+  }
+
+  updated(changed) {
+    if (changed.has('round') || changed.has('uid') || changed.has('persistence') || changed.has('deck')) {
+      this._loadMyRoundSession();
+    }
+  }
+
+  /**
+   * Comprueba si ya tengo orden guardado para la ronda ABIERTA (leyendo mi
+   * histórico, que las reglas permiten filtrar por uid). Así «Jugar» puede
+   * avisar en vez de mostrar el tablero vacío como si no hubiera jugado.
+   */
+  async _loadMyRoundSession() {
+    const key = this.round && this.uid && this.persistence && this._canPlay
+      ? `${this.deck}:${this.round.id}:${this.uid}`
+      : '';
+    if (key === this._checkedFor) return;
+    this._checkedFor = key;
+    // Reset al cambiar de ronda/jugador.
+    this._myRoundSession = null;
+    this._replaying = false;
+    this._saved = false;
+    if (!key) return;
+    this._loadingMine = true;
+    try {
+      const history = await getMyHistory(this.persistence, this.uid, this.deck);
+      // Si mientras cargaba cambió la ronda/jugador, esta respuesta es vieja: se
+      // descarta para no pisar el estado de la ronda actual (condición de carrera).
+      if (this._checkedFor !== key) return;
+      this._myRoundSession = history.find((s) => s.roundId === this.round.id) ?? null;
+    } catch {
+      if (this._checkedFor === key) this._myRoundSession = null; // ante error, dejar jugar
+    } finally {
+      if (this._checkedFor === key) this._loadingMine = false;
+    }
   }
 
   get _deck() {
@@ -97,6 +142,9 @@ export class MotivatorsApp extends LitElement {
     try {
       await saveSession(this.persistence, { round: this.round, identity: this.identity, orden: e.detail.orden });
       this._saved = true;
+      this._replaying = false;
+      // Deja constancia de que ya hay orden de esta ronda (por si luego rehace y cancela).
+      this._myRoundSession = { roundId: this.round.id };
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar tu orden.';
     } finally {
@@ -109,11 +157,17 @@ export class MotivatorsApp extends LitElement {
     if (!deck) return html`<p class="state error">Juego no válido.</p>`;
     if (!this._canPlay) return html`<p class="state">Este juego lo juegan ingenieros y managers del equipo.</p>`;
     if (!this.round) return html`<p class="state">No hay ninguna ronda abierta ahora mismo. Vuelve cuando se active la próxima.</p>`;
-    if (this._saved) {
+    if (this._loadingMine) return html`<p class="state">Cargando…</p>`;
+    // Ya jugada esta ronda (guardada ahora o en una sesión anterior): en vez del
+    // tablero vacío, se avisa y se ofrece rehacer (sobrescribe al guardar).
+    if ((this._saved || this._myRoundSession) && !this._replaying) {
+      const justSaved = this._saved;
       return html`<div class="done">
-        <h3>¡Guardado! 🎉</h3>
-        <p>Tu orden para <span class="round-name">${this.round.name}</span> se ha registrado. Puedes revisarlo cuando quieras.</p>
-        <button class="again" @click=${() => { this._saved = false; }}>Volver a ordenar</button>
+        <h3>${justSaved ? '¡Guardado! 🎉' : 'Ya jugaste esta ronda ✓'}</h3>
+        <p>${justSaved
+          ? html`Tu orden para <span class="round-name">${this.round.name}</span> se ha registrado. Puedes revisarlo cuando quieras.`
+          : html`Ya registraste tu orden para <span class="round-name">${this.round.name}</span>. Puedes verlo en «Mis resultados». Si vuelves a ordenar, reemplazarás tu respuesta anterior.`}</p>
+        <button class="again" @click=${() => { this._replaying = true; }}>Volver a ordenar</button>
       </div>`;
     }
     const err = this.error ? html`<p class="state error">${this.error}</p>` : null;
