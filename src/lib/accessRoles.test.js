@@ -242,7 +242,21 @@ describe('mergeAccessUsers', () => {
       users: [],
       leader: [{ id: 'seed', displayName: 'Seed', email: 'seed@x.com' }],
     });
-    expect(result).toEqual([{ uid: 'seed', displayName: 'Seed', email: 'seed@x.com', lastLogin: null, role: 'leader' }]);
+    expect(result).toEqual([{
+      uid: 'seed', displayName: 'Seed', email: 'seed@x.com', lastLogin: null,
+      role: 'leader', teamRole: 'leader', isAdmin: false,
+    }]);
+  });
+
+  it('expone los dos ejes por separado: isAdmin (gobierno) y teamRole (equipo)', () => {
+    // RMR-TSK-0313: un admin que además es manager conserva su rol de equipo en
+    // teamRole, y el gobierno en isAdmin — independientes; role queda derivado.
+    const [adminLeader] = mergeAccessUsers({ users: [{ id: 'u1', lastLogin: 5 }], superadmin: [{ id: 'u1' }], leader: [{ id: 'u1' }] });
+    expect(adminLeader).toMatchObject({ role: 'superadmin', teamRole: 'leader', isAdmin: true });
+    const [pureAdmin] = mergeAccessUsers({ users: [{ id: 'u2', lastLogin: 5 }], superadmin: [{ id: 'u2' }] });
+    expect(pureAdmin).toMatchObject({ role: 'superadmin', teamRole: 'none', isAdmin: true });
+    const [pureLeader] = mergeAccessUsers({ users: [{ id: 'u3', lastLogin: 5 }], leader: [{ id: 'u3' }] });
+    expect(pureLeader).toMatchObject({ role: 'leader', teamRole: 'leader', isAdmin: false });
   });
 
   it('el supermanager gana al viewer y al leader, y pierde contra el superadmin', () => {

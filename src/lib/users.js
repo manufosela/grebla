@@ -97,21 +97,28 @@ export async function listAllUsers() {
   });
 }
 
+/** Colección del eje de gobierno de instancia (superadmin). Se gestiona aparte. */
+const ADMIN_COLLECTION = ROLE_COLLECTION.superadmin;
+
 /**
- * Reasigna el rol de acceso de un usuario: escribe el doc en la colección del
- * rol nuevo (con merge, preservando campos existentes como grantedBy) y borra
- * los docs de las otras dos colecciones, de forma que quede en un único rol.
- * `role: 'none'` borra de las tres (quita todo acceso). Solo puede invocarlo
- * un superadmin: las reglas de Firestore rechazan la escritura si no lo es.
+ * Reasigna el ROL DE EQUIPO de un usuario (supermanager/viewer/leader): escribe el
+ * doc del rol nuevo y borra los de los otros, de forma que quede en uno solo.
+ * `role: 'none'` los borra todos. NO toca el eje de gobierno (superadmin/`/admins`):
+ * es ortogonal (ADR de acceso en dos ejes) y se gestiona con `setUserAdmin`, así
+ * que cambiar el rol de equipo NO le quita el superadmin. Solo un superadmin puede
+ * invocarlo (lo imponen las reglas de Firestore).
  * @param {string} uid
  * @param {AccessRole|'none'} role
  * @param {{ displayName?: string|null, email?: string|null }} [profile]
  * @returns {Promise<void>}
  */
 export async function setUserRole(uid, role, profile = {}) {
+  // El superadmin es el eje de gobierno, ortogonal: se gestiona con setUserAdmin.
+  // Rechazarlo aquí evita que un caller borre el rol de equipo sin conceder admin.
+  if (role === 'superadmin') throw new Error('El superadmin se concede con setUserAdmin, no con setUserRole');
   const targetCollection = role === 'none' ? null : ROLE_COLLECTION[role];
   const writes = Object.values(ROLE_COLLECTION)
-    .filter((collectionName) => collectionName !== targetCollection)
+    .filter((collectionName) => collectionName !== targetCollection && collectionName !== ADMIN_COLLECTION)
     .map((collectionName) => deleteDoc(doc(db, collectionName, uid)));
   if (targetCollection) {
     writes.push(
@@ -123,6 +130,24 @@ export async function setUserRole(uid, role, profile = {}) {
     );
   }
   await Promise.all(writes);
+}
+
+/**
+ * Concede o retira el GOBIERNO DE INSTANCIA (superadmin) de un usuario ya
+ * existente, de forma ORTOGONAL a su rol de equipo (ADR de acceso en dos ejes):
+ * solo escribe/borra `/admins/{uid}`, sin tocar sus demás roles. Es lo que
+ * alimenta el checkbox «Superadmin» de la lista de usuarios. Solo un superadmin
+ * puede escribir en `/admins` (reglas de Firestore).
+ * @param {string} uid
+ * @param {boolean} isAdmin
+ * @param {{ displayName?: string|null, email?: string|null }} [profile]
+ * @returns {Promise<void>}
+ */
+export function setUserAdmin(uid, isAdmin, profile = {}) {
+  const ref = doc(db, ADMIN_COLLECTION, uid);
+  return isAdmin
+    ? setDoc(ref, { displayName: profile.displayName ?? null, email: profile.email ?? null, addedAt: serverTimestamp() }, { merge: true })
+    : deleteDoc(ref);
 }
 
 /**

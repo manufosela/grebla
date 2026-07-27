@@ -16,12 +16,12 @@ import { LitElement, html, css } from 'lit';
 import './app-modal.js';
 import './admin/game-editor.js';
 import {
-  listLeaders, addLeaderByEmail, removeLeader, renameLeader, grantAdminByEmail,
+  listLeaders, addLeaderByEmail, removeLeader, renameLeader,
   listSupermanagers, setLeaderReportsTo,
 } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
-import { listAllUsers, setUserRole, setUserDisplayName, listLinkedUids, assignUserToLeader } from '../lib/users.js';
+import { listAllUsers, setUserRole, setUserAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -112,8 +112,6 @@ export class SuperadminPanel extends LitElement {
     _error: { state: true },
     _editLeaderUid: { state: true },
     _editLeaderName: { state: true },
-    _superadminEmail: { state: true },
-    _superadminNotice: { state: true },
     _editUserUid: { state: true },
     _editUserName: { state: true },
     _framework: { state: true },
@@ -227,6 +225,8 @@ export class SuperadminPanel extends LitElement {
     .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act:hover { border-color: var(--rm-accent, #3b82f6); color: var(--rm-accent, #3b82f6); }
     .badge.linked { background: #0d9488; margin-left: 0.35rem; }
+    .admin-check { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: 0.5rem; font-size: 0.78rem; font-weight: 600; color: var(--rm-muted, #6b7280); cursor: pointer; }
+    .admin-check input { cursor: pointer; }
     .assign-body { display: flex; flex-direction: column; gap: 0.9rem; }
     .assign-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
     .assign-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
@@ -323,8 +323,6 @@ export class SuperadminPanel extends LitElement {
     /** @type {string|null} uid del manager cuyo nombre se está editando (RMR-BUG-0032), o null */
     this._editLeaderUid = null;
     this._editLeaderName = '';
-    this._superadminEmail = '';
-    this._superadminNotice = '';
     /** @type {string|null} uid del usuario cuyo nombre se está editando en la pestaña Usuarios, o null */
     this._editUserUid = null;
     this._editUserName = '';
@@ -670,26 +668,6 @@ export class SuperadminPanel extends LitElement {
       await this._loadLeaders();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo renombrar el manager.';
-    }
-  }
-
-  /**
-   * Nombra superadmin por email desde la pestaña Usuarios (RMR-TSK-0230). Usa la
-   * Cloud Function grantAdmin, que provisiona la cuenta si el email nunca ha
-   * iniciado sesión, así el superadmin queda preparado para su primer login.
-   */
-  async _grantSuperadminByEmail() {
-    const email = this._superadminEmail.trim();
-    if (!email) return;
-    this._usersError = '';
-    this._superadminNotice = '';
-    try {
-      await grantAdminByEmail(email);
-      this._superadminEmail = '';
-      this._superadminNotice = `${email} ya es superadmin.`;
-      await this._loadUsers();
-    } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo conceder superadmin.';
     }
   }
 
@@ -1343,21 +1321,6 @@ export class SuperadminPanel extends LitElement {
   }
 
   /** Nombrar superadmin por email desde la pestaña Usuarios (RMR-TSK-0230). */
-  _renderSuperadminAlta() {
-    return html`
-      <div class="superadmin-alta">
-        <h3>Nombrar superadmin</h3>
-        <p class="ro-note">Concede superadmin directamente por email, aunque nunca haya iniciado sesión (la cuenta se prepara para su primer login).</p>
-        <div class="toolbar">
-          <input type="email" placeholder="email@dominio.com" .value=${this._superadminEmail}
-            @input=${(e) => { this._superadminEmail = e.target.value; }} />
-          <button class="primary" ?disabled=${!this._superadminEmail.trim()} @click=${() => this._grantSuperadminByEmail()}>Hacer superadmin</button>
-        </div>
-        ${this._superadminNotice ? html`<p class="notice">${this._superadminNotice}</p>` : null}
-      </div>
-    `;
-  }
-
   /** @param {import('../lib/leaders.js').Leader} l */
   _renderLeaderRow(l) {
     const editing = this._editLeaderUid === l.uid;
@@ -1457,7 +1420,7 @@ export class SuperadminPanel extends LitElement {
         <h2>Usuarios (${this._users.length})</h2>
         <p class="ro-note">
           Da de alta un viewer o un manager por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
-          Cambia el rol de quien ya aparece en la lista con «Cambiar rol…». «Quitar acceso» solo revoca el rol: no borra la cuenta ni la saca de su equipo.
+          Cambia el rol de equipo de quien ya aparece con «Rol de equipo…». El <strong>superadmin</strong> es el checkbox de cada fila (independiente del rol de equipo). «Quitar acceso» solo revoca el rol: no borra la cuenta ni la saca de su equipo.
         </p>
         <div class="toolbar">
           <input
@@ -1472,7 +1435,6 @@ export class SuperadminPanel extends LitElement {
           </select>
           <button class="primary" ?disabled=${!this._newUserEmail.trim()} @click=${() => this._addUser()}>Añadir usuario</button>
         </div>
-        ${this._renderSuperadminAlta()}
         ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
         ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
         ${this._users.length === 0
@@ -1523,14 +1485,44 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
-  /** Celda de rol + badge «Vinculado». @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
+  /** Celda de rol + checkbox de superadmin (ortogonal) + badge «Vinculado». @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
   _renderUserRoleCell(user, linked) {
+    // Los dos ejes por separado: el badge muestra el ROL DE EQUIPO (teamRole) y
+    // el checkbox el GOBIERNO (isAdmin), independientes (ADR de acceso en 2 ejes).
     return html`
       <td>
-        <span class="badge" style=${`background:${ROLE_COLOR[user.role]}`}>${ROLE_LABEL[user.role]}</span>
+        <span class="badge" style=${`background:${ROLE_COLOR[user.teamRole]}`}>${ROLE_LABEL[user.teamRole]}</span>
         ${linked ? html`<span class="badge linked" title="Vinculado a una persona">Vinculado</span>` : null}
+        ${this.readOnly ? null : html`<label class="admin-check" title="Gobierno de instancia: ve y gestiona toda la organización. Es independiente de su rol de equipo.">
+          <input type="checkbox" .checked=${user.isAdmin} @change=${(e) => this._toggleAdmin(user, e.target.checked)} />
+          Superadmin
+        </label>`}
       </td>
     `;
+  }
+
+  /**
+   * Concede o retira el superadmin (eje de gobierno, ortogonal al rol de equipo)
+   * con el checkbox de la fila. Salvaguarda: nadie puede quitarse a sí mismo el
+   * superadmin (se quedaría sin gobierno y sin poder revertirlo).
+   * @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} isAdmin
+   */
+  async _toggleAdmin(user, isAdmin) {
+    this._usersError = '';
+    this._usersNotice = '';
+    if (!isAdmin && user.uid === this.currentUid) {
+      this._usersError = 'No puedes quitarte a ti mismo el superadmin.';
+      await this._loadUsers(); // revierte el checkbox visualmente
+      return;
+    }
+    try {
+      await setUserAdmin(user.uid, isAdmin, { displayName: user.displayName, email: user.email });
+      this._usersNotice = isAdmin ? 'Superadmin concedido.' : 'Superadmin retirado.';
+      await Promise.all([this._loadUsers(), this._loadLeaders()]);
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el superadmin.';
+      await this._loadUsers();
+    }
   }
 
   /** Acciones de la fila de usuario. @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
@@ -1545,8 +1537,7 @@ export class SuperadminPanel extends LitElement {
     return html`<div class="row-actions">
       <button class="act" @click=${() => this._startEditUserName(user)}>Renombrar</button>
       <select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
-        <option value="" disabled selected>Cambiar rol…</option>
-        <option value="superadmin">Superadmin</option>
+        <option value="" disabled selected>Rol de equipo…</option>
         <option value="supermanager">Head (manager de managers)</option>
         <option value="viewer">Viewer</option>
         <option value="leader">Manager</option>
