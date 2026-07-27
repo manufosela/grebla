@@ -21,7 +21,7 @@ import {
 } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
-import { listAllUsers, setUserRole, setUserAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader } from '../lib/users.js';
+import { listAllUsers, setUserRole, setUserAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -127,6 +127,7 @@ export class SuperadminPanel extends LitElement {
     _newUserEmail: { state: true },
     _newUserRole: { state: true },
     _confirmRoleChange: { state: true },
+    _confirmDelete: { state: true },
     _usersError: { state: true },
     _usersNotice: { state: true },
     _linkedUids: { state: true },
@@ -352,6 +353,8 @@ export class SuperadminPanel extends LitElement {
     this._newUserRole = 'viewer';
     /** @type {{ uid: string, role: import('../lib/accessRoles.js').AccessRole|'none' }|null} */
     this._confirmRoleChange = null;
+    /** @type {string|null} uid del usuario pendiente de confirmar borrado. */
+    this._confirmDelete = null;
     this._usersError = '';
     this._usersNotice = '';
     /** @type {string[]} uids ya vinculados a una persona (para no ofrecer "Asignar") */
@@ -1547,6 +1550,15 @@ export class SuperadminPanel extends LitElement {
         <button @click=${() => { this._confirmRoleChange = null; }}>No</button>
       </span>`;
     }
+    if (this._confirmDelete === user.uid) {
+      return html`<span class="confirm">¿Borrar a ${user.displayName ?? user.email ?? 'este usuario'}?
+        <button class="yes danger" @click=${() => this._deleteUser(user)}>Borrar</button>
+        <button @click=${() => { this._confirmDelete = null; }}>No</button>
+      </span>`;
+    }
+    // «Borrar» solo para quien NUNCA ha iniciado sesión (sin lastLogin): es el
+    // borrado limpio, sin datos de interacción que recalcular (Fase A).
+    const neverLoggedIn = !user.lastLogin;
     return html`<div class="row-actions">
       <button class="act" @click=${() => this._startEditUserName(user)}>Renombrar</button>
       <select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
@@ -1559,7 +1571,29 @@ export class SuperadminPanel extends LitElement {
       ${user.role === 'none' && !linked
         ? html`<button class="act" type="button" @click=${() => this._openAssign(user)}>Asignar a equipo</button>`
         : null}
+      ${neverLoggedIn && user.uid !== this.currentUid
+        ? html`<button class="del-btn" type="button" title="Solo posible porque nunca ha iniciado sesión" @click=${() => { this._confirmDelete = user.uid; }}>Borrar</button>`
+        : null}
     </div>`;
+  }
+
+  /**
+   * Borra a un usuario que nunca inició sesión (Fase A, RMR-TSK-0315). El botón
+   * solo aparece en ese caso; aun así, deleteUnusedUser revalida las dependencias
+   * (no deja personas huérfanas) y falla si las hay.
+   * @param {import('../lib/accessRoles.js').AccessUser} user
+   */
+  async _deleteUser(user) {
+    this._usersError = '';
+    this._usersNotice = '';
+    this._confirmDelete = null;
+    try {
+      await deleteUnusedUser(user.uid);
+      this._usersNotice = 'Usuario borrado.';
+      await Promise.all([this._loadUsers(), this._loadLeaders()]);
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo borrar el usuario.';
+    }
   }
 
   _renderAssignModal() {

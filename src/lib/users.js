@@ -11,7 +11,7 @@
  * @typedef {import('./accessRoles.js').AccessRole} AccessRole
  * @typedef {import('./accessRoles.js').AccessUser} AccessUser
  */
-import { doc, collection, addDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, addDoc, getDoc, getDocs, setDoc, deleteDoc, query, where, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { ROLE_COLLECTION, mergeAccessUsers, unlinkedUsers } from './accessRoles.js';
 
@@ -130,6 +130,34 @@ export async function setUserRole(uid, role, profile = {}) {
     );
   }
   await Promise.all(writes);
+}
+
+/**
+ * Borra a un usuario que NUNCA ha iniciado sesión (borrado limpio, Fase A). Es
+ * seguro porque, sin login, no ha podido generar datos de interacción (sesiones
+ * de motivadores, mareas, respuestas…), así que no está en ningún agregado y no
+ * hay nada que recalcular. Solo revoca sus roles (equipo + gobierno) y lo saca
+ * del directorio /users si por lo que fuera existiera.
+ *
+ * Comprueba antes las dependencias: si es un líder con personas en su equipo
+ * (ownerLeaderUid == uid), FALLA en vez de dejar personas huérfanas.
+ *
+ * El caller DEBE haber verificado que el usuario nunca inició sesión (lastLogin
+ * nulo); esta función no lo puede saber sola. Solo un superadmin puede borrar en
+ * esas colecciones (reglas de Firestore).
+ * @param {string} uid
+ * @returns {Promise<void>}
+ */
+export async function deleteUnusedUser(uid) {
+  const owned = await getDocs(query(collection(db, 'people'), where('ownerLeaderUid', '==', uid)));
+  if (!owned.empty) {
+    const n = owned.size;
+    throw new Error(`No se puede borrar: tiene ${n} persona${n === 1 ? '' : 's'} en su equipo. Reasígnalas o bórralas primero.`);
+  }
+  await setUserRole(uid, 'none'); // borra sus roles de equipo (leaders/viewers/supermanagers)
+  await setUserAdmin(uid, false); // y el gobierno (admins)
+  const usersDoc = doc(db, 'users', uid);
+  if ((await getDoc(usersDoc)).exists()) await deleteDoc(usersDoc);
 }
 
 /**
