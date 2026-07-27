@@ -5,7 +5,9 @@
  *
  * @typedef {'superadmin'|'supermanager'|'viewer'|'leader'} AccessRole
  * @typedef {AccessRole|'none'} UserRole
- * @typedef {{ uid: string, displayName: string|null, email: string|null, role: UserRole, lastLogin: unknown }} AccessUser
+ * @typedef {'supermanager'|'viewer'|'leader'|'none'} TeamRole  Rol de equipo (eje funcional), sin el gobierno.
+ * @typedef {{ uid: string, displayName: string|null, email: string|null, role: UserRole,
+ *   teamRole: TeamRole, isAdmin: boolean, lastLogin: unknown }} AccessUser
  */
 
 /** @type {Record<AccessRole, string>} */
@@ -31,11 +33,13 @@ function toMs(v) {
 
 /**
  * Fusiona el directorio de usuarios (/users, todos los que han iniciado sesión)
- * con las colecciones de rol (/admins, /viewers, /leaders) en una única lista.
- * Cada usuario recibe su rol de mayor prioridad (superadmin > viewer > leader) o
- * 'none' si no tiene ninguno. Ordena por última conexión descendente.
+ * con las colecciones de rol en una única lista. Expone los DOS EJES por usuario
+ * (ADR de acceso en dos ejes): `isAdmin` (gobierno de instancia, /admins) y
+ * `teamRole` (rol de equipo: supermanager/viewer/leader/none), independientes. El
+ * `role` único derivado se mantiene por compatibilidad. Ordena por última conexión.
  * @param {{ users?: Array<{id:string,displayName?:string|null,email?:string|null,lastLogin?:unknown}>,
  *           superadmin?: Array<{id:string,displayName?:string|null,email?:string|null}>,
+ *           supermanager?: Array<{id:string,displayName?:string|null,email?:string|null}>,
  *           viewer?: Array<{id:string,displayName?:string|null,email?:string|null}>,
  *           leader?: Array<{id:string,displayName?:string|null,email?:string|null}> }} groups
  * @returns {AccessUser[]}
@@ -50,19 +54,28 @@ export function mergeAccessUsers(groups) {
       email: u.email ?? null,
       lastLogin: u.lastLogin ?? null,
       role: /** @type {UserRole} */ ('none'),
+      teamRole: /** @type {TeamRole} */ ('none'),
+      isAdmin: false,
     });
   }
-  // Aplica los roles de menor a mayor prioridad (gana el último = mayor).
+  // Aplica los roles de menor a mayor prioridad (gana el último = mayor). El
+  // superadmin marca el eje de gobierno (isAdmin) sin pisar el rol de equipo.
   for (const role of ROLE_ASC) {
     for (const item of groups[role] ?? []) {
-      const existing = byUid.get(item.id);
-      byUid.set(item.id, {
+      const existing = byUid.get(item.id) ?? {
+        uid: item.id, displayName: null, email: null, lastLogin: null,
+        role: 'none', teamRole: 'none', isAdmin: false,
+      };
+      const next = {
+        ...existing,
         uid: item.id,
-        displayName: existing?.displayName ?? item.displayName ?? null,
-        email: existing?.email ?? item.email ?? null,
-        lastLogin: existing?.lastLogin ?? null,
-        role,
-      });
+        displayName: existing.displayName ?? item.displayName ?? null,
+        email: existing.email ?? item.email ?? null,
+        role, // derivado: el de mayor prioridad (incluye superadmin)
+      };
+      if (role === 'superadmin') next.isAdmin = true;
+      else next.teamRole = /** @type {TeamRole} */ (role);
+      byUid.set(item.id, next);
     }
   }
   return [...byUid.values()].sort((a, b) => toMs(b.lastLogin) - toMs(a.lastLogin));
