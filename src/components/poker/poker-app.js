@@ -9,7 +9,7 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './poker-table.js';
-import { listSessions, createSession, deleteSession } from '../../lib/poker.js';
+import { listSessions, createSession, deleteSession, listSquads } from '../../lib/poker.js';
 
 export class PokerApp extends LitElement {
   static properties = {
@@ -21,6 +21,9 @@ export class PokerApp extends LitElement {
     _selected: { state: true },
     _sessions: { state: true },
     _newName: { state: true },
+    _newMode: { state: true },
+    _newSquad: { state: true },
+    _squads: { state: true },
     _loading: { state: true },
     _error: { state: true },
   };
@@ -31,11 +34,13 @@ export class PokerApp extends LitElement {
     .back { align-self: flex-start; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
     .back:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .lead { margin: 0 0 1rem; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
-    .create { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
-    .create input { flex: 1 1 14rem; min-width: 0; padding: 0.55rem 0.75rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
-    .create input:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
+    .create { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.4rem; max-width: 34rem; }
+    .create input, .create select { padding: 0.55rem 0.75rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
+    .create input:focus, .create select:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
+    .modes { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
+    .modes label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
     button { font: inherit; cursor: pointer; border-radius: 8px; font-weight: 600; }
-    .create button { border: 1px solid var(--teal); background: var(--teal); color: var(--rm-on-accent, #fff); padding: 0.55rem 1rem; }
+    .create button { align-self: flex-start; border: 1px solid var(--teal); background: var(--teal); color: var(--rm-on-accent, #fff); padding: 0.55rem 1.2rem; }
     .create button:disabled { opacity: 0.5; cursor: default; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
@@ -60,6 +65,9 @@ export class PokerApp extends LitElement {
     this._selected = null;
     this._sessions = [];
     this._newName = '';
+    this._newMode = 'simple';
+    this._newSquad = '';
+    this._squads = [];
     this._loading = false;
     this._error = '';
     this._loadedFor = null;
@@ -88,6 +96,9 @@ export class PokerApp extends LitElement {
     try {
       const sessions = await listSessions(this._ownerScope);
       this._sessions = sessions.filter((s) => s.status !== 'closed');
+      if (this.canManage && !this._squads.length) {
+        this._squads = await listSquads().catch(() => []);
+      }
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las sesiones.';
     } finally {
@@ -98,9 +109,17 @@ export class PokerApp extends LitElement {
   async _create() {
     const name = this._newName.trim();
     if (!name || !this.leaderUid) return;
+    if (this._newMode === 'linear' && !this._newSquad) {
+      this._error = 'Elige un squad para el modo Linear.';
+      return;
+    }
     try {
-      const id = await createSession({ name, ownerLeaderUid: this.leaderUid });
+      const squad = this._newMode === 'linear'
+        ? this._squads.find((s) => s.linearLabel === this._newSquad) ?? null
+        : null;
+      const id = await createSession({ name, ownerLeaderUid: this.leaderUid, mode: this._newMode, squad });
       this._newName = '';
+      this._error = '';
       await this._loadList();
       const created = this._sessions.find((s) => s.id === id);
       if (created) this._select(created);
@@ -138,6 +157,17 @@ export class PokerApp extends LitElement {
           <input type="text" placeholder="Nombre de la sesión (p. ej. «Refinamiento sprint 12»)" .value=${this._newName}
             @input=${(e) => { this._newName = e.target.value; }}
             @keydown=${(e) => { if (e.key === 'Enter') this._create(); }} />
+          <div class="modes">
+            <label><input type="radio" name="mode" .checked=${this._newMode === 'simple'}
+              @change=${() => { this._newMode = 'simple'; }} /> Voto simple</label>
+            <label><input type="radio" name="mode" .checked=${this._newMode === 'linear'}
+              @change=${() => { this._newMode = 'linear'; }} /> Refinar backlog (Linear)</label>
+          </div>
+          ${this._newMode === 'linear' ? html`
+            <select @change=${(e) => { this._newSquad = e.target.value; }}>
+              <option value="">Elige un squad…</option>
+              ${this._squads.map((s) => html`<option value=${s.linearLabel} .selected=${this._newSquad === s.linearLabel}>${s.name}</option>`)}
+            </select>` : null}
           <button @click=${() => this._create()} ?disabled=${!this._newName.trim()}>Crear sesión</button>
         </div>` : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
