@@ -31,16 +31,15 @@ function createdAtMs(value) {
 // ── Sesiones ─────────────────────────────────────────────────────────────────
 
 /**
- * Crea una sesión de poker (la invoca el manager/head dueño). Nace sin tema, sin
- * revelar y en la ronda 1.
- * @param {{ name: string, topic?: string, ownerLeaderUid: string }} data
+ * Crea una sesión de poker (la invoca el manager/head dueño). Nace sin revelar y
+ * en la ronda 1: es un juego de voto simple, sin tema.
+ * @param {{ name: string, ownerLeaderUid: string }} data
  * @returns {Promise<string>} id de la sesión
  */
 export async function createSession(data) {
   if (!data?.ownerLeaderUid) throw new Error('createSession requiere ownerLeaderUid');
   const ref = await addDoc(collection(db, SESSIONS), {
     name: String(data.name ?? '').trim(),
-    topic: String(data.topic ?? '').trim(),
     ownerLeaderUid: data.ownerLeaderUid,
     revealed: false,
     round: 1,
@@ -99,14 +98,12 @@ export function watchVotes(sessionId, onData, onError) {
 }
 
 /**
- * Fija el tema a estimar y ARRANCA una votación limpia: incrementa la ronda y
- * oculta los votos. Sirve tanto para el primer tema como para «Nuevo tema». Solo
- * el dueño (o superadmin) puede: lo imponen las reglas.
- * @param {string} sessionId @param {string} topic
+ * «Volver a votar»: arranca una votación limpia incrementando la ronda y
+ * ocultando los votos. Solo el dueño (o superadmin) puede: lo imponen las reglas.
+ * @param {string} sessionId
  */
-export function startTopic(sessionId, topic) {
+export function revote(sessionId) {
   return updateDoc(doc(db, SESSIONS, sessionId), {
-    topic: String(topic ?? '').trim(),
     round: increment(1),
     revealed: false,
   });

@@ -1,9 +1,8 @@
 /**
- * <poker-table> — la mesa de una sesión de Scrum Poker (RMR-TSK-0317). Se une a
- * la sesión, muestra el tema, el mazo para votar en oculto y la presencia (quién
- * ha votado, SIN el valor). Cuando todos los que se han unido han votado, aparece
- * el botón «Revelar» para todos; al revelar se ven las cartas y un resumen
- * (media de las numéricas / consenso). El dueño pasa al siguiente tema.
+ * <poker-table> — la mesa de una sesión de Scrum Poker (RMR-TSK-0321). Juego de
+ * voto simple: al entrar ves el mazo y votas en oculto; el manager o cualquiera
+ * pulsa «Mostrar votos» y se ven todas las cartas con el nombre de cada persona;
+ * el manager puede «Volver a votar» para reiniciar. Sin temas ni tareas.
  *
  * Todo en tiempo real: se suscribe a la sesión y a la presencia siempre, y a los
  * votos SOLO cuando la sesión está revelada (antes, las reglas no dejan leer la
@@ -13,9 +12,9 @@
  */
 import { LitElement, html, css } from 'lit';
 import { POKER_DECK } from '../../tools/poker/domain/deck.js';
-import { allVoted, countVoted, hasVotedThisRound, revealedVotes, summarizeVotes } from '../../tools/poker/domain/tally.js';
+import { countVoted, hasVotedThisRound, revealedVotes, summarizeVotes } from '../../tools/poker/domain/tally.js';
 import {
-  joinSession, castVote, reveal, startTopic, getMyVote,
+  joinSession, castVote, reveal, revote, getMyVote,
   watchSession, watchPlayers, watchVotes,
 } from '../../lib/poker.js';
 
@@ -29,18 +28,11 @@ export class PokerTable extends LitElement {
     _players: { state: true },
     _votes: { state: true },
     _myVote: { state: true },
-    _topicDraft: { state: true },
     _error: { state: true },
   };
 
   static styles = css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); }
-    .topic { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.2rem; }
-    .topic h3 { margin: 0; font-size: 1.05rem; color: var(--rm-text, #1e3a5f); }
-    .topic .muted { color: var(--rm-muted, #5b6b7d); font-style: italic; }
-    .topic-edit { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .topic-edit input { flex: 1 1 12rem; min-width: 0; padding: 0.5rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
-    .topic-edit input:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
     button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); padding: 0.45rem 0.85rem; font-weight: 600; }
     button:hover:not(:disabled) { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     button.primary { background: var(--teal); border-color: var(--teal); color: var(--rm-on-accent, #fff); }
@@ -75,7 +67,6 @@ export class PokerTable extends LitElement {
     this._players = [];
     this._votes = [];
     this._myVote = null;
-    this._topicDraft = '';
     this._error = '';
     this._subs = [];
     this._votesSub = null;
@@ -116,10 +107,9 @@ export class PokerTable extends LitElement {
   _onSession(session) {
     this._session = session;
     if (!session) return;
-    // Al cambiar de ronda, la carta elegida deja de valer.
+    // Al volver a votar (nueva ronda), la carta elegida deja de valer.
     if (this._lastRound !== null && session.round !== this._lastRound) {
       this._myVote = null;
-      this._topicDraft = '';
     }
     this._lastRound = session.round;
     // Suscribirse a los votos SOLO cuando está revelado (antes las reglas rechazan
@@ -159,36 +149,12 @@ export class PokerTable extends LitElement {
     try { await reveal(this.sessionId); } catch (err) { this._onError(err); }
   }
 
-  async _startTopic() {
-    const topic = this._topicDraft.trim();
-    if (!topic) return;
-    try {
-      await startTopic(this.sessionId, topic);
-      this._topicDraft = '';
-    } catch (err) { this._onError(err); }
-  }
-
-  _renderTopic() {
-    const topic = this._session?.topic?.trim();
-    if (!this.canManage) {
-      return html`<div class="topic">
-        <h3>${topic || html`<span class="muted">Esperando a que se proponga un tema…</span>`}</h3>
-      </div>`;
-    }
-    const label = this._revealed ? 'Siguiente tema' : (topic ? 'Cambiar tema' : 'Empezar a estimar');
-    return html`<div class="topic">
-      ${topic ? html`<h3>${topic}</h3>` : html`<h3 class="muted">Propón el primer tema a estimar</h3>`}
-      <div class="topic-edit">
-        <input type="text" placeholder="Tema o tarea a estimar…" .value=${this._topicDraft}
-          @input=${(e) => { this._topicDraft = e.target.value; }}
-          @keydown=${(e) => { if (e.key === 'Enter') this._startTopic(); }} />
-        <button class="primary" @click=${() => this._startTopic()} ?disabled=${!this._topicDraft.trim()}>${label}</button>
-      </div>
-    </div>`;
+  async _revote() {
+    try { await revote(this.sessionId); } catch (err) { this._onError(err); }
   }
 
   _renderDeck() {
-    if (!this._session?.topic?.trim() || this._revealed) return null;
+    if (this._revealed) return null;
     const picked = this._myVoteValue;
     return html`
       <p class="lead">Elige tu carta. Nadie ve tu voto hasta que se revele.</p>
@@ -220,15 +186,18 @@ export class PokerTable extends LitElement {
   }
 
   _renderBar() {
-    const round = this._round;
-    const voted = countVoted(this._players, round);
+    // Tras revelar: solo el manager puede reiniciar la votación.
+    if (this._revealed) {
+      return this.canManage
+        ? html`<div class="bar"><button class="primary" @click=${() => this._revote()}>Volver a votar</button></div>`
+        : null;
+    }
+    const voted = countVoted(this._players, this._round);
     const total = this._players.length;
-    if (this._revealed) return null;
-    if (!this._session?.topic?.trim()) return null;
-    const ready = allVoted(this._players, round);
+    // «Mostrar votos» lo puede pulsar cualquiera (basta con que haya algún voto).
     return html`<div class="bar">
       <span class="lead">${voted}/${total} han votado</span>
-      ${ready ? html`<button class="primary" @click=${() => this._reveal()}>Revelar votos</button>` : null}
+      <button class="primary" @click=${() => this._reveal()} ?disabled=${voted === 0}>Mostrar votos</button>
     </div>`;
   }
 
@@ -252,7 +221,6 @@ export class PokerTable extends LitElement {
   render() {
     if (!this._session) return html`<p class="lead">Cargando la mesa…</p>`;
     return html`
-      ${this._renderTopic()}
       ${this._renderDeck()}
       ${this._renderBar()}
       ${this._renderPlayers()}
