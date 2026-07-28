@@ -234,3 +234,18 @@ export async function getMyVote(sessionId, uid) {
   const snap = await getDoc(doc(db, SESSIONS, sessionId, 'votes', uid));
   return snap.exists() ? snap.data() : null;
 }
+
+/** Marca (o desmarca) al jugador como observador («solo ver»): persiste en la sesión. */
+export function setSpectator(sessionId, uid, spectator) {
+  return setDoc(doc(db, SESSIONS, sessionId, 'players', uid), { spectator: !!spectator }, { merge: true });
+}
+
+/** El jugador se salta la ronda actual («fuera de mi ámbito»). */
+export function skipRound(sessionId, uid, round) {
+  return setDoc(doc(db, SESSIONS, sessionId, 'players', uid), { skippedRound: round }, { merge: true });
+}
+
+/** Vuelve a la ronda (deshace «fuera de mi ámbito»). */
+export function unskipRound(sessionId, uid) {
+  return setDoc(doc(db, SESSIONS, sessionId, 'players', uid), { skippedRound: null }, { merge: true });
+}

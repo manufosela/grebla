@@ -12,11 +12,15 @@
  */
 import { LitElement, html, css } from 'lit';
 import { POKER_DECK } from '../../tools/poker/domain/deck.js';
-import { countVoted, hasVotedThisRound, revealedVotes, summarizeVotes } from '../../tools/poker/domain/tally.js';
+import {
+  countActiveVoted, hasVotedThisRound, revealedVotes, summarizeVotes,
+  isSpectator, hasSkippedRound, activeVoters,
+} from '../../tools/poker/domain/tally.js';
 import {
   joinSession, castVote, reveal, revote, getMyVote,
   watchSession, watchPlayers, watchVotes,
   listSquadBacklog, setSessionTasks, setCurrentTask, activateVoting, saveEstimate,
+  setSpectator, skipRound, unskipRound,
 } from '../../lib/poker.js';
 
 export class PokerTable extends LitElement {
@@ -76,6 +80,11 @@ export class PokerTable extends LitElement {
     .est-input { width: 5rem; padding: 0.4rem 0.6rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 0 0 0.9rem; font-size: 0.86rem; color: var(--rm-text, #1e3a5f); }
+    .ctl { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .ctl-btn { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 8px; padding: 0.3rem 0.75rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .ctl-btn:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
+    .state.out { background: var(--rm-surface-hover, #eef3f5); color: var(--rm-muted, #5b6b7d); font-style: italic; }
   `;
 
   constructor() {
@@ -185,9 +194,24 @@ export class PokerTable extends LitElement {
   // En simple se vota siempre; en linear, solo tras «activar votación» de la tarea.
   get _votingActive() { return this._mode !== 'linear' || this._session?.votingActive === true; }
   get _results() { return this._session?.results ?? {}; }
+  get _myPlayer() { return this._players.find((p) => p.uid === this.uid) ?? null; }
+  get _amSpectator() { return isSpectator(this._myPlayer); }
+  get _amSkipped() { return hasSkippedRound(this._myPlayer, this._round); }
+  get _canIVote() { return this._votingActive && !this._revealed && !this._amSpectator && !this._amSkipped; }
+
+  async _toggleSpectator() {
+    try { await setSpectator(this.sessionId, this.uid, !this._amSpectator); } catch (err) { this._onError(err); }
+  }
+
+  async _toggleSkip() {
+    try {
+      if (this._amSkipped) await unskipRound(this.sessionId, this.uid);
+      else await skipRound(this.sessionId, this.uid, this._round);
+    } catch (err) { this._onError(err); }
+  }
 
   async _vote(card) {
-    if (this._revealed) return;
+    if (!this._canIVote) return; // ni revelado, ni observador, ni fuera de ámbito, ni en discusión
     try {
       await castVote(this.sessionId, this.uid, this._round, card);
       this._myVote = { value: card, round: this._round };
@@ -237,8 +261,20 @@ export class PokerTable extends LitElement {
     try { await saveEstimate(this.sessionId, this._currentTaskId, value); } catch (err) { this._onError(err); }
   }
 
-  _renderDeck() {
+  _renderControls() {
     if (this._revealed) return null;
+    return html`<div class="controls">
+      <label class="ctl"><input type="checkbox" .checked=${this._amSpectator}
+        @change=${() => this._toggleSpectator()} /> Solo ver (no votar)</label>
+      ${this._votingActive && !this._amSpectator ? html`
+        <button class="ctl-btn" @click=${() => this._toggleSkip()}>${this._amSkipped ? 'Volver a la ronda' : 'Fuera de mi ámbito'}</button>` : null}
+    </div>`;
+  }
+
+  _renderDeck() {
+    if (this._revealed || !this._votingActive) return null;
+    if (this._amSpectator) return html`<p class="lead">Estás como observador: no votas en esta sesión.</p>`;
+    if (this._amSkipped) return html`<p class="lead">Te has saltado esta ronda (fuera de tu ámbito).</p>`;
     const picked = this._myVoteValue;
     return html`
       <p class="lead">Elige tu carta. Nadie ve tu voto hasta que se revele.</p>
@@ -259,11 +295,15 @@ export class PokerTable extends LitElement {
       <ul class="players">
         ${this._players.map((p) => {
           const voted = hasVotedThisRound(p, round);
+          const spec = isSpectator(p);
+          const skip = hasSkippedRound(p, round);
           return html`<li>
             <span class="name">${p.name || 'Sin nombre'}</span>
             ${revealed
-              ? html`<span class="reveal-card">${voted ? (cardByUid[p.uid] ?? '·') : '—'}</span>`
-              : html`<span class="state ${voted ? 'voted' : 'waiting'}">${voted ? '✓ votó' : 'pensando…'}</span>`}
+              ? html`<span class="reveal-card">${(voted && !spec && !skip) ? (cardByUid[p.uid] ?? '·') : (spec ? '👁' : '—')}</span>`
+              : html`<span class="state ${voted ? 'voted' : (spec || skip ? 'out' : 'waiting')}">${
+                  spec ? 'solo ve' : skip ? 'fuera de ámbito' : voted ? '✓ votó' : 'pensando…'
+                }</span>`}
           </li>`;
         })}
       </ul>`;
@@ -276,8 +316,8 @@ export class PokerTable extends LitElement {
         ? html`<div class="bar"><button class="primary" @click=${() => this._revote()}>Volver a votar</button></div>`
         : null;
     }
-    const voted = countVoted(this._players, this._round);
-    const total = this._players.length;
+    const voted = countActiveVoted(this._players, this._round);
+    const total = activeVoters(this._players, this._round).length;
     // «Mostrar votos» lo puede pulsar cualquiera (basta con que haya algún voto).
     return html`<div class="bar">
       <span class="lead">${voted}/${total} han votado</span>
@@ -304,6 +344,7 @@ export class PokerTable extends LitElement {
 
   _renderSimple() {
     return html`
+      ${this._renderControls()}
       ${this._renderDeck()}
       ${this._renderBar()}
       ${this._renderPlayers()}
@@ -355,12 +396,15 @@ export class PokerTable extends LitElement {
 
   _renderVotingArea() {
     if (!this._votingActive) {
-      return html`<div class="bar">
-        <span class="lead">En discusión — anotad en Linear. Cuando esté claro, a votar.</span>
-        ${this.canManage ? html`<button class="primary" @click=${() => this._activateVoting()}>Activar votación</button>` : null}
-      </div>`;
+      return html`
+        <div class="bar">
+          <span class="lead">En discusión — anotad en Linear. Cuando esté claro, a votar.</span>
+          ${this.canManage ? html`<button class="primary" @click=${() => this._activateVoting()}>Activar votación</button>` : null}
+        </div>
+        ${this._renderControls()}`;
     }
     return html`
+      ${this._renderControls()}
       ${this._renderDeck()}
       ${this._renderBar()}
       ${this._renderPlayers()}

@@ -26,6 +26,26 @@ export function countVoted(players, round) {
   return (players ?? []).filter((p) => hasVotedThisRound(p, round)).length;
 }
 
+/** ¿Es este jugador un observador («solo ver»)? No se le ofrece el mazo. */
+export function isSpectator(player) {
+  return !!player && player.spectator === true;
+}
+
+/** ¿Se ha saltado este jugador la ronda actual («fuera de mi ámbito»)? */
+export function hasSkippedRound(player, round) {
+  return !!player && player.skippedRound === round;
+}
+
+/** Jugadores que SÍ votan en la ronda: ni observadores ni fuera de ámbito. */
+export function activeVoters(players, round) {
+  return (players ?? []).filter((p) => !isSpectator(p) && !hasSkippedRound(p, round));
+}
+
+/** Cuántos votantes ACTIVOS han votado (nunca supera al total de activos). */
+export function countActiveVoted(players, round) {
+  return activeVoters(players, round).filter((p) => hasVotedThisRound(p, round)).length;
+}
+
 /**
  * ¿Han votado TODOS los que se han unido? (y hay al menos uno). Es lo que
  * habilita el botón «Revelar» para todos: revelar antes no rompe nada, pero se
@@ -47,7 +67,7 @@ export function allVoted(players, round) {
  */
 export function revealedVotes(players, votesByUid, round) {
   return (players ?? [])
-    .filter((p) => hasVotedThisRound(p, round))
+    .filter((p) => hasVotedThisRound(p, round) && !isSpectator(p) && !hasSkippedRound(p, round))
     .map((p) => {
       const vote = voteFor(votesByUid, p.uid);
       return { uid: p.uid, name: p.name ?? '', value: vote?.round === round ? vote.value : null };

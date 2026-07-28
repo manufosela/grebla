@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasVotedThisRound, countVoted, allVoted, revealedVotes, summarizeVotes } from './tally.js';
+import { hasVotedThisRound, countVoted, allVoted, revealedVotes, summarizeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted } from './tally.js';
 
 const player = (uid, votedRound) => ({ uid, name: uid, votedRound });
 
@@ -38,6 +38,35 @@ describe('allVoted', () => {
   it('al pasar de ronda vuelve a ser falso aunque votaran la anterior', () => {
     const players = [player('a', 3), player('b', 3)];
     expect(allVoted(players, 4)).toBe(false);
+  });
+});
+
+describe('observador y fuera de ámbito', () => {
+  it('isSpectator detecta el «solo ver»', () => {
+    expect(isSpectator({ spectator: true })).toBe(true);
+    expect(isSpectator({ spectator: false })).toBe(false);
+    expect(isSpectator(null)).toBe(false);
+  });
+  it('hasSkippedRound solo cuenta la ronda actual', () => {
+    expect(hasSkippedRound({ skippedRound: 3 }, 3)).toBe(true);
+    expect(hasSkippedRound({ skippedRound: 2 }, 3)).toBe(false);
+  });
+  it('activeVoters excluye observadores y fuera de ámbito', () => {
+    const players = [
+      { uid: 'a', votedRound: 3 },
+      { uid: 'b', spectator: true },
+      { uid: 'c', skippedRound: 3 },
+      { uid: 'd', skippedRound: 2 },
+    ];
+    expect(activeVoters(players, 3).map((p) => p.uid)).toEqual(['a', 'd']);
+  });
+  it('countActiveVoted no supera al total de activos (votó y luego observador)', () => {
+    const players = [{ uid: 'a', votedRound: 3, spectator: true }, { uid: 'b', votedRound: 3 }];
+    expect(countActiveVoted(players, 3)).toBe(1); // 'a' votó pero es observador → no cuenta
+  });
+  it('revealedVotes excluye el voto obsoleto de un observador', () => {
+    const players = [{ uid: 'a', votedRound: 3, spectator: true }];
+    expect(revealedVotes(players, { a: { value: '5', round: 3 } }, 3)).toEqual([]);
   });
 });
 
