@@ -14,6 +14,9 @@ importers:
       '@lit-labs/ssr-client':
         specifier: ^1.1.8
         version: 1.1.8
+      '@manufosela/loading-layer':
+        specifier: ^2.0.1
+        version: 2.0.1
       '@manufosela/multi-select':
         specifier: ^2.1.0
         version: 2.1.0
@@ -739,6 +742,9 @@ packages:
 
   '@lit/reactive-element@2.1.2':
     resolution: {integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==}
+
+  '@manufosela/loading-layer@2.0.1':
+    resolution: {integrity: sha512-ZBXBwC2kwrd1eiCjo63Zf2PJH3uNBiYoS0M8aOsBz/VaxRRb7aOT1d1b+pSJR+y07MvydsrGQX39omNipMYORw==}
 
   '@manufosela/multi-select@2.1.0':
     resolution: {integrity: sha512-UMjfdg7DQ5iPhj0dqgPJok0+BEEolK+V6oy7jzqE40zVqGiAoIFGc0Dvdkk8kLANxlXZKJgAdGBTHEpHKXa/iA==}
@@ -3519,6 +3525,10 @@ snapshots:
   '@lit/reactive-element@2.1.2':
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.6.0
+
+  '@manufosela/loading-layer@2.0.1':
+    dependencies:
+      lit: 3.3.3
 
   '@manufosela/multi-select@2.1.0':
     dependencies:
