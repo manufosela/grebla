@@ -7,6 +7,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
+import './survey-padron.js';
 import { climateTemplate } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors } from '../../tools/survey/domain/questions.js';
 import { parseParticipants } from '../../tools/survey/domain/participants.js';
@@ -335,6 +336,7 @@ export class SurveyAdmin extends LitElement {
     return html`
       <div class="toolbar">
         <button class="primary" @click=${() => this._new()}>Nueva encuesta</button>
+        <button class="ghost" @click=${() => { this._phase = 'padron'; }}>Padrón de empresa</button>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._surveys.length ? html`
@@ -449,6 +451,9 @@ export class SurveyAdmin extends LitElement {
       ${this._phase === 'edit' ? this._renderEdit()
         : this._phase === 'participants' ? this._renderParticipants()
         : this._phase === 'results' ? this._renderResults()
+        : this._phase === 'padron' ? html`
+            <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
+            <survey-padron></survey-padron>`
         : this._renderList()}`;
   }
 }
