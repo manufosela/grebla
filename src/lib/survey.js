@@ -50,6 +50,22 @@ export async function getSurveyAdmin(id) {
 }
 
 /**
+ * Genera un token por participante (vía Cloud Function; reutiliza el existente
+ * por email). @returns {Promise<Array<{ email: string, token: string }>>}
+ */
+export async function createSurveyTokens(surveyId, participants) {
+  const fn = await callable('createSurveyTokens');
+  const res = await fn({ surveyId, participants });
+  return res.data?.tokens ?? [];
+}
+
+/** Tokens (padrón) de una encuesta, para participación y reenvío. Solo superadmin. */
+export async function listTokens(surveyId) {
+  const snap = await getDocs(collection(db, 'surveys', surveyId, 'tokens'));
+  return snap.docs.map((d) => ({ token: d.id, ...d.data() }));
+}
+
+/**
  * Carga la encuesta abierta de un token y las respuestas previas (para editar).
  * @param {string} surveyId @param {string} token
  * @returns {Promise<{ survey: { title: string, questions: Array<object> }, responses: Record<string, unknown>|null }>}
