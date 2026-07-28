@@ -53,6 +53,7 @@ try {
     await setDoc(doc(db, 'surveys', 's1'), { title: 'Clima agosto', status: 'open', threshold: 5 });
     await setDoc(doc(db, 'surveys', 's1', 'tokens', 'tok1'), { email: 'x@tribbuapp.com', metadata: { dept: 'Eng' }, used: false });
     await setDoc(doc(db, 'surveys', 's1', 'answers', 'ans1'), { answers: { enps: 9 }, metadata: { dept: 'Eng', tenure: '1-3' } });
+    await setDoc(doc(db, 'padron', 'p1'), { email: 'ana@tribbuapp.com', department: 'People', birthDate: '1990-01-01' });
   });
 
   const admin = env.authenticatedContext('super-uid').firestore();
@@ -74,6 +75,13 @@ try {
   await check('NO se auto-concede el rol (solo superadmin escribe /surveyAdmins)',
     assertFails(setDoc(doc(people, 'surveyAdmins', 'people-uid'), { name: 'x' })));
   await check('el superadmin SÍ concede el rol', assertSucceeds(setDoc(doc(admin, 'surveyAdmins', 'otro-uid'), { name: 'Nuevo' })));
+
+  console.log('Padrón: lo gestiona People (superadmin o gestor); nadie más lo ve:');
+  await check('el gestor LEE el padrón', assertSucceeds(getDoc(doc(people, 'padron', 'p1'))));
+  await check('el gestor ESCRIBE en el padrón', assertSucceeds(setDoc(doc(people, 'padron', 'p2'), { email: 'b@tribbuapp.com' })));
+  await check('el superadmin gestiona el padrón', assertSucceeds(setDoc(doc(admin, 'padron', 'p3'), { email: 'c@tribbuapp.com' })));
+  await check('un miembro normal NO lee el padrón', assertFails(getDoc(doc(member, 'padron', 'p1'))));
+  await check('un miembro normal NO escribe el padrón', assertFails(setDoc(doc(member, 'padron', 'p9'), { email: 'z@x.com' })));
 
   console.log('Un miembro normal NO ve nada de la encuesta:');
   await check('NO lee la encuesta', assertFails(getDoc(doc(member, 'surveys', 's1'))));

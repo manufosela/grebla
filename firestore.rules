@@ -731,6 +731,13 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Padrón de empresa (RMR-TSK-0333): personas + metadatos que alimentan la
+    // segmentación de las encuestas. Lo gestiona People (superadmin o gestor de
+    // encuestas); nadie más lo lee (contiene email + fecha de nacimiento).
+    match /padron/{personId} {
+      allow read, write: if isSuperAdmin() || isSurveyAdmin();
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
