@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { climateTemplate } from './templates.js';
+import { climateTemplate, serializeTemplate, parseTemplate } from './templates.js';
 import { validateAnswer } from './questions.js';
 
 describe('climateTemplate', () => {
@@ -25,5 +25,42 @@ describe('climateTemplate', () => {
     expect(validateAnswer(questions[0], 11)).toBe(false);
     expect(validateAnswer(questions[2], 5)).toBe(true);
     expect(validateAnswer(questions[2], 6)).toBe(false);
+  });
+});
+
+describe('serializeTemplate / parseTemplate', () => {
+  it('un round-trip conserva título y preguntas', () => {
+    const tpl = { title: 'Clima', questions: climateTemplate() };
+    const parsed = parseTemplate(serializeTemplate(tpl));
+    expect(parsed.title).toBe('Clima');
+    expect(parsed.questions).toEqual(tpl.questions);
+  });
+
+  it('acepta un array de preguntas directo (sin envoltorio)', () => {
+    const parsed = parseTemplate(JSON.stringify([{ type: 'scale', min: 1, max: 5, label: 'q' }]));
+    expect(parsed.title).toBe('');
+    expect(parsed.questions).toHaveLength(1);
+  });
+
+  it('descarta campos desconocidos y preserva el id si viene', () => {
+    const parsed = parseTemplate(JSON.stringify({
+      questions: [{ id: 'x1', type: 'text', label: 'hola', maligno: 'drop', required: true }],
+    }));
+    expect(parsed.questions[0]).toEqual({ id: 'x1', type: 'text', label: 'hola', required: true });
+  });
+
+  it('en escala sin min/max cae a 1–5', () => {
+    const [q] = parseTemplate(JSON.stringify([{ type: 'scale', label: 'q' }])).questions;
+    expect(q).toMatchObject({ min: 1, max: 5 });
+  });
+
+  it('rechaza JSON inválido, sin preguntas o con tipo no soportado', () => {
+    expect(() => parseTemplate('{no json')).toThrow(/JSON/);
+    expect(() => parseTemplate('{"questions": []}')).toThrow(/pregunta/i);
+    expect(() => parseTemplate(JSON.stringify([{ type: 'radio', label: 'q' }]))).toThrow(/tipo/i);
+  });
+
+  it('rechaza una escala inválida (min ≥ max)', () => {
+    expect(() => parseTemplate(JSON.stringify([{ type: 'scale', min: 5, max: 5, label: 'q' }]))).toThrow();
   });
 });

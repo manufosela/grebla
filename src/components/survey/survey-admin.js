@@ -8,7 +8,7 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
-import { climateTemplate } from '../../tools/survey/domain/templates.js';
+import { climateTemplate, serializeTemplate, parseTemplate } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors } from '../../tools/survey/domain/questions.js';
 import { parseParticipants } from '../../tools/survey/domain/participants.js';
 import {
@@ -152,6 +152,34 @@ export class SurveyAdmin extends LitElement {
   }
 
   _loadTemplate() { this._questions = climateTemplate(); }
+
+  /** Importa una plantilla JSON al editor, generando ids a las que no lo traigan. */
+  async _onTemplateFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite reimportar el mismo archivo
+    if (!file) return;
+    try {
+      const { title, questions } = parseTemplate(await file.text());
+      this._questions = questions.map((q) => (q.id ? q : { ...q, id: crypto.randomUUID() }));
+      if (title && !this._title.trim()) this._title = title;
+      this._error = '';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo importar la plantilla.';
+    }
+  }
+
+  /** Descarga las preguntas actuales como plantilla JSON (Blob, sin document.write). */
+  _exportTemplate() {
+    const json = serializeTemplate({ title: this._title, questions: this._questions });
+    const slug = (this._title || 'plantilla').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slug || 'plantilla'}-encuesta.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   _addQuestion(type) {
     const q = type === 'text'
@@ -403,7 +431,9 @@ export class SurveyAdmin extends LitElement {
       <div class="add-row">
         <button class="ghost" @click=${() => this._addQuestion('scale')}>+ Pregunta de escala</button>
         <button class="ghost" @click=${() => this._addQuestion('text')}>+ Pregunta de texto</button>
-        <button class="ghost" @click=${() => this._loadTemplate()}>Cargar plantilla eNPS + Q12</button>
+        <button class="ghost" @click=${() => this._loadTemplate()}>Plantilla eNPS + Q12</button>
+        <label class="ghost">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
+        <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">
