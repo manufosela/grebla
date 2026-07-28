@@ -20,6 +20,7 @@ import {
   listSupermanagers, setLeaderReportsTo,
 } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
+import { addSurveyAdminByEmail } from '../lib/survey.js';
 import './catalog-manager.js';
 import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -63,7 +64,7 @@ function nextOrder(items) {
 /** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
 const ROLE_LABEL = { superadmin: 'Superadmin', supermanager: 'Head', viewer: 'Viewer', leader: 'Manager', none: 'Sin rol' };
 // El violeta del Head contrasta AA sobre el texto blanco del badge, igual que los demás.
-const ROLE_COLOR = { superadmin: '#dc2626', supermanager: '#6d28d9', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af' };
+const ROLE_COLOR = { superadmin: '#dc2626', supermanager: '#6d28d9', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af', surveyAdmin: '#0d9488' };
 const loginFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short' });
 /** @param {unknown} ts Firestore Timestamp | number | null */
 function formatLogin(ts) {
@@ -200,6 +201,10 @@ export class SuperadminPanel extends LitElement {
     button.primary { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
     button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    /* La tabla de usuarios (7 columnas) hace scroll propio si no cabe, para no
+       desbordar el panel. Ancho mínimo para que las columnas no se compriman. */
+    .table-wrap { overflow-x: auto; }
+    .table-wrap table { min-width: 52rem; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #6b7280); font-weight: 600; }
     tbody tr.clickable { cursor: pointer; }
@@ -785,6 +790,8 @@ export class SuperadminPanel extends LitElement {
     try {
       if (this._newUserRole === 'leader') {
         await addLeaderByEmail(email);
+      } else if (this._newUserRole === 'surveyAdmin') {
+        await addSurveyAdminByEmail(email);
       } else {
         await addViewerByEmail(email);
       }
@@ -1436,6 +1443,7 @@ export class SuperadminPanel extends LitElement {
           <select @change=${(e) => { this._newUserRole = e.target.value; }}>
             <option value="viewer" ?selected=${this._newUserRole === 'viewer'}>Viewer</option>
             <option value="leader" ?selected=${this._newUserRole === 'leader'}>Manager</option>
+            <option value="surveyAdmin" ?selected=${this._newUserRole === 'surveyAdmin'}>People account</option>
           </select>
           <button class="primary" ?disabled=${!this._newUserEmail.trim()} @click=${() => this._addUser()}>Añadir usuario</button>
         </div>
@@ -1443,12 +1451,12 @@ export class SuperadminPanel extends LitElement {
         ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
         ${this._users.length === 0
           ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
-          : html`<table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th class="admin-col">Superadmin</th><th class="admin-col">Encuestas</th>`}<th>Última conexión</th><th></th></tr></thead>
+          : html`<div class="table-wrap"><table>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th class="admin-col">Superadmin</th><th class="admin-col">People&nbsp;account</th>`}<th>Última conexión</th><th></th></tr></thead>
               <tbody>
                 ${this._users.map((u) => this._renderUserRow(u))}
               </tbody>
-            </table>`}
+            </table></div>`}
       </section>
       ${this._renderAssignModal()}
     `;
@@ -1501,6 +1509,7 @@ export class SuperadminPanel extends LitElement {
       <td>
         <span class="badge" style=${`background:${ROLE_COLOR[user.teamRole]}`}>${ROLE_LABEL[user.teamRole]}</span>
         ${user.isAdmin ? html`<span class="badge" style=${`background:${ROLE_COLOR.superadmin}`}>Superadmin</span>` : null}
+        ${user.isSurveyAdmin ? html`<span class="badge" style=${`background:${ROLE_COLOR.surveyAdmin}`}>People account</span>` : null}
         ${linked ? html`<span class="badge linked" title="Vinculado a una persona">Vinculado</span>` : null}
       </td>
     `;
@@ -1549,8 +1558,8 @@ export class SuperadminPanel extends LitElement {
     const who = user.displayName ?? user.email ?? user.uid;
     return html`
       <td class="admin-cell">
-        <input type="checkbox" aria-label=${`Gestor de encuestas: ${who}`}
-          title="Gestor de encuestas (People): crea y gestiona encuestas y ve resultados, sin ser superadmin."
+        <input type="checkbox" aria-label=${`People account: ${who}`}
+          title="People account: gestiona las encuestas (crear, enlaces, resultados) sin ser superadmin."
           .checked=${user.isSurveyAdmin} @change=${(e) => this._toggleSurveyAdmin(user, e.target.checked)} />
       </td>
     `;
@@ -1562,10 +1571,10 @@ export class SuperadminPanel extends LitElement {
     this._usersNotice = '';
     try {
       await setSurveyAdmin(user.uid, isSurveyAdmin, { displayName: user.displayName, email: user.email });
-      this._usersNotice = isSurveyAdmin ? 'Gestor de encuestas concedido.' : 'Gestor de encuestas retirado.';
+      this._usersNotice = isSurveyAdmin ? 'People account concedido.' : 'People account retirado.';
       await this._loadUsers();
     } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el gestor de encuestas.';
+      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el People account.';
       await this._loadUsers();
     }
   }

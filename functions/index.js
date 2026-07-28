@@ -82,7 +82,7 @@ export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => 
 });
 
 // ── Accesos (líderes y viewers) ──────────────────────────────────────────────
-const ACCESS_COLLECTION = { leader: 'leaders', viewer: 'viewers' };
+const ACCESS_COLLECTION = { leader: 'leaders', viewer: 'viewers', surveyAdmin: 'surveyAdmins' };
 
 /**
  * Gestiona los accesos de la instancia: líderes (gestionan sus personas) y
@@ -98,10 +98,10 @@ export const manageAccess = onCall({ region: 'europe-west1' }, async (request) =
     throw new HttpsError('permission-denied', 'Solo un superadmin puede gestionar accesos.');
   }
   const action = request.data?.action === 'remove' ? 'remove' : 'add';
-  const role = request.data?.role === 'viewer' ? 'viewer' : 'leader';
+  const role = ['viewer', 'surveyAdmin'].includes(request.data?.role) ? request.data.role : 'leader';
   const collectionName = ACCESS_COLLECTION[role];
   const email = typeof request.data?.email === 'string' ? request.data.email.trim() : '';
-  if (!email) throw new HttpsError('invalid-argument', `Falta el email del ${role === 'viewer' ? 'viewer' : 'líder'}.`);
+  if (!email) throw new HttpsError('invalid-argument', 'Falta el email.');
 
   let user;
   try {

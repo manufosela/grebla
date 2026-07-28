@@ -79,6 +79,16 @@ export async function isSurveyAdmin(uid) {
 }
 
 /**
+ * Da de alta un «People account» por email (provisiona la cuenta si nunca inició
+ * sesión y le concede el rol), vía la Cloud Function manageAccess. Solo superadmin.
+ */
+export async function addSurveyAdminByEmail(email) {
+  const fn = await callable('manageAccess');
+  const res = await fn({ action: 'add', role: 'surveyAdmin', email: String(email ?? '').trim() });
+  return res.data;
+}
+
+/**
  * Carga la encuesta abierta de un token y las respuestas previas (para editar).
  * @param {string} surveyId @param {string} token
  * @returns {Promise<{ survey: { title: string, questions: Array<object> }, responses: Record<string, unknown>|null }>}
