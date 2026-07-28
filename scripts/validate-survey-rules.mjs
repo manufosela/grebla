@@ -48,6 +48,7 @@ try {
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'admins', 'super-uid'), { name: 'People admin' });
+    await setDoc(doc(db, 'surveyAdmins', 'people-uid'), { name: 'Gestor de encuestas' });
     await setDoc(doc(db, 'members', 'alice-uid'), { name: 'Alice' });
     await setDoc(doc(db, 'surveys', 's1'), { title: 'Clima agosto', status: 'open', threshold: 5 });
     await setDoc(doc(db, 'surveys', 's1', 'tokens', 'tok1'), { email: 'x@tribbuapp.com', metadata: { dept: 'Eng' }, used: false });
@@ -55,6 +56,7 @@ try {
   });
 
   const admin = env.authenticatedContext('super-uid').firestore();
+  const people = env.authenticatedContext('people-uid').firestore();
   const member = env.authenticatedContext('alice-uid').firestore();
   const anon = env.unauthenticatedContext().firestore();
 
@@ -63,6 +65,15 @@ try {
   await check('lee la encuesta', assertSucceeds(getDoc(doc(admin, 'surveys', 's1'))));
   await check('lee los tokens (participación por depto, reenvío)', assertSucceeds(getDoc(doc(admin, 'surveys', 's1', 'tokens', 'tok1'))));
   await check('lee las respuestas anónimas (dashboards)', assertSucceeds(getDoc(doc(admin, 'surveys', 's1', 'answers', 'ans1'))));
+
+  console.log('El gestor de encuestas (People, NO superadmin) gestiona y lee:');
+  await check('crea una encuesta', assertSucceeds(setDoc(doc(people, 'surveys', 'sp'), { title: 'De People', status: 'draft' })));
+  await check('lee la encuesta', assertSucceeds(getDoc(doc(people, 'surveys', 's1'))));
+  await check('lee los tokens', assertSucceeds(getDoc(doc(people, 'surveys', 's1', 'tokens', 'tok1'))));
+  await check('lee las respuestas', assertSucceeds(getDoc(doc(people, 'surveys', 's1', 'answers', 'ans1'))));
+  await check('NO se auto-concede el rol (solo superadmin escribe /surveyAdmins)',
+    assertFails(setDoc(doc(people, 'surveyAdmins', 'people-uid'), { name: 'x' })));
+  await check('el superadmin SÍ concede el rol', assertSucceeds(setDoc(doc(admin, 'surveyAdmins', 'otro-uid'), { name: 'Nuevo' })));
 
   console.log('Un miembro normal NO ve nada de la encuesta:');
   await check('NO lee la encuesta', assertFails(getDoc(doc(member, 'surveys', 's1'))));

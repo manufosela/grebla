@@ -29,6 +29,12 @@ async function isAdmin(uid) {
   return snap.exists;
 }
 
+/** Gestor de encuestas (People): gestiona /surveys sin ser superadmin. @param {string} uid */
+async function isSurveyAdmin(uid) {
+  const snap = await getFirestore().doc(`surveyAdmins/${uid}`).get();
+  return snap.exists;
+}
+
 export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => {
   const caller = request.auth;
   if (!caller) {
@@ -306,7 +312,9 @@ export const submitSurveyResponse = onCall(
 export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
-  if (!(await isAdmin(uid))) throw new HttpsError('permission-denied', 'Solo un superadmin puede generar enlaces.');
+  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
+    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede generar enlaces.');
+  }
   const { surveyId, participants } = request.data ?? {};
   if (!surveyId || !Array.isArray(participants)) throw new HttpsError('invalid-argument', 'Faltan surveyId o participants.');
 

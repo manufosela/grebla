@@ -21,7 +21,7 @@ import {
 } from '../lib/leaders.js';
 import { addViewerByEmail } from '../lib/viewers.js';
 import './catalog-manager.js';
-import { listAllUsers, setUserRole, setUserAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
+import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -1444,7 +1444,7 @@ export class SuperadminPanel extends LitElement {
         ${this._users.length === 0
           ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
           : html`<table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th class="admin-col">Superadmin</th>`}<th>Última conexión</th><th></th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th class="admin-col">Superadmin</th><th class="admin-col">Encuestas</th>`}<th>Última conexión</th><th></th></tr></thead>
               <tbody>
                 ${this._users.map((u) => this._renderUserRow(u))}
               </tbody>
@@ -1464,6 +1464,7 @@ export class SuperadminPanel extends LitElement {
         <td class="muted">${user.email ?? '—'}</td>
         ${this._renderUserRoleCell(user, linked)}
         ${this._renderAdminCell(user)}
+        ${this._renderSurveyAdminCell(user)}
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>${this._renderUserActions(user, linked)}</td>
       </tr>
@@ -1482,6 +1483,7 @@ export class SuperadminPanel extends LitElement {
         <td class="muted">${user.email ?? '—'}</td>
         ${this._renderUserRoleCell(user, this._isLinked(user))}
         ${this._renderAdminCell(user)}
+        ${this._renderSurveyAdminCell(user)}
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>
           <button class="act" @click=${() => this._saveUserName()}>Guardar</button>
@@ -1537,6 +1539,33 @@ export class SuperadminPanel extends LitElement {
       await Promise.all([this._loadUsers(), this._loadLeaders()]);
     } catch (err) {
       this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el superadmin.';
+      await this._loadUsers();
+    }
+  }
+
+  /** Celda del checkbox «gestor de encuestas» (People), columna propia. @param {import('../lib/accessRoles.js').AccessUser} user */
+  _renderSurveyAdminCell(user) {
+    if (this.readOnly) return null;
+    const who = user.displayName ?? user.email ?? user.uid;
+    return html`
+      <td class="admin-cell">
+        <input type="checkbox" aria-label=${`Gestor de encuestas: ${who}`}
+          title="Gestor de encuestas (People): crea y gestiona encuestas y ve resultados, sin ser superadmin."
+          .checked=${user.isSurveyAdmin} @change=${(e) => this._toggleSurveyAdmin(user, e.target.checked)} />
+      </td>
+    `;
+  }
+
+  /** Concede o retira el rol «gestor de encuestas» con el checkbox de la fila. @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} isSurveyAdmin */
+  async _toggleSurveyAdmin(user, isSurveyAdmin) {
+    this._usersError = '';
+    this._usersNotice = '';
+    try {
+      await setSurveyAdmin(user.uid, isSurveyAdmin, { displayName: user.displayName, email: user.email });
+      this._usersNotice = isSurveyAdmin ? 'Gestor de encuestas concedido.' : 'Gestor de encuestas retirado.';
+      await this._loadUsers();
+    } catch (err) {
+      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el gestor de encuestas.';
       await this._loadUsers();
     }
   }
