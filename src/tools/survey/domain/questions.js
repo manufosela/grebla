@@ -33,6 +33,27 @@ export function validateAnswer(question, value) {
 }
 
 /**
+ * Errores de un borrador de encuesta antes de guardarlo (validación de forma):
+ * título, umbral de anonimato entero ≥ 2, cada pregunta con enunciado y, si es de
+ * escala, min/max enteros con 0 ≤ min < max. Devuelve la lista (vacía = válido).
+ */
+export function surveyDraftErrors({ title, questions, threshold } = {}) {
+  const errors = [];
+  if (!String(title ?? '').trim()) errors.push('Falta el título.');
+  if (!Number.isInteger(threshold) || threshold < 2) errors.push('El umbral de anonimato debe ser un entero ≥ 2.');
+  const list = questions ?? [];
+  if (!list.length) errors.push('Añade al menos una pregunta.');
+  list.forEach((q, i) => {
+    if (!String(q?.label ?? '').trim()) errors.push(`La pregunta ${i + 1} necesita enunciado.`);
+    if (q?.type === 'scale'
+      && (!Number.isInteger(q.min) || !Number.isInteger(q.max) || q.min < 0 || q.min >= q.max)) {
+      errors.push(`La escala de la pregunta ${i + 1} no es válida (min entero ≥ 0 y menor que max).`);
+    }
+  });
+  return errors;
+}
+
+/**
  * Deja solo las respuestas cuyas claves son ids de preguntas de la encuesta y
  * descarta cualquier campo extra (que un cliente no cuele datos arbitrarios).
  */

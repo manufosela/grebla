@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scaleRange, validateAnswer, validateResponses, sanitizeResponses } from './questions.js';
+import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors } from './questions.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const q12a = { id: 'q1', type: 'scale', min: 1, max: 5, required: true };
@@ -29,6 +29,26 @@ describe('validateAnswer', () => {
     expect(validateAnswer(reason, 'porque sí')).toBe(true);
     expect(validateAnswer(reason, '')).toBe(true);
     expect(validateAnswer(reason, 5)).toBe(false);
+  });
+});
+
+describe('surveyDraftErrors', () => {
+  const ok = { title: 'Clima', threshold: 5, questions: [{ type: 'scale', min: 1, max: 5, label: 'q' }] };
+  it('sin errores en un borrador válido', () => {
+    expect(surveyDraftErrors(ok)).toEqual([]);
+  });
+  it('exige título y umbral entero ≥ 2', () => {
+    expect(surveyDraftErrors({ ...ok, title: '  ' }).length).toBeGreaterThan(0);
+    expect(surveyDraftErrors({ ...ok, threshold: 1 }).length).toBeGreaterThan(0);
+    expect(surveyDraftErrors({ ...ok, threshold: 2.5 }).length).toBeGreaterThan(0);
+  });
+  it('rechaza escalas inválidas (min>=max, negativas o no enteras)', () => {
+    expect(surveyDraftErrors({ ...ok, questions: [{ type: 'scale', min: 5, max: 5, label: 'q' }] }).length).toBeGreaterThan(0);
+    expect(surveyDraftErrors({ ...ok, questions: [{ type: 'scale', min: -1, max: 5, label: 'q' }] }).length).toBeGreaterThan(0);
+    expect(surveyDraftErrors({ ...ok, questions: [{ type: 'scale', min: 1, max: 5.5, label: 'q' }] }).length).toBeGreaterThan(0);
+  });
+  it('exige enunciado en cada pregunta', () => {
+    expect(surveyDraftErrors({ ...ok, questions: [{ type: 'text', label: '' }] }).length).toBeGreaterThan(0);
   });
 });
 

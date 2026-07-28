@@ -1,0 +1,18 @@
+---
+import Base from '../../../layouts/Base.astro';
+
+/**
+ * Panel de administración de Encuestas (RMR-PCS-0026). Solo superadmin (People en
+ * Fase 1): crear/editar encuestas y (próximamente) participantes y dashboards.
+ * La página de respuesta es pública y aparte (/encuesta).
+ */
+---
+
+<Base title="GREBLA — Encuestas" requireAuth={true} requireAdmin={true}>
+  <tool-nav href="/" name="Encuestas" icon="📋"></tool-nav>
+  <survey-admin></survey-admin>
+</Base>
+
+<script>
+  import '../../../client/encuestas-admin.js';
+</script>

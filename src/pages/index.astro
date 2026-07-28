@@ -72,6 +72,13 @@ const tools = [
     description: 'Estimación en equipo en tiempo real: el manager abre una sesión, cada uno vota una carta en oculto y, cuando todos han votado, se revelan a la vez con la media y el consenso.',
     available: true,
   },
+  {
+    name: 'Encuestas',
+    href: '/tools/encuestas',
+    description: 'Encuestas de clima anónimas (eNPS + Q12): crea la encuesta, comparte los enlaces personales y consulta participación y resultados por segmento. Gestión de People.',
+    available: true,
+    adminOnly: true,
+  },
 ];
 ---
 
@@ -102,7 +109,7 @@ const tools = [
   <section id="tenant-tools" class="tools" hidden>
     {
       tools.map((tool) => (
-        <a class="tool-card" href={tool.href} aria-disabled={!tool.available}>
+        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-admin-only={tool.adminOnly ? 'true' : undefined} hidden={tool.adminOnly}>
           <h2>{tool.name}</h2>
           <p>{tool.description}</p>
           <span class="cta">Abrir →</span>
