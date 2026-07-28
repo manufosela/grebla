@@ -9,6 +9,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { scaleRange, isScale, isText, isChoice, choiceOptions, validateResponses, sanitizeResponses, canAdvance } from '../../tools/survey/domain/questions.js';
+import { END, firstQuestionId, hasBranching, resolveNext } from '../../tools/survey/domain/flow.js';
 import { getSurveyForToken, submitSurveyResponse } from '../../lib/survey.js';
 
 export class SurveyRespond extends LitElement {
@@ -18,7 +19,7 @@ export class SurveyRespond extends LitElement {
     _phase: { state: true }, // 'loading' | 'ready' | 'error'
     _survey: { state: true },
     _responses: { state: true },
-    _index: { state: true }, // pregunta visible (navegación secuencial)
+    _path: { state: true }, // pila de ids de preguntas visitadas (permite ir atrás por el grafo)
     _navError: { state: true },
     _saving: { state: true },
     _saved: { state: true },
@@ -67,7 +68,7 @@ export class SurveyRespond extends LitElement {
     this._phase = 'loading';
     this._survey = null;
     this._responses = {};
-    this._index = 0;
+    this._path = [];
     this._navError = '';
     this._saving = false;
     this._saved = false;
@@ -101,7 +102,8 @@ export class SurveyRespond extends LitElement {
       const { survey, responses } = await getSurveyForToken(this.surveyId, this.token);
       this._survey = survey;
       this._responses = { ...responses };
-      this._index = 0;
+      const first = firstQuestionId(survey?.questions ?? []);
+      this._path = first ? [first] : [];
       this._navError = '';
       this._saved = responses != null; // ya había respondido antes
       this._phase = 'ready';
@@ -140,16 +142,35 @@ export class SurveyRespond extends LitElement {
     else this._setAnswer(qid, opt);
   }
 
-  get _valid() {
-    return validateResponses(this._survey?.questions ?? [], this._responses).valid;
-  }
-
   get _questions() {
     return this._survey?.questions ?? [];
   }
 
   get _current() {
-    return this._questions[this._index] ?? null;
+    const id = this._path.at(-1);
+    return this._questions.find((q) => q.id === id) ?? null;
+  }
+
+  /** Preguntas efectivamente recorridas: solo estas cuentan para validar el envío. */
+  get _pathQuestions() {
+    return this._path.map((id) => this._questions.find((q) => q.id === id)).filter(Boolean);
+  }
+
+  get _valid() {
+    return validateResponses(this._pathQuestions, this._responses).valid;
+  }
+
+  /** Siguiente id desde la pregunta actual, o END; trata un ciclo (id ya visitado) como fin. */
+  get _resolvedNextId() {
+    const q = this._current;
+    if (!q) return END;
+    const nextId = resolveNext(q, this._responses[q.id], this._questions);
+    return nextId !== END && this._path.includes(nextId) ? END : nextId;
+  }
+
+  /** ¿La pregunta actual es el final del camino (según su respuesta)? */
+  get _isLast() {
+    return this._resolvedNextId === END;
   }
 
   _next() {
@@ -158,12 +179,13 @@ export class SurveyRespond extends LitElement {
       return;
     }
     this._navError = '';
-    if (this._index < this._questions.length - 1) this._index += 1;
+    const nextId = this._resolvedNextId;
+    if (nextId !== END) this._path = [...this._path, nextId];
   }
 
   _prev() {
     this._navError = '';
-    if (this._index > 0) this._index -= 1;
+    if (this._path.length > 1) this._path = this._path.slice(0, -1);
   }
 
   async _submit() {
@@ -228,8 +250,12 @@ export class SurveyRespond extends LitElement {
     const questions = this._questions;
     const total = questions.length;
     const current = this._current;
-    const isLast = this._index >= total - 1;
-    const pct = total ? Math.round(((this._index + 1) / total) * 100) : 0;
+    const isLast = this._isLast;
+    const branching = hasBranching(questions);
+    // Con saltos, el total de pasos no es fijo: se muestra el nº recorrido sin barra.
+    const posInOrder = current ? questions.findIndex((q) => q.id === current.id) : -1;
+    const stepText = branching ? `Pregunta ${this._path.length}` : `Pregunta ${posInOrder + 1} de ${total}`;
+    const pct = total ? Math.round(((posInOrder + 1) / total) * 100) : 0;
     let submitLabel = 'Enviar respuesta';
     if (this._saving) submitLabel = 'Guardando…';
     else if (this._saved) submitLabel = 'Actualizar respuesta';
@@ -240,13 +266,13 @@ export class SurveyRespond extends LitElement {
       ${this._saved && !this._error ? html`<p class="banner ok">✓ Respuesta guardada. Puedes seguir editándola.</p>` : null}
       ${this._error ? html`<p class="banner err">${this._error}</p>` : null}
       ${total ? html`<div class="progress">
-        <div class="count">Pregunta ${this._index + 1} de ${total}</div>
-        <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+        <div class="count">${stepText}</div>
+        ${branching ? null : html`<div class="track"><div class="fill" style="width:${pct}%"></div></div>`}
       </div>` : null}
       ${current ? this._renderQuestion(current) : html`<p class="muted">Esta encuesta no tiene preguntas.</p>`}
       ${this._navError ? html`<p class="muted" style="color:#b42318">${this._navError}</p>` : null}
       <div class="actions">
-        <button type="button" class="nav" ?disabled=${this._index === 0} @click=${() => this._prev()}>Atrás</button>
+        <button type="button" class="nav" ?disabled=${this._path.length <= 1} @click=${() => this._prev()}>Atrás</button>
         <span class="spacer"></span>
         ${isLast
           ? html`<button type="button" class="submit" ?disabled=${!this._valid || this._saving} @click=${() => this._submit()}>
