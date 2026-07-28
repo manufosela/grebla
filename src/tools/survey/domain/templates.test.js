@@ -49,6 +49,13 @@ describe('serializeTemplate / parseTemplate', () => {
     expect(parsed.questions[0]).toEqual({ id: 'x1', type: 'text', label: 'hola', required: true });
   });
 
+  it('preserva las opciones de una pregunta de opción única', () => {
+    const [q] = parseTemplate(JSON.stringify([
+      { id: 'area', type: 'choice', label: '¿Área?', options: ['Producto', ' Ventas ', ''] },
+    ])).questions;
+    expect(q).toEqual({ id: 'area', type: 'choice', label: '¿Área?', required: false, options: ['Producto', 'Ventas'] });
+  });
+
   it('en escala sin min/max cae a 1–5', () => {
     const [q] = parseTemplate(JSON.stringify([{ type: 'scale', label: 'q' }])).questions;
     expect(q).toMatchObject({ min: 1, max: 5 });

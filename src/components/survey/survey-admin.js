@@ -9,16 +9,17 @@ import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
 import { climateTemplate, serializeTemplate, parseTemplate } from '../../tools/survey/domain/templates.js';
-import { surveyDraftErrors } from '../../tools/survey/domain/questions.js';
+import { surveyDraftErrors, choiceOptions } from '../../tools/survey/domain/questions.js';
 import { parseParticipants } from '../../tools/survey/domain/participants.js';
 import {
-  participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale,
+  participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, createSurveyTokens, listTokens, listAnswers,
 } from '../../lib/survey.js';
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
+const QUESTION_KIND = { scale: 'Escala', text: 'Texto', choice: 'Opción única' };
 
 export class SurveyAdmin extends LitElement {
   static properties = {
@@ -70,6 +71,7 @@ export class SurveyAdmin extends LitElement {
     .q-top { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
     .q-top .kind { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #5b6b7d); }
     .q-label { flex: 1 1 18rem; min-width: 0; }
+    .opts-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
     .q-opts { display: flex; gap: 0.9rem; align-items: center; flex-wrap: wrap; font-size: 0.82rem; }
     .q-opts label { display: inline-flex; align-items: center; gap: 0.3rem; }
     .q-move button, .q-del { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
@@ -182,9 +184,11 @@ export class SurveyAdmin extends LitElement {
   }
 
   _addQuestion(type) {
-    const q = type === 'text'
-      ? { id: crypto.randomUUID(), type: 'text', required: false, label: '' }
-      : { id: crypto.randomUUID(), type: 'scale', min: 1, max: 5, required: true, label: '' };
+    const base = { id: crypto.randomUUID(), label: '' };
+    let q;
+    if (type === 'text') q = { ...base, type: 'text', required: false };
+    else if (type === 'choice') q = { ...base, type: 'choice', required: true, options: [] };
+    else q = { ...base, type: 'scale', min: 1, max: 5, required: true };
     this._questions = [...this._questions, q];
   }
 
@@ -206,12 +210,14 @@ export class SurveyAdmin extends LitElement {
 
   async _save() {
     const title = this._title.trim();
-    const errors = surveyDraftErrors({ title, questions: this._questions, threshold: this._threshold });
+    // Limpia las opciones de las preguntas de opción única (quita líneas vacías) antes de validar/persistir.
+    const questions = this._questions.map((q) => (q.type === 'choice' ? { ...q, options: choiceOptions(q) } : q));
+    const errors = surveyDraftErrors({ title, questions, threshold: this._threshold });
     if (errors.length) { this._error = errors[0]; return; }
     this._saving = true;
     this._error = '';
     try {
-      const payload = { title, questions: this._questions, threshold: this._threshold };
+      const payload = { title, questions, threshold: this._threshold };
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
       await this._loadList();
@@ -308,6 +314,24 @@ export class SurveyAdmin extends LitElement {
   }
 
   _renderQuestionResult(q, answers, threshold) {
+    if (q.type === 'choice') {
+      // k-anonimato POR OPCIÓN: se ocultan las opciones con menos de `threshold`
+      // respuestas y, si hay alguna oculta, no se muestra el total (evita inferir
+      // su conteo por resta).
+      const { visible, suppressed, total } = choiceTally(answers, q, threshold);
+      if (!visible.length) {
+        return html`<div class="qr">
+          <p class="qr-label">${q.label}</p>
+          <p class="hidden-note">Aún no hay suficientes respuestas por opción (mínimo ${threshold}) para mostrar la distribución sin comprometer el anonimato.</p>
+        </div>`;
+      }
+      return html`<div class="qr">
+        <p class="qr-label">${q.label}</p>
+        ${suppressed.length ? null : html`<p class="qr-summary">n=${total}</p>`}
+        <div class="dist">${visible.map((c) => html`<span class="dchip">${c.key}: ${c.count}</span>`)}</div>
+        ${suppressed.length ? html`<p class="hidden-note">${suppressed.length} opción${suppressed.length === 1 ? '' : 'es'} con muy pocas respuestas se ocultan por privacidad.</p>` : null}
+      </div>`;
+    }
     if (q.type === 'text') {
       const texts = textAnswers(answers, q.id);
       // Los textos verbatim pueden identificar a alguien: se ocultan hasta
@@ -390,7 +414,7 @@ export class SurveyAdmin extends LitElement {
   _renderQuestion(q, i) {
     return html`<div class="q">
       <div class="q-top">
-        <span class="kind">${q.type === 'text' ? 'Texto' : 'Escala'}</span>
+        <span class="kind">${QUESTION_KIND[q.type] ?? 'Escala'}</span>
         <input class="q-label" type="text" placeholder="Enunciado de la pregunta" .value=${q.label ?? ''}
           @input=${(e) => this._patchQuestion(i, { label: e.target.value })} />
         <span class="q-move">
@@ -399,6 +423,11 @@ export class SurveyAdmin extends LitElement {
         </span>
         <button class="q-del" title="Quitar" @click=${() => this._removeQuestion(i)}>✕</button>
       </div>
+      ${q.type === 'choice' ? html`
+        <label class="opts-field">Opciones (una por línea)
+          <textarea rows="3" placeholder="Producto&#10;Ventas&#10;Soporte" .value=${(q.options ?? []).join('\n')}
+            @input=${(e) => this._patchQuestion(i, { options: e.target.value.split('\n') })}></textarea>
+        </label>` : null}
       <div class="q-opts">
         ${q.type === 'scale' ? html`
           <label>de <input class="num" type="number" .value=${String(q.min ?? 1)}
@@ -431,6 +460,7 @@ export class SurveyAdmin extends LitElement {
       <div class="add-row">
         <button class="ghost" @click=${() => this._addQuestion('scale')}>+ Pregunta de escala</button>
         <button class="ghost" @click=${() => this._addQuestion('text')}>+ Pregunta de texto</button>
+        <button class="ghost" @click=${() => this._addQuestion('choice')}>+ Pregunta de opción</button>
         <button class="ghost" @click=${() => this._loadTemplate()}>Plantilla eNPS + Q12</button>
         <label class="ghost">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
         <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>

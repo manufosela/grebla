@@ -1,17 +1,26 @@
 /**
  * Preguntas de una encuesta (RMR-TSK-0318). Dominio puro (sin Firebase).
  *
- * Una pregunta es `{ id, type, label, min?, max?, required? }`. Tipos:
+ * Una pregunta es `{ id, type, label, min?, max?, options?, required? }`. Tipos:
  *  - `scale`: número entero en [min, max] (eNPS 1–10, Q12 de Gallup 1–5…).
  *  - `text`: texto libre (la «razón» del eNPS).
+ *  - `choice`: opción única entre `options` (lista de strings); permite ramificar.
  * La escala es CONFIGURABLE por pregunta (no hay un 1–6 fijo): cada una lleva su
  * min/max.
  */
 
-export const QUESTION_TYPES = ['scale', 'text'];
+export const QUESTION_TYPES = ['scale', 'text', 'choice'];
 
 export const isScale = (q) => q?.type === 'scale';
 export const isText = (q) => q?.type === 'text';
+export const isChoice = (q) => q?.type === 'choice';
+
+/** Opciones no vacías de una pregunta de opción única. */
+export function choiceOptions(question) {
+  return (Array.isArray(question?.options) ? question.options : [])
+    .map((o) => String(o ?? '').trim())
+    .filter(Boolean);
+}
 
 /** Límites de una escala, con 1–5 por defecto si la pregunta no los fija. */
 export function scaleRange(question) {
@@ -24,6 +33,7 @@ export function scaleRange(question) {
 export function validateAnswer(question, value) {
   if (!question) return false;
   if (question.type === 'text') return typeof value === 'string';
+  if (question.type === 'choice') return typeof value === 'string' && choiceOptions(question).includes(value);
   if (question.type === 'scale') {
     if (typeof value !== 'number' || !Number.isInteger(value)) return false;
     const { min, max } = scaleRange(question);
@@ -48,6 +58,9 @@ export function surveyDraftErrors({ title, questions, threshold } = {}) {
     if (q?.type === 'scale'
       && (!Number.isInteger(q.min) || !Number.isInteger(q.max) || q.min < 0 || q.min >= q.max)) {
       errors.push(`La escala de la pregunta ${i + 1} no es válida (min entero ≥ 0 y menor que max).`);
+    }
+    if (q?.type === 'choice' && choiceOptions(q).length < 2) {
+      errors.push(`La pregunta ${i + 1} de opción única necesita al menos dos opciones.`);
     }
   });
   return errors;

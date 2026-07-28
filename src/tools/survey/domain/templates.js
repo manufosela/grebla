@@ -9,10 +9,10 @@
  * questions }`, para reutilizar conjuntos de preguntas entre encuestas.
  */
 
-import { QUESTION_TYPES, surveyDraftErrors } from './questions.js';
+import { QUESTION_TYPES, surveyDraftErrors, choiceOptions } from './questions.js';
 
 /** Campos que se conservan de cada pregunta importada (whitelist anti-inyección). */
-const QUESTION_FIELDS = ['id', 'type', 'label', 'required', 'min', 'max'];
+const QUESTION_FIELDS = ['id', 'type', 'label', 'required', 'min', 'max', 'options'];
 
 const Q12_LABELS = [
   'Sé lo que se espera de mí en el trabajo.',
@@ -61,6 +61,7 @@ function normalizeImportedQuestion(raw, i) {
     q.min = Number.isInteger(raw.min) ? raw.min : 1;
     q.max = Number.isInteger(raw.max) ? raw.max : 5;
   }
+  if (raw.type === 'choice') q.options = choiceOptions(raw);
   return QUESTION_FIELDS.reduce((acc, f) => (q[f] === undefined ? acc : { ...acc, [f]: q[f] }), {});
 }
 

@@ -8,7 +8,7 @@
  * Props: surveyId, token (del glue que lee la URL).
  */
 import { LitElement, html, css } from 'lit';
-import { scaleRange, isScale, isText, validateResponses, sanitizeResponses, canAdvance } from '../../tools/survey/domain/questions.js';
+import { scaleRange, isScale, isText, isChoice, choiceOptions, validateResponses, sanitizeResponses, canAdvance } from '../../tools/survey/domain/questions.js';
 import { getSurveyForToken, submitSurveyResponse } from '../../lib/survey.js';
 
 export class SurveyRespond extends LitElement {
@@ -34,7 +34,9 @@ export class SurveyRespond extends LitElement {
     .q:first-of-type { border-top: 0; }
     .q .label { font-weight: 600; margin: 0 0 0.7rem; line-height: 1.4; }
     .scale { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .choice { display: flex; flex-direction: column; gap: 0.5rem; }
     .opt { min-width: 2.6rem; height: 2.6rem; padding: 0 0.5rem; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer; }
+    .opt.wide { min-width: 0; height: auto; width: 100%; padding: 0.7rem 0.9rem; text-align: left; font-weight: 600; }
     .opt:hover { border-color: var(--rm-accent, #2a9d8f); }
     .opt[aria-pressed="true"] { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .scale-ends { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); margin-top: 0.35rem; }
@@ -124,6 +126,20 @@ export class SurveyRespond extends LitElement {
     this._saved = false;
   }
 
+  _clearAnswer(qid) {
+    const rest = { ...this._responses };
+    delete rest[qid];
+    this._responses = rest;
+    this._navError = '';
+    this._saved = false;
+  }
+
+  /** Opción única: reelegir la misma opción la deselecciona si la pregunta es opcional. */
+  _toggleChoice(qid, opt, isRequired) {
+    if (!isRequired && this._responses[qid] === opt) this._clearAnswer(qid);
+    else this._setAnswer(qid, opt);
+  }
+
   get _valid() {
     return validateResponses(this._survey?.questions ?? [], this._responses).valid;
   }
@@ -180,6 +196,18 @@ export class SurveyRespond extends LitElement {
         ${q.minLabel || q.maxLabel
           ? html`<div class="scale-ends"><span>${q.minLabel ?? ''}</span><span>${q.maxLabel ?? ''}</span></div>`
           : null}
+      </fieldset>`;
+    }
+    if (isChoice(q)) {
+      const current = this._responses[q.id];
+      return html`<fieldset class="q" style="border:0;margin:0;padding:1rem 0;">
+        <legend class="label">${q.label}</legend>
+        <div class="choice" role="group" aria-label=${q.label}>
+          ${choiceOptions(q).map((opt) => html`<button type="button" class="opt wide"
+            aria-pressed=${current === opt ? 'true' : 'false'}
+            @click=${() => this._toggleChoice(q.id, opt, q.required !== false)}>${opt}</button>`)}
+        </div>
+        ${q.required === false ? html`<p class="muted" style="margin-top:0.5rem">Opcional: vuelve a tocar la opción elegida para deseleccionarla.</p>` : null}
       </fieldset>`;
     }
     if (isText(q)) {

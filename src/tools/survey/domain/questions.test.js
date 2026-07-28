@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors, isAnswered, canAdvance } from './questions.js';
+import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors, isAnswered, canAdvance, choiceOptions } from './questions.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const q12a = { id: 'q1', type: 'scale', min: 1, max: 5, required: true };
 const reason = { id: 'reason', type: 'text' };
+const area = { id: 'area', type: 'choice', required: true, options: ['Producto', 'Ventas', 'Soporte'] };
 
 describe('scaleRange', () => {
   it('usa el min/max de la pregunta', () => {
@@ -29,6 +30,26 @@ describe('validateAnswer', () => {
     expect(validateAnswer(reason, 'porque sí')).toBe(true);
     expect(validateAnswer(reason, '')).toBe(true);
     expect(validateAnswer(reason, 5)).toBe(false);
+  });
+  it('la opción única solo acepta un valor de su lista', () => {
+    expect(validateAnswer(area, 'Ventas')).toBe(true);
+    expect(validateAnswer(area, 'Marketing')).toBe(false);
+    expect(validateAnswer(area, 2)).toBe(false);
+  });
+});
+
+describe('choiceOptions', () => {
+  it('normaliza y descarta opciones vacías', () => {
+    expect(choiceOptions({ options: ['A', ' B ', '', null] })).toEqual(['A', 'B']);
+    expect(choiceOptions({})).toEqual([]);
+  });
+});
+
+describe('surveyDraftErrors (choice)', () => {
+  const base = { title: 'x', threshold: 5 };
+  it('exige al menos dos opciones', () => {
+    expect(surveyDraftErrors({ ...base, questions: [{ type: 'choice', label: 'q', options: ['una'] }] }).length).toBeGreaterThan(0);
+    expect(surveyDraftErrors({ ...base, questions: [{ type: 'choice', label: 'q', options: ['a', 'b'] }] })).toEqual([]);
   });
 });
 

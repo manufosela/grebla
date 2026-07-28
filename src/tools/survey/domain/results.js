@@ -7,6 +7,7 @@
  */
 import { enps, summarizeScale } from './tally.js';
 import { partitionSegments } from './anonymity.js';
+import { choiceOptions } from './questions.js';
 
 /** Participación por departamento a partir de los tokens (respondidos/total, %). */
 export function participationByDept(tokens) {
@@ -48,6 +49,21 @@ export function scaleResult(question, values) {
   const nums = (values ?? []).filter((v) => typeof v === 'number');
   const isEnps = (question?.min === 1 || question?.min === 0) && question?.max === 10;
   return { ...summarizeScale(nums), enps: isEnps ? enps(nums) : null };
+}
+
+/**
+ * Distribución de una pregunta de opción única, con k-anonimato POR OPCIÓN:
+ * cada opción es un «segmento» y se oculta si tiene menos de `threshold`
+ * respuestas. Devuelve `{ visible, suppressed, total }`. El componente NO debe
+ * mostrar `total` cuando hay opciones ocultas (evita inferir su conteo por resta).
+ */
+export function choiceTally(answers, question, threshold) {
+  const values = answerValues(answers, question.id);
+  const counts = choiceOptions(question).map((opt) => ({
+    key: opt,
+    count: values.filter((v) => v === opt).length,
+  }));
+  return { ...partitionSegments(counts, threshold), total: values.length };
 }
 
 /**
