@@ -1,17 +1,26 @@
 /**
  * Preguntas de una encuesta (RMR-TSK-0318). Dominio puro (sin Firebase).
  *
- * Una pregunta es `{ id, type, label, min?, max?, required? }`. Tipos:
+ * Una pregunta es `{ id, type, label, min?, max?, options?, required? }`. Tipos:
  *  - `scale`: número entero en [min, max] (eNPS 1–10, Q12 de Gallup 1–5…).
  *  - `text`: texto libre (la «razón» del eNPS).
+ *  - `choice`: opción única entre `options` (lista de strings); permite ramificar.
  * La escala es CONFIGURABLE por pregunta (no hay un 1–6 fijo): cada una lleva su
  * min/max.
  */
 
-export const QUESTION_TYPES = ['scale', 'text'];
+export const QUESTION_TYPES = ['scale', 'text', 'choice'];
 
 export const isScale = (q) => q?.type === 'scale';
 export const isText = (q) => q?.type === 'text';
+export const isChoice = (q) => q?.type === 'choice';
+
+/** Opciones no vacías de una pregunta de opción única. */
+export function choiceOptions(question) {
+  return (Array.isArray(question?.options) ? question.options : [])
+    .map((o) => String(o ?? '').trim())
+    .filter(Boolean);
+}
 
 /** Límites de una escala, con 1–5 por defecto si la pregunta no los fija. */
 export function scaleRange(question) {
@@ -24,6 +33,7 @@ export function scaleRange(question) {
 export function validateAnswer(question, value) {
   if (!question) return false;
   if (question.type === 'text') return typeof value === 'string';
+  if (question.type === 'choice') return typeof value === 'string' && choiceOptions(question).includes(value);
   if (question.type === 'scale') {
     if (typeof value !== 'number' || !Number.isInteger(value)) return false;
     const { min, max } = scaleRange(question);
@@ -49,8 +59,37 @@ export function surveyDraftErrors({ title, questions, threshold } = {}) {
       && (!Number.isInteger(q.min) || !Number.isInteger(q.max) || q.min < 0 || q.min >= q.max)) {
       errors.push(`La escala de la pregunta ${i + 1} no es válida (min entero ≥ 0 y menor que max).`);
     }
+    if (q?.type === 'choice' && choiceOptions(q).length < 2) {
+      errors.push(`La pregunta ${i + 1} de opción única necesita al menos dos opciones.`);
+    }
   });
   return errors;
+}
+
+/**
+ * ¿Está `question` respondida en `responses`? Una escala respondida es un valor
+ * válido; un texto respondido es una cadena no vacía (los espacios no cuentan).
+ * Sirve para la navegación secuencial (una pregunta a la vez).
+ */
+export function isAnswered(question, responses) {
+  if (!question) return false;
+  const has = responses != null && Object.hasOwn(responses, question.id);
+  if (!has) return false;
+  const value = responses[question.id];
+  if (question.type === 'text') return String(value ?? '').trim().length > 0;
+  return validateAnswer(question, value);
+}
+
+/**
+ * ¿Se puede avanzar desde `question`? Si es obligatoria, debe estar respondida;
+ * si es opcional, se avanza siempre salvo que tenga una respuesta presente pero
+ * inválida (que no debería ocurrir desde la UI, pero lo blindamos).
+ */
+export function canAdvance(question, responses) {
+  if (!question) return false;
+  if (question.required) return isAnswered(question, responses);
+  const has = responses != null && Object.hasOwn(responses, question.id);
+  return !has || validateAnswer(question, responses[question.id]);
 }
 
 /**
@@ -74,7 +113,7 @@ export function sanitizeResponses(questions, responses) {
 export function validateResponses(questions, responses) {
   const errors = [];
   for (const q of questions ?? []) {
-    const answered = responses != null && Object.prototype.hasOwnProperty.call(responses, q.id);
+    const answered = responses != null && Object.hasOwn(responses, q.id);
     if (q.required && !answered) { errors.push({ id: q.id, error: 'required' }); continue; }
     if (answered && !validateAnswer(q, responses[q.id])) errors.push({ id: q.id, error: 'invalid' });
   }

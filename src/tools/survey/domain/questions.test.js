@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors } from './questions.js';
+import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors, isAnswered, canAdvance, choiceOptions } from './questions.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const q12a = { id: 'q1', type: 'scale', min: 1, max: 5, required: true };
 const reason = { id: 'reason', type: 'text' };
+const area = { id: 'area', type: 'choice', required: true, options: ['Producto', 'Ventas', 'Soporte'] };
 
 describe('scaleRange', () => {
   it('usa el min/max de la pregunta', () => {
@@ -30,6 +31,26 @@ describe('validateAnswer', () => {
     expect(validateAnswer(reason, '')).toBe(true);
     expect(validateAnswer(reason, 5)).toBe(false);
   });
+  it('la opción única solo acepta un valor de su lista', () => {
+    expect(validateAnswer(area, 'Ventas')).toBe(true);
+    expect(validateAnswer(area, 'Marketing')).toBe(false);
+    expect(validateAnswer(area, 2)).toBe(false);
+  });
+});
+
+describe('choiceOptions', () => {
+  it('normaliza y descarta opciones vacías', () => {
+    expect(choiceOptions({ options: ['A', ' B ', '', null] })).toEqual(['A', 'B']);
+    expect(choiceOptions({})).toEqual([]);
+  });
+});
+
+describe('surveyDraftErrors (choice)', () => {
+  const base = { title: 'x', threshold: 5 };
+  it('exige al menos dos opciones', () => {
+    expect(surveyDraftErrors({ ...base, questions: [{ type: 'choice', label: 'q', options: ['una'] }] }).length).toBeGreaterThan(0);
+    expect(surveyDraftErrors({ ...base, questions: [{ type: 'choice', label: 'q', options: ['a', 'b'] }] })).toEqual([]);
+  });
 });
 
 describe('surveyDraftErrors', () => {
@@ -49,6 +70,33 @@ describe('surveyDraftErrors', () => {
   });
   it('exige enunciado en cada pregunta', () => {
     expect(surveyDraftErrors({ ...ok, questions: [{ type: 'text', label: '' }] }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('isAnswered', () => {
+  it('una escala respondida con valor válido cuenta como respondida', () => {
+    expect(isAnswered(enps, { enps: 9 })).toBe(true);
+    expect(isAnswered(enps, { enps: 99 })).toBe(false);
+    expect(isAnswered(enps, {})).toBe(false);
+  });
+  it('un texto solo cuenta si no está vacío ni en blanco', () => {
+    expect(isAnswered(reason, { reason: 'algo' })).toBe(true);
+    expect(isAnswered(reason, { reason: '   ' })).toBe(false);
+    expect(isAnswered(reason, {})).toBe(false);
+  });
+});
+
+describe('canAdvance', () => {
+  it('en obligatoria exige respuesta', () => {
+    expect(canAdvance(enps, {})).toBe(false);
+    expect(canAdvance(enps, { enps: 8 })).toBe(true);
+  });
+  it('en opcional avanza aunque falte', () => {
+    expect(canAdvance(reason, {})).toBe(true);
+    expect(canAdvance(reason, { reason: '' })).toBe(true);
+  });
+  it('en opcional con respuesta presente pero inválida no avanza', () => {
+    expect(canAdvance({ id: 's', type: 'scale', min: 1, max: 5 }, { s: 99 })).toBe(false);
   });
 });
 

@@ -8,17 +8,19 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
-import { climateTemplate } from '../../tools/survey/domain/templates.js';
-import { surveyDraftErrors } from '../../tools/survey/domain/questions.js';
+import { climateTemplate, serializeTemplate, parseTemplate } from '../../tools/survey/domain/templates.js';
+import { surveyDraftErrors, choiceOptions } from '../../tools/survey/domain/questions.js';
+import { END, flowErrors } from '../../tools/survey/domain/flow.js';
 import { parseParticipants } from '../../tools/survey/domain/participants.js';
 import {
-  participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale,
+  participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, createSurveyTokens, listTokens, listAnswers,
 } from '../../lib/survey.js';
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
+const QUESTION_KIND = { scale: 'Escala', text: 'Texto', choice: 'Opción única' };
 
 export class SurveyAdmin extends LitElement {
   static properties = {
@@ -70,7 +72,13 @@ export class SurveyAdmin extends LitElement {
     .q-top { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
     .q-top .kind { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #5b6b7d); }
     .q-label { flex: 1 1 18rem; min-width: 0; }
+    .opts-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
     .q-opts { display: flex; gap: 0.9rem; align-items: center; flex-wrap: wrap; font-size: 0.82rem; }
+    .flow { border-top: 1px dashed var(--rm-border, #e3ebef); padding-top: 0.55rem; margin-top: 0.2rem; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.82rem; }
+    .flow-line { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
+    .flow select, .flow input { font-size: 0.82rem; padding: 0.3rem 0.45rem; }
+    .rule { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; color: var(--rm-text, #1e3a5f); }
+    .flow .ghost { align-self: flex-start; }
     .q-opts label { display: inline-flex; align-items: center; gap: 0.3rem; }
     .q-move button, .q-del { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
     .q-del:hover { border-color: #b42318; color: #b42318; }
@@ -153,10 +161,40 @@ export class SurveyAdmin extends LitElement {
 
   _loadTemplate() { this._questions = climateTemplate(); }
 
+  /** Importa una plantilla JSON al editor, generando ids a las que no lo traigan. */
+  async _onTemplateFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite reimportar el mismo archivo
+    if (!file) return;
+    try {
+      const { title, questions } = parseTemplate(await file.text());
+      this._questions = questions.map((q) => (q.id ? q : { ...q, id: crypto.randomUUID() }));
+      if (title && !this._title.trim()) this._title = title;
+      this._error = '';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo importar la plantilla.';
+    }
+  }
+
+  /** Descarga las preguntas actuales como plantilla JSON (Blob, sin document.write). */
+  _exportTemplate() {
+    const json = serializeTemplate({ title: this._title, questions: this._questions });
+    const slug = (this._title || 'plantilla').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${slug || 'plantilla'}-encuesta.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   _addQuestion(type) {
-    const q = type === 'text'
-      ? { id: crypto.randomUUID(), type: 'text', required: false, label: '' }
-      : { id: crypto.randomUUID(), type: 'scale', min: 1, max: 5, required: true, label: '' };
+    const base = { id: crypto.randomUUID(), label: '' };
+    let q;
+    if (type === 'text') q = { ...base, type: 'text', required: false };
+    else if (type === 'choice') q = { ...base, type: 'choice', required: true, options: [] };
+    else q = { ...base, type: 'scale', min: 1, max: 5, required: true };
     this._questions = [...this._questions, q];
   }
 
@@ -176,14 +214,45 @@ export class SurveyAdmin extends LitElement {
     this._questions = next;
   }
 
+  /** Normaliza una pregunta para persistir: opciones limpias, sin `next` vacío ni reglas sin destino. */
+  _normalizeQuestion(q) {
+    const out = { ...q };
+    if (out.type === 'choice') out.options = choiceOptions(out);
+    if (!out.next) delete out.next;
+    const rules = (Array.isArray(out.rules) ? out.rules : []).filter((r) => r && r.goto);
+    if (rules.length) out.rules = rules;
+    else delete out.rules;
+    return out;
+  }
+
+  _setNext(i, value) { this._patchQuestion(i, { next: value }); }
+
+  _addRule(i) {
+    const q = this._questions[i];
+    const equals = q.type === 'choice' ? (choiceOptions(q)[0] ?? '') : (q.min ?? 1);
+    this._patchQuestion(i, { rules: [...(q.rules ?? []), { equals, goto: '' }] });
+  }
+
+  _setRule(i, j, patch) {
+    const rules = (this._questions[i].rules ?? []).map((r, k) => (k === j ? { ...r, ...patch } : r));
+    this._patchQuestion(i, { rules });
+  }
+
+  _removeRule(i, j) {
+    this._patchQuestion(i, { rules: (this._questions[i].rules ?? []).filter((_, k) => k !== j) });
+  }
+
   async _save() {
     const title = this._title.trim();
-    const errors = surveyDraftErrors({ title, questions: this._questions, threshold: this._threshold });
+    // Normaliza antes de validar/persistir: limpia opciones de choice, quita el
+    // `next` vacío («siguiente en orden») y las reglas sin destino.
+    const questions = this._questions.map((q) => this._normalizeQuestion(q));
+    const errors = [...surveyDraftErrors({ title, questions, threshold: this._threshold }), ...flowErrors(questions)];
     if (errors.length) { this._error = errors[0]; return; }
     this._saving = true;
     this._error = '';
     try {
-      const payload = { title, questions: this._questions, threshold: this._threshold };
+      const payload = { title, questions, threshold: this._threshold };
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
       await this._loadList();
@@ -280,6 +349,24 @@ export class SurveyAdmin extends LitElement {
   }
 
   _renderQuestionResult(q, answers, threshold) {
+    if (q.type === 'choice') {
+      // k-anonimato POR OPCIÓN: se ocultan las opciones con menos de `threshold`
+      // respuestas y, si hay alguna oculta, no se muestra el total (evita inferir
+      // su conteo por resta).
+      const { visible, suppressed, total } = choiceTally(answers, q, threshold);
+      if (!visible.length) {
+        return html`<div class="qr">
+          <p class="qr-label">${q.label}</p>
+          <p class="hidden-note">Aún no hay suficientes respuestas por opción (mínimo ${threshold}) para mostrar la distribución sin comprometer el anonimato.</p>
+        </div>`;
+      }
+      return html`<div class="qr">
+        <p class="qr-label">${q.label}</p>
+        ${suppressed.length ? null : html`<p class="qr-summary">n=${total}</p>`}
+        <div class="dist">${visible.map((c) => html`<span class="dchip">${c.key}: ${c.count}</span>`)}</div>
+        ${suppressed.length ? html`<p class="hidden-note">${suppressed.length} opción${suppressed.length === 1 ? '' : 'es'} con muy pocas respuestas se ocultan por privacidad.</p>` : null}
+      </div>`;
+    }
     if (q.type === 'text') {
       const texts = textAnswers(answers, q.id);
       // Los textos verbatim pueden identificar a alguien: se ocultan hasta
@@ -359,10 +446,41 @@ export class SurveyAdmin extends LitElement {
         : html`<p class="empty">Aún no hay encuestas. Crea la primera.</p>`}`;
   }
 
+  /** Selector de destino (siguiente en orden / otra pregunta / terminar) para next y goto. */
+  _renderDestSelect(value, onChange, selfId) {
+    return html`<select @change=${(e) => onChange(e.target.value)}>
+      <option value="" ?selected=${!value}>Siguiente en orden</option>
+      ${this._questions.map((other, idx) => (other.id === selfId ? null : html`<option value=${other.id} ?selected=${value === other.id}>P${idx + 1}: ${(other.label || '(sin enunciado)').slice(0, 32)}</option>`))}
+      <option value=${END} ?selected=${value === END}>Terminar encuesta</option>
+    </select>`;
+  }
+
+  _renderFlow(q, i) {
+    const canBranch = q.type === 'choice' || q.type === 'scale';
+    const rules = q.rules ?? [];
+    return html`<div class="flow">
+      <label class="flow-line">Al responder, ir a: ${this._renderDestSelect(q.next, (v) => this._setNext(i, v), q.id)}</label>
+      ${canBranch ? html`
+        ${rules.map((r, j) => html`<div class="rule">
+          <span>Si la respuesta es</span>
+          ${q.type === 'choice'
+            ? html`<select @change=${(e) => this._setRule(i, j, { equals: e.target.value })}>
+                ${choiceOptions(q).map((opt) => html`<option value=${opt} ?selected=${r.equals === opt}>${opt}</option>`)}
+              </select>`
+            : html`<input class="num" type="number" .value=${String(r.equals ?? '')}
+                @input=${(e) => this._setRule(i, j, { equals: Number(e.target.value) })} />`}
+          <span>→ ir a</span>
+          ${this._renderDestSelect(r.goto, (v) => this._setRule(i, j, { goto: v }), q.id)}
+          <button class="q-del" title="Quitar regla" @click=${() => this._removeRule(i, j)}>✕</button>
+        </div>`)}
+        <button class="ghost" @click=${() => this._addRule(i)}>+ Regla condicional</button>` : null}
+    </div>`;
+  }
+
   _renderQuestion(q, i) {
     return html`<div class="q">
       <div class="q-top">
-        <span class="kind">${q.type === 'text' ? 'Texto' : 'Escala'}</span>
+        <span class="kind">${QUESTION_KIND[q.type] ?? 'Escala'}</span>
         <input class="q-label" type="text" placeholder="Enunciado de la pregunta" .value=${q.label ?? ''}
           @input=${(e) => this._patchQuestion(i, { label: e.target.value })} />
         <span class="q-move">
@@ -371,6 +489,11 @@ export class SurveyAdmin extends LitElement {
         </span>
         <button class="q-del" title="Quitar" @click=${() => this._removeQuestion(i)}>✕</button>
       </div>
+      ${q.type === 'choice' ? html`
+        <label class="opts-field">Opciones (una por línea)
+          <textarea rows="3" placeholder="Producto&#10;Ventas&#10;Soporte" .value=${(q.options ?? []).join('\n')}
+            @input=${(e) => this._patchQuestion(i, { options: e.target.value.split('\n') })}></textarea>
+        </label>` : null}
       <div class="q-opts">
         ${q.type === 'scale' ? html`
           <label>de <input class="num" type="number" .value=${String(q.min ?? 1)}
@@ -380,6 +503,7 @@ export class SurveyAdmin extends LitElement {
         <label><input type="checkbox" .checked=${q.required !== false}
           @change=${(e) => this._patchQuestion(i, { required: e.target.checked })} /> Obligatoria</label>
       </div>
+      ${this._renderFlow(q, i)}
     </div>`;
   }
 
@@ -403,7 +527,10 @@ export class SurveyAdmin extends LitElement {
       <div class="add-row">
         <button class="ghost" @click=${() => this._addQuestion('scale')}>+ Pregunta de escala</button>
         <button class="ghost" @click=${() => this._addQuestion('text')}>+ Pregunta de texto</button>
-        <button class="ghost" @click=${() => this._loadTemplate()}>Cargar plantilla eNPS + Q12</button>
+        <button class="ghost" @click=${() => this._addQuestion('choice')}>+ Pregunta de opción</button>
+        <button class="ghost" @click=${() => this._loadTemplate()}>Plantilla eNPS + Q12</button>
+        <label class="ghost">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
+        <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">

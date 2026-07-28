@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { climateTemplate } from './templates.js';
+import { climateTemplate, serializeTemplate, parseTemplate } from './templates.js';
 import { validateAnswer } from './questions.js';
 
 describe('climateTemplate', () => {
@@ -25,5 +25,66 @@ describe('climateTemplate', () => {
     expect(validateAnswer(questions[0], 11)).toBe(false);
     expect(validateAnswer(questions[2], 5)).toBe(true);
     expect(validateAnswer(questions[2], 6)).toBe(false);
+  });
+});
+
+describe('serializeTemplate / parseTemplate', () => {
+  it('un round-trip conserva título y preguntas', () => {
+    const tpl = { title: 'Clima', questions: climateTemplate() };
+    const parsed = parseTemplate(serializeTemplate(tpl));
+    expect(parsed.title).toBe('Clima');
+    expect(parsed.questions).toEqual(tpl.questions);
+  });
+
+  it('acepta un array de preguntas directo (sin envoltorio)', () => {
+    const parsed = parseTemplate(JSON.stringify([{ type: 'scale', min: 1, max: 5, label: 'q' }]));
+    expect(parsed.title).toBe('');
+    expect(parsed.questions).toHaveLength(1);
+  });
+
+  it('descarta campos desconocidos y preserva el id si viene', () => {
+    const parsed = parseTemplate(JSON.stringify({
+      questions: [{ id: 'x1', type: 'text', label: 'hola', maligno: 'drop', required: true }],
+    }));
+    expect(parsed.questions[0]).toEqual({ id: 'x1', type: 'text', label: 'hola', required: true });
+  });
+
+  it('preserva las opciones de una pregunta de opción única', () => {
+    const [q] = parseTemplate(JSON.stringify([
+      { id: 'area', type: 'choice', label: '¿Área?', options: ['Producto', ' Ventas ', ''] },
+    ])).questions;
+    expect(q).toEqual({ id: 'area', type: 'choice', label: '¿Área?', required: false, options: ['Producto', 'Ventas'] });
+  });
+
+  it('en escala sin min/max cae a 1–5', () => {
+    const [q] = parseTemplate(JSON.stringify([{ type: 'scale', label: 'q' }])).questions;
+    expect(q).toMatchObject({ min: 1, max: 5 });
+  });
+
+  it('preserva next y reglas de salto válidas', () => {
+    const parsed = parseTemplate(JSON.stringify({
+      questions: [
+        { id: 'a', type: 'choice', label: '¿Área?', options: ['Ventas', 'Otro'], rules: [{ equals: 'Ventas', goto: 'c' }], next: 'b' },
+        { id: 'b', type: 'text', label: 'b' },
+        { id: 'c', type: 'text', label: 'c' },
+      ],
+    }));
+    expect(parsed.questions[0].next).toBe('b');
+    expect(parsed.questions[0].rules).toEqual([{ equals: 'Ventas', goto: 'c' }]);
+  });
+
+  it('rechaza un flujo con destino inexistente o cíclico', () => {
+    expect(() => parseTemplate(JSON.stringify([{ id: 'a', type: 'text', label: 'a', next: 'zzz' }]))).toThrow();
+    expect(() => parseTemplate(JSON.stringify([{ id: 'a', type: 'text', label: 'a', next: 'a' }]))).toThrow();
+  });
+
+  it('rechaza JSON inválido, sin preguntas o con tipo no soportado', () => {
+    expect(() => parseTemplate('{no json')).toThrow(/JSON/);
+    expect(() => parseTemplate('{"questions": []}')).toThrow(/pregunta/i);
+    expect(() => parseTemplate(JSON.stringify([{ type: 'radio', label: 'q' }]))).toThrow(/tipo/i);
+  });
+
+  it('rechaza una escala inválida (min ≥ max)', () => {
+    expect(() => parseTemplate(JSON.stringify([{ type: 'scale', min: 5, max: 5, label: 'q' }]))).toThrow();
   });
 });

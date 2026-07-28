@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale } from './results.js';
+import { participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally } from './results.js';
 
 const tokens = [
   { metadata: { department: 'People' }, used: true },
@@ -55,5 +55,21 @@ describe('segmentedScale (k-anon)', () => {
     const { visible, suppressed } = segmentedScale(answers, question, 'department', 2);
     expect(visible.map((s) => s.key)).toEqual(['Eng']);
     expect(suppressed.map((s) => s.key)).toEqual(['People']);
+  });
+});
+
+describe('choiceTally (k-anon por opción)', () => {
+  const question = { id: 'area', type: 'choice', options: ['Producto', 'Ventas', 'Soporte'] };
+  const answers = [
+    ...Array.from({ length: 4 }, () => ({ answers: { area: 'Producto' } })),
+    ...Array.from({ length: 3 }, () => ({ answers: { area: 'Ventas' } })),
+    { answers: { area: 'Soporte' } }, // 1 sola respuesta: debe ocultarse
+  ];
+  it('oculta las opciones con menos de N respuestas y no cuenta las ausentes', () => {
+    const { visible, suppressed, total } = choiceTally(answers, question, 3);
+    expect(total).toBe(8);
+    expect(visible.map((s) => s.key)).toEqual(['Producto', 'Ventas']);
+    expect(visible.find((s) => s.key === 'Producto').count).toBe(4);
+    expect(suppressed.map((s) => s.key)).toEqual(['Soporte']);
   });
 });
