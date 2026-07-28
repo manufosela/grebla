@@ -29,4 +29,19 @@ describe('parseParticipants', () => {
     expect(out).toHaveLength(1);
     expect(out[0].metadata.department).toBe('Data');
   });
+
+  it('con cabecera mapea por nombre en cualquier orden e ignora columnas extra', () => {
+    const csv = 'Nombre,Email,Departamento,Fecha_alta,Otra\nAna Ruiz,ana@x.com,People,2024-01-15,basura';
+    expect(parseParticipants(csv)).toEqual([
+      { email: 'ana@x.com', metadata: { department: 'People', startDate: '2024-01-15' } },
+    ]);
+  });
+
+  it('con cabecera de solo email', () => {
+    expect(parseParticipants('email\nbob@x.com')).toEqual([{ email: 'bob@x.com', metadata: {} }]);
+  });
+
+  it('no confunde «no-email» (contiene «email») con una cabecera', () => {
+    expect(parseParticipants('no-email\nc@x.com')).toEqual([{ email: 'c@x.com', metadata: {} }]);
+  });
 });

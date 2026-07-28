@@ -216,9 +216,22 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
+  /** Lee un CSV subido y vuelca su contenido al área de texto para revisar. */
+  async _onCsvFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite volver a subir el mismo fichero
+    if (!file) return;
+    try {
+      this._partText = await file.text();
+      this._error = '';
+    } catch {
+      this._error = 'No se pudo leer el fichero.';
+    }
+  }
+
   async _generate() {
     const participants = parseParticipants(this._partText);
-    if (!participants.length) { this._error = 'Pega al menos un email válido.'; return; }
+    if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
     this._partBusy = true;
     this._error = '';
     try {
@@ -404,8 +417,11 @@ export class SurveyAdmin extends LitElement {
       <h2>${this._partSurvey.title} · Participantes</h2>
       <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Pega el padrón y genera los enlaces personales.</p>
       <div class="field">
-        <label for="pp">Una persona por línea: <code>email</code>, o <code>email,departamento</code>, o <code>email,departamento,fecha-alta</code></label>
-        <textarea id="pp" rows="6" placeholder="ana@tribbuapp.com,People,2024-01-15" .value=${this._partText}
+        <label for="pp">Sube un <strong>CSV</strong> o pega el padrón. Una persona por fila. Columnas:
+          <code>email</code> (obligatoria), <code>departamento</code> y <code>fecha_alta</code> (YYYY-MM-DD, opcionales).
+          Con cabecera se mapean por nombre en cualquier orden (las columnas extra se ignoran); sin cabecera, en ese orden.</label>
+        <input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onCsvFile(e)} />
+        <textarea id="pp" rows="6" placeholder="email,departamento,fecha_alta&#10;ana@tribbuapp.com,People,2024-01-15" .value=${this._partText}
           @input=${(e) => { this._partText = e.target.value; }}></textarea>
       </div>
       <div class="save-row">
