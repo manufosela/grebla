@@ -6,6 +6,7 @@
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern } from '../lib/accessRoles.js';
+import { isSurveyAdmin } from '../lib/survey.js';
 
 const VIEW_FLAG = 'grebla-view';
 const landing = document.getElementById('platform-landing');
@@ -22,7 +23,10 @@ onUserChanged(async (user) => {
   try {
     const access = await resolveAccess(user);
     const { role } = access;
-    if (!role) return showLanding();
+    // Gestor de encuestas (People): puede gestionar encuestas aunque no tenga otro
+    // rol; debe llegar a las tools y ver la tarjeta Encuestas (RMR-TSK-0328).
+    const canManageSurveys = canGovern(access) || (await isSurveyAdmin(user.uid));
+    if (!role && !canManageSurveys) return showLanding();
     // Conmutador de vistas (RMR-TSK-0250): un manager/superadmin que ha elegido
     // «vista de ingeniero» va a su propio «Mi espacio», no a las herramientas.
     if (sessionStorage.getItem(VIEW_FLAG) === 'engineer' && (canGovern(access) || role === 'leader')) {
@@ -44,7 +48,7 @@ onUserChanged(async (user) => {
     // El superadmin (como el líder) aterriza en las herramientas —con vista de
     // toda la organización— y llega a la gestión con el conmutador «Gestión» o
     // el botón «volver a gestión» (RMR-BUG-0050). No se le redirige a /admin.
-    showTools(canGovern(access));
+    showTools(canGovern(access), canManageSurveys);
     if (canGovern(access)) backToAdmin?.removeAttribute('hidden');
   } catch {
     showLanding();
@@ -57,12 +61,16 @@ function showLanding() {
   landing?.removeAttribute('hidden');
 }
 
-function showTools(canGovernInstance = false) {
+function showTools(canGovernInstance = false, canManageSurveys = false) {
   landing?.setAttribute('hidden', '');
   tools?.removeAttribute('hidden');
-  // Tarjetas solo para gobierno de instancia (p. ej. Encuestas de People): se
-  // ocultan a quien no es superadmin para no ofrecer una tool que no puede abrir.
+  // Tarjetas de gobierno de instancia: solo superadmin.
   for (const card of tools?.querySelectorAll('[data-admin-only]') ?? []) {
     card.toggleAttribute('hidden', !canGovernInstance);
+  }
+  // Tarjeta de Encuestas: superadmin O gestor de encuestas (People). Marcador
+  // propio para NO ensanchar el resto de tarjetas de gobierno.
+  for (const card of tools?.querySelectorAll('[data-survey-tool]') ?? []) {
+    card.toggleAttribute('hidden', !canManageSurveys);
   }
 }

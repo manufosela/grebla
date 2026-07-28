@@ -65,10 +65,17 @@ export async function listTokens(surveyId) {
   return snap.docs.map((d) => ({ token: d.id, ...d.data() }));
 }
 
-/** Respuestas ANÓNIMAS de una encuesta (para los dashboards). Solo superadmin. */
+/** Respuestas ANÓNIMAS de una encuesta (para los dashboards). Solo superadmin/gestor. */
 export async function listAnswers(surveyId) {
   const snap = await getDocs(collection(db, 'surveys', surveyId, 'answers'));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** ¿Es `uid` gestor de encuestas (People)? Para abrir la tool sin ser superadmin. */
+export async function isSurveyAdmin(uid) {
+  if (!uid) return false;
+  const snap = await getDoc(doc(db, 'surveyAdmins', uid));
+  return snap.exists();
 }
 
 /**

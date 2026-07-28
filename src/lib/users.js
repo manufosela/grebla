@@ -80,12 +80,13 @@ export async function assignUserToLeader(user, leaderUid) {
 
 /** @returns {Promise<AccessUser[]>} */
 export async function listAllUsers() {
-  const [usersSnap, adminsSnap, supermanagersSnap, viewersSnap, leadersSnap] = await Promise.all([
+  const [usersSnap, adminsSnap, supermanagersSnap, viewersSnap, leadersSnap, surveyAdminsSnap] = await Promise.all([
     getDocs(collection(db, 'users')),
     getDocs(collection(db, 'admins')),
     getDocs(collection(db, 'supermanagers')),
     getDocs(collection(db, 'viewers')),
     getDocs(collection(db, 'leaders')),
+    getDocs(collection(db, 'surveyAdmins')),
   ]);
   const toItems = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   return mergeAccessUsers({
@@ -94,6 +95,7 @@ export async function listAllUsers() {
     supermanager: toItems(supermanagersSnap),
     viewer: toItems(viewersSnap),
     leader: toItems(leadersSnap),
+    surveyAdmin: toItems(surveyAdminsSnap),
   });
 }
 
@@ -174,6 +176,21 @@ export async function deleteUnusedUser(uid) {
 export function setUserAdmin(uid, isAdmin, profile = {}) {
   const ref = doc(db, ADMIN_COLLECTION, uid);
   return isAdmin
+    ? setDoc(ref, { displayName: profile.displayName ?? null, email: profile.email ?? null, addedAt: serverTimestamp() }, { merge: true })
+    : deleteDoc(ref);
+}
+
+/**
+ * Concede o retira el rol «gestor de encuestas» (People): puede gestionar
+ * /surveys sin ser superadmin. Ortogonal al gobierno y al rol de equipo; solo
+ * escribe /surveyAdmins/{uid}. Es lo que alimenta el checkbox «Encuestas» de la
+ * lista de usuarios. Solo un superadmin puede escribir (reglas de Firestore).
+ * @param {string} uid @param {boolean} isSurveyAdmin
+ * @param {{ displayName?: string|null, email?: string|null }} [profile]
+ */
+export function setSurveyAdmin(uid, isSurveyAdmin, profile = {}) {
+  const ref = doc(db, 'surveyAdmins', uid);
+  return isSurveyAdmin
     ? setDoc(ref, { displayName: profile.displayName ?? null, email: profile.email ?? null, addedAt: serverTimestamp() }, { merge: true })
     : deleteDoc(ref);
 }

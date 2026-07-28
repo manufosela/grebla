@@ -244,8 +244,18 @@ describe('mergeAccessUsers', () => {
     });
     expect(result).toEqual([{
       uid: 'seed', displayName: 'Seed', email: 'seed@x.com', lastLogin: null,
-      role: 'leader', teamRole: 'leader', isAdmin: false,
+      role: 'leader', teamRole: 'leader', isAdmin: false, isSurveyAdmin: false,
     }]);
+  });
+
+  it('expone el gestor de encuestas (isSurveyAdmin) como eje ortogonal', () => {
+    const [u] = mergeAccessUsers({
+      users: [{ id: 'p', displayName: 'P', email: 'p@x.com' }],
+      surveyAdmin: [{ id: 'p' }],
+    });
+    expect(u.isSurveyAdmin).toBe(true);
+    expect(u.isAdmin).toBe(false);
+    expect(u.teamRole).toBe('none');
   });
 
   it('expone los dos ejes por separado: isAdmin (gobierno) y teamRole (equipo)', () => {

@@ -17,6 +17,12 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
+    // Gestor de encuestas (People): puede gestionar /surveys sin ser superadmin.
+    // Lo concede un superadmin en el panel (RMR-TSK-0328).
+    function isSurveyAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/surveyAdmins/$(request.auth.uid));
+    }
     function isViewer() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/viewers/$(request.auth.uid));
@@ -699,22 +705,30 @@ service cloud.firestore {
     // (no lee Firestore). Por eso el cliente solo LEE, y solo el admin.
     // Fase 1: «admin» = superadmin; el rol People como eje propio es card aparte.
     match /surveys/{surveyId} {
-      allow read: if isSuperAdmin();
-      allow write: if isSuperAdmin();
+      allow read: if isSuperAdmin() || isSurveyAdmin();
+      allow write: if isSuperAdmin() || isSurveyAdmin();
 
       // Padrón/tokens: email + metadatos de cada persona (lado admin). Los genera
       // la CF al importar el CSV; el cliente NO escribe. El admin los lee para el
       // % de participación por departamento y para reenviar los links.
       match /tokens/{token} {
-        allow read: if isSuperAdmin();
+        allow read: if isSuperAdmin() || isSurveyAdmin();
         allow write: if false;
       }
       // Respuestas ANÓNIMAS (sin email ni token). Las escribe SOLO la CF de canje
       // (Admin SDK); el admin las lee para los dashboards (ya son anónimas).
       match /answers/{answerId} {
-        allow read: if isSuperAdmin();
+        allow read: if isSuperAdmin() || isSurveyAdmin();
         allow write: if false;
       }
+    }
+
+    // Gestores de encuestas (People): cada uno lee SU propio doc (para saber si
+    // puede gestionar) y el superadmin lee todos (panel); solo el superadmin
+    // concede/retira. No se filtra a terceros quién es gestor.
+    match /surveyAdmins/{uid} {
+      allow read: if isSuperAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow write: if isSuperAdmin();
     }
 
     // Resto: denegado por defecto.
