@@ -201,10 +201,17 @@ export class SuperadminPanel extends LitElement {
     button.primary { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
     button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    /* La tabla de usuarios (7 columnas) hace scroll propio si no cabe, para no
-       desbordar el panel. Ancho mínimo para que las columnas no se compriman. */
+    /* La tabla de usuarios hace scroll propio si no cabe, para no desbordar el
+       panel. Ancho mínimo para que las columnas no se compriman. */
     .table-wrap { overflow-x: auto; }
-    .table-wrap table { min-width: 52rem; }
+    .table-wrap table { min-width: 46rem; }
+    .access summary { cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--rm-text, #111827); list-style: none; padding: 0.2rem 0.55rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; display: inline-block; white-space: nowrap; }
+    .access summary::-webkit-details-marker { display: none; }
+    .access summary::after { content: ' ▾'; color: var(--rm-muted, #6b7280); }
+    .access[open] summary { border-color: var(--rm-accent, #3b82f6); color: var(--rm-accent, #3b82f6); }
+    .access-opts { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.4rem; padding: 0.45rem 0.55rem; border: 1px solid var(--rm-border, #eef0f2); border-radius: 6px; font-size: 0.82rem; white-space: nowrap; }
+    .access-opts label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .access-opts label.implied { color: var(--rm-muted, #6b7280); cursor: default; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #6b7280); font-weight: 600; }
     tbody tr.clickable { cursor: pointer; }
@@ -1452,7 +1459,7 @@ export class SuperadminPanel extends LitElement {
         ${this._users.length === 0
           ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
           : html`<div class="table-wrap"><table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th class="admin-col">Superadmin</th><th class="admin-col">People&nbsp;account</th>`}<th>Última conexión</th><th></th></tr></thead>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th>Accesos</th>`}<th>Última conexión</th><th></th></tr></thead>
               <tbody>
                 ${this._users.map((u) => this._renderUserRow(u))}
               </tbody>
@@ -1471,8 +1478,7 @@ export class SuperadminPanel extends LitElement {
         <td>${user.displayName ?? '—'}</td>
         <td class="muted">${user.email ?? '—'}</td>
         ${this._renderUserRoleCell(user, linked)}
-        ${this._renderAdminCell(user)}
-        ${this._renderSurveyAdminCell(user)}
+        ${this._renderAccessCell(user)}
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>${this._renderUserActions(user, linked)}</td>
       </tr>
@@ -1490,8 +1496,7 @@ export class SuperadminPanel extends LitElement {
         </td>
         <td class="muted">${user.email ?? '—'}</td>
         ${this._renderUserRoleCell(user, this._isLinked(user))}
-        ${this._renderAdminCell(user)}
-        ${this._renderSurveyAdminCell(user)}
+        ${this._renderAccessCell(user)}
         <td class="muted">${formatLogin(user.lastLogin)}</td>
         <td>
           <button class="act" @click=${() => this._saveUserName()}>Guardar</button>
@@ -1515,15 +1520,30 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
-  /** Celda del checkbox de superadmin (columna propia, centrado). @param {import('../lib/accessRoles.js').AccessUser} user */
-  _renderAdminCell(user) {
+  /**
+   * Celda «Accesos»: un desplegable con las concesiones de instancia (superadmin
+   * y People account), ortogonales al rol de equipo. Como un superadmin ya puede
+   * gestionar encuestas, People account sale marcado y DESHABILITADO (heredado)
+   * cuando es superadmin — no se escribe /surveyAdmins.
+   * @param {import('../lib/accessRoles.js').AccessUser} user
+   */
+  _renderAccessCell(user) {
     if (this.readOnly) return null;
     const who = user.displayName ?? user.email ?? user.uid;
+    const summary = user.isAdmin ? 'Superadmin' : (user.isSurveyAdmin ? 'People account' : '—');
     return html`
-      <td class="admin-cell">
-        <input type="checkbox" aria-label=${`Superadmin: ${who}`}
-          title="Gobierno de instancia: ve y gestiona toda la organización, independiente del rol de equipo."
-          .checked=${user.isAdmin} @change=${(e) => this._toggleAdmin(user, e.target.checked)} />
+      <td>
+        <details class="access">
+          <summary aria-label=${`Accesos de ${who}`}>${summary}</summary>
+          <div class="access-opts">
+            <label><input type="checkbox" .checked=${user.isAdmin}
+              @change=${(e) => this._toggleAdmin(user, e.target.checked)} /> Superadmin</label>
+            <label class=${user.isAdmin ? 'implied' : ''}
+              title=${user.isAdmin ? 'Heredado: un superadmin ya puede gestionar encuestas.' : ''}>
+              <input type="checkbox" ?disabled=${user.isAdmin} .checked=${user.isAdmin || user.isSurveyAdmin}
+                @change=${(e) => this._toggleSurveyAdmin(user, e.target.checked)} /> People account</label>
+          </div>
+        </details>
       </td>
     `;
   }
@@ -1550,19 +1570,6 @@ export class SuperadminPanel extends LitElement {
       this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el superadmin.';
       await this._loadUsers();
     }
-  }
-
-  /** Celda del checkbox «gestor de encuestas» (People), columna propia. @param {import('../lib/accessRoles.js').AccessUser} user */
-  _renderSurveyAdminCell(user) {
-    if (this.readOnly) return null;
-    const who = user.displayName ?? user.email ?? user.uid;
-    return html`
-      <td class="admin-cell">
-        <input type="checkbox" aria-label=${`People account: ${who}`}
-          title="People account: gestiona las encuestas (crear, enlaces, resultados) sin ser superadmin."
-          .checked=${user.isSurveyAdmin} @change=${(e) => this._toggleSurveyAdmin(user, e.target.checked)} />
-      </td>
-    `;
   }
 
   /** Concede o retira el rol «gestor de encuestas» con el checkbox de la fila. @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} isSurveyAdmin */
