@@ -9,6 +9,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { defineSecret } from 'firebase-functions/params';
+import { randomBytes } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -295,6 +296,52 @@ export const submitSurveyResponse = onCall(
     return { ok: true };
   },
 );
+
+/**
+ * Genera un token único por participante de una encuesta (padrón). Solo
+ * superadmin (People). Reutiliza el token existente por email para no duplicar al
+ * re-ejecutar. Escribe /surveys/{id}/tokens/{token} = { email, metadata, used }.
+ * Devuelve [{ email, token }]; el cliente compone el enlace con su origin.
+ */
+export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(uid))) throw new HttpsError('permission-denied', 'Solo un superadmin puede generar enlaces.');
+  const { surveyId, participants } = request.data ?? {};
+  if (!surveyId || !Array.isArray(participants)) throw new HttpsError('invalid-argument', 'Faltan surveyId o participants.');
+
+  const db = getFirestore();
+  const surveyRef = db.doc(`surveys/${surveyId}`);
+  if (!(await surveyRef.get()).exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
+
+  // Tokens ya emitidos, indexados por email, para no duplicar.
+  const existing = await surveyRef.collection('tokens').get();
+  const tokenByEmail = new Map();
+  existing.docs.forEach((d) => {
+    const email = d.data().email;
+    if (email) tokenByEmail.set(String(email).toLowerCase(), d.id);
+  });
+
+  const results = [];
+  let batch = db.batch();
+  let pending = 0;
+  for (const p of participants) {
+    const email = String(p?.email ?? '').trim();
+    if (!email || !email.includes('@')) continue;
+    const key = email.toLowerCase();
+    let token = tokenByEmail.get(key);
+    if (!token) {
+      token = randomBytes(18).toString('hex');
+      tokenByEmail.set(key, token);
+      batch.set(surveyRef.collection('tokens').doc(token), { email, metadata: p?.metadata ?? {}, used: false });
+      pending += 1;
+      if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
+    }
+    results.push({ email, token });
+  }
+  if (pending > 0) await batch.commit();
+  return { tokens: results };
+});
 
 /**
  * Propuesta de preguntas para un periodo de O2O con IA. El cliente manda las

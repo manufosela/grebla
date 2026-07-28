@@ -9,7 +9,8 @@ import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import { climateTemplate } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors } from '../../tools/survey/domain/questions.js';
-import { listSurveys, createSurvey, updateSurvey, setSurveyStatus } from '../../lib/survey.js';
+import { parseParticipants } from '../../tools/survey/domain/participants.js';
+import { listSurveys, createSurvey, updateSurvey, setSurveyStatus, createSurveyTokens, listTokens } from '../../lib/survey.js';
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
 
@@ -23,6 +24,11 @@ export class SurveyAdmin extends LitElement {
     _questions: { state: true },
     _threshold: { state: true },
     _saving: { state: true },
+    _partSurvey: { state: true },
+    _partText: { state: true },
+    _partTokens: { state: true },
+    _partBusy: { state: true },
+    _copiedAll: { state: true },
     _error: { state: true },
   };
 
@@ -62,6 +68,10 @@ export class SurveyAdmin extends LitElement {
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
+    textarea { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); resize: vertical; }
+    textarea:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
+    code { background: var(--rm-surface-hover, #eef3f5); padding: 0.05rem 0.3rem; border-radius: 4px; font-size: 0.85em; }
+    input.link { width: 100%; box-sizing: border-box; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
   `;
 
   constructor() {
@@ -74,6 +84,11 @@ export class SurveyAdmin extends LitElement {
     this._questions = [];
     this._threshold = 5;
     this._saving = false;
+    this._partSurvey = null;
+    this._partText = '';
+    this._partTokens = [];
+    this._partBusy = false;
+    this._copiedAll = false;
     this._error = '';
     this._loaded = false;
   }
@@ -166,6 +181,50 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
+  async _openParticipants(survey) {
+    this._partSurvey = survey;
+    this._partText = '';
+    this._partTokens = [];
+    this._error = '';
+    this._phase = 'participants';
+    try {
+      this._partTokens = await listTokens(survey.id);
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudieron cargar los participantes.';
+    }
+  }
+
+  async _generate() {
+    const participants = parseParticipants(this._partText);
+    if (!participants.length) { this._error = 'Pega al menos un email válido.'; return; }
+    this._partBusy = true;
+    this._error = '';
+    try {
+      await createSurveyTokens(this._partSurvey.id, participants);
+      this._partTokens = await listTokens(this._partSurvey.id);
+      this._partText = '';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudieron generar los enlaces.';
+    } finally {
+      this._partBusy = false;
+    }
+  }
+
+  _linkFor(token) {
+    return `${location.origin}/encuesta?s=${this._partSurvey.id}&t=${token}`;
+  }
+
+  async _copyAll() {
+    const lines = this._partTokens.map((t) => `${t.email},${this._linkFor(t.token)}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(lines);
+      this._copiedAll = true;
+      setTimeout(() => { this._copiedAll = false; }, 2000);
+    } catch {
+      this._error = 'No se pudo copiar; selecciona el texto de la tabla a mano.';
+    }
+  }
+
   _renderList() {
     if (this._loading) return skeletonLines(4);
     return html`
@@ -182,6 +241,7 @@ export class SurveyAdmin extends LitElement {
             <td>${(s.questions ?? []).length}</td>
             <td><div class="row-actions">
               <button class="ghost" @click=${() => this._edit(s)}>Editar</button>
+              <button class="ghost" @click=${() => this._openParticipants(s)}>Enlaces</button>
               ${s.status === 'draft' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'open')}>Abrir</button>` : null}
               ${s.status === 'open' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'closed')}>Cerrar</button>` : null}
               ${s.status === 'closed' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'open')}>Reabrir</button>` : null}
@@ -243,11 +303,43 @@ export class SurveyAdmin extends LitElement {
       </div>`;
   }
 
+  _renderParticipants() {
+    const total = this._partTokens.length;
+    const responded = this._partTokens.filter((t) => t.used).length;
+    return html`
+      <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
+      <h2>${this._partSurvey.title} · Participantes</h2>
+      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Pega el padrón y genera los enlaces personales.</p>
+      <div class="field">
+        <label for="pp">Una persona por línea: <code>email</code>, o <code>email,departamento</code>, o <code>email,departamento,fecha-alta</code></label>
+        <textarea id="pp" rows="6" placeholder="ana@tribbuapp.com,People,2024-01-15" .value=${this._partText}
+          @input=${(e) => { this._partText = e.target.value; }}></textarea>
+      </div>
+      <div class="save-row">
+        <button class="primary" ?disabled=${this._partBusy || !this._partText.trim()} @click=${() => this._generate()}>
+          ${this._partBusy ? 'Generando…' : 'Generar enlaces'}
+        </button>
+        ${total ? html`<button class="ghost" @click=${() => this._copyAll()}>${this._copiedAll ? '✓ Copiado' : 'Copiar todos (email, enlace)'}</button>` : null}
+      </div>
+      ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      ${total ? html`
+        <table>
+          <thead><tr><th>Email</th><th>Enlace personal</th><th>Estado</th></tr></thead>
+          <tbody>${this._partTokens.map((t) => html`<tr>
+            <td>${t.email}</td>
+            <td><input class="link" type="text" readonly .value=${this._linkFor(t.token)} @focus=${(e) => e.target.select()} /></td>
+            <td><span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span></td>
+          </tr>`)}</tbody>
+        </table>` : null}`;
+  }
+
   render() {
     return html`
       <h2>Encuestas de clima</h2>
       <p class="lead">Crea y gestiona las encuestas anónimas. Solo tú (People) ves esto; las respuestas son anónimas.</p>
-      ${this._phase === 'edit' ? this._renderEdit() : this._renderList()}`;
+      ${this._phase === 'edit' ? this._renderEdit()
+        : this._phase === 'participants' ? this._renderParticipants()
+        : this._renderList()}`;
   }
 }
 
