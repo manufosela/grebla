@@ -125,12 +125,12 @@ export class PokerTable extends LitElement {
       this._error = err instanceof Error ? err.message : 'No se pudo entrar en la sesión.';
     }
     this._subs = [
-      watchSession(this.sessionId, (s) => this._onSession(s), (e) => this._onError(e)),
+      watchSession(this.sessionId, (s, pending) => this._onSession(s, pending), (e) => this._onError(e)),
       watchPlayers(this.sessionId, (p) => { this._players = p; }, (e) => this._onError(e)),
     ];
   }
 
-  _onSession(session) {
+  _onSession(session, pending = false) {
     this._session = session;
     if (!session) return;
     // Al volver a votar o cambiar de tarea (nueva ronda), la carta elegida deja de valer.
@@ -145,15 +145,24 @@ export class PokerTable extends LitElement {
       this._backlogLoadedFor = session.squad?.linearLabel;
       this._loadBacklog(session.squad?.linearLabel);
     }
-    // Suscribirse a los votos SOLO cuando está revelado (antes las reglas rechazan
-    // leer la colección entera); al ocultar, cortar y limpiar.
-    if (session.revealed && !this._votesSub) {
-      this._votesSub = watchVotes(this.sessionId, (v) => { this._votes = v; }, (e) => this._onError(e));
+    // Suscribirse a los votos SOLO cuando el revelado está CONFIRMADO por el
+    // servidor (no en la escritura pendiente): la regla lee `revealed` del
+    // servidor, así que suscribirse con el revelado aún local da permission-denied.
+    if (session.revealed && !pending && !this._votesSub) {
+      this._votesSub = watchVotes(this.sessionId, (v) => { this._votes = v; }, (e) => this._onVotesError(e));
     } else if (!session.revealed && this._votesSub) {
       this._votesSub();
       this._votesSub = null;
       this._votes = [];
     }
+  }
+
+  /** Error del listener de votos: un permission-denied es la carrera del revelado
+   * (se reintenta con el próximo snapshot confirmado), no un fallo real. */
+  _onVotesError(err) {
+    if (this._votesSub) { this._votesSub(); this._votesSub = null; }
+    if (String(err?.code ?? '').includes('permission-denied')) return;
+    this._onError(err);
   }
 
   _onError(err) {

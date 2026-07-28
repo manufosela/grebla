@@ -123,11 +123,18 @@ export async function listSessions(ownerScope) {
   return batches.flat().sort((a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt));
 }
 
-/** Observa una sesión EN VIVO (tema/ronda/revelado cambian para todos a la vez). */
+/**
+ * Observa una sesión EN VIVO. Se piden los cambios de metadatos para poder
+ * distinguir el revelado OPTIMISTA local (escritura pendiente) del CONFIRMADO por
+ * el servidor: suscribirse a /votes con el revelado aún pendiente provoca un
+ * permission-denied transitorio (la regla lee `revealed` del servidor). Por eso
+ * `onData` recibe también `hasPendingWrites`.
+ */
 export function watchSession(sessionId, onData, onError) {
   return onSnapshot(
     doc(db, SESSIONS, sessionId),
-    (snap) => onData(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    { includeMetadataChanges: true },
+    (snap) => onData(snap.exists() ? { id: snap.id, ...snap.data() } : null, snap.metadata.hasPendingWrites),
     onError,
   );
 }
