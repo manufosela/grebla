@@ -9,7 +9,7 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './poker-table.js';
-import { listSessions, createSession, deleteSession, listSquads } from '../../lib/poker.js';
+import { listSessions, createSession, deleteSession, listSquads, getSession } from '../../lib/poker.js';
 
 export class PokerApp extends LitElement {
   static properties = {
@@ -24,6 +24,8 @@ export class PokerApp extends LitElement {
     _newMode: { state: true },
     _newSquad: { state: true },
     _squads: { state: true },
+    openSessionId: { attribute: false },
+    _copied: { state: true },
     _loading: { state: true },
     _error: { state: true },
   };
@@ -31,7 +33,8 @@ export class PokerApp extends LitElement {
   static styles = css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); }
     .detail { display: flex; flex-direction: column; gap: 1rem; }
-    .back { align-self: flex-start; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+    .detail-top { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: space-between; }
+    .back { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
     .back:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .lead { margin: 0 0 1rem; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .create { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.4rem; max-width: 34rem; }
@@ -68,9 +71,12 @@ export class PokerApp extends LitElement {
     this._newMode = 'simple';
     this._newSquad = '';
     this._squads = [];
+    this.openSessionId = null;
+    this._copied = false;
     this._loading = false;
     this._error = '';
     this._loadedFor = null;
+    this._openedShared = false;
   }
 
   /** De quién son las sesiones que se ven: la rama del supermanager, o su manager. */
@@ -83,11 +89,39 @@ export class PokerApp extends LitElement {
   }
 
   updated(changed) {
+    // Enlace compartido: abrir la sesión directamente en cuanto haya uid.
+    if ((changed.has('openSessionId') || changed.has('uid'))
+        && this.openSessionId && this.uid && !this._openedShared) {
+      this._openedShared = true;
+      this._openShared(this.openSessionId);
+    }
     if (!changed.has('leaderUid') && !changed.has('leaderUids') && !changed.has('canManage')) return;
     const key = this._sourcesKey;
     if (!key || key === this._loadedFor) return;
     this._loadedFor = key;
     this._loadList();
+  }
+
+  async _openShared(id) {
+    try {
+      const session = await getSession(id);
+      if (session) this._select(session);
+      else this._error = 'Esa sesión no existe o se ha cerrado.';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo abrir la sesión.';
+    }
+  }
+
+  async _shareLink(session) {
+    const url = `${location.origin}/poker?s=${session.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      this._copied = true;
+      setTimeout(() => { this._copied = false; }, 2000);
+    } catch {
+      // Sin permiso de portapapeles: se muestra la URL para copiarla a mano.
+      this._error = url;
+    }
   }
 
   async _loadList() {
@@ -143,7 +177,11 @@ export class PokerApp extends LitElement {
   _renderDetail() {
     const s = this._selected;
     return html`<div class="detail">
-      <button class="back" @click=${() => this._backToList()}>← Volver a las sesiones</button>
+      <div class="detail-top">
+        <button class="back" @click=${() => this._backToList()}>← Volver a las sesiones</button>
+        <button class="back" @click=${() => this._shareLink(s)}>${this._copied ? '✓ Enlace copiado' : '🔗 Compartir enlace'}</button>
+      </div>
+      ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <poker-table .sessionId=${s.id} .uid=${this.uid} .authorName=${this.authorName ?? ''}
         .canManage=${this.canManage && s.ownerLeaderUid === this.uid}></poker-table>
     </div>`;

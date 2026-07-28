@@ -15,6 +15,10 @@ import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
 
 const app = document.querySelector('poker-app');
 
+// Enlace compartido: /poker?s=<sessionId> abre esa sesión directamente, aunque no
+// salga en la lista acotada por equipo (RMR-TSK-0324).
+if (app) app.openSessionId = new URLSearchParams(location.search).get('s');
+
 onUserChanged(async (user) => {
   if (!user || !app) return;
   try {

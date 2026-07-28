@@ -123,6 +123,12 @@ export async function listSessions(ownerScope) {
   return batches.flat().sort((a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt));
 }
 
+/** Una sesión por id (para abrirla desde un enlace compartido, fuera de la lista). */
+export async function getSession(sessionId) {
+  const snap = await getDoc(doc(db, SESSIONS, sessionId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
 /**
  * Observa una sesión EN VIVO. Se piden los cambios de metadatos para poder
  * distinguir el revelado OPTIMISTA local (escritura pendiente) del CONFIRMADO por
