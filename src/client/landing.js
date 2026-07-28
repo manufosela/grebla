@@ -44,7 +44,7 @@ onUserChanged(async (user) => {
     // El superadmin (como el líder) aterriza en las herramientas —con vista de
     // toda la organización— y llega a la gestión con el conmutador «Gestión» o
     // el botón «volver a gestión» (RMR-BUG-0050). No se le redirige a /admin.
-    showTools();
+    showTools(canGovern(access));
     if (canGovern(access)) backToAdmin?.removeAttribute('hidden');
   } catch {
     showLanding();
@@ -57,7 +57,12 @@ function showLanding() {
   landing?.removeAttribute('hidden');
 }
 
-function showTools() {
+function showTools(canGovernInstance = false) {
   landing?.setAttribute('hidden', '');
   tools?.removeAttribute('hidden');
+  // Tarjetas solo para gobierno de instancia (p. ej. Encuestas de People): se
+  // ocultan a quien no es superadmin para no ofrecer una tool que no puede abrir.
+  for (const card of tools?.querySelectorAll('[data-admin-only]') ?? []) {
+    card.toggleAttribute('hidden', !canGovernInstance);
+  }
 }
