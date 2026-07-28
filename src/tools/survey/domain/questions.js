@@ -54,6 +54,32 @@ export function surveyDraftErrors({ title, questions, threshold } = {}) {
 }
 
 /**
+ * ¿Está `question` respondida en `responses`? Una escala respondida es un valor
+ * válido; un texto respondido es una cadena no vacía (los espacios no cuentan).
+ * Sirve para la navegación secuencial (una pregunta a la vez).
+ */
+export function isAnswered(question, responses) {
+  if (!question) return false;
+  const has = responses != null && Object.hasOwn(responses, question.id);
+  if (!has) return false;
+  const value = responses[question.id];
+  if (question.type === 'text') return String(value ?? '').trim().length > 0;
+  return validateAnswer(question, value);
+}
+
+/**
+ * ¿Se puede avanzar desde `question`? Si es obligatoria, debe estar respondida;
+ * si es opcional, se avanza siempre salvo que tenga una respuesta presente pero
+ * inválida (que no debería ocurrir desde la UI, pero lo blindamos).
+ */
+export function canAdvance(question, responses) {
+  if (!question) return false;
+  if (question.required) return isAnswered(question, responses);
+  const has = responses != null && Object.hasOwn(responses, question.id);
+  return !has || validateAnswer(question, responses[question.id]);
+}
+
+/**
  * Deja solo las respuestas cuyas claves son ids de preguntas de la encuesta y
  * descarta cualquier campo extra (que un cliente no cuele datos arbitrarios).
  */
@@ -74,7 +100,7 @@ export function sanitizeResponses(questions, responses) {
 export function validateResponses(questions, responses) {
   const errors = [];
   for (const q of questions ?? []) {
-    const answered = responses != null && Object.prototype.hasOwnProperty.call(responses, q.id);
+    const answered = responses != null && Object.hasOwn(responses, q.id);
     if (q.required && !answered) { errors.push({ id: q.id, error: 'required' }); continue; }
     if (answered && !validateAnswer(q, responses[q.id])) errors.push({ id: q.id, error: 'invalid' });
   }

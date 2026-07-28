@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors } from './questions.js';
+import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors, isAnswered, canAdvance } from './questions.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const q12a = { id: 'q1', type: 'scale', min: 1, max: 5, required: true };
@@ -49,6 +49,33 @@ describe('surveyDraftErrors', () => {
   });
   it('exige enunciado en cada pregunta', () => {
     expect(surveyDraftErrors({ ...ok, questions: [{ type: 'text', label: '' }] }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('isAnswered', () => {
+  it('una escala respondida con valor válido cuenta como respondida', () => {
+    expect(isAnswered(enps, { enps: 9 })).toBe(true);
+    expect(isAnswered(enps, { enps: 99 })).toBe(false);
+    expect(isAnswered(enps, {})).toBe(false);
+  });
+  it('un texto solo cuenta si no está vacío ni en blanco', () => {
+    expect(isAnswered(reason, { reason: 'algo' })).toBe(true);
+    expect(isAnswered(reason, { reason: '   ' })).toBe(false);
+    expect(isAnswered(reason, {})).toBe(false);
+  });
+});
+
+describe('canAdvance', () => {
+  it('en obligatoria exige respuesta', () => {
+    expect(canAdvance(enps, {})).toBe(false);
+    expect(canAdvance(enps, { enps: 8 })).toBe(true);
+  });
+  it('en opcional avanza aunque falte', () => {
+    expect(canAdvance(reason, {})).toBe(true);
+    expect(canAdvance(reason, { reason: '' })).toBe(true);
+  });
+  it('en opcional con respuesta presente pero inválida no avanza', () => {
+    expect(canAdvance({ id: 's', type: 'scale', min: 1, max: 5 }, { s: 99 })).toBe(false);
   });
 });
 
