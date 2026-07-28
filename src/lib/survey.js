@@ -65,6 +65,12 @@ export async function listTokens(surveyId) {
   return snap.docs.map((d) => ({ token: d.id, ...d.data() }));
 }
 
+/** Respuestas ANÓNIMAS de una encuesta (para los dashboards). Solo superadmin. */
+export async function listAnswers(surveyId) {
+  const snap = await getDocs(collection(db, 'surveys', surveyId, 'answers'));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 /**
  * Carga la encuesta abierta de un token y las respuestas previas (para editar).
  * @param {string} surveyId @param {string} token
