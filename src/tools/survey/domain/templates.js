@@ -10,9 +10,17 @@
  */
 
 import { QUESTION_TYPES, surveyDraftErrors, choiceOptions } from './questions.js';
+import { flowErrors } from './flow.js';
 
 /** Campos que se conservan de cada pregunta importada (whitelist anti-inyección). */
-const QUESTION_FIELDS = ['id', 'type', 'label', 'required', 'min', 'max', 'options'];
+const QUESTION_FIELDS = ['id', 'type', 'label', 'required', 'min', 'max', 'options', 'next', 'rules'];
+
+/** Normaliza las reglas de salto importadas: solo `{ equals, goto }` con tipos válidos. */
+function normalizeRules(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .filter((r) => r && (typeof r.equals === 'string' || typeof r.equals === 'number') && typeof r.goto === 'string' && r.goto)
+    .map((r) => ({ equals: r.equals, goto: r.goto }));
+}
 
 const Q12_LABELS = [
   'Sé lo que se espera de mí en el trabajo.',
@@ -62,6 +70,9 @@ function normalizeImportedQuestion(raw, i) {
     q.max = Number.isInteger(raw.max) ? raw.max : 5;
   }
   if (raw.type === 'choice') q.options = choiceOptions(raw);
+  if (typeof raw.next === 'string' && raw.next) q.next = raw.next;
+  const rules = normalizeRules(raw.rules);
+  if (rules.length) q.rules = rules;
   return QUESTION_FIELDS.reduce((acc, f) => (q[f] === undefined ? acc : { ...acc, [f]: q[f] }), {});
 }
 
@@ -82,7 +93,7 @@ export function parseTemplate(text) {
     throw new Error('El JSON no contiene ninguna pregunta.');
   }
   const questions = list.map(normalizeImportedQuestion);
-  const errors = surveyDraftErrors({ title: 'plantilla', threshold: 5, questions });
+  const errors = [...surveyDraftErrors({ title: 'plantilla', threshold: 5, questions }), ...flowErrors(questions)];
   if (errors.length) throw new Error(errors[0]);
   const title = typeof data?.title === 'string' ? data.title : '';
   return { title, questions };

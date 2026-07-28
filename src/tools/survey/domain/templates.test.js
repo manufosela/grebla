@@ -61,6 +61,23 @@ describe('serializeTemplate / parseTemplate', () => {
     expect(q).toMatchObject({ min: 1, max: 5 });
   });
 
+  it('preserva next y reglas de salto válidas', () => {
+    const parsed = parseTemplate(JSON.stringify({
+      questions: [
+        { id: 'a', type: 'choice', label: '¿Área?', options: ['Ventas', 'Otro'], rules: [{ equals: 'Ventas', goto: 'c' }], next: 'b' },
+        { id: 'b', type: 'text', label: 'b' },
+        { id: 'c', type: 'text', label: 'c' },
+      ],
+    }));
+    expect(parsed.questions[0].next).toBe('b');
+    expect(parsed.questions[0].rules).toEqual([{ equals: 'Ventas', goto: 'c' }]);
+  });
+
+  it('rechaza un flujo con destino inexistente o cíclico', () => {
+    expect(() => parseTemplate(JSON.stringify([{ id: 'a', type: 'text', label: 'a', next: 'zzz' }]))).toThrow();
+    expect(() => parseTemplate(JSON.stringify([{ id: 'a', type: 'text', label: 'a', next: 'a' }]))).toThrow();
+  });
+
   it('rechaza JSON inválido, sin preguntas o con tipo no soportado', () => {
     expect(() => parseTemplate('{no json')).toThrow(/JSON/);
     expect(() => parseTemplate('{"questions": []}')).toThrow(/pregunta/i);

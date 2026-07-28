@@ -10,6 +10,7 @@ import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
 import { climateTemplate, serializeTemplate, parseTemplate } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors, choiceOptions } from '../../tools/survey/domain/questions.js';
+import { END, flowErrors } from '../../tools/survey/domain/flow.js';
 import { parseParticipants } from '../../tools/survey/domain/participants.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
@@ -73,6 +74,11 @@ export class SurveyAdmin extends LitElement {
     .q-label { flex: 1 1 18rem; min-width: 0; }
     .opts-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
     .q-opts { display: flex; gap: 0.9rem; align-items: center; flex-wrap: wrap; font-size: 0.82rem; }
+    .flow { border-top: 1px dashed var(--rm-border, #e3ebef); padding-top: 0.55rem; margin-top: 0.2rem; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.82rem; }
+    .flow-line { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
+    .flow select, .flow input { font-size: 0.82rem; padding: 0.3rem 0.45rem; }
+    .rule { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; color: var(--rm-text, #1e3a5f); }
+    .flow .ghost { align-self: flex-start; }
     .q-opts label { display: inline-flex; align-items: center; gap: 0.3rem; }
     .q-move button, .q-del { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
     .q-del:hover { border-color: #b42318; color: #b42318; }
@@ -208,11 +214,40 @@ export class SurveyAdmin extends LitElement {
     this._questions = next;
   }
 
+  /** Normaliza una pregunta para persistir: opciones limpias, sin `next` vacío ni reglas sin destino. */
+  _normalizeQuestion(q) {
+    const out = { ...q };
+    if (out.type === 'choice') out.options = choiceOptions(out);
+    if (!out.next) delete out.next;
+    const rules = (Array.isArray(out.rules) ? out.rules : []).filter((r) => r && r.goto);
+    if (rules.length) out.rules = rules;
+    else delete out.rules;
+    return out;
+  }
+
+  _setNext(i, value) { this._patchQuestion(i, { next: value }); }
+
+  _addRule(i) {
+    const q = this._questions[i];
+    const equals = q.type === 'choice' ? (choiceOptions(q)[0] ?? '') : (q.min ?? 1);
+    this._patchQuestion(i, { rules: [...(q.rules ?? []), { equals, goto: '' }] });
+  }
+
+  _setRule(i, j, patch) {
+    const rules = (this._questions[i].rules ?? []).map((r, k) => (k === j ? { ...r, ...patch } : r));
+    this._patchQuestion(i, { rules });
+  }
+
+  _removeRule(i, j) {
+    this._patchQuestion(i, { rules: (this._questions[i].rules ?? []).filter((_, k) => k !== j) });
+  }
+
   async _save() {
     const title = this._title.trim();
-    // Limpia las opciones de las preguntas de opción única (quita líneas vacías) antes de validar/persistir.
-    const questions = this._questions.map((q) => (q.type === 'choice' ? { ...q, options: choiceOptions(q) } : q));
-    const errors = surveyDraftErrors({ title, questions, threshold: this._threshold });
+    // Normaliza antes de validar/persistir: limpia opciones de choice, quita el
+    // `next` vacío («siguiente en orden») y las reglas sin destino.
+    const questions = this._questions.map((q) => this._normalizeQuestion(q));
+    const errors = [...surveyDraftErrors({ title, questions, threshold: this._threshold }), ...flowErrors(questions)];
     if (errors.length) { this._error = errors[0]; return; }
     this._saving = true;
     this._error = '';
@@ -411,6 +446,37 @@ export class SurveyAdmin extends LitElement {
         : html`<p class="empty">Aún no hay encuestas. Crea la primera.</p>`}`;
   }
 
+  /** Selector de destino (siguiente en orden / otra pregunta / terminar) para next y goto. */
+  _renderDestSelect(value, onChange, selfId) {
+    return html`<select @change=${(e) => onChange(e.target.value)}>
+      <option value="" ?selected=${!value}>Siguiente en orden</option>
+      ${this._questions.map((other, idx) => (other.id === selfId ? null : html`<option value=${other.id} ?selected=${value === other.id}>P${idx + 1}: ${(other.label || '(sin enunciado)').slice(0, 32)}</option>`))}
+      <option value=${END} ?selected=${value === END}>Terminar encuesta</option>
+    </select>`;
+  }
+
+  _renderFlow(q, i) {
+    const canBranch = q.type === 'choice' || q.type === 'scale';
+    const rules = q.rules ?? [];
+    return html`<div class="flow">
+      <label class="flow-line">Al responder, ir a: ${this._renderDestSelect(q.next, (v) => this._setNext(i, v), q.id)}</label>
+      ${canBranch ? html`
+        ${rules.map((r, j) => html`<div class="rule">
+          <span>Si la respuesta es</span>
+          ${q.type === 'choice'
+            ? html`<select @change=${(e) => this._setRule(i, j, { equals: e.target.value })}>
+                ${choiceOptions(q).map((opt) => html`<option value=${opt} ?selected=${r.equals === opt}>${opt}</option>`)}
+              </select>`
+            : html`<input class="num" type="number" .value=${String(r.equals ?? '')}
+                @input=${(e) => this._setRule(i, j, { equals: Number(e.target.value) })} />`}
+          <span>→ ir a</span>
+          ${this._renderDestSelect(r.goto, (v) => this._setRule(i, j, { goto: v }), q.id)}
+          <button class="q-del" title="Quitar regla" @click=${() => this._removeRule(i, j)}>✕</button>
+        </div>`)}
+        <button class="ghost" @click=${() => this._addRule(i)}>+ Regla condicional</button>` : null}
+    </div>`;
+  }
+
   _renderQuestion(q, i) {
     return html`<div class="q">
       <div class="q-top">
@@ -437,6 +503,7 @@ export class SurveyAdmin extends LitElement {
         <label><input type="checkbox" .checked=${q.required !== false}
           @change=${(e) => this._patchQuestion(i, { required: e.target.checked })} /> Obligatoria</label>
       </div>
+      ${this._renderFlow(q, i)}
     </div>`;
   }
 
