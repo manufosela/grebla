@@ -22,6 +22,7 @@ import {
 import { addViewerByEmail } from '../lib/viewers.js';
 import { addSurveyAdminByEmail } from '../lib/survey.js';
 import './catalog-manager.js';
+import '@manufosela/loading-layer';
 import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
@@ -127,6 +128,7 @@ export class SuperadminPanel extends LitElement {
     _users: { state: true },
     _newUserEmail: { state: true },
     _newUserRole: { state: true },
+    _addingUser: { state: true },
     _confirmRoleChange: { state: true },
     _confirmDelete: { state: true },
     _usersError: { state: true },
@@ -205,11 +207,15 @@ export class SuperadminPanel extends LitElement {
        panel. Ancho mínimo para que las columnas no se compriman. */
     .table-wrap { overflow-x: auto; }
     .table-wrap table { min-width: 46rem; }
-    .access summary { cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--rm-text, #111827); list-style: none; padding: 0.2rem 0.55rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; display: inline-block; white-space: nowrap; }
+    /* Resumen de ancho FIJO para que todas las celdas (— / Superadmin / People
+       account) tengan el mismo ancho y la columna no baile. */
+    .access summary { cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--rm-text, #111827); list-style: none; padding: 0.25rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; display: inline-flex; justify-content: space-between; align-items: center; gap: 0.5rem; min-width: 8.5rem; box-sizing: border-box; white-space: nowrap; }
     .access summary::-webkit-details-marker { display: none; }
-    .access summary::after { content: ' ▾'; color: var(--rm-muted, #6b7280); }
+    .access summary::after { content: '▾'; color: var(--rm-muted, #6b7280); }
     .access[open] summary { border-color: var(--rm-accent, #3b82f6); color: var(--rm-accent, #3b82f6); }
-    .access-opts { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.4rem; padding: 0.45rem 0.55rem; border: 1px solid var(--rm-border, #eef0f2); border-radius: 6px; font-size: 0.82rem; white-space: nowrap; }
+    /* Opciones FLOTANTES (position:fixed, posicionadas en JS): no empujan la tabla
+       ni las recorta el scroll horizontal del contenedor. */
+    .access-opts { position: fixed; z-index: 10000; display: flex; flex-direction: column; gap: 0.4rem; padding: 0.5rem 0.65rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); font-size: 0.82rem; white-space: nowrap; }
     .access-opts label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
     .access-opts label.implied { color: var(--rm-muted, #6b7280); cursor: default; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
@@ -363,6 +369,7 @@ export class SuperadminPanel extends LitElement {
     this._newUserEmail = '';
     /** @type {'viewer'|'leader'} rol inicial para el alta por email */
     this._newUserRole = 'viewer';
+    this._addingUser = false;
     /** @type {{ uid: string, role: import('../lib/accessRoles.js').AccessRole|'none' }|null} */
     this._confirmRoleChange = null;
     /** @type {string|null} uid del usuario pendiente de confirmar borrado. */
@@ -791,9 +798,10 @@ export class SuperadminPanel extends LitElement {
 
   async _addUser() {
     const email = this._newUserEmail.trim();
-    if (!email) return;
+    if (!email || this._addingUser) return;
     this._usersError = '';
     this._usersNotice = '';
+    this._addingUser = true; // overlay de carga: bloquea clics mientras provisiona
     try {
       if (this._newUserRole === 'leader') {
         await addLeaderByEmail(email);
@@ -807,6 +815,8 @@ export class SuperadminPanel extends LitElement {
       await Promise.all([this._loadUsers(), this._loadLeaders()]);
     } catch (err) {
       this._usersError = err instanceof Error ? err.message : 'No se pudo añadir el usuario.';
+    } finally {
+      this._addingUser = false;
     }
   }
 
@@ -899,6 +909,7 @@ export class SuperadminPanel extends LitElement {
 
   render() {
     return html`
+      <loading-layer ?visible=${this._addingUser} message="Añadiendo usuario…"></loading-layer>
       <div class="bar">
         <h1>Gestión de la organización</h1>
         ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #6b7280)">Modo solo lectura (viewer)</span>` : null}
@@ -1452,7 +1463,7 @@ export class SuperadminPanel extends LitElement {
             <option value="leader" ?selected=${this._newUserRole === 'leader'}>Manager</option>
             <option value="surveyAdmin" ?selected=${this._newUserRole === 'surveyAdmin'}>People account</option>
           </select>
-          <button class="primary" ?disabled=${!this._newUserEmail.trim()} @click=${() => this._addUser()}>Añadir usuario</button>
+          <button class="primary" ?disabled=${!this._newUserEmail.trim() || this._addingUser} @click=${() => this._addUser()}>${this._addingUser ? 'Añadiendo…' : 'Añadir usuario'}</button>
         </div>
         ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
         ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
@@ -1533,7 +1544,7 @@ export class SuperadminPanel extends LitElement {
     const summary = user.isAdmin ? 'Superadmin' : (user.isSurveyAdmin ? 'People account' : '—');
     return html`
       <td>
-        <details class="access">
+        <details class="access" @toggle=${this._positionAccessPopover}>
           <summary aria-label=${`Accesos de ${who}`}>${summary}</summary>
           <div class="access-opts">
             <label><input type="checkbox" .checked=${user.isAdmin}
@@ -1570,6 +1581,19 @@ export class SuperadminPanel extends LitElement {
       this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el superadmin.';
       await this._loadUsers();
     }
+  }
+
+  /** Posiciona el desplegable de Accesos como FLOTANTE (position:fixed) al abrirlo,
+   * para que no empuje la tabla ni lo recorte el scroll horizontal del contenedor. */
+  _positionAccessPopover(e) {
+    const details = e.currentTarget;
+    if (!details.open) return;
+    const summary = details.querySelector('summary');
+    const opts = details.querySelector('.access-opts');
+    if (!summary || !opts) return;
+    const rect = summary.getBoundingClientRect();
+    opts.style.top = `${rect.bottom + 4}px`;
+    opts.style.left = `${rect.left}px`;
   }
 
   /** Concede o retira el rol «gestor de encuestas» con el checkbox de la fila. @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} isSurveyAdmin */
