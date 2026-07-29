@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseParticipants } from './participants.js';
+import { parseParticipants, padronToParticipants } from './participants.js';
 
 describe('parseParticipants', () => {
   it('parsea email + departamento + fecha de alta', () => {
@@ -43,5 +43,37 @@ describe('parseParticipants', () => {
 
   it('no confunde «no-email» (contiene «email») con una cabecera', () => {
     expect(parseParticipants('no-email\nc@x.com')).toEqual([{ email: 'c@x.com', metadata: {} }]);
+  });
+});
+
+describe('padronToParticipants', () => {
+  const padron = [
+    { email: 'a@x.com', department: 'Eng', hireDate: '2022-01-01', active: true },
+    { email: 'b@x.com', department: 'People', hireDate: '2020-05-01' },
+    { email: 'c@x.com', department: 'Eng', active: false },
+    { email: 'sin-arroba', department: 'Eng' },
+  ];
+
+  it('mapea hireDate→startDate y descarta emails inválidos', () => {
+    expect(padronToParticipants(padron, { onlyActive: false })).toEqual([
+      { email: 'a@x.com', metadata: { department: 'Eng', startDate: '2022-01-01' } },
+      { email: 'b@x.com', metadata: { department: 'People', startDate: '2020-05-01' } },
+      { email: 'c@x.com', metadata: { department: 'Eng' } },
+    ]);
+  });
+
+  it('por defecto excluye a las personas de baja', () => {
+    const out = padronToParticipants(padron);
+    expect(out.map((p) => p.email)).toEqual(['a@x.com', 'b@x.com']);
+  });
+
+  it('filtra por departamento', () => {
+    const out = padronToParticipants(padron, { department: 'Eng', onlyActive: false });
+    expect(out.map((p) => p.email)).toEqual(['a@x.com', 'c@x.com']);
+  });
+
+  it('nunca expone fecha de nacimiento ni edad en el metadata', () => {
+    const out = padronToParticipants([{ email: 'd@x.com', department: 'X', birthDate: '1990-01-01' }]);
+    expect(out[0].metadata).toEqual({ department: 'X' });
   });
 });

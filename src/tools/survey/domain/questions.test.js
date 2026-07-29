@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors, isAnswered, canAdvance, choiceOptions } from './questions.js';
+import { scaleRange, validateAnswer, validateResponses, sanitizeResponses, surveyDraftErrors, isAnswered, canAdvance, choiceOptions, draftToPayload } from './questions.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const q12a = { id: 'q1', type: 'scale', min: 1, max: 5, required: true };
@@ -70,6 +70,17 @@ describe('surveyDraftErrors', () => {
   });
   it('exige enunciado en cada pregunta', () => {
     expect(surveyDraftErrors({ ...ok, questions: [{ type: 'text', label: '' }] }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('draftToPayload', () => {
+  it('incluye la escala por defecto (persistida igual en alta y edición)', () => {
+    const payload = draftToPayload({ title: '  Clima  ', questions: [enps], threshold: 7, defaultScale: { min: 2, max: 8 } });
+    expect(payload).toEqual({ title: 'Clima', questions: [enps], threshold: 7, defaultScale: { min: 2, max: 8 } });
+  });
+  it('cae a umbral 5 y escala 1–5 cuando faltan o no son enteros', () => {
+    const payload = draftToPayload({ title: 'x', questions: [], threshold: 'no', defaultScale: {} });
+    expect(payload).toMatchObject({ threshold: 5, defaultScale: { min: 1, max: 5 } });
   });
 });
 

@@ -8,10 +8,11 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
-import { climateTemplate, serializeTemplate, parseTemplate } from '../../tools/survey/domain/templates.js';
-import { surveyDraftErrors, choiceOptions } from '../../tools/survey/domain/questions.js';
+import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
+import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
 import { END, flowErrors } from '../../tools/survey/domain/flow.js';
-import { parseParticipants } from '../../tools/survey/domain/participants.js';
+import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
+import { listPadron } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
@@ -34,11 +35,17 @@ export class SurveyAdmin extends LitElement {
     _title: { state: true },
     _questions: { state: true },
     _threshold: { state: true },
+    _defaultMin: { state: true },
+    _defaultMax: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
     _partText: { state: true },
     _partTokens: { state: true },
     _partBusy: { state: true },
+    _padron: { state: true },
+    _padronDept: { state: true },
+    _padronActive: { state: true },
+    _padronError: { state: true },
     _copiedAll: { state: true },
     _resSurvey: { state: true },
     _resAnswers: { state: true },
@@ -119,11 +126,17 @@ export class SurveyAdmin extends LitElement {
     this._title = '';
     this._questions = [];
     this._threshold = 5;
+    this._defaultMin = 1;
+    this._defaultMax = 5;
     this._saving = false;
     this._partSurvey = null;
     this._partText = '';
     this._partTokens = [];
     this._partBusy = false;
+    this._padron = [];
+    this._padronDept = '';
+    this._padronActive = true;
+    this._padronError = '';
     this._copiedAll = false;
     this._resSurvey = null;
     this._resAnswers = [];
@@ -155,6 +168,8 @@ export class SurveyAdmin extends LitElement {
     this._title = '';
     this._questions = [];
     this._threshold = 5;
+    this._defaultMin = 1;
+    this._defaultMax = 5;
     this._error = '';
     this._phase = 'edit';
   }
@@ -164,6 +179,8 @@ export class SurveyAdmin extends LitElement {
     this._title = survey.title ?? '';
     this._questions = (survey.questions ?? []).map((q) => ({ ...q }));
     this._threshold = Number.isInteger(survey.threshold) ? survey.threshold : 5;
+    this._defaultMin = Number.isInteger(survey.defaultScale?.min) ? survey.defaultScale.min : 1;
+    this._defaultMax = Number.isInteger(survey.defaultScale?.max) ? survey.defaultScale.max : 5;
     this._error = '';
     this._phase = 'edit';
   }
@@ -198,12 +215,26 @@ export class SurveyAdmin extends LitElement {
     URL.revokeObjectURL(url);
   }
 
+  /** Importa preguntas simples desde un CSV (usa la escala por defecto de la encuesta). */
+  async _onQuestionsCsv(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const questions = parseQuestionsCsv(await file.text(), { min: this._defaultMin, max: this._defaultMax });
+      this._questions = questions.map((q) => ({ ...q, id: crypto.randomUUID() }));
+      this._error = '';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo importar el CSV.';
+    }
+  }
+
   _addQuestion(type) {
     const base = { id: crypto.randomUUID(), label: '' };
     let q;
     if (type === 'text') q = { ...base, type: 'text', required: false };
     else if (type === 'choice') q = { ...base, type: 'choice', required: true, options: [] };
-    else q = { ...base, type: 'scale', min: 1, max: 5, required: true };
+    else q = { ...base, type: 'scale', min: this._defaultMin, max: this._defaultMax, required: true };
     this._questions = [...this._questions, q];
   }
 
@@ -256,12 +287,18 @@ export class SurveyAdmin extends LitElement {
     // Normaliza antes de validar/persistir: limpia opciones de choice, quita el
     // `next` vacío («siguiente en orden») y las reglas sin destino.
     const questions = this._questions.map((q) => this._normalizeQuestion(q));
+    const defaultScale = { min: this._defaultMin, max: this._defaultMax };
+    if (!Number.isInteger(defaultScale.min) || !Number.isInteger(defaultScale.max) || defaultScale.min < 0 || defaultScale.min >= defaultScale.max) {
+      this._error = 'La escala por defecto no es válida (min entero ≥ 0 y menor que max).';
+      return;
+    }
     const errors = [...surveyDraftErrors({ title, questions, threshold: this._threshold }), ...flowErrors(questions)];
     if (errors.length) { this._error = errors[0]; return; }
     this._saving = true;
     this._error = '';
     try {
-      const payload = { title, questions, threshold: this._threshold };
+      // Mismo payload (con defaultScale) para alta y edición.
+      const payload = draftToPayload({ title, questions, threshold: this._threshold, defaultScale });
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
       await this._loadList();
@@ -304,13 +341,34 @@ export class SurveyAdmin extends LitElement {
     this._partSurvey = survey;
     this._partText = '';
     this._partTokens = [];
+    this._padron = [];
+    this._padronDept = '';
+    this._padronActive = true;
     this._error = '';
+    this._padronError = '';
     this._phase = 'participants';
+    // Cargas independientes: un fallo del padrón NO debe ocultarse como «vacío»
+    // ni impedir ver los tokens ya generados.
     try {
       this._partTokens = await listTokens(survey.id);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los participantes.';
     }
+    try {
+      this._padron = await listPadron();
+    } catch (err) {
+      this._padronError = err instanceof Error ? err.message : 'No se pudo cargar el padrón.';
+    }
+  }
+
+  /** Departamentos únicos presentes en el padrón, para el filtro. */
+  get _padronDepartments() {
+    return [...new Set(this._padron.map((p) => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }
+
+  /** Personas del padrón que recibirían enlace con el filtro actual. */
+  get _padronSelection() {
+    return padronToParticipants(this._padron, { department: this._padronDept || null, onlyActive: this._padronActive });
   }
 
   /** Lee un CSV subido y vuelca su contenido al área de texto para revisar. */
@@ -326,9 +384,9 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
-  async _generate() {
-    const participants = parseParticipants(this._partText);
-    if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
+  /** Crea los tokens de una lista de participantes y recarga la tabla. */
+  async _createTokens(participants) {
+    if (!participants.length) { this._error = 'No hay ningún participante válido.'; return; }
     this._partBusy = true;
     this._error = '';
     try {
@@ -340,6 +398,18 @@ export class SurveyAdmin extends LitElement {
     } finally {
       this._partBusy = false;
     }
+  }
+
+  _generate() {
+    const participants = parseParticipants(this._partText);
+    if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
+    return this._createTokens(participants);
+  }
+
+  _generateFromPadron() {
+    const participants = this._padronSelection;
+    if (!participants.length) { this._error = 'El padrón no tiene a nadie con ese filtro.'; return; }
+    return this._createTokens(participants);
   }
 
   _linkFor(token) {
@@ -558,6 +628,15 @@ export class SurveyAdmin extends LitElement {
         <input id="th" class="num" type="number" min="2" .value=${String(this._threshold)}
           @input=${(e) => { this._threshold = Number(e.target.value) || 5; }} />
       </div>
+      <div class="field">
+        <label>Escala por defecto de las preguntas (la usan las de escala nuevas y el CSV)</label>
+        <div class="q-opts">
+          <label>de <input class="num" type="number" .value=${String(this._defaultMin)}
+            @input=${(e) => { this._defaultMin = Number(e.target.value); }} /></label>
+          <label>a <input class="num" type="number" .value=${String(this._defaultMax)}
+            @input=${(e) => { this._defaultMax = Number(e.target.value); }} /></label>
+        </div>
+      </div>
       <h2>Preguntas</h2>
       ${this._questions.length
         ? this._questions.map((q, i) => this._renderQuestion(q, i))
@@ -567,13 +646,45 @@ export class SurveyAdmin extends LitElement {
         <button class="ghost" @click=${() => this._addQuestion('text')}>+ Pregunta de texto</button>
         <button class="ghost" @click=${() => this._addQuestion('choice')}>+ Pregunta de opción</button>
         <button class="ghost" @click=${() => this._loadTemplate()}>Plantilla eNPS + Q12</button>
+        <label class="ghost">Importar CSV<input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onQuestionsCsv(e)} hidden /></label>
         <label class="ghost">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
         <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
+      <p class="lead" style="margin-top:0.4rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen con JSON o el editor de reglas.</p>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">
         <button class="primary" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar'}</button>
       </div>`;
+  }
+
+  /** Bloque del padrón en Participantes: error de carga, vacío o el generador. */
+  _renderPadronBlock() {
+    if (this._padronError) return html`<p class="error">No se pudo cargar el padrón: ${this._padronError}</p>`;
+    if (this._padron.length) return this._renderPadronSource();
+    return html`<p class="lead">El padrón está vacío. Puedes rellenarlo en «Padrón de empresa» o generar los enlaces con un CSV aquí abajo.</p>`;
+  }
+
+  /** Generar enlaces tirando del padrón de empresa, con filtro por departamento y activos. */
+  _renderPadronSource() {
+    const sel = this._padronSelection;
+    return html`<div class="field">
+      <label>Desde el <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}). Filtra y genera un enlace por persona; los metadatos (departamento, antigüedad) salen del padrón.</label>
+      <div class="q-opts">
+        <label>Departamento
+          <select @change=${(e) => { this._padronDept = e.target.value; }}>
+            <option value="" ?selected=${!this._padronDept}>Todos</option>
+            ${this._padronDepartments.map((d) => html`<option value=${d} ?selected=${this._padronDept === d}>${d}</option>`)}
+          </select>
+        </label>
+        <label><input type="checkbox" .checked=${this._padronActive}
+          @change=${(e) => { this._padronActive = e.target.checked; }} /> Solo activos</label>
+      </div>
+      <div class="save-row">
+        <button class="primary" ?disabled=${this._partBusy || !sel.length} @click=${() => this._generateFromPadron()}>
+          ${this._partBusy ? 'Generando…' : `Generar enlaces desde el padrón (${sel.length})`}
+        </button>
+      </div>
+    </div>`;
   }
 
   _renderParticipants() {
@@ -582,7 +693,9 @@ export class SurveyAdmin extends LitElement {
     return html`
       <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
       <h2>${this._partSurvey.title} · Participantes</h2>
-      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Pega el padrón y genera los enlaces personales.</p>
+      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Genera los enlaces personales desde el padrón o subiendo un CSV.</p>
+      ${this._renderPadronBlock()}
+      <h3>O bien, sube o pega un CSV</h3>
       <div class="field">
         <label for="pp">Sube un <strong>CSV</strong> o pega el padrón. Una persona por fila. Columnas:
           <code>email</code> (obligatoria), <code>departamento</code> y <code>fecha_alta</code> (YYYY-MM-DD, opcionales).

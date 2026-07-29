@@ -46,6 +46,94 @@ export function climateTemplate() {
   ];
 }
 
+/**
+ * Parser CSV (RFC4180): respeta campos entre comillas dobles, comas y saltos de
+ * línea dentro de comillas y comillas escapadas (`""`). Devuelve filas de celdas
+ * (recortadas), descartando las filas totalmente vacías.
+ */
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cur = '';
+  let inQuotes = false;
+  const s = String(text ?? '');
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i];
+    if (inQuotes) {
+      if (ch === '"' && s[i + 1] === '"') { cur += '"'; i += 1; }
+      else if (ch === '"') inQuotes = false;
+      else cur += ch;
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(cur); cur = '';
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && s[i + 1] === '\n') i += 1; // CRLF
+      row.push(cur); cur = '';
+      rows.push(row); row = [];
+    } else {
+      cur += ch;
+    }
+  }
+  row.push(cur);
+  rows.push(row);
+  return rows.map((r) => r.map((c) => c.trim())).filter((r) => r.some((c) => c !== ''));
+}
+
+const CSV_HEADER = {
+  type: /^tipo|type/,
+  label: /enunciado|pregunta|label|texto/,
+  min: /^min/,
+  max: /^max/,
+  required: /oblig|required|requerida/,
+  options: /opci|option/,
+};
+const TRUEISH = new Set(['si', 'sí', 'yes', 'true', '1', 'x']);
+
+/**
+ * Parsea preguntas SIMPLES (sin flujo condicional) desde un CSV con columnas
+ * `tipo,enunciado,min,max,obligatoria,opciones`. Con cabecera mapea por nombre en
+ * cualquier orden; sin cabecera, ese orden posicional. Las escalas sin min/max
+ * usan `defaultScale`; las `choice` parten `opciones` por `|`. Lanza un Error con
+ * mensaje claro si algo no encaja. Los saltos se hacen con JSON / el creador visual.
+ * @param {string} text @param {{min:number,max:number}} [defaultScale]
+ * @returns {Array<object>}
+ */
+export function parseQuestionsCsv(text, defaultScale = { min: 1, max: 5 }) {
+  const rows = parseCsvRows(text);
+  if (!rows.length) throw new Error('El CSV está vacío.');
+
+  const cols = { type: 0, label: 1, min: 2, max: 3, required: 4, options: 5 };
+  let dataRows = rows;
+  const header = rows[0].map((cell) => cell.toLowerCase());
+  // Es cabecera si la primera fila tiene, en CUALQUIER orden, una columna de tipo
+  // y otra de enunciado (una fila de datos empieza por scale/text/choice, no por «tipo»).
+  const looksLikeHeader = header.some((cell) => CSV_HEADER.type.test(cell)) && header.some((cell) => CSV_HEADER.label.test(cell));
+  if (looksLikeHeader) {
+    for (const key of Object.keys(cols)) cols[key] = header.findIndex((cell) => CSV_HEADER[key].test(cell));
+    dataRows = rows.slice(1);
+  }
+
+  const cell = (cells, key) => (cols[key] >= 0 ? (cells[cols[key]] ?? '').trim() : '');
+  const questions = dataRows.map((cells, i) => {
+    const type = cell(cells, 'type').toLowerCase();
+    if (!QUESTION_TYPES.includes(type)) throw new Error(`La fila ${i + 1} tiene un tipo no soportado: «${type || '(vacío)'}».`);
+    const q = { type, label: cell(cells, 'label'), required: TRUEISH.has(cell(cells, 'required').toLowerCase()) };
+    if (type === 'scale') {
+      const minRaw = cell(cells, 'min');
+      const maxRaw = cell(cells, 'max');
+      q.min = minRaw !== '' && Number.isInteger(Number(minRaw)) ? Number(minRaw) : defaultScale.min;
+      q.max = maxRaw !== '' && Number.isInteger(Number(maxRaw)) ? Number(maxRaw) : defaultScale.max;
+    }
+    if (type === 'choice') q.options = cell(cells, 'options').split('|').map((o) => o.trim()).filter(Boolean);
+    return q;
+  });
+
+  const errors = surveyDraftErrors({ title: 'csv', threshold: 5, questions });
+  if (errors.length) throw new Error(errors[0]);
+  return questions;
+}
+
 /** Serializa una plantilla a JSON legible (con salto de línea) para descargar. */
 export function serializeTemplate({ title = '', questions = [] } = {}) {
   return JSON.stringify({ version: 1, title, questions }, null, 2);
