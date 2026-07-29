@@ -1,0 +1,7 @@
+{
+  "_comment": "Copia este fichero a deploy.config.json (gitignored) y pon TUS cuentas. Lo usa scripts/deploy-all.mjs.",
+  "instances": [
+    { "name": "demo", "project": "grebla-app", "account": "cuenta-del-demo@example.com", "buildScript": "build" },
+    { "name": "tribbu", "project": "grebla-tribbu", "account": "cuenta-de-tribbu@example.com", "buildScript": "build:tribbu" }
+  ]
+}

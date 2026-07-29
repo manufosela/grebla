@@ -12,6 +12,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+# cuentas de despliegue por instancia (deploy:all) — nunca en el repo público
+deploy.config.json
 
 # firebase — claves de servicio / Admin SDK (NUNCA commitear)
 serviceAccountKey.json
