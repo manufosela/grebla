@@ -92,13 +92,27 @@ if (themeToggle) {
 // persistente cuyo botón borra TODAS las cachés y recarga.
 const SW_UPDATE_POLL_MS = 60 * 60 * 1000;
 
-/** Borra TODAS las cachés y recarga: fuerza traer el bundle nuevo (de-cachear). */
+/**
+ * Fuerza traer el bundle nuevo: borra TODAS las cachés Y **des-registra el
+ * service worker** antes de recargar. Sin el unregister, el SW viejo (que sirve
+ * los assets cache-first) podía re-servir el bundle anterior y el aviso no se
+ * quitaba nunca; al des-registrarlo, la recarga va directa a la red y el SW se
+ * vuelve a registrar fresco.
+ */
 async function forceUpdate() {
   try {
     const keys = await caches.keys();
     await Promise.all(keys.map((key) => caches.delete(key)));
   } catch {
     /* sin Cache API igualmente se recarga con red */
+  }
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((reg) => reg.unregister()));
+    }
+  } catch {
+    /* sin SW igualmente se recarga */
   }
   location.reload();
 }
