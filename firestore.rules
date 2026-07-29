@@ -735,6 +735,12 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Biblioteca de plantillas de encuesta (conjuntos de preguntas reutilizables).
+    // Las gestiona People (superadmin o gestor de encuestas), como /surveys.
+    match /surveyTemplates/{templateId} {
+      allow read, write: if isSuperAdmin() || isSurveyAdmin();
+    }
+
     // Padrón de empresa (RMR-TSK-0333): personas + metadatos que alimentan la
     // segmentación de las encuestas. Lo gestiona People (superadmin o gestor de
     // encuestas); nadie más lo lee (contiene email + fecha de nacimiento).
