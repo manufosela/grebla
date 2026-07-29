@@ -706,7 +706,11 @@ service cloud.firestore {
     // Fase 1: «admin» = superadmin; el rol People como eje propio es card aparte.
     match /surveys/{surveyId} {
       allow read: if isSuperAdmin() || isSurveyAdmin();
-      allow write: if isSuperAdmin() || isSurveyAdmin();
+      allow create, update: if isSuperAdmin() || isSurveyAdmin();
+      // El borrado (con tokens/answers en cascada) SOLO lo hace la CF deleteSurvey
+      // (Admin SDK, verifica superadmin); el cliente nunca borra directamente para
+      // no dejar subcolecciones huérfanas.
+      allow delete: if false;
 
       // Padrón/tokens: email + metadatos de cada persona (lado admin). Los genera
       // la CF al importar el CSV; el cliente NO escribe. El admin los lee para el

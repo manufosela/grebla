@@ -16,7 +16,7 @@ import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
 import {
-  listSurveys, createSurvey, updateSurvey, setSurveyStatus, createSurveyTokens, listTokens, listAnswers,
+  listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, createSurveyTokens, listTokens, listAnswers,
 } from '../../lib/survey.js';
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
@@ -24,9 +24,12 @@ const QUESTION_KIND = { scale: 'Escala', text: 'Texto', choice: 'Opción única'
 
 export class SurveyAdmin extends LitElement {
   static properties = {
+    canDelete: { type: Boolean }, // solo superadmin: el glue lo activa
     _phase: { state: true }, // 'list' | 'edit'
     _surveys: { state: true },
     _loading: { state: true },
+    _confirmDeleteId: { state: true },
+    _deletingId: { state: true },
     _editId: { state: true },
     _title: { state: true },
     _questions: { state: true },
@@ -53,6 +56,9 @@ export class SurveyAdmin extends LitElement {
     .primary:disabled { opacity: 0.5; cursor: default; }
     .ghost { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); padding: 0.4rem 0.8rem; font-size: 0.82rem; }
     .ghost:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
+    .ghost.danger { color: #b42318; }
+    .ghost.danger:hover { border-color: #b42318; color: #b42318; }
+    .ghost:disabled { opacity: 0.5; cursor: default; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #5b6b7d); font-weight: 600; font-size: 0.78rem; }
@@ -103,9 +109,12 @@ export class SurveyAdmin extends LitElement {
 
   constructor() {
     super();
+    this.canDelete = false;
     this._phase = 'list';
     this._surveys = [];
     this._loading = false;
+    this._confirmDeleteId = null;
+    this._deletingId = null;
     this._editId = null;
     this._title = '';
     this._questions = [];
@@ -273,6 +282,24 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
+  _askDelete(survey) { this._confirmDeleteId = survey.id; this._error = ''; }
+  _cancelDelete() { this._confirmDeleteId = null; }
+
+  /** Borra la encuesta y sus datos (CF, solo superadmin). Tras confirmación inline. */
+  async _deleteSurvey(survey) {
+    this._deletingId = survey.id;
+    this._error = '';
+    try {
+      await deleteSurvey(survey.id);
+      this._confirmDeleteId = null;
+      await this._loadList();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo borrar la encuesta.';
+    } finally {
+      this._deletingId = null;
+    }
+  }
+
   async _openParticipants(survey) {
     this._partSurvey = survey;
     this._partText = '';
@@ -418,6 +445,16 @@ export class SurveyAdmin extends LitElement {
         : html`<p class="empty">Aún no hay respuestas.</p>`}`;
   }
 
+  /** Botón de borrar, o confirmación inline si esta encuesta está pendiente de confirmar. */
+  _renderDeleteAction(s) {
+    if (this._confirmDeleteId !== s.id) {
+      return html`<button class="ghost danger" @click=${() => this._askDelete(s)}>Borrar</button>`;
+    }
+    const busy = this._deletingId === s.id;
+    return html`<button class="ghost danger" ?disabled=${busy} @click=${() => this._deleteSurvey(s)}>${busy ? 'Borrando…' : '¿Confirmar?'}</button>
+      <button class="ghost" ?disabled=${busy} @click=${() => this._cancelDelete()}>Cancelar</button>`;
+  }
+
   _renderList() {
     if (this._loading) return skeletonLines(4);
     return html`
@@ -440,6 +477,7 @@ export class SurveyAdmin extends LitElement {
               ${s.status === 'draft' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'open')}>Abrir</button>` : null}
               ${s.status === 'open' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'closed')}>Cerrar</button>` : null}
               ${s.status === 'closed' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'open')}>Reabrir</button>` : null}
+              ${this.canDelete ? this._renderDeleteAction(s) : null}
             </div></td>
           </tr>`)}</tbody>
         </table>`
