@@ -71,7 +71,7 @@ export function surveyDraftErrors({ title, questions, threshold } = {}) {
  * con valores normalizados. Lo usan TANTO el alta como la edición, así la escala
  * por defecto y el umbral se guardan igual en ambos casos.
  */
-export function draftToPayload({ title, questions, threshold, defaultScale, email } = {}) {
+export function draftToPayload({ title, questions, threshold, defaultScale, email, layout } = {}) {
   return {
     title: String(title ?? '').trim(),
     questions: questions ?? [],
@@ -84,6 +84,7 @@ export function draftToPayload({ title, questions, threshold, defaultScale, emai
       subject: String(email?.subject ?? '').trim(),
       body: String(email?.body ?? ''),
     },
+    layout: layout && typeof layout === 'object' ? layout : {},
   };
 }
 
