@@ -15,7 +15,10 @@ onUserChanged(async (user) => {
   try {
     const access = await resolveAccess(user);
     const allowed = canGovern(access) || (await isSurveyAdmin(user.uid));
-    if (!allowed) location.replace('/');
+    if (!allowed) { location.replace('/'); return; }
+    // Borrar encuestas es exclusivo del superadmin (el eje de gobierno de instancia).
+    const panel = document.querySelector('survey-admin');
+    if (panel) panel.canDelete = access.isAdmin === true;
   } catch {
     location.replace('/');
   }

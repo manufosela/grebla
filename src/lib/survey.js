@@ -37,6 +37,16 @@ export function setSurveyStatus(id, status) {
   return updateDoc(doc(db, 'surveys', id), { status });
 }
 
+/**
+ * Borra una encuesta y, en cascada, sus tokens y respuestas. Vía Cloud Function
+ * (Admin SDK); solo superadmin. El cliente no puede borrar /surveys ni sus
+ * subcolecciones (las reglas lo impiden).
+ */
+export async function deleteSurvey(id) {
+  const fn = await callable('deleteSurvey');
+  await fn({ surveyId: id });
+}
+
 /** Lista todas las encuestas (más recientes primero). Solo superadmin (reglas). */
 export async function listSurveys() {
   const snap = await getDocs(query(collection(db, 'surveys'), orderBy('createdAt', 'desc')));

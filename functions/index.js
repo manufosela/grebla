@@ -200,6 +200,29 @@ export const deletePerson = onCall({ region: 'europe-west1' }, async (request) =
 });
 
 /**
+ * Borra una encuesta COMPLETA (doc + subcolecciones `tokens` y `answers`) con
+ * `recursiveDelete` del Admin SDK — el cliente Web no puede borrar subcolecciones
+ * ni el propio doc (reglas: `delete` a false). Solo un superadmin.
+ */
+export const deleteSurvey = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(caller.uid))) {
+    throw new HttpsError('permission-denied', 'Solo un superadmin puede borrar encuestas.');
+  }
+  const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
+  if (!surveyId) throw new HttpsError('invalid-argument', 'Falta el surveyId a borrar.');
+
+  const db = getFirestore();
+  const ref = db.doc(`surveys/${surveyId}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', `Encuesta ${surveyId} no encontrada.`);
+
+  await db.recursiveDelete(ref); // borra el doc y sus subcolecciones (tokens, answers)
+  return { ok: true, deletedSurveyId: surveyId };
+});
+
+/**
  * getMyO2O: proyección COMPARTIDA de los O2O de la persona vinculada al llamante.
  * Deriva el personId de su uid (no lo acepta como input, para que solo obtenga lo
  * suyo), busca las sesiones en los líderes que le corresponden (dueño + líderes

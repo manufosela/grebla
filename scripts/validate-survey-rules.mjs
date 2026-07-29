@@ -17,7 +17,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT ?? 'demo-grebla';
 
@@ -98,6 +98,10 @@ try {
   await check('el admin NO escribe una respuesta (la escribe la CF)', assertFails(setDoc(doc(admin, 'surveys', 's1', 'answers', 'ans2'), { answers: { enps: 1 } })));
   await check('un miembro NO escribe una respuesta', assertFails(setDoc(doc(member, 'surveys', 's1', 'answers', 'ans3'), { answers: { enps: 10 } })));
   await check('un anónimo NO escribe una respuesta', assertFails(setDoc(doc(anon, 'surveys', 's1', 'answers', 'ans4'), { answers: { enps: 10 } })));
+
+  // Borrado: NADIE borra /surveys desde el cliente (lo hace la CF deleteSurvey con Admin SDK).
+  await check('el superadmin NO borra la encuesta directamente (lo hace la CF)', assertFails(deleteDoc(doc(admin, 'surveys', 's1'))));
+  await check('el gestor NO borra la encuesta', assertFails(deleteDoc(doc(people, 'surveys', 's1'))));
 
   console.log(`\n✅ Reglas de Encuestas: ${passed} comprobaciones OK`);
 } finally {
