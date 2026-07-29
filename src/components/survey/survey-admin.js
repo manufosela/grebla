@@ -8,6 +8,7 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
+import './survey-flow-canvas.js';
 import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
 import { defaultEmailTemplate } from '../../tools/survey/domain/email.js';
@@ -41,6 +42,8 @@ export class SurveyAdmin extends LitElement {
     _defaultMax: { state: true },
     _emailSubject: { state: true },
     _emailBody: { state: true },
+    _showFlow: { state: true },
+    _flowLayout: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
     _partText: { state: true },
@@ -139,6 +142,8 @@ export class SurveyAdmin extends LitElement {
     this._defaultMax = 5;
     this._emailSubject = '';
     this._emailBody = '';
+    this._showFlow = false;
+    this._flowLayout = {};
     this._saving = false;
     this._partSurvey = null;
     this._partText = '';
@@ -188,6 +193,8 @@ export class SurveyAdmin extends LitElement {
     const tpl = defaultEmailTemplate();
     this._emailSubject = tpl.subject;
     this._emailBody = tpl.body;
+    this._flowLayout = {};
+    this._showFlow = false;
     this._error = '';
     this._phase = 'edit';
   }
@@ -202,6 +209,8 @@ export class SurveyAdmin extends LitElement {
     const tpl = defaultEmailTemplate();
     this._emailSubject = survey.email?.subject ?? tpl.subject;
     this._emailBody = survey.email?.body ?? tpl.body;
+    this._flowLayout = survey.layout ?? {};
+    this._showFlow = false;
     this._error = '';
     this._phase = 'edit';
   }
@@ -258,6 +267,9 @@ export class SurveyAdmin extends LitElement {
     else q = { ...base, type: 'scale', min: this._defaultMin, max: this._defaultMax, required: true };
     this._questions = [...this._questions, q];
   }
+
+  _toggleFlow() { this._showFlow = !this._showFlow; }
+  _onLayoutChange(e) { this._flowLayout = { ...e.detail }; }
 
   _patchQuestion(index, patch) {
     this._questions = this._questions.map((q, i) => (i === index ? { ...q, ...patch } : q));
@@ -322,6 +334,7 @@ export class SurveyAdmin extends LitElement {
       const payload = draftToPayload({
         title, questions, threshold: this._threshold, defaultScale,
         email: { subject: this._emailSubject, body: this._emailBody },
+        layout: this._flowLayout,
       });
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
@@ -710,6 +723,11 @@ export class SurveyAdmin extends LitElement {
         <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
       <p class="lead" style="margin-top:0.4rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen con JSON o el editor de reglas.</p>
+      <div class="save-row">
+        <button class="ghost" @click=${() => this._toggleFlow()}>${this._showFlow ? 'Ocultar flujo visual' : 'Ver flujo visual'}</button>
+      </div>
+      ${this._showFlow ? html`<survey-flow-canvas .questions=${this._questions} .layout=${this._flowLayout}
+        @layout-change=${(e) => this._onLayoutChange(e)}></survey-flow-canvas>` : null}
       <h2>Mensaje del correo</h2>
       <p class="lead">El texto que acompaña al enlace cuando se envía la encuesta. Escribe <code>{{enlace}}</code> donde quieras que aparezca el enlace personal de cada persona.</p>
       <div class="field">

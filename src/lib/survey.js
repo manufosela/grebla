@@ -16,13 +16,14 @@ async function callable(name) {
 // ── Admin de encuestas (solo superadmin; las reglas escriben /surveys directo) ──
 
 /** Crea una encuesta en borrador. @returns {Promise<string>} id */
-export async function createSurvey({ title, questions, threshold, defaultScale, email } = {}) {
+export async function createSurvey({ title, questions, threshold, defaultScale, email, layout } = {}) {
   const ref = await addDoc(collection(db, 'surveys'), {
     title: String(title ?? '').trim(),
     questions: questions ?? [],
     threshold: Number.isInteger(threshold) ? threshold : 5,
     defaultScale: defaultScale ?? { min: 1, max: 5 },
     email: email ?? { subject: '', body: '' },
+    layout: layout ?? {},
     status: 'draft',
     createdAt: serverTimestamp(),
   });
