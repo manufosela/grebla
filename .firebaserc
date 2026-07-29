@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "grebla-app"
+    "default": "grebla-app",
+    "demo": "grebla-app",
+    "tribbu": "grebla-tribbu"
   }
 }

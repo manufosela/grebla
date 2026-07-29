@@ -8,10 +8,10 @@ node_modules/
 # astro
 .astro/
 
-# environment (NUNCA commitear credenciales)
+# environment (NUNCA commitear credenciales ni config de instancias)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # firebase — claves de servicio / Admin SDK (NUNCA commitear)
 serviceAccountKey.json
