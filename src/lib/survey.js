@@ -71,6 +71,22 @@ export async function createSurveyTokens(surveyId, participants) {
   return res.data?.tokens ?? [];
 }
 
+/**
+ * Envía un correo de PRUEBA a `to` con un enlace de prueba (su respuesta no cuenta).
+ * La URL de la instancia la compone el servidor (no se manda desde el cliente).
+ */
+export async function sendSurveyTestEmail(surveyId, to) {
+  const fn = await callable('sendSurveyTestEmail');
+  await fn({ surveyId, to });
+}
+
+/** Envío MASIVO: manda a cada participante su enlace. @returns {Promise<{sent,failed}>} */
+export async function sendSurveyBulkEmails(surveyId) {
+  const fn = await callable('sendSurveyBulkEmails');
+  const res = await fn({ surveyId });
+  return res.data ?? { sent: 0, failed: 0 };
+}
+
 /** Tokens (padrón) de una encuesta, para participación y reenvío. Solo superadmin. */
 export async function listTokens(surveyId) {
   const snap = await getDocs(collection(db, 'surveys', surveyId, 'tokens'));

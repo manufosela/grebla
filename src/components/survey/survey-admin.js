@@ -19,6 +19,7 @@ import {
 } from '../../tools/survey/domain/results.js';
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, createSurveyTokens, listTokens, listAnswers,
+  sendSurveyTestEmail, sendSurveyBulkEmails,
 } from '../../lib/survey.js';
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
@@ -49,6 +50,10 @@ export class SurveyAdmin extends LitElement {
     _padronDept: { state: true },
     _padronActive: { state: true },
     _padronError: { state: true },
+    _testEmail: { state: true },
+    _sendBusy: { state: true },
+    _sendNotice: { state: true },
+    _confirmBulk: { state: true },
     _copiedAll: { state: true },
     _resSurvey: { state: true },
     _resAnswers: { state: true },
@@ -101,6 +106,7 @@ export class SurveyAdmin extends LitElement {
     .add-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.6rem 0 1.4rem; }
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
+    .notice { color: var(--rm-accent-700, #1f7a6e); font-size: 0.85rem; font-weight: 600; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     textarea { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); resize: vertical; }
     textarea:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
@@ -142,6 +148,10 @@ export class SurveyAdmin extends LitElement {
     this._padronDept = '';
     this._padronActive = true;
     this._padronError = '';
+    this._testEmail = '';
+    this._sendBusy = false;
+    this._sendNotice = '';
+    this._confirmBulk = false;
     this._copiedAll = false;
     this._resSurvey = null;
     this._resAnswers = [];
@@ -364,7 +374,7 @@ export class SurveyAdmin extends LitElement {
     // Cargas independientes: un fallo del padrón NO debe ocultarse como «vacío»
     // ni impedir ver los tokens ya generados.
     try {
-      this._partTokens = await listTokens(survey.id);
+      this._partTokens = (await listTokens(survey.id)).filter((t) => t.test !== true);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los participantes.';
     }
@@ -405,7 +415,7 @@ export class SurveyAdmin extends LitElement {
     this._error = '';
     try {
       await createSurveyTokens(this._partSurvey.id, participants);
-      this._partTokens = await listTokens(this._partSurvey.id);
+      this._partTokens = (await listTokens(this._partSurvey.id)).filter((t) => t.test !== true);
       this._partText = '';
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron generar los enlaces.';
@@ -418,6 +428,40 @@ export class SurveyAdmin extends LitElement {
     const participants = parseParticipants(this._partText);
     if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
     return this._createTokens(participants);
+  }
+
+  _sendMsg(err) { return err instanceof Error ? err.message : 'No se pudo enviar el correo.'; }
+
+  /** Envía un correo de prueba (enlace que no cuenta) al email indicado. */
+  async _sendTest() {
+    const to = String(this._testEmail ?? '').trim();
+    if (!to.includes('@')) { this._error = 'Escribe un email de prueba válido.'; return; }
+    this._sendBusy = true; this._error = ''; this._sendNotice = '';
+    try {
+      await sendSurveyTestEmail(this._partSurvey.id, to);
+      this._sendNotice = `Correo de prueba enviado a ${to}. Su respuesta no contará en los resultados.`;
+    } catch (err) {
+      this._error = this._sendMsg(err);
+    } finally {
+      this._sendBusy = false;
+    }
+  }
+
+  _askBulk() { this._confirmBulk = true; this._error = ''; this._sendNotice = ''; }
+  _cancelBulk() { this._confirmBulk = false; }
+
+  /** Envío masivo a todos los participantes (tras confirmación inline). */
+  async _sendBulk() {
+    this._sendBusy = true; this._error = ''; this._sendNotice = '';
+    try {
+      const { sent, failed } = await sendSurveyBulkEmails(this._partSurvey.id);
+      this._confirmBulk = false;
+      this._sendNotice = `Enviados ${sent} correo${sent === 1 ? '' : 's'}${failed ? `, ${failed} fallido${failed === 1 ? '' : 's'}` : ''}.`;
+    } catch (err) {
+      this._error = this._sendMsg(err);
+    } finally {
+      this._sendBusy = false;
+    }
   }
 
   _generateFromPadron() {
@@ -450,8 +494,9 @@ export class SurveyAdmin extends LitElement {
     this._phase = 'results';
     try {
       const [answers, tokens] = await Promise.all([listAnswers(survey.id), listTokens(survey.id)]);
-      this._resAnswers = answers;
-      this._resTokens = tokens;
+      // Los enlaces y respuestas de PRUEBA no cuentan en los agregados ni en la participación.
+      this._resAnswers = answers.filter((a) => a.test !== true);
+      this._resTokens = tokens.filter((t) => t.test !== true);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los resultados.';
     } finally {
@@ -745,7 +790,28 @@ export class SurveyAdmin extends LitElement {
             <td><input class="link" type="text" readonly .value=${this._linkFor(t.token)} @focus=${(e) => e.target.select()} /></td>
             <td><span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span></td>
           </tr>`)}</tbody>
-        </table>` : null}`;
+        </table>` : null}
+      ${total ? this._renderSendBox() : null}`;
+  }
+
+  /** Envío por correo: prueba (no cuenta) y masivo (con confirmación inline). */
+  _renderSendBox() {
+    const total = this._partTokens.length;
+    return html`
+      <h3>Enviar por correo</h3>
+      <p class="lead">Se envía desde <code>encuestas@tribbuapp.com</code>. La encuesta debe estar <strong>abierta</strong> y tener el mensaje redactado (pestaña de edición).</p>
+      ${this._sendNotice ? html`<p class="notice">${this._sendNotice}</p>` : null}
+      <div class="save-row">
+        <input type="email" placeholder="email para la prueba" .value=${this._testEmail}
+          @input=${(e) => { this._testEmail = e.target.value; }} />
+        <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._sendTest()}>Enviar prueba</button>
+      </div>
+      <div class="save-row">
+        ${this._confirmBulk
+          ? html`<button class="primary" ?disabled=${this._sendBusy} @click=${() => this._sendBulk()}>${this._sendBusy ? 'Enviando…' : `Confirmar envío a ${total}`}</button>
+              <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._cancelBulk()}>Cancelar</button>`
+          : html`<button class="primary" ?disabled=${!total || this._sendBusy} @click=${() => this._askBulk()}>Enviar a todos (${total})</button>`}
+      </div>`;
   }
 
   render() {
