@@ -91,3 +91,21 @@ export function bucketMetadata(rawMetadata, refIso) {
 export function answerId(token, salt) {
   return createHmac('sha256', String(salt)).update(String(token)).digest('hex');
 }
+
+/** Marcador del enlace en la plantilla de correo (espejo del dominio email.js). */
+export const LINK_PLACEHOLDER = '{{enlace}}';
+
+/** Errores de la plantilla de correo: asunto no vacío y cuerpo con el marcador del enlace. */
+export function emailTemplateErrors({ subject, body } = {}) {
+  const errors = [];
+  if (!String(subject ?? '').trim()) errors.push('El asunto del correo no puede estar vacío.');
+  if (!String(body ?? '').includes(LINK_PLACEHOLDER)) {
+    errors.push(`El cuerpo del correo debe incluir ${LINK_PLACEHOLDER} donde irá el enlace.`);
+  }
+  return errors;
+}
+
+/** Sustituye el marcador por el enlace real (espejo del dominio). */
+export function renderEmailBody(body, link) {
+  return String(body ?? '').replaceAll(LINK_PLACEHOLDER, String(link ?? ''));
+}
