@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "PUBLIC_APP_VERSION=$(git rev-parse --short HEAD) astro build && node scripts/stamp-sw.mjs",
+    "build:tribbu": "PUBLIC_APP_VERSION=$(git rev-parse --short HEAD) astro build --mode tribbu && node scripts/stamp-sw.mjs",
     "publish:version": "node scripts/publish-version.mjs",
     "preview": "astro preview",
     "check": "astro check",
