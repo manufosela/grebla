@@ -45,3 +45,28 @@ export function parseParticipants(text) {
   }
   return [...byEmail.values()];
 }
+
+/**
+ * Convierte el padrón de empresa en participantes para generar los enlaces,
+ * filtrando por departamento y (por defecto) solo personas activas. Mapea
+ * `hireDate → startDate` (alimenta el tramo de antigüedad). NO incluye la fecha
+ * de nacimiento ni la edad: iría en la respuesta anónima y podría reidentificar;
+ * la edad se tratará por tramos en el dashboard.
+ * @param {Array<{email:string,department?:string,hireDate?:string,active?:boolean}>} padron
+ * @param {{ department?: string|null, onlyActive?: boolean }} [opts]
+ * @returns {Array<{ email: string, metadata: { department?: string, startDate?: string } }>}
+ */
+export function padronToParticipants(padron, { department = null, onlyActive = true } = {}) {
+  const byEmail = new Map();
+  for (const person of padron ?? []) {
+    const email = String(person?.email ?? '').trim();
+    if (!email.includes('@')) continue;
+    if (onlyActive && person.active === false) continue;
+    if (department && person.department !== department) continue;
+    const metadata = {};
+    if (person.department) metadata.department = person.department;
+    if (person.hireDate) metadata.startDate = person.hireDate;
+    byEmail.set(email.toLowerCase(), { email, metadata });
+  }
+  return [...byEmail.values()];
+}

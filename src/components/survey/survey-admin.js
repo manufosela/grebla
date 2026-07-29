@@ -11,7 +11,8 @@ import './survey-padron.js';
 import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
 import { END, flowErrors } from '../../tools/survey/domain/flow.js';
-import { parseParticipants } from '../../tools/survey/domain/participants.js';
+import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
+import { listPadron } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
@@ -41,6 +42,10 @@ export class SurveyAdmin extends LitElement {
     _partText: { state: true },
     _partTokens: { state: true },
     _partBusy: { state: true },
+    _padron: { state: true },
+    _padronDept: { state: true },
+    _padronActive: { state: true },
+    _padronError: { state: true },
     _copiedAll: { state: true },
     _resSurvey: { state: true },
     _resAnswers: { state: true },
@@ -128,6 +133,10 @@ export class SurveyAdmin extends LitElement {
     this._partText = '';
     this._partTokens = [];
     this._partBusy = false;
+    this._padron = [];
+    this._padronDept = '';
+    this._padronActive = true;
+    this._padronError = '';
     this._copiedAll = false;
     this._resSurvey = null;
     this._resAnswers = [];
@@ -332,13 +341,34 @@ export class SurveyAdmin extends LitElement {
     this._partSurvey = survey;
     this._partText = '';
     this._partTokens = [];
+    this._padron = [];
+    this._padronDept = '';
+    this._padronActive = true;
     this._error = '';
+    this._padronError = '';
     this._phase = 'participants';
+    // Cargas independientes: un fallo del padrón NO debe ocultarse como «vacío»
+    // ni impedir ver los tokens ya generados.
     try {
       this._partTokens = await listTokens(survey.id);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los participantes.';
     }
+    try {
+      this._padron = await listPadron();
+    } catch (err) {
+      this._padronError = err instanceof Error ? err.message : 'No se pudo cargar el padrón.';
+    }
+  }
+
+  /** Departamentos únicos presentes en el padrón, para el filtro. */
+  get _padronDepartments() {
+    return [...new Set(this._padron.map((p) => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }
+
+  /** Personas del padrón que recibirían enlace con el filtro actual. */
+  get _padronSelection() {
+    return padronToParticipants(this._padron, { department: this._padronDept || null, onlyActive: this._padronActive });
   }
 
   /** Lee un CSV subido y vuelca su contenido al área de texto para revisar. */
@@ -354,9 +384,9 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
-  async _generate() {
-    const participants = parseParticipants(this._partText);
-    if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
+  /** Crea los tokens de una lista de participantes y recarga la tabla. */
+  async _createTokens(participants) {
+    if (!participants.length) { this._error = 'No hay ningún participante válido.'; return; }
     this._partBusy = true;
     this._error = '';
     try {
@@ -368,6 +398,18 @@ export class SurveyAdmin extends LitElement {
     } finally {
       this._partBusy = false;
     }
+  }
+
+  _generate() {
+    const participants = parseParticipants(this._partText);
+    if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
+    return this._createTokens(participants);
+  }
+
+  _generateFromPadron() {
+    const participants = this._padronSelection;
+    if (!participants.length) { this._error = 'El padrón no tiene a nadie con ese filtro.'; return; }
+    return this._createTokens(participants);
   }
 
   _linkFor(token) {
@@ -615,13 +657,45 @@ export class SurveyAdmin extends LitElement {
       </div>`;
   }
 
+  /** Bloque del padrón en Participantes: error de carga, vacío o el generador. */
+  _renderPadronBlock() {
+    if (this._padronError) return html`<p class="error">No se pudo cargar el padrón: ${this._padronError}</p>`;
+    if (this._padron.length) return this._renderPadronSource();
+    return html`<p class="lead">El padrón está vacío. Puedes rellenarlo en «Padrón de empresa» o generar los enlaces con un CSV aquí abajo.</p>`;
+  }
+
+  /** Generar enlaces tirando del padrón de empresa, con filtro por departamento y activos. */
+  _renderPadronSource() {
+    const sel = this._padronSelection;
+    return html`<div class="field">
+      <label>Desde el <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}). Filtra y genera un enlace por persona; los metadatos (departamento, antigüedad) salen del padrón.</label>
+      <div class="q-opts">
+        <label>Departamento
+          <select @change=${(e) => { this._padronDept = e.target.value; }}>
+            <option value="" ?selected=${!this._padronDept}>Todos</option>
+            ${this._padronDepartments.map((d) => html`<option value=${d} ?selected=${this._padronDept === d}>${d}</option>`)}
+          </select>
+        </label>
+        <label><input type="checkbox" .checked=${this._padronActive}
+          @change=${(e) => { this._padronActive = e.target.checked; }} /> Solo activos</label>
+      </div>
+      <div class="save-row">
+        <button class="primary" ?disabled=${this._partBusy || !sel.length} @click=${() => this._generateFromPadron()}>
+          ${this._partBusy ? 'Generando…' : `Generar enlaces desde el padrón (${sel.length})`}
+        </button>
+      </div>
+    </div>`;
+  }
+
   _renderParticipants() {
     const total = this._partTokens.length;
     const responded = this._partTokens.filter((t) => t.used).length;
     return html`
       <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
       <h2>${this._partSurvey.title} · Participantes</h2>
-      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Pega el padrón y genera los enlaces personales.</p>
+      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Genera los enlaces personales desde el padrón o subiendo un CSV.</p>
+      ${this._renderPadronBlock()}
+      <h3>O bien, sube o pega un CSV</h3>
       <div class="field">
         <label for="pp">Sube un <strong>CSV</strong> o pega el padrón. Una persona por fila. Columnas:
           <code>email</code> (obligatoria), <code>departamento</code> y <code>fecha_alta</code> (YYYY-MM-DD, opcionales).
