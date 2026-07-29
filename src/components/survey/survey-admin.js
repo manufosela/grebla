@@ -10,6 +10,7 @@ import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
 import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
+import { defaultEmailTemplate } from '../../tools/survey/domain/email.js';
 import { END, flowErrors } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { listPadron } from '../../lib/padron.js';
@@ -37,6 +38,8 @@ export class SurveyAdmin extends LitElement {
     _threshold: { state: true },
     _defaultMin: { state: true },
     _defaultMax: { state: true },
+    _emailSubject: { state: true },
+    _emailBody: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
     _partText: { state: true },
@@ -128,6 +131,8 @@ export class SurveyAdmin extends LitElement {
     this._threshold = 5;
     this._defaultMin = 1;
     this._defaultMax = 5;
+    this._emailSubject = '';
+    this._emailBody = '';
     this._saving = false;
     this._partSurvey = null;
     this._partText = '';
@@ -170,6 +175,9 @@ export class SurveyAdmin extends LitElement {
     this._threshold = 5;
     this._defaultMin = 1;
     this._defaultMax = 5;
+    const tpl = defaultEmailTemplate();
+    this._emailSubject = tpl.subject;
+    this._emailBody = tpl.body;
     this._error = '';
     this._phase = 'edit';
   }
@@ -181,6 +189,9 @@ export class SurveyAdmin extends LitElement {
     this._threshold = Number.isInteger(survey.threshold) ? survey.threshold : 5;
     this._defaultMin = Number.isInteger(survey.defaultScale?.min) ? survey.defaultScale.min : 1;
     this._defaultMax = Number.isInteger(survey.defaultScale?.max) ? survey.defaultScale.max : 5;
+    const tpl = defaultEmailTemplate();
+    this._emailSubject = survey.email?.subject ?? tpl.subject;
+    this._emailBody = survey.email?.body ?? tpl.body;
     this._error = '';
     this._phase = 'edit';
   }
@@ -297,8 +308,11 @@ export class SurveyAdmin extends LitElement {
     this._saving = true;
     this._error = '';
     try {
-      // Mismo payload (con defaultScale) para alta y edición.
-      const payload = draftToPayload({ title, questions, threshold: this._threshold, defaultScale });
+      // Mismo payload (con defaultScale y plantilla de correo) para alta y edición.
+      const payload = draftToPayload({
+        title, questions, threshold: this._threshold, defaultScale,
+        email: { subject: this._emailSubject, body: this._emailBody },
+      });
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
       await this._loadList();
@@ -651,6 +665,18 @@ export class SurveyAdmin extends LitElement {
         <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
       <p class="lead" style="margin-top:0.4rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen con JSON o el editor de reglas.</p>
+      <h2>Mensaje del correo</h2>
+      <p class="lead">El texto que acompaña al enlace cuando se envía la encuesta. Escribe <code>{{enlace}}</code> donde quieras que aparezca el enlace personal de cada persona.</p>
+      <div class="field">
+        <label for="es">Asunto</label>
+        <input id="es" class="title" type="text" .value=${this._emailSubject}
+          @input=${(e) => { this._emailSubject = e.target.value; }} />
+      </div>
+      <div class="field">
+        <label for="eb">Cuerpo</label>
+        <textarea id="eb" rows="8" .value=${this._emailBody}
+          @input=${(e) => { this._emailBody = e.target.value; }}></textarea>
+      </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">
         <button class="primary" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar'}</button>
