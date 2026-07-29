@@ -5,7 +5,7 @@
  * escriben (Admin SDK). El token del enlace es la credencial.
  */
 import { app, db } from './firebase.js';
-import { collection, doc, addDoc, getDoc, getDocs, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
 /** Instancia httpsCallable de una función en la región del proyecto. */
 async function callable(name) {
@@ -48,6 +48,41 @@ export function setSurveyStatus(id, status) {
 export async function deleteSurvey(id) {
   const fn = await callable('deleteSurvey');
   await fn({ surveyId: id });
+}
+
+// ── Biblioteca de plantillas (/surveyTemplates) — solo superadmin/People ──
+
+const TEMPLATES = 'surveyTemplates';
+
+/** Plantillas guardadas, ordenadas por nombre. */
+export async function listSurveyTemplates() {
+  const snap = await getDocs(query(collection(db, TEMPLATES), orderBy('name')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** Guarda un conjunto de preguntas como plantilla con nombre. @returns {Promise<string>} id */
+export async function saveSurveyTemplate(name, questions) {
+  const ref = await addDoc(collection(db, TEMPLATES), {
+    name: String(name ?? '').trim(),
+    questions: questions ?? [],
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Renombra una plantilla. */
+export function renameSurveyTemplate(id, name) {
+  return updateDoc(doc(db, TEMPLATES, id), { name: String(name ?? '').trim() });
+}
+
+/** Sustituye las preguntas de una plantilla (editar). */
+export function updateSurveyTemplate(id, questions) {
+  return updateDoc(doc(db, TEMPLATES, id), { questions: questions ?? [] });
+}
+
+/** Borra una plantilla. */
+export function deleteSurveyTemplate(id) {
+  return deleteDoc(doc(db, TEMPLATES, id));
 }
 
 /** Lista todas las encuestas (más recientes primero). Solo superadmin (reglas). */

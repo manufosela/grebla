@@ -21,6 +21,7 @@ import {
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, createSurveyTokens, listTokens, listAnswers,
   sendSurveyTestEmail, sendSurveyBulkEmails,
+  listSurveyTemplates, saveSurveyTemplate, renameSurveyTemplate, deleteSurveyTemplate,
 } from '../../lib/survey.js';
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
@@ -45,6 +46,12 @@ export class SurveyAdmin extends LitElement {
     _editTab: { state: true },
     _flowLayout: { state: true },
     _allExpanded: { state: true },
+    _templates: { state: true },
+    _showSaveTpl: { state: true },
+    _tplName: { state: true },
+    _tplBusy: { state: true },
+    _tplError: { state: true },
+    _renameId: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
     _partText: { state: true },
@@ -159,6 +166,17 @@ export class SurveyAdmin extends LitElement {
     .addbtn:hover { background: var(--teal); color: var(--rm-on-accent, #fff); }
     .ghost.file { cursor: pointer; }
     .save-bar { position: sticky; bottom: 0; background: var(--rm-surface, #fff); padding: 0.8rem 0; margin-top: 1rem; border-top: 1px solid var(--rm-border, #eef0f2); display: flex; }
+    /* Biblioteca de plantillas */
+    .tpl-picker { padding: 0.9rem 1rem; background: var(--rm-surface-hover, #f6f9fa); border: 1px dashed var(--rm-border, #cfdae1); border-radius: 10px; margin-bottom: 0.8rem; }
+    .tpl-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .tpl-item { display: inline-flex; align-items: center; gap: 0.15rem; }
+    .tpl { border: 1px solid var(--teal); background: var(--rm-surface, #fff); color: var(--rm-accent-700, var(--teal)); padding: 0.4rem 0.8rem; border-radius: 8px; font-weight: 600; font-size: 0.82rem; cursor: pointer; }
+    .tpl:hover { background: var(--teal); color: var(--rm-on-accent, #fff); }
+    .tpl-tag { font-size: 0.66rem; opacity: 0.7; text-transform: uppercase; }
+    .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.2rem 0.45rem; font-size: 0.78rem; cursor: pointer; }
+    .act.danger:hover { border-color: #b42318; color: #b42318; }
+    .save-tpl { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.6rem 0; padding: 0.6rem 0.8rem; background: color-mix(in srgb, var(--teal) 7%, transparent); border: 1px solid color-mix(in srgb, var(--teal) 20%, transparent); border-radius: 10px; }
+    .save-tpl input { flex: 1 1 14rem; }
   `;
 
   constructor() {
@@ -180,6 +198,12 @@ export class SurveyAdmin extends LitElement {
     this._editTab = 'questions';
     this._flowLayout = {};
     this._allExpanded = false;
+    this._templates = [];
+    this._showSaveTpl = false;
+    this._tplName = '';
+    this._tplBusy = false;
+    this._tplError = '';
+    this._renameId = null;
     this._saving = false;
     this._partSurvey = null;
     this._partText = '';
@@ -204,7 +228,7 @@ export class SurveyAdmin extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    if (!this._loaded) { this._loaded = true; this._loadList(); }
+    if (!this._loaded) { this._loaded = true; this._loadList(); this._loadTemplatesLib(); }
   }
 
   async _loadList() {
@@ -252,6 +276,51 @@ export class SurveyAdmin extends LitElement {
   }
 
   _loadTemplate() { this._questions = climateTemplate(); }
+
+  async _loadTemplatesLib() {
+    try {
+      this._templates = await listSurveyTemplates();
+      this._tplError = '';
+    } catch (err) {
+      this._tplError = err instanceof Error ? err.message : 'No se pudieron cargar las plantillas.';
+    }
+  }
+
+  /** Carga las preguntas de una plantilla en el editor (con ids nuevos). */
+  _useTemplate(questions) {
+    this._questions = (questions ?? []).map((q) => ({ ...q, id: crypto.randomUUID() }));
+    this._flowLayout = {};
+  }
+
+  _askSaveTpl() { this._showSaveTpl = true; this._renameId = null; this._tplName = ''; this._tplError = ''; }
+  _askRenameTpl(t) { this._showSaveTpl = true; this._renameId = t.id; this._tplName = t.name ?? ''; this._tplError = ''; }
+  _cancelSaveTpl() { this._showSaveTpl = false; this._renameId = null; }
+
+  /** Guarda una plantilla nueva o renombra una existente (según _renameId). */
+  async _saveTpl() {
+    const name = String(this._tplName ?? '').trim();
+    if (!name) { this._tplError = 'Ponle un nombre a la plantilla.'; return; }
+    this._tplBusy = true; this._tplError = '';
+    try {
+      if (this._renameId) await renameSurveyTemplate(this._renameId, name);
+      else await saveSurveyTemplate(name, this._questions.map((q) => this._normalizeQuestion(q)));
+      this._showSaveTpl = false; this._renameId = null;
+      await this._loadTemplatesLib();
+    } catch (err) {
+      this._tplError = err instanceof Error ? err.message : 'No se pudo guardar la plantilla.';
+    } finally {
+      this._tplBusy = false;
+    }
+  }
+
+  async _deleteTpl(t) {
+    try {
+      await deleteSurveyTemplate(t.id);
+      await this._loadTemplatesLib();
+    } catch (err) {
+      this._tplError = err instanceof Error ? err.message : 'No se pudo borrar la plantilla.';
+    }
+  }
 
   /** Importa una plantilla JSON al editor, generando ids a las que no lo traigan. */
   async _onTemplateFile(e) {
@@ -782,7 +851,7 @@ export class SurveyAdmin extends LitElement {
         <h3>Preguntas${n ? html` <span class="count-pill">${n}</span>` : ''}</h3>
         ${n > 1 ? html`<button class="linkbtn" @click=${() => this._setAllQ(!this._allExpanded)}>${this._allExpanded ? 'Colapsar todas' : 'Descolapsar todas'}</button>` : null}
       </div>
-      ${n ? this._questions.map((q, i) => this._renderQuestion(q, i)) : html`<p class="empty">Sin preguntas. Añade una o carga una plantilla.</p>`}
+      ${n ? this._questions.map((q, i) => this._renderQuestion(q, i)) : this._renderTemplatePicker()}
       <div class="btn-group add-group">
         <span class="group-label">Añadir pregunta</span>
         <button class="addbtn scale" @click=${() => this._addQuestion('scale')}>+ Escala</button>
@@ -791,12 +860,41 @@ export class SurveyAdmin extends LitElement {
       </div>
       <div class="btn-group io-group">
         <span class="group-label">Plantilla y archivos</span>
-        <button class="ghost" @click=${() => this._loadTemplate()}>Plantilla eNPS + Q12</button>
+        ${n ? html`<button class="ghost" @click=${() => this._askSaveTpl()}>Guardar como plantilla</button>` : null}
         <label class="ghost file">Importar CSV<input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onQuestionsCsv(e)} hidden /></label>
         <label class="ghost file">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
         <button class="ghost" ?disabled=${!n} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
+      ${this._showSaveTpl ? this._renderSaveTplForm() : null}
       <p class="lead" style="margin-top:0.6rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen en el flujo visual o con JSON.</p>`;
+  }
+
+  /** Selector de plantilla para una encuesta en blanco: la base + las guardadas (usar/renombrar/borrar). */
+  _renderTemplatePicker() {
+    return html`
+      <div class="tpl-picker">
+        <p class="empty">Encuesta en blanco. Empieza desde una plantilla o añade preguntas abajo.</p>
+        <div class="tpl-list">
+          <button class="tpl base" @click=${() => this._loadTemplate()}>eNPS + Q12 <span class="tpl-tag">base</span></button>
+          ${this._templates.map((t) => html`<span class="tpl-item">
+            <button class="tpl" @click=${() => this._useTemplate(t.questions)}>${t.name}</button>
+            <button class="act" title="Renombrar" @click=${() => this._askRenameTpl(t)}>✎</button>
+            <button class="act danger" title="Borrar" @click=${() => this._deleteTpl(t)}>✕</button>
+          </span>`)}
+        </div>
+        ${this._tplError ? html`<p class="error">${this._tplError}</p>` : null}
+      </div>`;
+  }
+
+  /** Formulario para guardar una plantilla nueva o renombrar una existente. */
+  _renderSaveTplForm() {
+    return html`<div class="save-tpl">
+      <input type="text" placeholder="Nombre de la plantilla" .value=${this._tplName}
+        @input=${(e) => { this._tplName = e.target.value; }} />
+      <button class="primary" ?disabled=${this._tplBusy} @click=${() => this._saveTpl()}>${this._renameId ? 'Renombrar' : 'Guardar plantilla'}</button>
+      <button class="ghost" @click=${() => this._cancelSaveTpl()}>Cancelar</button>
+      ${this._tplError ? html`<span class="error">${this._tplError}</span>` : null}
+    </div>`;
   }
 
   _renderEmailTab() {
