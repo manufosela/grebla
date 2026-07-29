@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { climateTemplate, serializeTemplate, parseTemplate } from './templates.js';
+import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from './templates.js';
 import { validateAnswer } from './questions.js';
 
 describe('climateTemplate', () => {
@@ -86,5 +86,52 @@ describe('serializeTemplate / parseTemplate', () => {
 
   it('rechaza una escala inválida (min ≥ max)', () => {
     expect(() => parseTemplate(JSON.stringify([{ type: 'scale', min: 5, max: 5, label: 'q' }]))).toThrow();
+  });
+});
+
+describe('parseQuestionsCsv', () => {
+  it('con cabecera mapea por nombre y aplica escala por defecto si faltan min/max', () => {
+    const csv = [
+      'tipo,enunciado,min,max,obligatoria,opciones',
+      'scale,¿Recomendarías?,1,10,si,',
+      'text,¿Por qué?,,,no,',
+      'scale,Otra de escala,,,si,',
+    ].join('\n');
+    const qs = parseQuestionsCsv(csv, { min: 1, max: 5 });
+    expect(qs).toEqual([
+      { type: 'scale', label: '¿Recomendarías?', required: true, min: 1, max: 10 },
+      { type: 'text', label: '¿Por qué?', required: false },
+      { type: 'scale', label: 'Otra de escala', required: true, min: 1, max: 5 },
+    ]);
+  });
+
+  it('parte las opciones de una choice por | ', () => {
+    const [q] = parseQuestionsCsv('choice,¿Área?,,,si,Producto|Ventas|Soporte');
+    expect(q).toEqual({ type: 'choice', label: '¿Área?', required: true, options: ['Producto', 'Ventas', 'Soporte'] });
+  });
+
+  it('respeta las comas dentro de comillas y las comillas escapadas', () => {
+    const csv = ['tipo,enunciado,min,max,obligatoria,opciones', 'scale,"¿Recomendarías TRIBBU, de ""verdad""?",1,5,si,'].join('\n');
+    const [q] = parseQuestionsCsv(csv);
+    expect(q.label).toBe('¿Recomendarías TRIBBU, de "verdad"?');
+    expect(q).toMatchObject({ type: 'scale', min: 1, max: 5 });
+  });
+
+  it('sin cabecera usa el orden posicional', () => {
+    const [q] = parseQuestionsCsv('scale,Enunciado,1,7,si,');
+    expect(q).toMatchObject({ type: 'scale', min: 1, max: 7, required: true });
+  });
+
+  it('detecta la cabecera aunque las columnas vayan en otro orden', () => {
+    const csv = ['enunciado,obligatoria,tipo,opciones,min,max', '¿Área?,si,choice,A|B,,'].join('\n');
+    expect(parseQuestionsCsv(csv)).toEqual([
+      { type: 'choice', label: '¿Área?', required: true, options: ['A', 'B'] },
+    ]);
+  });
+
+  it('rechaza tipo no soportado, choice con menos de dos opciones y CSV vacío', () => {
+    expect(() => parseQuestionsCsv('radio,q,,,,')).toThrow(/tipo/i);
+    expect(() => parseQuestionsCsv('choice,q,,,si,solo-una')).toThrow(/opciones/i);
+    expect(() => parseQuestionsCsv('   ')).toThrow(/vac/i);
   });
 });

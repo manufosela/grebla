@@ -8,8 +8,8 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
-import { climateTemplate, serializeTemplate, parseTemplate } from '../../tools/survey/domain/templates.js';
-import { surveyDraftErrors, choiceOptions } from '../../tools/survey/domain/questions.js';
+import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
+import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
 import { END, flowErrors } from '../../tools/survey/domain/flow.js';
 import { parseParticipants } from '../../tools/survey/domain/participants.js';
 import {
@@ -34,6 +34,8 @@ export class SurveyAdmin extends LitElement {
     _title: { state: true },
     _questions: { state: true },
     _threshold: { state: true },
+    _defaultMin: { state: true },
+    _defaultMax: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
     _partText: { state: true },
@@ -119,6 +121,8 @@ export class SurveyAdmin extends LitElement {
     this._title = '';
     this._questions = [];
     this._threshold = 5;
+    this._defaultMin = 1;
+    this._defaultMax = 5;
     this._saving = false;
     this._partSurvey = null;
     this._partText = '';
@@ -155,6 +159,8 @@ export class SurveyAdmin extends LitElement {
     this._title = '';
     this._questions = [];
     this._threshold = 5;
+    this._defaultMin = 1;
+    this._defaultMax = 5;
     this._error = '';
     this._phase = 'edit';
   }
@@ -164,6 +170,8 @@ export class SurveyAdmin extends LitElement {
     this._title = survey.title ?? '';
     this._questions = (survey.questions ?? []).map((q) => ({ ...q }));
     this._threshold = Number.isInteger(survey.threshold) ? survey.threshold : 5;
+    this._defaultMin = Number.isInteger(survey.defaultScale?.min) ? survey.defaultScale.min : 1;
+    this._defaultMax = Number.isInteger(survey.defaultScale?.max) ? survey.defaultScale.max : 5;
     this._error = '';
     this._phase = 'edit';
   }
@@ -198,12 +206,26 @@ export class SurveyAdmin extends LitElement {
     URL.revokeObjectURL(url);
   }
 
+  /** Importa preguntas simples desde un CSV (usa la escala por defecto de la encuesta). */
+  async _onQuestionsCsv(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const questions = parseQuestionsCsv(await file.text(), { min: this._defaultMin, max: this._defaultMax });
+      this._questions = questions.map((q) => ({ ...q, id: crypto.randomUUID() }));
+      this._error = '';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo importar el CSV.';
+    }
+  }
+
   _addQuestion(type) {
     const base = { id: crypto.randomUUID(), label: '' };
     let q;
     if (type === 'text') q = { ...base, type: 'text', required: false };
     else if (type === 'choice') q = { ...base, type: 'choice', required: true, options: [] };
-    else q = { ...base, type: 'scale', min: 1, max: 5, required: true };
+    else q = { ...base, type: 'scale', min: this._defaultMin, max: this._defaultMax, required: true };
     this._questions = [...this._questions, q];
   }
 
@@ -256,12 +278,18 @@ export class SurveyAdmin extends LitElement {
     // Normaliza antes de validar/persistir: limpia opciones de choice, quita el
     // `next` vacío («siguiente en orden») y las reglas sin destino.
     const questions = this._questions.map((q) => this._normalizeQuestion(q));
+    const defaultScale = { min: this._defaultMin, max: this._defaultMax };
+    if (!Number.isInteger(defaultScale.min) || !Number.isInteger(defaultScale.max) || defaultScale.min < 0 || defaultScale.min >= defaultScale.max) {
+      this._error = 'La escala por defecto no es válida (min entero ≥ 0 y menor que max).';
+      return;
+    }
     const errors = [...surveyDraftErrors({ title, questions, threshold: this._threshold }), ...flowErrors(questions)];
     if (errors.length) { this._error = errors[0]; return; }
     this._saving = true;
     this._error = '';
     try {
-      const payload = { title, questions, threshold: this._threshold };
+      // Mismo payload (con defaultScale) para alta y edición.
+      const payload = draftToPayload({ title, questions, threshold: this._threshold, defaultScale });
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
       await this._loadList();
@@ -558,6 +586,15 @@ export class SurveyAdmin extends LitElement {
         <input id="th" class="num" type="number" min="2" .value=${String(this._threshold)}
           @input=${(e) => { this._threshold = Number(e.target.value) || 5; }} />
       </div>
+      <div class="field">
+        <label>Escala por defecto de las preguntas (la usan las de escala nuevas y el CSV)</label>
+        <div class="q-opts">
+          <label>de <input class="num" type="number" .value=${String(this._defaultMin)}
+            @input=${(e) => { this._defaultMin = Number(e.target.value); }} /></label>
+          <label>a <input class="num" type="number" .value=${String(this._defaultMax)}
+            @input=${(e) => { this._defaultMax = Number(e.target.value); }} /></label>
+        </div>
+      </div>
       <h2>Preguntas</h2>
       ${this._questions.length
         ? this._questions.map((q, i) => this._renderQuestion(q, i))
@@ -567,9 +604,11 @@ export class SurveyAdmin extends LitElement {
         <button class="ghost" @click=${() => this._addQuestion('text')}>+ Pregunta de texto</button>
         <button class="ghost" @click=${() => this._addQuestion('choice')}>+ Pregunta de opción</button>
         <button class="ghost" @click=${() => this._loadTemplate()}>Plantilla eNPS + Q12</button>
+        <label class="ghost">Importar CSV<input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onQuestionsCsv(e)} hidden /></label>
         <label class="ghost">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
         <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
+      <p class="lead" style="margin-top:0.4rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen con JSON o el editor de reglas.</p>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">
         <button class="primary" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar'}</button>

@@ -67,6 +67,23 @@ export function surveyDraftErrors({ title, questions, threshold } = {}) {
 }
 
 /**
+ * Ensambla el payload persistible de una encuesta desde el borrador del editor,
+ * con valores normalizados. Lo usan TANTO el alta como la edición, así la escala
+ * por defecto y el umbral se guardan igual en ambos casos.
+ */
+export function draftToPayload({ title, questions, threshold, defaultScale } = {}) {
+  return {
+    title: String(title ?? '').trim(),
+    questions: questions ?? [],
+    threshold: Number.isInteger(threshold) ? threshold : 5,
+    defaultScale: {
+      min: Number.isInteger(defaultScale?.min) ? defaultScale.min : 1,
+      max: Number.isInteger(defaultScale?.max) ? defaultScale.max : 5,
+    },
+  };
+}
+
+/**
  * ¿Está `question` respondida en `responses`? Una escala respondida es un valor
  * válido; un texto respondido es una cadena no vacía (los espacios no cuentan).
  * Sirve para la navegación secuencial (una pregunta a la vez).
