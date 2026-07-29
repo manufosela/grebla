@@ -42,8 +42,9 @@ export class SurveyAdmin extends LitElement {
     _defaultMax: { state: true },
     _emailSubject: { state: true },
     _emailBody: { state: true },
-    _showFlow: { state: true },
+    _editTab: { state: true },
     _flowLayout: { state: true },
+    _allExpanded: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
     _partText: { state: true },
@@ -124,6 +125,40 @@ export class SurveyAdmin extends LitElement {
     .schip { font-size: 0.78rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--rm-accent-700, var(--teal)); }
     .hidden-note { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-style: italic; margin: 0.4rem 0 0; }
     .texts { margin: 0.2rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
+    /* Editor: pestañas */
+    .tabs { display: flex; gap: 0.25rem; border-bottom: 2px solid var(--rm-border, #e3ebef); margin: 0.6rem 0 1rem; }
+    .tab { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -2px; padding: 0.5rem 0.95rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); cursor: pointer; border-radius: 8px 8px 0 0; }
+    .tab:hover { color: var(--teal); background: var(--rm-surface-hover, #f2f7f8); }
+    .tab.on { color: var(--teal); border-bottom-color: var(--teal); }
+    .tab-body { min-height: 180px; }
+    .settings { display: flex; gap: 1.4rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.8rem 1rem; background: var(--rm-surface-hover, #f6f9fa); border: 1px solid var(--rm-border, #e6eef1); border-radius: 10px; }
+    .settings .field { margin-bottom: 0; }
+    .q-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0.4rem 0 0.7rem; }
+    .q-head h3 { margin: 0; }
+    .count-pill { display: inline-block; font-size: 0.72rem; font-weight: 700; background: var(--teal); color: var(--rm-on-accent, #fff); border-radius: 999px; padding: 0.05rem 0.5rem; }
+    .linkbtn { background: none; border: 0; color: var(--teal); font-weight: 600; font-size: 0.82rem; cursor: pointer; padding: 0.2rem 0.3rem; }
+    .linkbtn:hover { text-decoration: underline; }
+    /* Preguntas colapsables */
+    .q-details { padding: 0; display: block; overflow: hidden; box-shadow: 0 1px 3px rgba(20,50,80,0.06); }
+    .q-summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.55rem; padding: 0.55rem 0.75rem; }
+    .q-summary::-webkit-details-marker { display: none; }
+    .q-summary::before { content: '▸'; color: var(--rm-muted, #90a4b0); transition: transform 0.15s; }
+    .q-details[open] > .q-summary::before { transform: rotate(90deg); }
+    .q-details[open] > .q-summary { border-bottom: 1px solid var(--rm-border, #eef0f2); }
+    .q-details > .q-top, .q-details > .q-opts, .q-details > .opts-field, .q-details > .flow { margin: 0.5rem 0.75rem; }
+    .q-sumlabel { flex: 1; min-width: 0; color: var(--rm-text, #1e3a5f); font-size: 0.9rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .q-summary .kind { padding: 0.12rem 0.45rem; border-radius: 6px; background: var(--rm-surface-hover, #eef3f5); }
+    .q-summary .kind.choice { background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--rm-accent-700, var(--teal)); }
+    .q-summary .kind.scale { background: #e5eefa; color: #2b5f9e; }
+    /* Grupos de botones diferenciados */
+    .btn-group { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0.7rem 0; padding: 0.5rem 0.7rem; border-radius: 10px; }
+    .btn-group .group-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #5b6b7d); margin-right: 0.15rem; }
+    .add-group { background: color-mix(in srgb, var(--teal) 8%, transparent); border: 1px solid color-mix(in srgb, var(--teal) 22%, transparent); }
+    .io-group { background: var(--rm-surface-hover, #f2f5f7); border: 1px dashed var(--rm-border, #cfdae1); }
+    .addbtn { border: 1px solid var(--teal); background: var(--rm-surface, #fff); color: var(--rm-accent-700, var(--teal)); padding: 0.4rem 0.85rem; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; box-shadow: 0 1px 2px rgba(42,157,143,0.18); }
+    .addbtn:hover { background: var(--teal); color: var(--rm-on-accent, #fff); }
+    .ghost.file { cursor: pointer; }
+    .save-bar { position: sticky; bottom: 0; background: var(--rm-surface, #fff); padding: 0.8rem 0; margin-top: 1rem; border-top: 1px solid var(--rm-border, #eef0f2); display: flex; }
   `;
 
   constructor() {
@@ -142,8 +177,9 @@ export class SurveyAdmin extends LitElement {
     this._defaultMax = 5;
     this._emailSubject = '';
     this._emailBody = '';
-    this._showFlow = false;
+    this._editTab = 'questions';
     this._flowLayout = {};
+    this._allExpanded = false;
     this._saving = false;
     this._partSurvey = null;
     this._partText = '';
@@ -194,7 +230,7 @@ export class SurveyAdmin extends LitElement {
     this._emailSubject = tpl.subject;
     this._emailBody = tpl.body;
     this._flowLayout = {};
-    this._showFlow = false;
+    this._editTab = 'questions';
     this._error = '';
     this._phase = 'edit';
   }
@@ -210,7 +246,7 @@ export class SurveyAdmin extends LitElement {
     this._emailSubject = survey.email?.subject ?? tpl.subject;
     this._emailBody = survey.email?.body ?? tpl.body;
     this._flowLayout = survey.layout ?? {};
-    this._showFlow = false;
+    this._editTab = 'questions';
     this._error = '';
     this._phase = 'edit';
   }
@@ -268,8 +304,16 @@ export class SurveyAdmin extends LitElement {
     this._questions = [...this._questions, q];
   }
 
-  _toggleFlow() { this._showFlow = !this._showFlow; }
+  _setTab(tab) { this._editTab = tab; }
   _onLayoutChange(e) { this._flowLayout = { ...e.detail }; }
+
+  /** Abre o cierra todas las preguntas (manipula los <details> directamente). */
+  _setAllQ(open) {
+    this._allExpanded = open;
+    this.updateComplete.then(() => {
+      this.shadowRoot?.querySelectorAll('details.q-details').forEach((d) => { d.open = open; });
+    });
+  }
 
   _patchQuestion(index, patch) {
     this._questions = this._questions.map((q, i) => (i === index ? { ...q, ...patch } : q));
@@ -658,9 +702,12 @@ export class SurveyAdmin extends LitElement {
   }
 
   _renderQuestion(q, i) {
-    return html`<div class="q">
+    return html`<details class="q q-details">
+      <summary class="q-summary">
+        <span class="kind ${q.type}">${QUESTION_KIND[q.type] ?? 'Escala'}</span>
+        <span class="q-sumlabel">${q.label || html`<em>(sin enunciado)</em>`}</span>
+      </summary>
       <div class="q-top">
-        <span class="kind">${QUESTION_KIND[q.type] ?? 'Escala'}</span>
         <input class="q-label" type="text" placeholder="Enunciado de la pregunta" .value=${q.label ?? ''}
           @input=${(e) => this._patchQuestion(i, { label: e.target.value })} />
         <span class="q-move">
@@ -684,10 +731,11 @@ export class SurveyAdmin extends LitElement {
           @change=${(e) => this._patchQuestion(i, { required: e.target.checked })} /> Obligatoria</label>
       </div>
       ${this._renderFlow(q, i)}
-    </div>`;
+    </details>`;
   }
 
   _renderEdit() {
+    const TABS = [['questions', 'Preguntas'], ['flow', 'Flujo visual'], ['email', 'Correo']];
     return html`
       <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
       <div class="field">
@@ -695,41 +743,65 @@ export class SurveyAdmin extends LitElement {
         <input id="t" class="title" type="text" placeholder="p. ej. «Encuesta de clima — agosto»" .value=${this._title}
           @input=${(e) => { this._title = e.target.value; }} />
       </div>
-      <div class="field">
-        <label for="th">Umbral de anonimato (mínimo de respuestas por segmento)</label>
-        <input id="th" class="num" type="number" min="2" .value=${String(this._threshold)}
-          @input=${(e) => { this._threshold = Number(e.target.value) || 5; }} />
+      <div class="tabs" role="tablist">
+        ${TABS.map(([id, label]) => html`<button class="tab ${this._editTab === id ? 'on' : ''}"
+          role="tab" aria-selected=${this._editTab === id ? 'true' : 'false'} @click=${() => this._setTab(id)}>${label}</button>`)}
       </div>
-      <div class="field">
-        <label>Escala por defecto de las preguntas (la usan las de escala nuevas y el CSV)</label>
-        <div class="q-opts">
-          <label>de <input class="num" type="number" .value=${String(this._defaultMin)}
-            @input=${(e) => { this._defaultMin = Number(e.target.value); }} /></label>
-          <label>a <input class="num" type="number" .value=${String(this._defaultMax)}
-            @input=${(e) => { this._defaultMax = Number(e.target.value); }} /></label>
+      <div class="tab-body">
+        ${this._editTab === 'questions' ? this._renderQuestionsTab() : null}
+        ${this._editTab === 'flow' ? html`<survey-flow-canvas .questions=${this._questions} .layout=${this._flowLayout}
+          @layout-change=${(e) => this._onLayoutChange(e)}></survey-flow-canvas>` : null}
+        ${this._editTab === 'email' ? this._renderEmailTab() : null}
+      </div>
+      ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      <div class="save-bar">
+        <button class="primary" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar encuesta'}</button>
+      </div>`;
+  }
+
+  _renderQuestionsTab() {
+    const n = this._questions.length;
+    return html`
+      <div class="settings">
+        <div class="field">
+          <label for="th">Umbral de anonimato</label>
+          <input id="th" class="num" type="number" min="2" .value=${String(this._threshold)}
+            @input=${(e) => { this._threshold = Number(e.target.value) || 5; }} />
+        </div>
+        <div class="field">
+          <label>Escala por defecto</label>
+          <div class="q-opts">
+            <label>de <input class="num" type="number" .value=${String(this._defaultMin)}
+              @input=${(e) => { this._defaultMin = Number(e.target.value); }} /></label>
+            <label>a <input class="num" type="number" .value=${String(this._defaultMax)}
+              @input=${(e) => { this._defaultMax = Number(e.target.value); }} /></label>
+          </div>
         </div>
       </div>
-      <h2>Preguntas</h2>
-      ${this._questions.length
-        ? this._questions.map((q, i) => this._renderQuestion(q, i))
-        : html`<p class="empty">Sin preguntas. Carga la plantilla o añade una.</p>`}
-      <div class="add-row">
-        <button class="ghost" @click=${() => this._addQuestion('scale')}>+ Pregunta de escala</button>
-        <button class="ghost" @click=${() => this._addQuestion('text')}>+ Pregunta de texto</button>
-        <button class="ghost" @click=${() => this._addQuestion('choice')}>+ Pregunta de opción</button>
+      <div class="q-head">
+        <h3>Preguntas${n ? html` <span class="count-pill">${n}</span>` : ''}</h3>
+        ${n > 1 ? html`<button class="linkbtn" @click=${() => this._setAllQ(!this._allExpanded)}>${this._allExpanded ? 'Colapsar todas' : 'Descolapsar todas'}</button>` : null}
+      </div>
+      ${n ? this._questions.map((q, i) => this._renderQuestion(q, i)) : html`<p class="empty">Sin preguntas. Añade una o carga una plantilla.</p>`}
+      <div class="btn-group add-group">
+        <span class="group-label">Añadir pregunta</span>
+        <button class="addbtn scale" @click=${() => this._addQuestion('scale')}>+ Escala</button>
+        <button class="addbtn text" @click=${() => this._addQuestion('text')}>+ Texto</button>
+        <button class="addbtn choice" @click=${() => this._addQuestion('choice')}>+ Opción única</button>
+      </div>
+      <div class="btn-group io-group">
+        <span class="group-label">Plantilla y archivos</span>
         <button class="ghost" @click=${() => this._loadTemplate()}>Plantilla eNPS + Q12</button>
-        <label class="ghost">Importar CSV<input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onQuestionsCsv(e)} hidden /></label>
-        <label class="ghost">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
-        <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
+        <label class="ghost file">Importar CSV<input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onQuestionsCsv(e)} hidden /></label>
+        <label class="ghost file">Importar JSON<input type="file" accept=".json,application/json" @change=${(e) => this._onTemplateFile(e)} hidden /></label>
+        <button class="ghost" ?disabled=${!n} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
-      <p class="lead" style="margin-top:0.4rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen con JSON o el editor de reglas.</p>
-      <div class="save-row">
-        <button class="ghost" @click=${() => this._toggleFlow()}>${this._showFlow ? 'Ocultar flujo visual' : 'Ver flujo visual'}</button>
-      </div>
-      ${this._showFlow ? html`<survey-flow-canvas .questions=${this._questions} .layout=${this._flowLayout}
-        @layout-change=${(e) => this._onLayoutChange(e)}></survey-flow-canvas>` : null}
-      <h2>Mensaje del correo</h2>
-      <p class="lead">El texto que acompaña al enlace cuando se envía la encuesta. Escribe <code>{{enlace}}</code> donde quieras que aparezca el enlace personal de cada persona.</p>
+      <p class="lead" style="margin-top:0.6rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen en el flujo visual o con JSON.</p>`;
+  }
+
+  _renderEmailTab() {
+    return html`
+      <p class="lead">El texto que acompaña al enlace al enviar la encuesta. Escribe <code>{{enlace}}</code> donde quieras que aparezca el enlace personal.</p>
       <div class="field">
         <label for="es">Asunto</label>
         <input id="es" class="title" type="text" .value=${this._emailSubject}
@@ -737,12 +809,8 @@ export class SurveyAdmin extends LitElement {
       </div>
       <div class="field">
         <label for="eb">Cuerpo</label>
-        <textarea id="eb" rows="8" .value=${this._emailBody}
+        <textarea id="eb" rows="9" .value=${this._emailBody}
           @input=${(e) => { this._emailBody = e.target.value; }}></textarea>
-      </div>
-      ${this._error ? html`<p class="error">${this._error}</p>` : null}
-      <div class="save-row">
-        <button class="primary" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar'}</button>
       </div>`;
   }
 
