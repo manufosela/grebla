@@ -10,6 +10,7 @@ import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
 import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
+import { defaultEmailTemplate } from '../../tools/survey/domain/email.js';
 import { END, flowErrors } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { listPadron } from '../../lib/padron.js';
@@ -18,6 +19,7 @@ import {
 } from '../../tools/survey/domain/results.js';
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, createSurveyTokens, listTokens, listAnswers,
+  sendSurveyTestEmail, sendSurveyBulkEmails,
 } from '../../lib/survey.js';
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
@@ -37,6 +39,8 @@ export class SurveyAdmin extends LitElement {
     _threshold: { state: true },
     _defaultMin: { state: true },
     _defaultMax: { state: true },
+    _emailSubject: { state: true },
+    _emailBody: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
     _partText: { state: true },
@@ -46,6 +50,10 @@ export class SurveyAdmin extends LitElement {
     _padronDept: { state: true },
     _padronActive: { state: true },
     _padronError: { state: true },
+    _testEmail: { state: true },
+    _sendBusy: { state: true },
+    _sendNotice: { state: true },
+    _confirmBulk: { state: true },
     _copiedAll: { state: true },
     _resSurvey: { state: true },
     _resAnswers: { state: true },
@@ -98,6 +106,7 @@ export class SurveyAdmin extends LitElement {
     .add-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.6rem 0 1.4rem; }
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
+    .notice { color: var(--rm-accent-700, #1f7a6e); font-size: 0.85rem; font-weight: 600; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     textarea { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); resize: vertical; }
     textarea:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
@@ -128,6 +137,8 @@ export class SurveyAdmin extends LitElement {
     this._threshold = 5;
     this._defaultMin = 1;
     this._defaultMax = 5;
+    this._emailSubject = '';
+    this._emailBody = '';
     this._saving = false;
     this._partSurvey = null;
     this._partText = '';
@@ -137,6 +148,10 @@ export class SurveyAdmin extends LitElement {
     this._padronDept = '';
     this._padronActive = true;
     this._padronError = '';
+    this._testEmail = '';
+    this._sendBusy = false;
+    this._sendNotice = '';
+    this._confirmBulk = false;
     this._copiedAll = false;
     this._resSurvey = null;
     this._resAnswers = [];
@@ -170,6 +185,9 @@ export class SurveyAdmin extends LitElement {
     this._threshold = 5;
     this._defaultMin = 1;
     this._defaultMax = 5;
+    const tpl = defaultEmailTemplate();
+    this._emailSubject = tpl.subject;
+    this._emailBody = tpl.body;
     this._error = '';
     this._phase = 'edit';
   }
@@ -181,6 +199,9 @@ export class SurveyAdmin extends LitElement {
     this._threshold = Number.isInteger(survey.threshold) ? survey.threshold : 5;
     this._defaultMin = Number.isInteger(survey.defaultScale?.min) ? survey.defaultScale.min : 1;
     this._defaultMax = Number.isInteger(survey.defaultScale?.max) ? survey.defaultScale.max : 5;
+    const tpl = defaultEmailTemplate();
+    this._emailSubject = survey.email?.subject ?? tpl.subject;
+    this._emailBody = survey.email?.body ?? tpl.body;
     this._error = '';
     this._phase = 'edit';
   }
@@ -297,8 +318,11 @@ export class SurveyAdmin extends LitElement {
     this._saving = true;
     this._error = '';
     try {
-      // Mismo payload (con defaultScale) para alta y edición.
-      const payload = draftToPayload({ title, questions, threshold: this._threshold, defaultScale });
+      // Mismo payload (con defaultScale y plantilla de correo) para alta y edición.
+      const payload = draftToPayload({
+        title, questions, threshold: this._threshold, defaultScale,
+        email: { subject: this._emailSubject, body: this._emailBody },
+      });
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
       await this._loadList();
@@ -350,7 +374,7 @@ export class SurveyAdmin extends LitElement {
     // Cargas independientes: un fallo del padrón NO debe ocultarse como «vacío»
     // ni impedir ver los tokens ya generados.
     try {
-      this._partTokens = await listTokens(survey.id);
+      this._partTokens = (await listTokens(survey.id)).filter((t) => t.test !== true);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los participantes.';
     }
@@ -391,7 +415,7 @@ export class SurveyAdmin extends LitElement {
     this._error = '';
     try {
       await createSurveyTokens(this._partSurvey.id, participants);
-      this._partTokens = await listTokens(this._partSurvey.id);
+      this._partTokens = (await listTokens(this._partSurvey.id)).filter((t) => t.test !== true);
       this._partText = '';
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron generar los enlaces.';
@@ -404,6 +428,40 @@ export class SurveyAdmin extends LitElement {
     const participants = parseParticipants(this._partText);
     if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
     return this._createTokens(participants);
+  }
+
+  _sendMsg(err) { return err instanceof Error ? err.message : 'No se pudo enviar el correo.'; }
+
+  /** Envía un correo de prueba (enlace que no cuenta) al email indicado. */
+  async _sendTest() {
+    const to = String(this._testEmail ?? '').trim();
+    if (!to.includes('@')) { this._error = 'Escribe un email de prueba válido.'; return; }
+    this._sendBusy = true; this._error = ''; this._sendNotice = '';
+    try {
+      await sendSurveyTestEmail(this._partSurvey.id, to);
+      this._sendNotice = `Correo de prueba enviado a ${to}. Su respuesta no contará en los resultados.`;
+    } catch (err) {
+      this._error = this._sendMsg(err);
+    } finally {
+      this._sendBusy = false;
+    }
+  }
+
+  _askBulk() { this._confirmBulk = true; this._error = ''; this._sendNotice = ''; }
+  _cancelBulk() { this._confirmBulk = false; }
+
+  /** Envío masivo a todos los participantes (tras confirmación inline). */
+  async _sendBulk() {
+    this._sendBusy = true; this._error = ''; this._sendNotice = '';
+    try {
+      const { sent, failed } = await sendSurveyBulkEmails(this._partSurvey.id);
+      this._confirmBulk = false;
+      this._sendNotice = `Enviados ${sent} correo${sent === 1 ? '' : 's'}${failed ? `, ${failed} fallido${failed === 1 ? '' : 's'}` : ''}.`;
+    } catch (err) {
+      this._error = this._sendMsg(err);
+    } finally {
+      this._sendBusy = false;
+    }
   }
 
   _generateFromPadron() {
@@ -436,8 +494,9 @@ export class SurveyAdmin extends LitElement {
     this._phase = 'results';
     try {
       const [answers, tokens] = await Promise.all([listAnswers(survey.id), listTokens(survey.id)]);
-      this._resAnswers = answers;
-      this._resTokens = tokens;
+      // Los enlaces y respuestas de PRUEBA no cuentan en los agregados ni en la participación.
+      this._resAnswers = answers.filter((a) => a.test !== true);
+      this._resTokens = tokens.filter((t) => t.test !== true);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los resultados.';
     } finally {
@@ -651,6 +710,18 @@ export class SurveyAdmin extends LitElement {
         <button class="ghost" ?disabled=${!this._questions.length} @click=${() => this._exportTemplate()}>Exportar JSON</button>
       </div>
       <p class="lead" style="margin-top:0.4rem">CSV para preguntas simples: <code>tipo,enunciado,min,max,obligatoria,opciones</code> (opciones de choice separadas por <code>|</code>). Los saltos condicionales se hacen con JSON o el editor de reglas.</p>
+      <h2>Mensaje del correo</h2>
+      <p class="lead">El texto que acompaña al enlace cuando se envía la encuesta. Escribe <code>{{enlace}}</code> donde quieras que aparezca el enlace personal de cada persona.</p>
+      <div class="field">
+        <label for="es">Asunto</label>
+        <input id="es" class="title" type="text" .value=${this._emailSubject}
+          @input=${(e) => { this._emailSubject = e.target.value; }} />
+      </div>
+      <div class="field">
+        <label for="eb">Cuerpo</label>
+        <textarea id="eb" rows="8" .value=${this._emailBody}
+          @input=${(e) => { this._emailBody = e.target.value; }}></textarea>
+      </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">
         <button class="primary" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar'}</button>
@@ -719,7 +790,28 @@ export class SurveyAdmin extends LitElement {
             <td><input class="link" type="text" readonly .value=${this._linkFor(t.token)} @focus=${(e) => e.target.select()} /></td>
             <td><span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span></td>
           </tr>`)}</tbody>
-        </table>` : null}`;
+        </table>` : null}
+      ${total ? this._renderSendBox() : null}`;
+  }
+
+  /** Envío por correo: prueba (no cuenta) y masivo (con confirmación inline). */
+  _renderSendBox() {
+    const total = this._partTokens.length;
+    return html`
+      <h3>Enviar por correo</h3>
+      <p class="lead">Se envía desde <code>encuestas@tribbuapp.com</code>. La encuesta debe estar <strong>abierta</strong> y tener el mensaje redactado (pestaña de edición).</p>
+      ${this._sendNotice ? html`<p class="notice">${this._sendNotice}</p>` : null}
+      <div class="save-row">
+        <input type="email" placeholder="email para la prueba" .value=${this._testEmail}
+          @input=${(e) => { this._testEmail = e.target.value; }} />
+        <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._sendTest()}>Enviar prueba</button>
+      </div>
+      <div class="save-row">
+        ${this._confirmBulk
+          ? html`<button class="primary" ?disabled=${this._sendBusy} @click=${() => this._sendBulk()}>${this._sendBusy ? 'Enviando…' : `Confirmar envío a ${total}`}</button>
+              <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._cancelBulk()}>Cancelar</button>`
+          : html`<button class="primary" ?disabled=${!total || this._sendBusy} @click=${() => this._askBulk()}>Enviar a todos (${total})</button>`}
+      </div>`;
   }
 
   render() {

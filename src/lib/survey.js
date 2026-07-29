@@ -16,12 +16,13 @@ async function callable(name) {
 // ── Admin de encuestas (solo superadmin; las reglas escriben /surveys directo) ──
 
 /** Crea una encuesta en borrador. @returns {Promise<string>} id */
-export async function createSurvey({ title, questions, threshold, defaultScale } = {}) {
+export async function createSurvey({ title, questions, threshold, defaultScale, email } = {}) {
   const ref = await addDoc(collection(db, 'surveys'), {
     title: String(title ?? '').trim(),
     questions: questions ?? [],
     threshold: Number.isInteger(threshold) ? threshold : 5,
     defaultScale: defaultScale ?? { min: 1, max: 5 },
+    email: email ?? { subject: '', body: '' },
     status: 'draft',
     createdAt: serverTimestamp(),
   });
@@ -68,6 +69,22 @@ export async function createSurveyTokens(surveyId, participants) {
   const fn = await callable('createSurveyTokens');
   const res = await fn({ surveyId, participants });
   return res.data?.tokens ?? [];
+}
+
+/**
+ * Envía un correo de PRUEBA a `to` con un enlace de prueba (su respuesta no cuenta).
+ * La URL de la instancia la compone el servidor (no se manda desde el cliente).
+ */
+export async function sendSurveyTestEmail(surveyId, to) {
+  const fn = await callable('sendSurveyTestEmail');
+  await fn({ surveyId, to });
+}
+
+/** Envío MASIVO: manda a cada participante su enlace. @returns {Promise<{sent,failed}>} */
+export async function sendSurveyBulkEmails(surveyId) {
+  const fn = await callable('sendSurveyBulkEmails');
+  const res = await fn({ surveyId });
+  return res.data ?? { sent: 0, failed: 0 };
 }
 
 /** Tokens (padrón) de una encuesta, para participación y reenvío. Solo superadmin. */

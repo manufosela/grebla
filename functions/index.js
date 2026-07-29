@@ -19,7 +19,8 @@ import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
-import { validateResponses, sanitizeResponses, bucketMetadata, answerId } from './survey.js';
+import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody } from './survey.js';
+import { sendGmail } from './gmail.js';
 
 initializeApp();
 
@@ -267,6 +268,9 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
 // answerId = HMAC(salt, token), así se edita la MISMA respuesta sin guardar el
 // mapeo token→respuesta (un admin con la BBDD no puede reidentificar por ahí).
 const SURVEY_SALT = defineSecret('SURVEY_SALT');
+const GMAIL_SA_KEY = defineSecret('GMAIL_SA_KEY');
+const MAIL_SENDER_USER = 'encuestas@tribbuapp.com'; // buzón impersonado (delegación de dominio)
+const MAIL_FROM = 'Encuestas TRIBBU <encuestas@tribbuapp.com>';
 
 /** Carga la encuesta abierta de un token y las respuestas previas (para editar). */
 export const getSurveyForToken = onCall(
@@ -317,6 +321,7 @@ export const submitSurveyResponse = onCall(
     await answerRef.set({
       answers: clean,
       metadata: bucketMetadata(tokenSnap.data().metadata ?? {}, nowIso),
+      test: tokenSnap.data().test === true, // respuesta de PRUEBA: se excluye de los agregados
       createdAt: prev.exists ? (prev.data().createdAt ?? nowIso) : nowIso,
       updatedAt: nowIso,
     });
@@ -373,6 +378,99 @@ export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (requ
   if (pending > 0) await batch.commit();
   return { tokens: results };
 });
+
+/** Verifica que el llamante es superadmin o gestor de encuestas; si no, lanza. */
+async function assertSurveyManager(uid) {
+  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
+    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede enviar correos.');
+  }
+}
+
+/**
+ * Base pública de la instancia, derivada del proyecto EN EL SERVIDOR. Nunca se usa
+ * un `origin` del cliente para componer los enlaces (evita convertir el envío en
+ * un vector de phishing hacia un dominio arbitrario).
+ */
+function appBaseUrl() {
+  const projectId = process.env.GCLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT ?? '';
+  return `https://${projectId}.web.app`;
+}
+
+/**
+ * Lee la encuesta, valida que esté ABIERTA (para que el enlace se pueda responder)
+ * y que su plantilla de correo esté completa; devuelve sus datos.
+ */
+async function loadSurveyForEmail(db, surveyId) {
+  const ref = db.doc(`surveys/${surveyId}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
+  const survey = snap.data();
+  if (survey.status !== 'open') {
+    throw new HttpsError('failed-precondition', 'Abre la encuesta antes de enviar los correos.');
+  }
+  const errors = emailTemplateErrors(survey.email ?? {});
+  if (errors.length) throw new HttpsError('failed-precondition', errors[0]);
+  return { ref, survey };
+}
+
+/**
+ * Envía un correo de PRUEBA a un destinatario con un enlace de prueba (token
+ * `test`): se puede rellenar, pero su respuesta NO cuenta en los agregados. Solo
+ * superadmin/People. La encuesta debe estar abierta para poder responderlo.
+ */
+export const sendSurveyTestEmail = onCall(
+  { region: 'europe-west1', secrets: [GMAIL_SA_KEY] },
+  async (request) => {
+    await assertSurveyManager(request.auth?.uid);
+    const { surveyId, to } = request.data ?? {};
+    if (!surveyId || !to) throw new HttpsError('invalid-argument', 'Faltan surveyId o to.');
+    if (!String(to).includes('@')) throw new HttpsError('invalid-argument', 'El email de prueba no es válido.');
+    const db = getFirestore();
+    const { ref, survey } = await loadSurveyForEmail(db, surveyId);
+    const token = randomBytes(18).toString('hex');
+    await ref.collection('tokens').doc(token).set({ email: to, metadata: {}, used: false, test: true });
+    const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token}`;
+    await sendGmail({
+      saKeyJson: GMAIL_SA_KEY.value(), senderUser: MAIL_SENDER_USER, from: MAIL_FROM,
+      to, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
+    });
+    return { ok: true };
+  },
+);
+
+/**
+ * Envío MASIVO: manda a cada participante (token no de prueba) su enlace personal.
+ * Secuencial y tolerante a fallos (cuenta enviados/fallidos). Solo superadmin/People.
+ */
+export const sendSurveyBulkEmails = onCall(
+  { region: 'europe-west1', secrets: [GMAIL_SA_KEY], timeoutSeconds: 540 },
+  async (request) => {
+    await assertSurveyManager(request.auth?.uid);
+    const { surveyId } = request.data ?? {};
+    if (!surveyId) throw new HttpsError('invalid-argument', 'Falta surveyId.');
+    const db = getFirestore();
+    const { ref, survey } = await loadSurveyForEmail(db, surveyId);
+    const tokens = await ref.collection('tokens').get();
+    let sent = 0;
+    let failed = 0;
+    for (const doc of tokens.docs) {
+      const data = doc.data();
+      if (data.test === true || !data.email) continue; // los de prueba no se reenvían
+      const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${doc.id}`;
+      try {
+        await sendGmail({
+          saKeyJson: GMAIL_SA_KEY.value(), senderUser: MAIL_SENDER_USER, from: MAIL_FROM,
+          to: data.email, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
+        });
+        sent += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { sent, failed };
+  },
+);
 
 /**
  * Propuesta de preguntas para un periodo de O2O con IA. El cliente manda las
