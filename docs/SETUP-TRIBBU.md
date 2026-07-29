@@ -24,47 +24,51 @@ tribbu. Nada toca el repo (de la parte del repo me encargo yo con lo que me pase
 
 ## 5. Secrets (CLI)
 
-**`SURVEY_SALT` debe llevar el MISMO valor que grebla-app** (si cambia, los enlaces ya enviados
-dejan de valer). Ojo: `grebla-app` es tu cuenta personal y `grebla-tribbu` la de tribbu, así que
-suele hacer falta cambiar de cuenta entre leer y escribir.
+> Todos los comandos llevan **`--account <email>`** porque tienes varias cuentas logadas
+> (tribbu, personal, OX). Sustituye `CUENTA_TRIBBU` por la que administra `grebla-tribbu`.
 
-- **Si una misma cuenta tiene acceso a los dos proyectos**, cópialo de un tirón:
-  ```bash
-  gcloud secrets versions access latest --secret=SURVEY_SALT --project=grebla-app \
-    | firebase functions:secrets:set SURVEY_SALT --project grebla-tribbu --data-file=-
-  ```
-- **Si son cuentas distintas**, usa un fichero temporal (nunca imprimas el valor en pantalla):
-  ```bash
-  SALT_FILE=$(mktemp)                    # fichero temporal con permisos 600
-  # (1) con la cuenta de grebla-app — vuelca el valor al fichero (sin mostrarlo):
-  gcloud secrets versions access latest --secret=SURVEY_SALT --project=grebla-app > "$SALT_FILE"
-  # (2) cambia a la cuenta de tribbu y súbelo desde el fichero:
-  firebase functions:secrets:set SURVEY_SALT --project grebla-tribbu --data-file="$SALT_FILE"
-  rm -f "$SALT_FILE"                     # bórralo siempre al terminar
-  ```
-
-El resto de secrets, ya con la cuenta de tribbu:
+Estamos en pruebas y no hay enlaces en uso, así que el **`SURVEY_SALT` es NUEVO** (no se migra):
 ```bash
-firebase functions:secrets:set ANTHROPIC_API_KEY --project grebla-tribbu
-firebase functions:secrets:set DORA_GITHUB_TOKEN --project grebla-tribbu
-firebase functions:secrets:set LINEAR_API_KEY    --project grebla-tribbu
+openssl rand -hex 32 \
+  | firebase functions:secrets:set SURVEY_SALT --project grebla-tribbu --account CUENTA_TRIBBU --data-file=-
+
+firebase functions:secrets:set ANTHROPIC_API_KEY --project grebla-tribbu --account CUENTA_TRIBBU
+firebase functions:secrets:set DORA_GITHUB_TOKEN --project grebla-tribbu --account CUENTA_TRIBBU
+firebase functions:secrets:set LINEAR_API_KEY    --project grebla-tribbu --account CUENTA_TRIBBU
 ```
 
-## 6. Migrar los usuarios (⚠ conservando los UIDs)
+## 6. Migrar los usuarios (conservando los UIDs)
 ```bash
-firebase auth:export users.json --project grebla-app
-firebase auth:import users.json --project grebla-tribbu
+firebase auth:export users.json --project grebla-app    --account CUENTA_PERSONAL
+firebase auth:import users.json --project grebla-tribbu --account CUENTA_TRIBBU
 ```
 
 ## 7. Migrar los datos (Firestore)
+> `gsutil` **no admite `--account`**: usa la cuenta ACTIVA de gcloud, que se fija con
+> `gcloud config set account` antes de cada tramo.
 ```bash
-gcloud firestore export gs://grebla-app.appspot.com/mig --project grebla-app
-gsutil -m cp -r gs://grebla-app.appspot.com/mig gs://grebla-tribbu.appspot.com/
-gcloud firestore import gs://grebla-tribbu.appspot.com/mig --project grebla-tribbu
+# (1) export de grebla-app a su bucket (cuenta personal):
+gcloud firestore export gs://grebla-app.appspot.com/mig --project grebla-app --account CUENTA_PERSONAL
+
+# (2) baja el export a local con la cuenta personal y súbelo al de tribbu con la de tribbu.
+#     Copiando a "./" (no a otra carpeta) se conserva el nombre "mig" sin anidar:
+gcloud config set account CUENTA_PERSONAL
+gsutil -m cp -r gs://grebla-app.appspot.com/mig ./          # crea ./mig con el export intacto
+gcloud config set account CUENTA_TRIBBU
+gsutil -m cp -r ./mig gs://grebla-tribbu.firebasestorage.app/   # queda gs://…/mig con el export intacto
+rm -rf ./mig
+
+# (3) import del export exacto en grebla-tribbu (cuenta de tribbu):
+gcloud firestore import gs://grebla-tribbu.firebasestorage.app/mig --project grebla-tribbu --account CUENTA_TRIBBU
 ```
+> Verifica el nombre del bucket de `grebla-app` en Storage de la consola: los proyectos
+> antiguos usan `.appspot.com`; los nuevos, `.firebasestorage.app`.
+
+> **Atajo si prefieres empezar limpio**: al estar en pruebas, puedes **saltarte los pasos 6 y 7**.
+> El proyecto arranca vacío y recreas el superadmin con tu primer login. Menos lío que la
+> migración cross-cuenta.
 
 ---
 
-Cuando tengas hechos los pasos **1–4**, pásame el **project id** y la **config web**: dejo el
-repo listo (`.env.tribbu`, alias) y desplegamos. Los pasos 5–7 (secrets y migración) los
-hacemos juntos después, contigo ejecutando los comandos.
+Config ya recibida. Los pasos **1–4** están hechos; quedan **5** (secrets) y, si quieres
+conservar datos, **6–7** (migración). El `.env.tribbu` y el deploy los preparo yo.
