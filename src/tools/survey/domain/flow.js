@@ -3,11 +3,46 @@
  *
  * Una encuesta es un grafo dirigido: cada pregunta puede definir `next` (id de la
  * siguiente, `END` para terminar, o ausente = la siguiente en orden) y `rules`
- * `[{ equals, goto }]` que desvían según la respuesta. Sin `next` ni `rules`, el
- * flujo es lineal (retrocompatible con las encuestas ya creadas).
+ * `[{ op, value, goto }]` que desvían según la respuesta. `op` es un operador de
+ * comparación (=, ≠, >, ≥, <, ≤); las reglas se evalúan EN ORDEN y gana la
+ * primera que se cumple. Sin `next` ni `rules`, el flujo es lineal (retrocompat).
+ *
+ * Compatibilidad: las reglas antiguas `{ equals, goto }` se leen como `op:'eq'`.
  */
 
 export const END = '__end__';
+
+/** Operadores de condición disponibles (el orden es el del selector del editor). */
+export const OPERATORS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'];
+const OP_SYMBOL = { eq: '=', neq: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤' };
+
+/** Operador de una regla (compat: sin `op` → igualdad). */
+export const ruleOp = (rule) => rule?.op ?? 'eq';
+/** Valor comparado por una regla (compat: la forma antigua usaba `equals`). */
+export const ruleValue = (rule) => (rule && 'op' in rule ? rule.value : rule?.equals);
+
+/** Etiqueta legible de una regla para el lienzo (p. ej. «> 8», «≤ 5», «Ventas»). */
+export function ruleLabel(rule) {
+  const op = ruleOp(rule);
+  const value = ruleValue(rule);
+  return op === 'eq' ? String(value) : `${OP_SYMBOL[op] ?? op} ${value}`;
+}
+
+/**
+ * ¿Se cumple la condición (`op` `value`) para `answer`? Las comparaciones de
+ * orden (>, ≥, <, ≤) solo aplican a números; con no-números devuelven `false`.
+ */
+export function ruleMatches(op, answer, value) {
+  switch (op) {
+    case 'eq': return answer === value;
+    case 'neq': return answer !== value;
+    case 'gt': return typeof answer === 'number' && typeof value === 'number' && answer > value;
+    case 'gte': return typeof answer === 'number' && typeof value === 'number' && answer >= value;
+    case 'lt': return typeof answer === 'number' && typeof value === 'number' && answer < value;
+    case 'lte': return typeof answer === 'number' && typeof value === 'number' && answer <= value;
+    default: return false;
+  }
+}
 
 /** Id de la primera pregunta (o null si no hay ninguna). */
 export function firstQuestionId(questions) {
@@ -21,13 +56,13 @@ export function hasBranching(questions) {
 
 /**
  * Id de la pregunta siguiente a `question` dada `answer`: gana la primera regla
- * cuyo `equals` coincide con la respuesta; si ninguna, `next`; si no, la
+ * cuya condición (`op` `value`) se cumple; si ninguna, `next`; si no, la
  * siguiente en orden; y `END` si no hay más.
  */
 export function resolveNext(question, answer, questions) {
   const rules = Array.isArray(question?.rules) ? question.rules : [];
   for (const rule of rules) {
-    if (rule && rule.equals === answer) return rule.goto || END;
+    if (rule && ruleMatches(ruleOp(rule), answer, ruleValue(rule))) return rule.goto || END;
   }
   if (question?.next) return question.next;
   const list = questions ?? [];
@@ -85,6 +120,14 @@ export function flowErrors(questions) {
     (Array.isArray(q?.rules) ? q.rules : []).forEach((rule, j) => {
       if (!rule || rule.goto == null || !isValidTarget(rule.goto)) {
         errors.push(`La regla ${j + 1} de la pregunta ${i + 1} apunta a un destino que no existe.`);
+        return;
+      }
+      const op = ruleOp(rule);
+      const value = ruleValue(rule);
+      if (value == null || value === '') {
+        errors.push(`La regla ${j + 1} de la pregunta ${i + 1} no tiene valor de comparación.`);
+      } else if (op !== 'eq' && op !== 'neq' && !Number.isFinite(value)) {
+        errors.push(`La regla ${j + 1} de la pregunta ${i + 1} compara con «mayor/menor» pero el valor no es numérico.`);
       }
     });
   });

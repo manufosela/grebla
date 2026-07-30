@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { END, firstQuestionId, hasBranching, resolveNext, flowErrors } from './flow.js';
+import { END, firstQuestionId, hasBranching, resolveNext, flowErrors, ruleMatches, ruleLabel } from './flow.js';
 
 const linear = [
   { id: 'a', type: 'text' },
@@ -76,5 +76,52 @@ describe('flowErrors', () => {
   it('un salto hacia adelante no es ciclo', () => {
     const qs = [{ id: 'a', next: 'c' }, { id: 'b' }, { id: 'c' }];
     expect(flowErrors(qs)).toEqual([]);
+  });
+  it('rechaza una regla de mayor/menor con valor no numérico', () => {
+    expect(flowErrors([{ id: 'a', rules: [{ op: 'gt', value: 'ocho', goto: END }] }]).length).toBeGreaterThan(0);
+  });
+  it('rechaza una regla sin valor de comparación', () => {
+    expect(flowErrors([{ id: 'a', rules: [{ op: 'gte', value: null, goto: END }] }]).length).toBeGreaterThan(0);
+  });
+});
+
+describe('ruleMatches (operadores)', () => {
+  it('compara por orden solo con números', () => {
+    expect(ruleMatches('gt', 9, 8)).toBe(true);
+    expect(ruleMatches('gt', 7, 8)).toBe(false);
+    expect(ruleMatches('gte', 8, 8)).toBe(true);
+    expect(ruleMatches('lte', 5, 5)).toBe(true);
+    expect(ruleMatches('lt', 5, 5)).toBe(false);
+    expect(ruleMatches('gt', 'texto', 8)).toBe(false);
+  });
+  it('igualdad y desigualdad valen para texto y número', () => {
+    expect(ruleMatches('eq', 'Ventas', 'Ventas')).toBe(true);
+    expect(ruleMatches('neq', 'Ventas', 'Compras')).toBe(true);
+    expect(ruleMatches('neq', 3, 3)).toBe(false);
+  });
+});
+
+describe('resolveNext con operadores y orden', () => {
+  const q = { id: 'a', rules: [{ op: 'gte', value: 8, goto: 'x' }, { op: 'gte', value: 5, goto: 'y' }] };
+  const qs = [q, { id: 'x' }, { id: 'y' }, { id: 'z' }];
+  it('gana la primera condición que se cumple (rangos por orden)', () => {
+    expect(resolveNext(q, 9, qs)).toBe('x');
+    expect(resolveNext(q, 6, qs)).toBe('y');
+  });
+  it('si ninguna se cumple, cae en la siguiente en orden', () => {
+    expect(resolveNext(q, 3, qs)).toBe('x'); // sin next explícito → la siguiente pregunta del listado
+  });
+  it('mantiene compat con la forma antigua {equals}', () => {
+    const old = { id: 'a', rules: [{ equals: 1, goto: END }] };
+    expect(resolveNext(old, 1, [old, { id: 'b' }])).toBe(END);
+  });
+});
+
+describe('ruleLabel', () => {
+  it('igualdad muestra solo el valor; el resto, símbolo + valor', () => {
+    expect(ruleLabel({ op: 'eq', value: 'Ventas' })).toBe('Ventas');
+    expect(ruleLabel({ op: 'gt', value: 8 })).toBe('> 8');
+    expect(ruleLabel({ op: 'lte', value: 5 })).toBe('≤ 5');
+    expect(ruleLabel({ equals: 3 })).toBe('3');
   });
 });

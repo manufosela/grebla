@@ -12,7 +12,7 @@ import './survey-flow-canvas.js';
 import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
 import { defaultEmailTemplate } from '../../tools/survey/domain/email.js';
-import { END, flowErrors } from '../../tools/survey/domain/flow.js';
+import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { listPadron } from '../../lib/padron.js';
 import {
@@ -26,6 +26,10 @@ import {
 
 const STATUS_LABEL = { draft: 'Borrador', open: 'Abierta', closed: 'Cerrada' };
 const QUESTION_KIND = { scale: 'Escala', text: 'Texto', choice: 'Opción única' };
+// Operadores por tipo de pregunta: escala compara por orden; opción única, por igualdad.
+const OP_TEXT = { eq: '= igual a', neq: '≠ distinto de', gt: '> mayor que', gte: '≥ mayor o igual que', lt: '< menor que', lte: '≤ menor o igual que' };
+const OPS_SCALE = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
+const OPS_CHOICE = ['eq', 'neq'];
 
 export class SurveyAdmin extends LitElement {
   static properties = {
@@ -115,6 +119,9 @@ export class SurveyAdmin extends LitElement {
     .q-opts label { display: inline-flex; align-items: center; gap: 0.3rem; }
     .q-move button, .q-del { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.15rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
     .q-del:hover { border-color: #b42318; color: #b42318; }
+    button.q-move { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.15rem 0.45rem; font-size: 0.8rem; cursor: pointer; }
+    button.q-move:disabled { opacity: 0.35; cursor: default; }
+    .rule-hint { margin: 0.1rem 0 0.2rem; color: var(--rm-muted, #5b6b7d); font-size: 0.76rem; font-style: italic; }
     .add-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.6rem 0 1.4rem; }
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
@@ -423,8 +430,10 @@ export class SurveyAdmin extends LitElement {
 
   _addRule(i) {
     const q = this._questions[i];
-    const equals = q.type === 'choice' ? (choiceOptions(q)[0] ?? '') : (q.min ?? 1);
-    this._patchQuestion(i, { rules: [...(q.rules ?? []), { equals, goto: '' }] });
+    const rule = q.type === 'choice'
+      ? { op: 'eq', value: choiceOptions(q)[0] ?? '', goto: '' }
+      : { op: 'gte', value: q.min ?? 1, goto: '' };
+    this._patchQuestion(i, { rules: [...(q.rules ?? []), rule] });
   }
 
   _setRule(i, j, patch) {
@@ -434,6 +443,15 @@ export class SurveyAdmin extends LitElement {
 
   _removeRule(i, j) {
     this._patchQuestion(i, { rules: (this._questions[i].rules ?? []).filter((_, k) => k !== j) });
+  }
+
+  /** Reordena una regla (el orden importa: gana la primera cuya condición se cumple). */
+  _moveRule(i, j, dir) {
+    const rules = [...(this._questions[i].rules ?? [])];
+    const k = j + dir;
+    if (k < 0 || k >= rules.length) return;
+    [rules[j], rules[k]] = [rules[k], rules[j]];
+    this._patchQuestion(i, { rules });
   }
 
   async _save() {
@@ -764,16 +782,22 @@ export class SurveyAdmin extends LitElement {
       ${canBranch ? html`
         ${rules.map((r, j) => html`<div class="rule">
           <span>Si la respuesta es</span>
+          <select @change=${(e) => this._setRule(i, j, { op: e.target.value })}>
+            ${(q.type === 'choice' ? OPS_CHOICE : OPS_SCALE).map((op) => html`<option value=${op} ?selected=${ruleOp(r) === op}>${OP_TEXT[op]}</option>`)}
+          </select>
           ${q.type === 'choice'
-            ? html`<select @change=${(e) => this._setRule(i, j, { equals: e.target.value })}>
-                ${choiceOptions(q).map((opt) => html`<option value=${opt} ?selected=${r.equals === opt}>${opt}</option>`)}
+            ? html`<select @change=${(e) => this._setRule(i, j, { value: e.target.value })}>
+                ${choiceOptions(q).map((opt) => html`<option value=${opt} ?selected=${ruleValue(r) === opt}>${opt}</option>`)}
               </select>`
-            : html`<input class="num" type="number" .value=${String(r.equals ?? '')}
-                @input=${(e) => this._setRule(i, j, { equals: Number(e.target.value) })} />`}
+            : html`<input class="num" type="number" .value=${String(ruleValue(r) ?? '')}
+                @input=${(e) => this._setRule(i, j, { value: Number(e.target.value) })} />`}
           <span>→ ir a</span>
           ${this._renderDestSelect(r.goto, (v) => this._setRule(i, j, { goto: v }), q.id)}
+          <button class="q-move" title="Subir regla" ?disabled=${j === 0} @click=${() => this._moveRule(i, j, -1)}>↑</button>
+          <button class="q-move" title="Bajar regla" ?disabled=${j === rules.length - 1} @click=${() => this._moveRule(i, j, 1)}>↓</button>
           <button class="q-del" title="Quitar regla" @click=${() => this._removeRule(i, j)}>✕</button>
         </div>`)}
+        ${rules.length > 1 ? html`<p class="rule-hint">Se evalúan en orden: gana la primera condición que se cumple.</p>` : null}
         <button class="ghost" @click=${() => this._addRule(i)}>+ Regla condicional</button>` : null}
     </div>`;
   }
