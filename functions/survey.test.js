@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateResponses, sanitizeResponses, tenureBucket, ageBucket, bucketMetadata, answerId } from './survey.js';
+import { validateResponses, sanitizeResponses, tenureBucket, ageBucket, bucketMetadata, answerId, sanitizeParticipantMeta } from './survey.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const reason = { id: 'reason', type: 'text' };
@@ -29,6 +29,13 @@ describe('tenureBucket', () => {
   it('reparte en tramos', () => {
     expect(tenureBucket('2024-01-01T00:00:00Z', '2026-07-27T00:00:00Z')).toBe('1-3');
     expect(tenureBucket('2010-01-01T00:00:00Z', '2026-07-27T00:00:00Z')).toBe('10+');
+  });
+});
+
+describe('sanitizeParticipantMeta', () => {
+  it('conserva solo las claves conocidas recortadas y descarta lo demás', () => {
+    const out = sanitizeParticipantMeta({ department: ' Eng ', startDate: '2024-01-01', birthDate: '', location: 'Madrid', evil: 'x', name: 'Ana' });
+    expect(out).toEqual({ department: 'Eng', startDate: '2024-01-01', location: 'Madrid' });
   });
 });
 

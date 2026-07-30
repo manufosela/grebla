@@ -134,6 +134,18 @@ export async function resetSurveyResponses(surveyId, onlyTest = false) {
   return res.data ?? { cleared: 0, tokensReset: 0 };
 }
 
+/** Actualiza los campos de segmentación de un participante (por token), sin regenerar el enlace. */
+export async function updateSurveyParticipant(surveyId, token, metadata) {
+  const fn = await callable('updateSurveyParticipant');
+  await fn({ surveyId, token, metadata });
+}
+
+/** Borra un participante (su token) y su respuesta si la hubiera. */
+export async function deleteSurveyParticipant(surveyId, token) {
+  const fn = await callable('deleteSurveyParticipant');
+  await fn({ surveyId, token });
+}
+
 /** Tokens (padrón) de una encuesta, para participación y reenvío. Solo superadmin. */
 export async function listTokens(surveyId) {
   const snap = await getDocs(collection(db, 'surveys', surveyId, 'tokens'));
