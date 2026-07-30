@@ -45,6 +45,7 @@ export class SurveyAdmin extends LitElement {
     _emailBody: { state: true },
     _editTab: { state: true },
     _flowLayout: { state: true },
+    _selectedNodeId: { state: true },
     _allExpanded: { state: true },
     _templates: { state: true },
     _showSaveTpl: { state: true },
@@ -133,10 +134,10 @@ export class SurveyAdmin extends LitElement {
     .hidden-note { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-style: italic; margin: 0.4rem 0 0; }
     .texts { margin: 0.2rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
     /* Editor: pestañas */
-    .tabs { display: flex; gap: 0.25rem; border-bottom: 2px solid var(--rm-border, #e3ebef); margin: 0.6rem 0 1rem; }
-    .tab { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -2px; padding: 0.5rem 0.95rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); cursor: pointer; border-radius: 8px 8px 0 0; }
-    .tab:hover { color: var(--teal); background: var(--rm-surface-hover, #f2f7f8); }
-    .tab.on { color: var(--teal); border-bottom-color: var(--teal); }
+    .tabs { display: inline-flex; gap: 0.25rem; padding: 0.28rem; background: var(--rm-surface-hover, #eef3f5); border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; margin: 0.6rem 0 1.1rem; }
+    .tab { background: none; border: 0; padding: 0.5rem 1.15rem; font-weight: 600; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); cursor: pointer; border-radius: 9px; transition: background 0.12s, color 0.12s, box-shadow 0.12s; }
+    .tab:hover { color: var(--teal); }
+    .tab.on { background: var(--teal); color: var(--rm-on-accent, #fff); box-shadow: 0 1px 4px rgba(42,157,143,0.4); }
     .tab-body { min-height: 180px; }
     .settings { display: flex; gap: 1.4rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.8rem 1rem; background: var(--rm-surface-hover, #f6f9fa); border: 1px solid var(--rm-border, #e6eef1); border-radius: 10px; }
     .settings .field { margin-bottom: 0; }
@@ -177,6 +178,11 @@ export class SurveyAdmin extends LitElement {
     .act.danger:hover { border-color: #b42318; color: #b42318; }
     .save-tpl { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.6rem 0; padding: 0.6rem 0.8rem; background: color-mix(in srgb, var(--teal) 7%, transparent); border: 1px solid color-mix(in srgb, var(--teal) 20%, transparent); border-radius: 10px; }
     .save-tpl input { flex: 1 1 14rem; }
+    /* Pestaña de flujo: lienzo + panel lateral */
+    .flow-wrap { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+    .flow-canvas { flex: 1 1 56%; min-width: 0; max-height: 72vh; overflow: auto; }
+    .flow-panel { flex: 1 1 250px; min-width: 240px; max-width: 360px; border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; padding: 0.7rem 0.8rem; background: var(--rm-surface, #fff); box-shadow: 0 1px 4px rgba(20,50,80,0.07); }
+    .fp-title { margin: 0 0 0.6rem; font-size: 0.82rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); }
   `;
 
   constructor() {
@@ -197,6 +203,7 @@ export class SurveyAdmin extends LitElement {
     this._emailBody = '';
     this._editTab = 'questions';
     this._flowLayout = {};
+    this._selectedNodeId = null;
     this._allExpanded = false;
     this._templates = [];
     this._showSaveTpl = false;
@@ -375,6 +382,7 @@ export class SurveyAdmin extends LitElement {
 
   _setTab(tab) { this._editTab = tab; }
   _onLayoutChange(e) { this._flowLayout = { ...e.detail }; }
+  _onNodeSelect(e) { this._selectedNodeId = e.detail.id; }
 
   /** Abre o cierra todas las preguntas (manipula los <details> directamente). */
   _setAllQ(open) {
@@ -776,6 +784,12 @@ export class SurveyAdmin extends LitElement {
         <span class="kind ${q.type}">${QUESTION_KIND[q.type] ?? 'Escala'}</span>
         <span class="q-sumlabel">${q.label || html`<em>(sin enunciado)</em>`}</span>
       </summary>
+      ${this._renderQuestionBody(q, i)}
+    </details>`;
+  }
+
+  _renderQuestionBody(q, i) {
+    return html`
       <div class="q-top">
         <input class="q-label" type="text" placeholder="Enunciado de la pregunta" .value=${q.label ?? ''}
           @input=${(e) => this._patchQuestion(i, { label: e.target.value })} />
@@ -799,8 +813,7 @@ export class SurveyAdmin extends LitElement {
         <label><input type="checkbox" .checked=${q.required !== false}
           @change=${(e) => this._patchQuestion(i, { required: e.target.checked })} /> Obligatoria</label>
       </div>
-      ${this._renderFlow(q, i)}
-    </details>`;
+      ${this._renderFlow(q, i)}`;
   }
 
   _renderEdit() {
@@ -818,8 +831,7 @@ export class SurveyAdmin extends LitElement {
       </div>
       <div class="tab-body">
         ${this._editTab === 'questions' ? this._renderQuestionsTab() : null}
-        ${this._editTab === 'flow' ? html`<survey-flow-canvas .questions=${this._questions} .layout=${this._flowLayout}
-          @layout-change=${(e) => this._onLayoutChange(e)}></survey-flow-canvas>` : null}
+        ${this._editTab === 'flow' ? this._renderFlowTab() : null}
         ${this._editTab === 'email' ? this._renderEmailTab() : null}
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
@@ -894,6 +906,21 @@ export class SurveyAdmin extends LitElement {
       <button class="primary" ?disabled=${this._tplBusy} @click=${() => this._saveTpl()}>${this._renameId ? 'Renombrar' : 'Guardar plantilla'}</button>
       <button class="ghost" @click=${() => this._cancelSaveTpl()}>Cancelar</button>
       ${this._tplError ? html`<span class="error">${this._tplError}</span>` : null}
+    </div>`;
+  }
+
+  /** Pestaña de flujo: lienzo + panel lateral que edita la pregunta del nodo seleccionado. */
+  _renderFlowTab() {
+    const idx = this._questions.findIndex((q) => q.id === this._selectedNodeId);
+    const q = idx >= 0 ? this._questions[idx] : null;
+    return html`<div class="flow-wrap">
+      <survey-flow-canvas class="flow-canvas" .questions=${this._questions} .layout=${this._flowLayout} .selectedId=${this._selectedNodeId}
+        @layout-change=${(e) => this._onLayoutChange(e)} @node-select=${(e) => this._onNodeSelect(e)}></survey-flow-canvas>
+      <aside class="flow-panel">
+        ${q
+          ? html`<h4 class="fp-title">${QUESTION_KIND[q.type] ?? 'Pregunta'} · editar nodo</h4>${this._renderQuestionBody(q, idx)}`
+          : html`<p class="empty">Haz clic en un nodo para editar su pregunta aquí; arrástralo para moverlo.</p>`}
+      </aside>
     </div>`;
   }
 
