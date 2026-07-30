@@ -12,6 +12,8 @@ import { END } from '../../tools/survey/domain/flow.js';
 
 const NODE_W = 180;
 const NODE_H = 62;
+const END_W = 120; // el nodo «Fin» es un óvalo más pequeño (ver CSS .node.end)
+const END_H = 40;
 const KIND = { scale: 'Escala', text: 'Texto', choice: 'Opción única' };
 
 export class SurveyFlowCanvas extends LitElement {
@@ -64,16 +66,20 @@ export class SurveyFlowCanvas extends LitElement {
     }
   }
 
+  /** Ancho/alto reales del nodo (el «Fin» es más pequeño que los de pregunta). */
+  _w(id) { return id === END ? END_W : NODE_W; }
+  _h(id) { return id === END ? END_H : NODE_H; }
+
   /** Punto de conexión de un nodo (centro-arriba o centro-abajo). */
   _port(id, side) {
     const p = this._pos[id] ?? { x: 0, y: 0 };
-    return { x: p.x + NODE_W / 2, y: side === 'bottom' ? p.y + NODE_H : p.y };
+    return { x: p.x + this._w(id) / 2, y: side === 'bottom' ? p.y + this._h(id) : p.y };
   }
 
   /** Puerto derecho de un nodo (para las aristas condicionales laterales). */
   _portR(id) {
     const p = this._pos[id] ?? { x: 0, y: 0 };
-    return { x: p.x + NODE_W, y: p.y + NODE_H / 2 };
+    return { x: p.x + this._w(id), y: p.y + this._h(id) / 2 };
   }
 
   _onDown(e, id) {
@@ -105,15 +111,17 @@ export class SurveyFlowCanvas extends LitElement {
     const edges = flowEdges(this.questions ?? []);
     const ids = Object.keys(this._pos);
     if (!ids.length) return html`<div class="canvas"></div>`;
-    // Ancho: reservar a la derecha el bulge máximo real de las condicionales (que
-    // escalonan a 40 + (n-1)·26) más un margen para su etiqueta; así no se recortan.
-    const condPerNode = {};
-    for (const e of edges) if (e.label) condPerNode[e.from] = (condPerNode[e.from] ?? 0) + 1;
-    const maxCond = Math.max(0, ...Object.values(condPerNode));
-    const rightMargin = NODE_W + (maxCond > 0 ? 40 + (maxCond - 1) * 26 + 50 : 60);
+    // Cada condicional ocupa un CARRIL lateral propio (global, no por nodo) para que
+    // dos saltos de nodos distintos no compartan corredor y se solapen. El ancho
+    // reserva a la derecha el carril más externo más un margen para su etiqueta.
+    const LANE0 = 40;
+    const LANE_STEP = 28;
+    const condTotal = edges.reduce((n, e) => n + (e.label ? 1 : 0), 0);
+    const maxBulge = condTotal > 0 ? LANE0 + (condTotal - 1) * LANE_STEP : 0;
+    const rightMargin = NODE_W + (condTotal > 0 ? maxBulge + 50 : 60);
     const width = Math.max(...ids.map((id) => this._pos[id].x)) + rightMargin;
     const height = Math.max(...ids.map((id) => this._pos[id].y)) + NODE_H + 60;
-    const condSeen = {}; // nº de condicionales ya dibujadas por nodo (para escalonar la curva)
+    let condLane = 0; // carril de la próxima condicional a dibujar
     return html`
       <div class="canvas" style="width:${width}px;height:${height}px"
         @pointermove=${this._onMove} @pointerup=${this._onUp} @pointercancel=${this._onUp}>
@@ -132,10 +140,10 @@ export class SurveyFlowCanvas extends LitElement {
               const to = this._port(edge.to, 'top');
               return svg`<path class="edge" d=${edgePath(from, to)} marker-end="url(#fc-arrow)"></path>`;
             }
-            condSeen[edge.from] = (condSeen[edge.from] ?? 0) + 1;
+            const bulge = LANE0 + condLane * LANE_STEP;
+            condLane += 1;
             const from = this._portR(edge.from);
             const to = this._portR(edge.to);
-            const bulge = 40 + (condSeen[edge.from] - 1) * 26;
             const cx = Math.max(from.x, to.x) + bulge;
             const label = svg`<text class="elabel" x=${cx} y=${(from.y + to.y) / 2} text-anchor="middle">${edge.label}</text>`;
             return svg`<path class="edge cond" d=${sideEdgePath(from, to, bulge)} marker-end="url(#fc-arrow-c)"></path>${label}`;
