@@ -24,6 +24,15 @@ describe('flowEdges', () => {
   it('el salto por defecto a END se representa como arista a END', () => {
     expect(flowEdges([{ id: 'a', next: END }])).toContainEqual({ from: 'a', to: END, label: null });
   });
+  it('etiqueta las reglas con operador (p. ej. > 8, ≤ 5)', () => {
+    const qs = [
+      { id: 'a', type: 'scale', rules: [{ op: 'gt', value: 8, goto: 'b' }, { op: 'lte', value: 5, goto: 'c' }] },
+      { id: 'b', type: 'text' }, { id: 'c', type: 'text' },
+    ];
+    const edges = flowEdges(qs);
+    expect(edges).toContainEqual({ from: 'a', to: 'b', label: '> 8' });
+    expect(edges).toContainEqual({ from: 'a', to: 'c', label: '≤ 5' });
+  });
 });
 
 describe('autoLayout', () => {

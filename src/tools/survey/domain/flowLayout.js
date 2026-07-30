@@ -5,12 +5,12 @@
  * AUTO-LAYOUT inicial de las posiciones y la CURVA (path SVG) entre dos puntos.
  * El modelo de grafo vive en `flow.js`; esto es solo la capa de dibujo.
  */
-import { END } from './flow.js';
+import { END, ruleLabel } from './flow.js';
 
 /**
- * Aristas del grafo: por cada pregunta, sus reglas (etiquetadas con el valor de
- * `equals`) y su salto por defecto (`next`, la siguiente en orden, o `END`). El
- * destino `to` puede ser `END` (nodo final).
+ * Aristas del grafo: por cada pregunta, sus reglas (etiquetadas con su condición,
+ * p. ej. «> 8», «≤ 5», «Ventas») y su salto por defecto (`next`, la siguiente en
+ * orden, o `END`). El destino `to` puede ser `END` (nodo final).
  * @returns {Array<{ from: string, to: string, label: string|null }>}
  */
 export function flowEdges(questions) {
@@ -18,7 +18,7 @@ export function flowEdges(questions) {
   const edges = [];
   list.forEach((q, i) => {
     for (const rule of (Array.isArray(q?.rules) ? q.rules : [])) {
-      if (rule?.goto) edges.push({ from: q.id, to: rule.goto, label: String(rule.equals) });
+      if (rule?.goto) edges.push({ from: q.id, to: rule.goto, label: ruleLabel(rule) });
     }
     if (q?.next) edges.push({ from: q.id, to: q.next, label: null });
     else if (i + 1 < list.length) edges.push({ from: q.id, to: list[i + 1].id, label: null });
