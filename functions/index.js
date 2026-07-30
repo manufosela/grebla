@@ -379,6 +379,12 @@ export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (requ
       batch.set(surveyRef.collection('tokens').doc(token), { email, metadata: p?.metadata ?? {}, used: false });
       pending += 1;
       if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
+    } else if (p?.metadata && Object.keys(p.metadata).length > 0) {
+      // El enlace ya existe: re-subir el padrón ACTUALIZA sus campos de segmentación
+      // (merge, sin duplicar el token). No borra los que no vengan en esta subida.
+      batch.set(surveyRef.collection('tokens').doc(token), { metadata: p.metadata }, { merge: true });
+      pending += 1;
+      if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
     }
     results.push({ email, token });
   }

@@ -10,7 +10,9 @@
  * email válido y deduplica por email (en minúsculas). La fecha de alta alimenta
  * el tramo de antigüedad.
  *
- * @returns {Array<{ email: string, metadata: { department?: string, startDate?: string } }>}
+ * Con cabecera también reconoce nacimiento (nacim… / birth → tramo de edad) y
+ * ubicación (ubica… / sede / ciudad / location / oficina).
+ * @returns {Array<{ email: string, metadata: { department?: string, startDate?: string, birthDate?: string, location?: string } }>}
  */
 export function parseParticipants(text) {
   const rows = String(text ?? '')
@@ -23,6 +25,8 @@ export function parseParticipants(text) {
   let emailIdx = 0;
   let deptIdx = 1;
   let startIdx = 2;
+  let birthIdx = -1;
+  let locIdx = -1;
   let dataRows = rows;
   const header = rows[0].map((cell) => cell.toLowerCase());
   // Ancladas al inicio para no confundir «no-email» (contiene «email») con cabecera.
@@ -30,7 +34,10 @@ export function parseParticipants(text) {
   if (looksLikeHeader) {
     emailIdx = header.findIndex((cell) => /^(e-?mail|correo)/.test(cell));
     deptIdx = header.findIndex((cell) => /depart|depto|equipo|team/.test(cell));
-    startIdx = header.findIndex((cell) => /alta|start|antig|incorpor|fecha/.test(cell));
+    // «fecha» a secas cae en alta salvo que la columna de nacimiento la reclame antes.
+    startIdx = header.findIndex((cell) => /alta|start|antig|incorpor/.test(cell) || (/fecha/.test(cell) && !/nacim|nacid|birth/.test(cell)));
+    birthIdx = header.findIndex((cell) => /nacim|nacid|birth/.test(cell));
+    locIdx = header.findIndex((cell) => /ubica|localiz|sede|ciudad|location|oficina/.test(cell));
     dataRows = rows.slice(1);
   }
 
@@ -41,6 +48,8 @@ export function parseParticipants(text) {
     const metadata = {};
     if (deptIdx >= 0 && cells[deptIdx]) metadata.department = cells[deptIdx];
     if (startIdx >= 0 && cells[startIdx]) metadata.startDate = cells[startIdx];
+    if (birthIdx >= 0 && cells[birthIdx]) metadata.birthDate = cells[birthIdx];
+    if (locIdx >= 0 && cells[locIdx]) metadata.location = cells[locIdx];
     byEmail.set(email.toLowerCase(), { email, metadata });
   }
   return [...byEmail.values()];
@@ -49,12 +58,13 @@ export function parseParticipants(text) {
 /**
  * Convierte el padrón de empresa en participantes para generar los enlaces,
  * filtrando por departamento y (por defecto) solo personas activas. Mapea
- * `hireDate → startDate` (alimenta el tramo de antigüedad). NO incluye la fecha
- * de nacimiento ni la edad: iría en la respuesta anónima y podría reidentificar;
- * la edad se tratará por tramos en el dashboard.
- * @param {Array<{email:string,department?:string,hireDate?:string,active?:boolean}>} padron
+ * `hireDate → startDate` (tramo de antigüedad) y `birthDate` (tramo de edad).
+ * Las fechas exactas van solo al token (que ve el gestor); en la respuesta
+ * anónima se guardan SOLO en tramos (bucketMetadata), nunca la fecha, así no
+ * reidentifican. La ubicación se pasa tal cual (categórica) y se protege con k.
+ * @param {Array<{email:string,department?:string,hireDate?:string,birthDate?:string,location?:string,active?:boolean}>} padron
  * @param {{ department?: string|null, onlyActive?: boolean }} [opts]
- * @returns {Array<{ email: string, metadata: { department?: string, startDate?: string } }>}
+ * @returns {Array<{ email: string, metadata: { department?: string, startDate?: string, birthDate?: string, location?: string } }>}
  */
 export function padronToParticipants(padron, { department = null, onlyActive = true } = {}) {
   const byEmail = new Map();
@@ -66,6 +76,8 @@ export function padronToParticipants(padron, { department = null, onlyActive = t
     const metadata = {};
     if (person.department) metadata.department = person.department;
     if (person.hireDate) metadata.startDate = person.hireDate;
+    if (person.birthDate) metadata.birthDate = person.birthDate;
+    if (person.location) metadata.location = person.location;
     byEmail.set(email.toLowerCase(), { email, metadata });
   }
   return [...byEmail.values()];
