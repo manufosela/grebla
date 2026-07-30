@@ -1620,13 +1620,15 @@ export class SuperadminPanel extends LitElement {
       </span>`;
     }
     if (this._confirmDelete === user.uid) {
-      return html`<span class="confirm">¿Borrar a ${user.displayName ?? user.email ?? 'este usuario'}?
+      const warn = user.lastLogin ? ' Se eliminan sus datos y acceso; si tuviera cuenta de inicio de sesión, se recrearía vacía al volver a entrar.' : '';
+      return html`<span class="confirm">¿Borrar a ${user.displayName ?? user.email ?? 'este usuario'}?${warn}
         <button class="yes danger" @click=${() => this._deleteUser(user)}>Borrar</button>
         <button @click=${() => { this._confirmDelete = null; }}>No</button>
       </span>`;
     }
-    // «Borrar» solo para quien NUNCA ha iniciado sesión (sin lastLogin): es el
-    // borrado limpio, sin datos de interacción que recalcular (Fase A).
+    // «Borrar» (superadmin): limpio para quien nunca inició sesión; para el resto
+    // borra datos y accesos (útil p. ej. con usuarios migrados que no deben estar).
+    // `deleteUnusedUser` revalida que no tenga equipo antes de borrar.
     const neverLoggedIn = !user.lastLogin;
     return html`<div class="row-actions">
       <button class="act" @click=${() => this._startEditUserName(user)}>Renombrar</button>
@@ -1640,16 +1642,19 @@ export class SuperadminPanel extends LitElement {
       ${user.role === 'none' && !linked
         ? html`<button class="act" type="button" @click=${() => this._openAssign(user)}>Asignar a equipo</button>`
         : null}
-      ${neverLoggedIn && user.uid !== this.currentUid
-        ? html`<button class="del-btn" type="button" title="Solo posible porque nunca ha iniciado sesión" @click=${() => { this._confirmDelete = user.uid; }}>Borrar</button>`
+      ${user.uid !== this.currentUid
+        ? html`<button class="del-btn" type="button"
+            title=${neverLoggedIn ? 'Nunca inició sesión: borrado limpio' : 'Borra sus datos y accesos del sistema'}
+            @click=${() => { this._confirmDelete = user.uid; }}>Borrar</button>`
         : null}
     </div>`;
   }
 
   /**
-   * Borra a un usuario que nunca inició sesión (Fase A, RMR-TSK-0315). El botón
-   * solo aparece en ese caso; aun así, deleteUnusedUser revalida las dependencias
-   * (no deja personas huérfanas) y falla si las hay.
+   * Borra a un usuario del sistema (solo superadmin, no a sí mismo). Limpio para
+   * quien nunca inició sesión; para el resto elimina datos y accesos.
+   * `deleteUnusedUser` revalida las dependencias (no deja personas huérfanas) y
+   * falla si las hay.
    * @param {import('../lib/accessRoles.js').AccessUser} user
    */
   async _deleteUser(user) {

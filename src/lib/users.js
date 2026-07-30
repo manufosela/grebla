@@ -158,6 +158,7 @@ export async function deleteUnusedUser(uid) {
   }
   await setUserRole(uid, 'none'); // borra sus roles de equipo (leaders/viewers/supermanagers)
   await setUserAdmin(uid, false); // y el gobierno (admins)
+  await setSurveyAdmin(uid, false); // y el rol de gestor de encuestas (People)
   const usersDoc = doc(db, 'users', uid);
   if ((await getDoc(usersDoc)).exists()) await deleteDoc(usersDoc);
 }
