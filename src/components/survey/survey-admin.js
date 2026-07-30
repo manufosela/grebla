@@ -30,6 +30,10 @@ const QUESTION_KIND = { scale: 'Escala', text: 'Texto', choice: 'Opción única'
 const OP_TEXT = { eq: '= igual a', neq: '≠ distinto de', gt: '> mayor que', gte: '≥ mayor o igual que', lt: '< menor que', lte: '≤ menor o igual que' };
 const OPS_SCALE = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
 const OPS_CHOICE = ['eq', 'neq'];
+// Ejes de segmentación de resultados (los que el padrón anonimiza en cada respuesta).
+const SEGMENT_FIELDS = ['department', 'tenure', 'location'];
+const SEGMENT_LABELS = { department: 'Departamento', tenure: 'Antigüedad', location: 'Ubicación' };
+const SEGMENT_MIN = 5; // k-anonimato mínimo por grupo, aunque el umbral de la encuesta sea menor
 
 export class SurveyAdmin extends LitElement {
   static properties = {
@@ -42,6 +46,7 @@ export class SurveyAdmin extends LitElement {
     _confirmReset: { state: true },
     _resettingId: { state: true },
     _notice: { state: true },
+    _segmentField: { state: true },
     _editId: { state: true },
     _title: { state: true },
     _questions: { state: true },
@@ -131,6 +136,10 @@ export class SurveyAdmin extends LitElement {
     .notice { color: var(--rm-accent-700, #1f7a6e); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 12%, transparent);
       border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.85rem; }
     .reset-confirm { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
+    .seg-picker { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.2rem 0 0.9rem; }
+    .seg-picker label { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
+    .seg-picker select { padding: 0.3rem 0.5rem; }
+    .seg-hint { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-style: italic; }
     .notice { color: var(--rm-accent-700, #1f7a6e); font-size: 0.85rem; font-weight: 600; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     textarea { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); resize: vertical; }
@@ -213,6 +222,7 @@ export class SurveyAdmin extends LitElement {
     this._confirmReset = null;
     this._resettingId = null;
     this._notice = '';
+    this._segmentField = 'department';
     this._editId = null;
     this._title = '';
     this._questions = [];
@@ -726,7 +736,8 @@ export class SurveyAdmin extends LitElement {
       </div>`;
     }
     const r = scaleResult(q, answerValues(answers, q.id));
-    const seg = segmentedScale(answers, q, 'department', threshold);
+    const segMin = Math.max(SEGMENT_MIN, threshold);
+    const seg = segmentedScale(answers, q, this._segmentField, segMin);
     return html`<div class="qr">
       <p class="qr-label">${q.label}</p>
       <p class="qr-summary">
@@ -735,7 +746,7 @@ export class SurveyAdmin extends LitElement {
       </p>
       ${r.distribution.length ? html`<div class="dist">${r.distribution.map((d) => html`<span class="dchip">${d.value}: ${d.count}</span>`)}</div>` : null}
       ${seg.visible.length ? html`<div class="seg">${seg.visible.map((s) => html`<span class="schip">${s.key}: ${s.enps !== null ? `eNPS ${s.enps}` : `media ${s.average.toFixed(1)}`} (n=${s.count})</span>`)}</div>` : null}
-      ${seg.suppressed.length ? html`<p class="hidden-note">${seg.suppressed.length} departamento${seg.suppressed.length === 1 ? '' : 's'} oculto${seg.suppressed.length === 1 ? '' : 's'} por privacidad (menos de ${threshold} respuestas).</p>` : null}
+      ${seg.suppressed.length ? html`<p class="hidden-note">${seg.suppressed.length} grupo${seg.suppressed.length === 1 ? '' : 's'} oculto${seg.suppressed.length === 1 ? '' : 's'} por privacidad (menos de ${segMin} respuestas).</p>` : null}
     </div>`;
   }
 
@@ -756,6 +767,14 @@ export class SurveyAdmin extends LitElement {
         <tbody>${byDept.map((d) => html`<tr><td>${d.department}</td><td>${d.responded}/${d.total}</td><td>${d.pct}%</td></tr>`)}</tbody>
       </table>` : html`<p class="empty">Aún no hay participantes cargados.</p>`}
       <h3>Resultados por pregunta</h3>
+      <div class="seg-picker">
+        <label>Agrupar por:
+          <select @change=${(e) => { this._segmentField = e.target.value; }}>
+            ${SEGMENT_FIELDS.map((f) => html`<option value=${f} ?selected=${this._segmentField === f}>${SEGMENT_LABELS[f]}</option>`)}
+          </select>
+        </label>
+        <span class="seg-hint">Cada grupo con menos de ${Math.max(SEGMENT_MIN, threshold)} respuestas se oculta.</span>
+      </div>
       ${this._resAnswers.length
         ? (survey.questions ?? []).map((q) => this._renderQuestionResult(q, this._resAnswers, threshold))
         : html`<p class="empty">Aún no hay respuestas.</p>`}`;
