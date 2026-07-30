@@ -21,7 +21,7 @@ import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
-import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody } from './survey.js';
+import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody, sanitizeParticipantMeta } from './survey.js';
 import { sendGmail } from './gmail.js';
 import { getPortalDb, portalConfigured, publishSquadMetrics } from './portal.js';
 
@@ -391,6 +391,65 @@ export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (requ
   if (pending > 0) await batch.commit();
   return { tokens: results };
 });
+
+/**
+ * Actualiza los campos de segmentación (metadata) de UN participante ya creado,
+ * localizado por su token, sin regenerar el enlace. Solo superadmin/People. La
+ * metadata se sanea a las claves conocidas (nada de campos arbitrarios).
+ */
+export const updateSurveyParticipant = onCall(
+  { region: 'europe-west1', secrets: [SURVEY_SALT] },
+  async (request) => {
+    await assertSurveyManager(request.auth?.uid);
+    const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
+    const token = typeof request.data?.token === 'string' ? request.data.token.trim() : '';
+    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
+
+    const db = getFirestore();
+    const surveyRef = db.doc(`surveys/${surveyId}`);
+    const tokenRef = surveyRef.collection('tokens').doc(token);
+    const tokenSnap = await tokenRef.get();
+    if (!tokenSnap.exists) throw new HttpsError('not-found', 'Participante no encontrado.');
+
+    const cleanMeta = sanitizeParticipantMeta(request.data?.metadata ?? {});
+    await tokenRef.set({ metadata: cleanMeta }, { merge: true });
+
+    // Si ya respondió, re-bucketizar su respuesta anónima para que los resultados
+    // segmentados usen los nuevos campos y no queden buckets obsoletos.
+    if (tokenSnap.data().used === true) {
+      // Los tramos (edad/antigüedad) se recalculan respecto a la fecha ORIGINAL de
+      // la respuesta, no a la de esta edición, para no alterar el histórico.
+      const refIso = tokenSnap.data().respondedAt || new Date().toISOString();
+      const answerRef = surveyRef.collection('answers').doc(answerId(token, SURVEY_SALT.value()));
+      if ((await answerRef.get()).exists) {
+        await answerRef.set({ metadata: bucketMetadata(cleanMeta, refIso) }, { merge: true });
+      }
+    }
+    return { ok: true };
+  },
+);
+
+/**
+ * Borra UN participante (su token) y su respuesta anónima si la hubiera. El
+ * answerId es HMAC del token con el SALT (secreto), así que se recalcula aquí.
+ * Solo superadmin/People.
+ */
+export const deleteSurveyParticipant = onCall(
+  { region: 'europe-west1', secrets: [SURVEY_SALT] },
+  async (request) => {
+    await assertSurveyManager(request.auth?.uid);
+    const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
+    const token = typeof request.data?.token === 'string' ? request.data.token.trim() : '';
+    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
+
+    const db = getFirestore();
+    const surveyRef = db.doc(`surveys/${surveyId}`);
+    // Token y respuesta son documentos hoja (sin subcolecciones): delete directo.
+    await surveyRef.collection('answers').doc(answerId(token, SURVEY_SALT.value())).delete();
+    await surveyRef.collection('tokens').doc(token).delete();
+    return { ok: true };
+  },
+);
 
 /**
  * Reinicia las respuestas de una encuesta para volver a lanzarla tras un cambio:

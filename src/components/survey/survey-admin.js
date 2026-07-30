@@ -20,7 +20,7 @@ import {
 } from '../../tools/survey/domain/results.js';
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, createSurveyTokens, listTokens, listAnswers,
-  resetSurveyResponses, sendSurveyTestEmail, sendSurveyBulkEmails,
+  resetSurveyResponses, updateSurveyParticipant, deleteSurveyParticipant, sendSurveyTestEmail, sendSurveyBulkEmails,
   listSurveyTemplates, saveSurveyTemplate, renameSurveyTemplate, deleteSurveyTemplate,
 } from '../../lib/survey.js';
 
@@ -47,6 +47,9 @@ export class SurveyAdmin extends LitElement {
     _resettingId: { state: true },
     _notice: { state: true },
     _segmentField: { state: true },
+    _partEdits: { state: true },
+    _partConfirmDelete: { state: true },
+    _partRowBusy: { state: true },
     _editId: { state: true },
     _title: { state: true },
     _questions: { state: true },
@@ -140,6 +143,10 @@ export class SurveyAdmin extends LitElement {
     .seg-picker label { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
     .seg-picker select { padding: 0.3rem 0.5rem; }
     .seg-hint { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-style: italic; }
+    .parts-table { overflow-x: auto; }
+    .part-in { width: 8.5rem; font-size: 0.8rem; padding: 0.25rem 0.4rem; }
+    .part-actions { white-space: nowrap; }
+    .part-actions button { margin-left: 0.3rem; }
     .notice { color: var(--rm-accent-700, #1f7a6e); font-size: 0.85rem; font-weight: 600; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     textarea { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); resize: vertical; }
@@ -223,6 +230,9 @@ export class SurveyAdmin extends LitElement {
     this._resettingId = null;
     this._notice = '';
     this._segmentField = 'department';
+    this._partEdits = {};
+    this._partConfirmDelete = null;
+    this._partRowBusy = null;
     this._editId = null;
     this._title = '';
     this._questions = [];
@@ -1071,6 +1081,78 @@ export class SurveyAdmin extends LitElement {
     </div>`;
   }
 
+  /** Valor actual de un campo de participante (edición en curso o el ya guardado). */
+  _partValue(t, field) {
+    return this._partEdits[t.token]?.[field] ?? t.metadata?.[field] ?? '';
+  }
+
+  _editPart(token, field, value) {
+    this._partEdits = { ...this._partEdits, [token]: { ...this._partEdits[token], [field]: value } };
+  }
+
+  /** Recarga la lista de participantes (excluye los de prueba). */
+  async _reloadParticipants() {
+    this._partTokens = (await listTokens(this._partSurvey.id)).filter((t) => t.test !== true);
+  }
+
+  async _savePart(t) {
+    this._partRowBusy = t.token; this._error = ''; this._notice = '';
+    try {
+      const metadata = {};
+      for (const f of ['department', 'startDate', 'birthDate', 'location']) {
+        const v = String(this._partValue(t, f)).trim();
+        if (v) metadata[f] = v;
+      }
+      await updateSurveyParticipant(this._partSurvey.id, t.token, metadata);
+      await this._reloadParticipants();
+      const { [t.token]: _drop, ...rest } = this._partEdits;
+      this._partEdits = rest;
+      this._notice = `Datos de ${t.email} actualizados.`;
+    } catch (err) {
+      this._error = `No se pudo actualizar: ${err?.message ?? err}`;
+    } finally {
+      this._partRowBusy = null;
+    }
+  }
+
+  _askDeletePart(token) { this._partConfirmDelete = token; this._error = ''; this._notice = ''; }
+  _cancelDeletePart() { this._partConfirmDelete = null; }
+
+  async _doDeletePart(t) {
+    this._partRowBusy = t.token; this._error = '';
+    try {
+      await deleteSurveyParticipant(this._partSurvey.id, t.token);
+      await this._reloadParticipants();
+      this._partConfirmDelete = null;
+      this._notice = `Participante ${t.email} borrado.`;
+    } catch (err) {
+      this._error = `No se pudo borrar: ${err?.message ?? err}`;
+    } finally {
+      this._partRowBusy = null;
+    }
+  }
+
+  /** Fila editable de un participante: campos de segmentación + guardar/borrar. */
+  _renderPartRow(t) {
+    const busy = this._partRowBusy === t.token;
+    const fields = [['department', 'Departamento'], ['startDate', 'Alta (YYYY-MM-DD)'], ['birthDate', 'Nacim. (YYYY-MM-DD)'], ['location', 'Ubicación']];
+    return html`<tr>
+      <td>${t.email}</td>
+      ${fields.map(([f, ph]) => html`<td><input class="part-in" type="text" placeholder=${ph} ?disabled=${busy}
+        .value=${String(this._partValue(t, f))} @input=${(e) => this._editPart(t.token, f, e.target.value)} /></td>`)}
+      <td><span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span></td>
+      <td><input class="link" type="text" readonly .value=${this._linkFor(t.token)} @focus=${(e) => e.target.select()} /></td>
+      <td class="part-actions">
+        ${this._partConfirmDelete === t.token
+          ? html`<span class="reset-confirm">¿Borrar?
+              <button class="ghost danger" ?disabled=${busy} @click=${() => this._doDeletePart(t)}>${busy ? '…' : 'Sí'}</button>
+              <button class="ghost" ?disabled=${busy} @click=${() => this._cancelDeletePart()}>No</button></span>`
+          : html`<button class="ghost" ?disabled=${busy} @click=${() => this._savePart(t)}>${busy ? 'Guardando…' : 'Guardar'}</button>
+              <button class="q-del" title="Borrar participante" ?disabled=${busy} @click=${() => this._askDeletePart(t.token)}>✕</button>`}
+      </td>
+    </tr>`;
+  }
+
   _renderParticipants() {
     const total = this._partTokens.length;
     const responded = this._partTokens.filter((t) => t.used).length;
@@ -1082,8 +1164,8 @@ export class SurveyAdmin extends LitElement {
       <h3>O bien, sube o pega un CSV</h3>
       <div class="field">
         <label for="pp">Sube un <strong>CSV</strong> o pega el padrón. Una persona por fila. Columnas:
-          <code>email</code> (obligatoria), <code>departamento</code> y <code>fecha_alta</code> (YYYY-MM-DD, opcionales).
-          Con cabecera se mapean por nombre en cualquier orden (las columnas extra se ignoran); sin cabecera, en ese orden.</label>
+          <code>email</code> (obligatoria), y opcionales <code>departamento</code>, <code>fecha_alta</code>, <code>nacimiento</code> y <code>ubicación</code> (fechas en YYYY-MM-DD).
+          Con cabecera se mapean por nombre en cualquier orden (las columnas extra se ignoran). Re-subir con los mismos emails <strong>actualiza</strong> sus campos sin duplicar el enlace.</label>
         <input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onCsvFile(e)} />
         <textarea id="pp" rows="6" placeholder="email,departamento,fecha_alta&#10;ana@tribbuapp.com,People,2024-01-15" .value=${this._partText}
           @input=${(e) => { this._partText = e.target.value; }}></textarea>
@@ -1095,15 +1177,15 @@ export class SurveyAdmin extends LitElement {
         ${total ? html`<button class="ghost" @click=${() => this._copyAll()}>${this._copiedAll ? '✓ Copiado' : 'Copiar todos (email, enlace)'}</button>` : null}
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
       ${total ? html`
-        <table>
-          <thead><tr><th>Email</th><th>Enlace personal</th><th>Estado</th></tr></thead>
-          <tbody>${this._partTokens.map((t) => html`<tr>
-            <td>${t.email}</td>
-            <td><input class="link" type="text" readonly .value=${this._linkFor(t.token)} @focus=${(e) => e.target.select()} /></td>
-            <td><span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span></td>
-          </tr>`)}</tbody>
-        </table>` : null}
+        <p class="lead">Edita los campos de segmentación de cada participante (se guardan en su enlace, sin regenerarlo) o bórralo.</p>
+        <div class="parts-table">
+          <table>
+            <thead><tr><th>Email</th><th>Departamento</th><th>Alta</th><th>Nacimiento</th><th>Ubicación</th><th>Estado</th><th>Enlace</th><th></th></tr></thead>
+            <tbody>${this._partTokens.map((t) => this._renderPartRow(t))}</tbody>
+          </table>
+        </div>` : null}
       ${total ? this._renderSendBox() : null}`;
   }
 

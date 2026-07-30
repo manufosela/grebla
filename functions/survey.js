@@ -102,6 +102,23 @@ export function bucketMetadata(rawMetadata, refIso) {
   return meta;
 }
 
+/** Claves de segmentación editables de un participante (las que van al token). */
+export const PARTICIPANT_META_KEYS = ['department', 'startDate', 'birthDate', 'location'];
+
+/**
+ * Sanea la metadata editada de un participante: SOLO las claves de segmentación
+ * conocidas, como cadenas recortadas (descarta vacías y cualquier campo ajeno).
+ * Evita que el cliente inyecte campos arbitrarios en el token.
+ */
+export function sanitizeParticipantMeta(raw) {
+  const out = {};
+  for (const key of PARTICIPANT_META_KEYS) {
+    const value = raw?.[key];
+    if (value != null && String(value).trim()) out[key] = String(value).trim();
+  }
+  return out;
+}
+
 /**
  * Id determinista del documento de respuesta a partir del token y un salt
  * secreto (SURVEY_SALT). Permite localizar/editar la MISMA respuesta anónima sin
