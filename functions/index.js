@@ -222,6 +222,13 @@ export const deleteSurvey = onCall({ region: 'europe-west1' }, async (request) =
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', `Encuesta ${surveyId} no encontrada.`);
 
+  // No se borra una encuesta CON respuestas: primero se reinicia (evita tirar datos
+  // por error). La UI también deshabilita el botón, pero se valida aquí (server-side).
+  const anAnswer = await ref.collection('answers').limit(1).get();
+  if (!anAnswer.empty) {
+    throw new HttpsError('failed-precondition', 'La encuesta tiene respuestas. Reiníciala antes de borrarla.');
+  }
+
   await db.recursiveDelete(ref); // borra el doc y sus subcolecciones (tokens, answers)
   return { ok: true, deletedSurveyId: surveyId };
 });

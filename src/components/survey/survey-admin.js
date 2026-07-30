@@ -19,7 +19,7 @@ import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
 import {
-  listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, createSurveyTokens, listTokens, listAnswers,
+  listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, surveyHasResponses, createSurveyTokens, listTokens, listAnswers,
   resetSurveyResponses, updateSurveyParticipant, deleteSurveyParticipant, sendSurveyTestEmail, sendSurveyBulkEmails,
   listSurveyTemplates, saveSurveyTemplate, renameSurveyTemplate, deleteSurveyTemplate,
 } from '../../lib/survey.js';
@@ -50,6 +50,10 @@ export class SurveyAdmin extends LitElement {
     _partEdits: { state: true },
     _partConfirmDelete: { state: true },
     _partRowBusy: { state: true },
+    _hasResponses: { state: true },
+    _renamingId: { state: true },
+    _renameTitle: { state: true },
+    _renameBusy: { state: true },
     _editId: { state: true },
     _title: { state: true },
     _questions: { state: true },
@@ -139,6 +143,10 @@ export class SurveyAdmin extends LitElement {
     .notice { color: var(--rm-accent-700, #1f7a6e); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 12%, transparent);
       border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.85rem; }
     .reset-confirm { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
+    .rename-btn { border: none; background: transparent; color: var(--rm-muted, #5b6b7d); cursor: pointer; font-size: 0.9rem; padding: 0 0.2rem; opacity: 0.6; }
+    .rename-btn:hover { opacity: 1; color: var(--teal, #2a9d8f); }
+    .rename-row { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .rename-in { font-size: 0.9rem; padding: 0.25rem 0.45rem; min-width: 12rem; }
     .seg-picker { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.2rem 0 0.9rem; }
     .seg-picker label { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
     .seg-picker select { padding: 0.3rem 0.5rem; }
@@ -233,6 +241,10 @@ export class SurveyAdmin extends LitElement {
     this._partEdits = {};
     this._partConfirmDelete = null;
     this._partRowBusy = null;
+    this._hasResponses = {};
+    this._renamingId = null;
+    this._renameTitle = '';
+    this._renameBusy = false;
     this._editId = null;
     this._title = '';
     this._questions = [];
@@ -283,6 +295,12 @@ export class SurveyAdmin extends LitElement {
     this._error = '';
     try {
       this._surveys = await listSurveys();
+      // Solo el superadmin borra: cargar si cada encuesta tiene respuestas (para
+      // deshabilitar el borrado de las que ya tienen datos) únicamente si puede.
+      if (this.canDelete && this._surveys.length) {
+        const flags = await Promise.all(this._surveys.map((s) => surveyHasResponses(s.id)));
+        this._hasResponses = Object.fromEntries(this._surveys.map((s, i) => [s.id, flags[i]]));
+      }
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las encuestas.';
     } finally {
@@ -790,8 +808,30 @@ export class SurveyAdmin extends LitElement {
         : html`<p class="empty">Aún no hay respuestas.</p>`}`;
   }
 
-  /** Botón de borrar, o confirmación inline si esta encuesta está pendiente de confirmar. */
+  _startRename(s) { this._renamingId = s.id; this._renameTitle = s.title ?? ''; this._error = ''; }
+  _cancelRename() { this._renamingId = null; }
+
+  /** Renombra la encuesta: solo el campo `title` (no toca id, enlaces ni respuestas). */
+  async _saveRename(s) {
+    const title = this._renameTitle.trim();
+    if (!title) { this._error = 'El nombre no puede estar vacío.'; return; }
+    this._renameBusy = true; this._error = '';
+    try {
+      await updateSurvey(s.id, { title });
+      this._renamingId = null;
+      await this._loadList();
+    } catch (err) {
+      this._error = `No se pudo renombrar: ${err?.message ?? err}`;
+    } finally {
+      this._renameBusy = false;
+    }
+  }
+
+  /** Botón de borrar. Deshabilitado si la encuesta tiene respuestas (reiniciar primero). */
   _renderDeleteAction(s) {
+    if (this._hasResponses[s.id]) {
+      return html`<button class="ghost danger" disabled title="Tiene respuestas: reiníciala antes de borrarla">Borrar</button>`;
+    }
     if (this._confirmDeleteId !== s.id) {
       return html`<button class="ghost danger" @click=${() => this._askDelete(s)}>Borrar</button>`;
     }
@@ -826,7 +866,16 @@ export class SurveyAdmin extends LitElement {
         <table>
           <thead><tr><th>Encuesta</th><th>Estado</th><th>Preguntas</th><th></th></tr></thead>
           <tbody>${this._surveys.map((s) => html`<tr>
-            <td>${s.title || '(sin título)'}</td>
+            <td>${this._renamingId === s.id
+              ? html`<span class="rename-row">
+                  <input class="rename-in" .value=${this._renameTitle} ?disabled=${this._renameBusy}
+                    @input=${(e) => { this._renameTitle = e.target.value; }}
+                    @keydown=${(e) => { if (e.key === 'Enter') this._saveRename(s); if (e.key === 'Escape') this._cancelRename(); }} />
+                  <button class="ghost" ?disabled=${this._renameBusy} @click=${() => this._saveRename(s)}>${this._renameBusy ? '…' : 'Guardar'}</button>
+                  <button class="ghost" ?disabled=${this._renameBusy} @click=${() => this._cancelRename()}>✕</button>
+                </span>`
+              : html`${s.title || '(sin título)'}
+                  <button class="rename-btn" title="Renombrar" @click=${() => this._startRename(s)}>✎</button>`}</td>
             <td><span class="chip ${s.status}">${STATUS_LABEL[s.status] ?? s.status}</span></td>
             <td>${(s.questions ?? []).length}</td>
             <td><div class="row-actions">

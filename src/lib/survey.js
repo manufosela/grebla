@@ -5,7 +5,7 @@
  * escriben (Admin SDK). El token del enlace es la credencial.
  */
 import { app, db } from './firebase.js';
-import { collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
 /** Instancia httpsCallable de una función en la región del proyecto. */
 async function callable(name) {
@@ -89,6 +89,12 @@ export function deleteSurveyTemplate(id) {
 export async function listSurveys() {
   const snap = await getDocs(query(collection(db, 'surveys'), orderBy('createdAt', 'desc')));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** ¿La encuesta tiene alguna respuesta? (para permitir borrarla solo si no). Solo superadmin. */
+export async function surveyHasResponses(surveyId) {
+  const snap = await getDocs(query(collection(db, 'surveys', surveyId, 'answers'), limit(1)));
+  return !snap.empty;
 }
 
 /** Una encuesta por id (para el editor). */

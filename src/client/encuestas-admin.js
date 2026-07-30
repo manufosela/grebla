@@ -16,9 +16,11 @@ onUserChanged(async (user) => {
     const access = await resolveAccess(user);
     const allowed = canGovern(access) || (await isSurveyAdmin(user.uid));
     if (!allowed) { location.replace('/'); return; }
-    // Borrar encuestas es exclusivo del superadmin (el eje de gobierno de instancia).
+    // Borrar encuestas es exclusivo del superadmin (eje de gobierno de instancia),
+    // por su ROL real —no por el modo de vista activo— así el conmutador de vistas
+    // no le oculta el borrado.
     const panel = document.querySelector('survey-admin');
-    if (panel) panel.canDelete = access.isAdmin === true;
+    if (panel) panel.canDelete = access.role === 'superadmin';
   } catch {
     location.replace('/');
   }
