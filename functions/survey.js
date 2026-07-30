@@ -66,6 +66,24 @@ export function tenureBucket(startDateIso, refIso) {
 }
 
 /**
+ * Tramo de edad a partir de la fecha de nacimiento, respecto a `refIso`. Como
+ * `tenureBucket`: la respuesta anónima guarda SOLO el tramo, nunca la fecha.
+ */
+export function ageBucket(birthDateIso, refIso) {
+  if (!birthDateIso || !refIso) return null;
+  const birth = new Date(birthDateIso);
+  const ref = new Date(refIso);
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(ref.getTime())) return null;
+  const years = (ref.getTime() - birth.getTime()) / (365.25 * 24 * 3600 * 1000);
+  if (years < 0) return null;
+  if (years < 25) return '<25';
+  if (years < 35) return '25-34';
+  if (years < 45) return '35-44';
+  if (years < 55) return '45-54';
+  return '55+';
+}
+
+/**
  * Convierte los metadatos CRUDOS del token (que incluyen email y fecha de alta)
  * en los metadatos ANÓNIMOS que se guardan con la respuesta: nunca el email; la
  * fecha de alta se reduce a TRAMO; el resto de campos no sensibles pasan tal cual.
@@ -78,7 +96,9 @@ export function bucketMetadata(rawMetadata, refIso) {
   if (raw.location != null) meta.location = raw.location;
   const tenure = tenureBucket(raw.startDate, refIso);
   if (tenure != null) meta.tenure = tenure;
-  // `email`, `startDate` exacta, `name` y cualquier otro campo NO se copian.
+  const age = ageBucket(raw.birthDate, refIso);
+  if (age != null) meta.age = age;
+  // `email`, `startDate`/`birthDate` exactas, `name` y cualquier otro campo NO se copian.
   return meta;
 }
 

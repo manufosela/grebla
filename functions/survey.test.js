@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateResponses, sanitizeResponses, tenureBucket, bucketMetadata, answerId } from './survey.js';
+import { validateResponses, sanitizeResponses, tenureBucket, ageBucket, bucketMetadata, answerId } from './survey.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const reason = { id: 'reason', type: 'text' };
@@ -32,14 +32,24 @@ describe('tenureBucket', () => {
   });
 });
 
+describe('ageBucket', () => {
+  it('reparte la edad en tramos y descarta fechas inválidas', () => {
+    expect(ageBucket('1995-06-01T00:00:00Z', '2026-07-27T00:00:00Z')).toBe('25-34'); // 31 años
+    expect(ageBucket('1970-01-01T00:00:00Z', '2026-07-27T00:00:00Z')).toBe('55+');
+    expect(ageBucket('no-fecha', '2026-07-27T00:00:00Z')).toBeNull();
+  });
+});
+
 describe('bucketMetadata', () => {
   const REF = '2026-07-27T00:00:00Z';
 
-  it('NUNCA copia el email ni la fecha de alta exacta', () => {
-    const meta = bucketMetadata({ email: 'ana@tribbuapp.com', startDate: '2024-01-01', department: 'People', name: 'Ana' }, REF);
+  it('NUNCA copia el email ni las fechas exactas (alta/nacimiento)', () => {
+    const meta = bucketMetadata({ email: 'ana@tribbuapp.com', startDate: '2024-01-01', birthDate: '1990-01-01', department: 'People', name: 'Ana' }, REF);
     expect(meta.email).toBeUndefined();
     expect(meta.startDate).toBeUndefined();
+    expect(meta.birthDate).toBeUndefined();
     expect(meta.name).toBeUndefined();
+    expect(meta.age).toBe('35-44'); // solo el tramo, nunca la fecha
   });
 
   it('convierte la fecha de alta en tramo y pasa department/location', () => {

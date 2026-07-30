@@ -31,8 +31,8 @@ const OP_TEXT = { eq: '= igual a', neq: '≠ distinto de', gt: '> mayor que', gt
 const OPS_SCALE = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
 const OPS_CHOICE = ['eq', 'neq'];
 // Ejes de segmentación de resultados (los que el padrón anonimiza en cada respuesta).
-const SEGMENT_FIELDS = ['department', 'tenure', 'location'];
-const SEGMENT_LABELS = { department: 'Departamento', tenure: 'Antigüedad', location: 'Ubicación' };
+const SEGMENT_FIELDS = ['department', 'tenure', 'location', 'age'];
+const SEGMENT_LABELS = { department: 'Departamento', tenure: 'Antigüedad', location: 'Ubicación', age: 'Edad' };
 const SEGMENT_MIN = 5; // k-anonimato mínimo por grupo, aunque el umbral de la encuesta sea menor
 
 export class SurveyAdmin extends LitElement {

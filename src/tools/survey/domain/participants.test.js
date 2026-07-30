@@ -72,8 +72,13 @@ describe('padronToParticipants', () => {
     expect(out.map((p) => p.email)).toEqual(['a@x.com', 'c@x.com']);
   });
 
-  it('nunca expone fecha de nacimiento ni edad en el metadata', () => {
-    const out = padronToParticipants([{ email: 'd@x.com', department: 'X', birthDate: '1990-01-01' }]);
-    expect(out[0].metadata).toEqual({ department: 'X' });
+  it('pasa nacimiento y ubicación al metadata del token (la anonimización a tramos va en bucketMetadata)', () => {
+    const out = padronToParticipants([{ email: 'd@x.com', department: 'X', birthDate: '1990-01-01', location: 'Madrid' }]);
+    expect(out[0].metadata).toEqual({ department: 'X', birthDate: '1990-01-01', location: 'Madrid' });
+  });
+
+  it('parseParticipants reconoce columnas de nacimiento y ubicación por cabecera', () => {
+    const csv = 'email,departamento,nacimiento,ciudad\nz@x.com,Eng,1988-05-02,Bilbao';
+    expect(parseParticipants(csv)[0].metadata).toEqual({ department: 'Eng', birthDate: '1988-05-02', location: 'Bilbao' });
   });
 });
