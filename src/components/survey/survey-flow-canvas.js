@@ -7,7 +7,7 @@
  * las posiciones, que el editor persiste con la encuesta. MVP: ver + mover.
  */
 import { LitElement, html, css, svg } from 'lit';
-import { flowEdges, resolveLayout, edgePath } from '../../tools/survey/domain/flowLayout.js';
+import { flowEdges, resolveLayout, edgePath, sideEdgePath } from '../../tools/survey/domain/flowLayout.js';
 import { END } from '../../tools/survey/domain/flow.js';
 
 const NODE_W = 180;
@@ -70,6 +70,12 @@ export class SurveyFlowCanvas extends LitElement {
     return { x: p.x + NODE_W / 2, y: side === 'bottom' ? p.y + NODE_H : p.y };
   }
 
+  /** Puerto derecho de un nodo (para las aristas condicionales laterales). */
+  _portR(id) {
+    const p = this._pos[id] ?? { x: 0, y: 0 };
+    return { x: p.x + NODE_W, y: p.y + NODE_H / 2 };
+  }
+
   _onDown(e, id) {
     const p = this._pos[id];
     this._drag = { id, x0: p.x, y0: p.y, px: e.clientX, py: e.clientY };
@@ -99,8 +105,15 @@ export class SurveyFlowCanvas extends LitElement {
     const edges = flowEdges(this.questions ?? []);
     const ids = Object.keys(this._pos);
     if (!ids.length) return html`<div class="canvas"></div>`;
-    const width = Math.max(...ids.map((id) => this._pos[id].x)) + NODE_W + 60;
+    // Ancho: reservar a la derecha el bulge máximo real de las condicionales (que
+    // escalonan a 40 + (n-1)·26) más un margen para su etiqueta; así no se recortan.
+    const condPerNode = {};
+    for (const e of edges) if (e.label) condPerNode[e.from] = (condPerNode[e.from] ?? 0) + 1;
+    const maxCond = Math.max(0, ...Object.values(condPerNode));
+    const rightMargin = NODE_W + (maxCond > 0 ? 40 + (maxCond - 1) * 26 + 50 : 60);
+    const width = Math.max(...ids.map((id) => this._pos[id].x)) + rightMargin;
     const height = Math.max(...ids.map((id) => this._pos[id].y)) + NODE_H + 60;
+    const condSeen = {}; // nº de condicionales ya dibujadas por nodo (para escalonar la curva)
     return html`
       <div class="canvas" style="width:${width}px;height:${height}px"
         @pointermove=${this._onMove} @pointerup=${this._onUp} @pointercancel=${this._onUp}>
@@ -109,14 +122,23 @@ export class SurveyFlowCanvas extends LitElement {
             <marker id="fc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--rm-muted, #90a4b0)"></path>
             </marker>
+            <marker id="fc-arrow-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>
+            </marker>
           </defs>
           ${edges.map((edge) => {
-            const from = this._port(edge.from, 'bottom');
-            const to = this._port(edge.to, 'top');
-            const label = edge.label
-              ? svg`<text class="elabel" x=${(from.x + to.x) / 2} y=${(from.y + to.y) / 2} text-anchor="middle">${edge.label}</text>`
-              : '';
-            return svg`<path class="edge ${edge.label ? 'cond' : ''}" d=${edgePath(from, to)} marker-end="url(#fc-arrow)"></path>${label}`;
+            if (!edge.label) {
+              const from = this._port(edge.from, 'bottom');
+              const to = this._port(edge.to, 'top');
+              return svg`<path class="edge" d=${edgePath(from, to)} marker-end="url(#fc-arrow)"></path>`;
+            }
+            condSeen[edge.from] = (condSeen[edge.from] ?? 0) + 1;
+            const from = this._portR(edge.from);
+            const to = this._portR(edge.to);
+            const bulge = 40 + (condSeen[edge.from] - 1) * 26;
+            const cx = Math.max(from.x, to.x) + bulge;
+            const label = svg`<text class="elabel" x=${cx} y=${(from.y + to.y) / 2} text-anchor="middle">${edge.label}</text>`;
+            return svg`<path class="edge cond" d=${sideEdgePath(from, to, bulge)} marker-end="url(#fc-arrow-c)"></path>${label}`;
           })}
         </svg>
         ${ids.map((id) => {
