@@ -82,6 +82,11 @@ describe('draftToPayload', () => {
     const payload = draftToPayload({ title: 'x', questions: [], threshold: 'no', defaultScale: {} });
     expect(payload).toMatchObject({ threshold: 5, defaultScale: { min: 1, max: 5 } });
   });
+  it('descarta del layout las claves reservadas «__…__» que Firestore rechaza (nodo Fin)', () => {
+    const payload = draftToPayload({ title: 'x', questions: [], layout: { q1: { x: 1, y: 2 }, __end__: { x: 0, y: 9 } } });
+    expect(payload.layout).toEqual({ q1: { x: 1, y: 2 } });
+    expect(payload.layout).not.toHaveProperty('__end__');
+  });
 });
 
 describe('isAnswered', () => {
