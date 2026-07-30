@@ -33,8 +33,8 @@ export class SurveyFlowCanvas extends LitElement {
     svg.edges { position: absolute; inset: 0; pointer-events: none; }
     .edge { fill: none; stroke: var(--rm-muted, #90a4b0); stroke-width: 2; }
     .edge.cond { stroke: var(--teal); stroke-dasharray: 5 4; }
-    .elabel { fill: var(--rm-accent-700, #1f7a6e); font-size: 11px; font-weight: 700; paint-order: stroke;
-      stroke: var(--rm-surface, #fff); stroke-width: 3px; }
+    .elabel-bg { fill: var(--rm-surface, #fff); stroke: var(--teal); stroke-width: 1.5px; }
+    .elabel { fill: var(--rm-accent-700, #1f7a6e); font-size: 11px; font-weight: 700; }
     .node { position: absolute; width: ${NODE_W}px; min-height: ${NODE_H}px; box-sizing: border-box;
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px;
       padding: 0.45rem 0.6rem; cursor: grab; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
@@ -135,18 +135,25 @@ export class SurveyFlowCanvas extends LitElement {
             </marker>
           </defs>
           ${edges.map((edge) => {
+            // Estructura HOMOGÉNEA (siempre <g>) para que Lit reconcilie limpio al
+            // cambiar un destino y no deje aristas huérfanas (líneas fantasma).
             if (!edge.label) {
               const from = this._port(edge.from, 'bottom');
               const to = this._port(edge.to, 'top');
-              return svg`<path class="edge" d=${edgePath(from, to)} marker-end="url(#fc-arrow)"></path>`;
+              return svg`<g class="edge-g"><path class="edge" d=${edgePath(from, to)} marker-end="url(#fc-arrow)"></path></g>`;
             }
             const bulge = LANE0 + condLane * LANE_STEP;
             condLane += 1;
             const from = this._portR(edge.from);
             const to = this._portR(edge.to);
             const cx = Math.max(from.x, to.x) + bulge;
-            const label = svg`<text class="elabel" x=${cx} y=${(from.y + to.y) / 2} text-anchor="middle">${edge.label}</text>`;
-            return svg`<path class="edge cond" d=${sideEdgePath(from, to, bulge)} marker-end="url(#fc-arrow-c)"></path>${label}`;
+            const midY = (from.y + to.y) / 2;
+            const lw = 14 + edge.label.length * 7; // ancho aproximado de la cajita de la etiqueta
+            return svg`<g class="edge-g">
+              <path class="edge cond" d=${sideEdgePath(from, to, bulge)} marker-end="url(#fc-arrow-c)"></path>
+              <rect class="elabel-bg" x=${cx - lw / 2} y=${midY - 9} width=${lw} height="18" rx="5"></rect>
+              <text class="elabel" x=${cx} y=${midY} text-anchor="middle" dominant-baseline="central">${edge.label}</text>
+            </g>`;
           })}
         </svg>
         ${ids.map((id) => {

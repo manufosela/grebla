@@ -84,8 +84,23 @@ export function draftToPayload({ title, questions, threshold, defaultScale, emai
       subject: String(email?.subject ?? '').trim(),
       body: String(email?.body ?? ''),
     },
-    layout: layout && typeof layout === 'object' ? layout : {},
+    layout: sanitizeLayout(layout),
   };
+}
+
+/**
+ * Limpia el mapa de posiciones para Firestore: descarta las claves reservadas que
+ * empiezan y terminan con «__» (p. ej. el nodo `__end__`), que Firestore rechaza
+ * como nombre de campo. La posición del nodo Fin se recalcula sola al reabrir.
+ */
+export function sanitizeLayout(layout) {
+  if (!layout || typeof layout !== 'object') return {};
+  const out = {};
+  for (const [key, value] of Object.entries(layout)) {
+    if (key.startsWith('__') && key.endsWith('__')) continue;
+    out[key] = value;
+  }
+  return out;
 }
 
 /**
