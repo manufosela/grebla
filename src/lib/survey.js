@@ -123,6 +123,17 @@ export async function sendSurveyBulkEmails(surveyId) {
   return res.data ?? { sent: 0, failed: 0 };
 }
 
+/**
+ * Reinicia las respuestas de una encuesta para relanzarla: borra respuestas y deja
+ * los tokens como pendientes, manteniendo los enlaces. Con `onlyTest`, solo las de
+ * prueba. @returns {Promise<{cleared:number, tokensReset:number}>}
+ */
+export async function resetSurveyResponses(surveyId, onlyTest = false) {
+  const fn = await callable('resetSurveyResponses');
+  const res = await fn({ surveyId, onlyTest });
+  return res.data ?? { cleared: 0, tokensReset: 0 };
+}
+
 /** Tokens (padrón) de una encuesta, para participación y reenvío. Solo superadmin. */
 export async function listTokens(surveyId) {
   const snap = await getDocs(collection(db, 'surveys', surveyId, 'tokens'));

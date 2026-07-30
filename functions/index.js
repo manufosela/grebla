@@ -224,6 +224,54 @@ export const deleteSurvey = onCall({ region: 'europe-west1' }, async (request) =
 });
 
 /**
+ * Reinicia las respuestas de una encuesta para volver a lanzarla tras un cambio:
+ * borra las respuestas y marca los tokens como NO usados, MANTENIENDO los mismos
+ * enlaces (la misma gente vuelve a poder contestar desde cero). Con `onlyTest`,
+ * solo afecta a los tokens de prueba (deja intactas las respuestas reales).
+ * Solo superadmin o People (assertSurveyManager). El cliente no puede tocar las
+ * subcolecciones (reglas), así que esto va por Admin SDK.
+ */
+export const resetSurveyResponses = onCall(
+  { region: 'europe-west1', secrets: [SURVEY_SALT] },
+  async (request) => {
+    await assertSurveyManager(request.auth?.uid);
+    const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
+    if (!surveyId) throw new HttpsError('invalid-argument', 'Falta el surveyId.');
+    const onlyTest = request.data?.onlyTest === true;
+
+    const db = getFirestore();
+    const surveyRef = db.doc(`surveys/${surveyId}`);
+    if (!(await surveyRef.get()).exists) throw new HttpsError('not-found', `Encuesta ${surveyId} no encontrada.`);
+
+    const salt = SURVEY_SALT.value();
+    const tokensSnap = await surveyRef.collection('tokens').get();
+    const targetTokens = onlyTest ? tokensSnap.docs.filter((d) => d.data().test === true) : tokensSnap.docs;
+
+    // Respuestas a borrar: con onlyTest, solo las de los tokens de prueba ya usados
+    // (su answerId es HMAC del token); sin onlyTest, TODAS las respuestas.
+    const answerRefs = onlyTest
+      ? targetTokens.filter((d) => d.data().used === true).map((d) => surveyRef.collection('answers').doc(answerId(d.id, salt)))
+      : (await surveyRef.collection('answers').get()).docs.map((d) => d.ref);
+
+    // Ops: borrar respuestas + resetear tokens. Se commitea en lotes de 400
+    // (el batch de Firestore admite hasta 500 operaciones).
+    const ops = [
+      ...answerRefs.map((ref) => ({ kind: 'del', ref })),
+      ...targetTokens.map((d) => ({ kind: 'reset', ref: d.ref })),
+    ];
+    for (let i = 0; i < ops.length; i += 400) {
+      const batch = db.batch();
+      for (const op of ops.slice(i, i + 400)) {
+        if (op.kind === 'del') batch.delete(op.ref);
+        else batch.update(op.ref, { used: false, respondedAt: FieldValue.delete() });
+      }
+      await batch.commit();
+    }
+    return { ok: true, cleared: answerRefs.length, tokensReset: targetTokens.length, onlyTest };
+  },
+);
+
+/**
  * getMyO2O: proyección COMPARTIDA de los O2O de la persona vinculada al llamante.
  * Deriva el personId de su uid (no lo acepta como input, para que solo obtenga lo
  * suyo), busca las sesiones en los líderes que le corresponden (dueño + líderes
