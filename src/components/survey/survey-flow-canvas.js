@@ -18,6 +18,7 @@ export class SurveyFlowCanvas extends LitElement {
   static properties = {
     questions: { attribute: false },
     layout: { attribute: false },
+    selectedId: { attribute: false },
     _pos: { state: true },
     _drag: { state: true },
   };
@@ -37,6 +38,7 @@ export class SurveyFlowCanvas extends LitElement {
       padding: 0.45rem 0.6rem; cursor: grab; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       display: flex; flex-direction: column; gap: 0.15rem; }
     .node:active { cursor: grabbing; border-color: var(--teal); }
+    .node.sel { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal), 0 3px 8px rgba(20,50,80,0.16); }
     .node.choice { border-left: 3px solid var(--teal); }
     .node.scale { border-left: 3px solid #4c86c6; }
     .node.text { border-left: 3px solid var(--rm-muted, #90a4b0); }
@@ -81,10 +83,15 @@ export class SurveyFlowCanvas extends LitElement {
     this._pos = { ...this._pos, [id]: { x: Math.max(0, x0 + e.clientX - px), y: Math.max(0, y0 + e.clientY - py) } };
   }
 
-  _onUp() {
+  _onUp(e) {
     if (!this._drag) return;
+    const { id, px, py } = this._drag;
+    // Poco movimiento = clic (seleccionar); movimiento = arrastre (reposicionar).
+    const moved = Math.abs(e.clientX - px) > 4 || Math.abs(e.clientY - py) > 4;
     this._drag = null;
-    this.dispatchEvent(new CustomEvent('layout-change', { detail: { ...this._pos }, bubbles: true, composed: true }));
+    const type = moved ? 'layout-change' : 'node-select';
+    const detail = moved ? { ...this._pos } : { id };
+    this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
   render() {
@@ -114,11 +121,12 @@ export class SurveyFlowCanvas extends LitElement {
         </svg>
         ${ids.map((id) => {
           const p = this._pos[id];
+          const sel = id === this.selectedId ? ' sel' : '';
           if (id === END) {
-            return html`<div class="node end" style="left:${p.x}px;top:${p.y}px" @pointerdown=${(e) => this._onDown(e, id)}>Fin</div>`;
+            return html`<div class="node end${sel}" style="left:${p.x}px;top:${p.y}px" @pointerdown=${(e) => this._onDown(e, id)}>Fin</div>`;
           }
           const q = qById.get(id);
-          return html`<div class="node ${q?.type ?? 'text'}" style="left:${p.x}px;top:${p.y}px" @pointerdown=${(e) => this._onDown(e, id)}>
+          return html`<div class="node ${q?.type ?? 'text'}${sel}" style="left:${p.x}px;top:${p.y}px" @pointerdown=${(e) => this._onDown(e, id)}>
             <span class="ntype">${KIND[q?.type] ?? 'Pregunta'}</span>
             <span class="nlabel">${q?.label || '(sin enunciado)'}</span>
           </div>`;
