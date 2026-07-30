@@ -20,7 +20,7 @@ import {
 } from '../../tools/survey/domain/results.js';
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, createSurveyTokens, listTokens, listAnswers,
-  sendSurveyTestEmail, sendSurveyBulkEmails,
+  resetSurveyResponses, sendSurveyTestEmail, sendSurveyBulkEmails,
   listSurveyTemplates, saveSurveyTemplate, renameSurveyTemplate, deleteSurveyTemplate,
 } from '../../lib/survey.js';
 
@@ -39,6 +39,9 @@ export class SurveyAdmin extends LitElement {
     _loading: { state: true },
     _confirmDeleteId: { state: true },
     _deletingId: { state: true },
+    _confirmReset: { state: true },
+    _resettingId: { state: true },
+    _notice: { state: true },
     _editId: { state: true },
     _title: { state: true },
     _questions: { state: true },
@@ -125,6 +128,9 @@ export class SurveyAdmin extends LitElement {
     .add-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.6rem 0 1.4rem; }
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
+    .notice { color: var(--rm-accent-700, #1f7a6e); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 12%, transparent);
+      border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.85rem; }
+    .reset-confirm { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
     .notice { color: var(--rm-accent-700, #1f7a6e); font-size: 0.85rem; font-weight: 600; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     textarea { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); resize: vertical; }
@@ -204,6 +210,9 @@ export class SurveyAdmin extends LitElement {
     this._loading = false;
     this._confirmDeleteId = null;
     this._deletingId = null;
+    this._confirmReset = null;
+    this._resettingId = null;
+    this._notice = '';
     this._editId = null;
     this._title = '';
     this._questions = [];
@@ -504,6 +513,26 @@ export class SurveyAdmin extends LitElement {
   _askDelete(survey) { this._confirmDeleteId = survey.id; this._error = ''; }
   _cancelDelete() { this._confirmDeleteId = null; }
 
+  _askReset(survey) { this._confirmReset = survey.id; this._error = ''; this._notice = ''; }
+  _cancelReset() { this._confirmReset = null; }
+
+  /** Borra respuestas (todas o solo las de prueba) y deja los enlaces reutilizables. */
+  async _doReset(survey, onlyTest) {
+    this._resettingId = survey.id;
+    this._error = '';
+    try {
+      const res = await resetSurveyResponses(survey.id, onlyTest);
+      this._confirmReset = null;
+      this._notice = onlyTest
+        ? `Borradas ${res.cleared} respuestas de prueba. Esos enlaces vuelven a estar disponibles.`
+        : `Reiniciada: ${res.cleared} respuestas borradas. Los ${res.tokensReset} enlaces vuelven a estar disponibles.`;
+    } catch (err) {
+      this._error = `No se pudo reiniciar: ${err?.message ?? err}`;
+    } finally {
+      this._resettingId = null;
+    }
+  }
+
   /** Borra la encuesta y sus datos (CF, solo superadmin). Tras confirmación inline. */
   async _deleteSurvey(survey) {
     this._deletingId = survey.id;
@@ -742,6 +771,19 @@ export class SurveyAdmin extends LitElement {
       <button class="ghost" ?disabled=${busy} @click=${() => this._cancelDelete()}>Cancelar</button>`;
   }
 
+  /** Acción de reinicio: botón, o confirmación inline con «Todas» / «Solo prueba». */
+  _renderResetAction(s) {
+    if (s.status === 'draft') return null; // en borrador no hay respuestas
+    if (this._confirmReset !== s.id) {
+      return html`<button class="ghost" title="Borra respuestas y reutiliza los enlaces" @click=${() => this._askReset(s)}>Reiniciar</button>`;
+    }
+    const busy = this._resettingId === s.id;
+    return html`<span class="reset-confirm">¿Borrar respuestas?
+      <button class="ghost danger" ?disabled=${busy} @click=${() => this._doReset(s, false)}>${busy ? 'Reiniciando…' : 'Todas'}</button>
+      <button class="ghost" ?disabled=${busy} @click=${() => this._doReset(s, true)}>Solo prueba</button>
+      <button class="ghost" ?disabled=${busy} @click=${() => this._cancelReset()}>Cancelar</button></span>`;
+  }
+
   _renderList() {
     if (this._loading) return skeletonLines(4);
     return html`
@@ -750,6 +792,7 @@ export class SurveyAdmin extends LitElement {
         <button class="ghost" @click=${() => { this._phase = 'padron'; }}>Padrón de empresa</button>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
       ${this._surveys.length ? html`
         <table>
           <thead><tr><th>Encuesta</th><th>Estado</th><th>Preguntas</th><th></th></tr></thead>
@@ -764,6 +807,7 @@ export class SurveyAdmin extends LitElement {
               ${s.status === 'draft' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'open')}>Abrir</button>` : null}
               ${s.status === 'open' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'closed')}>Cerrar</button>` : null}
               ${s.status === 'closed' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'open')}>Reabrir</button>` : null}
+              ${this._renderResetAction(s)}
               ${this.canDelete ? this._renderDeleteAction(s) : null}
             </div></td>
           </tr>`)}</tbody>
