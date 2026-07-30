@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { flowEdges, autoLayout, resolveLayout, edgePath } from './flowLayout.js';
+import { flowEdges, autoLayout, resolveLayout, edgePath, sideEdgePath } from './flowLayout.js';
 import { END } from './flow.js';
 
 const linear = [{ id: 'a', type: 'text' }, { id: 'b', type: 'text' }];
@@ -32,6 +32,15 @@ describe('flowEdges', () => {
     const edges = flowEdges(qs);
     expect(edges).toContainEqual({ from: 'a', to: 'b', label: '> 8' });
     expect(edges).toContainEqual({ from: 'a', to: 'c', label: '≤ 5' });
+  });
+});
+
+describe('sideEdgePath', () => {
+  it('abomba la curva a la derecha de ambos extremos (bulge)', () => {
+    const d = sideEdgePath({ x: 100, y: 40 }, { x: 100, y: 300 }, 56);
+    expect(d).toContain('M 100 40');
+    expect(d).toContain('156'); // 100 + 56: los puntos de control quedan a la derecha
+    expect(d).toContain('C');
   });
 });
 

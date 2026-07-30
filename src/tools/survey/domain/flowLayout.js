@@ -59,3 +59,13 @@ export function edgePath(from, to) {
   const dy = Math.max(30, Math.abs(to.y - from.y) * 0.5);
   return `M ${from.x} ${from.y} C ${from.x} ${from.y + dy}, ${to.x} ${to.y - dy}, ${to.x} ${to.y}`;
 }
+
+/**
+ * Curva lateral para una arista condicional: sale y entra por el lado derecho y
+ * se abomba hacia fuera, de modo que un salto que cruza varios nodos NO quede
+ * oculto tras la columna del salto por defecto. `bulge` la separa de la columna.
+ */
+export function sideEdgePath(from, to, bulge = 56) {
+  const cx = Math.max(from.x, to.x) + bulge;
+  return `M ${from.x} ${from.y} C ${cx} ${from.y}, ${cx} ${to.y}, ${to.x} ${to.y}`;
+}

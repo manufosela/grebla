@@ -189,7 +189,11 @@ export class SurveyAdmin extends LitElement {
     .flow-wrap { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
     .flow-canvas { flex: 1 1 56%; min-width: 0; max-height: 72vh; overflow: auto; }
     .flow-panel { flex: 1 1 250px; min-width: 240px; max-width: 360px; border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; padding: 0.7rem 0.8rem; background: var(--rm-surface, #fff); box-shadow: 0 1px 4px rgba(20,50,80,0.07); }
-    .fp-title { margin: 0 0 0.6rem; font-size: 0.82rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); }
+    .fp-title { margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); }
+    .fp-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .fp-close { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.1rem 0.45rem; font-size: 0.85rem; cursor: pointer; }
+    .fp-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--rm-border, #e3ebef); }
+    .flow-label { margin: 0 0 0.15rem; font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); }
   `;
 
   constructor() {
@@ -390,6 +394,8 @@ export class SurveyAdmin extends LitElement {
   _setTab(tab) { this._editTab = tab; }
   _onLayoutChange(e) { this._flowLayout = { ...e.detail }; }
   _onNodeSelect(e) { this._selectedNodeId = e.detail.id; }
+  /** Cierra la edición del nodo actual (vuelve al lienzo sin nodo abierto). */
+  _closeNode() { this._selectedNodeId = null; }
 
   /** Abre o cierra todas las preguntas (manipula los <details> directamente). */
   _setAllQ(open) {
@@ -778,8 +784,8 @@ export class SurveyAdmin extends LitElement {
     const canBranch = q.type === 'choice' || q.type === 'scale';
     const rules = q.rules ?? [];
     return html`<div class="flow">
-      <label class="flow-line">Al responder, ir a: ${this._renderDestSelect(q.next, (v) => this._setNext(i, v), q.id)}</label>
       ${canBranch ? html`
+        <p class="flow-label">Condiciones (se evalúan en orden; gana la primera que se cumple):</p>
         ${rules.map((r, j) => html`<div class="rule">
           <span>Si la respuesta es</span>
           <select @change=${(e) => this._setRule(i, j, { op: e.target.value })}>
@@ -797,8 +803,8 @@ export class SurveyAdmin extends LitElement {
           <button class="q-move" title="Bajar regla" ?disabled=${j === rules.length - 1} @click=${() => this._moveRule(i, j, 1)}>↓</button>
           <button class="q-del" title="Quitar regla" @click=${() => this._removeRule(i, j)}>✕</button>
         </div>`)}
-        ${rules.length > 1 ? html`<p class="rule-hint">Se evalúan en orden: gana la primera condición que se cumple.</p>` : null}
         <button class="ghost" @click=${() => this._addRule(i)}>+ Regla condicional</button>` : null}
+      <label class="flow-line">${canBranch ? 'Si no se cumple ninguna condición, ir a:' : 'Al terminar, ir a:'} ${this._renderDestSelect(q.next, (v) => this._setNext(i, v), q.id)}</label>
     </div>`;
   }
 
@@ -942,7 +948,16 @@ export class SurveyAdmin extends LitElement {
         @layout-change=${(e) => this._onLayoutChange(e)} @node-select=${(e) => this._onNodeSelect(e)}></survey-flow-canvas>
       <aside class="flow-panel">
         ${q
-          ? html`<h4 class="fp-title">${QUESTION_KIND[q.type] ?? 'Pregunta'} · editar nodo</h4>${this._renderQuestionBody(q, idx)}`
+          ? html`
+            <div class="fp-head">
+              <h4 class="fp-title">${QUESTION_KIND[q.type] ?? 'Pregunta'} · editar nodo</h4>
+              <button class="fp-close" title="Cerrar edición" @click=${() => this._closeNode()}>✕</button>
+            </div>
+            ${this._renderQuestionBody(q, idx)}
+            <div class="fp-actions">
+              <button class="primary" @click=${() => this._closeNode()}>✓ Hecho</button>
+              <button class="ghost" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar encuesta'}</button>
+            </div>`
           : html`<p class="empty">Haz clic en un nodo para editar su pregunta aquí; arrástralo para moverlo.</p>`}
       </aside>
     </div>`;
