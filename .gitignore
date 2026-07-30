@@ -20,6 +20,9 @@ serviceAccountKey.json
 *firebase-adminsdk*.json
 *-adminsdk-*.json
 *serviceAccount*.json
+*-sa.json
+*-sa-*.json
+portal-metrics-sa*.json
 .firebase/
 firebase-debug.log*
 firestore-debug.log*

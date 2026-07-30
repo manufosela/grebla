@@ -8,6 +8,8 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { randomBytes } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
@@ -21,6 +23,7 @@ import {
 } from './motivatorsAggregate.js';
 import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody } from './survey.js';
 import { sendGmail } from './gmail.js';
+import { getPortalDb, portalConfigured, publishSquadMetrics } from './portal.js';
 
 initializeApp();
 
@@ -269,6 +272,10 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
 // mapeo token→respuesta (un admin con la BBDD no puede reidentificar por ahí).
 const SURVEY_SALT = defineSecret('SURVEY_SALT');
 const GMAIL_SA_KEY = defineSecret('GMAIL_SA_KEY');
+// Clave (JSON) de la service account del portal de management (tribbu-dev-portal),
+// para el push periódico de métricas DORA/LEAN. Solo configurada en la instancia
+// que alimenta al portal; en otras (demo) es un placeholder y el push se omite.
+const PORTAL_SA_KEY = defineSecret('PORTAL_SA_KEY');
 const MAIL_SENDER_USER = 'encuestas@tribbuapp.com'; // buzón impersonado (delegación de dominio)
 const MAIL_FROM = 'Encuestas TRIBBU <encuestas@tribbuapp.com>';
 
@@ -1948,5 +1955,26 @@ export const syncMemberRegistry = onDocumentWritten(
         linkedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
+  },
+);
+
+/**
+ * Push periódico (semanal, GCP) de las métricas DORA/LEAN por squad al Firestore
+ * del portal de management (proyecto `tribbu-dev-portal`, distinto del de GREBLA).
+ * Usa una SEGUNDA app de Firebase Admin nombrada con la credencial del secret
+ * `PORTAL_SA_KEY`; escribe solo `metrics_dora`/`metrics_lean`. En instancias sin
+ * portal configurado (el placeholder no parsea a la SA del portal) se omite.
+ */
+export const pushMetricsToPortal = onSchedule(
+  { schedule: 'every monday 06:00', timeZone: 'Europe/Madrid', region: 'europe-west1', secrets: [PORTAL_SA_KEY] },
+  async () => {
+    const saKeyJson = PORTAL_SA_KEY.value();
+    if (!portalConfigured(saKeyJson)) {
+      logger.info('Portal no configurado en esta instancia: se omite el push de métricas.');
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    const results = await publishSquadMetrics({ greblaDb: getFirestore(), portalDb: getPortalDb(saKeyJson), nowIso });
+    logger.info('Push de métricas al portal completado', results);
   },
 );
