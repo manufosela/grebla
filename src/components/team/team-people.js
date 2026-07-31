@@ -30,6 +30,8 @@ import {
 } from '../../tools/team/application/usecases/index.js';
 import { composeTitle } from '../../tools/career/data/framework.js';
 import { listUsers, unlinkedUsers } from '../../lib/users.js';
+import { setLeaderReportsTo } from '../../lib/leaders.js';
+import { resolveSuperior } from '../../tools/team/domain/superior.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
@@ -47,6 +49,7 @@ export class TeamPeople extends LitElement {
   static properties = {
     persistence: { attribute: false },
     members: { attribute: false },
+    heads: { attribute: false },
     currentUid: { attribute: false },
     isAdmin: { attribute: false },
     framework: { attribute: false },
@@ -220,6 +223,8 @@ export class TeamPeople extends LitElement {
     this.isAdmin = false;
     /** @type {import('../../lib/leaders.js').Leader[]} managers de la instancia (compartir/transferir) */
     this.members = [];
+    /** @type {Array<{ uid: string, displayName: string|null, email: string|null }>} heads (supermanagers) para resolver el superior de un manager */
+    this.heads = [];
     /** @type {string|null} uid del manager en sesión */
     this.currentUid = null;
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
@@ -469,11 +474,33 @@ export class TeamPeople extends LitElement {
     );
   }
 
-  /** Celda «Manager» de la tabla (solo superadmin): nombre del dueño o «Sin manager».
-   * Reutiliza `_leaderName` (displayName › email › uid). */
-  _renderLeaderCell(person) {
-    if (!person.ownerLeaderUid) return html`<span class="muted">Sin manager</span>`;
-    return html`<span class="leader">${this._leaderName(person.ownerLeaderUid)}</span>`;
+  /** Colecciones de rol (leaders/heads) para resolver el superior (RMR-TSK-0367). */
+  _roleSets() {
+    return { leaders: this.members ?? [], heads: this.heads ?? [] };
+  }
+
+  /** Nombre visible de un head (supermanager) por uid: displayName › email › uid. */
+  _headName(uid) {
+    const h = (this.heads ?? []).find((x) => x.uid === uid);
+    return h?.displayName ?? h?.email ?? uid;
+  }
+
+  /** Nombre del superior según el descriptor de rol (manager → leader, head → head). */
+  _superiorName(descriptor) {
+    if (!descriptor.superiorUid) return null;
+    return descriptor.superiorKind === 'head'
+      ? this._headName(descriptor.superiorUid)
+      : this._leaderName(descriptor.superiorUid);
+  }
+
+  /** Celda «Superior» de la tabla (solo superadmin): depende del ROL de la persona
+   * (engineer → su manager; manager → su head; head → sin superior). Muestra el
+   * nombre del superior o la etiqueta de vacío propia de su rol. */
+  _renderSuperiorCell(person) {
+    const sup = resolveSuperior(person, this._roleSets());
+    const name = this._superiorName(sup);
+    if (!name) return html`<span class="muted">${sup.emptyLabel}</span>`;
+    return html`<span class="leader">${name}</span>`;
   }
 
   /** Lista de personas activas: cargando / vacío / tabla (sin ternarios anidados). */
@@ -487,7 +514,7 @@ export class TeamPeople extends LitElement {
         <thead>
           <tr>
             ${this._sortableTh('name', 'Nombre')}
-            ${this.isAdmin ? this._sortableTh('leader', 'Manager') : null}
+            ${this.isAdmin ? this._sortableTh('leader', 'Superior') : null}
             <th>Carrera</th><th>Gremios</th><th>Squads</th>
             ${this._sortableTh('startDate', 'Desde')}
             <th>Acciones</th>
@@ -519,7 +546,9 @@ export class TeamPeople extends LitElement {
     if (!this._sortBy) return people;
     const dir = this._sortDir;
     const keyOf = (p) => {
-      if (this._sortBy === 'leader') return (this._leaderName(p.ownerLeaderUid) || '~~~').toLowerCase();
+      if (this._sortBy === 'leader') {
+        return (this._superiorName(resolveSuperior(p, this._roleSets())) || '~~~').toLowerCase();
+      }
       if (this._sortBy === 'startDate') return p.startDate || '';
       return (p.name || '').toLowerCase();
     };
@@ -562,7 +591,7 @@ export class TeamPeople extends LitElement {
     return html`
       <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
         <td>${p.name}${ext}${pending}</td>
-        ${this.isAdmin ? html`<td>${this._renderLeaderCell(p)}</td>` : null}
+        ${this.isAdmin ? html`<td>${this._renderSuperiorCell(p)}</td>` : null}
         <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
         <td>${this._renderChips(p.guilds)}</td>
         <td>${this._renderChips(squadNames(p.squadIds, this.squads), this.squads)}</td>
@@ -619,16 +648,32 @@ export class TeamPeople extends LitElement {
     return this.isAdmin || (this.currentUid != null && person.ownerLeaderUid === this.currentUid);
   }
 
+  /**
+   * Quién puede transferir a esta persona según su rol: al engineer lo cede su
+   * dueño (o un admin); reasignar el head de un manager escribe `reportsTo`, que
+   * por reglas solo hace un superadmin; un head no tiene superior transferible.
+   * @param {import('../../tools/team/domain/types.js').Person} person
+   * @param {import('../../tools/team/domain/superior.js').SuperiorDescriptor} sup
+   * @returns {boolean}
+   */
+  _canTransfer(person, sup) {
+    if (!sup.canTransfer) return false;
+    if (sup.role === 'manager') return this.isAdmin;
+    return this._canManage(person);
+  }
+
   _renderActions(person) {
     const manage = this._canManage(person);
+    const sup = resolveSuperior(person, this._roleSets());
+    const canTransfer = this._canTransfer(person, sup);
     return html`
       <div class="row-actions">
         <button class="act" type="button" @click=${() => this._openPerson(person, 'datos')}>Editar</button>
         ${manage
-          ? html`
-              <button class="act" type="button" @click=${() => this._openShare(person)}>Compartir</button>
-              <button class="act" type="button" @click=${() => this._openTransfer(person)}>Transferir</button>
-            `
+          ? html`<button class="act" type="button" @click=${() => this._openShare(person)}>Compartir</button>`
+          : null}
+        ${canTransfer
+          ? html`<button class="act" type="button" @click=${() => this._openTransfer(person)}>Transferir</button>`
           : null}
         ${this._confirmOff === person.id
           ? html`<span class="confirm">¿Dar de baja?
@@ -718,19 +763,39 @@ export class TeamPeople extends LitElement {
     const sel = this._transferSel;
     if (!person || !sel) return;
     this.error = '';
+    const sup = resolveSuperior(person, this._roleSets());
     try {
-      if (sel === RELEASE_OWNER) {
+      if (sup.role === 'manager') {
+        await this._transferHead(person, sel);
+      } else if (sel === RELEASE_OWNER) {
         await releaseOwnership(this.persistence, person.id);
+        await this._load();
       } else {
         await transferOwnership(this.persistence, person.id, sel);
+        await this._load();
       }
       this._transferFor = null;
       this._transferSel = '';
       this._confirmTransfer = false;
-      await this._load();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo transferir.';
     }
+  }
+
+  /**
+   * Reasigna el head al que reporta un manager escribiendo su `reportsTo`
+   * (RMR-TSK-0367). No toca `ownerLeaderUid`. Refleja el cambio en la lista local
+   * de `members` para que la celda «Superior» se recalcule sin recargar (el
+   * origen de `members` vive en el glue del cliente).
+   * @param {import('../../tools/team/domain/types.js').Person} person
+   * @param {string} sel  uid del head o el sentinela RELEASE_OWNER (sin head)
+   */
+  async _transferHead(person, sel) {
+    const headUid = sel === RELEASE_OWNER ? null : sel;
+    await setLeaderReportsTo(person.uid, headUid);
+    this.members = (this.members ?? []).map((m) =>
+      m.uid === person.uid ? { ...m, reportsTo: headUid } : m,
+    );
   }
 
 
@@ -864,27 +929,60 @@ export class TeamPeople extends LitElement {
     `;
   }
 
-  /** Cuerpo del modal de transferencia (destino: otro manager o «sin manager»). */
+  /** Cuerpo del modal de transferencia según el ROL: al engineer se le cede el
+   * manager (ownerLeaderUid); al manager se le reasigna el head (reportsTo). */
   _renderTransferBody(person) {
-    const candidates = (this.members ?? []).filter((m) => m.uid !== person.ownerLeaderUid);
+    const sup = resolveSuperior(person, this._roleSets());
     const isRelease = this._transferSel === RELEASE_OWNER;
-    const confirmText = isRelease
-      ? 'La persona quedará sin manager (solo el superadmin podrá gestionarla). ¿Confirmas?'
-      : 'Perderás el acceso a esta persona. ¿Confirmas la transferencia?';
+    if (sup.role === 'manager') {
+      return this._renderTransferForm({
+        description: 'Reasigna el head (manager de managers) al que reporta esta persona, o suéltala para dejarla sin head.',
+        selectLabel: 'Head (reporta a)',
+        candidates: (this.heads ?? []).filter((h) => h.uid !== person.uid),
+        releaseLabel: '— Sin head —',
+        emptyLabel: 'No hay heads todavía. Pide a un superadmin que asigne el rol Head a alguien.',
+        confirmText: isRelease
+          ? 'El manager quedará sin head, fuera de toda rama. ¿Confirmas?'
+          : 'Reasignarás el head al que reporta este manager. ¿Confirmas?',
+      });
+    }
+    return this._renderTransferForm({
+      description: 'Cede esta persona a otro manager, o suéltala para dejarla sin manager. Es una transferencia total: dejarás de tener acceso.',
+      selectLabel: 'Nuevo dueño',
+      candidates: (this.members ?? []).filter((m) => m.uid !== person.ownerLeaderUid),
+      releaseLabel: '— Sin manager (soltar) —',
+      emptyLabel: null,
+      confirmText: isRelease
+        ? 'La persona quedará sin manager (solo el superadmin podrá gestionarla). ¿Confirmas?'
+        : 'Perderás el acceso a esta persona. ¿Confirmas la transferencia?',
+    });
+  }
+
+  /**
+   * Formulario genérico del modal de transferencia (selector + confirmación),
+   * parametrizado por rol para no duplicar el mismo layout dos veces.
+   * @param {{ description: string, selectLabel: string,
+   *   candidates: Array<{ uid: string, displayName: string|null, email: string|null }>,
+   *   releaseLabel: string, emptyLabel: string|null, confirmText: string }} cfg
+   */
+  _renderTransferForm({ description, selectLabel, candidates, releaseLabel, emptyLabel, confirmText }) {
+    const isRelease = this._transferSel === RELEASE_OWNER;
     const primaryLabel = this._transferPrimaryLabel(isRelease);
     const onPrimary = this._confirmTransfer ? () => this._transfer() : () => { this._confirmTransfer = true; };
+    const showEmpty = candidates.length === 0 && emptyLabel;
     return html`
       <div class="modal-body">
-        <p>Cede esta persona a otro manager, o suéltala para dejarla sin manager. Es una transferencia total: dejarás de tener acceso.</p>
+        <p>${description}</p>
+        ${showEmpty ? html`<p class="empty">${emptyLabel}</p>` : null}
         <div class="fields">
-          <label>Nuevo dueño
+          <label>${selectLabel}
             <select
               .value=${this._transferSel}
               @change=${(e) => { this._transferSel = e.target.value; this._confirmTransfer = false; }}
             >
               <option value="">— Elige un destino —</option>
-              ${candidates.map((m) => html`<option value=${m.uid}>${m.displayName ?? m.email ?? m.uid}</option>`)}
-              <option value=${RELEASE_OWNER}>— Sin manager (soltar) —</option>
+              ${candidates.map((c) => html`<option value=${c.uid}>${c.displayName ?? c.email ?? c.uid}</option>`)}
+              <option value=${RELEASE_OWNER}>${releaseLabel}</option>
             </select>
           </label>
         </div>

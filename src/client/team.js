@@ -7,7 +7,7 @@
 import '../components/team/team-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
-import { listLeaders } from '../lib/leaders.js';
+import { listLeaders, listSupermanagers } from '../lib/leaders.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
@@ -27,8 +27,14 @@ onUserChanged(async (user) => {
     }
     // Los managers de la instancia se necesitan tanto para el selector de
     // compartir personas como para resolver la rama de un supermanager (los EMs
-    // que le reportan), así que se cargan ANTES de construir el container.
-    const [members, framework] = await Promise.all([listLeaders(), getFramework()]);
+    // que le reportan), así que se cargan ANTES de construir el container. Los
+    // heads (supermanagers) resuelven el «superior» de un manager en la lista y
+    // el selector de Transferir de un manager (RMR-TSK-0367).
+    const [members, heads, framework] = await Promise.all([
+      listLeaders(),
+      listSupermanagers(),
+      getFramework(),
+    ]);
     // Ámbito con los dos ejes (RMR-TSK-0309): quien gobierna la instancia (admin)
     // Y ADEMÁS lidera un equipo/rama puede ELEGIR entre ver lo suyo o toda la
     // organización — antes el gobierno le tapaba su equipo. La elección vive en la
@@ -58,6 +64,7 @@ onUserChanged(async (user) => {
     // Control de ámbito solo para quien puede elegir (admin que además lidera).
     app.scopeChoice = canChooseScope ? scope : null;
     app.members = members;
+    app.heads = heads;
     app.framework = framework;
     app.persistence = persistence; // dispara la carga inicial en el componente
   } catch (err) {
