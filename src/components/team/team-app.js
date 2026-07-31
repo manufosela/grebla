@@ -33,6 +33,7 @@ export class TeamApp extends LitElement {
     isAdmin: { attribute: false },
     scopeChoice: { attribute: false },
     members: { attribute: false },
+    heads: { attribute: false },
     framework: { attribute: false },
     view: { state: true },
     selected: { state: true },
@@ -89,6 +90,8 @@ export class TeamApp extends LitElement {
     this.scopeChoice = null;
     /** @type {import('../../lib/leaders.js').Leader[]} managers de la instancia (para compartir) */
     this.members = [];
+    /** @type {Array<{ uid: string, displayName: string|null, email: string|null }>} heads (supermanagers) para resolver el superior de un manager */
+    this.heads = [];
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
     this.framework = null;
     const rawHash = location.hash.slice(1);
@@ -278,6 +281,7 @@ export class TeamApp extends LitElement {
         return html`<team-people
           .persistence=${this.persistence}
           .members=${this.members}
+          .heads=${this.heads}
           .currentUid=${this.uid}
           .isAdmin=${this.isAdmin}
           .framework=${this.framework}
