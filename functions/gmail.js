@@ -6,15 +6,9 @@
  * No lee correo ni impersona a nadie más que el buzón emisor de encuestas.
  */
 import { JWT } from 'google-auth-library';
+import { assertHeaderSafe } from './resend.js';
 
 const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
-
-/** Rechaza CR/LF en un valor de cabecera (evita inyección de cabeceras SMTP). */
-function assertHeaderSafe(value, field) {
-  if (/[\r\n]/.test(String(value ?? ''))) {
-    throw new Error(`Cabecera ${field} con caracteres de control no permitidos.`);
-  }
-}
 
 /** Construye el mensaje RFC822 (texto plano UTF-8) en base64url para la Gmail API. */
 export function buildRawMessage({ from, to, subject, text }) {
