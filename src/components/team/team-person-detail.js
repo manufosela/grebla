@@ -135,6 +135,20 @@ const DIM_SUBTABS = [
   { id: 'contribution', label: 'Contribución' },
 ];
 
+/** Sub-sub-pestañas de «Organización»: cada clasificación con espacio propio. */
+const ORG_SUBTABS = [
+  { id: 'gremios', label: 'Gremios' },
+  { id: 'labels', label: 'Labels' },
+  { id: 'squads', label: 'Squads' },
+];
+
+/** Sub-sub-pestañas de «Carrera»: parten el contenido para evitar un scroll largo. */
+const CAREER_SUBTABS = [
+  { id: 'nivel', label: 'Nivel' },
+  { id: 'expectativas', label: 'Expectativas' },
+  { id: 'aspiraciones', label: 'Aspiraciones' },
+];
+
 export class TeamPersonDetail extends LitElement {
   static properties = {
     persistence: { attribute: false },
@@ -150,6 +164,8 @@ export class TeamPersonDetail extends LitElement {
     error: { state: true },
     _subtab: { state: true },
     _dimSubtab: { state: true },
+    _orgSubtab: { state: true },
+    _careerSubtab: { state: true },
     _form: { state: true },
     _know: { state: true },
     _contrib: { state: true },
@@ -390,6 +406,10 @@ export class TeamPersonDetail extends LitElement {
     this._subtab = 'datos';
     /** @type {string} sub-sub-pestaña activa dentro de «Dimensiones» */
     this._dimSubtab = 'seniority';
+    /** @type {string} sub-sub-pestaña activa dentro de «Organización» */
+    this._orgSubtab = 'gremios';
+    /** @type {string} sub-sub-pestaña activa dentro de «Carrera» */
+    this._careerSubtab = 'nivel';
     /** @type {{ levelId: string, disciplines: string[] }} edición inline de carrera (nivel + disciplinas) */
     this._career = { levelId: '', disciplines: [] };
     /** @type {boolean} guardado de carrera en curso */
@@ -451,6 +471,8 @@ export class TeamPersonDetail extends LitElement {
       // pulsada en el Mapa), para no arrastrar la pestaña de la persona anterior.
       this._subtab = 'datos';
       this._dimSubtab = 'seniority';
+      this._orgSubtab = 'gremios';
+      this._careerSubtab = 'nivel';
       if (this.initialSubtab) {
         if (DIM_SUBTABS.some((t) => t.id === this.initialSubtab)) {
           // Deep-link a una dimensión concreta: abre el grupo «Dimensiones» en ella.
@@ -696,6 +718,52 @@ export class TeamPersonDetail extends LitElement {
         })}
       </div>
     `;
+  }
+
+  /**
+   * Barra de sub-sub-pestañas genérica (tablist anidado accesible, roving
+   * tabindex): reutiliza `.tabs`/`.tab`. `prefix` da ids únicos (`${prefix}-<id>`
+   * para el tab y `${prefix}panel-<id>` para su panel); `onSelect(id)` cambia el
+   * estado. Lo usan Organización y Carrera.
+   */
+  _renderNestedTabs(items, activeId, prefix, ariaLabel, onSelect) {
+    return html`
+      <div class="tabs tabs-nested" role="tablist" aria-label=${ariaLabel}
+        @keydown=${(e) => this._nestedTabsKeydown(e, items, activeId, prefix, onSelect)}>
+        ${items.map((t) => {
+          const selected = activeId === t.id;
+          return html`
+            <button
+              id="${prefix}-${t.id}"
+              class="tab ${selected ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected=${selected ? 'true' : 'false'}
+              aria-controls="${prefix}panel-${t.id}"
+              tabindex=${selected ? '0' : '-1'}
+              @click=${() => onSelect(t.id)}
+            >${t.label}</button>
+          `;
+        })}
+      </div>
+    `;
+  }
+
+  /** Navegación por teclado (flechas/Home/End) de una barra de sub-sub-pestañas genérica. */
+  _nestedTabsKeydown(e, items, activeId, prefix, onSelect) {
+    const ids = items.map((t) => t.id);
+    const i = ids.indexOf(activeId);
+    let next = i;
+    if (e.key === 'ArrowLeft') next = (i - 1 + ids.length) % ids.length;
+    else if (e.key === 'ArrowRight') next = (i + 1) % ids.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = ids.length - 1;
+    else return;
+    e.preventDefault();
+    onSelect(ids[next]);
+    this.updateComplete.then(() => {
+      /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#${prefix}-${ids[next]}`))?.focus();
+    });
   }
 
   /**
@@ -1384,96 +1452,103 @@ export class TeamPersonDetail extends LitElement {
     const addendumsByDiscipline = Object.groupBy(addendums, (a) => a.discipline.id);
     const aspirations = level ? aspirationalLevels(fw, this.person.levelId) : [];
 
+    const active = this._careerSubtab;
+    const nivelPanel = () => html`
+      ${this._renderCareerEditor()}
+      ${level ? this._renderAssessment(fw, level) : null}
+      ${level
+        ? html`
+            <p class="sub">Nivel actual</p>
+            <div class="now">
+              <p><span class="code">${level.code}</span> · ${level.title}</p>
+              ${level.description ? html`<p class="desc">${level.description}</p>` : null}
+              ${level.typicalProfile ? html`<p class="profile">Perfil típico: ${level.typicalProfile}</p>` : null}
+            </div>
+          `
+        : null}
+      ${this.isAdmin
+        ? html`<p class="fw-admin">
+            El framework de carrera (niveles, expectativas…) se edita en el
+            <a href="/admin#careerFramework">panel de administración</a>.
+          </p>`
+        : null}
+    `;
+    const expectativasPanel = () => html`
+      ${level
+        ? html`
+            <p class="sub">Lo que se te reconoce</p>
+            <ul class="expect">
+              ${expectations.map(
+                (row) => html`
+                  <li>
+                    <span class="dim">${row.dimension.name}</span>:
+                    ${row.text
+                      ? html`<span class="txt">${row.text}</span>`
+                      : html`<span class="todo">pendiente de definir</span>`}
+                  </li>
+                `,
+              )}
+            </ul>
+          `
+        : null}
+      ${addendums.length > 0
+        ? html`
+            <p class="sub">Enfoque por disciplina</p>
+            <div class="addn">
+              ${Object.values(addendumsByDiscipline).map(
+                (rows) => html`
+                  <p class="disc">${rows[0].discipline.name}</p>
+                  <ul>
+                    ${rows.map(
+                      (a) => html`<li><span class="dim">${a.dimension.name}:</span> ${a.text}</li>`,
+                    )}
+                  </ul>
+                `,
+              )}
+            </div>
+          `
+        : null}
+      ${!level && addendums.length === 0
+        ? html`<p class="empty">Asigna el nivel en «Nivel» para ver las expectativas.</p>`
+        : null}
+    `;
+    const aspiracionesPanel = () => html`
+      ${level
+        ? html`
+            <p class="sub">A qué aspirar</p>
+            ${aspirations.length === 0
+              ? html`<p class="empty">No hay siguientes niveles definidos desde aquí.</p>`
+              : html`
+                  <ul class="aspire">
+                    ${aspirations.map(
+                      (l) => html`
+                        <li>
+                          <details>
+                            <summary>
+                              <span><span class="code">${l.code}</span> · ${l.title}</span>
+                              ${trackName(l.trackId) ? html`<span class="track">${trackName(l.trackId)}</span>` : null}
+                            </summary>
+                            ${l.description ? html`<p class="desc">${l.description}</p>` : null}
+                          </details>
+                        </li>
+                      `,
+                    )}
+                  </ul>
+                `}
+          `
+        : null}
+      ${this._renderDeclaredTarget(fw)}
+      ${this._renderCompletedRoutes()}
+    `;
+    const panel = { nivel: nivelPanel, expectativas: expectativasPanel, aspiraciones: aspiracionesPanel }[active] ?? nivelPanel;
+
     return html`
       <section class="career">
         <h3>Carrera</h3>
-
-        ${this._renderCareerEditor()}
-
-        ${level ? this._renderAssessment(fw, level) : null}
-
-        ${level
-          ? html`
-              <p class="sub">Nivel actual</p>
-              <div class="now">
-                <p><span class="code">${level.code}</span> · ${level.title}</p>
-                ${level.description ? html`<p class="desc">${level.description}</p>` : null}
-                ${level.typicalProfile ? html`<p class="profile">Perfil típico: ${level.typicalProfile}</p>` : null}
-              </div>
-            `
-          : null}
-
-        ${level
-          ? html`
-              <p class="sub">Lo que se te reconoce</p>
-              <ul class="expect">
-                ${expectations.map(
-                  (row) => html`
-                    <li>
-                      <span class="dim">${row.dimension.name}</span>:
-                      ${row.text
-                        ? html`<span class="txt">${row.text}</span>`
-                        : html`<span class="todo">pendiente de definir</span>`}
-                    </li>
-                  `,
-                )}
-              </ul>
-            `
-          : null}
-
-        ${addendums.length > 0
-          ? html`
-              <p class="sub">Enfoque por disciplina</p>
-              <div class="addn">
-                ${Object.values(addendumsByDiscipline).map(
-                  (rows) => html`
-                    <p class="disc">${rows[0].discipline.name}</p>
-                    <ul>
-                      ${rows.map(
-                        (a) => html`<li><span class="dim">${a.dimension.name}:</span> ${a.text}</li>`,
-                      )}
-                    </ul>
-                  `,
-                )}
-              </div>
-            `
-          : null}
-
-        ${level
-          ? html`
-              <p class="sub">A qué aspirar</p>
-              ${aspirations.length === 0
-                ? html`<p class="empty">No hay siguientes niveles definidos desde aquí.</p>`
-                : html`
-                    <ul class="aspire">
-                      ${aspirations.map(
-                        (l) => html`
-                          <li>
-                            <details>
-                              <summary>
-                                <span><span class="code">${l.code}</span> · ${l.title}</span>
-                                ${trackName(l.trackId) ? html`<span class="track">${trackName(l.trackId)}</span>` : null}
-                              </summary>
-                              ${l.description ? html`<p class="desc">${l.description}</p>` : null}
-                            </details>
-                          </li>
-                        `,
-                      )}
-                    </ul>
-                  `}
-            `
-          : null}
-
-        ${this._renderDeclaredTarget(fw)}
-
-        ${this._renderCompletedRoutes()}
-
-        ${this.isAdmin
-          ? html`<p class="fw-admin">
-              El framework de carrera (niveles, expectativas…) se edita en el
-              <a href="/admin#careerFramework">panel de administración</a>.
-            </p>`
-          : null}
+        ${this._renderNestedTabs(CAREER_SUBTABS, active, 'pcar', 'Secciones de carrera', (id) => { this._careerSubtab = id; })}
+        <div id="pcarpanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="pcar-${active}" tabindex="0">
+          ${panel()}
+        </div>
       </section>
     `;
   }
@@ -1902,11 +1977,18 @@ export class TeamPersonDetail extends LitElement {
    * squads. Comparte el borrador `this._datos` y el guardado con «Datos». */
   _renderOrganizacion() {
     const d = this._datos;
+    const active = this._orgSubtab;
+    const panel = {
+      gremios: () => this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c)),
+      labels: () => this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c)),
+      squads: () => this._renderDatosSquads(d.squadIds ?? []),
+    }[active] ?? (() => this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c)));
     return html`
       <section class="datos">
-        ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
-        ${this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c))}
-        ${this._renderDatosSquads(d.squadIds ?? [])}
+        ${this._renderNestedTabs(ORG_SUBTABS, active, 'porg', 'Clasificación de la persona', (id) => { this._orgSubtab = id; })}
+        <div id="porgpanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="porg-${active}" tabindex="0">
+          ${panel()}
+        </div>
         ${this._renderDatosActions('Guardar organización')}
       </section>
     `;
