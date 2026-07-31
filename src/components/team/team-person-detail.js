@@ -265,7 +265,14 @@ export class TeamPersonDetail extends LitElement {
     .career .route-done-row .rd-name { font-weight: 700; font-size: 0.85rem; color: var(--rm-text, #111827); }
     .career .route-done-row .rd-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
     /* Pestaña «Datos» (RMR-TSK-0173). */
-    .datos { display: flex; flex-direction: column; gap: 0.9rem; max-width: 560px; }
+    /* Rejilla: los campos se reparten en varias columnas según el ancho, cada uno
+       con su tamaño; no una sola columna estrecha con un campo por línea. */
+    .datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+      gap: 0.9rem 1.2rem; align-items: start; }
+    /* A fila completa: el email (lleva texto de ayuda), el aviso de cuenta, los
+       fieldsets de checks, los mensajes y la barra de acciones. */
+    .datos .fld:has(.fld-hint), .datos .acct, .datos .datos-checks,
+    .datos .error, .datos .datos-actions { grid-column: 1 / -1; }
     .datos .fld { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .datos .fld input { font: inherit; font-weight: 400; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
     .datos .fld .chk-loc { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 400; font-size: 0.9rem; color: var(--rm-text, #111827); }
