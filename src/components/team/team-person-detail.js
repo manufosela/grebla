@@ -114,13 +114,25 @@ const DIMENSIONS = [
  */
 const SUBTABS = [
   { id: 'datos', label: 'Datos' },
+  { id: 'organizacion', label: 'Organización' },
   { id: 'carrera', label: 'Carrera' },
+  { id: 'dimensiones', label: 'Dimensiones' },
+  { id: 'conversations', label: 'O2O' },
+  { id: 'notes', label: 'Notas' },
+];
+
+/**
+ * Sub-sub-pestañas de la pestaña «Dimensiones»: las cuatro dimensiones de
+ * evaluación agrupadas bajo un único primer nivel. El orden define el recorrido
+ * con las flechas del teclado y el primero (`seniority`) es el activo por defecto.
+ * Los ids coinciden con los que envía el Mapa en `open-person` (deep-link).
+ * @type {ReadonlyArray<{ id: string, label: string }>}
+ */
+const DIM_SUBTABS = [
   { id: 'seniority', label: 'Seniority' },
   { id: 'emotional', label: 'Emocional' },
   { id: 'knowledge', label: 'Conocimiento' },
   { id: 'contribution', label: 'Contribución' },
-  { id: 'conversations', label: 'O2O' },
-  { id: 'notes', label: 'Notas' },
 ];
 
 export class TeamPersonDetail extends LitElement {
@@ -137,6 +149,7 @@ export class TeamPersonDetail extends LitElement {
     loading: { state: true },
     error: { state: true },
     _subtab: { state: true },
+    _dimSubtab: { state: true },
     _form: { state: true },
     _know: { state: true },
     _contrib: { state: true },
@@ -339,6 +352,10 @@ export class TeamPersonDetail extends LitElement {
     .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .tab:hover:not(.active) { color: var(--rm-text, #111827); }
     .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    /* Tablist anidado (sub-sub-pestañas de «Dimensiones»): mismo patrón, un punto
+       menos de tamaño para leerse como segundo nivel sin perder contraste. */
+    .tabs-nested { margin-bottom: 1rem; }
+    .tabs-nested .tab { font-size: 0.82rem; padding: 0.32rem 0.85rem; }
     .subpanel:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: var(--rm-radius, 12px); }
 
     /* ── Editor inline de carrera (nivel + disciplinas) ── */
@@ -371,6 +388,8 @@ export class TeamPersonDetail extends LitElement {
     this.initialSubtab = null;
     /** @type {string} sub-pestaña activa de la ficha (arranca en Datos) */
     this._subtab = 'datos';
+    /** @type {string} sub-sub-pestaña activa dentro de «Dimensiones» */
+    this._dimSubtab = 'seniority';
     /** @type {{ levelId: string, disciplines: string[] }} edición inline de carrera (nivel + disciplinas) */
     this._career = { levelId: '', disciplines: [] };
     /** @type {boolean} guardado de carrera en curso */
@@ -427,10 +446,19 @@ export class TeamPersonDetail extends LitElement {
   updated() {
     if (this.persistence && this.person && this._loadedFor !== this.person.id) {
       this._loadedFor = this.person.id;
-      // Al abrir una persona nueva, respeta la sub-pestaña inicial solicitada
-      // (p. ej. la dimensión pulsada en el Mapa); si no, arranca en «Carrera».
-      if (this.initialSubtab && SUBTABS.some((t) => t.id === this.initialSubtab)) {
-        this._subtab = this.initialSubtab;
+      // Al abrir una persona nueva, arranca en los valores por defecto y solo
+      // entonces respeta la sub-pestaña inicial solicitada (p. ej. la dimensión
+      // pulsada en el Mapa), para no arrastrar la pestaña de la persona anterior.
+      this._subtab = 'datos';
+      this._dimSubtab = 'seniority';
+      if (this.initialSubtab) {
+        if (DIM_SUBTABS.some((t) => t.id === this.initialSubtab)) {
+          // Deep-link a una dimensión concreta: abre el grupo «Dimensiones» en ella.
+          this._subtab = 'dimensiones';
+          this._dimSubtab = this.initialSubtab;
+        } else if (SUBTABS.some((t) => t.id === this.initialSubtab)) {
+          this._subtab = this.initialSubtab;
+        }
       }
       this._seedCareer();
       this._seedDatos();
@@ -502,6 +530,29 @@ export class TeamPersonDetail extends LitElement {
     // Tras el re-render, mueve el foco a la sub-pestaña recién activada.
     this.updateComplete.then(() => {
       /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#psub-${this._subtab}`))?.focus();
+    });
+  }
+
+  /**
+   * Navegación por teclado de las sub-sub-pestañas de «Dimensiones» (mismo patrón
+   * ARIA tablist con activación automática que el primer nivel): ←/→ circulares y
+   * Home/End a la primera/última, moviendo el foco a la nueva pestaña.
+   * @param {KeyboardEvent} e
+   * @returns {void}
+   */
+  _onDimSubtabsKeydown(e) {
+    const ids = DIM_SUBTABS.map((t) => t.id);
+    const i = ids.indexOf(this._dimSubtab);
+    let next = i;
+    if (e.key === 'ArrowLeft') next = (i - 1 + ids.length) % ids.length;
+    else if (e.key === 'ArrowRight') next = (i + 1) % ids.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = ids.length - 1;
+    else return;
+    e.preventDefault();
+    this._dimSubtab = ids[next];
+    this.updateComplete.then(() => {
+      /** @type {HTMLElement|null} */ (this.renderRoot.querySelector(`#pdim-${this._dimSubtab}`))?.focus();
     });
   }
 
@@ -643,6 +694,62 @@ export class TeamPersonDetail extends LitElement {
             >${t.label}</button>
           `;
         })}
+      </div>
+    `;
+  }
+
+  /**
+   * Barra de sub-sub-pestañas de «Dimensiones» (tablist anidado, mismo patrón
+   * accesible de roving tabindex): solo la activa es tabulable y las flechas
+   * mueven foco y selección. Reutiliza las clases `.tabs`/`.tab` del primer nivel.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderDimSubtabs() {
+    return html`
+      <div class="tabs tabs-nested" role="tablist" aria-label="Dimensiones de evaluación" @keydown=${this._onDimSubtabsKeydown}>
+        ${DIM_SUBTABS.map((t) => {
+          const selected = this._dimSubtab === t.id;
+          return html`
+            <button
+              id="pdim-${t.id}"
+              class="tab ${selected ? 'active' : ''}"
+              type="button"
+              role="tab"
+              aria-selected=${selected ? 'true' : 'false'}
+              aria-controls="pdimpanel-${t.id}"
+              tabindex=${selected ? '0' : '-1'}
+              @click=${() => { this._dimSubtab = t.id; }}
+            >${t.label}</button>
+          `;
+        })}
+      </div>
+    `;
+  }
+
+  /**
+   * Pestaña «Dimensiones»: agrupa las cuatro dimensiones de evaluación bajo un
+   * tablist anidado, reutilizando los renderers de cada dimensión sin tocar su
+   * lógica ni su persistencia.
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderDimensions() {
+    const active = this._dimSubtab;
+    const panel = {
+      seniority: () => this._renderDimension(DIMENSIONS[0]),
+      emotional: () => this._renderDimension(DIMENSIONS[1]),
+      knowledge: () => this._renderKnowledge(),
+      contribution: () => this._renderContribution(),
+    }[active] ?? (() => this._renderDimension(DIMENSIONS[0]));
+    return html`
+      ${this._renderDimSubtabs()}
+      <div
+        id="pdimpanel-${active}"
+        class="subpanel"
+        role="tabpanel"
+        aria-labelledby="pdim-${active}"
+        tabindex="0"
+      >
+        ${panel()}
       </div>
     `;
   }
@@ -1744,7 +1851,29 @@ export class TeamPersonDetail extends LitElement {
     </div>`;
   }
 
-  /** Pestaña «Datos»: identidad editable de la persona en un ÚNICO sitio. */
+  /**
+   * Feedback + botón de guardado de la ficha de datos. Tanto «Datos» como
+   * «Organización» editan el mismo borrador `this._datos` y persisten TODO con
+   * `_saveDatos` (nombre, github, ubicación, externo, gremios, labels, squads y
+   * email), así que comparten esta misma acción — cambia solo la etiqueta.
+   * @param {string} label  texto del botón
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderDatosActions(label) {
+    return html`
+      ${this._datosError ? html`<p class="error">${this._datosError}</p>` : null}
+      <div class="datos-actions">
+        <button class="primary" type="button" ?disabled=${this._datosSaving} @click=${() => this._saveDatos()}>
+          ${this._datosSaving ? 'Guardando…' : label}
+        </button>
+        ${this._datosSaved ? html`<span class="saved">✓ Guardado</span>` : null}
+      </div>
+    `;
+  }
+
+  /** Pestaña «Datos»: identidad básica editable de la persona (nombre, github,
+   * fecha de alta, ubicación, externo/a y email). La clasificación por gremios,
+   * labels y squads vive en la pestaña «Organización». */
   _renderDatos() {
     const d = this._datos;
     return html`
@@ -1763,17 +1892,22 @@ export class TeamPersonDetail extends LitElement {
           <input type="checkbox" .checked=${!!d.external} @change=${(e) => { this._datos = { ...d, external: e.target.checked }; }} />
           Es externo/a
         </label>
+        ${this._renderEmailBlock()}
+        ${this._renderDatosActions('Guardar datos')}
+      </section>
+    `;
+  }
+
+  /** Pestaña «Organización»: clasificación de la persona por gremios, labels y
+   * squads. Comparte el borrador `this._datos` y el guardado con «Datos». */
+  _renderOrganizacion() {
+    const d = this._datos;
+    return html`
+      <section class="datos">
         ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
         ${this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c))}
         ${this._renderDatosSquads(d.squadIds ?? [])}
-        ${this._renderEmailBlock()}
-        ${this._datosError ? html`<p class="error">${this._datosError}</p>` : null}
-        <div class="datos-actions">
-          <button class="primary" type="button" ?disabled=${this._datosSaving} @click=${() => this._saveDatos()}>
-            ${this._datosSaving ? 'Guardando…' : 'Guardar datos'}
-          </button>
-          ${this._datosSaved ? html`<span class="saved">✓ Guardado</span>` : null}
-        </div>
+        ${this._renderDatosActions('Guardar organización')}
       </section>
     `;
   }
@@ -1822,14 +1956,12 @@ export class TeamPersonDetail extends LitElement {
   _renderActivePanel() {
     const panel = {
       datos: () => this._renderDatos(),
+      organizacion: () => this._renderOrganizacion(),
       carrera: () => this._renderCareer(),
-      seniority: () => this._renderDimension(DIMENSIONS[0]),
-      emotional: () => this._renderDimension(DIMENSIONS[1]),
-      knowledge: () => this._renderKnowledge(),
-      contribution: () => this._renderContribution(),
+      dimensiones: () => this._renderDimensions(),
       conversations: () => this._renderConversations(),
       notes: () => this._renderNotes(),
-    }[this._subtab] ?? (() => (this.person?.external ? this._renderDatos() : this._renderCareer()));
+    }[this._subtab] ?? (() => this._renderDatos());
     return panel();
   }
 }
