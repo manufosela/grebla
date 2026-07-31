@@ -17,8 +17,6 @@ import {
   listRepos,
   removeRepo,
   updateRepoConfig,
-  listTeams,
-  listGuilds,
   registerDeployment,
   listDeployments,
   removeDeployment,
@@ -32,6 +30,7 @@ import { deploymentFrequencyPerWeek } from '../../tools/dora/domain/deployments.
 import { meanTimeToRecovery } from '../../tools/dora/domain/mttr.js';
 import { formatHours } from './format.js';
 import { getCurrentUser } from '../../lib/auth.js';
+import { listLeanUnits, withCurrentOption, withCurrentOptions } from '../../lib/leanUnits.js';
 import { levelBadge, levelStyles } from './level-badge.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
@@ -70,8 +69,8 @@ export class DoraRepos extends LitElement {
     _confirm: { state: true },
     refresh: { attribute: false },
     _refreshing: { state: true },
-    _teams: { state: true },
-    _guilds: { state: true },
+    _leanSquads: { state: true },
+    _leanChapters: { state: true },
     _editing: { state: true },
     _editTeam: { state: true },
     _editGuilds: { state: true },
@@ -133,6 +132,8 @@ export class DoraRepos extends LitElement {
     .help { font-size: 0.78rem; line-height: 1.5; margin: 0; }
     td.err { color: var(--rm-danger, #dc2626); font-size: 0.8rem; }
     input.edit-in { width: 100%; min-width: 8rem; font-size: 0.82rem; padding: 0.3rem 0.4rem; }
+    select.edit-in { width: 100%; min-width: 8rem; font-size: 0.82rem; padding: 0.3rem 0.4rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
+    select.edit-in.guilds { padding: 0.2rem; }
     .del-btn.edit { color: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); margin-right: 0.4rem; }
     .tag { display: inline-block; background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.76rem; margin: 0 0.2rem 0.2rem 0; }
     .deploy-toggle { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; border: 0; background: none; padding: 0; color: var(--rm-accent, #2a9d8f); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
@@ -174,13 +175,15 @@ export class DoraRepos extends LitElement {
     this.refresh = null;
     this._refreshing = false;
     this._loaded = false;
-    /** @type {string[]} catálogos vivos derivados de los repos */
-    this._teams = [];
-    this._guilds = [];
+    /** @type {string[]} squads (equipos) del catálogo LEAN para el selector */
+    this._leanSquads = [];
+    /** @type {string[]} chapters (gremios) del catálogo LEAN para el selector */
+    this._leanChapters = [];
     /** @type {string|null} id del repo en edición de agrupación */
     this._editing = null;
     this._editTeam = '';
-    this._editGuilds = '';
+    /** @type {string[]} gremios seleccionados en edición */
+    this._editGuilds = [];
     this._editBranch = '';
     this._editSignal = 'branch';
     this._editTagPattern = '';
@@ -243,14 +246,13 @@ export class DoraRepos extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [repos, teams, guilds] = await Promise.all([
+      const [repos, units] = await Promise.all([
         listRepos(this.persistence),
-        listTeams(this.persistence),
-        listGuilds(this.persistence),
+        listLeanUnits(),
       ]);
       this.repos = repos;
-      this._teams = teams;
-      this._guilds = guilds;
+      this._leanSquads = units.squads;
+      this._leanChapters = units.chapters;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar los repos.';
     } finally {
@@ -262,7 +264,7 @@ export class DoraRepos extends LitElement {
     this._confirm = null;
     this._editing = repo.id;
     this._editTeam = repo.team ?? '';
-    this._editGuilds = (repo.guilds ?? []).join(', ');
+    this._editGuilds = [...(repo.guilds ?? [])];
     this._editBranch = repo.baseBranch || 'main';
     this._editSignal = repo.deploySignal || 'branch';
     this._editTagPattern = repo.tagPattern || '';
@@ -272,11 +274,16 @@ export class DoraRepos extends LitElement {
   _cancelEdit() {
     this._editing = null;
     this._editTeam = '';
-    this._editGuilds = '';
+    this._editGuilds = [];
     this._editBranch = '';
     this._editSignal = 'branch';
     this._editTagPattern = '';
     this._editWorkflowFile = '';
+  }
+
+  /** Recoge los gremios marcados en el <select multiple> de edición. */
+  _onGuildsChange(event) {
+    this._editGuilds = [...event.target.selectedOptions].map((o) => o.value);
   }
 
   async _saveEdit(id) {
@@ -284,7 +291,7 @@ export class DoraRepos extends LitElement {
     try {
       await updateRepoConfig(this.persistence, id, {
         team: this._editTeam,
-        guilds: this._editGuilds.split(',').map((g) => g.trim()).filter(Boolean),
+        guilds: this._editGuilds.map((g) => g.trim()).filter(Boolean),
         baseBranch: this._editBranch,
         deploySignal: this._editSignal,
         tagPattern: this._editTagPattern,
@@ -743,11 +750,22 @@ export class DoraRepos extends LitElement {
   /** Celdas de equipo, gremios y rama base: en edición (admin) muestran inputs. */
   _renderConfigCells(repo) {
     if (this.canEdit && this._editing === repo.id) {
+      const teamOptions = withCurrentOption(this._leanSquads, this._editTeam);
+      const guildOptions = withCurrentOptions(this._leanChapters, this._editGuilds);
       return html`
-        <td><input class="edit-in" list="dora-teams" placeholder="(sin equipo)"
-          .value=${this._editTeam} @input=${(e) => { this._editTeam = e.target.value; }} /></td>
-        <td><input class="edit-in" list="dora-guilds" placeholder="gremios, separados por comas"
-          .value=${this._editGuilds} @input=${(e) => { this._editGuilds = e.target.value; }} /></td>
+        <td>
+          <select class="edit-in" @change=${(e) => { this._editTeam = e.target.value; }}>
+            <option value="" ?selected=${!this._editTeam}>(sin equipo)</option>
+            ${teamOptions.map((t) => html`<option value=${t} ?selected=${this._editTeam === t}>${t}</option>`)}
+          </select>
+        </td>
+        <td>
+          ${guildOptions.length === 0
+            ? html`<span class="muted">Sin gremios definidos en Flujo (LEAN).</span>`
+            : html`<select class="edit-in guilds" multiple size=${Math.min(guildOptions.length, 5)} @change=${(e) => this._onGuildsChange(e)}>
+                ${guildOptions.map((g) => html`<option value=${g} ?selected=${this._editGuilds.includes(g)}>${g}</option>`)}
+              </select>`}
+        </td>
         <td>
           <select class="edit-in" @change=${(e) => { this._editSignal = e.target.value; }}>
             <option value="branch" ?selected=${this._editSignal === 'branch'}>rama (merge)</option>
@@ -836,9 +854,7 @@ export class DoraRepos extends LitElement {
                     )}
                   </tbody>
                 </table>
-                <datalist id="dora-teams">${this._teams.map((t) => html`<option value=${t}></option>`)}</datalist>
-                <datalist id="dora-guilds">${this._guilds.map((g) => html`<option value=${g}></option>`)}</datalist>
-                <p class="muted note">Equipo, gremios y rama base (señal de despliegue, por defecto <code>main</code>) se configuran aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Para el <strong>MTTR</strong> abre «Incidentes» y registra las caídas (inicio → restauración). Siempre a nivel de equipo, nunca por persona.</p>
+                <p class="muted note">Equipo y gremios se eligen del catálogo de <strong>Flujo (LEAN)</strong> (squads y chapters) para que DORA agregue por las mismas unidades. La rama base (señal de despliegue, por defecto <code>main</code>) también se configura aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Para el <strong>MTTR</strong> abre «Incidentes» y registra las caídas (inicio → restauración). Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>
 
