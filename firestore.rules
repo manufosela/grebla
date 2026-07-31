@@ -354,6 +354,14 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Políticas de acceso a herramientas (RMR-PCS-0027): audience/managedBy por
+    // herramienta. Las lee cualquiera con acceso (para saber qué herramientas ve)
+    // y solo las gestiona el superadmin.
+    match /toolPolicies/{toolId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     match /labels/{labelId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()

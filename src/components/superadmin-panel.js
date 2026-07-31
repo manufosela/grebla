@@ -30,6 +30,8 @@ import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { rootRoles, childrenOf, assertValidReportsTo } from '../tools/team/domain/orgRoles.js';
+import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
+import { TOOLS } from '../tools/team/data/tools.js';
 
 const CITY_KINDS = ['tech', 'skill', 'milestone'];
 const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
@@ -78,7 +80,7 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'organigrama', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
+const TABS = ['leaders', 'organigrama', 'herramientas', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
 /** Ramas del organigrama (RMR-PCS-0027). Extensible por el superadmin al crear roles. */
 const ORG_BRANCHES = ['engineering', 'product', 'people', 'data', 'generico'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
@@ -145,6 +147,9 @@ export class SuperadminPanel extends LitElement {
     _orgError: { state: true },
     _orgNotice: { state: true },
     _orgConfirmDelete: { state: true },
+    _toolPolicies: { state: true },
+    _toolError: { state: true },
+    _toolNotice: { state: true },
   };
 
   static styles = css`
@@ -244,6 +249,16 @@ export class SuperadminPanel extends LitElement {
     .sub { font-size: 0.95rem; margin: 1.25rem 0 0.6rem; color: var(--rm-text, #111827); cursor: pointer; }
     details { margin-bottom: 0.5rem; }
     details.city .city-head { cursor: pointer; }
+    /* Editor de políticas de herramientas (RMR-PCS-0027 · F3) */
+    details.tool { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.9rem; margin-bottom: 0.6rem; }
+    details.tool > summary { cursor: pointer; font-size: 0.95rem; }
+    .tool-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; margin-top: 0.8rem; }
+    .tool-grant { border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; padding: 0.6rem 0.75rem; }
+    .grant-title { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--rm-navy, #1e3a5f); }
+    .grant-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .grant-cols.dim { opacity: 0.45; pointer-events: none; }
+    .grant-h { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #9ca3af); margin-bottom: 0.3rem; }
+    .grant .chk { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.2rem 0; }
     .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
@@ -399,6 +414,10 @@ export class SuperadminPanel extends LitElement {
     this._orgNotice = '';
     /** @type {string|null} id de rol pendiente de confirmar borrado */
     this._orgConfirmDelete = null;
+    /** @type {import('../tools/team/domain/toolAccess.js').ToolPolicy[]} políticas de herramientas */
+    this._toolPolicies = [];
+    this._toolError = '';
+    this._toolNotice = '';
     this._loaded = false;
   }
 
@@ -426,6 +445,7 @@ export class SuperadminPanel extends LitElement {
       this._loadLeaders();
       this._loadFramework();
       this._loadOrgRoles();
+      this._loadToolPolicies();
       // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
       if (!this.readOnly) this._loadUsers();
     }
@@ -910,6 +930,8 @@ export class SuperadminPanel extends LitElement {
         return html`${this._renderLeaders()} ${this.selected ? this._renderTeam() : null}`;
       case 'organigrama':
         return this._renderOrgRoles();
+      case 'herramientas':
+        return this._renderToolPolicies();
       case 'areas':
         return this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)');
       case 'guilds':
@@ -940,6 +962,7 @@ export class SuperadminPanel extends LitElement {
       <nav class="tabs" aria-label="Secciones de gestión">
         <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Managers</button>
         <button class="tab ${this._tab === 'organigrama' ? 'active' : ''}" @click=${() => this._setTab('organigrama')}>Organigrama</button>
+        <button class="tab ${this._tab === 'herramientas' ? 'active' : ''}" @click=${() => this._setTab('herramientas')}>Herramientas</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'squads' ? 'active' : ''}" @click=${() => this._setTab('squads')}>Squads</button>
@@ -1554,6 +1577,105 @@ export class SuperadminPanel extends LitElement {
             </select>
             <button class="primary" @click=${() => this._createRole()}>Crear rol</button>
           </div>`}
+      </section>`;
+  }
+
+  // ── Herramientas: permisos de acceso/gestión (RMR-PCS-0027 · F3) ───────────
+
+  async _loadToolPolicies() {
+    try {
+      const loaded = await listToolPolicies();
+      // Si aún no se han sembrado, muestra el catálogo por defecto (solo lectura
+      // hasta que se guarde algo, que ya persiste).
+      this._toolPolicies = loaded.length ? loaded : TOOLS.map((t) => ({ ...t }));
+    } catch (err) {
+      this._toolError = err instanceof Error ? err.message : 'No se pudieron cargar las herramientas.';
+    }
+  }
+
+  /** Aplica un cambio a un grant (audience|managedBy) de una herramienta y persiste. */
+  async _updateToolGrant(toolId, kind, mutate) {
+    this._toolError = '';
+    this._toolNotice = '';
+    const policy = this._toolPolicies.find((p) => p.toolId === toolId);
+    if (!policy) return;
+    const prevGrant = policy[kind] ?? {};
+    const nextGrant = mutate({ ...prevGrant });
+    const nextPolicy = { ...policy, [kind]: nextGrant };
+    // Optimista, pero el rollback es QUIRÚRGICO: si la escritura falla, solo
+    // revierte ESTE grant y solo si nadie lo cambió después (comparando la
+    // referencia del objeto), para no pisar un cambio posterior que sí guardó.
+    this._toolPolicies = this._toolPolicies.map((p) => (p.toolId === toolId ? nextPolicy : p));
+    try {
+      await saveToolPolicy(toolId, { label: policy.label, [kind]: nextGrant });
+      this._toolNotice = 'Guardado.';
+    } catch (err) {
+      this._toolPolicies = this._toolPolicies.map((p) => {
+        if (p.toolId !== toolId || p[kind] !== nextGrant) return p;
+        return { ...p, [kind]: prevGrant };
+      });
+      this._toolError = err instanceof Error ? err.message : 'No se pudo guardar. Cambio revertido.';
+    }
+  }
+
+  /** Añade o quita un valor de un array de un grant (branches / roleIds). */
+  _toggleGrantList(grant, key, value) {
+    const list = grant[key] ?? [];
+    const next = list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+    return { ...grant, [key]: next };
+  }
+
+  /** Editor de un grant (audience o managedBy): everyone + ramas + roles. */
+  _renderGrantEditor(toolId, kind, grant, allowEveryone) {
+    const ro = this.readOnly;
+    const branches = ORG_BRANCHES;
+    const roles = this._orgRoles;
+    const everyone = Boolean(grant.everyone);
+    return html`
+      <div class="grant">
+        ${allowEveryone ? html`<label class="chk"><input type="checkbox" .checked=${everyone} ?disabled=${ro}
+          @change=${(e) => this._updateToolGrant(toolId, kind, (g) => ({ ...g, everyone: e.target.checked }))}>
+          <strong>Todos los empleados</strong></label>` : null}
+        <div class="grant-cols ${everyone ? 'dim' : ''}">
+          <div>
+            <span class="grant-h">Ramas</span>
+            ${branches.map((b) => html`<label class="chk"><input type="checkbox" ?disabled=${ro}
+              .checked=${(grant.branches ?? []).includes(b)}
+              @change=${() => this._updateToolGrant(toolId, kind, (g) => this._toggleGrantList(g, 'branches', b))}>${b}</label>`)}
+          </div>
+          <div>
+            <span class="grant-h">Roles</span>
+            ${roles.length === 0 ? html`<span class="muted">— sin roles —</span>` : roles.map((r) => html`<label class="chk"><input type="checkbox" ?disabled=${ro}
+              .checked=${(grant.roleIds ?? []).includes(r.id)}
+              @change=${() => this._updateToolGrant(toolId, kind, (g) => this._toggleGrantList(g, 'roleIds', r.id))}>${r.label}</label>`)}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  _renderToolPolicies() {
+    const ro = this.readOnly;
+    return html`
+      <section>
+        <h2>Herramientas — quién las ve y quién las gestiona</h2>
+        <p class="ro-note">El superadmin ve y gestiona TODAS las herramientas siempre. Aquí defines quién más: «Ve/usa» (audiencia) y «Gestiona» (delegación). Las reglas se suman: si cualquiera aplica, hay acceso.</p>
+        ${this._toolError ? html`<p class="error">${this._toolError}</p>` : null}
+        ${this._toolNotice ? html`<p class="notice">${this._toolNotice}</p>` : null}
+        ${ro ? html`<p class="ro-note">Solo lectura.</p>` : null}
+        ${this._toolPolicies.map((p) => html`
+          <details class="tool">
+            <summary><strong>${p.label ?? p.toolId}</strong> <span class="muted">(${p.toolId})</span></summary>
+            <div class="tool-body">
+              <div class="tool-grant">
+                <span class="grant-title">Ve / usa</span>
+                ${this._renderGrantEditor(p.toolId, 'audience', p.audience ?? {}, true)}
+              </div>
+              <div class="tool-grant">
+                <span class="grant-title">Gestiona <span class="muted">(además del superadmin)</span></span>
+                ${this._renderGrantEditor(p.toolId, 'managedBy', p.managedBy ?? {}, false)}
+              </div>
+            </div>
+          </details>`)}
       </section>`;
   }
 
