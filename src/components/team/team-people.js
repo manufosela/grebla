@@ -31,7 +31,7 @@ import {
 import { composeTitle } from '../../tools/career/data/framework.js';
 import { listUsers, unlinkedUsers } from '../../lib/users.js';
 import { setLeaderReportsTo } from '../../lib/leaders.js';
-import { resolveSuperior } from '../../tools/team/domain/superior.js';
+import { resolvePerson } from '../../tools/team/domain/identity.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
@@ -479,6 +479,34 @@ export class TeamPeople extends LitElement {
     return { leaders: this.members ?? [], heads: this.heads ?? [] };
   }
 
+  /**
+   * Identidad persona-céntrica (RMR-PCS-0027) adaptada al descriptor que ya usan
+   * la celda «Superior», el sort y el modal Transferir. Lee la organización de la
+   * ficha (orgRole/reportsToPersonId); si aún no está migrada, cae al modelo
+   * antiguo (uid→/leaders). El superior se referencia por personId; para pintar su
+   * nombre se traduce al uid de su ficha (que, siendo manager/head, está en
+   * /leaders o /supermanagers), de modo que _superiorName sigue valiendo.
+   * @param {any} person
+   * @returns {{ role: string, superiorKind: string, superiorUid: string|null,
+   *   superiorPersonId: string|null, emptyLabel: string, canTransfer: boolean }}
+   */
+  _resolveSup(person) {
+    const id = resolvePerson(person, { people: this.people ?? [], leaders: this.members ?? [], heads: this.heads ?? [] });
+    let superiorUid = id.superiorUidLegacy;
+    if (id.superiorPersonId) {
+      const supFicha = (this.people ?? []).find((p) => p.id === id.superiorPersonId);
+      superiorUid = supFicha?.uid ?? null;
+    }
+    return {
+      role: id.orgRole,
+      superiorKind: id.superiorKind,
+      superiorUid,
+      superiorPersonId: id.superiorPersonId,
+      emptyLabel: id.emptyLabel,
+      canTransfer: id.canTransfer,
+    };
+  }
+
   /** Nombre visible de un head (supermanager) por uid: displayName › email › uid. */
   _headName(uid) {
     const h = (this.heads ?? []).find((x) => x.uid === uid);
@@ -497,7 +525,7 @@ export class TeamPeople extends LitElement {
    * (engineer → su manager; manager → su head; head → sin superior). Muestra el
    * nombre del superior o la etiqueta de vacío propia de su rol. */
   _renderSuperiorCell(person) {
-    const sup = resolveSuperior(person, this._roleSets());
+    const sup = this._resolveSup(person);
     const name = this._superiorName(sup);
     if (!name) return html`<span class="muted">${sup.emptyLabel}</span>`;
     return html`<span class="leader">${name}</span>`;
@@ -547,7 +575,7 @@ export class TeamPeople extends LitElement {
     const dir = this._sortDir;
     const keyOf = (p) => {
       if (this._sortBy === 'leader') {
-        return (this._superiorName(resolveSuperior(p, this._roleSets())) || '~~~').toLowerCase();
+        return (this._superiorName(this._resolveSup(p)) || '~~~').toLowerCase();
       }
       if (this._sortBy === 'startDate') return p.startDate || '';
       return (p.name || '').toLowerCase();
@@ -664,7 +692,7 @@ export class TeamPeople extends LitElement {
 
   _renderActions(person) {
     const manage = this._canManage(person);
-    const sup = resolveSuperior(person, this._roleSets());
+    const sup = this._resolveSup(person);
     const canTransfer = this._canTransfer(person, sup);
     return html`
       <div class="row-actions">
@@ -763,7 +791,7 @@ export class TeamPeople extends LitElement {
     const sel = this._transferSel;
     if (!person || !sel) return;
     this.error = '';
-    const sup = resolveSuperior(person, this._roleSets());
+    const sup = this._resolveSup(person);
     try {
       if (sup.role === 'manager') {
         await this._transferHead(person, sel);
@@ -932,7 +960,7 @@ export class TeamPeople extends LitElement {
   /** Cuerpo del modal de transferencia según el ROL: al engineer se le cede el
    * manager (ownerLeaderUid); al manager se le reasigna el head (reportsTo). */
   _renderTransferBody(person) {
-    const sup = resolveSuperior(person, this._roleSets());
+    const sup = this._resolveSup(person);
     const isRelease = this._transferSel === RELEASE_OWNER;
     if (sup.role === 'manager') {
       return this._renderTransferForm({
