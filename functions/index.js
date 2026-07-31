@@ -364,39 +364,46 @@ export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (requ
   const surveyRef = db.doc(`surveys/${surveyId}`);
   if (!(await surveyRef.get()).exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
 
-  // Tokens ya emitidos, indexados por email, para no duplicar.
-  const existing = await surveyRef.collection('tokens').get();
-  const tokenByEmail = new Map();
-  existing.docs.forEach((d) => {
-    const email = d.data().email;
-    if (email) tokenByEmail.set(String(email).toLowerCase(), d.id);
-  });
+  try {
+    // Tokens ya emitidos, indexados por email, para no duplicar.
+    const existing = await surveyRef.collection('tokens').get();
+    const tokenByEmail = new Map();
+    existing.docs.forEach((d) => {
+      const email = d.data().email;
+      if (email) tokenByEmail.set(String(email).toLowerCase(), d.id);
+    });
 
-  const results = [];
-  let batch = db.batch();
-  let pending = 0;
-  for (const p of participants) {
-    const email = String(p?.email ?? '').trim();
-    if (!email || !email.includes('@')) continue;
-    const key = email.toLowerCase();
-    let token = tokenByEmail.get(key);
-    if (!token) {
-      token = randomBytes(18).toString('hex');
-      tokenByEmail.set(key, token);
-      batch.set(surveyRef.collection('tokens').doc(token), { email, metadata: p?.metadata ?? {}, used: false });
-      pending += 1;
-      if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
-    } else if (p?.metadata && Object.keys(p.metadata).length > 0) {
-      // El enlace ya existe: re-subir el padrón ACTUALIZA sus campos de segmentación
-      // (merge, sin duplicar el token). No borra los que no vengan en esta subida.
-      batch.set(surveyRef.collection('tokens').doc(token), { metadata: p.metadata }, { merge: true });
-      pending += 1;
-      if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
+    const results = [];
+    let batch = db.batch();
+    let pending = 0;
+    for (const p of participants) {
+      const email = String(p?.email ?? '').trim();
+      if (!email || !email.includes('@')) continue;
+      const key = email.toLowerCase();
+      let token = tokenByEmail.get(key);
+      if (!token) {
+        token = randomBytes(18).toString('hex');
+        tokenByEmail.set(key, token);
+        batch.set(surveyRef.collection('tokens').doc(token), { email, metadata: p?.metadata ?? {}, used: false });
+        pending += 1;
+        if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
+      } else if (p?.metadata && Object.keys(p.metadata).length > 0) {
+        // El enlace ya existe: re-subir el padrón ACTUALIZA sus campos de segmentación
+        // (merge, sin duplicar el token). No borra los que no vengan en esta subida.
+        batch.set(surveyRef.collection('tokens').doc(token), { metadata: p.metadata }, { merge: true });
+        pending += 1;
+        if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
+      }
+      results.push({ email, token });
     }
-    results.push({ email, token });
+    if (pending > 0) await batch.commit();
+    return { tokens: results };
+  } catch (err) {
+    // Diagnóstico: el detalle SOLO al log del servidor (no al cliente, para no
+    // filtrar internos); el cliente recibe un mensaje genérico.
+    logger.error('createSurveyTokens failed', { message: err?.message, stack: err?.stack, count: Array.isArray(participants) ? participants.length : 0 });
+    throw new HttpsError('internal', 'No se pudieron generar los enlaces. Inténtalo de nuevo; si persiste, avisa.');
   }
-  if (pending > 0) await batch.commit();
-  return { tokens: results };
 });
 
 /**
