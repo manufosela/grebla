@@ -34,14 +34,20 @@ const db = getFirestore();
 
 async function main() {
   console.log(`\n=== SEED /orgRoles · ${target} ===`);
+  let created = 0;
   for (const r of ROLES) {
-    await db.collection('orgRoles').doc(r.id).set(
-      { label: r.label, branch: r.branch, reportsToRoleId: r.reportsToRoleId },
-      { merge: true },
-    );
+    const ref = db.collection('orgRoles').doc(r.id);
+    // Idempotente y SEGURO: si el rol ya existe, no se toca (no pisar el
+    // organigrama que el superadmin haya reordenado). Solo se crean los que faltan.
+    if ((await ref.get()).exists) {
+      console.log(`  · ${r.id} ya existe → intacto`);
+      continue;
+    }
+    await ref.set({ label: r.label, branch: r.branch, reportsToRoleId: r.reportsToRoleId });
+    created += 1;
     console.log(`  ✓ ${r.id} (${r.branch}) → ${r.reportsToRoleId ?? 'cima'}`);
   }
-  console.log(`=== ${ROLES.length} roles sembrados ===\n`);
+  console.log(`=== ${created} roles creados (${ROLES.length - created} intactos) ===\n`);
   process.exit(0);
 }
 
