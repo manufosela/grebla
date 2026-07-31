@@ -285,7 +285,7 @@ const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 // para el push periódico de métricas DORA/LEAN. Solo configurada en la instancia
 // que alimenta al portal; en otras (demo) es un placeholder y el push se omite.
 const PORTAL_SA_KEY = defineSecret('PORTAL_SA_KEY');
-const MAIL_FROM = 'Encuestas TRIBBU <encuestas@tribbuapp.com>';
+const MAIL_FROM = 'Encuestas TRIBBU <encuestas@send.tribbu.io>';
 
 /** Carga la encuesta abierta de un token y las respuestas previas (para editar). */
 export const getSurveyForToken = onCall(
