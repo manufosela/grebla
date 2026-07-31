@@ -151,10 +151,19 @@ export class SurveyAdmin extends LitElement {
     .seg-picker label { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
     .seg-picker select { padding: 0.3rem 0.5rem; }
     .seg-hint { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-style: italic; }
-    .parts-table { overflow-x: auto; }
-    .part-in { width: 8.5rem; font-size: 0.8rem; padding: 0.25rem 0.4rem; }
-    .part-actions { white-space: nowrap; }
-    .part-actions button { margin-left: 0.3rem; }
+    .parts-list { display: flex; flex-direction: column; margin: 0.5rem 0; }
+    .part-block { border: 1px solid var(--rm-border, #dde7ec); border-bottom: none; padding: 0.6rem 0.8rem;
+      display: flex; flex-direction: column; gap: 0.5rem; }
+    .part-block:first-child { border-radius: 10px 10px 0 0; }
+    .part-block:last-child { border-bottom: 1px solid var(--rm-border, #dde7ec); border-radius: 0 0 10px 10px; }
+    .part-block:nth-child(even) { background: var(--rm-surface-hover, #f2f7f9); }
+    .pb-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .pb-email { font-weight: 700; color: var(--rm-text, #1e3a5f); word-break: break-all; }
+    .pb-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.5rem; }
+    .pb-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.72rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
+    .pb-field input { font-size: 0.85rem; padding: 0.3rem 0.45rem; }
+    .pb-foot { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .pb-link { flex: 1 1 16rem; font-size: 0.8rem; padding: 0.3rem 0.45rem; font-family: ui-monospace, monospace; }
     .notice { color: var(--rm-accent-700, #1f7a6e); font-size: 0.85rem; font-weight: 600; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     textarea { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); resize: vertical; }
@@ -1182,24 +1191,30 @@ export class SurveyAdmin extends LitElement {
   }
 
   /** Fila editable de un participante: campos de segmentación + guardar/borrar. */
+  /** Bloque de un participante: cabecera (email+estado), campos, y pie (enlace+acciones). */
   _renderPartRow(t) {
     const busy = this._partRowBusy === t.token;
-    const fields = [['department', 'Departamento'], ['startDate', 'Alta (YYYY-MM-DD)'], ['birthDate', 'Nacim. (YYYY-MM-DD)'], ['location', 'Ubicación']];
-    return html`<tr>
-      <td>${t.email}</td>
-      ${fields.map(([f, ph]) => html`<td><input class="part-in" type="text" placeholder=${ph} ?disabled=${busy}
-        .value=${String(this._partValue(t, f))} @input=${(e) => this._editPart(t.token, f, e.target.value)} /></td>`)}
-      <td><span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span></td>
-      <td><input class="link" type="text" readonly .value=${this._linkFor(t.token)} @focus=${(e) => e.target.select()} /></td>
-      <td class="part-actions">
+    const fields = [['department', 'Departamento'], ['startDate', 'Alta'], ['birthDate', 'Nacimiento'], ['location', 'Ubicación']];
+    return html`<div class="part-block">
+      <div class="pb-head">
+        <span class="pb-email">${t.email}</span>
+        <span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span>
+      </div>
+      <div class="pb-fields">
+        ${fields.map(([f, label]) => html`<label class="pb-field">${label}
+          <input type="text" ?disabled=${busy} .value=${String(this._partValue(t, f))}
+            @input=${(e) => this._editPart(t.token, f, e.target.value)} /></label>`)}
+      </div>
+      <div class="pb-foot">
+        <input class="pb-link" type="text" readonly title="Enlace personal" .value=${this._linkFor(t.token)} @focus=${(e) => e.target.select()} />
         ${this._partConfirmDelete === t.token
           ? html`<span class="reset-confirm">¿Borrar?
               <button class="ghost danger" ?disabled=${busy} @click=${() => this._doDeletePart(t)}>${busy ? '…' : 'Sí'}</button>
               <button class="ghost" ?disabled=${busy} @click=${() => this._cancelDeletePart()}>No</button></span>`
           : html`<button class="ghost" ?disabled=${busy} @click=${() => this._savePart(t)}>${busy ? 'Guardando…' : 'Guardar'}</button>
               <button class="q-del" title="Borrar participante" ?disabled=${busy} @click=${() => this._askDeletePart(t.token)}>✕</button>`}
-      </td>
-    </tr>`;
+      </div>
+    </div>`;
   }
 
   _renderParticipants() {
@@ -1229,12 +1244,7 @@ export class SurveyAdmin extends LitElement {
       ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
       ${total ? html`
         <p class="lead">Edita los campos de segmentación de cada participante (se guardan en su enlace, sin regenerarlo) o bórralo.</p>
-        <div class="parts-table">
-          <table>
-            <thead><tr><th>Email</th><th>Departamento</th><th>Alta</th><th>Nacimiento</th><th>Ubicación</th><th>Estado</th><th>Enlace</th><th></th></tr></thead>
-            <tbody>${this._partTokens.map((t) => this._renderPartRow(t))}</tbody>
-          </table>
-        </div>` : null}
+        <div class="parts-list">${this._partTokens.map((t) => this._renderPartRow(t))}</div>` : null}
       ${total ? this._renderSendBox() : null}`;
   }
 
