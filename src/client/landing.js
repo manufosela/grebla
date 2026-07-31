@@ -7,7 +7,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern } from '../lib/accessRoles.js';
 import { isSurveyAdmin } from '../lib/survey.js';
-import { getMyPerson } from '../lib/engineer.js';
+import { getMyPerson, ensureEmployeePerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
 import { canUseTool } from '../tools/team/domain/toolAccess.js';
 import { getEmployeeDomain } from '../lib/orgConfig.js';
@@ -63,6 +63,10 @@ onUserChanged(async (user) => {
     // Las lecturas de persona/políticas se aíslan: si fallan (transitorio), el
     // usuario YA autorizado no cae a la landing — ve el hub sin filtrar (como antes
     // de F6), y cada herramienta aplica su propio control de acceso.
+    // Corroboración: un empleado del dominio sin ficha obtiene la suya ('generico')
+    // en su primer login (Cloud Function, tolerante a fallos). Así queda registrado
+    // para que el superadmin le asigne rol/equipo cuando toque.
+    if (isEmployee) await ensureEmployeePerson();
     let person = null;
     let policies = [];
     let filterFailed = false;

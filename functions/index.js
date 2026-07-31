@@ -171,6 +171,70 @@ export const sealInvite = onCall({ region: 'europe-west1' }, async (request) => 
 });
 
 /**
+ * Corroboración de empleado (RMR-PCS-0027 · F7): al loguearse alguien del dominio
+ * de la instancia (/config/org.employeeDomain), garantiza que existe su ficha
+ * /people. Idempotente y tolerante:
+ *  - si ya tiene ficha vinculada por uid, no hace nada;
+ *  - si hay una ficha con su email SIN uid, se la vincula (corroboración);
+ *  - si no hay ninguna, le crea una ficha 'generico' (miembro de la organización
+ *    sin equipo, con acceso base a las herramientas everyone).
+ * Admin SDK porque las reglas no dejan al cliente crearse la ficha ni escribirse el
+ * uid. El login NO crea jerarquía: la ficha nace 'generico' y el superadmin le
+ * asigna rol/equipo cuando toque.
+ */
+export const ensureEmployeePerson = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const token = caller.token ?? {};
+  const email = typeof token.email === 'string' ? token.email.trim().toLowerCase() : '';
+  // Solo empleados con email VERIFICADO del dominio configurado.
+  if (!email || token.email_verified !== true) return { created: false, reason: 'unverified' };
+
+  const db = getFirestore();
+  const orgSnap = await db.doc('config/org').get();
+  const domain = (orgSnap.exists ? (orgSnap.data().employeeDomain ?? '') : '')
+    .toString().trim().toLowerCase().replace(/^@/, '');
+  if (!domain || !email.endsWith('@' + domain)) return { created: false, reason: 'not-employee' };
+
+  // ¿Ya tiene ficha vinculada por uid? Nada que hacer (cubre las fichas migradas).
+  const byUid = await db.collection('people').where('uid', '==', caller.uid).limit(1).get();
+  if (!byUid.empty) return { created: false, personId: byUid.docs[0].id, reason: 'exists' };
+
+  // ¿Ficha con su email SIN uid? Corroborar vinculando (solo la primera).
+  const byEmail = await db.collection('people').where('email', '==', email).get();
+  const unlinked = byEmail.docs.find((d) => !d.data().uid);
+  if (unlinked) {
+    await unlinked.ref.set({ uid: caller.uid }, { merge: true });
+    return { created: false, personId: unlinked.id, reason: 'linked' };
+  }
+
+  // Crear ficha 'generico' de forma ATÓMICA: un índice determinista por uid
+  // (peopleByUid/{uid}, solo Admin SDK) garantiza una sola ficha aunque el primer
+  // login llegue por dos pestañas a la vez. El personId sigue siendo autogenerado.
+  const indexRef = db.collection('peopleByUid').doc(caller.uid);
+  const outcome = await db.runTransaction(async (tx) => {
+    const idx = await tx.get(indexRef);
+    if (idx.exists) return { created: false, personId: idx.data().personId, reason: 'exists' };
+    const personRef = db.collection('people').doc();
+    tx.set(personRef, {
+      name: typeof token.name === 'string' && token.name ? token.name : email,
+      email,
+      uid: caller.uid,
+      orgRole: 'generico',
+      orgBranch: 'generico',
+      active: true,
+      startDate: new Date().toISOString().slice(0, 10),
+      guilds: [],
+      disciplines: [],
+      labels: [],
+    });
+    tx.set(indexRef, { personId: personRef.id, createdAt: FieldValue.serverTimestamp() });
+    return { created: true, personId: personRef.id };
+  });
+  return outcome;
+});
+
+/**
  * Borra DEFINITIVAMENTE a una persona con su subárbol completo (plan de carrera,
  * valoraciones, lecturas, conversaciones, notas, sesiones de Role Mirror…) con
  * `recursiveDelete` del Admin SDK — el cliente Web no puede borrar subcolecciones
