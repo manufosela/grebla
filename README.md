@@ -197,10 +197,32 @@ pnpm seed --admin=tu-email@dominio.com
 ```
 
 > Las variables `PUBLIC_FIREBASE_*` viven en `.env` (gitignored). En un proveedor
-> de build externo, configúralas en su entorno. Las service accounts del Admin
-> SDK viven FUERA del repo, en `~/.secrets/firebase/` (permisos `600`), una por
-> instancia (`grebla-app-sa.json`, `grebla-tribbu-sa.json`, `grebla-portal-sa.json`);
-> los scripts las resuelven con `scripts/lib/service-account.mjs`. Nunca se versionan.
+> de build externo, configúralas en su entorno.
+
+### Cuentas de servicio (Admin SDK)
+
+Las claves privadas de las service accounts (que usan los scripts con Admin SDK:
+`seed-*`, `provision-tenant`, `publish-version`) **nunca** van al repo ni al home
+raíz. Se guardan en **`~/.secrets/firebase/`** (directorio con `chmod 700`, ficheros
+con `chmod 600`), **una por instancia** y con nombre fijo:
+
+| Fichero | Proyecto Firebase | Uso |
+|---|---|---|
+| `grebla-app-sa.json` | `grebla-app` | demo: badge de versión, seeds |
+| `grebla-tribbu-sa.json` | `grebla-tribbu` | producción tribbu: badge de versión |
+| `grebla-portal-sa.json` | `tribbu-dev-portal` | subir el secret del push de métricas |
+
+Para generar una: consola de Firebase del proyecto → **Configuración del proyecto →
+Cuentas de servicio → Generar nueva clave privada** → descarga el JSON y muévelo/renómbralo
+al nombre de la tabla. Los scripts la resuelven con `scripts/lib/service-account.mjs`
+(`serviceAccountPath(target)`, con `target` = `app` por defecto, `tribbu` o `portal`).
+
+Publicar el badge de versión tras un deploy de hosting (mismo `HEAD` que se desplegó):
+
+```bash
+node scripts/publish-version.mjs      # demo (grebla-app)
+npm run publish:version:tribbu        # producción (grebla-tribbu)
+```
 
 ### Primer administrador
 
