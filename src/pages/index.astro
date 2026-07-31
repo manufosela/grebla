@@ -80,6 +80,26 @@ const tools = [
     surveyTool: true,
   },
 ];
+
+/**
+ * Mapea cada tarjeta a su toolId en /toolPolicies (RMR-PCS-0027 · F6). El hub
+ * filtra por estas políticas. «team» es gestión (managers/superadmin) y no tiene
+ * política de audiencia: se rige por el rol, como hasta ahora.
+ */
+const TOOL_ID: Record<string, string> = {
+  '/tools/role-mirror': 'rolemirror',
+  '/tools/team': 'team',
+  '/tools/dora': 'dora',
+  '/tools/lean': 'lean',
+  '/tools/career-map': 'career',
+  '/tools/o2o': 'o2o',
+  '/tools/motivators/moving': 'motivators',
+  '/tools/motivators/affective': 'motivators',
+  '/marea': 'marea',
+  '/retros': 'retros',
+  '/poker': 'poker',
+  '/tools/encuestas': 'surveys',
+};
 ---
 
 <Base title="GREBLA">
@@ -109,7 +129,7 @@ const tools = [
   <section id="tenant-tools" class="tools" hidden>
     {
       tools.map((tool) => (
-        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-survey-tool={tool.surveyTool ? 'true' : undefined} hidden={tool.surveyTool}>
+        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-survey-tool={tool.surveyTool ? 'true' : undefined} hidden={tool.surveyTool}>
           <h2>{tool.name}</h2>
           <p>{tool.description}</p>
           <span class="cta">Abrir →</span>
