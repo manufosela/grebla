@@ -25,6 +25,9 @@ serviceAccountKey.json
 portal-metrics-sa*.json
 .firebase/
 firebase-debug.log*
+
+# Karajan: worktrees y estado de agentes (isolation: worktree) — nunca al repo
+.claude/
 firestore-debug.log*
 
 # e2e (Playwright): tokens de sesión sembrados y resultados de corrida
