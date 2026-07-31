@@ -11,6 +11,7 @@
     "build": "PUBLIC_APP_VERSION=$(git rev-parse --short HEAD) astro build && node scripts/stamp-sw.mjs",
     "build:tribbu": "PUBLIC_APP_VERSION=$(git rev-parse --short HEAD) astro build --mode tribbu && node scripts/stamp-sw.mjs",
     "publish:version": "node scripts/publish-version.mjs",
+    "publish:version:tribbu": "node scripts/publish-version.mjs tribbu",
     "deploy:all": "node scripts/deploy-all.mjs",
     "preview": "astro preview",
     "check": "astro check",

@@ -197,8 +197,10 @@ pnpm seed --admin=tu-email@dominio.com
 ```
 
 > Las variables `PUBLIC_FIREBASE_*` viven en `.env` (gitignored). En un proveedor
-> de build externo, configúralas en su entorno. La service account del Admin SDK
-> (`*firebase-adminsdk*.json`) también está gitignored: nunca se versiona.
+> de build externo, configúralas en su entorno. Las service accounts del Admin
+> SDK viven FUERA del repo, en `~/.secrets/firebase/` (permisos `600`), una por
+> instancia (`grebla-app-sa.json`, `grebla-tribbu-sa.json`, `grebla-portal-sa.json`);
+> los scripts las resuelven con `scripts/lib/service-account.mjs`. Nunca se versionan.
 
 ### Primer administrador
 

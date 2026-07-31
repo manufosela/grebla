@@ -32,6 +32,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { initializeApp, cert } from 'firebase-admin/app';
+import { serviceAccountPath } from './lib/service-account.mjs';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ISLAND_CONTENT } from '../src/tools/career/data/islands/index.js';
 import { serializeCareerMap, normalizeCareerMap } from '../src/tools/career/data/maps.js';
@@ -62,13 +63,13 @@ if (unknown.length) {
 }
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const keyFile = readdirSync(root).find((f) => /firebase-adminsdk.*\.json$/.test(f));
+const keyFile = serviceAccountPath();
 if (!keyFile) {
   console.error('✗ No se encontró la service account (*firebase-adminsdk*.json) en la raíz.');
   process.exit(1);
 }
 
-initializeApp({ credential: cert(join(root, keyFile)) });
+initializeApp({ credential: cert(keyFile) });
 const db = getFirestore();
 
 let written = 0;

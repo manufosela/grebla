@@ -11,18 +11,19 @@ import { readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeApp, cert } from 'firebase-admin/app';
+import { serviceAccountPath } from './lib/service-account.mjs';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { DEFAULT_GUIDE, DEFAULT_FORM } from '../src/tools/o2o/data/index.js';
 
 const force = process.argv.includes('--force');
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const keyFile = readdirSync(root).find((f) => /firebase-adminsdk.*\.json$/.test(f));
+const keyFile = serviceAccountPath();
 if (!keyFile) {
   console.error('✗ No se encontró la service account (*firebase-adminsdk*.json) en la raíz.');
   process.exit(1);
 }
 
-initializeApp({ credential: cert(join(root, keyFile)) });
+initializeApp({ credential: cert(keyFile) });
 const db = getFirestore();
 
 /** @param {string} path @param {object} data */
