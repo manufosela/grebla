@@ -292,6 +292,17 @@ export class TeamPersonDetail extends LitElement {
     .datos-actions .saved { color: var(--rm-accent, #2a9d8f); font-weight: 700; font-size: 0.85rem; }
     .datos .fld-hint { font-weight: 400; font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
 
+    /* ── Subtab Organización: opciones grandes en rejilla (RMR-TSK-0369) ── */
+    /* Sin fieldset/legend: el subtab ya nombra la categoría (no repetir). */
+    .org-section { display: flex; flex-direction: column; gap: 1.1rem; }
+    .org-section .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; margin: 0; }
+    .org-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: 0.6rem; }
+    .org-checks .chk { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.9rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; font-size: 0.95rem; color: var(--rm-text, #111827); cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+    .org-checks .chk:hover { border-color: var(--rm-accent, #2a9d8f); }
+    .org-checks .chk:has(input:checked) { border-color: var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 12%, transparent); font-weight: 700; }
+    .org-checks .chk input { width: 1.15rem; height: 1.15rem; accent-color: var(--rm-accent, #2a9d8f); flex: none; }
+    .org-checks .orphan-tag { font-style: normal; font-size: 0.72rem; color: var(--rm-danger, #dc2626); }
+
     /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
     .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
     .career .assess-row { border: 1px solid var(--rm-border, #e5e7eb); border-left-width: 4px; border-radius: 8px; padding: 0.6rem 0.8rem; }
@@ -1794,19 +1805,15 @@ export class TeamPersonDetail extends LitElement {
   _renderDatosSquads(selectedIds) {
     const cat = this._squadsCat ?? [];
     if (cat.length === 0) {
-      return html`<fieldset class="datos-checks">
-        <legend>Squads</legend>
-        <span class="empty">Aún no hay squads (los crea el superadmin en el panel).</span>
-      </fieldset>`;
+      return html`<p class="empty">Aún no hay squads (los crea el superadmin en el panel).</p>`;
     }
-    return html`<fieldset class="datos-checks">
-      <legend>Squads</legend>
+    return html`<div class="org-checks">
       ${cat.map((sq) => html`<label class="chk">
         <input type="checkbox" .checked=${selectedIds.includes(sq.id)}
           @change=${(e) => this._toggleDatosSquad(sq.id, e.target.checked)} />
         <span>${sq.name}</span>
       </label>`)}
-    </fieldset>`;
+    </div>`;
   }
 
   /** @param {string} name @param {boolean} checked */
@@ -1861,16 +1868,12 @@ export class TeamPersonDetail extends LitElement {
     const catalogNames = new Set(catalog.map((c) => c.name));
     const orphans = (selected ?? []).filter((name) => !catalogNames.has(name));
     if (catalog.length === 0 && orphans.length === 0) {
-      return html`<fieldset class="datos-checks">
-        <legend>${legend}</legend>
-        <span class="empty">Aún no hay ${legend.toLowerCase()} (se gestionan en Ajustes).</span>
-      </fieldset>`;
+      return html`<p class="empty">Aún no hay ${legend.toLowerCase()} (se gestionan en Ajustes).</p>`;
     }
-    return html`<fieldset class="datos-checks">
-      <legend>${legend}</legend>
+    return html`<div class="org-checks">
       ${catalog.map((c) => this._datosCheck(c.name, selected, onToggle, false))}
       ${orphans.map((name) => this._datosCheck(name, selected, onToggle, true))}
-    </fieldset>`;
+    </div>`;
   }
 
   /** Un checkbox de gremio/label; `orphan` marca los que están fuera del catálogo. */
@@ -1991,7 +1994,7 @@ export class TeamPersonDetail extends LitElement {
       squads: () => this._renderDatosSquads(d.squadIds ?? []),
     }[active] ?? (() => this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c)));
     return html`
-      <section class="datos">
+      <section class="org-section">
         ${this._renderNestedTabs(ORG_SUBTABS, active, 'porg', 'Clasificación de la persona', (id) => { this._orgSubtab = id; })}
         <div id="porgpanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="porg-${active}" tabindex="0">
           ${panel()}
