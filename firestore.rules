@@ -346,6 +346,14 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Catálogo de roles del organigrama (RMR-PCS-0027): niveles por etiqueta con
+    // su jerarquía (reportsToRoleId). Lo lee cualquiera con acceso (para pintar
+    // títulos/organigrama) y solo lo gestiona el superadmin.
+    match /orgRoles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     match /labels/{labelId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()

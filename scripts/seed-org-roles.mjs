@@ -1,0 +1,48 @@
+/**
+ * Siembra el catálogo inicial de roles del organigrama (/orgRoles) de una
+ * instancia GREBLA (RMR-PCS-0027 · F2). Idempotente: usa merge, no pisa cambios
+ * que el superadmin haya hecho luego en el panel. NO borra roles existentes.
+ *
+ * Uso: node scripts/seed-org-roles.mjs --target=tribbu | app
+ */
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { serviceAccountPath } from './lib/service-account.mjs';
+
+const target = (process.argv.find((a) => a.startsWith('--target=')) || '--target=app').split('=')[1];
+
+// Organigrama inicial. reportsToRoleId encadena cada rama hacia su cima.
+const ROLES = [
+  // Engineering: CTO → Head of Engineering → Engineering Manager → Engineer
+  { id: 'cto', label: 'CTO', branch: 'engineering', reportsToRoleId: null },
+  { id: 'head-eng', label: 'Head of Engineering', branch: 'engineering', reportsToRoleId: 'cto' },
+  { id: 'em', label: 'Engineering Manager', branch: 'engineering', reportsToRoleId: 'head-eng' },
+  { id: 'engineer', label: 'Engineer', branch: 'engineering', reportsToRoleId: 'em' },
+  // Product: CPO → Product Manager (sin mandos intermedios)
+  { id: 'cpo', label: 'CPO', branch: 'product', reportsToRoleId: null },
+  { id: 'pm', label: 'Product Manager', branch: 'product', reportsToRoleId: 'cpo' },
+  // People: Chief People Officer (solo, sin subordinados de momento)
+  { id: 'cpeople', label: 'Chief People Officer', branch: 'people', reportsToRoleId: null },
+  // Data: Head of Data (cima de su rama, sin managers debajo)
+  { id: 'head-data', label: 'Head of Data', branch: 'data', reportsToRoleId: null },
+  // Empleado sin rama asignada: miembro genérico de TRIBBU
+  { id: 'generico', label: 'Genérico', branch: 'generico', reportsToRoleId: null },
+];
+
+initializeApp({ credential: cert(serviceAccountPath(target)) });
+const db = getFirestore();
+
+async function main() {
+  console.log(`\n=== SEED /orgRoles · ${target} ===`);
+  for (const r of ROLES) {
+    await db.collection('orgRoles').doc(r.id).set(
+      { label: r.label, branch: r.branch, reportsToRoleId: r.reportsToRoleId },
+      { merge: true },
+    );
+    console.log(`  ✓ ${r.id} (${r.branch}) → ${r.reportsToRoleId ?? 'cima'}`);
+  }
+  console.log(`=== ${ROLES.length} roles sembrados ===\n`);
+  process.exit(0);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
