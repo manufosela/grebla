@@ -22,7 +22,7 @@ import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
 import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody, sanitizeParticipantMeta } from './survey.js';
-import { sendGmail } from './gmail.js';
+import { sendResend } from './resend.js';
 import { getPortalDb, portalConfigured, publishSquadMetrics } from './portal.js';
 
 initializeApp();
@@ -278,12 +278,13 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
 // answerId = HMAC(salt, token), así se edita la MISMA respuesta sin guardar el
 // mapeo token→respuesta (un admin con la BBDD no puede reidentificar por ahí).
 const SURVEY_SALT = defineSecret('SURVEY_SALT');
-const GMAIL_SA_KEY = defineSecret('GMAIL_SA_KEY');
+// API key de Resend (https://resend.com) para el envío de correos de encuestas.
+// Debe definirse ANTES de las Cloud Functions que la usan (evita TDZ al cargar).
+const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 // Clave (JSON) de la service account del portal de management (tribbu-dev-portal),
 // para el push periódico de métricas DORA/LEAN. Solo configurada en la instancia
 // que alimenta al portal; en otras (demo) es un placeholder y el push se omite.
 const PORTAL_SA_KEY = defineSecret('PORTAL_SA_KEY');
-const MAIL_SENDER_USER = 'encuestas@tribbuapp.com'; // buzón impersonado (delegación de dominio)
 const MAIL_FROM = 'Encuestas TRIBBU <encuestas@tribbuapp.com>';
 
 /** Carga la encuesta abierta de un token y las respuestas previas (para editar). */
@@ -554,7 +555,7 @@ async function loadSurveyForEmail(db, surveyId) {
  * superadmin/People. La encuesta debe estar abierta para poder responderlo.
  */
 export const sendSurveyTestEmail = onCall(
-  { region: 'europe-west1', secrets: [GMAIL_SA_KEY] },
+  { region: 'europe-west1', secrets: [RESEND_API_KEY] },
   async (request) => {
     await assertSurveyManager(request.auth?.uid);
     const { surveyId, to } = request.data ?? {};
@@ -565,8 +566,8 @@ export const sendSurveyTestEmail = onCall(
     const token = randomBytes(18).toString('hex');
     await ref.collection('tokens').doc(token).set({ email: to, metadata: {}, used: false, test: true });
     const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token}`;
-    await sendGmail({
-      saKeyJson: GMAIL_SA_KEY.value(), senderUser: MAIL_SENDER_USER, from: MAIL_FROM,
+    await sendResend({
+      apiKey: RESEND_API_KEY.value(), from: MAIL_FROM,
       to, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
     });
     return { ok: true };
@@ -578,7 +579,7 @@ export const sendSurveyTestEmail = onCall(
  * Secuencial y tolerante a fallos (cuenta enviados/fallidos). Solo superadmin/People.
  */
 export const sendSurveyBulkEmails = onCall(
-  { region: 'europe-west1', secrets: [GMAIL_SA_KEY], timeoutSeconds: 540 },
+  { region: 'europe-west1', secrets: [RESEND_API_KEY], timeoutSeconds: 540 },
   async (request) => {
     await assertSurveyManager(request.auth?.uid);
     const { surveyId } = request.data ?? {};
@@ -593,8 +594,8 @@ export const sendSurveyBulkEmails = onCall(
       if (data.test === true || !data.email) continue; // los de prueba no se reenvían
       const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${doc.id}`;
       try {
-        await sendGmail({
-          saKeyJson: GMAIL_SA_KEY.value(), senderUser: MAIL_SENDER_USER, from: MAIL_FROM,
+        await sendResend({
+          apiKey: RESEND_API_KEY.value(), from: MAIL_FROM,
           to: data.email, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
         });
         sent += 1;
