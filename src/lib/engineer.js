@@ -119,6 +119,26 @@ export async function sealInvite() {
 }
 
 /**
+ * Corroboración de empleado (RMR-PCS-0027 · F7): pide a la Cloud Function que
+ * garantice la ficha del empleado logado (crea 'generico' si no existe, o vincula
+ * su uid a una ficha con su email). Idempotente y tolerante: nunca lanza al caller
+ * (un fallo no debe impedir el acceso). Devuelve true si creó o vinculó una ficha.
+ * @returns {Promise<boolean>}
+ */
+export async function ensureEmployeePerson() {
+  try {
+    const { app } = await import('./firebase.js');
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const fns = getFunctions(app, 'europe-west1');
+    const res = await httpsCallable(fns, 'ensureEmployeePerson')();
+    const data = /** @type {any} */ (res.data) ?? {};
+    return Boolean(data.created) || data.reason === 'linked';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Bitácora (JG-23) de una persona, en SOLO LECTURA — para que su líder vea el
  * historial de rutas de carrera completadas (F3, RMR-TSK-0171). Las reglas de
  * Firestore permiten al líder dueño (o admin/viewer) leer
