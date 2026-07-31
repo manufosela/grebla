@@ -28,6 +28,8 @@ import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
+import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
+import { rootRoles, childrenOf, assertValidReportsTo } from '../tools/team/domain/orgRoles.js';
 
 const CITY_KINDS = ['tech', 'skill', 'milestone'];
 const REC_KINDS = ['curso', 'formacion', 'doc', 'titulo'];
@@ -76,7 +78,9 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
+const TABS = ['leaders', 'organigrama', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
+/** Ramas del organigrama (RMR-PCS-0027). Extensible por el superadmin al crear roles. */
+const ORG_BRANCHES = ['engineering', 'product', 'people', 'data', 'generico'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
  *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
 const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
@@ -136,6 +140,11 @@ export class SuperadminPanel extends LitElement {
     _linkedUids: { state: true },
     _assignFor: { state: true },
     _assignLeader: { state: true },
+    _orgRoles: { state: true },
+    _orgForm: { state: true },
+    _orgError: { state: true },
+    _orgNotice: { state: true },
+    _orgConfirmDelete: { state: true },
   };
 
   static styles = css`
@@ -382,6 +391,14 @@ export class SuperadminPanel extends LitElement {
     this._assignFor = null;
     /** @type {string} manager seleccionado en el modal "Asignar a equipo" */
     this._assignLeader = '';
+    /** @type {import('../tools/team/domain/orgRoles.js').OrgRole[]} catálogo de roles del organigrama */
+    this._orgRoles = [];
+    /** @type {{ id: string, label: string, branch: string, reportsToRoleId: string }} borrador de rol nuevo */
+    this._orgForm = { id: '', label: '', branch: 'engineering', reportsToRoleId: '' };
+    this._orgError = '';
+    this._orgNotice = '';
+    /** @type {string|null} id de rol pendiente de confirmar borrado */
+    this._orgConfirmDelete = null;
     this._loaded = false;
   }
 
@@ -408,6 +425,7 @@ export class SuperadminPanel extends LitElement {
       this._loaded = true;
       this._loadLeaders();
       this._loadFramework();
+      this._loadOrgRoles();
       // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
       if (!this.readOnly) this._loadUsers();
     }
@@ -890,6 +908,8 @@ export class SuperadminPanel extends LitElement {
     switch (this._tab) {
       case 'leaders':
         return html`${this._renderLeaders()} ${this.selected ? this._renderTeam() : null}`;
+      case 'organigrama':
+        return this._renderOrgRoles();
       case 'areas':
         return this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)');
       case 'guilds':
@@ -919,6 +939,7 @@ export class SuperadminPanel extends LitElement {
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
         <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Managers</button>
+        <button class="tab ${this._tab === 'organigrama' ? 'active' : ''}" @click=${() => this._setTab('organigrama')}>Organigrama</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'squads' ? 'active' : ''}" @click=${() => this._setTab('squads')}>Squads</button>
@@ -1409,6 +1430,131 @@ export class SuperadminPanel extends LitElement {
         ${heads.map((h) => html`
           <option value=${h.uid} ?selected=${l.reportsTo === h.uid}>${h.displayName ?? h.email ?? h.uid}</option>`)}
       </select>`;
+  }
+
+  // ── Organigrama: catálogo de roles configurable (RMR-PCS-0027 · F2) ─────────
+
+  async _loadOrgRoles() {
+    try {
+      this._orgRoles = await listOrgRoles();
+    } catch (err) {
+      this._orgError = err instanceof Error ? err.message : 'No se pudieron cargar los roles.';
+    }
+  }
+
+  /** Reasigna el superior de un rol validando ciclos contra el catálogo actual. */
+  async _setRoleParent(roleId, parentId) {
+    this._orgError = '';
+    this._orgNotice = '';
+    try {
+      assertValidReportsTo(this._orgRoles, roleId, parentId || null);
+      await setOrgRoleReportsTo(roleId, parentId || null);
+      this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, reportsToRoleId: parentId || null } : r));
+      this._orgNotice = 'Organigrama actualizado.';
+    } catch (err) {
+      this._orgError = err instanceof Error ? err.message : 'No se pudo mover el rol.';
+    }
+  }
+
+  async _createRole() {
+    this._orgError = '';
+    this._orgNotice = '';
+    const label = this._orgForm.label.trim();
+    if (!label) { this._orgError = 'El nombre del rol es obligatorio.'; return; }
+    const id = (this._orgForm.id.trim() || slugify(label));
+    if (!id) { this._orgError = 'No se pudo derivar un identificador del nombre.'; return; }
+    if (this._orgRoles.some((r) => r.id === id)) { this._orgError = `Ya existe un rol con id «${id}».`; return; }
+    const parent = this._orgForm.reportsToRoleId || null;
+    try {
+      if (parent) assertValidReportsTo([...this._orgRoles, { id, label, branch: this._orgForm.branch, reportsToRoleId: null }], id, parent);
+      await saveOrgRole(id, { label, branch: this._orgForm.branch, reportsToRoleId: parent });
+      this._orgRoles = [...this._orgRoles, { id, label, branch: this._orgForm.branch, reportsToRoleId: parent }];
+      this._orgForm = { id: '', label: '', branch: this._orgForm.branch, reportsToRoleId: '' };
+      this._orgNotice = `Rol «${label}» creado.`;
+    } catch (err) {
+      this._orgError = err instanceof Error ? err.message : 'No se pudo crear el rol.';
+    }
+  }
+
+  async _removeRole(id) {
+    this._orgError = '';
+    this._orgNotice = '';
+    const children = childrenOf(this._orgRoles, id);
+    if (children.length) {
+      this._orgError = `No se puede borrar: ${children.length} rol(es) dependen de él. Reasígnalos antes.`;
+      this._orgConfirmDelete = null;
+      return;
+    }
+    try {
+      await deleteOrgRole(id);
+      this._orgRoles = this._orgRoles.filter((r) => r.id !== id);
+      this._orgConfirmDelete = null;
+      this._orgNotice = 'Rol borrado.';
+    } catch (err) {
+      this._orgError = err instanceof Error ? err.message : 'No se pudo borrar el rol.';
+    }
+  }
+
+  /** Filas del organigrama en orden jerárquico (DFS por rama), con profundidad. */
+  _orgRoleRows() {
+    const rows = [];
+    const visit = (role, depth) => {
+      rows.push({ role, depth });
+      for (const child of childrenOf(this._orgRoles, role.id)) visit(child, depth + 1);
+    };
+    for (const root of rootRoles(this._orgRoles)) visit(root, 0);
+    // Roles en un ciclo preexistente (no alcanzables desde una cima) igualmente listados.
+    const shown = new Set(rows.map((r) => r.role.id));
+    for (const r of this._orgRoles) if (!shown.has(r.id)) rows.push({ role: r, depth: 0 });
+    return rows;
+  }
+
+  _renderOrgRoles() {
+    const ro = this.readOnly;
+    const parentOptions = (roleId) => this._orgRoles
+      .filter((r) => r.id !== roleId)
+      .map((r) => html`<option value=${r.id}>${r.label}</option>`);
+    return html`
+      <section>
+        <h2>Organigrama — roles y jerarquía</h2>
+        <p class="ro-note">Cada rol define un nivel por etiqueta y de quién depende. Reordena la jerarquía cambiando «Depende de»; se impide crear ciclos. Los roles sin superior son cimas (uno por rama).</p>
+        ${this._orgError ? html`<p class="error">${this._orgError}</p>` : null}
+        ${this._orgNotice ? html`<p class="notice">${this._orgNotice}</p>` : null}
+        ${this._orgRoles.length === 0
+          ? html`<p class="empty">Aún no hay roles. Créalos abajo o ejecuta el seed inicial.</p>`
+          : html`<div class="table-wrap"><table>
+              <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th>${ro ? '' : html`<th></th>`}</tr></thead>
+              <tbody>
+                ${this._orgRoleRows().map(({ role, depth }) => html`<tr>
+                  <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">└ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
+                  <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${role.branch}</span></td>
+                  <td>${ro
+                    ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— cima —</span>`)
+                    : html`<select @change=${(e) => this._setRoleParent(role.id, e.target.value)}>
+                        <option value="" ?selected=${!role.reportsToRoleId}>— cima —</option>
+                        ${this._orgRoles.filter((r) => r.id !== role.id).map((r) => html`<option value=${r.id} ?selected=${role.reportsToRoleId === r.id}>${r.label}</option>`)}
+                      </select>`}</td>
+                  ${ro ? '' : html`<td>${this._orgConfirmDelete === role.id
+                    ? html`<span class="confirm">¿Borrar? <button @click=${() => this._removeRole(role.id)}>Sí</button> <button @click=${() => { this._orgConfirmDelete = null; }}>No</button></span>`
+                    : html`<button class="del-btn" @click=${() => { this._orgConfirmDelete = role.id; }}>Borrar</button>`}</td>`}
+                </tr>`)}
+              </tbody>
+            </table></div>`}
+        ${ro ? null : html`
+          <h3 class="sub">Nuevo rol</h3>
+          <div class="toolbar">
+            <input placeholder="Nombre (p.ej. Staff Engineer)" .value=${this._orgForm.label}
+              @input=${(e) => { this._orgForm = { ...this._orgForm, label: e.target.value }; }}>
+            <select .value=${this._orgForm.branch} @change=${(e) => { this._orgForm = { ...this._orgForm, branch: e.target.value }; }}>
+              ${ORG_BRANCHES.map((b) => html`<option value=${b} ?selected=${this._orgForm.branch === b}>${b}</option>`)}
+            </select>
+            <select .value=${this._orgForm.reportsToRoleId} @change=${(e) => { this._orgForm = { ...this._orgForm, reportsToRoleId: e.target.value }; }}>
+              <option value="">— cima (sin superior) —</option>
+              ${parentOptions('')}
+            </select>
+            <button class="primary" @click=${() => this._createRole()}>Crear rol</button>
+          </div>`}
+      </section>`;
   }
 
   _renderTeam() {
