@@ -13,18 +13,19 @@ import { readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeApp, cert } from 'firebase-admin/app';
+import { serviceAccountPath } from './lib/service-account.mjs';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { ORG_PHASE_BY_KEY, DEFAULT_ORG_PHASE } from '../src/data/org.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const keyFile = readdirSync(root).find((f) => /firebase-adminsdk.*\.json$/.test(f));
+const keyFile = serviceAccountPath();
 if (!keyFile) {
   console.error('✗ No se encontró la service account (*firebase-adminsdk*.json) en la raíz del proyecto.');
   process.exit(1);
 }
 
-initializeApp({ credential: cert(join(root, keyFile)) });
+initializeApp({ credential: cert(keyFile) });
 const db = getFirestore();
 const auth = getAuth();
 
