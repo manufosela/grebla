@@ -88,6 +88,25 @@ describe('career — framework de carrera (helpers puros)', () => {
     expect(seed.expectations.every((e) => e.levelId && e.dimensionId && e.text)).toBe(true);
   });
 
+  it('la semilla incluye la dimensión transversal «Orquestación y juicio» (RMR-PCS-0028 · F1)', () => {
+    const seed = seedFramework();
+    const orch = seed.dimensions.find((d) => d.id === 'orchestration');
+    expect(orch).toBeDefined();
+    expect(orch.name).toBe('Orquestación y juicio');
+    expect(orch.description).not.toBe('');
+    // va la última: es el eje más nuevo del framework
+    expect(orch.order).toBe(Math.max(...seed.dimensions.map((d) => d.order)));
+    // tiene expectativa en TODOS los niveles que ya tienen fila propia en la
+    // matriz, para que ninguna valoración muestre una celda vacía en esta columna
+    const coveredLevels = [...new Set(seed.expectations.map((e) => e.levelId))];
+    const orchLevels = new Set(
+      seed.expectations.filter((e) => e.dimensionId === 'orchestration').map((e) => e.levelId),
+    );
+    for (const levelId of coveredLevels) {
+      expect(orchLevels.has(levelId)).toBe(true);
+    }
+  });
+
   it('normalizeFramework normaliza expectations y descarta celdas incompletas', () => {
     const fw = normalizeFramework({
       levels: [{ id: 'l1', code: 'L1', title: 'Eng', trackId: 't', order: 1 }],
@@ -216,8 +235,8 @@ describe('career — framework de carrera (helpers puros)', () => {
 
     it('devuelve una entrada por dimensión, ordenadas por dimension.order', () => {
       const rows = expectationsForLevel(fw, 'l2');
-      expect(rows).toHaveLength(fw.dimensions.length); // 6 dimensiones
-      expect(rows.map((r) => r.dimension.id)).toEqual(['tech', 'reliability', 'product', 'execution', 'leadership', 'culture']);
+      expect(rows).toHaveLength(fw.dimensions.length); // todas las dimensiones del framework
+      expect(rows.map((r) => r.dimension.id)).toEqual(['tech', 'reliability', 'product', 'execution', 'leadership', 'culture', 'orchestration']);
     });
 
     it('rellena el texto de la expectativa del nivel y deja "" donde no hay', () => {
