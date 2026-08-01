@@ -15,7 +15,12 @@
  * con su brillo latente.
  */
 import { LitElement, html, css, svg, nothing } from 'lit';
-import { seabedScene } from '../../tools/career/domain/seabed.js';
+import { seabedScene, seabedProgress } from '../../tools/career/domain/seabed.js';
+
+/** Rótulo accesible del estado de un arrecife (encendido/disponible/bloqueado). */
+const STATUS_LABEL = { visited: 'encendido', available: 'disponible', blocked: 'bloqueado' };
+/** Rótulo del tipo de arrecife (por defecto «Competencia»). */
+const KIND_LABEL = { milestone: 'Hito', tech: 'Tecnología', skill: 'Competencia' };
 
 /** Burbujas de la escena: posiciones/tiempos FIJOS (deterministas, sin random). */
 const BUBBLES = [
@@ -31,7 +36,16 @@ const BUBBLES = [
 export class SeabedView extends LitElement {
   static properties = {
     map: { attribute: false },
+    journey: { attribute: false },
+    /** ¿El usuario JUEGA su propio recorrido? Habilita certificar arrecifes (F4). */
+    canPlay: { attribute: false },
+    /** Callback async del contenedor para encender/apagar un arrecife (F4):
+     *  `(cityId) => Promise`. Se espera para bloquear el botón mientras está en
+     *  vuelo y liberarlo al terminar (éxito o error). */
+    onToggle: { attribute: false },
     _selected: { state: true },
+    /** Certificado en vuelo: bloquea el botón para evitar dobles toggles (F4). */
+    _pending: { state: true },
   };
 
   static styles = css`
@@ -103,10 +117,27 @@ export class SeabedView extends LitElement {
       font-size: 0.72rem; line-height: 1.15; text-align: center; color: #cdeafa;
       text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); padding: 0.05rem 0.3rem;
     }
+    .reef .dot { position: relative; }
     .reef:hover .dot, .reef:focus-visible .dot { transform: scale(1.12); }
     .reef:focus-visible { outline: none; }
     .reef:focus-visible .label { text-decoration: underline; }
     @keyframes pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+    /* Estados del arrecife (F4): encendido (visited), latente (available), apagado (blocked). */
+    .reef .tick { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 900; color: #0a3324; }
+    .reef.visited .dot { background: radial-gradient(circle at 35% 30%, #fffef0, #a9f5cf 45%, #2aa578 100%); box-shadow: 0 0 14px 3px rgba(126, 255, 196, 0.7), 0 0 30px 10px rgba(126, 255, 196, 0.28); }
+    .reef.milestone.visited .dot { background: radial-gradient(circle at 35% 30%, #fffdf0, #ffd24d 50%, #b9781f 100%); box-shadow: 0 0 16px 4px rgba(255, 210, 77, 0.8), 0 0 34px 12px rgba(255, 210, 77, 0.38); }
+    .reef.blocked .dot { background: radial-gradient(circle at 35% 30%, #6b8794, #33505e 60%, #16242c 100%); box-shadow: 0 0 6px rgba(80, 120, 140, 0.3); animation: none; filter: saturate(0.5); }
+    .reef.blocked .label { color: #85a0ad; }
+    .count { margin: 0.4rem 0 0; font-size: 0.8rem; color: #8fd3e6; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .lit-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fffef0, #a9f5cf 45%, #2aa578); box-shadow: 0 0 8px rgba(126, 255, 196, 0.7); }
+    .sheet .st { text-transform: none; letter-spacing: 0; color: #8fd3e6; }
+    .sheet .st.visited { color: #8fe0b8; }
+    .sheet .st.blocked { color: #9fb4c0; }
+    .sheet .act { margin-top: 1.2rem; }
+    .sheet .certify { border: 1.5px solid #4dd0e1; background: rgba(77, 208, 225, 0.14); color: #eaf7fc; border-radius: 999px; padding: 0.5rem 1.05rem; font: inherit; font-weight: 700; cursor: pointer; }
+    .sheet .certify:hover:not(:disabled), .sheet .certify:focus-visible { background: rgba(77, 208, 225, 0.26); outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.3); }
+    .sheet .certify.on { border-color: #7fe0b8; color: #cdfbe6; background: rgba(126, 224, 184, 0.16); }
+    .sheet .certify:disabled { opacity: 0.5; cursor: not-allowed; }
     /* Panel de detalle del arrecife (hoja que sube desde el fondo). */
     .sheet-backdrop { position: absolute; inset: 0; z-index: 4; background: rgba(2, 10, 18, 0.55); backdrop-filter: blur(2px); }
     .sheet {
@@ -147,8 +178,14 @@ export class SeabedView extends LitElement {
     super();
     /** @type {import('../../tools/career/domain/types.js').CareerMap|null} */
     this.map = null;
+    /** @type {import('../../tools/career/domain/types.js').Journey|null} */
+    this.journey = null;
+    this.canPlay = false;
+    /** @type {((cityId: string) => Promise<unknown>)|null} */
+    this.onToggle = null;
     /** @type {string|null} */
     this._selected = null;
+    this._pending = false;
   }
 
   /** Escape: cierra el detalle si está abierto; si no, vuelve a la superficie. */
@@ -159,11 +196,11 @@ export class SeabedView extends LitElement {
       if (this._selected) this._selected = null;
       else this._surface();
     };
-    window.addEventListener('keydown', this._onKey);
+    globalThis.addEventListener('keydown', this._onKey);
   }
 
   disconnectedCallback() {
-    window.removeEventListener('keydown', this._onKey);
+    globalThis.removeEventListener('keydown', this._onKey);
     super.disconnectedCallback();
   }
 
@@ -178,6 +215,7 @@ export class SeabedView extends LitElement {
   render() {
     const { nodes, edges } = seabedScene(this.map);
     const byId = new Map(nodes.map((n) => [n.id, n]));
+    const { statusById, lit, total } = seabedProgress(this.map, this.journey);
     return html`
       <div class="rays" aria-hidden="true">
         <div class="ray" style="left:8%"></div>
@@ -191,6 +229,7 @@ export class SeabedView extends LitElement {
         <div class="titles">
           <h3>${this.map?.name ?? 'El lecho que sostiene'}</h3>
           <p>El fondo que sostiene el archipiélago: los arrecifes del juicio y la orquestación. Acércate a uno para explorarlo.</p>
+          ${total > 0 ? html`<p class="count"><span class="lit-dot" aria-hidden="true"></span> ${lit}/${total} arrecifes encendidos</p>` : nothing}
         </div>
         <button type="button" class="surface" @click=${this._surface}>🌊 Volver a la superficie</button>
       </header>
@@ -206,17 +245,20 @@ export class SeabedView extends LitElement {
                   return svg`<line class="edge" x1=${a.x} y1=${a.y} x2=${b.x} y2=${b.y} vector-effect="non-scaling-stroke"></line>`;
                 })}
               </svg>
-              ${nodes.map((n) => html`
+              ${nodes.map((n) => {
+                const status = statusById.get(n.id) ?? 'available';
+                return html`
                 <button
                   type="button"
-                  class="reef ${n.kind === 'milestone' ? 'milestone' : ''}"
+                  class="reef ${n.kind === 'milestone' ? 'milestone' : ''} ${status}"
                   style="left:${n.x}%;top:${n.y}%"
-                  aria-label="Arrecife: ${n.name}"
+                  aria-label="Arrecife: ${n.name} — ${STATUS_LABEL[status] ?? ''}"
                   @click=${() => { this._selected = n.id; }}
                 >
-                  <span class="dot" aria-hidden="true"></span>
+                  <span class="dot" aria-hidden="true">${status === 'visited' ? html`<span class="tick">✓</span>` : nothing}</span>
                   <span class="label">${n.name}</span>
-                </button>`)}
+                </button>`;
+              })}
             </div>`}
       ${this._renderSheet()}
     `;
@@ -225,18 +267,45 @@ export class SeabedView extends LitElement {
   _renderSheet() {
     const city = this._selected ? this._city(this._selected) : null;
     if (!city) return nothing;
+    const { statusById } = seabedProgress(this.map, this.journey);
+    const status = statusById.get(city.id) ?? 'available';
+    const visited = status === 'visited';
+    const blocked = status === 'blocked';
+    let certifyLabel = '✦ Encender el arrecife';
+    if (visited) certifyLabel = 'Apagar el arrecife (retirar)';
+    else if (blocked) certifyLabel = 'Alcanza antes los arrecifes previos';
     return html`
       <div class="sheet-backdrop" @click=${() => { this._selected = null; }}></div>
       <div class="sheet" role="dialog" aria-label="${city.name}">
         <button type="button" class="close" aria-label="Cerrar" @click=${() => { this._selected = null; }}>×</button>
-        <span class="kind">${city.kind === 'milestone' ? 'Hito' : city.kind === 'tech' ? 'Tecnología' : 'Competencia'}</span>
+        <span class="kind">${KIND_LABEL[city.kind] ?? 'Competencia'} · <span class="st ${status}">${STATUS_LABEL[status] ?? ''}</span></span>
         <h4>${city.name}</h4>
         ${city.summary ? html`<p class="summary">${city.summary}</p>` : nothing}
         ${city.keyPoints?.length ? html`<h5>Claves</h5><ul>${city.keyPoints.map((p) => html`<li>${p}</li>`)}</ul>` : nothing}
         ${city.aiFocus ? html`<h5>En la era de la IA</h5><p class="aifocus">${city.aiFocus}</p>` : nothing}
         ${city.resources?.length ? html`<h5>Recursos</h5><div class="res">${city.resources.map((r) => this._resource(r))}</div>` : nothing}
+        ${this.canPlay
+          ? html`<div class="act">
+              <button
+                type="button"
+                class="certify ${visited ? 'on' : ''}"
+                ?disabled=${(blocked && !visited) || this._pending}
+                @click=${() => this._toggle(city.id)}
+              >${certifyLabel}</button>
+            </div>`
+          : nothing}
       </div>
     `;
+  }
+
+  async _toggle(cityId) {
+    if (this._pending || typeof this.onToggle !== 'function') return; // anti doble-clic
+    this._pending = true;
+    try {
+      await this.onToggle(cityId);
+    } finally {
+      this._pending = false; // se libera siempre: éxito o error
+    }
   }
 
   _resource(r) {

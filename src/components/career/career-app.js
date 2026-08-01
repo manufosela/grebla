@@ -2762,6 +2762,22 @@ export class CareerApp extends LitElement {
   }
 
   /**
+   * Encender/apagar un arrecife del lecho (RMR-PCS-0028 · F4): certifica la casa
+   * del lecho con la MISMA persistencia que cualquier casa (toggleVisited sobre
+   * el mapa del lecho). El lecho está excluido de la ciudadanía de isla, así que
+   * no dispara celebraciones de isla; solo actualiza el journey.
+   */
+  async _toggleArrecife(cityId) {
+    if (!this._canPlayJourney || !this.personId || !this._seabedMap || !cityId) return;
+    this.error = '';
+    try {
+      this.journey = await toggleVisited(this.store, this.personId, this._seabedMap, this.journey, cityId);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo actualizar el arrecife.';
+    }
+  }
+
+  /**
    * Overlay del LECHO (RMR-PCS-0028 · F3a): la transición de descenso y luego la
    * vista submarina. Estilos scoped inline (la escena tiene los suyos propios en
    * <seabed-view>): aquí solo el posicionamiento y la animación de «hundirse».
@@ -2797,7 +2813,13 @@ export class CareerApp extends LitElement {
       </style>
       <div class="seabed-overlay">
         ${this._seabed === 'open' && this._seabedMap
-          ? html`<seabed-view .map=${this._seabedMap} @surface=${this._surface}></seabed-view>`
+          ? html`<seabed-view
+              .map=${this._seabedMap}
+              .journey=${this.journey}
+              .canPlay=${this._canPlayJourney}
+              .onToggle=${(cityId) => this._toggleArrecife(cityId)}
+              @surface=${this._surface}
+            ></seabed-view>`
           : html`<div class="descent">
               <span class="b" style="left:20%;width:7px;height:7px;animation-delay:0s"></span>
               <span class="b" style="left:44%;width:5px;height:5px;animation-delay:0.15s"></span>
