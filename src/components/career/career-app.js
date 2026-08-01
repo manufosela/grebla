@@ -184,6 +184,7 @@
 import { LitElement, html, css } from 'lit';
 import './career-map.js';
 import './career-list.js';
+import './seabed-view.js';
 import './career-island-3d.js';
 import './player-card.js';
 import './game-dialog.js';
@@ -219,6 +220,7 @@ import {
 import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/playtime.js';
 import { startPlaytimeTracker } from '../../lib/playtime.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds, listCareerRoutes } from '../../lib/careerMap.js';
+import { SEABED_ISLAND_ID } from '../../tools/career/data/archipelago.js';
 import { getFramework } from '../../lib/careerFramework.js';
 import * as carpoolsIo from '../../lib/carpools.js';
 import {
@@ -382,6 +384,9 @@ export class CareerApp extends LitElement {
     loading: { state: true },
     map: { state: true },
     viewMode: { state: true },
+    /** Estado del lecho (RMR-PCS-0028 · F3a): null | 'descending' | 'open'. */
+    _seabed: { state: true },
+    _seabedMap: { state: true },
     mode3d: { state: true },
     audioMuted: { state: true },
     teammates: { state: true },
@@ -2084,6 +2089,10 @@ export class CareerApp extends LitElement {
     // Modo de vista: '3d' (isla Three.js, por defecto) o 'flat' (plano,
     // fallback). La 2.5D se retiró en MC-8.
     this.viewMode = this._readViewMode();
+    // Lecho (RMR-PCS-0028 · F3a): null cerrado, 'descending' en la transición de
+    // descenso, 'open' en la vista submarina. El mapa del lecho se carga al bajar.
+    this._seabed = null;
+    this._seabedMap = null;
     // Modo de cámara del 3D (MC-7): 'aerial' | 'fps'; lo comunica la isla.
     this.mode3d = 'aerial';
     // Sonido de la isla (MC-11): preferencia persistida; el motor WebAudio
@@ -2725,6 +2734,77 @@ export class CareerApp extends LitElement {
   _changePerson(event) {
     this.personId = event.target.value || null;
     this.error = '';
+  }
+
+  /**
+   * Descender al LECHO (RMR-PCS-0028 · F3a): carga su mapa y reproduce la
+   * transición de descenso (mínimo 1.1s para que «parezca que bajas») antes de
+   * mostrar la vista submarina. Si la carga falla, aborta y vuelve arriba.
+   */
+  async _dive() {
+    if (this._seabed) return;
+    this._seabed = 'descending';
+    const loading = this._ensureIslandMap(SEABED_ISLAND_ID);
+    await new Promise((resolve) => { window.setTimeout(resolve, 1100); });
+    try {
+      this._seabedMap = await loading;
+    } catch {
+      this._seabed = null;
+      return;
+    }
+    if (this._seabed === 'descending') this._seabed = 'open';
+  }
+
+  /** Volver a la superficie desde la vista del lecho. */
+  _surface() {
+    this._seabed = null;
+  }
+
+  /**
+   * Overlay del LECHO (RMR-PCS-0028 · F3a): la transición de descenso y luego la
+   * vista submarina. Estilos scoped inline (la escena tiene los suyos propios en
+   * <seabed-view>): aquí solo el posicionamiento y la animación de «hundirse».
+   */
+  _renderSeabed() {
+    if (!this._seabed) return nothing;
+    return html`
+      <style>
+        .seabed-overlay { position: fixed; inset: 0; z-index: 60; }
+        .seabed-overlay seabed-view { position: absolute; inset: 0; overflow: auto; }
+        .descent {
+          position: absolute; inset: 0;
+          background: linear-gradient(180deg, #7fc4e0 0%, #2a6f8f 28%, #0a2536 68%, #030d16 100%);
+          background-size: 100% 300%; animation: seabed-sink 1.1s ease-in forwards;
+          display: flex; align-items: center; justify-content: center; overflow: hidden;
+        }
+        .descent .cap {
+          color: #eaf7fc; font-weight: 600; letter-spacing: 0.05em; font-size: 1.05rem;
+          text-shadow: 0 0 14px rgba(77, 208, 225, 0.6); animation: seabed-cap 1.1s ease;
+        }
+        .descent .b {
+          position: absolute; bottom: -3%; border-radius: 50%;
+          background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.8), rgba(160,220,255,0.2) 60%, transparent 70%);
+          animation: seabed-rise 1.1s linear forwards;
+        }
+        @keyframes seabed-sink { from { background-position: 0 0%; } to { background-position: 0 100%; } }
+        @keyframes seabed-cap { 0% { opacity: 0; transform: translateY(-8px); } 30% { opacity: 1; } 100% { opacity: 0.85; transform: translateY(6px); } }
+        @keyframes seabed-rise { from { transform: translateY(0); opacity: 0; } 20% { opacity: 0.9; } to { transform: translateY(-110vh); opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) {
+          .descent { animation-duration: 0.3s; }
+          .descent .b { display: none; }
+        }
+      </style>
+      <div class="seabed-overlay">
+        ${this._seabed === 'open' && this._seabedMap
+          ? html`<seabed-view .map=${this._seabedMap} @surface=${this._surface}></seabed-view>`
+          : html`<div class="descent">
+              <span class="b" style="left:20%;width:7px;height:7px;animation-delay:0s"></span>
+              <span class="b" style="left:44%;width:5px;height:5px;animation-delay:0.15s"></span>
+              <span class="b" style="left:63%;width:9px;height:9px;animation-delay:0.05s"></span>
+              <span class="b" style="left:81%;width:6px;height:6px;animation-delay:0.25s"></span>
+              <span class="cap">Sumergiéndote al lecho…</span>
+            </div>`}
+      </div>`;
   }
 
   _onSelect(event) {
@@ -7304,6 +7384,7 @@ export class CareerApp extends LitElement {
       (this.questions ?? []).filter((q) => q.islandId === this.currentIsland),
     );
     return html`
+      ${this._renderSeabed()}
       ${fps
         ? null
         : html`
@@ -7401,6 +7482,7 @@ export class CareerApp extends LitElement {
           .journey=${this.journey}
           .selected=${this.selected}
           @select-city=${this._onSelect}
+          @dive-seabed=${this._dive}
         ></career-map>
 
         <div class="panel">
