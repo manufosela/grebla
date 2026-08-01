@@ -8,6 +8,7 @@
 
 /** @type {ToolPolicy[]} Defaults acordados: everyone (Marea/Motivators), branch:engineering (resto), Encuestas gestionadas por People. */
 export const TOOLS = [
+  { toolId: 'organigrama', label: 'Organigrama', audience: { everyone: true }, managedBy: {} },
   { toolId: 'marea', label: 'Marea', audience: { everyone: true }, managedBy: {} },
   { toolId: 'motivators', label: 'Moving & Affective Motivators', audience: { everyone: true }, managedBy: {} },
   { toolId: 'surveys', label: 'Encuestas de clima', audience: { everyone: true }, managedBy: { branches: ['people'] } },

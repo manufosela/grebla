@@ -30,6 +30,7 @@ import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
+import { getUsersCrownLabel } from '../lib/orgConfig.js';
 import { rootRoles, childrenOf, assertValidReportsTo, roleChain } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
@@ -164,6 +165,7 @@ export class SuperadminPanel extends LitElement {
     _editBranchId: { state: true },
     _editBranchLabel: { state: true },
     _branchError: { state: true },
+    _orgCrown: { state: true },
   };
 
   static styles = css`
@@ -268,6 +270,8 @@ export class SuperadminPanel extends LitElement {
     .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
     .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
+    .pyr-crown { width: 100%; text-align: center; padding: 0.7rem 1rem; border-radius: 12px; border: 2px dashed var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 10%, transparent); font-weight: 800; font-size: 1rem; display: flex; flex-direction: column; gap: 0.15rem; }
+    .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
@@ -466,6 +470,8 @@ export class SuperadminPanel extends LitElement {
     this._editBranchId = null;
     this._editBranchLabel = '';
     this._branchError = '';
+    /** @type {string} etiqueta del nivel simbólico (usuarios del producto) en la cima. */
+    this._orgCrown = '';
     this._loaded = false;
   }
 
@@ -1692,6 +1698,9 @@ export class SuperadminPanel extends LitElement {
     } catch (err) {
       this._branchError = 'No se pudieron cargar las ramas.';
     }
+    try {
+      this._orgCrown = await getUsersCrownLabel();
+    } catch { this._orgCrown = ''; }
   }
 
   /** Etiqueta visible de una rama por su id (del catálogo, con fallback al id). */
@@ -1897,6 +1906,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <p class="ro-note">Pirámide invertida: quien tiene <strong>más responsabilidad</strong> (a quien nadie sostiene) está <strong>abajo</strong>, sosteniendo a todos. Las flechas suben: cada nivel sostiene al de encima.</p>
       <div class="pyramid">
+        ${this._orgCrown ? html`<div class="pyr-crown">👥 ${this._orgCrown}<em>a quienes todo el equipo sostiene</em></div>` : null}
         ${levels.map((level, i) => {
           // Invertida: la PRIMERA fila (arriba, más profunda) es la más ancha; la
           // ÚLTIMA (la base, sin inferior) es la punta estrecha.
