@@ -235,6 +235,93 @@ export const ensureEmployeePerson = onCall({ region: 'europe-west1' }, async (re
 });
 
 /**
+ * Colección de acceso que corresponde a un orgRole según el organigrama: rol con
+ * hijos-hoja (ICs) → 'leaders'; con hijos que a su vez mandan → 'supermanagers';
+ * sin hijos (o desconocido) → null (no es mando).
+ * @param {Array<{id:string,reportsToRoleId:string|null}>} roles
+ * @param {string|null} orgRole
+ * @returns {'leaders'|'supermanagers'|null}
+ */
+function mirrorCollectionFor(roles, orgRole) {
+  if (!orgRole) return null;
+  const children = roles.filter((r) => r.reportsToRoleId === orgRole);
+  if (children.length === 0) return null;
+  const gestionaMandos = children.some((c) => roles.some((r) => r.reportsToRoleId === c.id));
+  return gestionaMandos ? 'supermanagers' : 'leaders';
+}
+
+/**
+ * Espejo de ACCESO derivado del rol (RMR-PCS-0027 · F8d): cuando una persona con
+ * cuenta vinculada tiene un orgRole de MANDO, refleja su permiso en /leaders
+ * (gestiona ICs) o /supermanagers (gestiona managers), para que las reglas O(1) y
+ * el resto del código sigan resolviendo el acceso por uid.
+ *
+ * DECISIÓN DE NEGOCIO EXPLÍCITA (aprobada por el usuario): el espejo **nunca
+ * RETIRA acceso automáticamente** — una degradación de rol, un cambio de tipo o
+ * un borrado no deben dejar a nadie sin acceso por sorpresa; el retiro es manual.
+ * PERO para que eso NO sea retención silenciosa de privilegios, cuando el rol
+ * actual ya no justifica un acceso reflejado, se MARCA ese doc con
+ * `staleAccess:true` (+ motivo y fecha) para que el superadmin lo revise y retire
+ * cuando quiera. Al recuperar el rol, la marca se limpia. NUNCA toca /admins.
+ */
+export const mirrorAccessOnPersonWrite = onDocumentWritten(
+  { document: 'people/{personId}', region: 'europe-west1' },
+  async (event) => {
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const afterUid = typeof after?.uid === 'string' && after.uid ? after.uid : null;
+    const afterRole = typeof after?.orgRole === 'string' && after.orgRole ? after.orgRole : null;
+    const beforeUid = typeof before?.uid === 'string' && before.uid ? before.uid : null;
+    const beforeRole = typeof before?.orgRole === 'string' && before.orgRole ? before.orgRole : null;
+    // Nada relevante cambió: ni el vínculo ni el rol. Evita writes redundantes.
+    if (afterUid === beforeUid && afterRole === beforeRole) return;
+
+    const db = getFirestore();
+    const rolesSnap = await db.collection('orgRoles').get();
+    const roles = rolesSnap.docs.map((d) => ({ id: d.id, reportsToRoleId: d.data().reportsToRoleId ?? null }));
+
+    const afterCol = afterUid ? mirrorCollectionFor(roles, afterRole) : null;
+    const beforeCol = beforeUid ? mirrorCollectionFor(roles, beforeRole) : null;
+
+    // 1) Concede/actualiza el acceso vigente (solo añade) y limpia una marca previa.
+    if (afterCol) {
+      await db.doc(`${afterCol}/${afterUid}`).set(
+        {
+          displayName: after.name ?? null,
+          email: after.email ?? null,
+          mirroredFrom: event.params.personId,
+          mirroredRole: afterRole,
+          staleAccess: FieldValue.delete(),
+          staleReason: FieldValue.delete(),
+          staleSince: FieldValue.delete(),
+          addedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      logger.info(`[mirror] ${afterCol}/${afterUid} vigente (persona ${event.params.personId}, rol ${afterRole})`);
+    }
+
+    // 2) Un acceso reflejado que ya NO corresponde (degradación, cambio de tipo/uid
+    //    o borrado): NO se borra (decisión de negocio) — se MARCA como obsoleto para
+    //    revisión manual. Solo si el doc existe y no es el mismo que acaba de renovarse.
+    if (beforeCol && !(afterCol === beforeCol && afterUid === beforeUid)) {
+      const staleRef = db.doc(`${beforeCol}/${beforeUid}`);
+      if ((await staleRef.get()).exists) {
+        await staleRef.set(
+          {
+            staleAccess: true,
+            staleReason: 'El rol actual de la persona ya no justifica este acceso; revísalo y retíralo si procede.',
+            staleSince: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        logger.warn(`[mirror] ${beforeCol}/${beforeUid} marcado STALE (persona ${event.params.personId})`);
+      }
+    }
+  },
+);
+
+/**
  * Borra DEFINITIVAMENTE a una persona con su subárbol completo (plan de carrera,
  * valoraciones, lecturas, conversaciones, notas, sesiones de Role Mirror…) con
  * `recursiveDelete` del Admin SDK — el cliente Web no puede borrar subcolecciones
