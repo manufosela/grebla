@@ -29,7 +29,7 @@ import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
-import { rootRoles, childrenOf, assertValidReportsTo } from '../tools/team/domain/orgRoles.js';
+import { rootRoles, childrenOf, assertValidReportsTo, roleChain } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
 
@@ -159,6 +159,7 @@ export class SuperadminPanel extends LitElement {
     _newPersonName: { state: true },
     _newPersonEmail: { state: true },
     _newPersonRole: { state: true },
+    _orgSubtab: { state: true },
   };
 
   static styles = css`
@@ -256,6 +257,13 @@ export class SuperadminPanel extends LitElement {
     .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff; }
     .del-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
     .access-inline { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; margin-right: 0.5rem; }
+    /* Pirámide invertida del organigrama (RMR-PRP-0002) */
+    .pyramid { display: flex; flex-direction: column; align-items: center; gap: 1.3rem; padding: 1rem 0 0.5rem; --rm-branch-engineering: #2a9d8f; --rm-branch-product: #e76f51; --rm-branch-people: #9d4edd; --rm-branch-data: #457b9d; --rm-branch-generico: #6b7280; }
+    .pyr-level { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; }
+    .pyr-level:not(:last-child)::after { content: '↑'; position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); color: var(--rm-muted, #9ca3af); font-size: 1rem; font-weight: 700; }
+    .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
+    .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
+    .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
@@ -446,6 +454,8 @@ export class SuperadminPanel extends LitElement {
     this._newPersonName = '';
     this._newPersonEmail = '';
     this._newPersonRole = 'generico';
+    /** @type {'editor'|'vista'} sub-pestaña del Organigrama (tabla vs pirámide). */
+    this._orgSubtab = 'editor';
     this._loaded = false;
   }
 
@@ -1736,12 +1746,25 @@ export class SuperadminPanel extends LitElement {
   }
 
   _renderOrgRoles() {
+    const sub = this._orgSubtab;
+    return html`
+      <section>
+        <div class="subtabs">
+          <button class="subtab ${sub === 'editor' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'editor'; }}>Editor</button>
+          <button class="subtab ${sub === 'vista' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'vista'; }}>Vista (pirámide invertida)</button>
+        </div>
+        ${sub === 'vista' ? this._renderOrgPyramid() : this._renderOrgEditor()}
+      </section>
+    `;
+  }
+
+  _renderOrgEditor() {
     const ro = this.readOnly;
     const parentOptions = (roleId) => this._orgRoles
       .filter((r) => r.id !== roleId)
       .map((r) => html`<option value=${r.id}>${r.label}</option>`);
     return html`
-      <section>
+      <div>
         <h2>Organigrama — roles y jerarquía</h2>
         <p class="ro-note">Cada rol define un nivel por etiqueta y de quién depende. Reordena cambiando «Depende de»; se impide crear ciclos. Un rol <strong>«sin inferior»</strong> es la <strong>base</strong> de su rama: <strong>al que nadie sostiene</strong> porque él sostiene a todos (liderazgo afectivo). En la pirámide invertida se dibuja en la punta de abajo, no arriba.</p>
         ${this._orgError ? html`<p class="error">${this._orgError}</p>` : null}
@@ -1780,7 +1803,39 @@ export class SuperadminPanel extends LitElement {
             </select>
             <button class="primary" @click=${() => this._createRole()}>Crear rol</button>
           </div>`}
-      </section>`;
+      </div>`;
+  }
+
+  /** Vista de organigrama en PIRÁMIDE INVERTIDA (liderazgo afectivo): el rol que a
+   *  nadie sostiene (sin inferior) va en la punta de ABAJO; hacia arriba, ensanchando,
+   *  quienes son sostenidos. Cada franja es un nivel; el color, su rama. */
+  _renderOrgPyramid() {
+    const roles = this._orgRoles;
+    if (roles.length === 0) return html`<p class="empty">Aún no hay roles. Créalos en el Editor.</p>`;
+    // Profundidad de cada rol (0 = base/sin inferior). Se agrupa por profundidad.
+    const depthOf = (id) => Math.max(0, roleChain(roles, id).length - 1);
+    const maxDepth = Math.max(...roles.map((r) => depthOf(r.id)));
+    // Filas de ARRIBA (más profundas, ancho máximo) a ABAJO (base, punta estrecha).
+    const levels = [];
+    for (let d = maxDepth; d >= 0; d -= 1) {
+      levels.push(roles.filter((r) => depthOf(r.id) === d));
+    }
+    const branchColor = (b) => `var(--rm-branch-${b}, var(--rm-accent, #2a9d8f))`;
+    return html`
+      <p class="ro-note">Pirámide invertida: quien tiene <strong>más responsabilidad</strong> (a quien nadie sostiene) está <strong>abajo</strong>, sosteniendo a todos. Las flechas suben: cada nivel sostiene al de encima.</p>
+      <div class="pyramid">
+        ${levels.map((level, i) => {
+          // Invertida: la PRIMERA fila (arriba, más profunda) es la más ancha; la
+          // ÚLTIMA (la base, sin inferior) es la punta estrecha.
+          const width = 100 - i * (60 / Math.max(1, levels.length));
+          return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
+            ${level.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(r.branch)}">
+              <span class="pyr-dot" style="background:${branchColor(r.branch)}"></span>${r.label}
+              <em class="pyr-branch">${r.branch}</em>
+            </span>`)}
+          </div>`;
+        })}
+      </div>`;
   }
 
   // ── Herramientas: permisos de acceso/gestión (RMR-PCS-0027 · F3) ───────────
