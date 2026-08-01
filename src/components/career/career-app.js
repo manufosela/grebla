@@ -561,6 +561,11 @@ export class CareerApp extends LitElement {
     /* Las superficies claras (overlays y paneles) conservan su tinta oscura:
        el color claro del marco NO debe heredarse dentro de ellas. */
     .sea, .ficha, .onboard, .citypanel, .panel, .matepop { color: var(--rm-text, #111827); }
+    /* El papel es una superficie SIEMPRE clara: fija navy y accent OSCUROS
+       (RMR-BUG-0058). Si no, en tema oscuro heredan --gr-navy/--gr-teal CLAROS
+       (pensados para fondo oscuro) y los enlaces/énfasis quedan ilegibles sobre
+       el crema. Valores con contraste AA sobre el pergamino. */
+    .sea, .ficha, .onboard, .citypanel, .panel, .matepop { --rm-navy: #1e3a5f; --rm-accent: #17756a; }
     /* En modo 3D el canvas es el protagonista: ocupa todo el alto disponible y
        el panel de ciudadanía y el HUD flotan SOBRE él (overlay). */
     .stage3d { position: relative; display: flex; flex: 1 1 auto; min-height: 0; border-radius: 14px; overflow: hidden; }
