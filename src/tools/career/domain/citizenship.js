@@ -98,7 +98,10 @@ export function islandCitizenship(journey, islandRef) {
  * @returns {ArchipelagoProgress}
  */
 export function archipelagoProgress(journey, islands) {
-  const list = islands ?? [];
+  // El lecho (seabed) es transversal, no una isla del mar: su progresión tiene
+  // su propia mecánica (RMR-PCS-0028 · F4) y no cuenta en la ciudadanía ni en el
+  // marcador N/13 del pasaporte.
+  const list = (islands ?? []).filter((ref) => ref?.seabed !== true);
   const perIsland = list.map((ref) => ({
     id: ref.id,
     name: ref.name,
