@@ -152,6 +152,7 @@ export class SuperadminPanel extends LitElement {
     _toolNotice: { state: true },
     _peopleList: { state: true },
     _peopleError: { state: true },
+    _usersSubtab: { state: true },
   };
 
   static styles = css`
@@ -426,6 +427,8 @@ export class SuperadminPanel extends LitElement {
     /** @type {Array<Object>} personas /people (para verlas TODAS en Usuarios, F8c). */
     this._peopleList = [];
     this._peopleError = '';
+    /** @type {'cuentas'|'personas'} sub-pestaña activa de «Usuarios». */
+    this._usersSubtab = 'cuentas';
     this._loaded = false;
   }
 
@@ -1731,67 +1734,76 @@ export class SuperadminPanel extends LitElement {
     // Defensa en profundidad: un viewer nunca gestiona usuarios, aunque no
     // debería poder llegar a este tab (el botón de la pestaña está oculto).
     if (this.readOnly) return null;
+    // Sub-pestañas (nunca secciones apiladas con scroll): «Cuentas» de acceso y
+    // «Personas» dadas de alta se ven una u otra, no las dos a la vez.
+    const sub = this._usersSubtab;
     return html`
       <section>
-        <h2>Usuarios (${this._users.length})</h2>
-        <p class="ro-note">
-          Da de alta un viewer o un manager por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
-          Cambia el rol de equipo de quien ya aparece con «Rol de equipo…». El <strong>superadmin</strong> es el checkbox de cada fila (independiente del rol de equipo). «Quitar acceso» solo revoca el rol: no borra la cuenta ni la saca de su equipo.
-        </p>
-        <div class="toolbar">
-          <input
-            type="email"
-            placeholder="email@dominio.com"
-            .value=${this._newUserEmail}
-            @input=${(e) => { this._newUserEmail = e.target.value; }}
-          />
-          <select @change=${(e) => { this._newUserRole = e.target.value; }}>
-            <option value="viewer" ?selected=${this._newUserRole === 'viewer'}>Viewer</option>
-            <option value="leader" ?selected=${this._newUserRole === 'leader'}>Manager</option>
-            <option value="surveyAdmin" ?selected=${this._newUserRole === 'surveyAdmin'}>People account</option>
-          </select>
-          <button class="primary" ?disabled=${!this._newUserEmail.trim() || this._addingUser} @click=${() => this._addUser()}>${this._addingUser ? 'Añadiendo…' : 'Añadir usuario'}</button>
+        <div class="subtabs">
+          <button class="subtab ${sub === 'cuentas' ? 'active' : ''}" @click=${() => { this._usersSubtab = 'cuentas'; }}>Cuentas de acceso (${this._users.length})</button>
+          <button class="subtab ${sub === 'personas' ? 'active' : ''}" @click=${() => { this._usersSubtab = 'personas'; }}>Personas (${this._peopleList.length})</button>
         </div>
-        ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
-        ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
-        ${this._users.length === 0
-          ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
-          : html`<div class="table-wrap"><table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th>Accesos</th>`}<th>Última conexión</th><th></th></tr></thead>
-              <tbody>
-                ${this._users.map((u) => this._renderUserRow(u))}
-              </tbody>
-            </table></div>`}
-      </section>
-      <section>
-        <h2>Personas dadas de alta (${this._peopleList.length})</h2>
-        <p class="ro-note">
-          Todas las personas de la organización, <strong>tengan cuenta o no</strong> — incluidas las creadas en un equipo que aún no se han logado. Su rol, superior y permisos se editan en la herramienta de Equipo. Aquí las ves para no darlas de alta dos veces.
-        </p>
-        ${this._peopleError
-          ? html`<p class="error">${this._peopleError}</p>`
-          : this._peopleList.length === 0
-          ? html`<p class="empty">Aún no hay personas dadas de alta.</p>`
-          : html`<div class="table-wrap"><table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th></tr></thead>
-              <tbody>
-                ${this._peopleList.map((p) => {
-                  const roleLabel = this._orgRoles.find((r) => r.id === p.orgRole)?.label ?? (p.orgRole ?? html`<span class="muted">—</span>`);
-                  let account;
-                  if (p.uid) account = html`<span class="badge" style="background:var(--rm-accent,#2a9d8f)">Vinculada</span>`;
-                  else if (p.pendingEmail) account = html`<span class="muted">Pendiente</span>`;
-                  else account = html`<span class="muted">Sin cuenta</span>`;
-                  return html`<tr>
-                    <td>${p.name}</td>
-                    <td>${p.email ?? p.pendingEmail ?? html`<span class="muted">—</span>`}</td>
-                    <td>${roleLabel}</td>
-                    <td>${account}</td>
-                  </tr>`;
-                })}
-              </tbody>
-            </table></div>`}
+        ${sub === 'personas' ? this._renderUsersPeople() : this._renderUsersAccounts()}
       </section>
       ${this._renderAssignModal()}
+    `;
+  }
+
+  /** Sub-pestaña «Cuentas de acceso»: alta por email + tabla de cuentas/roles. */
+  _renderUsersAccounts() {
+    return html`
+      <p class="ro-note">
+        Da de alta un viewer o un manager por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
+        Cambia el rol de equipo de quien ya aparece con «Rol de equipo…». El <strong>superadmin</strong> es el checkbox de cada fila (independiente del rol de equipo). «Quitar acceso» solo revoca el rol: no borra la cuenta ni la saca de su equipo.
+      </p>
+      <div class="toolbar">
+        <input type="email" placeholder="email@dominio.com" .value=${this._newUserEmail} @input=${(e) => { this._newUserEmail = e.target.value; }} />
+        <select @change=${(e) => { this._newUserRole = e.target.value; }}>
+          <option value="viewer" ?selected=${this._newUserRole === 'viewer'}>Viewer</option>
+          <option value="leader" ?selected=${this._newUserRole === 'leader'}>Manager</option>
+          <option value="surveyAdmin" ?selected=${this._newUserRole === 'surveyAdmin'}>People account</option>
+        </select>
+        <button class="primary" ?disabled=${!this._newUserEmail.trim() || this._addingUser} @click=${() => this._addUser()}>${this._addingUser ? 'Añadiendo…' : 'Añadir usuario'}</button>
+      </div>
+      ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
+      ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
+      ${this._users.length === 0
+        ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
+        : html`<div class="table-wrap"><table>
+            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Accesos</th><th>Última conexión</th><th></th></tr></thead>
+            <tbody>${this._users.map((u) => this._renderUserRow(u))}</tbody>
+          </table></div>`}
+    `;
+  }
+
+  /** Sub-pestaña «Personas»: todas las de /people (con o sin cuenta), su rol y estado. */
+  _renderUsersPeople() {
+    return html`
+      <p class="ro-note">
+        Todas las personas de la organización, <strong>tengan cuenta o no</strong> — incluidas las creadas en un equipo que aún no se han logado. Su rol, superior y permisos se editan en la herramienta de Equipo. Aquí las ves para no darlas de alta dos veces.
+      </p>
+      ${this._peopleError
+        ? html`<p class="error">${this._peopleError}</p>`
+        : this._peopleList.length === 0
+        ? html`<p class="empty">Aún no hay personas dadas de alta.</p>`
+        : html`<div class="table-wrap"><table>
+            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th></tr></thead>
+            <tbody>
+              ${this._peopleList.map((p) => {
+                const roleLabel = this._orgRoles.find((r) => r.id === p.orgRole)?.label ?? (p.orgRole ?? html`<span class="muted">—</span>`);
+                let account;
+                if (p.uid) account = html`<span class="badge" style="background:var(--rm-accent,#2a9d8f)">Vinculada</span>`;
+                else if (p.pendingEmail) account = html`<span class="muted">Pendiente</span>`;
+                else account = html`<span class="muted">Sin cuenta</span>`;
+                return html`<tr>
+                  <td>${p.name}</td>
+                  <td>${p.email ?? p.pendingEmail ?? html`<span class="muted">—</span>`}</td>
+                  <td>${roleLabel}</td>
+                  <td>${account}</td>
+                </tr>`;
+              })}
+            </tbody>
+          </table></div>`}
     `;
   }
 
