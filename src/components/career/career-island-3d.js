@@ -355,6 +355,9 @@ const PROXIMITY_CHECK_MS = 100;
  * para que salga el prompt «[E] Zarpar».
  */
 const BOAT_PROXIMITY_RADIUS = 12;
+/** Proximidad a la BALIZA DE INMERSIÓN del lecho a pie (RMR-PCS-0028 · F3b):
+ *  como la barca, flota fuera del radio caminable (en el lado opuesto del muelle). */
+const DIVE_PROXIMITY_RADIUS = 11;
 /** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
 const AUTOWALK_TIMEOUT_S = 30;
 /** El autopiloto solo AVANZA cuando el rumbo al objetivo está dentro de este ángulo (rad): gira primero. Arco abierto (~34°) para que no se atasque girando al llegar (RMR-BUG-0016). */
@@ -818,6 +821,9 @@ export class CareerIsland3D extends LitElement {
     _insideCityId: { state: true },
     _nearBoat: { state: true },
     _nearWizard: { state: true },
+    _nearDive: { state: true },
+    /** ¿Hay lecho en el archipiélago? Habilita la baliza de inmersión (RMR-PCS-0028 · F3b). */
+    seabed: { attribute: false },
   };
 
   static styles = css`
@@ -1063,6 +1069,13 @@ export class CareerIsland3D extends LitElement {
     this._boatGroup = null;
     /** Posición de mundo de la barca para la proximidad a pie (MC-14), o null. */
     this._boatSpot = null;
+    /** Baliza de inmersión al lecho (RMR-PCS-0028 · F3b): grupo y posición de
+     *  mundo; solo si hay lecho. `_nearDive` es true junto a ella (prompt «[E]
+     *  Sumergirse al lecho»). */
+    this._diveGroup = null;
+    this._diveSpot = null;
+    this._nearDive = false;
+    this.seabed = false;
     /** Corredor caminable del muelle (RMR-TSK-0208): cápsula A→B + cubierta, o null. */
     this._dockCorridor = null;
     /** Guard del auto-zarpar a pie: evita disparar el viaje varias veces seguidas. */
@@ -1257,6 +1270,15 @@ export class CareerIsland3D extends LitElement {
       changed.has('routeStops') // números de la ruta libre (JG-9)
     ) {
       this._rebuildCities();
+    }
+    // Baliza de inmersión al lecho (RMR-PCS-0028 · F3b): si `seabed` llega o
+    // cambia después de construir la escena (el índice del archipiélago carga
+    // async), se rehace el grupo estático para añadir o quitar la baliza.
+    if (!changed.has('map') && changed.has('seabed')) {
+      this._diveGroup = null;
+      this._diveSpot = null;
+      this._nearDive = false;
+      this._replaceGroup('_staticGroup', this._buildStatic());
     }
     // Compañeros (MC-12): su grupo solo depende de la prop y del mapa (el
     // cambio de mapa ya los rehace dentro de _rebuildAll).
@@ -2062,6 +2084,11 @@ export class CareerIsland3D extends LitElement {
       this._openArchipelago();
       return;
     }
+    if (event.code === 'KeyE' && !event.repeat && this._nearDive) {
+      event.preventDefault();
+      this._emitDive();
+      return;
+    }
     if (CareerIsland3D.HELD_CODES.has(event.code)) {
       this._keys.add(event.code);
       this._autoWalkTargetId = null; // tomar el control cancela el autopiloto (JG-21)
@@ -2396,6 +2423,11 @@ export class CareerIsland3D extends LitElement {
     this._nearBoat = this._boatSpot
       ? Math.hypot(cam.x - this._boatSpot.x, cam.z - this._boatSpot.z) <= BOAT_PROXIMITY_RADIUS
       : false;
+    // Baliza de inmersión al lecho (RMR-PCS-0028 · F3b): prompt «[E] Sumergirse»
+    // por proximidad, igual que la barca (la ciudad cercana tiene prioridad).
+    this._nearDive = this._diveSpot
+      ? Math.hypot(cam.x - this._diveSpot.x, cam.z - this._diveSpot.z) <= DIVE_PROXIMITY_RADIUS
+      : false;
     // La cabaña del brujo (MC-22): prompt «[E] El brujo» — mismo radio que
     // las ciudades; en el HUD la ciudad cercana manda y la barca cede.
     this._nearWizard = this._wizardSpotW
@@ -2423,6 +2455,19 @@ export class CareerIsland3D extends LitElement {
     if (this._fpsLocked) document.exitPointerLock();
     this.dispatchEvent(
       new CustomEvent('open-archipelago', { bubbles: true, composed: true }),
+    );
+  }
+
+  /**
+   * Sumergirse al lecho (RMR-PCS-0028 · F3b): como zarpar, suelta el pointer
+   * lock (el descenso y la vista submarina son overlays de <career-app>) y emite
+   * `dive-seabed`, que <career-app> convierte en la transición de descenso.
+   */
+  _emitDive() {
+    this._keys.clear();
+    if (this._fpsLocked) document.exitPointerLock();
+    this.dispatchEvent(
+      new CustomEvent('dive-seabed', { bubbles: true, composed: true }),
     );
   }
 
@@ -2559,16 +2604,26 @@ export class CareerIsland3D extends LitElement {
     const city = this._nearCityId
       ? (this.map?.cities ?? []).find((c) => c.id === this._nearCityId)
       : null;
+    const near = this._nearActionLabel(city);
     return html`
-      ${city
-        ? html`<div class="fps-hint near"><kbd>E</kbd> Entrar en ${city.name}</div>`
-        : this._nearWizard
-          ? html`<div class="fps-hint near"><kbd>E</kbd> El brujo</div>`
-          : this._nearBoat
-            ? html`<div class="fps-hint near"><kbd>E</kbd> Zarpar</div>`
-            : null}
+      ${near ? html`<div class="fps-hint near"><kbd>E</kbd> ${near}</div>` : null}
       ${this._fpsLocked ? CareerIsland3D.FPS_HELP_IMMERSIVE : CareerIsland3D.FPS_HELP_FREE}
     `;
+  }
+
+  /**
+   * Acción de proximidad a pie ([E]): rótulo de la ciudad / brujo / barca /
+   * baliza de inmersión cercanos, en orden de prioridad, o null si ninguno.
+   * (Evita el ternario anidado del HUD.)
+   * @param {{name:string}|null} city
+   * @returns {string|null}
+   */
+  _nearActionLabel(city) {
+    if (city) return `Entrar en ${city.name}`;
+    if (this._nearWizard) return 'El brujo';
+    if (this._nearBoat) return 'Zarpar';
+    if (this._nearDive) return 'Sumergirse al lecho';
+    return null;
   }
 
   /**
@@ -2643,6 +2698,9 @@ export class CareerIsland3D extends LitElement {
     // (y quedan null en un mapa sin puerto, MC-14).
     this._boatGroup = null;
     this._boatSpot = null;
+    this._diveGroup = null;
+    this._diveSpot = null;
+    this._nearDive = false;
     this._dockCorridor = null;
     this._nearBoat = false;
     this._sailed = false;
@@ -3463,6 +3521,33 @@ export class CareerIsland3D extends LitElement {
     // juego, así que se carga en diferido sin bloquear nada.
     this._loadBoatModel(boat);
     harbor.add(boat);
+
+    // Baliza de INMERSIÓN al lecho (RMR-PCS-0028 · F3b): en el lado OPUESTO del
+    // muelle al barco (−lx), un halo bioluminiscente cian sobre el agua. Al
+    // acercarse a pie da «[E] Sumergirse al lecho». Solo si el archipiélago tiene
+    // lecho (this.seabed); aditivo — sin lecho el puerto queda como estaba.
+    if (this.seabed) {
+      const DIVE_LOCAL = { lx: -2.7, lz: dockLen - 1.6 };
+      const beacon = new THREE.Group();
+      beacon.position.set(DIVE_LOCAL.lx, TERRAIN.waterY - GROUND_Y + 0.02, DIVE_LOCAL.lz);
+      const glowMat = new THREE.MeshBasicMaterial({ color: 0x4dd0e1, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(1.6, 32), glowMat);
+      disc.rotation.x = -Math.PI / 2;
+      beacon.add(disc);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.1, 32), new THREE.MeshBasicMaterial({ color: 0x9becff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2;
+      beacon.add(ring);
+      const light = new THREE.PointLight(0x4dd0e1, 6, 14, 2);
+      light.position.set(0, 1.2, 0);
+      beacon.add(light);
+      beacon.userData.diveBeacon = true; // marca para el raycast/animación
+      this._diveGroup = beacon;
+      this._diveSpot = {
+        x: wx + DIVE_LOCAL.lx * Math.cos(seaYaw) + DIVE_LOCAL.lz * Math.sin(seaYaw),
+        z: wz - DIVE_LOCAL.lx * Math.sin(seaYaw) + DIVE_LOCAL.lz * Math.cos(seaYaw),
+      };
+      harbor.add(beacon);
+    }
 
     // Faro a pie de muelle: torre BLANCA troncocónica con dos franjas rojas,
     // galería con barandilla, linterna cálida (emisiva) y cúpula roja.
@@ -6214,6 +6299,7 @@ export class CareerIsland3D extends LitElement {
         else if (this._nearCityId) this._openNearCity();
         else if (this._nearWizard) this._openWizard();
         else if (this._nearBoat) this._openArchipelago();
+        else if (this._nearDive) this._emitDive();
         return;
       }
       // Modo LIBRE (JG-3): solo interactúa el CLIC de verdad — corto
@@ -6406,6 +6492,10 @@ export class CareerIsland3D extends LitElement {
     this._nearBoat = false;
     this._boatGroup = null;
     this._boatSpot = null;
+    // Baliza de inmersión al lecho (RMR-PCS-0028 · F3b): vive en la escena.
+    this._diveGroup = null;
+    this._diveSpot = null;
+    this._nearDive = false;
     // La cabaña del brujo (MC-22) vive en la escena: se libera con ella.
     this._wizardGroup = null;
     this._wizardSpotW = null;
