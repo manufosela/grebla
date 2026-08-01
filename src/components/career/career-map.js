@@ -31,6 +31,7 @@ import { shapeForArea, houseShapePath } from '../../tools/career/domain/houseSha
 import { stopNumberByCity } from '../../tools/career/domain/challenge.js';
 import { routeNumberByCity } from '../../tools/career/domain/route.js';
 import { seaIslands } from '../../tools/career/data/archipelago.js';
+import { hasSeabed } from '../../tools/career/domain/seabed.js';
 import {
   islandCircles,
   islandLabel,
@@ -63,12 +64,32 @@ export class CareerMapView extends LitElement {
   static styles = css`
     :host { display: block; }
     .wrap {
+      position: relative;
       background: var(--rm-track, #e9f0f2);
       border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: var(--rm-radius, 12px);
       padding: 0.5rem;
       overflow: auto;
     }
+    /* Resplandor del LECHO (RMR-PCS-0028 · F3a): abajo, como si el fondo marino
+       asomara bajo el archipiélago. Al activarlo se desciende a la vista submarina. */
+    .dive {
+      position: absolute; left: 50%; bottom: 0.6rem; transform: translateX(-50%);
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      border: 1.5px solid rgba(30, 130, 160, 0.55); border-radius: 999px;
+      background: linear-gradient(180deg, rgba(9, 42, 60, 0.92), rgba(4, 22, 34, 0.92));
+      color: #cdeefb; padding: 0.4rem 0.9rem 0.4rem 0.7rem; font: inherit; font-size: 0.82rem;
+      font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+    .dive:hover, .dive:focus-visible { border-color: #4dd0e1; color: #fff; outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.3); }
+    .dive .glow {
+      width: 0.85rem; height: 0.85rem; border-radius: 50%; flex: none;
+      background: radial-gradient(circle at 35% 30%, #d9fbff, #4dd0e1 55%, #1f7f96 100%);
+      box-shadow: 0 0 8px 2px rgba(77, 208, 225, 0.7);
+      animation: dive-pulse 2.6s ease-in-out infinite;
+    }
+    @keyframes dive-pulse { 0%, 100% { filter: brightness(1); transform: scale(1); } 50% { filter: brightness(1.4); transform: scale(1.12); } }
+    @media (prefers-reduced-motion: reduce) { .dive .glow { animation: none; } }
     svg { width: 100%; height: auto; display: block; }
     /* Modo «single» (mi-espacio, RMR-BUG-0031): sin zoom/expandir, TODOS los
        temas de la isla se etiquetan a la vez. Forzar el ancho al contenedor
@@ -514,6 +535,17 @@ export class CareerMapView extends LitElement {
           ${this._renderRoute(lay, ui)}
         </g>
       </svg>
+      ${!lay.single && !this.expanded && hasSeabed(this.archipelago?.islands)
+        ? html`<button
+            type="button"
+            class="dive"
+            aria-label="Sumergirse al lecho: las competencias de orquestación y juicio"
+            @click=${() => this.dispatchEvent(new CustomEvent('dive-seabed', { bubbles: true, composed: true }))}
+          >
+            <span class="glow" aria-hidden="true"></span>
+            <span class="dive-label">⌵ Sumergirse al lecho</span>
+          </button>`
+        : nothing}
       ${this._renderLegend()}
     </div>`;
   }
