@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Organigrama (RMR-PRP-0002): consulta de SOLO LECTURA del organigrama de la
+ * organización, en pirámide invertida (liderazgo afectivo). Accesible por
+ * cualquier empleado logado — no edita nada (la edición vive en el panel del
+ * superadmin). El componente <org-chart> lee /orgRoles y /orgBranches al montar.
+ */
+---
+
+<Base title="GREBLA — Organigrama" requireAuth={true}>
+  <tool-nav href="/" name="Organigrama" icon="🔻"></tool-nav>
+  <p class="page-lead">
+    Así se organiza la casa. En el liderazgo afectivo la pirámide se invierte:
+    quien más responsabilidad tiene está abajo, sosteniendo a todo el equipo.
+  </p>
+
+  <org-chart></org-chart>
+</Base>
+
+<script>
+  import '../components/org-chart.js';
+</script>

@@ -7,6 +7,12 @@ import Base from '../layouts/Base.astro';
  */
 const tools = [
   {
+    name: 'Organigrama',
+    href: '/organigrama',
+    description: 'Consulta cómo se organiza la casa, en pirámide invertida (liderazgo afectivo): quien más responsabilidad tiene sostiene desde abajo.',
+    available: true,
+  },
+  {
     name: 'Role Mirror',
     href: '/tools/role-mirror',
     description: 'Autodiagnóstico de perfil de ingeniería: cuestionario adaptativo y mapa de competencias.',
@@ -87,6 +93,7 @@ const tools = [
  * política de audiencia: se rige por el rol, como hasta ahora.
  */
 const TOOL_ID: Record<string, string> = {
+  '/organigrama': 'organigrama',
   '/tools/role-mirror': 'rolemirror',
   '/tools/team': 'team',
   '/tools/dora': 'dora',

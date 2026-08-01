@@ -22,3 +22,20 @@ export async function getEmployeeDomain() {
     return '';
   }
 }
+
+/**
+ * Etiqueta del nivel SIMBÓLICO en la cima de la pirámide invertida (los usuarios
+ * del producto, que no existen como fichas pero a quienes todo el equipo sostiene).
+ * Vacío = no se muestra (p.ej. la demo). En la instancia real se configura, p.ej.
+ * «Usuarios de TRIBBU». Se guarda en /config/org.usersCrownLabel.
+ * @returns {Promise<string>}
+ */
+export async function getUsersCrownLabel() {
+  try {
+    const snap = await getDoc(doc(db, 'config', 'org'));
+    const raw = snap.exists() ? snap.data().usersCrownLabel : '';
+    return (raw ?? '').toString().trim();
+  } catch {
+    return '';
+  }
+}
