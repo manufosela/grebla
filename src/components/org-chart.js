@@ -19,6 +19,7 @@ export class OrgChart extends LitElement {
     _crown: { state: true },
     _error: { state: true },
     _ready: { state: true },
+    _mode: { state: true },
   };
 
   static styles = css`
@@ -45,6 +46,17 @@ export class OrgChart extends LitElement {
       display: flex; flex-direction: column; gap: 0.15rem;
     }
     .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    /* Toggle Global / Por ramas (mismo lenguaje de pestaña subrayada). */
+    .modes { display: flex; gap: 0.1rem; border-bottom: 2px solid var(--rm-border, #e5e7eb); margin-bottom: 0.5rem; }
+    .mode { border: 0; background: none; color: var(--rm-muted, #6b7280); padding: 0.5rem 0.9rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+    .mode.on { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
+    .mode:hover:not(.on) { color: var(--rm-text, #111827); }
+    /* Mini-pirámides por rama, en rejilla. */
+    .branch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1.5rem 1rem; padding: 0.5rem 0; align-items: end; }
+    .branch-col { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; }
+    .branch-title { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 800; font-size: 0.95rem; }
+    .pyramid.mini { gap: 1.1rem; padding: 0.25rem 0; }
+    .pyramid.mini .pyr-level { gap: 0.4rem; }
   `;
 
   constructor() {
@@ -54,6 +66,8 @@ export class OrgChart extends LitElement {
     this._crown = '';
     this._error = '';
     this._ready = false;
+    /** @type {'global'|'ramas'} vista global (toda la organización) o una mini-pirámide por rama. */
+    this._mode = 'global';
     this._loadedForUser = null;
   }
 
@@ -91,18 +105,41 @@ export class OrgChart extends LitElement {
     return this._branches.find((b) => b.id === id)?.label ?? id;
   }
 
+  _branchColor(b) { return `var(--rm-branch-${b}, var(--rm-accent, #2a9d8f))`; }
+
+  /** Niveles (por profundidad) de un conjunto de roles, de la base (abajo) a las
+   *  hojas (arriba): array de [rolesEnEseNivel], en orden invertido para pintar. */
+  _levelsOf(roles) {
+    const depthOf = (id) => Math.max(0, roleChain(roles, id).length - 1);
+    const maxDepth = Math.max(0, ...roles.map((r) => depthOf(r.id)));
+    const levels = [];
+    for (let d = maxDepth; d >= 0; d -= 1) levels.push(roles.filter((r) => depthOf(r.id) === d));
+    return levels;
+  }
+
+  _role(r, color) {
+    return html`<span class="pyr-role" style="border-color:${color}">
+      <span class="pyr-dot" style="background:${color}"></span>${r.label}
+      <em class="pyr-branch">${this._branchLabel(r.branch)}</em>
+    </span>`;
+  }
+
   render() {
     if (!this._ready) return html`<p class="lead">Cargando organigrama…</p>`;
     if (this._error) return html`<p class="error">${this._error}</p>`;
-    const roles = this._roles;
-    if (roles.length === 0) return html`<p class="empty">El organigrama aún no está configurado.</p>`;
-    const depthOf = (id) => Math.max(0, roleChain(roles, id).length - 1);
-    const maxDepth = Math.max(...roles.map((r) => depthOf(r.id)));
-    const levels = [];
-    for (let d = maxDepth; d >= 0; d -= 1) levels.push(roles.filter((r) => depthOf(r.id) === d));
-    const branchColor = (b) => `var(--rm-branch-${b}, var(--rm-accent, #2a9d8f))`;
+    if (this._roles.length === 0) return html`<p class="empty">El organigrama aún no está configurado.</p>`;
     return html`
       <p class="lead">Pirámide invertida: quien tiene <strong>más responsabilidad</strong> (a quien nadie sostiene) está <strong>abajo</strong>, sosteniendo a todos. Las flechas suben: cada nivel sostiene al de encima.</p>
+      <div class="modes">
+        <button type="button" class="mode ${this._mode === 'global' ? 'on' : ''}" @click=${() => { this._mode = 'global'; }}>Toda la organización</button>
+        <button type="button" class="mode ${this._mode === 'ramas' ? 'on' : ''}" @click=${() => { this._mode = 'ramas'; }}>Por ramas</button>
+      </div>
+      ${this._mode === 'ramas' ? this._renderByBranch() : this._renderGlobal()}`;
+  }
+
+  _renderGlobal() {
+    const levels = this._levelsOf(this._roles);
+    return html`
       <div class="pyramid">
         ${this._crown ? html`<div class="pyr-crown">👥 ${this._crown}<em>a quienes todo el equipo sostiene</em></div>` : null}
         ${levels.map((level, i) => {
@@ -112,12 +149,41 @@ export class OrgChart extends LitElement {
           const groups = Object.groupBy(level, (r) => r.branch);
           return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
             ${Object.entries(groups).map(([branch, roles]) => html`
-              <div class="pyr-group" style="--g:${branchColor(branch)}">
-                ${roles.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
-                  <span class="pyr-dot" style="background:${branchColor(branch)}"></span>${r.label}
-                  <em class="pyr-branch">${this._branchLabel(branch)}</em>
-                </span>`)}
+              <div class="pyr-group" style="--g:${this._branchColor(branch)}">
+                ${roles.map((r) => this._role(r, this._branchColor(branch)))}
               </div>`)}
+          </div>`;
+        })}
+      </div>`;
+  }
+
+  /** Una mini-pirámide invertida POR RAMA: cada rama con su cabeza (sin inferior)
+   *  en la punta de abajo y sus roles hacia arriba, en columnas lado a lado. */
+  _renderByBranch() {
+    // Ramas a mostrar: TODAS las presentes en los roles (aunque falte su metadato
+    // en /orgBranches), para no perder ningún rol en esta vista. Primero las
+    // catalogadas (en su orden), luego las huérfanas; _branchLabel cae al id.
+    const roleBranchIds = new Set(this._roles.map((r) => r.branch));
+    const branchIds = [
+      ...this._branches.filter((b) => roleBranchIds.has(b.id)).map((b) => b.id),
+      ...[...roleBranchIds].filter((id) => !this._branches.some((b) => b.id === id)),
+    ];
+    if (branchIds.length === 0) return html`<p class="empty">No hay roles.</p>`;
+    return html`
+      <div class="branch-grid">
+        ${branchIds.map((bid) => {
+          const color = this._branchColor(bid);
+          const levels = this._levelsOf(this._roles.filter((r) => r.branch === bid));
+          return html`<div class="branch-col">
+            <div class="branch-title" style="color:${color}"><span class="pyr-dot" style="background:${color}"></span> ${this._branchLabel(bid)}</div>
+            <div class="pyramid mini">
+              ${levels.map((level, i) => {
+                const width = 100 - i * (50 / Math.max(1, levels.length));
+                return html`<div class="pyr-level" style="width:${Math.max(45, width)}%">
+                  ${level.map((r) => this._role(r, color))}
+                </div>`;
+              })}
+            </div>
           </div>`;
         })}
       </div>`;
