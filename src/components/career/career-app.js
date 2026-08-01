@@ -220,7 +220,7 @@ import {
 import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/playtime.js';
 import { startPlaytimeTracker } from '../../lib/playtime.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds, listCareerRoutes } from '../../lib/careerMap.js';
-import { SEABED_ISLAND_ID } from '../../tools/career/data/archipelago.js';
+import { SEABED_ISLAND_ID, seaIslands } from '../../tools/career/data/archipelago.js';
 import { hasSeabed } from '../../tools/career/domain/seabed.js';
 import { getFramework } from '../../lib/careerFramework.js';
 import * as carpoolsIo from '../../lib/carpools.js';
@@ -1619,6 +1619,23 @@ export class CareerApp extends LitElement {
       color: var(--rm-navy, #1e3a5f);
     }
     .sea-hint { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    /* Acceso al LECHO (RMR-BUG-0057): control bioluminiscente en el mapa del mar. */
+    .dive-sea {
+      display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.9rem auto 0;
+      border: 1.5px solid rgba(30, 130, 160, 0.6); border-radius: 999px;
+      background: linear-gradient(180deg, rgba(9, 42, 60, 0.95), rgba(4, 22, 34, 0.95));
+      color: #cdeefb; padding: 0.5rem 1rem; font: inherit; font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+    .dive-sea:hover, .dive-sea:focus-visible { border-color: #4dd0e1; color: #fff; outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.35); }
+    .dive-sea .dive-glow {
+      width: 0.85rem; height: 0.85rem; border-radius: 50%; flex: none;
+      background: radial-gradient(circle at 35% 30%, #d9fbff, #4dd0e1 55%, #1f7f96 100%);
+      box-shadow: 0 0 8px 2px rgba(77, 208, 225, 0.7);
+      animation: dive-sea-pulse 2.6s ease-in-out infinite;
+    }
+    @keyframes dive-sea-pulse { 0%, 100% { filter: brightness(1); transform: scale(1); } 50% { filter: brightness(1.4); transform: scale(1.12); } }
+    @media (prefers-reduced-motion: reduce) { .dive-sea .dive-glow { animation: none; } }
     /* Fundido de travesía entre islas (MC-14). */
     .travel-fade {
       position: fixed;
@@ -6342,7 +6359,10 @@ export class CareerApp extends LitElement {
    */
   _renderArchipelago() {
     if (!this.showArchipelago) return null;
-    const islands = this.archipelago?.islands ?? [];
+    // El lecho (seabed) es transversal: no se pinta como una isla más del mar;
+    // se accede con el control «Sumergirse al lecho» de abajo (RMR-BUG-0057).
+    const islands = seaIslands(this.archipelago?.islands ?? []);
+    const seabed = hasSeabed(this.archipelago?.islands);
     // La luz del brujo (JG-8): islas con alguna respuesta LISTA para la
     // persona cargada — su mancha del mapa emite el halo violeta.
     const wizardLit = new Set(
@@ -6433,6 +6453,14 @@ export class CareerApp extends LitElement {
           Elige una isla y zarpa. El viaje es libre: tus certificados te acompañan
           allá donde vayas.
         </p>
+        ${seabed
+          ? html`<button
+              type="button"
+              class="dive-sea"
+              aria-label="Sumergirse al lecho: las competencias de orquestación y juicio"
+              @click=${() => { this._closeArchipelago(); this._dive(); }}
+            ><span class="dive-glow" aria-hidden="true"></span> ⌵ Sumergirse al lecho</button>`
+          : null}
       </section>
     </div>`;
   }
