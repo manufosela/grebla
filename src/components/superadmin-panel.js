@@ -150,6 +150,8 @@ export class SuperadminPanel extends LitElement {
     _toolPolicies: { state: true },
     _toolError: { state: true },
     _toolNotice: { state: true },
+    _peopleList: { state: true },
+    _peopleError: { state: true },
   };
 
   static styles = css`
@@ -421,6 +423,9 @@ export class SuperadminPanel extends LitElement {
     this._toolPolicies = [];
     this._toolError = '';
     this._toolNotice = '';
+    /** @type {Array<Object>} personas /people (para verlas TODAS en Usuarios, F8c). */
+    this._peopleList = [];
+    this._peopleError = '';
     this._loaded = false;
   }
 
@@ -785,12 +790,23 @@ export class SuperadminPanel extends LitElement {
 
   async _loadUsers() {
     this._usersError = '';
+    this._peopleError = '';
+    // TODAS las personas dadas de alta (RMR-PCS-0027 · F8c), incluidas las que aún
+    // no tienen cuenta: así el superadmin las ve y no las duplica. Se carga en
+    // paralelo pero con estado de error PROPIO: un fallo NO se silencia (no mostrar
+    // «no hay personas» en falso), se avisa en su sección.
+    const peoplePromise = this.persistence ? listActivePeople(this.persistence) : Promise.resolve([]);
     try {
       const [users, linkedUids] = await Promise.all([listAllUsers(), listLinkedUids()]);
       this._users = users;
       this._linkedUids = linkedUids;
     } catch (err) {
       this._usersError = err instanceof Error ? err.message : 'No se pudieron cargar los usuarios.';
+    }
+    try {
+      this._peopleList = await peoplePromise;
+    } catch (err) {
+      this._peopleError = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
     }
   }
 
@@ -1744,6 +1760,34 @@ export class SuperadminPanel extends LitElement {
               <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>${this.readOnly ? null : html`<th>Accesos</th>`}<th>Última conexión</th><th></th></tr></thead>
               <tbody>
                 ${this._users.map((u) => this._renderUserRow(u))}
+              </tbody>
+            </table></div>`}
+      </section>
+      <section>
+        <h2>Personas dadas de alta (${this._peopleList.length})</h2>
+        <p class="ro-note">
+          Todas las personas de la organización, <strong>tengan cuenta o no</strong> — incluidas las creadas en un equipo que aún no se han logado. Su rol, superior y permisos se editan en la herramienta de Equipo. Aquí las ves para no darlas de alta dos veces.
+        </p>
+        ${this._peopleError
+          ? html`<p class="error">${this._peopleError}</p>`
+          : this._peopleList.length === 0
+          ? html`<p class="empty">Aún no hay personas dadas de alta.</p>`
+          : html`<div class="table-wrap"><table>
+              <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th></tr></thead>
+              <tbody>
+                ${this._peopleList.map((p) => {
+                  const roleLabel = this._orgRoles.find((r) => r.id === p.orgRole)?.label ?? (p.orgRole ?? html`<span class="muted">—</span>`);
+                  let account;
+                  if (p.uid) account = html`<span class="badge" style="background:var(--rm-accent,#2a9d8f)">Vinculada</span>`;
+                  else if (p.pendingEmail) account = html`<span class="muted">Pendiente</span>`;
+                  else account = html`<span class="muted">Sin cuenta</span>`;
+                  return html`<tr>
+                    <td>${p.name}</td>
+                    <td>${p.email ?? p.pendingEmail ?? html`<span class="muted">—</span>`}</td>
+                    <td>${roleLabel}</td>
+                    <td>${account}</td>
+                  </tr>`;
+                })}
               </tbody>
             </table></div>`}
       </section>
