@@ -395,14 +395,16 @@ export class TeamPersonDetail extends LitElement {
     .freq strong { color: var(--rm-text, #111827); }
 
     /* ── Barra de sub-pestañas (patrón ARIA tablist, coherente con Ajustes) ── */
-    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    /* Pestañas REALES (subrayado de acento pegado a la línea base, no píldoras). */
+    .tabs { display: flex; gap: 0.1rem; margin-bottom: 1.25rem; flex-wrap: wrap; border-bottom: 2px solid var(--rm-border, #e5e7eb); }
     .tab {
-      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
-      border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      border: 0; background: none; color: var(--rm-muted, #6b7280);
+      padding: 0.6rem 1rem; font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
     }
-    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
-    .tab:hover:not(.active) { color: var(--rm-text, #111827); }
-    .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .tab.active { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
+    .tab:hover:not(.active) { color: var(--rm-text, #111827); background: color-mix(in srgb, var(--rm-text, #111827) 5%, transparent); }
+    .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: -2px; border-radius: 6px; }
     /* Tablist anidado (sub-sub-pestañas de «Dimensiones»): mismo patrón, un punto
        menos de tamaño para leerse como segundo nivel sin perder contraste. */
     .tabs-nested { margin-bottom: 1rem; }

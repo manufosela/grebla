@@ -45,19 +45,22 @@ export class TeamApp extends LitElement {
 
   static styles = css`
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
-    .sections { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    /* Pestañas REALES (subrayado de acento pegado a la línea base, no píldoras). */
+    .sections { display: flex; gap: 0.1rem; margin-bottom: 1.25rem; flex-wrap: wrap; border-bottom: 2px solid var(--rm-border, #e5e7eb); }
     .tab {
-      border: 1px solid var(--rm-border, #d1d5db);
-      background: var(--rm-surface, #fff);
+      border: 0;
+      background: none;
       color: var(--rm-muted, #6b7280);
-      border-radius: 999px;
-      padding: 0.4rem 1rem;
-      font-size: 0.88rem;
+      padding: 0.6rem 1rem;
+      font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      border-radius: 6px 6px 0 0;
     }
-    .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
-    .tab:hover:not(.active) { color: var(--rm-text, #111827); }
+    .tab.active { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
+    .tab:hover:not(.active) { color: var(--rm-text, #111827); background: color-mix(in srgb, var(--rm-text, #111827) 5%, transparent); }
     .back {
       border: 0; background: none; color: var(--rm-accent, #2a9d8f);
       font-size: 0.88rem; font-weight: 600; cursor: pointer; padding: 0; margin-bottom: 1rem;
