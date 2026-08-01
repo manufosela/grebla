@@ -375,6 +375,9 @@ export class CareerApp extends LitElement {
   static properties = {
     store: { attribute: false },
     people: { attribute: false },
+    /** Roster del EQUIPO (solo manager, RMR-PCS-0029 · F2a): para la cola del
+     *  brujo y el tiempo agregado. NO es quién juega (eso es siempre uno mismo). */
+    teamRoster: { attribute: false },
     canEdit: { attribute: false },
     canPlay: { attribute: false },
     currentUser: { attribute: false },
@@ -2101,6 +2104,8 @@ export class CareerApp extends LitElement {
     /** @type {{ id: string, name: string }[]} */
     this.people = [];
     this.personId = null;
+    /** @type {{id:string,name:string,uid?:string|null}[]} roster del equipo (manager). */
+    this.teamRoster = [];
     this.error = '';
     this.journey = { visitedCities: [], currentCity: null, plannedRoute: [], evidences: {} };
     this.selected = null;
@@ -2466,12 +2471,12 @@ export class CareerApp extends LitElement {
       this._load();
     }
     // Compañeros (MC-12 → RMR-PCS-0029 · F1): ya NO se precargan los journeys de
-    // TODO el equipo. Los compañeros salen solo de tus carpools (shippooling) y
+    // el equipo entero. Los compañeros salen solo de tus carpools (shippooling) y
     // sus journeys los carga _ensureCarpoolJourneys; el juego es personal.
     // Cola del brujo (MC-22): con canEdit se cargan en paralelo las consultas
     // de todas las personas visibles (mismo cap y política que los journeys)
     // para el contador «🧙 Consultas (N)».
-    if (this.store && this.canEdit && (this.people ?? []).length > 0 && !this._teamQuestionsLoaded) {
+    if (this.store && this.canEdit && (this.teamRoster ?? []).length > 0 && !this._teamQuestionsLoaded) {
       this._teamQuestionsLoaded = true;
       this._loadTeamQuestions();
     }
@@ -4374,7 +4379,7 @@ export class CareerApp extends LitElement {
     if (!this.canEdit) return;
     this.showPlaytime = true;
     this.playtimeRows = null; // «Cargando…»
-    const people = this.people ?? [];
+    const people = this.teamRoster ?? [];
     const capped = people.slice(0, CareerApp.MAX_TEAM_JOURNEYS);
     if (people.length > capped.length) {
       console.warn(
@@ -5636,7 +5641,7 @@ export class CareerApp extends LitElement {
    * persona ilegible no tumba al resto (se avisa por consola y no cuenta).
    */
   async _loadTeamQuestions() {
-    const people = this.people ?? [];
+    const people = this.teamRoster ?? [];
     const capped = people.slice(0, CareerApp.MAX_TEAM_JOURNEYS);
     if (people.length > capped.length) {
       console.warn(
@@ -5671,7 +5676,9 @@ export class CareerApp extends LitElement {
    * @returns {{ personId: string, personName: string, question: import('../../tools/career/domain/wizard.js').WizardQuestion }[]}
    */
   _pendingQueue() {
-    const names = new Map((this.people ?? []).map((p) => [p.id, p.name]));
+    // Nombres del roster del equipo (brujo) + la propia persona, por si el
+    // manager tiene también consultas propias (RMR-PCS-0029 · F2a).
+    const names = new Map([...(this.teamRoster ?? []), ...(this.people ?? [])].map((p) => [p.id, p.name]));
     const queue = [];
     for (const [personId, questions] of this._teamQuestions) {
       const personName = names.get(personId);
