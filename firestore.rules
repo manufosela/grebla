@@ -177,6 +177,16 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/leaders/$(resource.data.ownerLeaderUid))
           && get(/databases/$(database)/documents/leaders/$(resource.data.ownerLeaderUid)).data.reportsTo == request.auth.uid;
       }
+      // Un Head (supermanager) sobre un MANAGER que le reporta (RMR-PCS-0027 · F8d):
+      // la persona ES un manager (tiene uid y /leaders/{uid} existe) y su reportsTo
+      // apunta a este Head. Sirve para que el Head ajuste los PERMISOS (toolOverrides)
+      // de sus managers — acotado a ese único campo en la regla de update.
+      function personIsMyManager() {
+        return isSuperManager()
+          && 'uid' in resource.data && resource.data.uid != null
+          && exists(/databases/$(database)/documents/leaders/$(resource.data.uid))
+          && get(/databases/$(database)/documents/leaders/$(resource.data.uid)).data.reportsTo == request.auth.uid;
+      }
       // La lectura (incl. la query por sharedWithUids) se respalda con el MISMO
       // campo que usa la consulta (el array), no con el mapa sharedWith; si no,
       // Firestore rechaza la query del líder (rules are not filters). El viewer
@@ -199,6 +209,9 @@ service cloud.firestore {
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
         || (sharedPerm(resource.data) == 'edit'
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
+        // Head ajusta SOLO los permisos de un manager de su rama (RMR-PCS-0027 · F8d).
+        || (personIsMyManager()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['toolOverrides']))
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['careerTargetLevelId']));
       allow delete: if isSuperAdmin() || isOwner();

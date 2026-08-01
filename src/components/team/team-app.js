@@ -19,6 +19,7 @@ import './team-settings.js';
 import './team-overview.js';
 import './team-map.js';
 import { listActivePeople } from '../../tools/team/application/usecases/index.js';
+import { getMyPerson } from '../../lib/engineer.js';
 
 const TEAM_TABS = ['people', 'map', 'departures', 'team', 'settings'];
 
@@ -39,6 +40,7 @@ export class TeamApp extends LitElement {
     selected: { state: true },
     selectedSubtab: { state: true },
     error: { state: true },
+    _editorPerson: { state: true },
   };
 
   static styles = css`
@@ -79,6 +81,9 @@ export class TeamApp extends LitElement {
     this.storage = null;
     /** @type {string|null} */
     this.uid = null;
+    /** @type {import('../../tools/team/domain/types.js').Person|null} ficha del editor (su alcance de permisos: head→managers de su rama). */
+    this._editorPerson = null;
+    this._editorLoadedFor = null;
     /** @type {boolean} */
     this.isAdmin = false;
     /**
@@ -142,6 +147,24 @@ export class TeamApp extends LitElement {
       const id = this._pendingPersonId;
       this._pendingPersonId = null;
       this._openPersonById(id);
+    }
+    // Ficha del editor: define su alcance para editar permisos de otros (un head
+    // gestiona a los managers que le reportan). Best-effort; null si no tiene ficha.
+    if (changed.has('uid')) {
+      if (!this.uid) {
+        // Logout / reset de auth: no dejar datos del editor anterior (evita que la
+        // UI de permisos siga habilitada con la identidad previa).
+        this._editorPerson = null;
+        this._editorLoadedFor = null;
+      } else if (this._editorLoadedFor !== this.uid) {
+        const requestedUid = this.uid;
+        this._editorLoadedFor = requestedUid;
+        // Guard de identidad: solo aplica el resultado si el uid sigue siendo el
+        // mismo (una respuesta tardía no debe pisar la ficha de otro usuario).
+        getMyPerson(requestedUid)
+          .then((p) => { if (this.uid === requestedUid) this._editorPerson = p; })
+          .catch(() => { if (this.uid === requestedUid) this._editorPerson = null; });
+      }
     }
   }
 
@@ -296,6 +319,7 @@ export class TeamApp extends LitElement {
             .framework=${this.framework}
             .isAdmin=${this.isAdmin}
             .currentUid=${this.uid}
+            .editorPerson=${this._editorPerson}
             .initialSubtab=${this.selectedSubtab}
           ></team-person-detail>
         `;

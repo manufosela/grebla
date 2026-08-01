@@ -30,6 +30,7 @@ import {
 } from '../../tools/team/application/usecases/index.js';
 import { listUsers } from '../../lib/users.js';
 import { listToolPolicies } from '../../lib/toolPolicies.js';
+import { listLeaders } from '../../lib/leaders.js';
 import { effectiveToolAccess } from '../../tools/team/domain/toolAccess.js';
 import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
 import { sparkline, sparklineTrend, SPARK_MAX } from '../../tools/team/domain/services/sparkline.js';
@@ -158,7 +159,9 @@ export class TeamPersonDetail extends LitElement {
     framework: { attribute: false },
     isAdmin: { attribute: false },
     currentUid: { attribute: false },
+    editorPerson: { attribute: false },
     initialSubtab: { attribute: false },
+    _leaderUids: { state: true },
     timeline: { state: true },
     areas: { state: true },
     conversations: { state: true },
@@ -434,6 +437,10 @@ export class TeamPersonDetail extends LitElement {
     this.isAdmin = false;
     /** @type {string|null} uid del editor (quien usa la ficha), para su alcance. */
     this.currentUid = null;
+    /** @type {import('../../tools/team/domain/types.js').Person|null} ficha del editor (head→managers). */
+    this.editorPerson = null;
+    /** @type {string[]} uids de /leaders (managers), cargados del MISMO source que la regla personIsMyManager (/leaders/{uid}). */
+    this._leaderUids = [];
     /** @type {string|null} sub-pestaña con la que abrir la ficha (p. ej. al saltar desde una dimensión del Mapa) */
     this.initialSubtab = null;
     /** @type {string} sub-pestaña activa de la ficha (arranca en Datos) */
@@ -543,16 +550,24 @@ export class TeamPersonDetail extends LitElement {
    * «Nivel» en vez de ocultarse (RMR-BUG-0030).
    */
   /**
-   * ¿Puede el editor gestionar los permisos de ESTA persona? (RMR-PCS-0027 · F8b)
-   * El superadmin, cualquiera; un manager, sobre las personas de las que es dueño
-   * (`ownerLeaderUid` == su uid) — el mismo criterio que la regla `isOwner` de
-   * Firestore respalda para escribir la ficha, así el guardado nunca choca con las
-   * reglas. El caso head→manager necesita el ajuste de reglas de una fase posterior.
+   * ¿Puede el editor gestionar los permisos de ESTA persona? (RMR-PCS-0027 · F8b/F8d)
+   * Cada caso está RESPALDADO por una regla de Firestore, así el guardado nunca
+   * choca con las reglas:
+   *  - superadmin: cualquiera (isSuperAdmin).
+   *  - manager: sus personas (ownerLeaderUid == su uid → regla isOwner).
+   *  - head: sus managers directos (persona.reportsToPersonId == su personId →
+   *    regla personIsMyManager, acotada a toolOverrides).
    */
   _canManagePerms() {
     if (this.isAdmin) return true;
     const p = this.person;
-    return !!p && this.currentUid != null && p.ownerLeaderUid === this.currentUid;
+    if (!p) return false;
+    // Head → managers DIRECTOS: la persona me reporta (reportsToPersonId) Y es un
+    // manager de verdad (su uid está en /leaders) — alineado con la regla
+    // personIsMyManager, para no habilitar la UI cuando el guardado se rechazaría.
+    if (this.editorPerson?.id && p.reportsToPersonId === this.editorPerson.id
+        && p.uid && this._leaderUids.includes(p.uid)) return true;
+    return this.currentUid != null && p.ownerLeaderUid === this.currentUid;
   }
 
   _visibleSubtabs() {
@@ -890,7 +905,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat, toolPolicies] =
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat, toolPolicies, leaderUids] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -905,9 +920,14 @@ export class TeamPersonDetail extends LitElement {
           listGuilds(this.persistence).catch(() => []),
           listUsers().catch(() => []),
           listSquads(this.persistence).catch(() => []),
-          // Políticas de herramientas para la matriz de permisos, solo si el que
-          // mira puede gestionar los permisos de esta persona (F8b).
-          this._canManagePerms() ? listToolPolicies().catch(() => []) : Promise.resolve([]),
+          // Políticas de herramientas para la matriz de permisos (F8b). Se cargan
+          // SIEMPRE (lectura pequeña, legible por cualquier autenticado): la pestaña
+          // «Permisos» aparece según _canManagePerms, no según esta carga — así se
+          // evita el orden circular con _leaderUids, que se resuelve en este mismo lote.
+          listToolPolicies().catch(() => []),
+          // uids de /leaders: para el alcance del head (¿la persona es un manager?),
+          // del MISMO source que la regla personIsMyManager. Best-effort.
+          listLeaders().then((ls) => ls.map((l) => l.uid)).catch(() => []),
         ]);
       this.timeline = timeline;
       this.areas = areas;
@@ -920,6 +940,7 @@ export class TeamPersonDetail extends LitElement {
       this._usersCat = usersCat;
       this._squadsCat = squadsCat;
       this._toolPolicies = toolPolicies;
+      this._leaderUids = leaderUids;
       this._seedAssessmentDraft();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
