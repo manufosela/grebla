@@ -80,7 +80,9 @@ function formatLogin(ts) {
 }
 
 const VIEW_FLAG = 'grebla-view';
-const TABS = ['leaders', 'organigrama', 'herramientas', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
+// «Managers» se retiró (RMR-PCS-0027 · F8e): dar el rol de mando se hace editando
+// la persona en «Usuarios», sin una pestaña aparte que duplicaba el alta.
+const TABS = ['organigrama', 'herramientas', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
 /** Ramas del organigrama (RMR-PCS-0027). Extensible por el superadmin al crear roles. */
 const ORG_BRANCHES = ['engineering', 'product', 'people', 'data', 'generico'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
@@ -90,7 +92,7 @@ const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
 function resolveHash(raw) {
   if (raw in LEGACY_CAREER_HASH) return { tab: 'career', sub: LEGACY_CAREER_HASH[raw] };
   if (TABS.includes(raw)) return { tab: raw };
-  return { tab: 'leaders' };
+  return { tab: 'users' };
 }
 
 /** Sub-pestañas del framework de carrera: 4 catálogos + 2 matrices de cruce. */
@@ -1022,8 +1024,6 @@ export class SuperadminPanel extends LitElement {
 
   _renderTabContent() {
     switch (this._tab) {
-      case 'leaders':
-        return html`${this._renderLeaders()} ${this.selected ? this._renderTeam() : null}`;
       case 'organigrama':
         return this._renderOrgRoles();
       case 'herramientas':
@@ -1056,7 +1056,6 @@ export class SuperadminPanel extends LitElement {
           : null}
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
-        <button class="tab ${this._tab === 'leaders' ? 'active' : ''}" @click=${() => this._setTab('leaders')}>Managers</button>
         <button class="tab ${this._tab === 'organigrama' ? 'active' : ''}" @click=${() => this._setTab('organigrama')}>Organigrama</button>
         <button class="tab ${this._tab === 'herramientas' ? 'active' : ''}" @click=${() => this._setTab('herramientas')}>Herramientas</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
@@ -1875,7 +1874,8 @@ export class SuperadminPanel extends LitElement {
                   <td>${email ?? html`<span class="muted">—</span>`}</td>
                   <td>
                     <select @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
-                      ${this._orgRoles.length === 0 ? html`<option>${p.orgRole ?? '—'}</option>` : this._orgRoles.map((r) => html`<option value=${r.id} ?selected=${p.orgRole === r.id}>${r.label}</option>`)}
+                      <option value="" disabled ?selected=${!this._orgRoles.some((r) => r.id === p.orgRole)}>— sin rol —</option>
+                      ${this._orgRoles.map((r) => html`<option value=${r.id} ?selected=${p.orgRole === r.id}>${r.label}</option>`)}
                     </select>
                   </td>
                   <td>
