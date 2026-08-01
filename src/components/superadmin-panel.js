@@ -156,7 +156,9 @@ export class SuperadminPanel extends LitElement {
     _peopleError: { state: true },
     _peopleNotice: { state: true },
     _confirmDeletePerson: { state: true },
-    _usersSubtab: { state: true },
+    _newPersonName: { state: true },
+    _newPersonEmail: { state: true },
+    _newPersonRole: { state: true },
   };
 
   static styles = css`
@@ -253,6 +255,7 @@ export class SuperadminPanel extends LitElement {
     .muted { color: var(--rm-muted, #9ca3af); }
     .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff; }
     .del-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+    .access-inline { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; margin-right: 0.5rem; }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
@@ -440,8 +443,9 @@ export class SuperadminPanel extends LitElement {
     this._peopleNotice = '';
     /** @type {string|null} id de persona pendiente de confirmar baja. */
     this._confirmDeletePerson = null;
-    /** @type {'cuentas'|'personas'} sub-pestaña activa de «Usuarios». */
-    this._usersSubtab = 'personas';
+    this._newPersonName = '';
+    this._newPersonEmail = '';
+    this._newPersonRole = 'generico';
     this._loaded = false;
   }
 
@@ -887,6 +891,110 @@ export class SuperadminPanel extends LitElement {
     } catch (err) {
       this._peopleError = 'No se pudo dar de baja a la persona.';
     }
+  }
+
+  /** Alta de persona desde el panel: crea la ficha con su rol; si hay email,
+   *  la pre-invita (pendingEmail: se vincula al primer login con ese email). */
+  async _addPersonPanel() {
+    const name = this._newPersonName.trim();
+    if (!name) { this._peopleError = 'El nombre es obligatorio.'; return; }
+    this._peopleError = '';
+    this._peopleNotice = '';
+    const roleId = this._newPersonRole || 'generico';
+    const branch = this._orgRoles.find((r) => r.id === roleId)?.branch ?? 'generico';
+    const email = this._newPersonEmail.trim().toLowerCase();
+    try {
+      await this.persistence.people.create({
+        name, orgRole: roleId, orgBranch: branch, active: true,
+        startDate: new Date().toISOString().slice(0, 10),
+        pendingEmail: email || null, guilds: [], disciplines: [], labels: [],
+      });
+      this._newPersonName = '';
+      this._newPersonEmail = '';
+      this._peopleNotice = 'Persona añadida.';
+      await this._loadUsers();
+    } catch (err) {
+      this._peopleError = 'No se pudo añadir la persona.';
+    }
+  }
+
+  /** Estado de acceso (superadmin/viewer/People) de la cuenta vinculada a una persona. */
+  _accessOf(uid) {
+    return this._users.find((u) => u.uid === uid) ?? null;
+  }
+
+  /** Cuentas logadas que aún NO tienen ficha /people — para crearla desde aquí. */
+  _orphanAccounts() {
+    const linked = new Set(this._peopleList.map((p) => p.uid).filter(Boolean));
+    return this._users.filter((u) => !linked.has(u.uid));
+  }
+
+  /** Conmuta el superadmin de la cuenta vinculada a una persona (eje de gobierno). */
+  async _togglePersonAdmin(p, isAdmin) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    try {
+      await setUserAdmin(p.uid, isAdmin, { displayName: p.name, email: this._personEmail(p) });
+      await this._loadUsers();
+      this._peopleNotice = 'Acceso actualizado.';
+    } catch (err) {
+      this._peopleError = 'No se pudo cambiar el superadmin.';
+    }
+  }
+
+  /** Acceso especial NO jerárquico de la cuenta: viewer (solo lectura) o People (encuestas). */
+  async _setPersonAccess(p, access) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    const profile = { displayName: p.name, email: this._personEmail(p) };
+    try {
+      // People-account (surveyAdmin) es un eje propio; el rol de equipo se fija
+      // SIEMPRE para que viewer / People / ninguno sean mutuamente exclusivos
+      // (un viewer previo se limpia al pasar a People).
+      await setSurveyAdmin(p.uid, access === 'people', profile);
+      await setUserRole(p.uid, access === 'viewer' ? 'viewer' : 'none', profile);
+      await this._loadUsers();
+      this._peopleNotice = 'Acceso actualizado.';
+    } catch (err) {
+      this._peopleError = 'No se pudo cambiar el acceso.';
+    }
+  }
+
+  /** Crea la ficha de una cuenta logada que aún no tiene persona (caso residual:
+   *  se logueó pero no se le creó ficha). Nace como 'generico', ya vinculada. */
+  async _createPersonForAccount(u) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    try {
+      await this.persistence.people.create({
+        name: u.displayName ?? u.email ?? 'Sin nombre',
+        uid: u.uid, email: u.email ?? null,
+        orgRole: 'generico', orgBranch: 'generico', active: true,
+        startDate: new Date().toISOString().slice(0, 10),
+        guilds: [], disciplines: [], labels: [],
+      });
+      this._peopleNotice = 'Ficha creada para la cuenta.';
+      await this._loadUsers();
+    } catch (err) {
+      this._peopleError = 'No se pudo crear la ficha de la cuenta.';
+    }
+  }
+
+  /** Celda de acceso de una persona: superadmin + acceso especial (viewer/People).
+   *  Solo con cuenta vinculada (los roles de acceso son por uid). */
+  _renderPersonAccess(p) {
+    if (!p.uid) return html`<span class="muted">requiere cuenta</span>`;
+    const acc = this._accessOf(p.uid);
+    const isAdmin = Boolean(acc?.isAdmin);
+    const special = acc?.isSurveyAdmin ? 'people' : (acc?.role === 'viewer' ? 'viewer' : 'none');
+    return html`
+      <label class="access-inline"><input type="checkbox" .checked=${isAdmin}
+        @change=${(e) => this._togglePersonAdmin(p, e.target.checked)} /> Superadmin</label>
+      <select @change=${(e) => this._setPersonAccess(p, e.target.value)}>
+        <option value="none" ?selected=${special === 'none'}>— sin acceso extra —</option>
+        <option value="viewer" ?selected=${special === 'viewer'}>Viewer (solo lectura)</option>
+        <option value="people" ?selected=${special === 'people'}>People (encuestas)</option>
+      </select>`;
   }
 
   /**
@@ -1635,7 +1743,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <h2>Organigrama — roles y jerarquía</h2>
-        <p class="ro-note">Cada rol define un nivel por etiqueta y de quién depende. Reordena la jerarquía cambiando «Depende de»; se impide crear ciclos. Un rol «sin superior» es la <strong>base</strong> de su rama: en el liderazgo afectivo quien más responsabilidad tiene <strong>sostiene desde abajo</strong> — en el organigrama se dibuja en la punta de la pirámide invertida, no arriba.</p>
+        <p class="ro-note">Cada rol define un nivel por etiqueta y de quién depende. Reordena cambiando «Depende de»; se impide crear ciclos. Un rol <strong>«sin inferior»</strong> es la <strong>base</strong> de su rama: <strong>al que nadie sostiene</strong> porque él sostiene a todos (liderazgo afectivo). En la pirámide invertida se dibuja en la punta de abajo, no arriba.</p>
         ${this._orgError ? html`<p class="error">${this._orgError}</p>` : null}
         ${this._orgNotice ? html`<p class="notice">${this._orgNotice}</p>` : null}
         ${this._orgRoles.length === 0
@@ -1647,9 +1755,9 @@ export class SuperadminPanel extends LitElement {
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">└ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
                   <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${role.branch}</span></td>
                   <td>${ro
-                    ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin superior (base) —</span>`)
+                    ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)
                     : html`<select @change=${(e) => this._setRoleParent(role.id, e.target.value)}>
-                        <option value="" ?selected=${!role.reportsToRoleId}>— sin superior (base) —</option>
+                        <option value="" ?selected=${!role.reportsToRoleId}>— sin inferior (base) —</option>
                         ${this._orgRoles.filter((r) => r.id !== role.id).map((r) => html`<option value=${r.id} ?selected=${role.reportsToRoleId === r.id}>${r.label}</option>`)}
                       </select>`}</td>
                   ${ro ? '' : html`<td>${this._orgConfirmDelete === role.id
@@ -1667,7 +1775,7 @@ export class SuperadminPanel extends LitElement {
               ${ORG_BRANCHES.map((b) => html`<option value=${b} ?selected=${this._orgForm.branch === b}>${b}</option>`)}
             </select>
             <select .value=${this._orgForm.reportsToRoleId} @change=${(e) => { this._orgForm = { ...this._orgForm, reportsToRoleId: e.target.value }; }}>
-              <option value="">— sin superior (base) —</option>
+              <option value="">— sin inferior (base) —</option>
               ${parentOptions('')}
             </select>
             <button class="primary" @click=${() => this._createRole()}>Crear rol</button>
@@ -1804,64 +1912,41 @@ export class SuperadminPanel extends LitElement {
   }
 
   _renderUsers() {
-    // Defensa en profundidad: un viewer nunca gestiona usuarios, aunque no
-    // debería poder llegar a este tab (el botón de la pestaña está oculto).
+    // Defensa en profundidad: un viewer nunca gestiona usuarios.
     if (this.readOnly) return null;
-    // Sub-pestañas (nunca secciones apiladas con scroll): «Cuentas» de acceso y
-    // «Personas» dadas de alta se ven una u otra, no las dos a la vez.
-    const sub = this._usersSubtab;
+    // UNA sola gestión de personas (RMR-PCS-0027 · F8e): aquí creas, editas rol,
+    // superior y acceso, y das de baja — sin duplicar con «Managers» ni con una
+    // pestaña de «cuentas» separada.
     return html`
       <section>
-        <div class="subtabs">
-          <button class="subtab ${sub === 'cuentas' ? 'active' : ''}" @click=${() => { this._usersSubtab = 'cuentas'; }}>Cuentas de acceso (${this._users.length})</button>
-          <button class="subtab ${sub === 'personas' ? 'active' : ''}" @click=${() => { this._usersSubtab = 'personas'; }}>Personas (${this._peopleList.length})</button>
+        <h2>Personas (${this._peopleList.length})</h2>
+        <p class="ro-note">
+          Todas las personas de la organización, <strong>tengan cuenta o no</strong>. Aquí las creas, les cambias el <strong>rol</strong>, el <strong>superior</strong> y el <strong>acceso</strong> (superadmin / viewer / People), y las das de baja. Los permisos de herramientas y el detalle se editan en su ficha (herramienta de Equipo). El email es el de su cuenta vinculada o el de la invitación.
+        </p>
+        <div class="toolbar">
+          <input type="text" placeholder="Nombre" .value=${this._newPersonName} @input=${(e) => { this._newPersonName = e.target.value; }} />
+          <input type="email" placeholder="email (opcional, para invitar)" .value=${this._newPersonEmail} @input=${(e) => { this._newPersonEmail = e.target.value; }} />
+          <select @change=${(e) => { this._newPersonRole = e.target.value; }}>
+            ${this._orgRoles.map((r) => html`<option value=${r.id} ?selected=${this._newPersonRole === r.id}>${r.label}</option>`)}
+          </select>
+          <button class="primary" ?disabled=${!this._newPersonName.trim()} @click=${() => this._addPersonPanel()}>Añadir persona</button>
         </div>
-        ${sub === 'personas' ? this._renderUsersPeople() : this._renderUsersAccounts()}
+        ${this._renderUsersPeople()}
       </section>
       ${this._renderAssignModal()}
     `;
   }
 
-  /** Sub-pestaña «Cuentas de acceso»: alta por email + tabla de cuentas/roles. */
-  _renderUsersAccounts() {
-    return html`
-      <p class="ro-note">
-        Da de alta un viewer o un manager por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login.
-        Cambia el rol de equipo de quien ya aparece con «Rol de equipo…». El <strong>superadmin</strong> es el checkbox de cada fila (independiente del rol de equipo). «Quitar acceso» solo revoca el rol: no borra la cuenta ni la saca de su equipo.
-      </p>
-      <div class="toolbar">
-        <input type="email" placeholder="email@dominio.com" .value=${this._newUserEmail} @input=${(e) => { this._newUserEmail = e.target.value; }} />
-        <select @change=${(e) => { this._newUserRole = e.target.value; }}>
-          <option value="viewer" ?selected=${this._newUserRole === 'viewer'}>Viewer</option>
-          <option value="leader" ?selected=${this._newUserRole === 'leader'}>Manager</option>
-          <option value="surveyAdmin" ?selected=${this._newUserRole === 'surveyAdmin'}>People account</option>
-        </select>
-        <button class="primary" ?disabled=${!this._newUserEmail.trim() || this._addingUser} @click=${() => this._addUser()}>${this._addingUser ? 'Añadiendo…' : 'Añadir usuario'}</button>
-      </div>
-      ${this._usersError ? html`<p class="error">${this._usersError}</p>` : null}
-      ${this._usersNotice ? html`<p class="notice">${this._usersNotice}</p>` : null}
-      ${this._users.length === 0
-        ? html`<p class="empty">Aún no ha iniciado sesión nadie.</p>`
-        : html`<div class="table-wrap"><table>
-            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Accesos</th><th>Última conexión</th><th></th></tr></thead>
-            <tbody>${this._users.map((u) => this._renderUserRow(u))}</tbody>
-          </table></div>`}
-    `;
-  }
-
-  /** Sub-pestaña «Personas»: todas las de /people (con o sin cuenta), su rol y estado. */
+  /** Tabla de personas: rol, superior, acceso (si tiene cuenta) y baja. */
   _renderUsersPeople() {
     const nameOf = (id) => this._peopleList.find((x) => x.id === id)?.name ?? '—';
     return html`
-      <p class="ro-note">
-        Todas las personas de la organización, <strong>tengan cuenta o no</strong>. Aquí les cambias el <strong>rol</strong> y el <strong>superior</strong>, y las das de baja. Los permisos de herramientas y el detalle se editan en su ficha (herramienta de Equipo). El email es el de su cuenta vinculada o el de la invitación.
-      </p>
       ${this._peopleError ? html`<p class="error">${this._peopleError}</p>` : null}
       ${this._peopleNotice ? html`<p class="notice">${this._peopleNotice}</p>` : null}
       ${this._peopleList.length === 0
         ? (this._peopleError ? null : html`<p class="empty">Aún no hay personas dadas de alta.</p>`)
         : html`<div class="table-wrap"><table>
-            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Superior</th><th>Cuenta</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Superior</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
             <tbody>
               ${this._peopleList.map((p) => {
                 const email = this._personEmail(p);
@@ -1880,16 +1965,23 @@ export class SuperadminPanel extends LitElement {
                   </td>
                   <td>
                     <select @change=${(e) => this._setPersonSuperior(p.id, e.target.value)} title=${nameOf(p.reportsToPersonId)}>
-                      <option value="" ?selected=${!p.reportsToPersonId}>— sin superior —</option>
+                      <option value="" ?selected=${!p.reportsToPersonId}>— sin inferior —</option>
                       ${this._peopleList.filter((o) => o.id !== p.id).map((o) => html`<option value=${o.id} ?selected=${p.reportsToPersonId === o.id}>${o.name}</option>`)}
                     </select>
                   </td>
                   <td>${account}</td>
+                  <td>${this._renderPersonAccess(p)}</td>
                   <td>${this._confirmDeletePerson === p.id
                     ? html`<span class="confirm">¿Dar de baja? <button class="yes" @click=${() => this._removePerson(p.id)}>Sí</button> <button @click=${() => { this._confirmDeletePerson = null; }}>No</button></span>`
                     : html`<button class="del-btn" @click=${() => { this._confirmDeletePerson = p.id; }}>Baja</button>`}</td>
                 </tr>`;
               })}
+              ${this._orphanAccounts().map((u) => html`<tr>
+                <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
+                <td>${u.email ?? html`<span class="muted">—</span>`}</td>
+                <td colspan="4"><span class="muted">Se ha logado pero no tiene ficha de persona.</span></td>
+                <td><button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button></td>
+              </tr>`)}
             </tbody>
           </table></div>`}
     `;
