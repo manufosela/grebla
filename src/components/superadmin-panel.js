@@ -905,6 +905,24 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
+  /** Cambia la RAMA de una persona (independiente de la del rol: p.ej. un Engineer
+   *  que trabaja en Data). Optimista con rollback quirúrgico. */
+  async _setPersonBranch(personId, branchId) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    const val = branchId || null;
+    const before = this._peopleList.find((p) => p.id === personId);
+    const prev = before?.orgBranch ?? null;
+    this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, orgBranch: val } : p));
+    try {
+      await this.persistence.people.update(personId, { orgBranch: val });
+      this._peopleNotice = 'Rama actualizada.';
+    } catch (err) {
+      this._peopleList = this._peopleList.map((p) => (p.id === personId && p.orgBranch === val ? { ...p, orgBranch: prev } : p));
+      this._peopleError = 'No se pudo cambiar la rama.';
+    }
+  }
+
   /** Da de baja a una persona (active:false, conserva el histórico). */
   async _removePerson(personId) {
     this._peopleError = '';
@@ -1815,12 +1833,15 @@ export class SuperadminPanel extends LitElement {
   /** Filas del organigrama en orden jerárquico (DFS por rama), con profundidad. */
   _orgRoleRows() {
     const rows = [];
+    // Post-orden (hijos ANTES que el padre): coherente con la pirámide invertida —
+    // los roles «de arriba» (hojas, sostenidos) se listan primero y el rol base
+    // (sin inferior) queda al final, abajo.
     const visit = (role, depth) => {
-      rows.push({ role, depth });
       for (const child of childrenOf(this._orgRoles, role.id)) visit(child, depth + 1);
+      rows.push({ role, depth });
     };
     for (const root of rootRoles(this._orgRoles)) visit(root, 0);
-    // Roles en un ciclo preexistente (no alcanzables desde una cima) igualmente listados.
+    // Roles en un ciclo preexistente (no alcanzables desde una base) igualmente listados.
     const shown = new Set(rows.map((r) => r.role.id));
     for (const r of this._orgRoles) if (!shown.has(r.id)) rows.push({ role: r, depth: 0 });
     return rows;
@@ -1857,7 +1878,7 @@ export class SuperadminPanel extends LitElement {
               <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
                 ${this._orgRoleRows().map(({ role, depth }) => html`<tr>
-                  <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">└ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
+                  <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
                   <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${this._branchLabel(role.branch)}</span></td>
                   <td>${ro
                     ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)
@@ -2124,7 +2145,7 @@ export class SuperadminPanel extends LitElement {
       ${this._peopleList.length === 0
         ? (this._peopleError ? null : html`<p class="empty">Aún no hay personas dadas de alta.</p>`)
         : html`<div class="table-wrap"><table>
-            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Superior</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Rama</th><th>Superior</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
             <tbody>
               ${this._peopleList.map((p) => {
                 const email = this._personEmail(p);
@@ -2139,6 +2160,12 @@ export class SuperadminPanel extends LitElement {
                     <select @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
                       <option value="" disabled ?selected=${!this._orgRoles.some((r) => r.id === p.orgRole)}>— sin rol —</option>
                       ${this._orgRoles.map((r) => html`<option value=${r.id} ?selected=${p.orgRole === r.id}>${r.label}</option>`)}
+                    </select>
+                  </td>
+                  <td>
+                    <select @change=${(e) => this._setPersonBranch(p.id, e.target.value)}>
+                      <option value="" ?selected=${!this._orgBranches.some((b) => b.id === p.orgBranch)}>— sin rama —</option>
+                      ${this._orgBranches.map((b) => html`<option value=${b.id} ?selected=${p.orgBranch === b.id}>${b.label}</option>`)}
                     </select>
                   </td>
                   <td>
@@ -2157,7 +2184,7 @@ export class SuperadminPanel extends LitElement {
               ${this._orphanAccounts().map((u) => html`<tr>
                 <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
                 <td>${u.email ?? html`<span class="muted">—</span>`}</td>
-                <td colspan="4"><span class="muted">Se ha logado pero no tiene ficha de persona.</span></td>
+                <td colspan="5"><span class="muted">Se ha logado pero no tiene ficha de persona.</span></td>
                 <td><button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button></td>
               </tr>`)}
             </tbody>
