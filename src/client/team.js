@@ -11,6 +11,8 @@ import { listLeaders, listSupermanagers } from '../lib/leaders.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
+import { createCareerContainer } from '../tools/career/composition/container.js';
+import { getArchipelago } from '../lib/careerMap.js';
 
 const app = document.querySelector('team-app');
 
@@ -66,6 +68,16 @@ onUserChanged(async (user) => {
     app.members = members;
     app.heads = heads;
     app.framework = framework;
+    // Carrera (RMR-PCS-0029 · F2b): store de carrera + índice del archipiélago
+    // para la pestaña «Carrera» (progreso listado del equipo). Los journeys por
+    // persona se leen BAJO DEMANDA dentro de la pestaña, no aquí.
+    try {
+      const { store: careerStore } = await createCareerContainer({ mode: 'firestore' });
+      app.careerStore = careerStore;
+      app.archipelago = await getArchipelago();
+    } catch (err) {
+      console.warn('Equipo · Carrera: no se pudo preparar el store de carrera.', err);
+    }
     app.persistence = persistence; // dispara la carga inicial en el componente
   } catch (err) {
     app.error = err instanceof Error ? err.message : 'No se pudo inicializar la herramienta.';
