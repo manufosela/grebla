@@ -97,3 +97,37 @@ export function assertValidReportsTo(roles, roleId, parentId) {
 export function roleDepth(roles, roleId) {
   return Math.max(0, roleChain(roles, roleId).length - 1);
 }
+
+/**
+ * Filas del editor de roles AGRUPADAS por rama (RMR-TSK-0375): dentro de cada
+ * rama, orden jerárquico post-orden (hijos antes que el padre → hojas arriba, el
+ * rol base «sin inferior» abajo, coherente con la pirámide invertida). Las ramas
+ * van en el orden de `branches` (catálogo) y luego las presentes en algún rol sin
+ * metadato. Cada fila marca `firstOfBranch` (primera de su bloque) para dibujar la
+ * línea separadora SOLO entre ramas. Función PURA.
+ * @param {OrgRole[]} roles
+ * @param {{id:string}[]} [branches] catálogo de ramas, para el orden de los bloques
+ * @returns {{ role: OrgRole, depth: number, firstOfBranch: boolean }[]}
+ */
+export function orgRoleRows(roles, branches = []) {
+  const list = roles ?? [];
+  const hier = [];
+  const visit = (role, depth) => {
+    for (const child of childrenOf(list, role.id)) visit(child, depth + 1);
+    hier.push({ role, depth });
+  };
+  for (const root of rootRoles(list)) visit(root, 0);
+  // Roles en un ciclo preexistente (no alcanzables desde una cima) igualmente listados.
+  const shown = new Set(hier.map((r) => r.role.id));
+  for (const r of list) if (!shown.has(r.id)) hier.push({ role: r, depth: 0 });
+  // Orden de ramas: catálogo primero, luego ramas presentes sin metadato; dedup.
+  const seen = new Set();
+  const order = [...(branches ?? []).map((b) => b.id), ...hier.map((r) => r.role.branch)]
+    .filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
+  const rows = [];
+  for (const branchId of order) {
+    const inBranch = hier.filter((r) => r.role.branch === branchId);
+    inBranch.forEach((r, i) => rows.push({ role: r.role, depth: r.depth, firstOfBranch: i === 0 }));
+  }
+  return rows;
+}
