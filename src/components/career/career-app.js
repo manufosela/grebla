@@ -221,6 +221,7 @@ import { playtimeSummary, formatPlayMinutes } from '../../tools/career/domain/pl
 import { startPlaytimeTracker } from '../../lib/playtime.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds, listCareerRoutes } from '../../lib/careerMap.js';
 import { SEABED_ISLAND_ID } from '../../tools/career/data/archipelago.js';
+import { hasSeabed } from '../../tools/career/domain/seabed.js';
 import { getFramework } from '../../lib/careerFramework.js';
 import * as carpoolsIo from '../../lib/carpools.js';
 import {
@@ -2745,7 +2746,7 @@ export class CareerApp extends LitElement {
     if (this._seabed) return;
     this._seabed = 'descending';
     const loading = this._ensureIslandMap(SEABED_ISLAND_ID);
-    await new Promise((resolve) => { window.setTimeout(resolve, 1100); });
+    await new Promise((resolve) => { globalThis.setTimeout(resolve, 1100); });
     try {
       this._seabedMap = await loading;
     } catch {
@@ -7438,10 +7439,12 @@ export class CareerApp extends LitElement {
               this.showCoins}
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               .wizardState=${hutState}
+              .seabed=${hasSeabed(this.archipelago?.islands)}
               @select-city=${this._onSelect}
               @select-teammate=${this._onSelectTeammate}
               @open-archipelago=${this._onOpenArchipelago}
               @open-wizard=${this._onOpenWizard}
+              @dive-seabed=${this._dive}
               @webgl-unavailable=${this._onWebglUnavailable}
               @mode-change=${this._onModeChange}
             ></career-island-3d>
