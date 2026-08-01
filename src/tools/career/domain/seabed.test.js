@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasSeabed, seabedRef, seabedScene } from './seabed.js';
+import { hasSeabed, seabedRef, seabedScene, seabedProgress } from './seabed.js';
 
 describe('career — lecho (helpers puros, RMR-PCS-0028 · F3)', () => {
   const islands = [
@@ -46,5 +46,27 @@ describe('career — lecho (helpers puros, RMR-PCS-0028 · F3)', () => {
     expect(seabedScene(map).edges).toEqual([]);
     expect(seabedScene(null)).toEqual({ nodes: [], edges: [] });
     expect(seabedScene({})).toEqual({ nodes: [], edges: [] });
+  });
+
+  it('seabedProgress marca visited/available/blocked y cuenta los encendidos', () => {
+    const map = {
+      id: 'seabed',
+      cities: [
+        { id: 'orchestration/a', name: 'A', kind: 'skill', area: 'z', x: 1, y: 2, weight: 3, prereqs: [] },
+        { id: 'orchestration/b', name: 'B', kind: 'skill', area: 'z', x: 3, y: 4, weight: 2, prereqs: ['orchestration/a'] },
+        { id: 'orchestration/c', name: 'C', kind: 'skill', area: 'z', x: 5, y: 6, weight: 2, prereqs: ['orchestration/b'] },
+      ],
+    };
+    const journey = { visitedCities: ['orchestration/a'] };
+    const { statusById, lit, total } = seabedProgress(map, journey);
+    expect(statusById.get('orchestration/a')).toBe('visited'); // certificado → encendido
+    expect(statusById.get('orchestration/b')).toBe('available'); // prereq cumplido
+    expect(statusById.get('orchestration/c')).toBe('blocked'); // b aún no
+    expect(lit).toBe(1);
+    expect(total).toBe(3);
+  });
+
+  it('seabedProgress tolera mapa/journey vacíos', () => {
+    expect(seabedProgress(null, null)).toEqual({ statusById: new Map(), lit: 0, total: 0 });
   });
 });

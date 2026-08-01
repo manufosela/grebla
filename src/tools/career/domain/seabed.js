@@ -6,7 +6,9 @@
  * @typedef {import('./types.js').CareerMap} CareerMap
  * @typedef {import('./types.js').IslandRef} IslandRef
  * @typedef {import('./types.js').City} City
+ * @typedef {import('./types.js').Journey} Journey
  */
+import { cityStatus } from './progress.js';
 
 /**
  * ¿Hay un lecho (isla transversal con seabed:true) en el índice?
@@ -67,4 +69,20 @@ export function seabedScene(map) {
     }
   }
   return { nodes, edges };
+}
+
+/**
+ * Progreso del lecho (RMR-PCS-0028 · F4): estado de cada arrecife según el
+ * journey (cityStatus) y el recuento de ENCENDIDOS (visited). El «encendido»
+ * refleja el recorrido de la persona, no la evaluación del manager. Función PURA.
+ * @param {CareerMap|null|undefined} map
+ * @param {Journey|null|undefined} journey
+ * @returns {{ statusById: Map<string,string>, lit: number, total: number }}
+ */
+export function seabedProgress(map, journey) {
+  const cities = (map?.cities ?? []).filter((c) => !c.deprecated);
+  const statusById = new Map(cities.map((c) => [c.id, cityStatus(map, c.id, journey)]));
+  let lit = 0;
+  for (const status of statusById.values()) if (status === 'visited') lit += 1;
+  return { statusById, lit, total: cities.length };
 }
