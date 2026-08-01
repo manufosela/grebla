@@ -29,6 +29,7 @@ import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
+import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { rootRoles, childrenOf, assertValidReportsTo, roleChain } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
@@ -83,8 +84,6 @@ const VIEW_FLAG = 'grebla-view';
 // «Managers» se retiró (RMR-PCS-0027 · F8e): dar el rol de mando se hace editando
 // la persona en «Usuarios», sin una pestaña aparte que duplicaba el alta.
 const TABS = ['organigrama', 'herramientas', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
-/** Ramas del organigrama (RMR-PCS-0027). Extensible por el superadmin al crear roles. */
-const ORG_BRANCHES = ['engineering', 'product', 'people', 'data', 'generico'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
  *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
 const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
@@ -160,6 +159,11 @@ export class SuperadminPanel extends LitElement {
     _newPersonEmail: { state: true },
     _newPersonRole: { state: true },
     _orgSubtab: { state: true },
+    _orgBranches: { state: true },
+    _newBranchLabel: { state: true },
+    _editBranchId: { state: true },
+    _editBranchLabel: { state: true },
+    _branchError: { state: true },
   };
 
   static styles = css`
@@ -454,8 +458,14 @@ export class SuperadminPanel extends LitElement {
     this._newPersonName = '';
     this._newPersonEmail = '';
     this._newPersonRole = 'generico';
-    /** @type {'editor'|'vista'} sub-pestaña del Organigrama (tabla vs pirámide). */
+    /** @type {'editor'|'ramas'|'vista'} sub-pestaña del Organigrama. */
     this._orgSubtab = 'editor';
+    /** @type {import('../lib/orgBranches.js').OrgBranch[]} catálogo de ramas. */
+    this._orgBranches = [];
+    this._newBranchLabel = '';
+    this._editBranchId = null;
+    this._editBranchLabel = '';
+    this._branchError = '';
     this._loaded = false;
   }
 
@@ -1671,10 +1681,72 @@ export class SuperadminPanel extends LitElement {
   // ── Organigrama: catálogo de roles configurable (RMR-PCS-0027 · F2) ─────────
 
   async _loadOrgRoles() {
+    // Independientes: un fallo cargando ramas NO debe impedir cargar los roles.
     try {
       this._orgRoles = await listOrgRoles();
     } catch (err) {
       this._orgError = err instanceof Error ? err.message : 'No se pudieron cargar los roles.';
+    }
+    try {
+      this._orgBranches = await listOrgBranches();
+    } catch (err) {
+      this._branchError = 'No se pudieron cargar las ramas.';
+    }
+  }
+
+  /** Etiqueta visible de una rama por su id (del catálogo, con fallback al id). */
+  _branchLabel(id) {
+    return this._orgBranches.find((b) => b.id === id)?.label ?? id;
+  }
+
+  /** Crea una rama nueva (id derivado del nombre). */
+  async _createBranch() {
+    this._branchError = '';
+    const label = this._newBranchLabel.trim();
+    if (!label) { this._branchError = 'El nombre de la rama es obligatorio.'; return; }
+    const id = slugify(label);
+    if (!id) { this._branchError = 'No se pudo derivar un identificador.'; return; }
+    if (this._orgBranches.some((b) => b.id === id)) { this._branchError = `Ya existe una rama «${id}».`; return; }
+    try {
+      await saveOrgBranch(id, label);
+      this._orgBranches = [...this._orgBranches, { id, label }];
+      this._newBranchLabel = '';
+    } catch (err) {
+      this._branchError = 'No se pudo crear la rama.';
+    }
+  }
+
+  /** Renombra una rama (el id no cambia, así los roles no se rompen). */
+  async _renameBranch(id) {
+    this._branchError = '';
+    const label = this._editBranchLabel.trim();
+    if (!label) { this._branchError = 'El nombre no puede quedar vacío.'; return; }
+    try {
+      await saveOrgBranch(id, label);
+      this._orgBranches = this._orgBranches.map((b) => (b.id === id ? { ...b, label } : b));
+      this._editBranchId = null;
+      this._editBranchLabel = '';
+    } catch (err) {
+      this._branchError = 'No se pudo renombrar la rama.';
+    }
+  }
+
+  /** Borra una rama solo si ningún rol la usa. Re-lee los roles FRESCOS antes de
+   *  comprobar el invariante, para no borrar por un estado obsoleto del cliente.
+   *  Si aun así quedara un role.branch huérfano, _branchLabel cae al id (no rompe). */
+  async _removeBranch(id) {
+    this._branchError = '';
+    try {
+      const roles = await listOrgRoles();
+      this._orgRoles = roles;
+      if (roles.some((r) => r.branch === id)) {
+        this._branchError = 'No se puede borrar: hay roles en esa rama. Cámbialos antes.';
+        return;
+      }
+      await deleteOrgBranch(id);
+      this._orgBranches = this._orgBranches.filter((b) => b.id !== id);
+    } catch (err) {
+      this._branchError = 'No se pudo borrar la rama.';
     }
   }
 
@@ -1750,10 +1822,11 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <div class="subtabs">
-          <button class="subtab ${sub === 'editor' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'editor'; }}>Editor</button>
+          <button class="subtab ${sub === 'editor' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'editor'; }}>Roles</button>
+          <button class="subtab ${sub === 'ramas' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'ramas'; }}>Ramas</button>
           <button class="subtab ${sub === 'vista' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'vista'; }}>Vista (pirámide invertida)</button>
         </div>
-        ${sub === 'vista' ? this._renderOrgPyramid() : this._renderOrgEditor()}
+        ${sub === 'vista' ? this._renderOrgPyramid() : sub === 'ramas' ? this._renderOrgBranches() : this._renderOrgEditor()}
       </section>
     `;
   }
@@ -1776,7 +1849,7 @@ export class SuperadminPanel extends LitElement {
               <tbody>
                 ${this._orgRoleRows().map(({ role, depth }) => html`<tr>
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">└ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
-                  <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${role.branch}</span></td>
+                  <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${this._branchLabel(role.branch)}</span></td>
                   <td>${ro
                     ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)
                     : html`<select @change=${(e) => this._setRoleParent(role.id, e.target.value)}>
@@ -1795,7 +1868,7 @@ export class SuperadminPanel extends LitElement {
             <input placeholder="Nombre (p.ej. Staff Engineer)" .value=${this._orgForm.label}
               @input=${(e) => { this._orgForm = { ...this._orgForm, label: e.target.value }; }}>
             <select .value=${this._orgForm.branch} @change=${(e) => { this._orgForm = { ...this._orgForm, branch: e.target.value }; }}>
-              ${ORG_BRANCHES.map((b) => html`<option value=${b} ?selected=${this._orgForm.branch === b}>${b}</option>`)}
+              ${this._orgBranches.map((b) => html`<option value=${b.id} ?selected=${this._orgForm.branch === b.id}>${b.label}</option>`)}
             </select>
             <select .value=${this._orgForm.reportsToRoleId} @change=${(e) => { this._orgForm = { ...this._orgForm, reportsToRoleId: e.target.value }; }}>
               <option value="">— sin inferior (base) —</option>
@@ -1831,10 +1904,50 @@ export class SuperadminPanel extends LitElement {
           return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
             ${level.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(r.branch)}">
               <span class="pyr-dot" style="background:${branchColor(r.branch)}"></span>${r.label}
-              <em class="pyr-branch">${r.branch}</em>
+              <em class="pyr-branch">${this._branchLabel(r.branch)}</em>
             </span>`)}
           </div>`;
         })}
+      </div>`;
+  }
+
+  /** Editor de RAMAS: crear, renombrar (sin romper los roles) y borrar. */
+  _renderOrgBranches() {
+    const ro = this.readOnly;
+    return html`
+      <div>
+        <h2>Ramas de la organización</h2>
+        <p class="ro-note">Las áreas de la organización (Engineering, Product, People, Data…). Puedes <strong>renombrarlas</strong> sin romper los roles (p.ej. «People» → «People & Operaciones») y <strong>crear</strong> las que necesites. Cada rol se asigna a una rama.</p>
+        ${this._branchError ? html`<p class="error">${this._branchError}</p>` : null}
+        ${this._orgBranches.length === 0
+          ? html`<p class="empty">Aún no hay ramas. Créalas abajo o ejecuta el seed.</p>`
+          : html`<div class="table-wrap"><table>
+              <thead><tr><th>Rama</th><th>Id</th><th>Roles</th>${ro ? '' : html`<th></th>`}</tr></thead>
+              <tbody>
+                ${this._orgBranches.map((b) => {
+                  const count = this._orgRoles.filter((r) => r.branch === b.id).length;
+                  return html`<tr>
+                    <td>${this._editBranchId === b.id
+                      ? html`<input .value=${this._editBranchLabel} @input=${(e) => { this._editBranchLabel = e.target.value; }}
+                          @keydown=${(e) => { if (e.key === 'Enter') this._renameBranch(b.id); }} />`
+                      : html`<span class="pyr-dot" style="display:inline-block;background:var(--rm-branch-${b.id}, var(--rm-accent,#2a9d8f))"></span> ${b.label}`}</td>
+                    <td class="muted">${b.id}</td>
+                    <td class="muted">${count}</td>
+                    ${ro ? '' : html`<td>${this._editBranchId === b.id
+                      ? html`<button class="ord-btn" @click=${() => this._renameBranch(b.id)}>Guardar</button> <button class="ord-btn" @click=${() => { this._editBranchId = null; }}>✕</button>`
+                      : html`<button class="ord-btn" @click=${() => { this._editBranchId = b.id; this._editBranchLabel = b.label; }}>Renombrar</button> <button class="del-btn" @click=${() => this._removeBranch(b.id)}>Borrar</button>`}</td>`}
+                  </tr>`;
+                })}
+              </tbody>
+            </table></div>`}
+        ${ro ? null : html`
+          <h3 class="sub">Nueva rama</h3>
+          <div class="toolbar">
+            <input placeholder="Nombre (p.ej. Operaciones)" .value=${this._newBranchLabel}
+              @input=${(e) => { this._newBranchLabel = e.target.value; }}
+              @keydown=${(e) => { if (e.key === 'Enter') this._createBranch(); }} />
+            <button class="primary" @click=${() => this._createBranch()}>Crear rama</button>
+          </div>`}
       </div>`;
   }
 

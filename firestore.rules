@@ -367,6 +367,14 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Catálogo de ramas de la organización (RMR-PCS-0027): { label }. Lo lee
+    // cualquiera con acceso (para pintar la rama de cada rol) y solo lo gestiona
+    // el superadmin (crear/renombrar/borrar ramas).
+    match /orgBranches/{branchId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // Políticas de acceso a herramientas (RMR-PCS-0027): audience/managedBy por
     // herramienta. Las lee cualquiera con acceso (para saber qué herramientas ve)
     // y solo las gestiona el superadmin.
