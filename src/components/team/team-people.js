@@ -32,6 +32,7 @@ import { composeTitle } from '../../tools/career/data/framework.js';
 import { listUsers, unlinkedUsers } from '../../lib/users.js';
 import { setLeaderReportsTo } from '../../lib/leaders.js';
 import { resolvePerson } from '../../tools/team/domain/identity.js';
+import { listOrgRoles } from '../../lib/orgRoles.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
@@ -64,6 +65,9 @@ export class TeamPeople extends LitElement {
     _selectedUid: { state: true },
     _selectedDisciplines: { state: true },
     _levelId: { state: true },
+    _orgRolesCat: { state: true },
+    _newOrgRole: { state: true },
+    _orgRolesError: { state: true },
     _selectedGuilds: { state: true },
     _newGuild: { state: true },
     _selectedLabels: { state: true },
@@ -248,6 +252,12 @@ export class TeamPeople extends LitElement {
     this._selectedDisciplines = [];
     /** @type {string} id de nivel seleccionado para el alta ('' = sin nivel) */
     this._levelId = '';
+    /** @type {import('../../tools/team/domain/orgRoles.js').OrgRole[]} catálogo de roles del organigrama */
+    this._orgRolesCat = [];
+    /** @type {string} orgRole del alta: engineer por defecto (RMR-PCS-0027 · F8a) */
+    this._newOrgRole = 'engineer';
+    /** @type {boolean} el catálogo de roles no se pudo cargar (bloquea el alta admin) */
+    this._orgRolesError = false;
     /** @type {string[]} nombres de gremios seleccionados para el alta */
     this._selectedGuilds = [];
     this._newGuild = '';
@@ -289,18 +299,22 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [people, labels, guilds, users, squads] = await Promise.all([
+      const [people, labels, guilds, users, squads, orgRoles] = await Promise.all([
         listActivePeople(this.persistence),
         listLabels(this.persistence),
         listGuilds(this.persistence),
         listUsers(),
         listSquads(this.persistence).catch(() => []),
+        // El fallo se marca (no se traga) para que el alta admin no cree con un
+        // rol por defecto incorrecto sin avisar (RMR-PCS-0027 · F8a).
+        listOrgRoles().then((r) => { this._orgRolesError = false; return r; }).catch(() => { this._orgRolesError = true; return []; }),
       ]);
       this.people = people;
       this.labels = labels;
       this.squads = squads;
       this.guilds = guilds;
       this.users = users;
+      this._orgRolesCat = orgRoles;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
     } finally {
@@ -437,6 +451,16 @@ export class TeamPeople extends LitElement {
       return;
     }
     this.error = '';
+    // Rol organizativo del alta (RMR-PCS-0027 · F8a): el superadmin elige del
+    // organigrama; un manager solo crea ingenieros (engineer/engineering, correcto
+    // aunque el catálogo no cargue). Si el admin no tiene catálogo, NO se crea con
+    // un rol por defecto silencioso: se avisa y se bloquea.
+    if (this.isAdmin && this._orgRolesCat.length === 0) {
+      this.error = 'No se pudo cargar el catálogo de roles. Recarga la página antes de dar de alta para asignar el rol correcto.';
+      return;
+    }
+    const orgRole = this.isAdmin ? (this._newOrgRole || 'engineer') : 'engineer';
+    const orgBranch = this._orgRolesCat.find((r) => r.id === orgRole)?.branch ?? 'engineering';
     try {
       await addPerson(this.persistence, {
         name,
@@ -448,8 +472,11 @@ export class TeamPeople extends LitElement {
         githubLogin: this._github,
         uid: this._selectedUid || null,
         external: this._external,
+        orgRole,
+        orgBranch,
       });
       this._name = '';
+      this._newOrgRole = 'engineer';
       this._selectedDisciplines = [];
       this._levelId = '';
       this._selectedGuilds = [];
@@ -1047,6 +1074,15 @@ export class TeamPeople extends LitElement {
             <label>Usuario de GitHub (opcional)
               <input type="text" placeholder="usuario" .value=${this._github} @input=${(e) => { this._github = e.target.value; }} />
             </label>
+            ${this.isAdmin && this._orgRolesCat.length
+              ? html`<label>Rol organizativo
+                  <select .value=${this._newOrgRole} @change=${(e) => { this._newOrgRole = e.target.value; }}>
+                    ${this._orgRolesCat.map((r) => html`<option value=${r.id} ?selected=${this._newOrgRole === r.id}>${r.label}</option>`)}
+                  </select>
+                </label>`
+              : (this.isAdmin
+                ? html`<p class="error" style="align-self:center">No se pudo cargar el catálogo de roles; recarga para asignar el rol antes de dar de alta.</p>`
+                : null)}
             <label class="chk-inline">
               <input type="checkbox" .checked=${this._external} @change=${(e) => { this._external = e.target.checked; }} />
               Es externo/a

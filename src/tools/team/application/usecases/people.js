@@ -48,9 +48,12 @@ export function normalizeInviteEmail(v) {
  * uid vía Cloud Function. uid y pendingEmail son excluyentes (si viene uid, no
  * hay invitación pendiente).
  * @param {PersistencePort} persistence
+ * `orgRole`/`orgBranch` (RMR-PCS-0027 · F8a) fijan el rol organizativo de la
+ * persona en el alta (por defecto engineer/engineering); el resto de campos van
+ * tal cual a la ficha.
  * @param {{ name: string, guilds?: string[], disciplines?: string[], levelId?: string|null,
  *           labels?: string[], startDate: string, active?: boolean, githubLogin?: string,
- *           uid?: string|null, pendingEmail?: string|null }} input
+ *           uid?: string|null, pendingEmail?: string|null, orgRole?: string, orgBranch?: string }} input
  * @returns {Promise<string>}
  */
 export function addPerson(persistence, input) {
