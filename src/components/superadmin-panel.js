@@ -252,10 +252,13 @@ export class SuperadminPanel extends LitElement {
     /* Editor de políticas de herramientas (RMR-PCS-0027 · F3) */
     details.tool { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.9rem; margin-bottom: 0.6rem; }
     details.tool > summary { cursor: pointer; font-size: 0.95rem; }
-    .tool-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; margin-top: 0.8rem; }
-    .tool-grant { border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; padding: 0.6rem 0.75rem; }
+    /* Ve/usa y Gestiona apilados (cada uno a lo ancho) para que la columna de
+       roles no se desborde con nombres largos (RMR-PCS-0027 · F3 fix). */
+    .tool-body { display: grid; grid-template-columns: 1fr; gap: 0.9rem; margin-top: 0.8rem; }
+    .tool-grant { border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; padding: 0.6rem 0.75rem; min-width: 0; }
     .grant-title { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--rm-navy, #1e3a5f); }
-    .grant-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .grant-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0.75rem 1.25rem; }
+    .grant-cols > div { min-width: 0; }
     .grant-cols.dim { opacity: 0.45; pointer-events: none; }
     .grant-h { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #9ca3af); margin-bottom: 0.3rem; }
     .grant .chk { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.2rem 0; }
