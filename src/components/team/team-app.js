@@ -295,6 +295,7 @@ export class TeamApp extends LitElement {
             .person=${this.selected}
             .framework=${this.framework}
             .isAdmin=${this.isAdmin}
+            .currentUid=${this.uid}
             .initialSubtab=${this.selectedSubtab}
           ></team-person-detail>
         `;

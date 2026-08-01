@@ -157,6 +157,7 @@ export class TeamPersonDetail extends LitElement {
     person: { attribute: false },
     framework: { attribute: false },
     isAdmin: { attribute: false },
+    currentUid: { attribute: false },
     initialSubtab: { attribute: false },
     timeline: { state: true },
     areas: { state: true },
@@ -431,6 +432,8 @@ export class TeamPersonDetail extends LitElement {
     this.framework = null;
     /** @type {boolean} el enlace al panel de admin del framework solo se muestra al superadmin */
     this.isAdmin = false;
+    /** @type {string|null} uid del editor (quien usa la ficha), para su alcance. */
+    this.currentUid = null;
     /** @type {string|null} sub-pestaña con la que abrir la ficha (p. ej. al saltar desde una dimensión del Mapa) */
     this.initialSubtab = null;
     /** @type {string} sub-pestaña activa de la ficha (arranca en Datos) */
@@ -539,10 +542,23 @@ export class TeamPersonDetail extends LitElement {
    * la composición de niveles del equipo — así que la pestaña se relabela
    * «Nivel» en vez de ocultarse (RMR-BUG-0030).
    */
+  /**
+   * ¿Puede el editor gestionar los permisos de ESTA persona? (RMR-PCS-0027 · F8b)
+   * El superadmin, cualquiera; un manager, sobre las personas de las que es dueño
+   * (`ownerLeaderUid` == su uid) — el mismo criterio que la regla `isOwner` de
+   * Firestore respalda para escribir la ficha, así el guardado nunca choca con las
+   * reglas. El caso head→manager necesita el ajuste de reglas de una fase posterior.
+   */
+  _canManagePerms() {
+    if (this.isAdmin) return true;
+    const p = this.person;
+    return !!p && this.currentUid != null && p.ownerLeaderUid === this.currentUid;
+  }
+
   _visibleSubtabs() {
-    // «Permisos» (matriz de herramientas) solo para el superadmin, que gestiona
-    // el acceso completo de cualquier persona (RMR-PCS-0027 · F8b).
-    const base = this.isAdmin ? [...SUBTABS, { id: 'permisos', label: 'Permisos' }] : SUBTABS;
+    // «Permisos» (matriz de herramientas): superadmin siempre; manager/head sobre
+    // la gente que gestionan (RMR-PCS-0027 · F8b).
+    const base = this._canManagePerms() ? [...SUBTABS, { id: 'permisos', label: 'Permisos' }] : SUBTABS;
     if (!this.person?.external) return base;
     return base.map((t) => (t.id === 'carrera' ? { ...t, label: 'Nivel' } : t));
   }
@@ -890,8 +906,8 @@ export class TeamPersonDetail extends LitElement {
           listUsers().catch(() => []),
           listSquads(this.persistence).catch(() => []),
           // Políticas de herramientas para la matriz de permisos, solo si el que
-          // mira es superadmin (la pestaña Permisos solo existe para él). F8b.
-          this.isAdmin ? listToolPolicies().catch(() => []) : Promise.resolve([]),
+          // mira puede gestionar los permisos de esta persona (F8b).
+          this._canManagePerms() ? listToolPolicies().catch(() => []) : Promise.resolve([]),
         ]);
       this.timeline = timeline;
       this.areas = areas;
@@ -2088,8 +2104,8 @@ export class TeamPersonDetail extends LitElement {
   }
 
   /** Celda tri-estado: heredar del rol / forzar sí / forzar no. */
-  _permCell(toolId, dim, roleDefault, mode) {
-    return html`<select @change=${(e) => this._setPerm(toolId, dim, e.target.value)}>
+  _permCell(toolId, dim, roleDefault, mode, disabled) {
+    return html`<select ?disabled=${disabled} @change=${(e) => this._setPerm(toolId, dim, e.target.value)}>
       <option value="inherit" ?selected=${mode === 'inherit'}>Heredar (${roleDefault ? 'sí' : 'no'})</option>
       <option value="yes" ?selected=${mode === 'yes'}>Sí</option>
       <option value="no" ?selected=${mode === 'no'}>No</option>
@@ -2139,8 +2155,8 @@ export class TeamPersonDetail extends LitElement {
               const def = effectiveToolAccess(roleRef, pol);
               return html`<tr>
                 <td>${pol.label ?? pol.toolId} <span class="muted">(${pol.toolId})</span></td>
-                <td>${this._permCell(pol.toolId, 'use', def.use.value, this._permMode(pol.toolId, 'use'))}</td>
-                <td>${this._permCell(pol.toolId, 'manage', def.manage.value, this._permMode(pol.toolId, 'manage'))}</td>
+                <td>${this._permCell(pol.toolId, 'use', def.use.value, this._permMode(pol.toolId, 'use'), false)}</td>
+                <td>${this._permCell(pol.toolId, 'manage', def.manage.value, this._permMode(pol.toolId, 'manage'), false)}</td>
               </tr>`;
             })}
           </tbody>
