@@ -429,6 +429,8 @@ export class CareerApp extends LitElement {
     carpoolTab: { state: true },
     carpools: { state: true },
     myCarpools: { state: true },
+    /** Carpools a los que me han INVITADO, pendientes de aceptar (F3). */
+    myInvitations: { state: true },
     carpoolBusy: { state: true },
     carpoolError: { state: true },
     cpDraft: { state: true },
@@ -1725,6 +1727,18 @@ export class CareerApp extends LitElement {
     /* ── Carpools (CP-1): overlay hermano de la ficha (tablón / los míos /
        crear). Tarjetas por grupo, tabla compacta de avance y formulario. ── */
     .cplead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
+    /* Invitaciones a grupos (F3): badge del botón + sección + form de invitar. */
+    .cpbadge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.15rem; height: 1.15rem; margin-left: 0.35rem; padding: 0 0.3rem; border-radius: 999px; background: var(--rm-danger, #dc2626); color: #fff; font-size: 0.72rem; font-weight: 800; }
+    .cpinvites { border: 1.5px solid color-mix(in srgb, var(--rm-accent, #2a9d8f) 45%, transparent); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); border-radius: 10px; padding: 0.6rem 0.8rem; margin: 0 0 0.9rem; }
+    .cpinvites h4 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+    .cpinvites ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .cpinvites li { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+    .cpinv-actions { display: inline-flex; gap: 0.4rem; }
+    .cpinvite { display: flex; align-items: end; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
+    .cpinvite label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .cpinvite input { padding: 0.35rem 0.5rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 6px; font: inherit; min-width: 14rem; }
+    .cpinv-pending { font-size: 0.78rem; color: var(--rm-muted, #6b7280); }
+    .cpinv-ok { font-size: 0.8rem; color: var(--rm-accent, #2a9d8f); font-weight: 600; }
     .cplist { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
     .cpcard { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.8rem; }
     .cphead { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
@@ -2226,6 +2240,11 @@ export class CareerApp extends LitElement {
     /** Carpools de la persona cargada (cualquier estado), o null sin cargar.
      * @type {import('../../tools/career/domain/carpool.js').Carpool[]|null} */
     this.myCarpools = null;
+    /** @type {import('../../tools/career/domain/carpool.js').Carpool[]|null} invitaciones pendientes (F3). */
+    this.myInvitations = null;
+    /** personId para el que se cargaron las invitaciones (recarga si cambia). */
+    this._invitesLoadedFor = null;
+    this._inviteFeedback = '';
     this.carpoolBusy = false;
     this.carpoolError = '';
     this.cpDraft = CareerApp.EMPTY_CP_DRAFT;
@@ -2469,6 +2488,13 @@ export class CareerApp extends LitElement {
     if (this.store && this.personId && this._loadedPerson !== this.personId) {
       this._loadedPerson = this.personId;
       this._load();
+    }
+    // Invitaciones a grupos (F3): se cargan en cuanto hay persona, para el badge
+    // del botón «Grupos» — así te enteras sin abrir el overlay.
+    if (this.store && this.personId && this._canPlayJourney && this._invitesLoadedFor !== this.personId) {
+      this._invitesLoadedFor = this.personId;
+      this.myInvitations = null;
+      this._loadMyInvitations();
     }
     // Compañeros (MC-12 → RMR-PCS-0029 · F1): ya NO se precargan los journeys de
     // el equipo entero. Los compañeros salen solo de tus carpools (shippooling) y
@@ -4520,6 +4546,84 @@ export class CareerApp extends LitElement {
   }
 
   /**
+   * Sección «Invitaciones pendientes» (F3): los grupos a los que me han invitado,
+   * con Aceptar/Rechazar. Solo se pinta si hay alguna.
+   */
+  _renderInvitations() {
+    const invites = this.myInvitations ?? [];
+    if (invites.length === 0) return nothing;
+    return html`<div class="cpinvites">
+      <h4>📨 Invitaciones pendientes (${invites.length})</h4>
+      <ul>
+        ${invites.map((c) => html`<li>
+          <span class="cpinv-name">🚗 <strong>${c.name}</strong> · conduce ${c.conductor.name}</span>
+          <span class="cpinv-actions">
+            <button class="primary" ?disabled=${this.carpoolBusy} @click=${() => this._respondInvite(c.id, true)}>Aceptar</button>
+            <button ?disabled=${this.carpoolBusy} @click=${() => this._respondInvite(c.id, false)}>Rechazar</button>
+          </span>
+        </li>`)}
+      </ul>
+    </div>`;
+  }
+
+  /** Carga las invitaciones pendientes de la persona (F3), para el badge y la sección. */
+  async _loadMyInvitations() {
+    const personId = this.personId;
+    if (!personId) return;
+    try {
+      const list = await this._carpoolApi.listMyInvitations(personId);
+      if (personId === this.personId) this.myInvitations = list;
+    } catch (err) {
+      console.warn(`Invitaciones: no se pudieron cargar las de "${personId}".`, err);
+      if (personId === this.personId) this.myInvitations = [];
+    }
+  }
+
+  /**
+   * Invitar por email a un carpool que conduzco (F3): la Cloud Function resuelve
+   * el email→persona. Deja un feedback legible (nombre invitado o error).
+   * @param {import('../../tools/career/domain/carpool.js').Carpool} carpool
+   * @param {string} email
+   */
+  async _inviteByEmail(carpool, email) {
+    const value = String(email ?? '').trim();
+    if (!value || this.carpoolBusy) return;
+    this.carpoolBusy = true;
+    this._inviteFeedback = '';
+    this.carpoolError = '';
+    try {
+      await this._carpoolApi.inviteToCarpoolByEmail(carpool.id, value);
+      // Mensaje genérico (privacidad): no confirmamos si ese email existe.
+      this._inviteFeedback = 'Si esa persona está en la plataforma, recibirá la invitación.';
+      await this._loadMyCarpools(); // refresca invitedPersonIds del grupo
+    } catch (err) {
+      this.carpoolError = err instanceof Error ? err.message : 'No se pudo invitar.';
+    } finally {
+      this.carpoolBusy = false;
+    }
+  }
+
+  /**
+   * Aceptar (accept=true) o rechazar una invitación (F3). Refresca invitaciones,
+   * mis carpools y el tablón.
+   * @param {string} carpoolId @param {boolean} accept
+   */
+  async _respondInvite(carpoolId, accept) {
+    if (this.carpoolBusy) return;
+    this.carpoolBusy = true;
+    this.carpoolError = '';
+    try {
+      await this._carpoolApi.respondCarpoolInvitation(carpoolId, accept);
+      await Promise.all([this._loadMyInvitations(), this._loadMyCarpools()]);
+      if (accept) this._ensureCarpoolJourneys();
+    } catch (err) {
+      this.carpoolError = err instanceof Error ? err.message : 'No se pudo responder a la invitación.';
+    } finally {
+      this.carpoolBusy = false;
+    }
+  }
+
+  /**
    * Asegura los journeys de los MIEMBROS de mis carpools para derivar su
    * avance (mismo patrón que MC-12: 1 lectura por persona, cap
    * MAX_TEAM_JOURNEYS, caché compartida en _teamJourneys). Un journey
@@ -4566,6 +4670,7 @@ export class CareerApp extends LitElement {
     }
     this._loadCarpoolBoard();
     if (this.personId && this.myCarpools === null) this._loadMyCarpools();
+    if (this.personId) this._loadMyInvitations(); // refresca invitaciones (F3)
   }
 
   /** Refresca el TABLÓN (carpools abiertos). Se recarga en cada apertura. */
@@ -4896,10 +5001,11 @@ export class CareerApp extends LitElement {
 
   /** Botón «🚗 Carpools» de la barra: el tablón lo ve todo el mundo. */
   _renderCarpoolButton() {
+    const invites = (this.myInvitations ?? []).length;
     return html`<button
       @click=${this._openCarpools}
-      title="Abrir el tablón de carpools: recorre la formación en grupo"
-    >🚗 Carpools</button>`;
+      title=${invites > 0 ? `Tienes ${invites} invitación${invites === 1 ? '' : 'es'} a un grupo` : 'Abrir el tablón de carpools: recorre la formación en grupo'}
+    >🚗 Carpools${invites > 0 ? html`<span class="cpbadge" aria-label="${invites} invitaciones pendientes">${invites}</span>` : nothing}</button>`;
   }
 
   /**
@@ -5030,6 +5136,23 @@ export class CareerApp extends LitElement {
           </li>`,
         )}
       </ul>
+      ${isConductor && cp.status === 'open'
+        ? html`<form class="cpinvite" @submit=${(e) => {
+            e.preventDefault();
+            const inp = e.currentTarget.elements.email;
+            this._inviteByEmail(cp, inp.value);
+            inp.value = '';
+          }}>
+            <label>Invitar por email
+              <input name="email" type="email" placeholder="Email de la persona" ?disabled=${this.carpoolBusy} required autocomplete="off" />
+            </label>
+            <button type="submit" ?disabled=${this.carpoolBusy}>Invitar</button>
+            ${(cp.invitedPersonIds ?? []).length > 0
+              ? html`<span class="cpinv-pending">${cp.invitedPersonIds.length} pendiente${cp.invitedPersonIds.length === 1 ? '' : 's'}</span>`
+              : nothing}
+            ${this._inviteFeedback ? html`<span class="cpinv-ok">${this._inviteFeedback}</span>` : nothing}
+          </form>`
+        : nothing}
       <div class="cpactions">
         ${this._canPlayJourney && inMarch && !isConductor && this.personId && isCarpoolMember(cp, this.personId)
           ? html`<button ?disabled=${this.carpoolBusy} @click=${() => this._leaveCarpool(cp)}>
@@ -5190,6 +5313,7 @@ export class CareerApp extends LitElement {
           Como compartir coche: un grupo con nombre recorre junto una ruta de
           paradas con tiempos objetivo. Únete a uno abierto o comparte tu ruta.
         </p>
+        ${this._renderInvitations()}
         <div class="ctabs" role="tablist" aria-label="Secciones de carpools" @keydown=${this._onCarpoolTabsKeydown}>
           ${tabs.map((tab) => {
             const selected = this.carpoolTab === tab;
