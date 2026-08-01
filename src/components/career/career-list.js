@@ -21,6 +21,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import { topicState, groupTopicsByArea, resolveRoute } from '../../tools/career/domain/listView.js';
+import { seaIslands, SEABED_ISLAND_ID } from '../../tools/career/data/archipelago.js';
 
 export class CareerListView extends LitElement {
   static properties = {
@@ -140,9 +141,10 @@ export class CareerListView extends LitElement {
 
   _renderIslands() {
     const maps = this.islandMaps ?? new Map();
+    // El lecho (seabed) es transversal: no se lista con las islas del mar.
     const islands = this.archipelago?.islands?.length
-      ? this.archipelago.islands
-      : [...maps.keys()].map((id) => ({ id, name: maps.get(id)?.name ?? id }));
+      ? seaIslands(this.archipelago.islands)
+      : [...maps.keys()].filter((id) => id !== SEABED_ISLAND_ID).map((id) => ({ id, name: maps.get(id)?.name ?? id }));
     return islands.map((isl) => {
       const map = maps.get(isl.id);
       if (!map) {

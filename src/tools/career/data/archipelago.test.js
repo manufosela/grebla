@@ -9,17 +9,33 @@ import {
 } from './archipelago.js';
 
 describe('career — archipiélago (índice de islas, helpers puros)', () => {
-  it('la semilla tiene las 13 islas del ADR con ids únicos', () => {
-    expect(ARCHIPELAGO_ISLANDS).toHaveLength(13);
+  it('la semilla tiene las 13 islas del ADR (del mar) con ids únicos', () => {
+    // Las islas del ADR son las del MAR (no transversales). El lecho (seabed)
+    // es un elemento aparte que se cuenta por separado.
+    const sea = ARCHIPELAGO_ISLANDS.filter((i) => i.seabed !== true);
+    expect(sea).toHaveLength(13);
     const ids = ARCHIPELAGO_ISLANDS.map((i) => i.id);
-    expect(new Set(ids).size).toBe(13);
-    expect(ids).toEqual(
+    expect(new Set(ids).size).toBe(ARCHIPELAGO_ISLANDS.length);
+    expect(sea.map((i) => i.id)).toEqual(
       expect.arrayContaining([
         'island', 'frontend', 'backend-php', 'backend-python', 'android', 'ios',
         'ai-engineer', 'devops', 'postgres', 'engineering-manager',
         'software-architect', 'product-manager', 'fde',
       ]),
     );
+  });
+
+  it('hay una isla-lecho transversal (seabed) reservada a la vista sumergida (RMR-PCS-0028 · F2)', () => {
+    const seabeds = ARCHIPELAGO_ISLANDS.filter((i) => i.seabed === true);
+    expect(seabeds).toHaveLength(1);
+    expect(seabeds[0].id).toBe('seabed');
+    expect(seabeds[0].startIsland).not.toBe(true); // no es la isla de inicio
+    // normalizeArchipelago preserva el flag seabed (no lo descarta al sanear)
+    const normalized = normalizeArchipelago({ islands: [{ id: 'seabed', name: 'El lecho', seabed: true, x: 50, y: 50 }] });
+    expect(normalized.islands[0].seabed).toBe(true);
+    // una isla normal no gana el flag
+    const sea = normalizeArchipelago({ islands: [{ id: 'x', name: 'X', x: 10, y: 20 }] });
+    expect('seabed' in sea.islands[0]).toBe(false);
   });
 
   it('solo la isla de inicio lleva startIsland y es «Bases de software»', () => {
@@ -129,6 +145,7 @@ describe('career — archipiélago (índice de islas, helpers puros)', () => {
       ios: 75,
       'ai-engineer': 70,
       fde: 70,
+      seabed: 75,
     });
   });
 

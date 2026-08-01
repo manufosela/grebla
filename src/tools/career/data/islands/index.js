@@ -26,6 +26,7 @@ import { ENGINEERING_MANAGER_ISLAND } from './engineering-manager.js';
 import { SOFTWARE_ARCHITECT_ISLAND } from './software-architect.js';
 import { PRODUCT_MANAGER_ISLAND } from './product-manager.js';
 import { FDE_ISLAND } from './fde.js';
+import { SEABED_ISLAND } from './seabed.js';
 
 /**
  * Contenido por isla, indexado por el id del doc /careerMap/{islandId}
@@ -48,4 +49,5 @@ export const ISLAND_CONTENT = Object.freeze({
   [SOFTWARE_ARCHITECT_ISLAND.id]: SOFTWARE_ARCHITECT_ISLAND,
   [PRODUCT_MANAGER_ISLAND.id]: PRODUCT_MANAGER_ISLAND,
   [FDE_ISLAND.id]: FDE_ISLAND,
+  [SEABED_ISLAND.id]: SEABED_ISLAND,
 });

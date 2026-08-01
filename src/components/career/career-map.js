@@ -30,6 +30,7 @@ import { cityStatus } from '../../tools/career/domain/progress.js';
 import { shapeForArea, houseShapePath } from '../../tools/career/domain/houseShapes.js';
 import { stopNumberByCity } from '../../tools/career/domain/challenge.js';
 import { routeNumberByCity } from '../../tools/career/domain/route.js';
+import { seaIslands } from '../../tools/career/data/archipelago.js';
 import {
   islandCircles,
   islandLabel,
@@ -210,7 +211,8 @@ export class CareerMapView extends LitElement {
     let islands = [];
     let mapsById = new Map();
     if (this.archipelago) {
-      islands = this.archipelago.islands ?? [];
+      // El lecho (seabed) es transversal: no se dibuja en el mapa del mar.
+      islands = seaIslands(this.archipelago.islands);
       mapsById = this.islandMaps ?? new Map();
     } else if (this.map) {
       const id = this.map.id ?? 'island';

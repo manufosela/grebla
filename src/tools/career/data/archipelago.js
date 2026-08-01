@@ -22,6 +22,9 @@ import { DEFAULT_ISLAND_ID } from '../domain/types.js';
 /** Id de la isla de INICIO (el doc /careerMap/island actual, «Bases de software»). */
 export const START_ISLAND_ID = DEFAULT_ISLAND_ID;
 
+/** Id del LECHO transversal (RMR-PCS-0028): la única isla con seabed:true. */
+export const SEABED_ISLAND_ID = 'seabed';
+
 /**
  * Objetivo de ciudadanía por defecto (MC-20) para islas que no traen el suyo:
  * islas creadas a mano por el superadmin desde /admin o índices anteriores a
@@ -63,7 +66,22 @@ export const ARCHIPELAGO_ISLANDS = [
   { id: 'software-architect', name: 'Isla Software Architect', discipline: 'software-architect', x: 64, y: 38, citizenshipPct: 85, citiesTotal: 23 },
   { id: 'product-manager', name: 'Isla Product Manager', discipline: 'product-manager', x: 40, y: 38, citizenshipPct: 90, citiesTotal: 20 },
   { id: 'fde', name: 'Isla FDE', discipline: 'fde', x: 66, y: 74, citizenshipPct: 70, citiesTotal: 20 },
+  // El LECHO (RMR-PCS-0028): eje transversal «Orquestación y juicio». No es una
+  // isla del mar (seabed:true) — se reserva para la vista sumergida (F3), pero
+  // por lo demás es una isla normal del modelo (editable, con journey y rutas).
+  // Su x/y solo cuenta para el modelo; no se dibuja en el mapa del mar.
+  { id: SEABED_ISLAND_ID, name: 'El lecho que sostiene', shortName: 'El lecho', discipline: 'orchestration', x: 50, y: 50, seabed: true, citizenshipPct: 75, citiesTotal: 7 },
 ];
+
+/**
+ * Islas del MAR: las que se dibujan en el mapa del archipiélago y en la lista.
+ * Excluye el lecho (seabed), que es transversal y se muestra sumergido aparte.
+ * @param {ReadonlyArray<IslandRef>} islands
+ * @returns {IslandRef[]}
+ */
+export function seaIslands(islands) {
+  return (islands ?? []).filter((i) => i?.seabed !== true);
+}
 
 /**
  * Semilla/fallback del índice: copia profunda de las 13 islas en código. Se usa
@@ -116,6 +134,8 @@ function normalizeIslandRef(ref) {
   const shortName = typeof ref?.shortName === 'string' ? ref.shortName.trim() : '';
   if (shortName) out.shortName = shortName;
   if (ref?.startIsland === true) out.startIsland = true;
+  // Lecho transversal (RMR-PCS-0028): se conserva para excluirlo del mapa del mar.
+  if (ref?.seabed === true) out.seabed = true;
   return out;
 }
 
