@@ -31,7 +31,7 @@ import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { rootRoles, childrenOf, assertValidReportsTo, roleChain } from '../tools/team/domain/orgRoles.js';
+import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
 
@@ -256,6 +256,12 @@ export class SuperadminPanel extends LitElement {
     .access-opts label.implied { color: var(--rm-muted, #6b7280); cursor: default; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    /* Editor de roles agrupado por rama (RMR-TSK-0375): sin línea entre filas de
+       la misma rama; línea separadora SOLO al inicio de cada bloque de rama
+       (menos el primero, que es el borde superior de la tabla). */
+    table.org-roles td { border-bottom: 0; }
+    table.org-roles tbody tr.branch-start td { border-top: 2px solid var(--rm-border, #e5e7eb); }
+    table.org-roles tbody tr:first-child td { border-top: 0; }
     tbody tr.clickable { cursor: pointer; }
     tbody tr.clickable:hover { background: var(--rm-surface-hover, #f9fafb); }
     tr.sel { background: var(--rm-surface-hover, #eef2ff); }
@@ -1831,21 +1837,15 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
-  /** Filas del organigrama en orden jerárquico (DFS por rama), con profundidad. */
+  /**
+   * Filas del editor de roles, AGRUPADAS por rama (para leer de un vistazo qué
+   * va con qué) y, dentro de cada rama, en orden jerárquico post-orden (hijos
+   * antes que el padre: coherente con la pirámide invertida — las hojas arriba y
+   * el rol base «sin inferior» abajo). Marca `firstOfBranch` en la primera fila
+   * de cada bloque para dibujar la línea separadora solo ENTRE ramas.
+   */
   _orgRoleRows() {
-    const rows = [];
-    // Post-orden (hijos ANTES que el padre): coherente con la pirámide invertida —
-    // los roles «de arriba» (hojas, sostenidos) se listan primero y el rol base
-    // (sin inferior) queda al final, abajo.
-    const visit = (role, depth) => {
-      for (const child of childrenOf(this._orgRoles, role.id)) visit(child, depth + 1);
-      rows.push({ role, depth });
-    };
-    for (const root of rootRoles(this._orgRoles)) visit(root, 0);
-    // Roles en un ciclo preexistente (no alcanzables desde una base) igualmente listados.
-    const shown = new Set(rows.map((r) => r.role.id));
-    for (const r of this._orgRoles) if (!shown.has(r.id)) rows.push({ role: r, depth: 0 });
-    return rows;
+    return orgRoleRows(this._orgRoles, this._orgBranches);
   }
 
   _renderOrgRoles() {
@@ -1875,10 +1875,10 @@ export class SuperadminPanel extends LitElement {
         ${this._orgNotice ? html`<p class="notice">${this._orgNotice}</p>` : null}
         ${this._orgRoles.length === 0
           ? html`<p class="empty">Aún no hay roles. Créalos abajo o ejecuta el seed inicial.</p>`
-          : html`<div class="table-wrap"><table>
+          : html`<div class="table-wrap"><table class="org-roles">
               <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
-                ${this._orgRoleRows().map(({ role, depth }) => html`<tr>
+                ${this._orgRoleRows().map(({ role, depth, firstOfBranch }) => html`<tr class=${firstOfBranch ? 'branch-start' : ''}>
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
                   <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${this._branchLabel(role.branch)}</span></td>
                   <td>${ro

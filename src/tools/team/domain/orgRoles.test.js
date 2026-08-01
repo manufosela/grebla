@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, roleChain, wouldCycle, assertValidReportsTo, roleDepth } from './orgRoles.js';
+import { rootRoles, childrenOf, roleChain, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -75,5 +75,31 @@ describe('assertValidReportsTo', () => {
   });
   it('lanza si crea ciclo', () => {
     expect(() => assertValidReportsTo(roles, 'cto', 'engineer')).toThrow(/ciclo/);
+  });
+});
+
+describe('orgRoleRows', () => {
+  const branches = [{ id: 'engineering' }, { id: 'product' }, { id: 'data' }, { id: 'generico' }];
+
+  it('agrupa por rama (orden del catálogo) y post-orden dentro de cada rama', () => {
+    const rows = orgRoleRows(roles, branches);
+    // engineering: hojas arriba, base abajo → engineer, em, head-eng, cto; luego product, data, genérico
+    expect(rows.map((r) => r.role.id)).toEqual([
+      'engineer', 'em', 'head-eng', 'cto', 'pm', 'cpo', 'head-data', 'generico',
+    ]);
+  });
+
+  it('marca firstOfBranch solo en la primera fila de cada bloque de rama', () => {
+    const rows = orgRoleRows(roles, branches);
+    expect(rows.filter((r) => r.firstOfBranch).map((r) => r.role.id)).toEqual([
+      'engineer', 'pm', 'head-data', 'generico',
+    ]);
+  });
+
+  it('coloca las ramas sin metadato de catálogo al final, como su propio bloque', () => {
+    const extra = [...roles, { id: 'cmo', label: 'CMO', branch: 'marketing', reportsToRoleId: null }];
+    const rows = orgRoleRows(extra, branches); // «marketing» no está en el catálogo
+    expect(rows[rows.length - 1].role.id).toBe('cmo');
+    expect(rows.find((r) => r.role.id === 'cmo').firstOfBranch).toBe(true);
   });
 });
