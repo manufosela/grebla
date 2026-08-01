@@ -166,22 +166,28 @@ export class SuperadminPanel extends LitElement {
     }
     .bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .bar h1 { font-size: 1.4rem; margin: 0; }
-    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    /* Pestañas REALES (no botones-píldora): fila con una línea base común y la
+       activa marcada por un subrayado de acento pegado a esa línea, conectada al
+       contenido que va justo debajo. */
+    .tabs { display: flex; gap: 0.1rem; margin-bottom: 1.25rem; flex-wrap: wrap; border-bottom: 2px solid var(--rm-border, #e5e7eb); }
     .tab {
-      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
-      border-radius: 999px; padding: 0.4rem 1rem; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      border: 0; background: none; color: var(--rm-muted, #6b7280);
+      padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
     }
-    .tab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
-    .tab:hover:not(.active) { color: var(--rm-text, #111827); }
-    /* Sub-pestañas del framework de carrera: más pequeñas y cuadradas que las
-       pestañas principales (píldoras), para que se lean como un segundo nivel. */
-    .subtabs { display: flex; gap: 0.35rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .tab.active { color: var(--rm-accent, #3b82f6); border-bottom-color: var(--rm-accent, #3b82f6); }
+    .tab:hover:not(.active) { color: var(--rm-text, #111827); background: color-mix(in srgb, var(--rm-text, #111827) 5%, transparent); }
+    .tab:focus-visible { outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: -2px; border-radius: 6px; }
+    /* Segundo nivel: mismo lenguaje de pestaña subrayada, un punto más pequeño. */
+    .subtabs { display: flex; gap: 0.1rem; margin-bottom: 1.25rem; flex-wrap: wrap; border-bottom: 2px solid var(--rm-border, #e5e7eb); }
     .subtab {
-      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
-      border-radius: 8px; padding: 0.35rem 0.85rem; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      border: 0; background: none; color: var(--rm-muted, #6b7280);
+      padding: 0.5rem 0.85rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+      border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
     }
-    .subtab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
-    .subtab:hover:not(.active) { color: var(--rm-text, #111827); border-color: var(--rm-accent, #3b82f6); }
+    .subtab.active { color: var(--rm-accent, #3b82f6); border-bottom-color: var(--rm-accent, #3b82f6); }
+    .subtab:hover:not(.active) { color: var(--rm-text, #111827); background: color-mix(in srgb, var(--rm-text, #111827) 5%, transparent); }
+    .subtab:focus-visible { outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: -2px; border-radius: 6px; }
     /* Sub-pestañas de «Carrera» (RMR-TSK-0262): estilo SUBRAYADO —distinto de las
        píldoras .subtab del editor de framework— para que no se apilen dos filas
        idénticas cuando el framework pinta sus propias sub-pestañas dentro. */
@@ -1562,7 +1568,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <section>
         <h2>Organigrama — roles y jerarquía</h2>
-        <p class="ro-note">Cada rol define un nivel por etiqueta y de quién depende. Reordena la jerarquía cambiando «Depende de»; se impide crear ciclos. Los roles sin superior son cimas (uno por rama).</p>
+        <p class="ro-note">Cada rol define un nivel por etiqueta y de quién depende. Reordena la jerarquía cambiando «Depende de»; se impide crear ciclos. Un rol «sin superior» es la <strong>base</strong> de su rama: en el liderazgo afectivo quien más responsabilidad tiene <strong>sostiene desde abajo</strong> — en el organigrama se dibuja en la punta de la pirámide invertida, no arriba.</p>
         ${this._orgError ? html`<p class="error">${this._orgError}</p>` : null}
         ${this._orgNotice ? html`<p class="notice">${this._orgNotice}</p>` : null}
         ${this._orgRoles.length === 0
@@ -1574,9 +1580,9 @@ export class SuperadminPanel extends LitElement {
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">└ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
                   <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${role.branch}</span></td>
                   <td>${ro
-                    ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— cima —</span>`)
+                    ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin superior (base) —</span>`)
                     : html`<select @change=${(e) => this._setRoleParent(role.id, e.target.value)}>
-                        <option value="" ?selected=${!role.reportsToRoleId}>— cima —</option>
+                        <option value="" ?selected=${!role.reportsToRoleId}>— sin superior (base) —</option>
                         ${this._orgRoles.filter((r) => r.id !== role.id).map((r) => html`<option value=${r.id} ?selected=${role.reportsToRoleId === r.id}>${r.label}</option>`)}
                       </select>`}</td>
                   ${ro ? '' : html`<td>${this._orgConfirmDelete === role.id
@@ -1594,7 +1600,7 @@ export class SuperadminPanel extends LitElement {
               ${ORG_BRANCHES.map((b) => html`<option value=${b} ?selected=${this._orgForm.branch === b}>${b}</option>`)}
             </select>
             <select .value=${this._orgForm.reportsToRoleId} @change=${(e) => { this._orgForm = { ...this._orgForm, reportsToRoleId: e.target.value }; }}>
-              <option value="">— cima (sin superior) —</option>
+              <option value="">— sin superior (base) —</option>
               ${parentOptions('')}
             </select>
             <button class="primary" @click=${() => this._createRole()}>Crear rol</button>
