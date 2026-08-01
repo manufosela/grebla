@@ -258,6 +258,7 @@ import {
   voyageDuration,
 } from '../../tools/career/domain/voyage.js';
 import { cityStatus, progressPct } from '../../tools/career/domain/progress.js';
+import { deriveTeammates } from '../../tools/career/domain/teammates.js';
 import { archipelagoProgress, citizenshipCelebrations } from '../../tools/career/domain/citizenship.js';
 import { newAchievements, formatAchievedAt } from '../../tools/career/domain/achievements.js';
 import { newCertificateEntries, logbookView, completedRoutes, formatDuration, EMPTY_LOGBOOK } from '../../tools/career/domain/logbook.js';
@@ -2125,7 +2126,6 @@ export class CareerApp extends LitElement {
     // (1 lectura por persona, una sola vez) y lista derivada para la isla.
     /** @type {Map<string, import('../../tools/career/domain/types.js').Journey>} */
     this._teamJourneys = new Map();
-    this._teamLoaded = false;
     /** @type {{ personId: string, name: string, currentCity: string, progressPct: number }[]} */
     this.teammates = CareerApp.EMPTY_TEAMMATES;
     this.showTeam = this._readTeamVisible();
@@ -2465,12 +2465,9 @@ export class CareerApp extends LitElement {
       this._loadedPerson = this.personId;
       this._load();
     }
-    // Compañeros (MC-12): una única carga en paralelo de los journeys del
-    // equipo en cuanto hay store y personas visibles.
-    if (this.store && (this.people ?? []).length > 0 && !this._teamLoaded) {
-      this._teamLoaded = true;
-      this._loadTeamJourneys();
-    }
+    // Compañeros (MC-12 → RMR-PCS-0029 · F1): ya NO se precargan los journeys de
+    // TODO el equipo. Los compañeros salen solo de tus carpools (shippooling) y
+    // sus journeys los carga _ensureCarpoolJourneys; el juego es personal.
     // Cola del brujo (MC-22): con canEdit se cargan en paralelo las consultas
     // de todas las personas visibles (mismo cap y política que los journeys)
     // para el contador «🧙 Consultas (N)».
@@ -2490,7 +2487,7 @@ export class CareerApp extends LitElement {
     if (changed.has('journey') && this.personId) {
       this._teamJourneys.set(this.personId, this.journey);
     }
-    if (changed.has('personId') || changed.has('journey') || changed.has('map')) {
+    if (changed.has('personId') || changed.has('journey') || changed.has('map') || changed.has('myCarpools')) {
       this._refreshTeammates();
     }
     // Accesibilidad de la tarjeta de la casa (3D): al abrirse recibe el foco
@@ -2674,34 +2671,6 @@ export class CareerApp extends LitElement {
     this.logbook = await recordLogbook(this.store, this.personId, this.logbook, [entry]);
   }
 
-  /**
-   * Carga EN PARALELO los journeys de las personas visibles (MC-12). Coste: 1
-   * lectura de Firestore por persona (aceptable en equipos pequeños); con más
-   * de MAX_TEAM_JOURNEYS personas se cargan solo las primeras y se deja
-   * constancia por consola. La persona seleccionada se salta: su journey ya lo
-   * trae _load() y la caché se refresca desde updated(). Un journey ilegible
-   * no tumba al resto: ese compañero no se pinta y se avisa por consola.
-   */
-  async _loadTeamJourneys() {
-    const people = this.people ?? [];
-    const capped = people.slice(0, CareerApp.MAX_TEAM_JOURNEYS);
-    if (people.length > capped.length) {
-      console.warn(
-        `Mapa del equipo: ${people.length} personas visibles; se cargan solo los journeys de las ${CareerApp.MAX_TEAM_JOURNEYS} primeras para acotar las lecturas.`,
-      );
-    }
-    await Promise.all(
-      capped.map(async (person) => {
-        if (person.id === this.personId) return;
-        try {
-          this._teamJourneys.set(person.id, await getJourney(this.store, person.id));
-        } catch (err) {
-          console.warn(`Mapa del equipo: no se pudo cargar el journey de "${person.id}".`, err);
-        }
-      }),
-    );
-    this._refreshTeammates();
-  }
 
   /**
    * Deriva la lista de compañeros para la isla (MC-12) a partir de la caché de
@@ -2709,28 +2678,31 @@ export class CareerApp extends LitElement {
    * quienes tienen ciudad actual (sin `currentCity` no hay dónde pintarlos).
    * SOLO nombre, ciudad y % de progreso — nada sensible (privacidad).
    */
-  _refreshTeammates() {
-    const map = this.map;
-    if (!map) {
-      this.teammates = CareerApp.EMPTY_TEAMMATES;
-      return;
+  /**
+   * Miembros de MIS carpools (shippooling), sin mí y sin duplicar (una persona
+   * puede estar en varios grupos). Es la única fuente de compañeros: el juego es
+   * personal salvo que hagas grupo (RMR-PCS-0029 · F1).
+   * @returns {{personId:string, name:string}[]}
+   */
+  _carpoolMembers() {
+    const byId = new Map();
+    for (const c of this.myCarpools ?? []) {
+      for (const m of c.members ?? []) {
+        if (m.personId !== this.personId && !byId.has(m.personId)) {
+          byId.set(m.personId, { personId: m.personId, name: m.name });
+        }
+      }
     }
-    const next = (this.people ?? [])
-      .filter((p) => p.id !== this.personId)
-      .map((p) => {
-        const journey = this._teamJourneys.get(p.id);
-        if (!journey || !journey.currentCity) return null;
-        // Archipiélago (MC-14): cada compañero se pinta SOLO en su isla — si
-        // está en otra, aquí no aparece (su casa ni existe en este mapa).
-        if ((journey.currentIsland ?? DEFAULT_ISLAND_ID) !== this.currentIsland) return null;
-        return {
-          personId: p.id,
-          name: p.name,
-          currentCity: journey.currentCity,
-          progressPct: progressPct(map, journey.visitedCities),
-        };
-      })
-      .filter((t) => t !== null);
+    return [...byId.values()];
+  }
+
+  _refreshTeammates() {
+    const next = deriveTeammates({
+      members: this._carpoolMembers(),
+      journeyById: this._teamJourneys,
+      currentIsland: this.currentIsland,
+      map: this.map,
+    });
     this.teammates = next.length > 0 ? next : CareerApp.EMPTY_TEAMMATES;
   }
 
