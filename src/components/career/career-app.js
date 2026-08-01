@@ -181,7 +181,7 @@
  *  - canPlay: boolean                          ingeniero vinculado (JG-1): juega SU plan, sin gestión de equipo
  *  - currentUser: { uid: string, name: string }|null   login (autoría de consultas/respuestas)
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import './career-map.js';
 import './career-list.js';
 import './seabed-view.js';
