@@ -18,10 +18,11 @@ import './team-person-detail.js';
 import './team-settings.js';
 import './team-overview.js';
 import './team-map.js';
+import './team-career.js';
 import { listActivePeople } from '../../tools/team/application/usecases/index.js';
 import { getMyPerson } from '../../lib/engineer.js';
 
-const TEAM_TABS = ['people', 'map', 'departures', 'team', 'settings'];
+const TEAM_TABS = ['people', 'career', 'map', 'departures', 'team', 'settings'];
 
 /** Prefijo del hash que enlaza directamente a la ficha de una persona. */
 const PERSON_HASH = 'person=';
@@ -36,6 +37,9 @@ export class TeamApp extends LitElement {
     members: { attribute: false },
     heads: { attribute: false },
     framework: { attribute: false },
+    /** Store de carrera y archipiélago para la pestaña «Carrera» (RMR-PCS-0029 · F2b). */
+    careerStore: { attribute: false },
+    archipelago: { attribute: false },
     view: { state: true },
     selected: { state: true },
     selectedSubtab: { state: true },
@@ -81,6 +85,8 @@ export class TeamApp extends LitElement {
     super();
     /** @type {import('../../tools/team/domain/ports.js').PersistencePort|null} */
     this.persistence = null;
+    this.careerStore = null;
+    this.archipelago = null;
     this.storage = null;
     /** @type {string|null} */
     this.uid = null;
@@ -270,6 +276,7 @@ export class TeamApp extends LitElement {
       ${this._renderScopeControl()}
       <nav class="sections" aria-label="Secciones">
         ${this._tab('people', 'Personas')}
+        ${this._tab('career', 'Carrera')}
         ${this._tab('map', 'Mapa')}
         ${this._tab('departures', 'Bajas')}
         ${this._tab('team', 'Equipo')}
@@ -313,6 +320,13 @@ export class TeamApp extends LitElement {
           .framework=${this.framework}
           @open-person=${this._onOpenPerson}
         ></team-people>`;
+      case 'career':
+        return html`<team-career
+          .persistence=${this.persistence}
+          .careerStore=${this.careerStore}
+          .archipelago=${this.archipelago}
+          .framework=${this.framework}
+        ></team-career>`;
       case 'person':
         return html`
           <button class="back" @click=${() => this._go('people')}>← Volver a personas</button>
