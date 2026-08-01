@@ -31,7 +31,8 @@ export class OrgChart extends LitElement {
       --rm-branch-engineering: #2a9d8f; --rm-branch-product: #e76f51; --rm-branch-people: #9d4edd;
       --rm-branch-data: #457b9d; --rm-branch-generico: #6b7280;
     }
-    .pyr-level { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; }
+    .pyr-level { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; }
+    .pyr-group { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.4rem 0.55rem; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 45%, transparent); background: color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 7%, transparent); }
     .pyr-level:not(:last-child)::after { content: '↑'; position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); color: var(--rm-muted, #9ca3af); font-size: 1rem; font-weight: 700; }
     .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
@@ -106,11 +107,17 @@ export class OrgChart extends LitElement {
         ${this._crown ? html`<div class="pyr-crown">👥 ${this._crown}<em>a quienes todo el equipo sostiene</em></div>` : null}
         ${levels.map((level, i) => {
           const width = 100 - i * (60 / Math.max(1, levels.length));
+          // Dentro de cada franja, los roles se AGRUPAN por rama (cada grupo con
+          // el color de su rama, separados) para ver qué va con qué.
+          const groups = Object.groupBy(level, (r) => r.branch);
           return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
-            ${level.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(r.branch)}">
-              <span class="pyr-dot" style="background:${branchColor(r.branch)}"></span>${r.label}
-              <em class="pyr-branch">${this._branchLabel(r.branch)}</em>
-            </span>`)}
+            ${Object.entries(groups).map(([branch, roles]) => html`
+              <div class="pyr-group" style="--g:${branchColor(branch)}">
+                ${roles.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
+                  <span class="pyr-dot" style="background:${branchColor(branch)}"></span>${r.label}
+                  <em class="pyr-branch">${this._branchLabel(branch)}</em>
+                </span>`)}
+              </div>`)}
           </div>`;
         })}
       </div>`;
