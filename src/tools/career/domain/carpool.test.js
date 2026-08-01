@@ -10,6 +10,8 @@ import {
   seatsLeft,
   isMember,
   canJoin,
+  isInvited,
+  canInvite,
   routeSummary,
   memberStopState,
   carpoolProgress,
@@ -248,5 +250,42 @@ describe('carpool: desde la ruta planificada personal', () => {
 describe('carpool: día local', () => {
   it('localIsoDay produce YYYY-MM-DD', () => {
     expect(localIsoDay(new Date(2026, 6, 4, 23, 59))).toBe('2026-07-04');
+  });
+});
+
+describe('carpool — invitaciones (RMR-PCS-0029 · F3)', () => {
+  const base = {
+    name: 'Grupo A', status: 'open', seats: 4,
+    conductor: { personId: 'c', name: 'Conductor' },
+    members: [{ personId: 'c', name: 'Conductor', joinedAt: '2026-08-01T00:00:00Z' }],
+    route: [],
+  };
+
+  it('normalizeCarpool lee invitedPersonIds y descarta vacíos, duplicados y miembros', () => {
+    const c = normalizeCarpool({ ...base, invitedPersonIds: ['p1', 'p1', '', '  ', 'c'] }, 'id1');
+    expect(c.invitedPersonIds).toEqual(['p1']); // 'c' es miembro → fuera; dup/vacíos fuera
+  });
+
+  it('normalizeCarpool sin invitedPersonIds → array vacío', () => {
+    expect(normalizeCarpool(base, 'id1').invitedPersonIds).toEqual([]);
+  });
+
+  it('isInvited/canInvite respetan miembros, invitados, aforo y estado', () => {
+    const c = normalizeCarpool({ ...base, invitedPersonIds: ['p1'] }, 'id1');
+    expect(isInvited(c, 'p1')).toBe(true);
+    expect(isInvited(c, 'p2')).toBe(false);
+    expect(canInvite(c, 'p2')).toBe(true);     // hueco libre, no miembro ni invitado
+    expect(canInvite(c, 'p1')).toBe(false);    // ya invitado
+    expect(canInvite(c, 'c')).toBe(false);     // ya miembro
+    expect(canInvite(c, null)).toBe(false);
+    // sin plaza (aforo lleno: 2 miembros, 2 plazas)
+    const full = normalizeCarpool({
+      ...base, seats: 2,
+      members: [base.members[0], { personId: 'm2', name: 'M2', joinedAt: '2026-08-01T00:00:00Z' }],
+    }, 'id2');
+    expect(canInvite(full, 'p2')).toBe(false);
+    // cerrado
+    const closed = normalizeCarpool({ ...base, status: 'closed' }, 'id3');
+    expect(canInvite(closed, 'p2')).toBe(false);
   });
 });

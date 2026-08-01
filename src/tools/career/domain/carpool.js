@@ -156,6 +156,13 @@ export function normalizeCarpool(data, id) {
     },
     members,
     memberIds: members.map((m) => m.personId),
+    // Personas INVITADAS pendientes de aceptar (RMR-PCS-0029 · F3). No se
+    // cuentan como miembros; se descartan las que ya son miembros y las vacías.
+    invitedPersonIds: [...new Set(
+      (Array.isArray(data?.invitedPersonIds) ? data.invitedPersonIds : [])
+        .map((x) => String(x ?? '').trim())
+        .filter((x) => x && !members.some((m) => m.personId === x)),
+    )],
     route: (Array.isArray(data?.route) ? data.route : [])
       .map(normalizeCarpoolStop)
       .filter((s) => s !== null),
@@ -186,6 +193,25 @@ export function isMember(carpool, personId) {
 export function canJoin(carpool, personId) {
   if (!personId) return false;
   return carpool.status === 'open' && seatsLeft(carpool) > 0 && !isMember(carpool, personId);
+}
+
+/**
+ * ¿La persona está INVITADA a este carpool (pendiente de aceptar)? (F3)
+ * @param {Carpool} carpool @param {string|null|undefined} personId @returns {boolean}
+ */
+export function isInvited(carpool, personId) {
+  return Boolean(personId) && (carpool.invitedPersonIds ?? []).includes(personId);
+}
+
+/**
+ * ¿Se puede INVITAR a esta persona? El carpool está abierto, queda plaza, no es
+ * ya miembro y no está ya invitada (F3).
+ * @param {Carpool} carpool @param {string|null|undefined} personId @returns {boolean}
+ */
+export function canInvite(carpool, personId) {
+  if (!personId) return false;
+  return carpool.status === 'open' && seatsLeft(carpool) > 0
+    && !isMember(carpool, personId) && !isInvited(carpool, personId);
 }
 
 /**
