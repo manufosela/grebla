@@ -20,6 +20,7 @@
  * @property {string|null} [uid]            Cuenta vinculada que CORROBORA a la persona al loguearse (atributo, no clave). Puede ser null para siempre sin afectar a su organización (RMR-PCS-0027).
  * @property {'engineer'|'manager'|'head'} [orgRole]  Rol organizativo EXPLÍCITO de la persona (persona-céntrico, RMR-PCS-0027): fuente de verdad de la jerarquía, independiente del login. Ausente = dato pre-migración (se deriva del uid como fallback).
  * @property {string|null} [reportsToPersonId]  personId del superior (manager de un engineer, head de un manager). Referencia por la clave inmutable personId, nunca por nombre ni uid.
+ * @property {Record<string, { use?: boolean, manage?: boolean }>} [toolOverrides]  Excepciones de permisos de herramientas para ESTA persona (RMR-PCS-0027 · F8b): anulan el default de su rol. Ej: { marea: { use: false } } desactiva Marea solo a esta persona. Ausente = todo por el rol.
  * @property {string|null} [pendingEmail]   Invitación por email a alguien que aún no se ha logado: la persona se prepara con uid null y, en su primer login con ese email, una Cloud Function sella el uid y limpia este campo.
  * @property {string[]} [labels]            Etiquetas libres (gremios/equipos) asignadas a la persona.
  * @property {string[]} [squadIds]          Squads a los que pertenece (por ID del catálogo /squads; puede estar en varios).

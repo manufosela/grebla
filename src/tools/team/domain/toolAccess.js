@@ -23,11 +23,22 @@
  * @property {Grant} [audience]
  * @property {Grant} [managedBy]
  *
+ * @typedef {Object} ToolOverride  Excepción por persona para una herramienta.
+ * @property {boolean} [use]      fuerza (true) o niega (false) VER/usar; ausente = hereda del rol
+ * @property {boolean} [manage]   fuerza (true) o niega (false) GESTIONAR; ausente = hereda del rol
+ *
  * @typedef {Object} PersonRef  Persona ya resuelta para evaluar acceso.
  * @property {string|null} personId
  * @property {string|null} [branch]    rama (derivada de su rol)
  * @property {string|null} [roleId]    su rol del organigrama
+ * @property {Record<string, ToolOverride>} [toolOverrides]  excepciones por herramienta que ANULAN el default del rol
  */
+
+/** Lee un override booleano de una persona para una herramienta y dimensión (use|manage). */
+function overrideOf(person, toolId, dim) {
+  const v = person?.toolOverrides?.[toolId]?.[dim];
+  return v === true || v === false ? v : undefined;
+}
 
 /**
  * ¿La persona encaja en un grant? Unión de las reglas del grant.
@@ -46,7 +57,9 @@ export function matchesGrant(grant, person) {
 }
 
 /**
- * ¿Puede la persona VER/usar la herramienta? El superadmin siempre puede.
+ * ¿Puede la persona VER/usar la herramienta? El superadmin siempre puede. Un
+ * override en la ficha (`toolOverrides[toolId].use`) ANULA el default del rol —
+ * así un manager puede, p.ej., desactivar Marea a un recién llegado un mes.
  * @param {PersonRef} person
  * @param {ToolPolicy|undefined|null} policy
  * @param {{ isSuperadmin?: boolean }} [ctx]
@@ -54,12 +67,14 @@ export function matchesGrant(grant, person) {
  */
 export function canUseTool(person, policy, { isSuperadmin = false } = {}) {
   if (isSuperadmin) return true;
+  const ov = overrideOf(person, policy?.toolId, 'use');
+  if (ov !== undefined) return ov;
   return matchesGrant(policy?.audience, person);
 }
 
 /**
- * ¿Puede la persona ADMINISTRAR la herramienta? El superadmin siempre puede;
- * el resto solo si encaja en `managedBy`.
+ * ¿Puede la persona ADMINISTRAR la herramienta? El superadmin siempre puede; el
+ * resto por `managedBy`, salvo override individual (`toolOverrides[toolId].manage`).
  * @param {PersonRef} person
  * @param {ToolPolicy|undefined|null} policy
  * @param {{ isSuperadmin?: boolean }} [ctx]
@@ -67,7 +82,28 @@ export function canUseTool(person, policy, { isSuperadmin = false } = {}) {
  */
 export function canManageTool(person, policy, { isSuperadmin = false } = {}) {
   if (isSuperadmin) return true;
+  const ov = overrideOf(person, policy?.toolId, 'manage');
+  if (ov !== undefined) return ov;
   return matchesGrant(policy?.managedBy, person);
+}
+
+/**
+ * Estado EFECTIVO de acceso de una persona a una herramienta, con el ORIGEN de
+ * cada decisión — para pintar la matriz de permisos (heredado del rol vs override).
+ * @param {PersonRef} person
+ * @param {ToolPolicy|undefined|null} policy
+ * @param {{ isSuperadmin?: boolean }} [ctx]
+ * @returns {{ use: { value: boolean, source: 'superadmin'|'override'|'role' },
+ *   manage: { value: boolean, source: 'superadmin'|'override'|'role' } }}
+ */
+export function effectiveToolAccess(person, policy, { isSuperadmin = false } = {}) {
+  const dim = (name, grant) => {
+    if (isSuperadmin) return { value: true, source: /** @type {const} */ ('superadmin') };
+    const ov = overrideOf(person, policy?.toolId, name);
+    if (ov !== undefined) return { value: ov, source: /** @type {const} */ ('override') };
+    return { value: matchesGrant(grant, person), source: /** @type {const} */ ('role') };
+  };
+  return { use: dim('use', policy?.audience), manage: dim('manage', policy?.managedBy) };
 }
 
 /**
