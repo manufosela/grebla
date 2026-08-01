@@ -94,6 +94,7 @@ export const ENGINEERING_FRAMEWORK = {
     { id: 'execution', name: 'Execution & Delivery', order: 4, description: 'Fiabilidad, ownership y capacidad de sacar las cosas adelante.' },
     { id: 'leadership', name: 'Leadership & Collaboration', order: 5, description: 'Mentoría, comunicación y hacer mejor al equipo que te rodea.' },
     { id: 'culture', name: 'Cultural Contribution', order: 6, description: 'Cómo contribuyes a la cultura (honestidad, ownership, respeto, cuidar el listón del equipo).' },
+    { id: 'orchestration', name: 'Orquestación y juicio', order: 7, description: 'Dirigir agentes de IA con criterio: dar contexto, descomponer y delegar, verificar y desconfiar del output, detectar el error sutil, decidir con información incompleta y proteger la atención. El cuello de botella se desplaza de escribir código a juzgar y orquestar.' },
   ],
   // Matriz de expectativas (Nivel × Dimensión) y addendums por disciplina:
   // contenido del documento de carrera de TRIBBU (ver frameworkContent.js).
