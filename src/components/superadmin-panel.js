@@ -152,6 +152,8 @@ export class SuperadminPanel extends LitElement {
     _toolNotice: { state: true },
     _peopleList: { state: true },
     _peopleError: { state: true },
+    _peopleNotice: { state: true },
+    _confirmDeletePerson: { state: true },
     _usersSubtab: { state: true },
   };
 
@@ -433,8 +435,11 @@ export class SuperadminPanel extends LitElement {
     /** @type {Array<Object>} personas /people (para verlas TODAS en Usuarios, F8c). */
     this._peopleList = [];
     this._peopleError = '';
+    this._peopleNotice = '';
+    /** @type {string|null} id de persona pendiente de confirmar baja. */
+    this._confirmDeletePerson = null;
     /** @type {'cuentas'|'personas'} sub-pestaña activa de «Usuarios». */
-    this._usersSubtab = 'cuentas';
+    this._usersSubtab = 'personas';
     this._loaded = false;
   }
 
@@ -816,6 +821,69 @@ export class SuperadminPanel extends LitElement {
       this._peopleList = await peoplePromise;
     } catch (err) {
       this._peopleError = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
+    }
+  }
+
+  // ── Gestión de personas desde el panel (RMR-PCS-0027 · F8e) ────────────────
+
+  /** Email visible: el de la ficha, o el de su cuenta vinculada, o la invitación. */
+  _personEmail(p) {
+    if (p.email) return p.email;
+    if (p.uid) {
+      const acc = this._users.find((u) => u.uid === p.uid);
+      if (acc?.email) return acc.email;
+    }
+    return p.pendingEmail ?? null;
+  }
+
+  /** Cambia el rol organizativo de una persona (deriva la rama del catálogo). */
+  async _setPersonRole(personId, roleId) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    const branch = this._orgRoles.find((r) => r.id === roleId)?.branch ?? 'engineering';
+    const before = this._peopleList.find((p) => p.id === personId);
+    const prevRole = before?.orgRole ?? null;
+    const prevBranch = before?.orgBranch ?? null;
+    this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, orgRole: roleId, orgBranch: branch } : p));
+    try {
+      await this.persistence.people.update(personId, { orgRole: roleId, orgBranch: branch });
+      this._peopleNotice = 'Rol actualizado.';
+    } catch (err) {
+      // Revert QUIRÚRGICO: solo si el valor sigue siendo el optimista de esta
+      // llamada (no pisar un cambio posterior que sí guardó).
+      this._peopleList = this._peopleList.map((p) => (p.id === personId && p.orgRole === roleId ? { ...p, orgRole: prevRole, orgBranch: prevBranch } : p));
+      this._peopleError = 'No se pudo cambiar el rol.';
+    }
+  }
+
+  /** Cambia el superior (reportsToPersonId) de una persona. */
+  async _setPersonSuperior(personId, superiorId) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    const val = superiorId || null;
+    const before = this._peopleList.find((p) => p.id === personId);
+    const prevSup = before?.reportsToPersonId ?? null;
+    this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, reportsToPersonId: val } : p));
+    try {
+      await this.persistence.people.update(personId, { reportsToPersonId: val });
+      this._peopleNotice = 'Superior actualizado.';
+    } catch (err) {
+      this._peopleList = this._peopleList.map((p) => (p.id === personId && p.reportsToPersonId === val ? { ...p, reportsToPersonId: prevSup } : p));
+      this._peopleError = 'No se pudo cambiar el superior.';
+    }
+  }
+
+  /** Da de baja a una persona (active:false, conserva el histórico). */
+  async _removePerson(personId) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    try {
+      await this.persistence.people.deactivate(personId);
+      this._peopleList = this._peopleList.filter((p) => p.id !== personId);
+      this._confirmDeletePerson = null;
+      this._peopleNotice = 'Persona dada de baja.';
+    } catch (err) {
+      this._peopleError = 'No se pudo dar de baja a la persona.';
     }
   }
 
@@ -1784,28 +1852,42 @@ export class SuperadminPanel extends LitElement {
 
   /** Sub-pestaña «Personas»: todas las de /people (con o sin cuenta), su rol y estado. */
   _renderUsersPeople() {
+    const nameOf = (id) => this._peopleList.find((x) => x.id === id)?.name ?? '—';
     return html`
       <p class="ro-note">
-        Todas las personas de la organización, <strong>tengan cuenta o no</strong> — incluidas las creadas en un equipo que aún no se han logado. Su rol, superior y permisos se editan en la herramienta de Equipo. Aquí las ves para no darlas de alta dos veces.
+        Todas las personas de la organización, <strong>tengan cuenta o no</strong>. Aquí les cambias el <strong>rol</strong> y el <strong>superior</strong>, y las das de baja. Los permisos de herramientas y el detalle se editan en su ficha (herramienta de Equipo). El email es el de su cuenta vinculada o el de la invitación.
       </p>
-      ${this._peopleError
-        ? html`<p class="error">${this._peopleError}</p>`
-        : this._peopleList.length === 0
-        ? html`<p class="empty">Aún no hay personas dadas de alta.</p>`
+      ${this._peopleError ? html`<p class="error">${this._peopleError}</p>` : null}
+      ${this._peopleNotice ? html`<p class="notice">${this._peopleNotice}</p>` : null}
+      ${this._peopleList.length === 0
+        ? (this._peopleError ? null : html`<p class="empty">Aún no hay personas dadas de alta.</p>`)
         : html`<div class="table-wrap"><table>
-            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Superior</th><th>Cuenta</th><th></th></tr></thead>
             <tbody>
               ${this._peopleList.map((p) => {
-                const roleLabel = this._orgRoles.find((r) => r.id === p.orgRole)?.label ?? (p.orgRole ?? html`<span class="muted">—</span>`);
+                const email = this._personEmail(p);
                 let account;
                 if (p.uid) account = html`<span class="badge" style="background:var(--rm-accent,#2a9d8f)">Vinculada</span>`;
                 else if (p.pendingEmail) account = html`<span class="muted">Pendiente</span>`;
                 else account = html`<span class="muted">Sin cuenta</span>`;
                 return html`<tr>
                   <td>${p.name}</td>
-                  <td>${p.email ?? p.pendingEmail ?? html`<span class="muted">—</span>`}</td>
-                  <td>${roleLabel}</td>
+                  <td>${email ?? html`<span class="muted">—</span>`}</td>
+                  <td>
+                    <select @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
+                      ${this._orgRoles.length === 0 ? html`<option>${p.orgRole ?? '—'}</option>` : this._orgRoles.map((r) => html`<option value=${r.id} ?selected=${p.orgRole === r.id}>${r.label}</option>`)}
+                    </select>
+                  </td>
+                  <td>
+                    <select @change=${(e) => this._setPersonSuperior(p.id, e.target.value)} title=${nameOf(p.reportsToPersonId)}>
+                      <option value="" ?selected=${!p.reportsToPersonId}>— sin superior —</option>
+                      ${this._peopleList.filter((o) => o.id !== p.id).map((o) => html`<option value=${o.id} ?selected=${p.reportsToPersonId === o.id}>${o.name}</option>`)}
+                    </select>
+                  </td>
                   <td>${account}</td>
+                  <td>${this._confirmDeletePerson === p.id
+                    ? html`<span class="confirm">¿Dar de baja? <button class="yes" @click=${() => this._removePerson(p.id)}>Sí</button> <button @click=${() => { this._confirmDeletePerson = null; }}>No</button></span>`
+                    : html`<button class="del-btn" @click=${() => { this._confirmDeletePerson = p.id; }}>Baja</button>`}</td>
                 </tr>`;
               })}
             </tbody>
