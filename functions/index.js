@@ -2209,3 +2209,108 @@ export const pushMetricsToPortal = onSchedule(
     logger.info('Push de métricas al portal completado', results);
   },
 );
+
+/**
+ * Invitar a una persona a un carpool (shippooling) por su EMAIL (RMR-PCS-0029 · F3).
+ * Solo quien conduce invita. Resuelve email→persona con Admin SDK (el cliente NUNCA
+ * ve el email de otros: solo recibe el nombre resuelto) y añade su personId a
+ * `invitedPersonIds` si el grupo está abierto, hay plaza (contando invitaciones
+ * pendientes) y no es ya miembro ni está ya invitada.
+ */
+export const inviteToCarpool = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const carpoolId = String(request.data?.carpoolId ?? '').trim();
+  const rawEmail = String(request.data?.email ?? '').trim();
+  const lowerEmail = rawEmail.toLowerCase();
+  if (!carpoolId || !lowerEmail) throw new HttpsError('invalid-argument', 'Falta el grupo o el email.');
+  const db = getFirestore();
+
+  const meSnap = await db.collection('people').where('uid', '==', caller.uid).limit(1).get();
+  if (meSnap.empty) throw new HttpsError('failed-precondition', 'No tienes una ficha vinculada.');
+  const myPersonId = meSnap.docs[0].id;
+
+  // Se resuelve el email FUERA de la transacción (una query no puede ir dentro).
+  // ANTI-ENUMERACIÓN (privacidad): la respuesta NUNCA revela si el email existe,
+  // está inactivo o ya está en el grupo, ni devuelve su nombre. Cualquier email
+  // no elegible sale con el MISMO `{ ok: true }` genérico. Solo se lanzan errores
+  // a nivel de GRUPO (no eres el conductor, no está abierto, no quedan plazas),
+  // que no dependen del email.
+  // Emails: los flujos de auth los guardan en minúsculas, pero una ficha creada
+  // a mano podría tener mayúsculas. Se prueba primero en minúsculas (la
+  // convención) y, si no, tal cual se escribió.
+  let inv = await db.collection('people').where('email', '==', lowerEmail).limit(1).get();
+  if (inv.empty && rawEmail !== lowerEmail) {
+    inv = await db.collection('people').where('email', '==', rawEmail).limit(1).get();
+  }
+  const invitedDoc = inv.empty ? null : inv.docs[0];
+  const invitedPersonId = invitedDoc?.id ?? null;
+  const eligible = Boolean(invitedDoc) && invitedDoc.data().active !== false && invitedPersonId !== myPersonId;
+
+  const ref = db.doc(`carpools/${carpoolId}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Ese grupo no existe.');
+    const c = snap.data();
+    if (c.conductor?.personId !== myPersonId) {
+      throw new HttpsError('permission-denied', 'Solo quien conduce el grupo puede invitar.');
+    }
+    if (c.status !== 'open') throw new HttpsError('failed-precondition', 'El grupo no está abierto.');
+    if (!eligible) return; // email no registrado/inactivo/tú mismo: respuesta genérica
+    const members = Array.isArray(c.members) ? c.members : [];
+    const invited = Array.isArray(c.invitedPersonIds) ? c.invitedPersonIds : [];
+    if (members.some((m) => m.personId === invitedPersonId) || invited.includes(invitedPersonId)) return; // ya dentro/invitado: genérico
+    if (members.length + invited.length >= (c.seats ?? 0)) {
+      throw new HttpsError('failed-precondition', 'No quedan plazas (contando las invitaciones pendientes).');
+    }
+    tx.set(ref, { invitedPersonIds: [...invited, invitedPersonId] }, { merge: true });
+  });
+  return { ok: true };
+});
+
+/**
+ * Responder a una invitación de carpool (RMR-PCS-0029 · F3): aceptar (pasar a
+ * miembro si sigue habiendo plaza) o rechazar (quitarse de invitados). Admin SDK,
+ * en transacción para no pasarse de aforo.
+ */
+export const respondCarpoolInvitation = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const carpoolId = String(request.data?.carpoolId ?? '').trim();
+  const accept = request.data?.accept;
+  if (!carpoolId) throw new HttpsError('invalid-argument', 'Falta el grupo.');
+  if (typeof accept !== 'boolean') throw new HttpsError('invalid-argument', 'Indica si aceptas (true) o rechazas (false).');
+  const db = getFirestore();
+
+  const meSnap = await db.collection('people').where('uid', '==', caller.uid).limit(1).get();
+  if (meSnap.empty) throw new HttpsError('failed-precondition', 'No tienes una ficha vinculada.');
+  const myPersonId = meSnap.docs[0].id;
+  const myName = meSnap.docs[0].data().name ?? myPersonId;
+
+  const ref = db.doc(`carpools/${carpoolId}`);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Ese grupo ya no existe.');
+    const c = snap.data();
+    const invited = Array.isArray(c.invitedPersonIds) ? c.invitedPersonIds : [];
+    if (!invited.includes(myPersonId)) throw new HttpsError('failed-precondition', 'No tienes una invitación a ese grupo.');
+    const nextInvited = invited.filter((id) => id !== myPersonId);
+    if (!accept) {
+      tx.set(ref, { invitedPersonIds: nextInvited }, { merge: true });
+      return { ok: true, joined: false };
+    }
+    if (c.status !== 'open') throw new HttpsError('failed-precondition', 'El grupo ya no está abierto.');
+    const members = Array.isArray(c.members) ? c.members : [];
+    if (members.some((m) => m.personId === myPersonId)) throw new HttpsError('already-exists', 'Ya estás en el grupo.');
+    if (members.length >= (c.seats ?? 0)) throw new HttpsError('failed-precondition', 'El grupo se ha llenado.');
+    const nextMembers = [...members, { personId: myPersonId, name: myName, joinedAt: new Date().toISOString() }];
+    const status = (c.seats ?? 0) - nextMembers.length <= 0 ? 'full' : 'open';
+    tx.set(ref, {
+      members: nextMembers,
+      memberIds: nextMembers.map((m) => m.personId),
+      status,
+      invitedPersonIds: nextInvited,
+    }, { merge: true });
+    return { ok: true, joined: true };
+  });
+});

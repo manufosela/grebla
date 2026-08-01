@@ -29,7 +29,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { db, app } from './firebase.js';
 import {
   DEFAULT_CARPOOL_SEATS,
   MIN_CARPOOL_SEATS,
@@ -228,4 +228,44 @@ export async function closeCarpool(carpool) {
   if (carpool.status === 'closed') return carpool;
   await updateDoc(carpoolDoc(carpool.id), { status: 'closed' });
   return { ...carpool, status: 'closed' };
+}
+
+/**
+ * Invitar por email a un carpool (RMR-PCS-0029 · F3): la Cloud Function resuelve
+ * el email→persona server-side. Respuesta GENÉRICA (anti-enumeración): no revela
+ * si el email existe ni el nombre.
+ * @param {string} carpoolId @param {string} email
+ * @returns {Promise<{ ok: boolean }>}
+ */
+export async function inviteToCarpoolByEmail(carpoolId, email) {
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const fns = getFunctions(app, 'europe-west1');
+  const res = await httpsCallable(fns, 'inviteToCarpool')({ carpoolId, email: String(email ?? '').trim() });
+  return res.data;
+}
+
+/**
+ * Aceptar (accept=true) o rechazar una invitación de carpool (F3). La Cloud
+ * Function comprueba plaza y estado y mueve al invitado a miembro.
+ * @param {string} carpoolId @param {boolean} accept
+ * @returns {Promise<{ ok: boolean, joined: boolean }>}
+ */
+export async function respondCarpoolInvitation(carpoolId, accept) {
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const fns = getFunctions(app, 'europe-west1');
+  const res = await httpsCallable(fns, 'respondCarpoolInvitation')({ carpoolId, accept: accept === true });
+  return res.data;
+}
+
+/**
+ * Carpools a los que ME HAN INVITADO (pendientes de aceptar). Lectura abierta a
+ * autenticados; se filtra por invitedPersonIds array-contains mi personId.
+ * @param {string} personId
+ * @returns {Promise<import('../tools/career/domain/carpool.js').Carpool[]>}
+ */
+export async function listMyInvitations(personId) {
+  const id = String(personId ?? '').trim();
+  if (!id) return [];
+  const snap = await getDocs(query(carpoolsCol(), where('invitedPersonIds', 'array-contains', id)));
+  return snap.docs.map((d) => normalizeCarpool(d.data(), d.id)).filter((c) => c !== null);
 }
