@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, roleChain, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows } from './orgRoles.js';
+import { rootRoles, childrenOf, roleChain, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -78,28 +78,59 @@ describe('assertValidReportsTo', () => {
   });
 });
 
-describe('orgRoleRows', () => {
-  const branches = [{ id: 'engineering' }, { id: 'product' }, { id: 'data' }, { id: 'generico' }];
-
-  it('agrupa por rama (orden del catálogo) y post-orden dentro de cada rama', () => {
-    const rows = orgRoleRows(roles, branches);
-    // engineering: hojas arriba, base abajo → engineer, em, head-eng, cto; luego product, data, genérico
+describe('orgRoleRows — orden por DEPENDENCIAS (no por rama)', () => {
+  it('cada árbol contiguo en post-orden: hojas arriba, la base al final del bloque', () => {
+    const rows = orgRoleRows(roles);
     expect(rows.map((r) => r.role.id)).toEqual([
       'engineer', 'em', 'head-eng', 'cto', 'pm', 'cpo', 'head-data', 'generico',
     ]);
   });
 
-  it('marca firstOfBranch solo en la primera fila de cada bloque de rama', () => {
-    const rows = orgRoleRows(roles, branches);
-    expect(rows.filter((r) => r.firstOfBranch).map((r) => r.role.id)).toEqual([
+  it('una dependencia que CRUZA de rama mantiene la cadena junta (head-eng→cpo: cpo debajo)', () => {
+    // El caso reportado: Head of Engineering (engineering) depende de CPO (product).
+    const crossed = roles.map((r) => (r.id === 'head-eng' ? { ...r, reportsToRoleId: 'cpo' } : r));
+    const ids = orgRoleRows(crossed).map((r) => r.role.id);
+    // El árbol de cpo sale contiguo, con TODA la cadena de head-eng dentro y cpo al final (la base).
+    expect(ids).toEqual(['cto', 'engineer', 'em', 'head-eng', 'pm', 'cpo', 'head-data', 'generico']);
+    // Y cpo va justo después (debajo) de sus dependientes head-eng/pm, no en otro bloque.
+    expect(ids.indexOf('cpo')).toBeGreaterThan(ids.indexOf('head-eng'));
+    expect(ids.indexOf('cpo')).toBe(ids.indexOf('pm') + 1);
+  });
+
+  it('marca firstOfTree solo en la primera fila de cada árbol', () => {
+    const rows = orgRoleRows(roles);
+    expect(rows.filter((r) => r.firstOfTree).map((r) => r.role.id)).toEqual([
       'engineer', 'pm', 'head-data', 'generico',
     ]);
   });
 
-  it('coloca las ramas sin metadato de catálogo al final, como su propio bloque', () => {
-    const extra = [...roles, { id: 'cmo', label: 'CMO', branch: 'marketing', reportsToRoleId: null }];
-    const rows = orgRoleRows(extra, branches); // «marketing» no está en el catálogo
-    expect(rows[rows.length - 1].role.id).toBe('cmo');
-    expect(rows.find((r) => r.role.id === 'cmo').firstOfBranch).toBe(true);
+  it('los roles en un ciclo preexistente (huérfanos de cima) salen igualmente al final', () => {
+    const cyc = [
+      ...roles,
+      { id: 'a', label: 'A', branch: 'generico', reportsToRoleId: 'b' },
+      { id: 'b', label: 'B', branch: 'generico', reportsToRoleId: 'a' },
+    ];
+    const ids = orgRoleRows(cyc).map((r) => r.role.id);
+    expect(ids).toContain('a');
+    expect(ids).toContain('b');
+  });
+});
+
+describe('branchColor — color estable por rama (var override + fallback determinista)', () => {
+  it('canónicas: var(--rm-branch-<id>, color de marca)', () => {
+    expect(branchColor('engineering')).toBe('var(--rm-branch-engineering, #2a9d8f)');
+    expect(branchColor('product')).toBe('var(--rm-branch-product, #e76f51)');
+    expect(branchColor('data')).toBe('var(--rm-branch-data, #457b9d)');
+  });
+
+  it('rama creada: fallback HSL determinista (mismo id → mismo color)', () => {
+    const c1 = branchColor('directiva');
+    expect(c1).toMatch(/^var\(--rm-branch-directiva, hsl\(\d+ 55% 58%\)\)$/);
+    expect(branchColor('directiva')).toBe(c1); // estable
+    expect(branchColor('operaciones')).not.toBe(c1); // ids distintos, colores distintos
+  });
+
+  it('tolera id vacío cayendo al genérico', () => {
+    expect(branchColor('')).toBe('var(--rm-branch-generico, #6b7280)');
   });
 });

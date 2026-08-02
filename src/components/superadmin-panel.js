@@ -32,7 +32,7 @@ import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows } from '../tools/team/domain/orgRoles.js';
+import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows, branchColor } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
 
@@ -1913,14 +1913,13 @@ export class SuperadminPanel extends LitElement {
   }
 
   /**
-   * Filas del editor de roles, AGRUPADAS por rama (para leer de un vistazo qué
-   * va con qué) y, dentro de cada rama, en orden jerárquico post-orden (hijos
-   * antes que el padre: coherente con la pirámide invertida — las hojas arriba y
-   * el rol base «sin inferior» abajo). Marca `firstOfBranch` en la primera fila
-   * de cada bloque para dibujar la línea separadora solo ENTRE ramas.
+   * Filas del editor de roles ORDENADAS POR DEPENDENCIAS: cada árbol contiguo en
+   * post-orden (hojas arriba, cada rol encima de su «depende de», la base al final
+   * del bloque — pirámide invertida). La rama es un dato de la fila, no el criterio
+   * de agrupación: una cadena que cruza de rama (head-eng→CPO) se mantiene junta.
    */
   _orgRoleRows() {
-    return orgRoleRows(this._orgRoles, this._orgBranches);
+    return orgRoleRows(this._orgRoles);
   }
 
   _renderOrgRoles() {
@@ -1953,7 +1952,7 @@ export class SuperadminPanel extends LitElement {
           : html`<div class="table-wrap"><table class="org-roles">
               <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
-                ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfBranch }) => html`<tr class=${firstOfBranch ? 'branch-start' : ''}>
+                ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfTree }) => html`<tr class=${firstOfTree ? 'branch-start' : ''}>
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
                   <td>${this._renderRoleBranchCell(role)}</td>
                   <td>${ro
@@ -2026,7 +2025,6 @@ export class SuperadminPanel extends LitElement {
     for (let d = maxDepth; d >= 0; d -= 1) {
       levels.push(roles.filter((r) => depthOf(r.id) === d));
     }
-    const branchColor = (b) => `var(--rm-branch-${b}, var(--rm-accent, #2a9d8f))`;
     // Etiqueta del superior de cada rol, precalculada para no anidar un find() dentro
     // del triple map de la pirámide (S2004: no anidar funciones >4 niveles).
     const labelById = new Map(roles.map((r) => [r.id, r.label]));
@@ -2073,7 +2071,7 @@ export class SuperadminPanel extends LitElement {
                     <td>${this._editBranchId === b.id
                       ? html`<input .value=${this._editBranchLabel} @input=${(e) => { this._editBranchLabel = e.target.value; }}
                           @keydown=${(e) => { if (e.key === 'Enter') this._renameBranch(b.id); }} />`
-                      : html`<span class="pyr-dot" style="display:inline-block;background:var(--rm-branch-${b.id}, var(--rm-accent,#2a9d8f))"></span> ${b.label}`}</td>
+                      : html`<span class="pyr-dot" style="display:inline-block;background:${branchColor(b.id)}"></span> ${b.label}`}</td>
                     <td class="muted">${b.id}</td>
                     <td class="muted">${count}</td>
                     ${ro ? '' : html`<td>${this._editBranchId === b.id

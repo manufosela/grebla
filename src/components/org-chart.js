@@ -10,7 +10,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { listOrgRoles } from '../lib/orgRoles.js';
 import { listOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { roleChain } from '../tools/team/domain/orgRoles.js';
+import { roleChain, branchColor } from '../tools/team/domain/orgRoles.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -105,7 +105,7 @@ export class OrgChart extends LitElement {
     return this._branches.find((b) => b.id === id)?.label ?? id;
   }
 
-  _branchColor(b) { return `var(--rm-branch-${b}, var(--rm-accent, #2a9d8f))`; }
+  _branchColor(b) { return branchColor(b); }
 
   /** Niveles (por profundidad) de un conjunto de roles, de la base (abajo) a las
    *  hojas (arriba): array de [rolesEnEseNivel], en orden invertido para pintar. */
