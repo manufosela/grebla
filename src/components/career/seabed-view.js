@@ -26,8 +26,10 @@ const EYE_Y = 8;            // altura de buceo
 const SWIM_SPEED = 0.9;     // avance por frame
 const TURN_SPEED = 0.03;    // giro por frame (flechas ←/→)
 const SCENE_R = 150;        // radio nadable
-const ENTER_RADIUS = 17;    // proximidad a la PUERTA de una casa-coral
-const EXIT_RADIUS = 13;     // proximidad a la corriente ascendente
+const ENTER_RADIUS = 17;    // proximidad a la PUERTA de una casa-coral (prompt)
+const EXIT_RADIUS = 13;     // proximidad a la corriente ascendente (prompt)
+const HOUSE_DOOR_RADIUS = 11; // «choque» con la puerta: nadar contra ella entra
+const EXIT_ENTER_RADIUS = 8;  // nadar dentro de la corriente sube a la superficie
 // Distancia mínima del CENTRO (tubo de subida) a cualquier casa-coral. > ENTER+EXIT
 // para que las zonas de «entrar» y «subir» nunca se solapen y el tubo quede libre.
 const CENTER_CLEARANCE = 34;
@@ -106,6 +108,7 @@ export class SeabedView extends LitElement {
     this._pitch = -0.12;
     this._drag = null;        // {x,y} durante el arrastre de mirada
     this._exitParts = [];
+    this._surfacing = false;  // guard: subir a la superficie una sola vez
   }
 
   connectedCallback() {
@@ -333,10 +336,14 @@ export class SeabedView extends LitElement {
       if (f || s) {
         const fx = -Math.sin(this._yaw); const fz = -Math.cos(this._yaw);
         const rx = Math.cos(this._yaw); const rz = -Math.sin(this._yaw);
-        camera.position.x += (f * fx + s * rx) * SWIM_SPEED;
-        camera.position.z += (f * fz + s * rz) * SWIM_SPEED;
+        const vx = f * fx + s * rx; const vz = f * fz + s * rz; // dirección de nado
+        camera.position.x += vx * SWIM_SPEED;
+        camera.position.z += vz * SWIM_SPEED;
         const d = Math.hypot(camera.position.x, camera.position.z);
         if (d > SCENE_R) { camera.position.x *= SCENE_R / d; camera.position.z *= SCENE_R / d; }
+        // Nadar CONTRA la puerta entra; nadar hacia la corriente sube (como en la
+        // isla: chocar de frente con la puerta / pisar el agujero, sin [E]).
+        this._checkSwimInto(vx, vz);
       }
     }
     camera.rotation.y = this._yaw; camera.rotation.x = this._pitch;
@@ -358,6 +365,38 @@ export class SeabedView extends LitElement {
     if (near !== this._near) this._near = near;
     const atExit = this._exitSpot ? Math.hypot(x - this._exitSpot.x, z - this._exitSpot.z) < EXIT_RADIUS : false;
     if (atExit !== this._nearExit) this._nearExit = atExit;
+  }
+
+  /** Entrar en una casa-coral al nadar contra su PUERTA, o subir al nadar hacia la
+   *  corriente ascendente — el MISMO gesto que en la isla (chocar de frente con la
+   *  puerta / meterse en el agujero), sin necesidad de [E]. `vx,vz` = dirección de
+   *  nado de este frame. */
+  _checkSwimInto(vx, vz) {
+    const { x, z } = this._t.camera.position;
+    // Subir: nadando HACIA la corriente del centro (dentro de su columna).
+    if (this._exitSpot) {
+      const ex = this._exitSpot.x - x; const ez = this._exitSpot.z - z;
+      const ed = Math.hypot(ex, ez);
+      if (ed <= EXIT_ENTER_RADIUS && (vx * ex + vz * ez) > 0) { this._doSurface(); return; }
+    }
+    // Entrar: delante de la PUERTA (que mira al centro) y nadando hacia la casa.
+    for (const r of this._reefs) {
+      const dx = r.spot.x - x; const dz = r.spot.z - z; // buzo → casa
+      const d = Math.hypot(dx, dz);
+      if (d > HOUSE_DOOR_RADIUS || d < 0.001) continue;
+      if ((vx * dx + vz * dz) <= 0) continue; // ¿nado hacia la casa?
+      const rr = Math.hypot(r.spot.x, r.spot.z) || 1;
+      const nx = -r.spot.x / rr; const nz = -r.spot.z / rr; // normal de la puerta (al centro)
+      // ¿estoy delante de la puerta? casa→buzo alineado con su normal (arco ~60°).
+      if ((-dx * nx + -dz * nz) / d > 0.5) { this._selected = r.cityId; return; }
+    }
+  }
+
+  /** Sube a la superficie una sola vez (guard: el bucle sigue hasta desmontar). */
+  _doSurface() {
+    if (this._surfacing) return;
+    this._surfacing = true;
+    this._surface();
   }
 
   _dispose(obj) {
@@ -401,7 +440,7 @@ export class SeabedView extends LitElement {
         : html`
             ${this._near ? html`<button type="button" class="prompt" @click=${this._interact}><kbd>E</kbd> Entrar en ${nearName}</button>` : nothing}
             ${!this._near && this._nearExit ? html`<button type="button" class="prompt" @click=${this._interact}><kbd>E</kbd> Subir a la superficie</button>` : nothing}
-            <p class="hint"><kbd>←</kbd><kbd>→</kbd> girar · <kbd>↑</kbd><kbd>↓</kbd> / <kbd>W</kbd><kbd>S</kbd> avanzar · <kbd>A</kbd><kbd>D</kbd> desplazarte · <kbd>E</kbd> entrar</p>`}
+            <p class="hint"><kbd>←</kbd><kbd>→</kbd> girar · <kbd>↑</kbd><kbd>↓</kbd> / <kbd>W</kbd><kbd>S</kbd> avanzar · <kbd>A</kbd><kbd>D</kbd> desplazarte · nada contra la puerta para entrar</p>`}
       ${this._renderSheet()}
     `;
   }
