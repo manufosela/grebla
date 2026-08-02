@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasSeabed, seabedRef, seabedScene, seabedProgress } from './seabed.js';
+import { hasSeabed, seabedRef, seabedScene, seabedProgress, arrecifeOrder } from './seabed.js';
 
 describe('career — lecho (helpers puros, RMR-PCS-0028 · F3)', () => {
   const islands = [
@@ -68,5 +68,31 @@ describe('career — lecho (helpers puros, RMR-PCS-0028 · F3)', () => {
 
   it('seabedProgress tolera mapa/journey vacíos', () => {
     expect(seabedProgress(null, null)).toEqual({ statusById: new Map(), lit: 0, total: 0 });
+  });
+});
+
+describe('arrecifeOrder — número de orden por nivel de prereqs (rework B)', () => {
+  it('nivel 1 los raíz, +1 por cada capa de prereqs', () => {
+    const map = { cities: [
+      { id: 'a', prereqs: [] },
+      { id: 'b', prereqs: ['a'] },
+      { id: 'c', prereqs: ['b'] },
+      { id: 'd', prereqs: [] },              // otra raíz
+      { id: 'e', prereqs: ['b', 'd'] },       // 1 + max(nivel b=2, nivel d=1) = 3
+    ] };
+    const order = arrecifeOrder(map);
+    expect(order.get('a')).toBe(1);
+    expect(order.get('d')).toBe(1);
+    expect(order.get('b')).toBe(2);
+    expect(order.get('c')).toBe(3);
+    expect(order.get('e')).toBe(3);
+  });
+
+  it('ignora prereqs inexistentes y tolera vacío/ciclos', () => {
+    expect(arrecifeOrder({ cities: [{ id: 'x', prereqs: ['fantasma'] }] }).get('x')).toBe(1);
+    expect(arrecifeOrder(null).size).toBe(0);
+    // ciclo preexistente: no cuelga
+    const cyc = { cities: [{ id: 'p', prereqs: ['q'] }, { id: 'q', prereqs: ['p'] }] };
+    expect(() => arrecifeOrder(cyc)).not.toThrow();
   });
 });
