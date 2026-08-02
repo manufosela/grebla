@@ -70,7 +70,7 @@ export const ARCHIPELAGO_ISLANDS = [
   // isla del mar (seabed:true) — se reserva para la vista sumergida (F3), pero
   // por lo demás es una isla normal del modelo (editable, con journey y rutas).
   // Su x/y solo cuenta para el modelo; no se dibuja en el mapa del mar.
-  { id: SEABED_ISLAND_ID, name: 'El lecho que sostiene', shortName: 'El lecho', discipline: 'orchestration', x: 50, y: 50, seabed: true, citizenshipPct: 75, citiesTotal: 7 },
+  { id: SEABED_ISLAND_ID, name: 'El lecho que sostiene', shortName: 'El lecho', discipline: 'orchestration', x: 50, y: 50, seabed: true, citizenshipPct: 75, citiesTotal: 13 },
 ];
 
 /**
