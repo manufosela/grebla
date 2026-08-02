@@ -2,7 +2,8 @@
  * <seabed-view> — el lecho como JUEGO 3D en PRIMERA PERSONA (RMR-PCS-0028 · B2).
  *
  * Motor propio (no reutiliza el 3D de la isla). Buceas en primera persona
- * (WASD/flechas para avanzar/desplazarte, ratón arrastrando para mirar) por un
+ * (flechas ←/→ para girar, ↑/↓ o W/S para avanzar, A/D para desplazarte, y el
+ * ratón arrastrando también para mirar) por un
  * fondo submarino con CASAS-CORAL grandes y vistosas: cada arrecife es una casa
  * con una PUERTA; al acercarte a su puerta puedes ENTRAR ([E]) y ver su info
  * (resumen, claves, era-IA, recursos, encender) — igual que en la isla. En el
@@ -23,6 +24,7 @@ const MILESTONE_COLOR = 0xffcf6b;
 const WORLD_SCALE = 2.6;
 const EYE_Y = 8;            // altura de buceo
 const SWIM_SPEED = 0.9;     // avance por frame
+const TURN_SPEED = 0.03;    // giro por frame (flechas ←/→)
 const SCENE_R = 150;        // radio nadable
 const ENTER_RADIUS = 17;    // proximidad a la PUERTA de una casa-coral
 const EXIT_RADIUS = 13;     // proximidad a la corriente ascendente
@@ -56,6 +58,7 @@ export class SeabedView extends LitElement {
     .prompt { position: absolute; left: 50%; bottom: 3.2rem; transform: translateX(-50%); z-index: 2; background: rgba(6, 26, 38, 0.85); border: 1.5px solid #4dd0e1; color: #eaf7fc; border-radius: 999px; padding: 0.5rem 1rem; font-size: 0.92rem; font-weight: 600; box-shadow: 0 0 18px rgba(77, 208, 225, 0.4); }
     .prompt kbd { background: #0a2a3c; border: 1px solid #4dd0e1; border-radius: 5px; padding: 0 0.35rem; font-weight: 800; }
     .hint { position: absolute; left: 50%; bottom: 0.8rem; transform: translateX(-50%); z-index: 2; font-size: 0.76rem; color: #8fb8c8; text-shadow: 0 1px 6px #000; pointer-events: none; text-align: center; }
+    .hint kbd { background: #0a2a3c; border: 1px solid #35576a; border-radius: 4px; padding: 0 0.3rem; margin: 0 0.05rem; font-weight: 700; color: #cdeefb; }
     .error { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 1rem; align-items: center; justify-content: center; z-index: 2; padding: 2rem; text-align: center; color: #9fc6d6; }
     .sheet-backdrop { position: absolute; inset: 0; z-index: 4; background: rgba(2, 10, 18, 0.55); backdrop-filter: blur(2px); }
     .sheet { position: absolute; z-index: 5; left: 50%; bottom: 0; transform: translateX(-50%); width: min(92%, 40rem); max-height: 88%; overflow-y: auto; background: linear-gradient(180deg, #0c2c40, #071a28); color: #e8f4f8; border: 1px solid rgba(120, 210, 255, 0.35); border-bottom: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); padding: 1.1rem 1.3rem 1.5rem; animation: surface-up 0.28s ease-out; }
@@ -298,15 +301,20 @@ export class SeabedView extends LitElement {
     if (!this._t) return;
     this._raf = requestAnimationFrame(this._loop);
     const { renderer, scene, camera } = this._t;
-    camera.rotation.y = this._yaw; camera.rotation.x = this._pitch;
-    // Buceo (WASD/flechas), pausado con la ficha abierta.
+    // Buceo (girar con ←/→, avanzar con W/S o ↑/↓, strafe con A/D), pausado con la ficha abierta.
     if (!this._selected) {
-      let f = 0; let s = 0;
       const k = this._keys;
+      // Girar la mirada con las flechas laterales (además del arrastre de ratón).
+      let turn = 0;
+      if (k.has('ArrowLeft')) turn += 1;
+      if (k.has('ArrowRight')) turn -= 1;
+      if (turn) this._yaw += turn * TURN_SPEED;
+      // Avanzar/retroceder y desplazamiento lateral.
+      let f = 0; let s = 0;
       if (k.has('KeyW') || k.has('ArrowUp')) f += 1;
       if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
-      if (k.has('KeyD') || k.has('ArrowRight')) s += 1;
-      if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;
+      if (k.has('KeyD')) s += 1;
+      if (k.has('KeyA')) s -= 1;
       if (f || s) {
         const fx = -Math.sin(this._yaw); const fz = -Math.cos(this._yaw);
         const rx = Math.cos(this._yaw); const rz = -Math.sin(this._yaw);
@@ -316,6 +324,7 @@ export class SeabedView extends LitElement {
         if (d > SCENE_R) { camera.position.x *= SCENE_R / d; camera.position.z *= SCENE_R / d; }
       }
     }
+    camera.rotation.y = this._yaw; camera.rotation.x = this._pitch;
     camera.position.y = EYE_Y;
     // Partículas de la corriente: suben y reaparecen abajo.
     for (const p of this._exitParts) { p.position.y += 0.35; if (p.position.y > 82) p.position.y -= 82; }
@@ -377,7 +386,7 @@ export class SeabedView extends LitElement {
         : html`
             ${this._near ? html`<div class="prompt"><kbd>E</kbd> Entrar en ${nearName}</div>` : nothing}
             ${!this._near && this._nearExit ? html`<div class="prompt"><kbd>E</kbd> Subir a la superficie</div>` : nothing}
-            <p class="hint">WASD / flechas para bucear · arrastra el ratón para mirar · <kbd>E</kbd> para entrar</p>`}
+            <p class="hint"><kbd>←</kbd><kbd>→</kbd> girar · <kbd>↑</kbd><kbd>↓</kbd> / <kbd>W</kbd><kbd>S</kbd> avanzar · <kbd>A</kbd><kbd>D</kbd> desplazarte · <kbd>E</kbd> entrar</p>`}
       ${this._renderSheet()}
     `;
   }
