@@ -13,6 +13,7 @@
  *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
 import { LitElement, html, css } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
 import {
@@ -509,6 +510,24 @@ export class SuperadminPanel extends LitElement {
       this._loadToolPolicies();
       // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
       if (!this.readOnly) this._loadUsers();
+    }
+    this._syncOrgRoleSelects();
+  }
+
+  /** Fija el valor mostrado de los <select> del editor de roles DESPUÉS del render:
+   *  sus <option> se generan en la misma plantilla y se crean tras el binding, así
+   *  que el select no reflejaría el valor por sí solo. Sin esto, cambiar «Rama» o
+   *  «Depende de» parecería no surtir efecto (el select vuelve a la 1ª opción). */
+  _syncOrgRoleSelects() {
+    const byId = new Map(this._orgRoles.map((r) => [r.id, r]));
+    for (const sel of this.renderRoot.querySelectorAll('select[data-branch-for]')) {
+      const role = byId.get(sel.dataset.branchFor);
+      if (role && sel.value !== role.branch) sel.value = role.branch;
+    }
+    for (const sel of this.renderRoot.querySelectorAll('select[data-parent-for]')) {
+      const role = byId.get(sel.dataset.parentFor);
+      const want = role?.reportsToRoleId ?? '';
+      if (role && sel.value !== want) sel.value = want;
     }
   }
 
@@ -1798,6 +1817,24 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
+  /** Cambia la RAMA de un rol existente (mueve el rol a otra área del organigrama).
+   *  Conserva label y reportsToRoleId (saveOrgRole hace merge). */
+  async _setRoleBranch(roleId, branchId) {
+    this._orgError = '';
+    this._orgNotice = '';
+    const role = this._orgRoles.find((r) => r.id === roleId);
+    if (!role || !branchId || role.branch === branchId) return;
+    const prevBranch = role.branch;
+    this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, branch: branchId } : r));
+    try {
+      await saveOrgRole(roleId, { label: role.label, branch: branchId, reportsToRoleId: role.reportsToRoleId ?? null });
+      this._orgNotice = `«${role.label}» movido a ${this._branchLabel(branchId)}.`;
+    } catch (err) {
+      this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, branch: prevBranch } : r));
+      this._orgError = err instanceof Error ? err.message : 'No se pudo cambiar la rama del rol.';
+    }
+  }
+
   async _createRole() {
     this._orgError = '';
     this._orgNotice = '';
@@ -1870,7 +1907,7 @@ export class SuperadminPanel extends LitElement {
     return html`
       <div>
         <h2>Organigrama — roles y jerarquía</h2>
-        <p class="ro-note">Cada rol define un nivel por etiqueta y de quién depende. Reordena cambiando «Depende de»; se impide crear ciclos. Un rol <strong>«sin inferior»</strong> es la <strong>base</strong> de su rama: <strong>al que nadie sostiene</strong> porque él sostiene a todos (liderazgo afectivo). En la pirámide invertida se dibuja en la punta de abajo, no arriba.</p>
+        <p class="ro-note">Cada rol tiene una <strong>Rama</strong> (el área donde se agrupa y colorea) y un <strong>«Depende de»</strong> (quién está por encima en la jerarquía). Son independientes: cambia la <strong>Rama</strong> para mover el rol a otra área, y <strong>«Depende de»</strong> para cambiar su línea de reporte (se impide crear ciclos). Un rol <strong>«sin inferior»</strong> es la <strong>base</strong> de su rama: <strong>al que nadie sostiene</strong> porque él sostiene a todos (liderazgo afectivo); en la pirámide invertida se dibuja en la punta de abajo, no arriba.</p>
         ${this._orgError ? html`<p class="error">${this._orgError}</p>` : null}
         ${this._orgNotice ? html`<p class="notice">${this._orgNotice}</p>` : null}
         ${this._orgRoles.length === 0
@@ -1878,14 +1915,18 @@ export class SuperadminPanel extends LitElement {
           : html`<div class="table-wrap"><table class="org-roles">
               <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
-                ${this._orgRoleRows().map(({ role, depth, firstOfBranch }) => html`<tr class=${firstOfBranch ? 'branch-start' : ''}>
+                ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfBranch }) => html`<tr class=${firstOfBranch ? 'branch-start' : ''}>
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
-                  <td><span class="badge" style="background:var(--rm-accent,#3b82f6)">${this._branchLabel(role.branch)}</span></td>
+                  <td>${ro
+                    ? html`<span class="badge" style="background:var(--rm-accent,#3b82f6)">${this._branchLabel(role.branch)}</span>`
+                    : html`<select data-branch-for=${role.id} @change=${(e) => this._setRoleBranch(role.id, e.target.value)}>
+                        ${this._orgBranches.map((b) => html`<option value=${b.id}>${b.label}</option>`)}
+                      </select>`}</td>
                   <td>${ro
                     ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)
-                    : html`<select @change=${(e) => this._setRoleParent(role.id, e.target.value)}>
-                        <option value="" ?selected=${!role.reportsToRoleId}>— sin inferior (base) —</option>
-                        ${this._orgRoles.filter((r) => r.id !== role.id).map((r) => html`<option value=${r.id} ?selected=${role.reportsToRoleId === r.id}>${r.label}</option>`)}
+                    : html`<select data-parent-for=${role.id} @change=${(e) => this._setRoleParent(role.id, e.target.value)}>
+                        <option value="">— sin inferior (base) —</option>
+                        ${this._orgRoles.filter((r) => r.id !== role.id).map((r) => html`<option value=${r.id}>${r.label}</option>`)}
                       </select>`}</td>
                   ${ro ? '' : html`<td>${this._orgConfirmDelete === role.id
                     ? html`<span class="confirm">¿Borrar? <button @click=${() => this._removeRole(role.id)}>Sí</button> <button @click=${() => { this._orgConfirmDelete = null; }}>No</button></span>`
@@ -1938,10 +1979,13 @@ export class SuperadminPanel extends LitElement {
           return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
             ${Object.entries(groups).map(([branch, roles]) => html`
               <div class="pyr-group" style="--g:${branchColor(branch)}">
-                ${roles.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
-                  <span class="pyr-dot" style="background:${branchColor(branch)}"></span>${r.label}
-                  <em class="pyr-branch">${this._branchLabel(branch)}</em>
-                </span>`)}
+                ${roles.map((r) => {
+                  const parent = this._orgRoles.find((x) => x.id === r.reportsToRoleId)?.label ?? null;
+                  return html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
+                    <span class="pyr-dot" style="background:${branchColor(branch)}"></span>${r.label}
+                    <em class="pyr-branch">${this._branchLabel(branch)}${parent ? html` · ↑ ${parent}` : ''}</em>
+                  </span>`;
+                })}
               </div>`)}
           </div>`;
         })}
