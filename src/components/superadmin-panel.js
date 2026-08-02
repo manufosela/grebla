@@ -1878,9 +1878,14 @@ export class SuperadminPanel extends LitElement {
     this._orgNotice = '';
     const label = this._orgForm.label.trim();
     if (!label) { this._orgError = 'El nombre del rol es obligatorio.'; return; }
-    const id = (this._orgForm.id.trim() || slugify(label));
+    const explicitId = this._orgForm.id.trim();
+    const taken = new Set(this._orgRoles.map((r) => r.id));
+    // Mismo NOMBRE en dos ramas es legítimo (Engineer en Engineering y en Data):
+    // si el id derivado del nombre choca, se genera uno único (engineer-2). Solo
+    // es error si el usuario tecleó un id explícito que ya existe.
+    const id = explicitId || uniqueId(slugify(label), taken);
     if (!id) { this._orgError = 'No se pudo derivar un identificador del nombre.'; return; }
-    if (this._orgRoles.some((r) => r.id === id)) { this._orgError = `Ya existe un rol con id «${id}».`; return; }
+    if (explicitId && taken.has(explicitId)) { this._orgError = `Ya existe un rol con id «${explicitId}».`; return; }
     const parent = this._orgForm.reportsToRoleId || null;
     try {
       if (parent) assertValidReportsTo([...this._orgRoles, { id, label, branch: this._orgForm.branch, reportsToRoleId: null }], id, parent);
