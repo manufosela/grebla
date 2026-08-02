@@ -3,6 +3,7 @@
  * producción de la era IA. Convención de rutas: cabecera de ./backend-php.js.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (14): construir interfaces reales con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -49,6 +50,7 @@ const VETERANUS_STOPS = Object.freeze([
   'frontend/interfaz-produccion',
   'frontend/generar-ui-con-ia',
   'devops/ci',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (36): tooling y design systems, el ciclo completo
@@ -90,6 +92,7 @@ const MAGISTER_STOPS = Object.freeze([
   'ai-engineer/apis-modelos',
   'software-architect/devex',
   'product-manager/metricas-activacion-retencion',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

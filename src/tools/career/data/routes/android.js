@@ -3,6 +3,7 @@
  * y mantenida. Convención de rutas: cabecera de ./backend-php.js.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (14): construir una app funcional con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -49,6 +50,7 @@ const VETERANUS_STOPS = Object.freeze([
   'android/segundo-plano',
   'android/firmas-play',
   'devops/ci',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (36): la isla completa (DI, modularización,
@@ -91,6 +93,7 @@ const MAGISTER_STOPS = Object.freeze([
   'software-architect/apis-y-contratos',
   'ai-engineer/apis-modelos',
   'product-manager/lanzamientos',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

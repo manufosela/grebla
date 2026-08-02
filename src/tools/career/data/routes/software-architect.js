@@ -3,6 +3,7 @@
  * al arquitecto de la era IA. Convención: cabecera de ./backend-php.js.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (14): pensar sistemas y decidir con trade-offs. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -48,6 +49,7 @@ const VETERANUS_STOPS = Object.freeze([
   'postgres/modelado-relacional',
   'devops/docker',
   'devops/slos',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (39): la isla completa (fitness functions,
@@ -93,6 +95,7 @@ const MAGISTER_STOPS = Object.freeze([
   'ai-engineer/como-funciona-llm',
   'engineering-manager/comunicar-hacia-arriba',
   'product-manager/north-star',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

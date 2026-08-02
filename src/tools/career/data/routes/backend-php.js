@@ -28,6 +28,7 @@
  * Firestore (el superadmin edita las rutas desde la web, ADR JG-14).
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (13): lo mínimo para ejecutar con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -71,6 +72,7 @@ const VETERANUS_STOPS = Object.freeze([
   'postgres/sql-fundamentos',
   'postgres/modelado-relacional',
   'devops/docker',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (36): el Veteranus completo más operación,
@@ -112,6 +114,7 @@ const MAGISTER_STOPS = Object.freeze([
   'devops/metricas',
   'software-architect/trade-offs',
   'software-architect/apis-y-contratos',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

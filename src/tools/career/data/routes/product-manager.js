@@ -8,6 +8,7 @@
  * Veteranus.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (14): descubrir, priorizar y medir con
  * autonomía. */
 const PERITUS_STOPS = Object.freeze([
@@ -55,6 +56,7 @@ const VETERANUS_STOPS = Object.freeze([
   'ai-engineer/como-funciona-llm',
   'ai-engineer/prompting',
   'frontend/prototipado-ia',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (34): la isla completa (A/B, North Star,
@@ -95,6 +97,7 @@ const MAGISTER_STOPS = Object.freeze([
   'software-architect/requisitos-no-funcionales',
   'devops/slos',
   'engineering-manager/metricas-sin-goodhart',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

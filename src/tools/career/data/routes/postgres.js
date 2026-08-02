@@ -3,6 +3,7 @@
  * datos. Convención completa de rutas de rol: cabecera de ./backend-php.js.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (13): SQL, modelado y transacciones con soltura. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -48,6 +49,7 @@ const VETERANUS_STOPS = Object.freeze([
   'postgres/migraciones-ia',
   'devops/docker',
   'software-architect/modelado-de-datos',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (37): la isla completa (optimización, VACUUM,
@@ -91,6 +93,7 @@ const MAGISTER_STOPS = Object.freeze([
   'software-architect/modelado-de-datos',
   'software-architect/sistemas-intensivos-datos',
   'ai-engineer/embeddings',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */
