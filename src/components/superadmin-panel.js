@@ -1795,7 +1795,11 @@ export class SuperadminPanel extends LitElement {
     if (!label) { this._branchError = 'El nombre no puede quedar vacío.'; return; }
     try {
       await saveOrgBranch(id, label);
-      this._orgBranches = this._orgBranches.map((b) => (b.id === id ? { ...b, label } : b));
+      // Upsert: si la rama venía de un rol pero no estaba en el catálogo (huérfana),
+      // renombrarla la incorpora; si ya estaba, solo cambia la etiqueta.
+      this._orgBranches = this._orgBranches.some((b) => b.id === id)
+        ? this._orgBranches.map((b) => (b.id === id ? { ...b, label } : b))
+        : [...this._orgBranches, { id, label }];
       this._editBranchId = null;
       this._editBranchLabel = '';
     } catch (err) {
@@ -2102,20 +2106,25 @@ export class SuperadminPanel extends LitElement {
       </div>`;
   }
 
-  /** Editor de RAMAS: crear, renombrar (sin romper los roles) y borrar. */
+  /** Editor de RAMAS: REFLEJO de las ramas que existen (catálogo ∪ las presentes en
+   *  algún rol, aunque falten en el catálogo — p.ej. creadas desde Roles). Aquí se
+   *  renombran y borran; crear se puede aquí o desde los selects de Roles. */
   _renderOrgBranches() {
     const ro = this.readOnly;
+    const catalogIds = new Set(this._orgBranches.map((b) => b.id));
+    const orphanIds = [...new Set(this._orgRoles.map((r) => r.branch))].filter((id) => id && !catalogIds.has(id));
+    const rows = [...this._orgBranches, ...orphanIds.map((id) => ({ id, label: id }))];
     return html`
       <div>
         <h2>Ramas de la organización</h2>
-        <p class="ro-note">Las áreas de la organización (Engineering, Product, People, Data…). Puedes <strong>renombrarlas</strong> sin romper los roles (p.ej. «People» → «People & Operaciones») y <strong>crear</strong> las que necesites. Cada rol se asigna a una rama.</p>
+        <p class="ro-note">Reflejo de las ramas en uso: las del catálogo y cualquier otra presente en algún rol (aunque se creara desde la pestaña Roles). Puedes <strong>renombrarlas</strong> sin romper los roles (p.ej. «People» → «People & Operaciones») y <strong>borrar</strong> las que ningún rol use.</p>
         ${this._branchError ? html`<p class="error">${this._branchError}</p>` : null}
-        ${this._orgBranches.length === 0
+        ${rows.length === 0
           ? html`<p class="empty">Aún no hay ramas. Créalas abajo o ejecuta el seed.</p>`
           : html`<div class="table-wrap"><table>
               <thead><tr><th>Rama</th><th>Id</th><th>Roles</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
-                ${this._orgBranches.map((b) => {
+                ${rows.map((b) => {
                   const count = this._orgRoles.filter((r) => r.branch === b.id).length;
                   return html`<tr>
                     <td>${this._editBranchId === b.id
