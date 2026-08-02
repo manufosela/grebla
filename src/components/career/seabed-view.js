@@ -67,8 +67,8 @@ export class SeabedView extends LitElement {
     .hint kbd { background: #0a2a3c; border: 1px solid #35576a; border-radius: 4px; padding: 0 0.3rem; margin: 0 0.05rem; font-weight: 700; color: #cdeefb; }
     .error { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 1rem; align-items: center; justify-content: center; z-index: 2; padding: 2rem; text-align: center; color: #9fc6d6; }
     .sheet-backdrop { position: absolute; inset: 0; z-index: 4; background: rgba(2, 10, 18, 0.55); backdrop-filter: blur(2px); }
-    .sheet { position: absolute; z-index: 5; left: 50%; bottom: 0; transform: translateX(-50%); width: min(92%, 40rem); max-height: 88%; overflow-y: auto; background: linear-gradient(180deg, #0c2c40, #071a28); color: #e8f4f8; border: 1px solid rgba(120, 210, 255, 0.35); border-bottom: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); padding: 1.1rem 1.3rem 1.5rem; animation: surface-up 0.28s ease-out; }
-    @keyframes surface-up { from { transform: translate(-50%, 30%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+    .sheet { position: absolute; z-index: 5; left: 50%; top: 50%; transform: translate(-50%, -50%); box-sizing: border-box; width: min(92%, 40rem); max-height: calc(100% - 2rem); overflow-y: auto; background: linear-gradient(180deg, #0c2c40, #071a28); color: #e8f4f8; border: 1px solid rgba(120, 210, 255, 0.35); border-radius: 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); padding: 1.1rem 1.3rem 1.5rem; animation: surface-up 0.28s ease-out; }
+    @keyframes surface-up { from { transform: translate(-50%, calc(-50% + 24px)); opacity: 0; } to { transform: translate(-50%, -50%); opacity: 1; } }
     .sheet .close { float: right; border: 0; background: none; color: #9fc6d6; font-size: 1.4rem; line-height: 1; cursor: pointer; }
     .sheet .close:hover, .sheet .close:focus-visible { color: #fff; outline: none; }
     .sheet .kind { display: inline-block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7fdfff; margin-bottom: 0.2rem; }
@@ -438,7 +438,7 @@ export class SeabedView extends LitElement {
       ${this._error
         ? html`<div class="error"><p>${this._error}</p><button type="button" class="surface" @click=${this._surface}>Volver a la superficie</button></div>`
         : html`
-            ${this._near ? html`<button type="button" class="prompt" @click=${this._interact}><kbd>E</kbd> Entrar en ${nearName}</button>` : nothing}
+            ${this._near ? html`<button type="button" class="prompt" @click=${this._interact}><kbd>E</kbd> Entrar en «${nearName}»</button>` : nothing}
             ${!this._near && this._nearExit ? html`<button type="button" class="prompt" @click=${this._interact}><kbd>E</kbd> Subir a la superficie</button>` : nothing}
             <p class="hint"><kbd>←</kbd><kbd>→</kbd> girar · <kbd>↑</kbd><kbd>↓</kbd> / <kbd>W</kbd><kbd>S</kbd> avanzar · <kbd>A</kbd><kbd>D</kbd> desplazarte · nada contra la puerta para entrar</p>`}
       ${this._renderSheet()}
