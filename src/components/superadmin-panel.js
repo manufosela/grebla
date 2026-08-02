@@ -1905,6 +1905,21 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
+  /** Id de un rol nuevo a partir de su nombre: el slug tal cual si está libre; si
+   *  choca, sufijado con la RAMA elegida (engineer → engineer-data) por legibilidad;
+   *  y si también choca (o la rama ya viene en el nombre), -2, -3… */
+  _deriveRoleId(label, taken) {
+    const base = slugify(label);
+    if (!base) return '';
+    if (!taken.has(base)) return base;
+    const branch = this._orgForm.branch;
+    // Si la rama ya contiene el nombre (rama «engineer-data» para «Engineer»), el
+    // id es directamente la rama — evita el duplicado «engineer-engineer-data».
+    const withBranch = branch === base || branch?.startsWith(`${base}-`) ? branch : `${base}-${branch}`;
+    if (branch && !base.endsWith(`-${branch}`) && !taken.has(withBranch)) return withBranch;
+    return uniqueId(base, taken);
+  }
+
   async _createRole() {
     this._orgError = '';
     this._orgNotice = '';
@@ -1912,10 +1927,11 @@ export class SuperadminPanel extends LitElement {
     if (!label) { this._orgError = 'El nombre del rol es obligatorio.'; return; }
     const explicitId = this._orgForm.id.trim();
     const taken = new Set(this._orgRoles.map((r) => r.id));
-    // Mismo NOMBRE en dos ramas es legítimo (Engineer en Engineering y en Data):
-    // si el id derivado del nombre choca, se genera uno único (engineer-2). Solo
-    // es error si el usuario tecleó un id explícito que ya existe.
-    const id = explicitId || uniqueId(slugify(label), taken);
+    // Mismo NOMBRE en dos ramas es legítimo (Engineer en Engineering y en Data): si
+    // el id derivado del nombre choca, se sufija primero con LA RAMA elegida
+    // (engineer → engineer-data), que es legible; y solo si también choca, -2, -3…
+    // Solo es error si el usuario tecleó un id explícito que ya existe.
+    const id = explicitId || this._deriveRoleId(label, taken);
     if (!id) { this._orgError = 'No se pudo derivar un identificador del nombre.'; return; }
     if (explicitId && taken.has(explicitId)) { this._orgError = `Ya existe un rol con id «${explicitId}».`; return; }
     const parent = this._orgForm.reportsToRoleId || null;
