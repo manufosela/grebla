@@ -6,6 +6,7 @@
  * la de datos en Postgres (SQL y pgvector), el stack natural del rol.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (14): entender modelos y prompts con método. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -53,6 +54,7 @@ const VETERANUS_STOPS = Object.freeze([
   'postgres/sql-fundamentos',
   'postgres/busqueda-vectores',
   'devops/docker',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (38): la isla completa (orquestación, MCP,
@@ -97,6 +99,7 @@ const MAGISTER_STOPS = Object.freeze([
   'devops/metricas',
   'product-manager/hipotesis-experimentos',
   'software-architect/trade-offs',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

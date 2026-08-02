@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CAREER_ROUTES, routeDocs } from './index.js';
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 import { ISLAND_CONTENT } from '../islands/index.js';
 import {
   ROUTE_TIER_KEYS,
@@ -14,11 +15,13 @@ import {
  * y por qué.
  */
 
-/** Tamaños orientativos de cada hito (paradas mín/máx, convención JG-14). */
+/** Tamaños orientativos de cada hito (paradas mín/máx, convención JG-14).
+ *  Los tiers altos incluyen además el tramo del LECHO (RMR-TSK-0384): +3 en
+ *  veteranus y +7 en magister sobre los rangos originales. */
 const TIER_SIZES = {
   peritus: { min: 8, max: 16 },
-  veteranus: { min: 16, max: 26 },
-  magister: { min: 26, max: 40 },
+  veteranus: { min: 16, max: 30 },
+  magister: { min: 26, max: 47 },
 };
 
 /** Nº mínimo de paradas de Bases con las que arranca toda ruta. */
@@ -84,6 +87,19 @@ describe('career — rutas de rol y nivel (JG-14, convención)', () => {
           }
         }
       });
+    });
+
+    it('teje el tramo del LECHO en los tiers altos (RMR-TSK-0384)', () => {
+      const packs = { veteranus: ORCHESTRATION_VETERANUS_STOPS, magister: ORCHESTRATION_MAGISTER_STOPS };
+      for (const [tierKey, tier] of tiers) {
+        if (tierKey === 'peritus') {
+          expect(tier.stops.some((s) => s.startsWith('orchestration/')), `peritus de ${discipline} no debería tener lecho`).toBe(false);
+          continue;
+        }
+        for (const stop of packs[tierKey]) {
+          expect(tier.stops.includes(stop), `${tierKey} de ${discipline} sin ${stop}`).toBe(true);
+        }
+      }
     });
 
     it('sus hitos son CRECIENTES: peritus ⊆ veteranus ⊆ magister (como conjuntos)', () => {

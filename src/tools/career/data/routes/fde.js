@@ -7,6 +7,7 @@
  * discovery de producto; RAG, agentes y contratos llegan en el Magister.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (15): entregar valor en terreno con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -56,6 +57,7 @@ const VETERANUS_STOPS = Object.freeze([
   'backend-python/fastapi',
   'devops/docker',
   'product-manager/entrevistas-usuarios',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (37): la isla completa (expectativas, puente
@@ -100,6 +102,7 @@ const MAGISTER_STOPS = Object.freeze([
   'ai-engineer/rag',
   'ai-engineer/agentes',
   'software-architect/apis-y-contratos',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

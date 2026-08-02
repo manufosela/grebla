@@ -7,6 +7,7 @@
  * el primer día.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (13): operar sistemas y contenedores con
  * autonomía. */
 const PERITUS_STOPS = Object.freeze([
@@ -50,6 +51,7 @@ const VETERANUS_STOPS = Object.freeze([
   'devops/metricas',
   'devops/alertas',
   'postgres/backups-recuperacion',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (36): la isla casi completa (GitOps, Helm,
@@ -93,6 +95,7 @@ const MAGISTER_STOPS = Object.freeze([
   'backend-python/servicio-produccion',
   'software-architect/platform-engineering',
   'software-architect/observabilidad',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

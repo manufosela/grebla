@@ -7,6 +7,7 @@
  * herramientas diarias del EM.
  */
 
+import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
 /** Paradas del hito Peritus (14): liderar personas con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/pensar-con-ia',
@@ -53,6 +54,7 @@ const VETERANUS_STOPS = Object.freeze([
   'engineering-manager/comunicar-hacia-arriba',
   'product-manager/priorizar-impacto-esfuerzo',
   'product-manager/stakeholders',
+  ...ORCHESTRATION_VETERANUS_STOPS,
 ]);
 
 /** Paradas del hito Magister (37): la isla completa (contratación, equipos
@@ -96,6 +98,7 @@ const MAGISTER_STOPS = Object.freeze([
   'devops/incidentes',
   'ai-engineer/como-funciona-llm',
   'ai-engineer/limites-modelos',
+  ...ORCHESTRATION_MAGISTER_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */
