@@ -72,6 +72,34 @@ export function seabedScene(map) {
 }
 
 /**
+ * Número de ORDEN de cada arrecife (RMR-PCS-0028 · rework B): su «nivel» en el
+ * grafo de prereqs — 1 para los que no dependen de nada, y 1 + el máximo nivel de
+ * sus prereqs para el resto. Arrecifes del mismo nivel comparten número (se
+ * pueden abordar en paralelo). Corta con seguridad ante ciclos preexistentes.
+ * Función PURA.
+ * @param {CareerMap|null|undefined} map
+ * @returns {Map<string, number>} id del arrecife → número de orden (≥1)
+ */
+export function arrecifeOrder(map) {
+  const cities = map?.cities ?? [];
+  const byId = new Map(cities.map((c) => [c.id, c]));
+  const memo = new Map();
+  const level = (id, stack) => {
+    if (memo.has(id)) return memo.get(id);
+    if (stack.has(id)) return 1; // ciclo: corta
+    const prereqs = (byId.get(id)?.prereqs ?? []).filter((p) => byId.has(p));
+    stack.add(id);
+    const lv = prereqs.length === 0 ? 1 : 1 + Math.max(...prereqs.map((p) => level(p, stack)));
+    stack.delete(id);
+    memo.set(id, lv);
+    return lv;
+  };
+  const out = new Map();
+  for (const c of cities) out.set(c.id, level(c.id, new Set()));
+  return out;
+}
+
+/**
  * Progreso del lecho (RMR-PCS-0028 · F4): estado de cada arrecife según el
  * journey (cityStatus) y el recuento de ENCENDIDOS (visited). El «encendido»
  * refleja el recorrido de la persona, no la evaluación del manager. Función PURA.

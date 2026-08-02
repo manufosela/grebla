@@ -1,143 +1,65 @@
 /**
- * <seabed-view> — la vista SUBMARINA del lecho (RMR-PCS-0028 · F3a).
+ * <seabed-view> — la vista SUBMARINA del lecho (RMR-PCS-0028 · rework B).
  *
- * El lecho es el fondo transversal que sostiene el archipiélago: aquí viven los
- * ARRECIFES, las competencias de «Orquestación y juicio». Recibe el CareerMap
- * del lecho (/careerMap/seabed) y lo pinta como una escena submarina propia
- * (fondo azul profundo, rayos de luz, partículas) con los arrecifes como nodos
- * bioluminiscentes conectados por sus prereqs. Activar un arrecife abre su
- * detalle (resumen, claves, lente era-IA y recursos) sin salir de la escena.
+ * El lecho es el fondo transversal que sostiene el archipiélago. MOTOR PROPIO
+ * (no reutiliza el 3D de la isla): una escena Three.js submarina por la que se
+ * NAVEGA (orbitar/zoom) hacia las CASAS-CORAL — un coral por arrecife, con su
+ * NÚMERO de orden y color por estado (encendido/latente/apagado). Al activar un
+ * coral se abre su detalle (resumen, claves, lente era-IA, recursos y certificar).
  *
- * Es un look COMPROMETIDO de un solo tema (submarino), no theme-aware: el lecho
- * es siempre el fondo oscuro. Emite `surface` para volver a la superficie.
- *
- * El encendido de los arrecifes según el progreso llega en F4; aquí todos lucen
- * con su brillo latente.
+ * Look COMPROMETIDO de un solo tema (submarino). Mismos props/eventos que la
+ * versión anterior (map/journey/canPlay/onToggle · `surface`), así que
+ * <career-app> no cambia. Si WebGL no está disponible, cae a un aviso legible.
  */
-import { LitElement, html, css, svg, nothing } from 'lit';
-import { seabedScene, seabedProgress } from '../../tools/career/domain/seabed.js';
+import { LitElement, html, css, nothing } from 'lit';
+import { seabedScene, seabedProgress, arrecifeOrder } from '../../tools/career/domain/seabed.js';
 
-/** Rótulo accesible del estado de un arrecife (encendido/disponible/bloqueado). */
 const STATUS_LABEL = { visited: 'encendido', available: 'disponible', blocked: 'bloqueado' };
-/** Rótulo del tipo de arrecife (por defecto «Competencia»). */
 const KIND_LABEL = { milestone: 'Hito', tech: 'Tecnología', skill: 'Competencia' };
-
-/** Burbujas de la escena: posiciones/tiempos FIJOS (deterministas, sin random). */
-const BUBBLES = [
-  { left: 12, size: 6, dur: 9, delay: 0 },
-  { left: 27, size: 4, dur: 12, delay: 2.5 },
-  { left: 41, size: 8, dur: 8, delay: 1 },
-  { left: 58, size: 5, dur: 11, delay: 3.5 },
-  { left: 73, size: 7, dur: 10, delay: 0.8 },
-  { left: 86, size: 4, dur: 13, delay: 2 },
-  { left: 92, size: 6, dur: 9, delay: 4 },
-];
+/** Color del coral por estado (encendido verde, disponible cian, bloqueado apagado). */
+const STATUS_COLOR = { visited: 0x8bf0be, available: 0x4dd0e1, blocked: 0x4a6675 };
+const MILESTONE_COLOR = 0xffcf6b;
+/** Mapa 0..100 → mundo (la escena abarca ~±65). */
+const WORLD_SCALE = 1.3;
 
 export class SeabedView extends LitElement {
   static properties = {
     map: { attribute: false },
     journey: { attribute: false },
-    /** ¿El usuario JUEGA su propio recorrido? Habilita certificar arrecifes (F4). */
     canPlay: { attribute: false },
-    /** Callback async del contenedor para encender/apagar un arrecife (F4):
-     *  `(cityId) => Promise`. Se espera para bloquear el botón mientras está en
-     *  vuelo y liberarlo al terminar (éxito o error). */
     onToggle: { attribute: false },
     _selected: { state: true },
-    /** Certificado en vuelo: bloquea el botón para evitar dobles toggles (F4). */
     _pending: { state: true },
+    _error: { state: true },
   };
 
   static styles = css`
     :host {
-      display: block;
-      position: relative;
-      color: #e8f4f8;
-      /* Fondo submarino: de la penumbra azulada de arriba al negro del fondo. */
-      background:
-        radial-gradient(120% 80% at 50% -10%, #123c56 0%, #0a2536 35%, #061826 65%, #030d16 100%);
-      overflow: hidden;
-      min-height: 30rem;
-      border-radius: 14px;
-    }
-    /* Rayos de luz que bajan desde la superficie. */
-    .rays { position: absolute; inset: 0; pointer-events: none; opacity: 0.5; mix-blend-mode: screen; }
-    .ray {
-      position: absolute; top: -10%; width: 16%; height: 130%;
-      background: linear-gradient(180deg, rgba(120, 210, 255, 0.28), rgba(120, 210, 255, 0));
-      filter: blur(6px); transform: skewX(-8deg); transform-origin: top center;
-    }
-    .bubbles { position: absolute; inset: 0; pointer-events: none; }
-    .bubble {
-      position: absolute; bottom: -4%; border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.7), rgba(160,220,255,0.15) 60%, transparent 70%);
-      box-shadow: 0 0 8px rgba(150, 220, 255, 0.3);
-      animation: rise linear infinite;
-    }
-    @keyframes rise {
-      0% { transform: translateY(0) translateX(0); opacity: 0; }
-      12% { opacity: 0.9; }
-      100% { transform: translateY(-115vh) translateX(1.5rem); opacity: 0; }
+      display: block; position: relative; color: #e8f4f8;
+      background: radial-gradient(120% 80% at 50% -10%, #123c56 0%, #0a2536 35%, #061826 65%, #030d16 100%);
+      overflow: hidden; min-height: 30rem; border-radius: 14px;
     }
     header.deep {
-      position: relative; z-index: 3;
+      position: absolute; top: 0; left: 0; right: 0; z-index: 3;
       display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
-      padding: 1.1rem 1.3rem 0.4rem;
+      padding: 1.1rem 1.3rem 0.4rem; pointer-events: none;
     }
-    .titles h3 { margin: 0; font-size: 1.25rem; letter-spacing: 0.01em; text-shadow: 0 0 14px rgba(77, 208, 225, 0.45); }
-    .titles p { margin: 0.2rem 0 0; font-size: 0.85rem; color: #9fc6d6; max-width: 42ch; }
+    header.deep .titles { pointer-events: none; }
+    .titles h3 { margin: 0; font-size: 1.25rem; letter-spacing: 0.01em; text-shadow: 0 0 14px rgba(77, 208, 225, 0.55), 0 2px 8px #000; }
+    .titles p { margin: 0.2rem 0 0; font-size: 0.85rem; color: #bfe0ee; max-width: 42ch; text-shadow: 0 1px 6px #000; }
+    .count { margin: 0.4rem 0 0; font-size: 0.8rem; color: #9beccb; display: inline-flex; align-items: center; gap: 0.4rem; text-shadow: 0 1px 6px #000; }
+    .lit-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fffef0, #a9f5cf 45%, #2aa578); box-shadow: 0 0 8px rgba(126, 255, 196, 0.7); }
     .surface {
-      flex: none; border: 1.5px solid rgba(120, 210, 255, 0.5); background: rgba(10, 40, 60, 0.6);
+      flex: none; pointer-events: auto; border: 1.5px solid rgba(120, 210, 255, 0.6); background: rgba(6, 26, 38, 0.75);
       color: #cdeefb; border-radius: 999px; padding: 0.45rem 0.95rem; font: inherit; font-size: 0.85rem;
       font-weight: 600; cursor: pointer; backdrop-filter: blur(2px);
     }
     .surface:hover, .surface:focus-visible { border-color: #7fdfff; color: #fff; outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.3); }
-    /* Escena con los arrecifes posicionados por x/y (0..100). */
-    .scene { position: relative; z-index: 2; width: 100%; aspect-ratio: 4 / 3; }
-    .edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-    .edge { stroke: rgba(77, 208, 225, 0.28); stroke-width: 1.5; stroke-linecap: round; }
-    .reef {
-      position: absolute; transform: translate(-50%, -50%);
-      display: inline-flex; flex-direction: column; align-items: center; gap: 0.35rem;
-      border: 0; background: none; padding: 0; cursor: pointer; color: #eaf7fc; font: inherit;
-      width: max-content; max-width: 9rem;
-    }
-    .reef .dot {
-      width: 1.5rem; height: 1.5rem; border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, #d9fbff, #4dd0e1 55%, #1f7f96 100%);
-      box-shadow: 0 0 10px 2px rgba(77, 208, 225, 0.6), 0 0 22px 6px rgba(77, 208, 225, 0.25);
-      animation: pulse 3.2s ease-in-out infinite;
-    }
-    .reef.milestone .dot {
-      width: 2rem; height: 2rem;
-      background: radial-gradient(circle at 35% 30%, #fff2cf, #ffcf6b 55%, #b9781f 100%);
-      box-shadow: 0 0 12px 3px rgba(255, 207, 107, 0.65), 0 0 26px 8px rgba(255, 207, 107, 0.3);
-    }
-    .reef .label {
-      font-size: 0.72rem; line-height: 1.15; text-align: center; color: #cdeafa;
-      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); padding: 0.05rem 0.3rem;
-    }
-    .reef .dot { position: relative; }
-    .reef:hover .dot, .reef:focus-visible .dot { transform: scale(1.12); }
-    .reef:focus-visible { outline: none; }
-    .reef:focus-visible .label { text-decoration: underline; }
-    @keyframes pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
-    /* Estados del arrecife (F4): encendido (visited), latente (available), apagado (blocked). */
-    .reef .tick { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 900; color: #0a3324; }
-    .reef.visited .dot { background: radial-gradient(circle at 35% 30%, #fffef0, #a9f5cf 45%, #2aa578 100%); box-shadow: 0 0 14px 3px rgba(126, 255, 196, 0.7), 0 0 30px 10px rgba(126, 255, 196, 0.28); }
-    .reef.milestone.visited .dot { background: radial-gradient(circle at 35% 30%, #fffdf0, #ffd24d 50%, #b9781f 100%); box-shadow: 0 0 16px 4px rgba(255, 210, 77, 0.8), 0 0 34px 12px rgba(255, 210, 77, 0.38); }
-    .reef.blocked .dot { background: radial-gradient(circle at 35% 30%, #6b8794, #33505e 60%, #16242c 100%); box-shadow: 0 0 6px rgba(80, 120, 140, 0.3); animation: none; filter: saturate(0.5); }
-    .reef.blocked .label { color: #85a0ad; }
-    .count { margin: 0.4rem 0 0; font-size: 0.8rem; color: #8fd3e6; display: inline-flex; align-items: center; gap: 0.4rem; }
-    .lit-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fffef0, #a9f5cf 45%, #2aa578); box-shadow: 0 0 8px rgba(126, 255, 196, 0.7); }
-    .sheet .st { text-transform: none; letter-spacing: 0; color: #8fd3e6; }
-    .sheet .st.visited { color: #8fe0b8; }
-    .sheet .st.blocked { color: #9fb4c0; }
-    .sheet .act { margin-top: 1.2rem; }
-    .sheet .certify { border: 1.5px solid #4dd0e1; background: rgba(77, 208, 225, 0.14); color: #eaf7fc; border-radius: 999px; padding: 0.5rem 1.05rem; font: inherit; font-weight: 700; cursor: pointer; }
-    .sheet .certify:hover:not(:disabled), .sheet .certify:focus-visible { background: rgba(77, 208, 225, 0.26); outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.3); }
-    .sheet .certify.on { border-color: #7fe0b8; color: #cdfbe6; background: rgba(126, 224, 184, 0.16); }
-    .sheet .certify:disabled { opacity: 0.5; cursor: not-allowed; }
+    .stage { position: absolute; inset: 0; z-index: 1; }
+    .stage canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; }
+    .stage canvas:active { cursor: grabbing; }
+    .hint { position: absolute; left: 50%; bottom: 0.7rem; transform: translateX(-50%); z-index: 2; font-size: 0.76rem; color: #8fb8c8; text-shadow: 0 1px 6px #000; pointer-events: none; }
+    .empty, .error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 2; padding: 2rem; text-align: center; color: #9fc6d6; }
     /* Panel de detalle del arrecife (hoja que sube desde el fondo). */
     .sheet-backdrop { position: absolute; inset: 0; z-index: 4; background: rgba(2, 10, 18, 0.55); backdrop-filter: blur(2px); }
     .sheet {
@@ -152,26 +74,22 @@ export class SeabedView extends LitElement {
     .sheet .close { float: right; border: 0; background: none; color: #9fc6d6; font-size: 1.4rem; line-height: 1; cursor: pointer; }
     .sheet .close:hover, .sheet .close:focus-visible { color: #fff; outline: none; }
     .sheet .kind { display: inline-block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7fdfff; margin-bottom: 0.2rem; }
+    .sheet .st { text-transform: none; letter-spacing: 0; color: #8fd3e6; }
+    .sheet .st.visited { color: #8fe0b8; } .sheet .st.blocked { color: #9fb4c0; }
     .sheet h4 { margin: 0 0 0.5rem; font-size: 1.3rem; text-shadow: 0 0 12px rgba(77, 208, 225, 0.4); }
     .sheet .summary { margin: 0 0 0.9rem; color: #d6ecf5; line-height: 1.5; }
     .sheet h5 { margin: 1rem 0 0.4rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #8fd3e6; }
-    .sheet ul { margin: 0; padding-left: 1.1rem; }
-    .sheet li { margin: 0.2rem 0; line-height: 1.4; }
+    .sheet ul { margin: 0; padding-left: 1.1rem; } .sheet li { margin: 0.2rem 0; line-height: 1.4; }
     .sheet .aifocus { background: rgba(77, 208, 225, 0.1); border-left: 3px solid #4dd0e1; padding: 0.55rem 0.8rem; border-radius: 0 8px 8px 0; color: #dff3fa; line-height: 1.5; }
     .sheet .res { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-    .sheet .res a, .sheet .res span {
-      display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem;
-      border: 1px solid rgba(120, 210, 255, 0.35); border-radius: 999px; padding: 0.3rem 0.7rem;
-      color: #cdeefb; text-decoration: none;
-    }
+    .sheet .res a, .sheet .res span { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; border: 1px solid rgba(120, 210, 255, 0.35); border-radius: 999px; padding: 0.3rem 0.7rem; color: #cdeefb; text-decoration: none; }
     .sheet .res a:hover, .sheet .res a:focus-visible { border-color: #7fdfff; color: #fff; outline: none; }
     .sheet .res .rk { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: #7fbdd2; }
-    .empty { position: relative; z-index: 2; padding: 3rem 1.5rem; text-align: center; color: #9fc6d6; }
-    @media (prefers-reduced-motion: reduce) {
-      .bubble { animation: none; display: none; }
-      .reef .dot { animation: none; }
-      .sheet { animation: none; }
-    }
+    .sheet .act { margin-top: 1.2rem; }
+    .sheet .certify { border: 1.5px solid #4dd0e1; background: rgba(77, 208, 225, 0.14); color: #eaf7fc; border-radius: 999px; padding: 0.5rem 1.05rem; font: inherit; font-weight: 700; cursor: pointer; }
+    .sheet .certify:hover:not(:disabled), .sheet .certify:focus-visible { background: rgba(77, 208, 225, 0.26); outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.3); }
+    .sheet .certify.on { border-color: #7fe0b8; color: #cdfbe6; background: rgba(126, 224, 184, 0.16); }
+    .sheet .certify:disabled { opacity: 0.5; cursor: not-allowed; }
   `;
 
   constructor() {
@@ -186,9 +104,13 @@ export class SeabedView extends LitElement {
     /** @type {string|null} */
     this._selected = null;
     this._pending = false;
+    this._error = '';
+    /** @type {any} recursos Three.js (null hasta montar). */
+    this._t = null;
+    this._raf = 0;
+    this._reefGroups = []; // grupos de coral, para raycast y limpieza
   }
 
-  /** Escape: cierra el detalle si está abierto; si no, vuelve a la superficie. */
   connectedCallback() {
     super.connectedCallback();
     this._onKey = (e) => {
@@ -201,7 +123,16 @@ export class SeabedView extends LitElement {
 
   disconnectedCallback() {
     globalThis.removeEventListener('keydown', this._onKey);
+    this._teardown();
     super.disconnectedCallback();
+  }
+
+  firstUpdated() {
+    this._init();
+  }
+
+  updated(changed) {
+    if (this._t && (changed.has('map') || changed.has('journey'))) this._buildReefs();
   }
 
   _surface() {
@@ -212,61 +143,228 @@ export class SeabedView extends LitElement {
     return (this.map?.cities ?? []).find((c) => c.id === id) ?? null;
   }
 
+  // ─── Escena 3D ───────────────────────────────────────────────────────────
+  async _init() {
+    const host = this.renderRoot.querySelector('.stage');
+    if (!host) return;
+    try {
+      const [THREE, { OrbitControls }] = await Promise.all([
+        import('three'),
+        import('three/addons/controls/OrbitControls.js'),
+      ]);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, 2));
+      const w = host.clientWidth || 800;
+      const h = host.clientHeight || 600;
+      renderer.setSize(w, h, false);
+      host.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x04141f);
+      scene.fog = new THREE.FogExp2(0x061c2a, 0.011);
+
+      const camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1000);
+      camera.position.set(0, 52, 78);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 4, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minDistance = 22;
+      controls.maxDistance = 170;
+      controls.maxPolarAngle = 1.45; // no bajar del lecho
+      controls.enablePan = false;
+
+      scene.add(new THREE.HemisphereLight(0x9fe6ff, 0x03202e, 0.55));
+      const key = new THREE.DirectionalLight(0xbfeeff, 0.8);
+      key.position.set(20, 60, 30);
+      scene.add(key);
+
+      // Lecho (suelo) y luz de superficie difusa.
+      const floor = new THREE.Mesh(
+        new THREE.CircleGeometry(140, 48),
+        new THREE.MeshStandardMaterial({ color: 0x06202e, roughness: 1, metalness: 0 }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      this._t = { THREE, renderer, scene, camera, controls, host, raycaster: new THREE.Raycaster(), pointer: new THREE.Vector2() };
+      renderer.domElement.addEventListener('pointerdown', this._onPointerDown);
+      this._ro = new ResizeObserver(() => this._resize());
+      this._ro.observe(host);
+      this._buildReefs();
+      this._loop();
+    } catch (err) {
+      this._error = 'No se pudo cargar la vista 3D del lecho (WebGL no disponible).';
+    }
+  }
+
+  /** Posición de mundo de un arrecife desde su x/y (0..100). */
+  _world(n) {
+    return [(n.x - 50) * WORLD_SCALE, (n.y - 50) * WORLD_SCALE];
+  }
+
+  _buildReefs() {
+    if (!this._t) return;
+    const { scene } = this._t;
+    for (const g of this._reefGroups) { scene.remove(g); this._dispose(g); }
+    this._reefGroups = [];
+    const { nodes } = seabedScene(this.map);
+    const { statusById } = seabedProgress(this.map, this.journey);
+    const order = arrecifeOrder(this.map);
+    for (const n of nodes) {
+      const status = statusById.get(n.id) ?? 'available';
+      const milestone = n.kind === 'milestone';
+      const color = milestone ? MILESTONE_COLOR : (STATUS_COLOR[status] ?? STATUS_COLOR.available);
+      const height = 4 + (n.weight ?? 2) * 1.6 + (milestone ? 2 : 0);
+      const g = this._coral(color, height, milestone, status);
+      const [wx, wz] = this._world(n);
+      g.position.set(wx, 0, wz);
+      g.userData.cityId = n.id;
+      g.add(this._numberSprite(order.get(n.id) ?? 1, color, height));
+      scene.add(g);
+      this._reefGroups.push(g);
+    }
+  }
+
+  _coral(color, height, milestone, status) {
+    const { THREE } = this._t;
+    const g = new THREE.Group();
+    const emissiveIntensity = status === 'blocked' ? 0.15 : 0.7;
+    const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity, roughness: 0.55, metalness: 0.1 });
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.2, height, 8), mat);
+    trunk.position.y = height / 2;
+    g.add(trunk);
+    const branches = milestone ? 5 : 3;
+    for (let i = 0; i < branches; i += 1) {
+      const a = (i / branches) * Math.PI * 2;
+      const b = new THREE.Mesh(new THREE.ConeGeometry(0.55, height * 0.7, 6), mat);
+      b.position.set(Math.cos(a) * 1.2, height * 0.72, Math.sin(a) * 1.2);
+      b.rotation.z = -Math.cos(a) * 0.5;
+      b.rotation.x = Math.sin(a) * 0.5;
+      g.add(b);
+    }
+    if (status !== 'blocked') {
+      const light = new THREE.PointLight(color, milestone ? 1.6 : 1.1, 20, 2);
+      light.position.y = height * 0.7;
+      g.add(light);
+    }
+    return g;
+  }
+
+  _numberSprite(num, color, height) {
+    const { THREE } = this._t;
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.beginPath();
+    ctx.arc(64, 64, 52, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(4,18,28,0.9)';
+    ctx.fill();
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = `#${color.toString(16).padStart(6, '0')}`;
+    ctx.stroke();
+    ctx.fillStyle = '#eaf7fc';
+    ctx.font = 'bold 68px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(num), 64, 70);
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    spr.scale.set(5, 5, 1);
+    spr.position.y = height + 3;
+    return spr;
+  }
+
+  _onPointerDown = (e) => {
+    // Solo un clic limpio selecciona; un arrastre orbita (lo gestiona OrbitControls).
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const up = (ev) => {
+      globalThis.removeEventListener('pointerup', up);
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6) return; // arrastre
+      this._pick(ev);
+    };
+    globalThis.addEventListener('pointerup', up);
+  };
+
+  _pick(e) {
+    if (!this._t) return;
+    const { renderer, raycaster, pointer, camera } = this._t;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(this._reefGroups, true);
+    if (hits.length === 0) return;
+    let o = hits[0].object;
+    while (o && o.userData.cityId === undefined) o = o.parent;
+    if (o?.userData.cityId) this._selected = o.userData.cityId;
+  }
+
+  _resize() {
+    if (!this._t) return;
+    const { renderer, camera, host } = this._t;
+    const w = host.clientWidth || 800;
+    const h = host.clientHeight || 600;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  _loop = () => {
+    if (!this._t) return;
+    this._raf = requestAnimationFrame(this._loop);
+    this._t.controls.update();
+    this._t.renderer.render(this._t.scene, this._t.camera);
+  };
+
+  _dispose(obj) {
+    obj.traverse?.((o) => {
+      o.geometry?.dispose?.();
+      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
+      else o.material?.dispose?.();
+      o.material?.map?.dispose?.();
+    });
+  }
+
+  _teardown() {
+    cancelAnimationFrame(this._raf);
+    this._ro?.disconnect();
+    if (this._t) {
+      this._t.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown);
+      for (const g of this._reefGroups) this._dispose(g);
+      this._t.controls.dispose?.();
+      this._t.renderer.dispose?.();
+      this._t.renderer.domElement.remove();
+    }
+    this._t = null;
+    this._reefGroups = [];
+  }
+
+  // ─── Overlay HTML ────────────────────────────────────────────────────────
   render() {
-    const { nodes, edges } = seabedScene(this.map);
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const { statusById, lit, total } = seabedProgress(this.map, this.journey);
+    const { lit, total } = seabedProgress(this.map, this.journey);
     return html`
-      <div class="rays" aria-hidden="true">
-        <div class="ray" style="left:8%"></div>
-        <div class="ray" style="left:38%"></div>
-        <div class="ray" style="left:66%"></div>
-      </div>
-      <div class="bubbles" aria-hidden="true">
-        ${BUBBLES.map((b) => html`<span class="bubble" style="left:${b.left}%;width:${b.size}px;height:${b.size}px;animation-duration:${b.dur}s;animation-delay:${b.delay}s"></span>`)}
-      </div>
       <header class="deep">
         <div class="titles">
           <h3>${this.map?.name ?? 'El lecho que sostiene'}</h3>
-          <p>El fondo que sostiene el archipiélago: los arrecifes del juicio y la orquestación. Acércate a uno para explorarlo.</p>
+          <p>El fondo que sostiene el archipiélago: los arrecifes del juicio y la orquestación. Orbita y acércate a un coral para explorarlo.</p>
           ${total > 0 ? html`<p class="count"><span class="lit-dot" aria-hidden="true"></span> ${lit}/${total} arrecifes encendidos</p>` : nothing}
         </div>
         <button type="button" class="surface" @click=${this._surface}>🌊 Volver a la superficie</button>
       </header>
-      ${nodes.length === 0
-        ? html`<p class="empty">El lecho aún no tiene arrecifes.</p>`
-        : html`
-            <div class="scene">
-              <svg class="edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                ${edges.map((e) => {
-                  const a = byId.get(e.from);
-                  const b = byId.get(e.to);
-                  if (!a || !b) return nothing;
-                  return svg`<line class="edge" x1=${a.x} y1=${a.y} x2=${b.x} y2=${b.y} vector-effect="non-scaling-stroke"></line>`;
-                })}
-              </svg>
-              ${nodes.map((n) => {
-                const status = statusById.get(n.id) ?? 'available';
-                return html`
-                <button
-                  type="button"
-                  class="reef ${n.kind === 'milestone' ? 'milestone' : ''} ${status}"
-                  style="left:${n.x}%;top:${n.y}%"
-                  aria-label="Arrecife: ${n.name} — ${STATUS_LABEL[status] ?? ''}"
-                  @click=${() => { this._selected = n.id; }}
-                >
-                  <span class="dot" aria-hidden="true">${status === 'visited' ? html`<span class="tick">✓</span>` : nothing}</span>
-                  <span class="label">${n.name}</span>
-                </button>`;
-              })}
-            </div>`}
+      <div class="stage"></div>
+      ${this._error
+        ? html`<p class="error">${this._error} <button type="button" class="surface" @click=${this._surface}>Volver a la superficie</button></p>`
+        : html`<p class="hint">Arrastra para orbitar · rueda para acercarte · clic en un coral para abrirlo</p>`}
       ${this._renderSheet()}
     `;
   }
 
   _renderSheet() {
     const city = this._selected ? this._city(this._selected) : null;
-    if (!city) return nothing;
+    if (!city) return html``; // sin selección: template vacío (tipo de retorno consistente)
     const { statusById } = seabedProgress(this.map, this.journey);
     const status = statusById.get(city.id) ?? 'available';
     const visited = status === 'visited';
@@ -286,12 +384,7 @@ export class SeabedView extends LitElement {
         ${city.resources?.length ? html`<h5>Recursos</h5><div class="res">${city.resources.map((r) => this._resource(r))}</div>` : nothing}
         ${this.canPlay
           ? html`<div class="act">
-              <button
-                type="button"
-                class="certify ${visited ? 'on' : ''}"
-                ?disabled=${(blocked && !visited) || this._pending}
-                @click=${() => this._toggle(city.id)}
-              >${certifyLabel}</button>
+              <button type="button" class="certify ${visited ? 'on' : ''}" ?disabled=${(blocked && !visited) || this._pending} @click=${() => this._toggle(city.id)}>${certifyLabel}</button>
             </div>`
           : nothing}
       </div>
@@ -299,12 +392,12 @@ export class SeabedView extends LitElement {
   }
 
   async _toggle(cityId) {
-    if (this._pending || typeof this.onToggle !== 'function') return; // anti doble-clic
+    if (this._pending || typeof this.onToggle !== 'function') return;
     this._pending = true;
     try {
       await this.onToggle(cityId);
     } finally {
-      this._pending = false; // se libera siempre: éxito o error
+      this._pending = false;
     }
   }
 
