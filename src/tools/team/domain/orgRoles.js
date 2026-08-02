@@ -19,6 +19,41 @@
 /** @param {OrgRole[]} roles @returns {Map<string, OrgRole>} */
 const indexById = (roles) => new Map((roles ?? []).map((r) => [r.id, r]));
 
+/** Colores de marca de las ramas canónicas. El resto (ramas creadas por el
+ *  superadmin) obtiene un color determinista por hash del id. */
+const CANONICAL_BRANCH_COLORS = {
+  engineering: '#2a9d8f',
+  product: '#e76f51',
+  people: '#9d4edd',
+  data: '#457b9d',
+  generico: '#6b7280',
+};
+
+/**
+ * Fallback de color de una rama: el de marca si es canónica; si no, un HSL
+ * DETERMINISTA derivado del id (misma rama → mismo color, siempre).
+ * @param {string} key @returns {string} color CSS sólido
+ */
+function branchColorFallback(key) {
+  if (CANONICAL_BRANCH_COLORS[key]) return CANONICAL_BRANCH_COLORS[key];
+  let h = 0;
+  for (let i = 0; i < key.length; i += 1) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 55% 58%)`;
+}
+
+/**
+ * Color de una rama por su id, como expresión CSS. Preserva el contrato de override
+ * por variable (`var(--rm-branch-<id>, …)`) para que un tema pueda re-teñir una rama,
+ * PERO con un fallback DETERMINISTA por id (no el acento): así cualquier rama —canónica
+ * o creada por el superadmin— tiene un color propio y estable aunque no exista la
+ * variable, y funciona fuera de `.pyramid`. Función PURA.
+ * @param {string} id @returns {string} color CSS
+ */
+export function branchColor(id) {
+  const key = id || 'generico';
+  return `var(--rm-branch-${key}, ${branchColorFallback(key)})`;
+}
+
 /**
  * Roles cima (sin superior). Un organigrama puede tener varias cimas (una por
  * rama: CTO en engineering, CPO en product, etc.).
@@ -99,35 +134,31 @@ export function roleDepth(roles, roleId) {
 }
 
 /**
- * Filas del editor de roles AGRUPADAS por rama (RMR-TSK-0375): dentro de cada
- * rama, orden jerárquico post-orden (hijos antes que el padre → hojas arriba, el
- * rol base «sin inferior» abajo, coherente con la pirámide invertida). Las ramas
- * van en el orden de `branches` (catálogo) y luego las presentes en algún rol sin
- * metadato. Cada fila marca `firstOfBranch` (primera de su bloque) para dibujar la
- * línea separadora SOLO entre ramas. Función PURA.
+ * Filas del editor de roles ORDENADAS POR DEPENDENCIAS (la rama es un dato de la
+ * fila, NO el criterio de agrupación — agrupar por rama rompía la cadena cuando
+ * una dependencia cruza de rama, p.ej. Head of Engineering → CPO). Cada árbol de
+ * dependencias sale CONTIGUO en post-orden: hojas arriba, cada rol encima de su
+ * «depende de», y el rol base «sin inferior» al final del bloque (coherente con la
+ * pirámide invertida). Cada fila marca `firstOfTree` (primera de su árbol) para la
+ * línea separadora SOLO entre árboles. Función PURA.
  * @param {OrgRole[]} roles
- * @param {{id:string}[]} [branches] catálogo de ramas, para el orden de los bloques
- * @returns {{ role: OrgRole, depth: number, firstOfBranch: boolean }[]}
+ * @returns {{ role: OrgRole, depth: number, firstOfTree: boolean }[]}
  */
-export function orgRoleRows(roles, branches = []) {
+export function orgRoleRows(roles) {
   const list = roles ?? [];
-  const hier = [];
-  const visit = (role, depth) => {
-    for (const child of childrenOf(list, role.id)) visit(child, depth + 1);
-    hier.push({ role, depth });
-  };
-  for (const root of rootRoles(list)) visit(root, 0);
-  // Roles en un ciclo preexistente (no alcanzables desde una cima) igualmente listados.
-  const shown = new Set(hier.map((r) => r.role.id));
-  for (const r of list) if (!shown.has(r.id)) hier.push({ role: r, depth: 0 });
-  // Orden de ramas: catálogo primero, luego ramas presentes sin metadato; dedup.
-  const seen = new Set();
-  const order = [...(branches ?? []).map((b) => b.id), ...hier.map((r) => r.role.branch)]
-    .filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
   const rows = [];
-  for (const branchId of order) {
-    const inBranch = hier.filter((r) => r.role.branch === branchId);
-    inBranch.forEach((r, i) => rows.push({ role: r.role, depth: r.depth, firstOfBranch: i === 0 }));
+  const visit = (role, depth, acc) => {
+    for (const child of childrenOf(list, role.id)) visit(child, depth + 1, acc);
+    acc.push({ role, depth });
+  };
+  for (const root of rootRoles(list)) {
+    const tree = [];
+    visit(root, 0, tree);
+    tree.forEach((r, i) => rows.push({ role: r.role, depth: r.depth, firstOfTree: i === 0 }));
   }
+  // Roles en un ciclo preexistente (no alcanzables desde una cima) igualmente listados.
+  const shown = new Set(rows.map((r) => r.role.id));
+  const orphans = list.filter((r) => !shown.has(r.id));
+  orphans.forEach((r, i) => rows.push({ role: r, depth: 0, firstOfTree: i === 0 }));
   return rows;
 }
