@@ -355,9 +355,8 @@ const PROXIMITY_CHECK_MS = 100;
  * para que salga el prompt «[E] Zarpar».
  */
 const BOAT_PROXIMITY_RADIUS = 12;
-/** Proximidad a la BALIZA DE INMERSIÓN del lecho a pie (RMR-PCS-0028 · F3b):
- *  como la barca, flota fuera del radio caminable (en el lado opuesto del muelle). */
-const DIVE_PROXIMITY_RADIUS = 11;
+/** Radio del HUECO al lecho en el centro (rework A): hay que PISARLO para bajar. */
+const DIVE_HOLE_RADIUS = 3;
 /** Guardián de tiempo (s) del autopiloto a pie (JG-21): si no llega, se rinde. */
 const AUTOWALK_TIMEOUT_S = 30;
 /** El autopiloto solo AVANZA cuando el rumbo al objetivo está dentro de este ángulo (rad): gira primero. Arco abierto (~34°) para que no se atasque girando al llegar (RMR-BUG-0016). */
@@ -1075,6 +1074,7 @@ export class CareerIsland3D extends LitElement {
     this._diveGroup = null;
     this._diveSpot = null;
     this._nearDive = false;
+    this._dove = false; // guarda del descenso automático al pisar el hueco (rework A)
     this.seabed = false;
     /** Corredor caminable del muelle (RMR-TSK-0208): cápsula A→B + cubierta, o null. */
     this._dockCorridor = null;
@@ -2084,11 +2084,6 @@ export class CareerIsland3D extends LitElement {
       this._openArchipelago();
       return;
     }
-    if (event.code === 'KeyE' && !event.repeat && this._nearDive) {
-      event.preventDefault();
-      this._emitDive();
-      return;
-    }
     if (CareerIsland3D.HELD_CODES.has(event.code)) {
       this._keys.add(event.code);
       this._autoWalkTargetId = null; // tomar el control cancela el autopiloto (JG-21)
@@ -2425,9 +2420,17 @@ export class CareerIsland3D extends LitElement {
       : false;
     // Baliza de inmersión al lecho (RMR-PCS-0028 · F3b): prompt «[E] Sumergirse»
     // por proximidad, igual que la barca (la ciudad cercana tiene prioridad).
+    // Hueco al lecho en el centro (rework A): al PISARLO (dentro del radio del
+    // hueco), el descenso se dispara SOLO, sin [E] — «te pones encima y bajas».
     this._nearDive = this._diveSpot
-      ? Math.hypot(cam.x - this._diveSpot.x, cam.z - this._diveSpot.z) <= DIVE_PROXIMITY_RADIUS
+      ? Math.hypot(cam.x - this._diveSpot.x, cam.z - this._diveSpot.z) <= DIVE_HOLE_RADIUS
       : false;
+    if (this._nearDive && !this._dove) {
+      this._dove = true; // guarda: no re-dispara mientras sigues encima
+      this._emitDive();
+    } else if (!this._nearDive) {
+      this._dove = false; // al salir del hueco, rearmado
+    }
     // La cabaña del brujo (MC-22): prompt «[E] El brujo» — mismo radio que
     // las ciudades; en el HUD la ciudad cercana manda y la barca cede.
     this._nearWizard = this._wizardSpotW
@@ -2622,7 +2625,6 @@ export class CareerIsland3D extends LitElement {
     if (city) return `Entrar en ${city.name}`;
     if (this._nearWizard) return 'El brujo';
     if (this._nearBoat) return 'Zarpar';
-    if (this._nearDive) return 'Sumergirse al lecho';
     return null;
   }
 
@@ -2892,11 +2894,50 @@ export class CareerIsland3D extends LitElement {
     for (const spot of this._billboardSpotsW) group.add(this._buildTribbuBillboard(spot));
 
     if (this.map.startPort) group.add(this._buildPort(this.map.startPort, labelsVisible));
+    // Hueco al LECHO en el CENTRO de la isla (RMR-PCS-0028 · rework A): si hay
+    // lecho, una abertura bioluminiscente en el centro por la que se desciende al
+    // ponerte encima (descenso inmediato). Reemplaza la baliza del muelle de F3b.
+    if (this.seabed) {
+      group.add(this._buildDiveHole());
+      this._diveSpot = { x: 0, z: 0 }; // centro de la isla (origen del mundo)
+    }
     // Isla sin ciudades (aún sin contenido, MC-14): cartel «En construcción»
     // recibiendo al viajero junto al puerto. La generación del resto de la
     // isla (terreno, puerto, vegetación) ya tolera mapas vacíos.
     if ((this.map.cities ?? []).length === 0) group.add(this._buildConstructionSign());
     return group;
+  }
+
+  /**
+   * Hueco al lecho en el centro de la isla (rework A): un disco oscuro (la
+   * abertura) con anillo bioluminiscente cian y luz — se ve como un pozo por el
+   * que bajar. Al pisarlo, _updateProximity dispara el descenso de inmediato.
+   */
+  _buildDiveHole() {
+    const THREE = this._THREE;
+    const g = new THREE.Group();
+    g.position.set(0, GROUND_Y + 0.03, 0);
+    // La abertura: disco muy oscuro (el «hueco»).
+    const hole = new THREE.Mesh(
+      new THREE.CircleGeometry(2.2, 40),
+      new THREE.MeshBasicMaterial({ color: 0x041018, side: THREE.DoubleSide }),
+    );
+    hole.rotation.x = -Math.PI / 2;
+    g.add(hole);
+    // Anillo bioluminiscente que lo delata.
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.2, 2.7, 40),
+      new THREE.MeshBasicMaterial({ color: 0x4dd0e1, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.02;
+    g.add(ring);
+    const light = new THREE.PointLight(0x4dd0e1, 7, 16, 2);
+    light.position.set(0, 1.4, 0);
+    g.add(light);
+    g.userData.diveHole = true;
+    this._diveGroup = g;
+    return g;
   }
 
   /**
@@ -3521,33 +3562,6 @@ export class CareerIsland3D extends LitElement {
     // juego, así que se carga en diferido sin bloquear nada.
     this._loadBoatModel(boat);
     harbor.add(boat);
-
-    // Baliza de INMERSIÓN al lecho (RMR-PCS-0028 · F3b): en el lado OPUESTO del
-    // muelle al barco (−lx), un halo bioluminiscente cian sobre el agua. Al
-    // acercarse a pie da «[E] Sumergirse al lecho». Solo si el archipiélago tiene
-    // lecho (this.seabed); aditivo — sin lecho el puerto queda como estaba.
-    if (this.seabed) {
-      const DIVE_LOCAL = { lx: -2.7, lz: dockLen - 1.6 };
-      const beacon = new THREE.Group();
-      beacon.position.set(DIVE_LOCAL.lx, TERRAIN.waterY - GROUND_Y + 0.02, DIVE_LOCAL.lz);
-      const glowMat = new THREE.MeshBasicMaterial({ color: 0x4dd0e1, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(1.6, 32), glowMat);
-      disc.rotation.x = -Math.PI / 2;
-      beacon.add(disc);
-      const ring = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.1, 32), new THREE.MeshBasicMaterial({ color: 0x9becff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
-      ring.rotation.x = -Math.PI / 2;
-      beacon.add(ring);
-      const light = new THREE.PointLight(0x4dd0e1, 6, 14, 2);
-      light.position.set(0, 1.2, 0);
-      beacon.add(light);
-      beacon.userData.diveBeacon = true; // marca para el raycast/animación
-      this._diveGroup = beacon;
-      this._diveSpot = {
-        x: wx + DIVE_LOCAL.lx * Math.cos(seaYaw) + DIVE_LOCAL.lz * Math.sin(seaYaw),
-        z: wz - DIVE_LOCAL.lx * Math.sin(seaYaw) + DIVE_LOCAL.lz * Math.cos(seaYaw),
-      };
-      harbor.add(beacon);
-    }
 
     // Faro a pie de muelle: torre BLANCA troncocónica con dos franjas rojas,
     // galería con barandilla, linterna cálida (emisiva) y cúpula roja.
@@ -6299,7 +6313,6 @@ export class CareerIsland3D extends LitElement {
         else if (this._nearCityId) this._openNearCity();
         else if (this._nearWizard) this._openWizard();
         else if (this._nearBoat) this._openArchipelago();
-        else if (this._nearDive) this._emitDive();
         return;
       }
       // Modo LIBRE (JG-3): solo interactúa el CLIC de verdad — corto
