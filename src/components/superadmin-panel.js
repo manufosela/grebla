@@ -167,6 +167,7 @@ export class SuperadminPanel extends LitElement {
     _editBranchLabel: { state: true },
     _branchError: { state: true },
     _orgCrown: { state: true },
+    _branchDraft: { state: true },
   };
 
   static styles = css`
@@ -263,6 +264,8 @@ export class SuperadminPanel extends LitElement {
     table.org-roles td { border-bottom: 0; }
     table.org-roles tbody tr.branch-start td { border-top: 2px solid var(--rm-border, #e5e7eb); }
     table.org-roles tbody tr:first-child td { border-top: 0; }
+    .branch-draft { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
+    .branch-draft input { min-width: 12rem; }
     tbody tr.clickable { cursor: pointer; }
     tbody tr.clickable:hover { background: var(--rm-surface-hover, #f9fafb); }
     tr.sel { background: var(--rm-surface-hover, #eef2ff); }
@@ -478,6 +481,8 @@ export class SuperadminPanel extends LitElement {
     this._editBranchId = null;
     this._editBranchLabel = '';
     this._branchError = '';
+    /** @type {{for: string, label: string}|null} rama nueva en creación desde un select de rol ('__form__' = form de nuevo rol). */
+    this._branchDraft = null;
     /** @type {string} etiqueta del nivel simbólico (usuarios del producto) en la cima. */
     this._orgCrown = '';
     this._loaded = false;
@@ -528,6 +533,12 @@ export class SuperadminPanel extends LitElement {
       const role = byId.get(sel.dataset.parentFor);
       const want = role?.reportsToRoleId ?? '';
       if (role && sel.value !== want) sel.value = want;
+    }
+    // Select de rama del form «Nuevo rol»: reflejar siempre _orgForm.branch (nunca
+    // el centinela «__new__»), aunque sus <option> se generen tras el binding.
+    const formSel = this.renderRoot.querySelector('select[data-branch-form]');
+    if (formSel && this._orgForm?.branch && formSel.value !== this._orgForm.branch) {
+      formSel.value = this._orgForm.branch;
     }
   }
 
@@ -1822,6 +1833,7 @@ export class SuperadminPanel extends LitElement {
   async _setRoleBranch(roleId, branchId) {
     this._orgError = '';
     this._orgNotice = '';
+    if (branchId === '__new__') { this._branchDraft = { for: roleId, label: '' }; return; }
     const role = this._orgRoles.find((r) => r.id === roleId);
     if (!role || !branchId || role.branch === branchId) return;
     const prevBranch = role.branch;
@@ -1832,6 +1844,32 @@ export class SuperadminPanel extends LitElement {
     } catch (err) {
       this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, branch: prevBranch } : r));
       this._orgError = err instanceof Error ? err.message : 'No se pudo cambiar la rama del rol.';
+    }
+  }
+
+  /** Crea una rama nueva desde el select de rol y la asigna en el sitio (al rol o
+   *  al form de «Nuevo rol»). Si el id ya existe, la reutiliza. */
+  async _createBranchInline() {
+    const draft = this._branchDraft;
+    if (!draft) return;
+    const label = draft.label.trim();
+    if (!label) { this._orgError = 'El nombre de la rama es obligatorio.'; return; }
+    const id = slugify(label);
+    if (!id) { this._orgError = 'No se pudo derivar un identificador de rama.'; return; }
+    try {
+      if (!this._orgBranches.some((b) => b.id === id)) {
+        await saveOrgBranch(id, label);
+        this._orgBranches = [...this._orgBranches, { id, label }];
+      }
+      if (draft.for === '__form__') {
+        this._orgForm = { ...this._orgForm, branch: id };
+      } else {
+        await this._setRoleBranch(draft.for, id);
+      }
+      this._branchDraft = null;
+      this._orgNotice = `Rama «${label}» creada.`;
+    } catch (err) {
+      this._orgError = err instanceof Error ? err.message : 'No se pudo crear la rama.';
     }
   }
 
@@ -1917,11 +1955,7 @@ export class SuperadminPanel extends LitElement {
               <tbody>
                 ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfBranch }) => html`<tr class=${firstOfBranch ? 'branch-start' : ''}>
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
-                  <td>${ro
-                    ? html`<span class="badge" style="background:var(--rm-accent,#3b82f6)">${this._branchLabel(role.branch)}</span>`
-                    : html`<select data-branch-for=${role.id} @change=${(e) => this._setRoleBranch(role.id, e.target.value)}>
-                        ${this._orgBranches.map((b) => html`<option value=${b.id}>${b.label}</option>`)}
-                      </select>`}</td>
+                  <td>${this._renderRoleBranchCell(role)}</td>
                   <td>${ro
                     ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)
                     : html`<select data-parent-for=${role.id} @change=${(e) => this._setRoleParent(role.id, e.target.value)}>
@@ -1939,16 +1973,43 @@ export class SuperadminPanel extends LitElement {
           <div class="toolbar">
             <input placeholder="Nombre (p.ej. Staff Engineer)" .value=${this._orgForm.label}
               @input=${(e) => { this._orgForm = { ...this._orgForm, label: e.target.value }; }}>
-            <select .value=${this._orgForm.branch} @change=${(e) => { this._orgForm = { ...this._orgForm, branch: e.target.value }; }}>
-              ${this._orgBranches.map((b) => html`<option value=${b.id} ?selected=${this._orgForm.branch === b.id}>${b.label}</option>`)}
+            <select data-branch-form @change=${(e) => { const v = e.target.value; if (v === '__new__') { this._branchDraft = { for: '__form__', label: '' }; } else { this._orgForm = { ...this._orgForm, branch: v }; } }}>
+              ${this._orgBranches.map((b) => html`<option value=${b.id}>${b.label}</option>`)}
+              <option value="__new__">➕ Nueva rama…</option>
             </select>
             <select .value=${this._orgForm.reportsToRoleId} @change=${(e) => { this._orgForm = { ...this._orgForm, reportsToRoleId: e.target.value }; }}>
               <option value="">— sin inferior (base) —</option>
               ${parentOptions('')}
             </select>
             <button class="primary" @click=${() => this._createRole()}>Crear rol</button>
-          </div>`}
+          </div>
+          ${this._branchDraft?.for === '__form__' ? this._renderBranchDraft() : null}`}
       </div>`;
+  }
+
+  /** Celda «Rama» de una fila del editor: badge en solo-lectura; si no, un select
+   *  (con «➕ Nueva rama…») y el input inline de creación cuando toca. Extraído para
+   *  no anidar el ternario del draft dentro del ternario ro?:  (S3358). */
+  _renderRoleBranchCell(role) {
+    if (this.readOnly) {
+      return html`<span class="badge" style="background:var(--rm-accent,#3b82f6)">${this._branchLabel(role.branch)}</span>`;
+    }
+    const draft = this._branchDraft?.for === role.id ? this._renderBranchDraft() : null;
+    return html`<select data-branch-for=${role.id} @change=${(e) => this._setRoleBranch(role.id, e.target.value)}>
+        ${this._orgBranches.map((b) => html`<option value=${b.id}>${b.label}</option>`)}
+        <option value="__new__">➕ Nueva rama…</option>
+      </select>${draft}`;
+  }
+
+  /** Input inline para crear una rama nueva desde el select de un rol / del form. */
+  _renderBranchDraft() {
+    return html`<span class="branch-draft">
+      <input placeholder="Nombre de la rama (p.ej. Directiva)" .value=${this._branchDraft.label}
+        @input=${(e) => { this._branchDraft = { ...this._branchDraft, label: e.target.value }; }}
+        @keydown=${(e) => { if (e.key === 'Enter') this._createBranchInline(); else if (e.key === 'Escape') { this._branchDraft = null; } }}>
+      <button type="button" class="primary" @click=${() => this._createBranchInline()}>Crear rama</button>
+      <button type="button" @click=${() => { this._branchDraft = null; }}>Cancelar</button>
+    </span>`;
   }
 
   /** Vista de organigrama en PIRÁMIDE INVERTIDA (liderazgo afectivo): el rol que a
@@ -1966,6 +2027,10 @@ export class SuperadminPanel extends LitElement {
       levels.push(roles.filter((r) => depthOf(r.id) === d));
     }
     const branchColor = (b) => `var(--rm-branch-${b}, var(--rm-accent, #2a9d8f))`;
+    // Etiqueta del superior de cada rol, precalculada para no anidar un find() dentro
+    // del triple map de la pirámide (S2004: no anidar funciones >4 niveles).
+    const labelById = new Map(roles.map((r) => [r.id, r.label]));
+    const parentLabelOf = (r) => (r.reportsToRoleId ? (labelById.get(r.reportsToRoleId) ?? null) : null);
     return html`
       <p class="ro-note">Pirámide invertida: quien tiene <strong>más responsabilidad</strong> (a quien nadie sostiene) está <strong>abajo</strong>, sosteniendo a todos. Las flechas suben: cada nivel sostiene al de encima.</p>
       <div class="pyramid">
@@ -1979,13 +2044,10 @@ export class SuperadminPanel extends LitElement {
           return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
             ${Object.entries(groups).map(([branch, roles]) => html`
               <div class="pyr-group" style="--g:${branchColor(branch)}">
-                ${roles.map((r) => {
-                  const parent = this._orgRoles.find((x) => x.id === r.reportsToRoleId)?.label ?? null;
-                  return html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
-                    <span class="pyr-dot" style="background:${branchColor(branch)}"></span>${r.label}
-                    <em class="pyr-branch">${this._branchLabel(branch)}${parent ? html` · ↑ ${parent}` : ''}</em>
-                  </span>`;
-                })}
+                ${roles.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
+                  <span class="pyr-dot" style="background:${branchColor(branch)}"></span>${r.label}
+                  <em class="pyr-branch">${this._branchLabel(branch)}${parentLabelOf(r) ? html` · ↑ ${parentLabelOf(r)}` : ''}</em>
+                </span>`)}
               </div>`)}
           </div>`;
         })}
