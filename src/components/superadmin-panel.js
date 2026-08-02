@@ -1975,14 +1975,22 @@ export class SuperadminPanel extends LitElement {
     return orgRoleRows(this._orgRoles);
   }
 
+  /** Cambia de subtab del organigrama RE-LEYENDO de Firestore: así Roles/Ramas/Vista
+   *  siempre reflejan el estado real aunque otra pestaña (u otro deploy) haya
+   *  cambiado datos — sin necesidad de recargar la página. */
+  _openOrgSubtab(sub) {
+    this._orgSubtab = sub;
+    this._loadOrgRoles();
+  }
+
   _renderOrgRoles() {
     const sub = this._orgSubtab;
     return html`
       <section>
         <div class="subtabs">
-          <button class="subtab ${sub === 'editor' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'editor'; }}>Roles</button>
-          <button class="subtab ${sub === 'ramas' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'ramas'; }}>Ramas</button>
-          <button class="subtab ${sub === 'vista' ? 'active' : ''}" @click=${() => { this._orgSubtab = 'vista'; }}>Vista (pirámide invertida)</button>
+          <button class="subtab ${sub === 'editor' ? 'active' : ''}" @click=${() => this._openOrgSubtab('editor')}>Roles</button>
+          <button class="subtab ${sub === 'ramas' ? 'active' : ''}" @click=${() => this._openOrgSubtab('ramas')}>Ramas</button>
+          <button class="subtab ${sub === 'vista' ? 'active' : ''}" @click=${() => this._openOrgSubtab('vista')}>Vista (pirámide invertida)</button>
         </div>
         ${sub === 'vista' ? this._renderOrgPyramid() : sub === 'ramas' ? this._renderOrgBranches() : this._renderOrgEditor()}
       </section>
