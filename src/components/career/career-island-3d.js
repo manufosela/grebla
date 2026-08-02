@@ -5073,6 +5073,11 @@ export class CareerIsland3D extends LitElement {
     for (const spot of this._areaSignSpots.values()) {
       exclusions.push({ x: spot.wx, z: spot.wz, r: 2.2 });
     }
+    // Hueco de bajada al lecho (RMR-PCS-0028): que ningún árbol lo tape ni caiga
+    // encima del agujero del centro de la isla.
+    if (this.seabed) {
+      exclusions.push({ x: 0, z: 0, r: DIVE_HOLE_RADIUS + 5 });
+    }
     const pathIds = [
       ...(this.journey?.visitedCities ?? []),
       ...(this.journey?.plannedRoute ?? []),

@@ -28,6 +28,9 @@ const TURN_SPEED = 0.03;    // giro por frame (flechas ←/→)
 const SCENE_R = 150;        // radio nadable
 const ENTER_RADIUS = 17;    // proximidad a la PUERTA de una casa-coral
 const EXIT_RADIUS = 13;     // proximidad a la corriente ascendente
+// Distancia mínima del CENTRO (tubo de subida) a cualquier casa-coral. > ENTER+EXIT
+// para que las zonas de «entrar» y «subir» nunca se solapen y el tubo quede libre.
+const CENTER_CLEARANCE = 34;
 const MOVE_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 export class SeabedView extends LitElement {
@@ -55,7 +58,8 @@ export class SeabedView extends LitElement {
     .stage { position: absolute; inset: 0; z-index: 1; }
     .stage canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; }
     .stage canvas:active { cursor: grabbing; }
-    .prompt { position: absolute; left: 50%; bottom: 3.2rem; transform: translateX(-50%); z-index: 2; background: rgba(6, 26, 38, 0.85); border: 1.5px solid #4dd0e1; color: #eaf7fc; border-radius: 999px; padding: 0.5rem 1rem; font-size: 0.92rem; font-weight: 600; box-shadow: 0 0 18px rgba(77, 208, 225, 0.4); }
+    .prompt { position: absolute; left: 50%; bottom: 3.2rem; transform: translateX(-50%); z-index: 2; background: rgba(6, 26, 38, 0.85); border: 1.5px solid #4dd0e1; color: #eaf7fc; border-radius: 999px; padding: 0.5rem 1rem; font: inherit; font-size: 0.92rem; font-weight: 600; box-shadow: 0 0 18px rgba(77, 208, 225, 0.4); cursor: pointer; pointer-events: auto; }
+    .prompt:hover, .prompt:focus-visible { border-color: #7fdfff; color: #fff; outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.35), 0 0 18px rgba(77, 208, 225, 0.5); }
     .prompt kbd { background: #0a2a3c; border: 1px solid #4dd0e1; border-radius: 5px; padding: 0 0.35rem; font-weight: 800; }
     .hint { position: absolute; left: 50%; bottom: 0.8rem; transform: translateX(-50%); z-index: 2; font-size: 0.76rem; color: #8fb8c8; text-shadow: 0 1px 6px #000; pointer-events: none; text-align: center; }
     .hint kbd { background: #0a2a3c; border: 1px solid #35576a; border-radius: 4px; padding: 0 0.3rem; margin: 0 0.05rem; font-weight: 700; color: #cdeefb; }
@@ -187,6 +191,17 @@ export class SeabedView extends LitElement {
 
   _world(n) { return [(n.x - 50) * WORLD_SCALE, (n.y - 50) * WORLD_SCALE]; }
 
+  /** Ninguna casa-coral puede quedar pegada al tubo de subida: si cae dentro de la
+   *  clearance del centro, se empuja radialmente hacia fuera (y las zonas de
+   *  «entrar» y «subir» nunca se solapan). */
+  _clearCenter(x, z) {
+    const d = Math.hypot(x, z);
+    if (d >= CENTER_CLEARANCE) return [x, z];
+    if (d < 0.001) return [CENTER_CLEARANCE, 0]; // caso degenerado: justo en el centro
+    const k = CENTER_CLEARANCE / d;
+    return [x * k, z * k];
+  }
+
   _buildReefs() {
     if (!this._t) return;
     const { scene } = this._t;
@@ -199,7 +214,7 @@ export class SeabedView extends LitElement {
       const status = statusById.get(n.id) ?? 'available';
       const milestone = n.kind === 'milestone';
       const color = milestone ? MILESTONE_COLOR : (STATUS_COLOR[status] ?? STATUS_COLOR.available);
-      const [wx, wz] = this._world(n);
+      const [wx, wz] = this._clearCenter(...this._world(n));
       const { group, height } = this._coralHouse(color, status, milestone);
       group.position.set(wx, 0, wz);
       group.rotation.y = Math.atan2(-wx, -wz); // la puerta (local +z) mira al centro
@@ -384,8 +399,8 @@ export class SeabedView extends LitElement {
       ${this._error
         ? html`<div class="error"><p>${this._error}</p><button type="button" class="surface" @click=${this._surface}>Volver a la superficie</button></div>`
         : html`
-            ${this._near ? html`<div class="prompt"><kbd>E</kbd> Entrar en ${nearName}</div>` : nothing}
-            ${!this._near && this._nearExit ? html`<div class="prompt"><kbd>E</kbd> Subir a la superficie</div>` : nothing}
+            ${this._near ? html`<button type="button" class="prompt" @click=${this._interact}><kbd>E</kbd> Entrar en ${nearName}</button>` : nothing}
+            ${!this._near && this._nearExit ? html`<button type="button" class="prompt" @click=${this._interact}><kbd>E</kbd> Subir a la superficie</button>` : nothing}
             <p class="hint"><kbd>←</kbd><kbd>→</kbd> girar · <kbd>↑</kbd><kbd>↓</kbd> / <kbd>W</kbd><kbd>S</kbd> avanzar · <kbd>A</kbd><kbd>D</kbd> desplazarte · <kbd>E</kbd> entrar</p>`}
       ${this._renderSheet()}
     `;
