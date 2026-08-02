@@ -150,6 +150,8 @@ export class SuperadminPanel extends LitElement {
     _orgError: { state: true },
     _orgNotice: { state: true },
     _orgConfirmDelete: { state: true },
+    _editRoleId: { state: true },
+    _editRoleLabel: { state: true },
     _toolPolicies: { state: true },
     _toolError: { state: true },
     _toolNotice: { state: true },
@@ -266,6 +268,9 @@ export class SuperadminPanel extends LitElement {
     table.org-roles tbody tr:first-child td { border-top: 0; }
     .branch-draft { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
     .branch-draft input { min-width: 12rem; }
+    .rename-btn { border: 0; background: none; color: var(--rm-muted, #9ca3af); cursor: pointer; font: inherit; padding: 0 0.25rem; opacity: 0.55; }
+    .rename-btn:hover, .rename-btn:focus-visible { color: var(--rm-accent, #2a9d8f); opacity: 1; outline: none; }
+    input.role-rename { min-width: 11rem; }
     tbody tr.clickable { cursor: pointer; }
     tbody tr.clickable:hover { background: var(--rm-surface-hover, #f9fafb); }
     tr.sel { background: var(--rm-surface-hover, #eef2ff); }
@@ -460,6 +465,9 @@ export class SuperadminPanel extends LitElement {
     this._orgNotice = '';
     /** @type {string|null} id de rol pendiente de confirmar borrado */
     this._orgConfirmDelete = null;
+    /** @type {string|null} id de rol en edición de nombre (inline) */
+    this._editRoleId = null;
+    this._editRoleLabel = '';
     /** @type {import('../tools/team/domain/toolAccess.js').ToolPolicy[]} políticas de herramientas */
     this._toolPolicies = [];
     this._toolError = '';
@@ -1847,6 +1855,26 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
+  /** Renombra un rol (el id no cambia, así ni la jerarquía ni las personas que lo
+   *  referencian se rompen — mismo patrón que renombrar ramas). */
+  async _renameRole(roleId) {
+    this._orgError = '';
+    this._orgNotice = '';
+    const role = this._orgRoles.find((r) => r.id === roleId);
+    const label = this._editRoleLabel.trim();
+    if (!role) return;
+    if (!label) { this._orgError = 'El nombre no puede quedar vacío.'; return; }
+    try {
+      await saveOrgRole(roleId, { label, branch: role.branch, reportsToRoleId: role.reportsToRoleId ?? null });
+      this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, label } : r));
+      this._editRoleId = null;
+      this._editRoleLabel = '';
+      this._orgNotice = `Rol renombrado a «${label}».`;
+    } catch (err) {
+      this._orgError = err instanceof Error ? err.message : 'No se pudo renombrar el rol.';
+    }
+  }
+
   /** Crea una rama nueva desde el select de rol y la asigna en el sitio (al rol o
    *  al form de «Nuevo rol»). Si el id ya existe, la reutiliza. */
   async _createBranchInline() {
@@ -1958,7 +1986,7 @@ export class SuperadminPanel extends LitElement {
               <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
                 ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfTree }) => html`<tr class=${firstOfTree ? 'branch-start' : ''}>
-                  <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${role.label} <span class="muted">(${role.id})</span></td>
+                  <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${this._renderRoleName(role)}</td>
                   <td>${this._renderRoleBranchCell(role)}</td>
                   <td>${ro
                     ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)
@@ -1989,6 +2017,23 @@ export class SuperadminPanel extends LitElement {
           </div>
           ${this._branchDraft?.for === '__form__' ? this._renderBranchDraft() : null}`}
       </div>`;
+  }
+
+  /** Nombre del rol en su fila: texto con lápiz de renombrado inline (Enter guarda,
+   *  Esc cancela). En solo-lectura, solo el texto. El id nunca cambia. */
+  _renderRoleName(role) {
+    if (this._editRoleId === role.id) {
+      return html`<input class="role-rename" .value=${this._editRoleLabel}
+          @input=${(e) => { this._editRoleLabel = e.target.value; }}
+          @keydown=${(e) => { if (e.key === 'Enter') this._renameRole(role.id); else if (e.key === 'Escape') { this._editRoleId = null; } }}>
+        <button type="button" class="ord-btn" @click=${() => this._renameRole(role.id)}>Guardar</button>
+        <button type="button" class="ord-btn" @click=${() => { this._editRoleId = null; }}>✕</button>`;
+    }
+    const pencil = this.readOnly
+      ? null
+      : html` <button type="button" class="rename-btn" title="Renombrar" aria-label="Renombrar ${role.label}"
+          @click=${() => { this._editRoleId = role.id; this._editRoleLabel = role.label; }}>✎</button>`;
+    return html`${role.label} <span class="muted">(${role.id})</span>${pencil}`;
   }
 
   /** Celda «Rama» de una fila del editor: badge en solo-lectura; si no, un select
