@@ -12,6 +12,7 @@ import { getMyPerson } from '../lib/engineer.js';
 import { listTeamMembers } from '../lib/retros.js';
 import { listLeaders } from '../lib/leaders.js';
 import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
+import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('retro-app');
 
@@ -19,6 +20,9 @@ onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
     const access = await resolveAccess(user);
+    // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de crear nada.
+    if (!(await guardToolPage('retros', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+
     const { role } = access;
     app.uid = user.uid;
     if (role === 'leader' || role === 'supermanager' || canGovern(access)) {

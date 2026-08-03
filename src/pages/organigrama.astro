@@ -21,4 +21,17 @@ import Base from '../layouts/Base.astro';
 
 <script>
   import '../components/org-chart.js';
+  import { onUserChanged } from '../lib/auth.js';
+  import { resolveAccess } from '../lib/access.js';
+  import { canGovern } from '../lib/accessRoles.js';
+  import { guardToolPage } from '../lib/toolGate.js';
+
+  // Gate por política de la herramienta (RMR-TSK-0387): si la política deniega,
+  // el componente se sustituye por la pantalla de sin-acceso (deja de cargar).
+  onUserChanged(async (user) => {
+    if (!user) return;
+    let isSuperadmin = false;
+    try { isSuperadmin = canGovern(await resolveAccess(user)); } catch { /* sin gobierno */ }
+    await guardToolPage('organigrama', user, { isSuperadmin, appEl: document.querySelector('org-chart') });
+  });
 </script>

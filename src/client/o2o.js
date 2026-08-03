@@ -11,6 +11,7 @@ import { createTeamContainer } from '../tools/team/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern } from '../lib/accessRoles.js';
 import { proposePrep } from '../lib/o2oAi.js';
+import { guardToolPage } from '../lib/toolGate.js';
 import { ROLES } from '../data/roles.js';
 
 const app = document.querySelector('o2o-app');
@@ -29,6 +30,9 @@ onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
     const access = await resolveAccess(user);
+    // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de crear nada.
+    if (!(await guardToolPage('o2o', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+
     const { role, uid } = access;
     if (!canGovern(access) && role !== 'leader') {
       app.error = 'Esta herramienta es para managers. Tu espacio de O2O está en «Mi espacio».';
