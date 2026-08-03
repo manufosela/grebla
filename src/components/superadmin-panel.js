@@ -2331,7 +2331,10 @@ export class SuperadminPanel extends LitElement {
   /** Editor de un grant (audience o managedBy): everyone + ramas + roles. */
   _renderGrantEditor(toolId, kind, grant, allowEveryone) {
     const ro = this.readOnly;
-    const branches = ORG_BRANCHES;
+    // Ramas del CATÁLOGO real (/orgBranches) — incluye las creadas por el
+    // superadmin (RMR-BUG-0077: antes referenciaba una constante inexistente y
+    // el ReferenceError abortaba el render de toda la lista de herramientas).
+    const branches = this._orgBranches;
     const roles = this._orgRoles;
     const everyone = Boolean(grant.everyone);
     return html`
@@ -2342,9 +2345,9 @@ export class SuperadminPanel extends LitElement {
         <div class="grant-cols ${everyone ? 'dim' : ''}">
           <div>
             <span class="grant-h">Ramas</span>
-            ${branches.map((b) => html`<label class="chk"><input type="checkbox" ?disabled=${ro}
-              .checked=${(grant.branches ?? []).includes(b)}
-              @change=${() => this._updateToolGrant(toolId, kind, (g) => this._toggleGrantList(g, 'branches', b))}>${b}</label>`)}
+            ${branches.length === 0 ? html`<span class="muted">— sin ramas —</span>` : branches.map((b) => html`<label class="chk"><input type="checkbox" ?disabled=${ro}
+              .checked=${(grant.branches ?? []).includes(b.id)}
+              @change=${() => this._updateToolGrant(toolId, kind, (g) => this._toggleGrantList(g, 'branches', b.id))}>${b.label}</label>`)}
           </div>
           <div>
             <span class="grant-h">Roles</span>
