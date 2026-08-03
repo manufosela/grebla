@@ -154,6 +154,8 @@ export class SuperadminPanel extends LitElement {
     _editRoleLabel: { state: true },
     _editEmailId: { state: true },
     _editEmailValue: { state: true },
+    _editPersonNameId: { state: true },
+    _editPersonNameValue: { state: true },
     _toolPolicies: { state: true },
     _toolError: { state: true },
     _toolNotice: { state: true },
@@ -482,6 +484,9 @@ export class SuperadminPanel extends LitElement {
     /** @type {string|null} id de persona en edición de email de invitación (inline) */
     this._editEmailId = null;
     this._editEmailValue = '';
+    /** @type {string|null} id de persona en edición de nombre (inline) */
+    this._editPersonNameId = null;
+    this._editPersonNameValue = '';
     /** @type {import('../tools/team/domain/toolAccess.js').ToolPolicy[]} políticas de herramientas */
     this._toolPolicies = [];
     this._toolError = '';
@@ -1046,6 +1051,41 @@ export class SuperadminPanel extends LitElement {
     } catch (err) {
       this._peopleError = err instanceof Error ? err.message : 'No se pudo guardar el email.';
     }
+  }
+
+  /** Guarda el nombre corregido de una persona (RMR-BUG-0076). El id no cambia:
+   *  journey, O2O, notas y todo lo que referencia a la persona quedan intactos. */
+  async _savePersonName(personId) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    const person = this._peopleList.find((p) => p.id === personId);
+    const name = this._editPersonNameValue.trim();
+    if (!person) return;
+    if (!name) { this._peopleError = 'El nombre no puede quedar vacío.'; return; }
+    try {
+      await this.persistence.people.update(personId, { name });
+      this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, name } : p));
+      this._editPersonNameId = null;
+      this._editPersonNameValue = '';
+      this._peopleNotice = `Nombre corregido a «${name}».`;
+    } catch (err) {
+      this._peopleError = err instanceof Error ? err.message : 'No se pudo guardar el nombre.';
+    }
+  }
+
+  /** Celda de nombre de la tabla de personas: texto con lápiz de edición inline
+   *  (Enter guarda, Esc cancela) — mismo patrón que el email (RMR-BUG-0076). */
+  _renderPersonNameCell(p) {
+    if (this._editPersonNameId === p.id) {
+      return html`<input class="role-rename" .value=${this._editPersonNameValue}
+          @input=${(e) => { this._editPersonNameValue = e.target.value; }}
+          @keydown=${(e) => { if (e.key === 'Enter') this._savePersonName(p.id); else if (e.key === 'Escape') { this._editPersonNameId = null; } }}>
+        <button type="button" class="ord-btn" @click=${() => this._savePersonName(p.id)}>Guardar</button>
+        <button type="button" class="ord-btn" @click=${() => { this._editPersonNameId = null; }}>✕</button>`;
+    }
+    return html`${p.name}
+      <button type="button" class="rename-btn" title="Editar nombre" aria-label="Editar nombre de ${p.name}"
+        @click=${() => { this._editPersonNameId = p.id; this._editPersonNameValue = p.name; }}>✎</button>`;
   }
 
   /** Celda de email de la tabla de personas: con cuenta, solo lectura (el de la
@@ -2414,7 +2454,7 @@ export class SuperadminPanel extends LitElement {
                 else if (p.pendingEmail) account = html`<span class="muted">Pendiente</span>`;
                 else account = html`<span class="muted">Sin cuenta</span>`;
                 return html`<tr>
-                  <td>${p.name}</td>
+                  <td>${this._renderPersonNameCell(p)}</td>
                   <td>${this._renderPersonEmailCell(p)}</td>
                   <td>
                     <select @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
