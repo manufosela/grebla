@@ -92,6 +92,107 @@ export function validateJobDescription(payload) {
   return { valid: errors.length === 0, errors };
 }
 
+/**
+ * GENERA una Job Description conforme al contrato a partir del FRAMEWORK
+ * (RMR-PCS-0031 · F2). Función PURA: recibe el framework normalizado de la
+ * instancia (con sus ediciones), no el seed — y unos parámetros mínimos.
+ * Sin fallbacks silenciosos: parámetros inválidos LANZAN con mensaje claro.
+ *
+ * @param {{ id?: string, name?: string,
+ *   tracks: Array<{id: string, name: string}>,
+ *   levels: Array<{id: string, code: string, title: string, trackId: string, order: number, description?: string, typicalProfile?: string}>,
+ *   disciplines: Array<{id: string, name: string}>,
+ *   dimensions: Array<{id: string, name: string, order: number}>,
+ *   expectations: Array<{levelId: string, dimensionId: string, text: string}> }} framework
+ * @param {{ jdId: string, roleName: string, levelIds: string[], disciplineIds?: string[],
+ *   datePosted: string, descriptionIntro?: string }} opts
+ * @returns {Record<string, unknown>} payload que pasa validateJobDescription
+ */
+export function generateJobDescription(framework, opts) {
+  const { jdId, roleName, levelIds, disciplineIds = [], datePosted, descriptionIntro = '' } = opts ?? {};
+  if (!framework || !Array.isArray(framework.levels)) throw new Error('Falta el framework de carrera.');
+  if (!isNonEmptyString(jdId)) throw new Error('Falta el id de la JD (jdId).');
+  if (!isNonEmptyString(roleName)) throw new Error('Falta el nombre del rol (roleName).');
+  if (!ISO_DATE_RE.test(String(datePosted ?? ''))) throw new Error('datePosted debe ser fecha ISO (YYYY-MM-DD).');
+  if (!Array.isArray(levelIds) || levelIds.length < 1 || levelIds.length > 2) {
+    throw new Error('Elige 1 o 2 niveles (rango «entre niveles»).');
+  }
+  if (new Set(levelIds).size !== levelIds.length) {
+    throw new Error('Un rango no puede repetir el mismo nivel dos veces.');
+  }
+  const levels = levelIds.map((id) => {
+    const level = framework.levels.find((l) => l.id === id);
+    if (!level) throw new Error(`El nivel «${id}» no existe en el framework.`);
+    return level;
+  }).toSorted((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  // Track: el común de los niveles; si el rango cruza tracks, null (el contrato lo permite).
+  const trackIds = new Set(levels.map((l) => l.trackId));
+  const track = trackIds.size === 1 ? (levels[0].trackId ?? null) : null;
+
+  const disciplineNames = disciplineIds.map((id) => {
+    const discipline = framework.disciplines?.find((d) => d.id === id);
+    if (!discipline) throw new Error(`La disciplina «${id}» no existe en el framework.`);
+    return discipline.name;
+  });
+  const codes = levels.map((l) => l.code);
+  const levelLabels = levels.map((l) => `${l.code} · ${l.title}`);
+  const isRange = levels.length === 2;
+
+  // Dimensiones con la(s) expectativa(s) de los niveles elegidos, en el orden
+  // del framework. Una dimensión sin expectativa para NINGUNO de los niveles
+  // se omite (el contrato exige al menos una por dimensión).
+  const dimensions = [...(framework.dimensions ?? [])]
+    .toSorted((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((dim) => ({
+      id: dim.id,
+      name: dim.name,
+      expectations: levels
+        .map((level) => {
+          const exp = (framework.expectations ?? []).find(
+            (e) => e.levelId === level.id && e.dimensionId === dim.id,
+          );
+          return exp ? { level: level.id, text: exp.text } : null;
+        })
+        .filter(Boolean),
+    }))
+    .filter((dim) => dim.expectations.length > 0);
+  if (dimensions.length === 0) {
+    throw new Error('El framework no tiene expectativas para esos niveles: no se puede generar la JD.');
+  }
+
+  const rangeText = isRange
+    ? `Entre los niveles ${codes[0]} (${levels[0].title}) y ${codes[1]} (${levels[1].title}) del framework ${framework.name ?? framework.id ?? 'de carrera'}.`
+    : `Nivel ${codes[0]} (${levels[0].title}) del framework ${framework.name ?? framework.id ?? 'de carrera'}.`;
+  const profileBits = levels.map((l) => l.typicalProfile).filter(isNonEmptyString);
+  const description = [
+    descriptionIntro.trim(),
+    `Buscamos ${roleName}${disciplineNames.length ? ` (${disciplineNames.join(', ')})` : ''}. ${rangeText}`,
+    ...levels.map((l) => (isNonEmptyString(l.description) ? `${l.code}: ${l.description}` : null)).filter(Boolean),
+  ].filter(isNonEmptyString).join('\n\n');
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    'x-schemaVersion': JD_SCHEMA_VERSION,
+    title: `${roleName} (${codes.join('–')})`,
+    description,
+    datePosted,
+    identifier: { '@type': 'PropertyValue', propertyID: 'grebla-jd', value: jdId },
+    qualifications: dimensions.map((d) => d.name).join(' · '),
+    skills: [...disciplineNames, ...dimensions.map((d) => d.name)],
+    experienceRequirements: profileBits.length ? `${rangeText} Perfil típico: ${profileBits.join(' / ')}.` : rangeText,
+    'x-careerLevel': {
+      framework: framework.id ?? 'engineering',
+      track,
+      levels: levels.map((l) => l.id),
+      levelLabels,
+      disciplines: disciplineNames,
+      dimensions,
+    },
+  };
+}
+
 /** Valida el bloque x-careerLevel (extensión propia). @returns {string[]} */
 function validateCareerLevel(block) {
   /** @type {string[]} */
