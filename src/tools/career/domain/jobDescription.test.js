@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { JD_SCHEMA_VERSION, isCompatibleSchemaVersion, validateJobDescription } from './jobDescription.js';
+import { JD_SCHEMA_VERSION, isCompatibleSchemaVersion, validateJobDescription, generateJobDescription } from './jobDescription.js';
 
 /** Una JD VÁLIDA de referencia (rango L2–L3, dos dimensiones). */
 const validJd = () => ({
@@ -103,5 +103,71 @@ describe('career — contrato de Job Description (RMR-PCS-0031 · F1)', () => {
     expect(isCompatibleSchemaVersion('2.0.0')).toBe(false);
     expect(isCompatibleSchemaVersion('v1')).toBe(false);
     expect(isCompatibleSchemaVersion(undefined)).toBe(false);
+  });
+});
+
+describe('generateJobDescription — generador desde el framework (F2)', async () => {
+  const { seedFramework } = await import('../data/framework.js');
+  const fw = seedFramework();
+
+  it('nivel ÚNICO: payload válido, fiel al framework real', () => {
+    const jd = generateJobDescription(fw, {
+      jdId: 'jd-1', roleName: 'Backend Engineer', levelIds: ['l2'],
+      disciplineIds: ['backend'], datePosted: '2026-08-03',
+    });
+    expect(validateJobDescription(jd).errors).toEqual([]);
+    expect(jd.title).toBe('Backend Engineer (L2)');
+    expect(jd['x-careerLevel'].track).toBe('ic');
+    expect(jd['x-careerLevel'].disciplines).toEqual(['Backend']);
+    // Las 7 dimensiones del seed tienen expectativa en l2.
+    expect(jd['x-careerLevel'].dimensions.length).toBe(7);
+    expect(jd['x-careerLevel'].dimensions[0].expectations[0].level).toBe('l2');
+  });
+
+  it('RANGO l2–l3: expectativas de ambos niveles atribuidas, ordenado por order', () => {
+    const jd = generateJobDescription(fw, {
+      jdId: 'jd-2', roleName: 'Senior Engineer', levelIds: ['l3', 'l2'], // desordenados a propósito
+      datePosted: '2026-08-03',
+    });
+    expect(validateJobDescription(jd).errors).toEqual([]);
+    expect(jd.title).toBe('Senior Engineer (L2–L3)');
+    const tech = jd['x-careerLevel'].dimensions.find((d) => d.id === 'tech');
+    expect(tech.expectations.map((e) => e.level)).toEqual(['l2', 'l3']);
+  });
+
+  it('rango que CRUZA tracks → track null (el contrato lo permite)', () => {
+    const jd = generateJobDescription(fw, {
+      jdId: 'jd-3', roleName: 'Tech Lead', levelIds: ['l3', 'l3tl'], datePosted: '2026-08-03',
+    });
+    expect(jd['x-careerLevel'].track).toBeNull();
+    expect(validateJobDescription(jd).errors).toEqual([]);
+  });
+
+  it('falla FUERTE con parámetros inválidos (sin fallbacks silenciosos)', () => {
+    expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: ['l99'], datePosted: '2026-08-03' })).toThrow(/no existe/);
+    expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: [], datePosted: '2026-08-03' })).toThrow(/1 o 2 niveles/);
+    expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: ['l1', 'l2', 'l3'], datePosted: '2026-08-03' })).toThrow(/1 o 2 niveles/);
+    expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: ['l2', 'l2'], datePosted: '2026-08-03' })).toThrow(/repetir/);
+    expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: ['l1'], disciplineIds: ['cobol'], datePosted: '2026-08-03' })).toThrow(/disciplina/);
+    expect(() => generateJobDescription(fw, { jdId: '', roleName: 'R', levelIds: ['l1'], datePosted: '2026-08-03' })).toThrow(/jdId/);
+    expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: ['l1'], datePosted: 'hoy' })).toThrow(/ISO/);
+  });
+
+  it('omite dimensiones sin expectativa y falla si NINGUNA tiene', () => {
+    const mini = {
+      id: 'engineering', name: 'Engineering',
+      tracks: [{ id: 'ic', name: 'IC' }],
+      levels: [{ id: 'l1', code: 'L1', title: 'Engineer', trackId: 'ic', order: 1 }],
+      disciplines: [],
+      dimensions: [
+        { id: 'a', name: 'Con expectativa', order: 1 },
+        { id: 'b', name: 'Sin expectativa', order: 2 },
+      ],
+      expectations: [{ levelId: 'l1', dimensionId: 'a', text: 'Hace cosas.' }],
+    };
+    const jd = generateJobDescription(mini, { jdId: 'x', roleName: 'R', levelIds: ['l1'], datePosted: '2026-08-03' });
+    expect(jd['x-careerLevel'].dimensions.map((d) => d.id)).toEqual(['a']);
+    const vacio = { ...mini, expectations: [] };
+    expect(() => generateJobDescription(vacio, { jdId: 'x', roleName: 'R', levelIds: ['l1'], datePosted: '2026-08-03' })).toThrow(/no tiene expectativas/);
   });
 });
