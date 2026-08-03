@@ -819,10 +819,12 @@ export class CareerIsland3D extends LitElement {
     _nearCityId: { state: true },
     _insideCityId: { state: true },
     _nearBoat: { state: true },
+    _nearEggId: { state: true },
     _nearWizard: { state: true },
     _nearDive: { state: true },
     /** ¿Hay lecho en el archipiélago? Habilita la baliza de inmersión (RMR-PCS-0028 · F3b). */
     seabed: { attribute: false },
+    eggs: { attribute: false },
   };
 
   static styles = css`
@@ -1064,6 +1066,9 @@ export class CareerIsland3D extends LitElement {
     this._nearCityId = null;
     /** true con el caminante junto a la barca del muelle (prompt «[E] Zarpar», MC-14). */
     this._nearBoat = false;
+    this._nearEggId = null;
+    /** @type {{id: string, x: number, z: number, title: string}[]} cofres de huevos activos en ESTA isla. */
+    this._eggSpots = [];
     /** Grupo de la barca del muelle (raycasteable para zarpar, MC-14), o null. */
     this._boatGroup = null;
     /** Posición de mundo de la barca para la proximidad a pie (MC-14), o null. */
@@ -1274,6 +1279,9 @@ export class CareerIsland3D extends LitElement {
     // Baliza de inmersión al lecho (RMR-PCS-0028 · F3b): si `seabed` llega o
     // cambia después de construir la escena (el índice del archipiélago carga
     // async), se rehace el grupo estático para añadir o quitar la baliza.
+    if (!changed.has('map') && changed.has('eggs')) {
+      this._replaceGroup('_staticGroup', this._buildStatic());
+    }
     if (!changed.has('map') && changed.has('seabed')) {
       this._diveGroup = null;
       this._diveSpot = null;
@@ -2084,6 +2092,12 @@ export class CareerIsland3D extends LitElement {
       this._openArchipelago();
       return;
     }
+    if (event.code === 'KeyE' && !event.repeat && this._nearEggId) {
+      event.preventDefault();
+      // Huevo de pascua (RMR-TSK-0393): abre el reto (career-app lo registra).
+      this.dispatchEvent(new CustomEvent('open-egg', { detail: { eggId: this._nearEggId }, bubbles: true, composed: true }));
+      return;
+    }
     if (CareerIsland3D.HELD_CODES.has(event.code)) {
       this._keys.add(event.code);
       this._autoWalkTargetId = null; // tomar el control cancela el autopiloto (JG-21)
@@ -2436,6 +2450,14 @@ export class CareerIsland3D extends LitElement {
     this._nearWizard = this._wizardSpotW
       ? Math.hypot(cam.x - this._wizardSpotW.wx, cam.z - this._wizardSpotW.wz) <= PROXIMITY_RADIUS
       : false;
+    // Cofre de huevo de pascua cercano (RMR-TSK-0393): «[E] ¿Qué es esto?».
+    let nearEgg = null;
+    let bestEgg = 5;
+    for (const spot of this._eggSpots) {
+      const d = Math.hypot(cam.x - spot.x, cam.z - spot.z);
+      if (d < bestEgg) { bestEgg = d; nearEgg = spot.id; }
+    }
+    if (nearEgg !== this._nearEggId) this._nearEggId = nearEgg;
     const near = nearestCityWithin({ x: cam.x, z: cam.z }, this._walkCities, PROXIMITY_RADIUS);
     const id = near?.id ?? null;
     if (id === this._nearCityId) return;
@@ -2624,6 +2646,7 @@ export class CareerIsland3D extends LitElement {
   _nearActionLabel(city) {
     if (city) return `Entrar en ${city.name}`;
     if (this._nearWizard) return 'El brujo';
+    if (this._nearEggId) return '¿Qué es esto?';
     if (this._nearBoat) return 'Zarpar';
     return null;
   }
@@ -2847,6 +2870,15 @@ export class CareerIsland3D extends LitElement {
     // Hueco al lecho (RMR-BUG-0078): el sitio se calcula ANTES de la vegetación
     // (que lo excluye) y DESPEJADO de casas, brujo y puerto — nada encima.
     this._diveSpot = this.seabed ? this._computeDiveSpot() : null;
+    // Cofres de huevos de pascua (RMR-TSK-0393): posiciones del editor, acotadas
+    // al radio caminable, también ANTES de la vegetación (que las despeja).
+    this._eggSpots = (this.eggs ?? []).map((egg) => {
+      const w = worldFromMap(egg.x, egg.y);
+      const d = Math.hypot(w.wx, w.wz) || 1;
+      const maxR = this._walkRadius - 3;
+      const k = d > maxR ? maxR / d : 1;
+      return { id: egg.id, x: w.wx * k, z: w.wz * k, title: egg.title };
+    });
     group.add(this._buildVegetation());
 
     // Comarcas: parche circular sutil + etiqueta flotante con el nombre.
@@ -2903,6 +2935,8 @@ export class CareerIsland3D extends LitElement {
     if (this.seabed && this._diveSpot) {
       group.add(this._buildDiveHole(this._diveSpot));
     }
+    // Cofres de huevos de pascua (RMR-TSK-0393).
+    for (const spot of this._eggSpots) group.add(this._buildEggChest(spot));
     // Isla sin ciudades (aún sin contenido, MC-14): cartel «En construcción»
     // recibiendo al viajero junto al puerto. La generación del resto de la
     // isla (terreno, puerto, vegetación) ya tolera mapas vacíos.
@@ -2957,6 +2991,35 @@ export class CareerIsland3D extends LitElement {
     g.add(light);
     g.userData.diveHole = true;
     this._diveGroup = g;
+    return g;
+  }
+
+  /** Cofre del tesoro low-poly de un huevo de pascua (RMR-TSK-0393): caja de
+   *  madera con tapa, fleje dorado y un brillo cálido que invita a acercarse. */
+  _buildEggChest(spot) {
+    const THREE = this._THREE;
+    const g = new THREE.Group();
+    g.position.set(spot.x, GROUND_Y, spot.z);
+    g.rotation.y = Math.atan2(-spot.x, -spot.z); // mira al centro de la isla
+    const wood = new THREE.MeshStandardMaterial({ color: 0x7a4f2a, roughness: 0.8 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xe9c46a, roughness: 0.35, metalness: 0.55, emissive: 0xe9c46a, emissiveIntensity: 0.25 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 1.05), wood);
+    base.position.y = 0.45;
+    g.add(base);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.6, 10, 1, false, 0, Math.PI), wood);
+    lid.rotation.z = Math.PI / 2;
+    lid.position.y = 0.92;
+    g.add(lid);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.0, 1.12), gold);
+    strap.position.y = 0.5;
+    g.add(strap);
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.3, 0.12), gold);
+    lock.position.set(0, 0.62, 0.58);
+    g.add(lock);
+    const light = new THREE.PointLight(0xffd97a, 2.2, 9, 2);
+    light.position.y = 1.4;
+    g.add(light);
+    g.userData.eggId = spot.id;
     return g;
   }
 
@@ -5129,6 +5192,10 @@ export class CareerIsland3D extends LitElement {
     // roca caiga encima del agujero (esté donde esté).
     if (this._diveSpot) {
       exclusions.push({ x: this._diveSpot.x, z: this._diveSpot.z, r: DIVE_HOLE_RADIUS + 5 });
+    }
+    // Cofres de huevos de pascua (RMR-TSK-0393): despejados de vegetación.
+    for (const spot of this._eggSpots) {
+      exclusions.push({ x: spot.x, z: spot.z, r: 5 });
     }
     const pathIds = [
       ...(this.journey?.visitedCities ?? []),

@@ -223,6 +223,7 @@ import { startPlaytimeTracker } from '../../lib/playtime.js';
 import { getCareerMap, getArchipelago, getExistingIslandIds, listCareerRoutes } from '../../lib/careerMap.js';
 import { SEABED_ISLAND_ID, seaIslands } from '../../tools/career/data/archipelago.js';
 import { hasSeabed } from '../../tools/career/domain/seabed.js';
+import { listActiveEggs, registerEggFind } from '../../lib/easterEggs.js';
 import { getFramework } from '../../lib/careerFramework.js';
 import * as carpoolsIo from '../../lib/carpools.js';
 import {
@@ -393,6 +394,8 @@ export class CareerApp extends LitElement {
     /** Estado del lecho (RMR-PCS-0028 · F3a): null | 'descending' | 'open'. */
     _seabed: { state: true },
     _seabedMap: { state: true },
+    _activeEggs: { state: true },
+    _eggPanel: { state: true },
     mode3d: { state: true },
     audioMuted: { state: true },
     teammates: { state: true },
@@ -472,6 +475,9 @@ export class CareerApp extends LitElement {
   static MAX_TEAM_JOURNEYS = 25;
   /** Lista vacía ESTABLE: la isla no rehace su grupo en cada render sin equipo. */
   static EMPTY_TEAMMATES = Object.freeze([]);
+
+  /** Sin huevos: referencia estable (no dispara rebuilds del grupo estático). */
+  static EMPTY_EGGS = Object.freeze([]);
   /** Duración (ms) del fundido de travesía entre islas (MC-14). */
   static TRAVEL_FADE_MS = 900;
   /** Duración (ms) del aviso de CIUDADANÍA DE ISLA (acompaña a la celebración
@@ -1693,6 +1699,9 @@ export class CareerApp extends LitElement {
     .cardsec:first-of-type { margin-top: 0.6rem; border-top: none; padding-top: 0; }
     .cardsec > h4 { margin: 0 0 0.4rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 800; }
     .summary { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--rm-text, #111827); }
+    /* Huevo escondido en «¿Qué es?» (RMR-TSK-0394): sutil hasta pasar por encima. */
+    .egg-hidden { border: 0; background: none; cursor: pointer; font-size: 0.8rem; opacity: 0.25; padding: 0 0.15rem; filter: grayscale(0.6); transition: opacity 0.2s, filter 0.2s; }
+    .egg-hidden:hover, .egg-hidden:focus-visible { opacity: 1; filter: none; outline: none; }
     /* Badge-sello de estado en la CABECERA (JG-18): separado de los botones. */
     .headbadge {
       display: inline-block;
@@ -2137,6 +2146,10 @@ export class CareerApp extends LitElement {
     // descenso, 'open' en la vista submarina. El mapa del lecho se carga al bajar.
     this._seabed = null;
     this._seabedMap = null;
+    /** @type {import('../../lib/easterEggs.js').EasterEgg[]|null} huevos activos (lazy). */
+    this._activeEggs = null;
+    /** @type {{egg: import('../../lib/easterEggs.js').EasterEgg, status: string, foundAt: string|null, solved: boolean, word: string, wordError: boolean}|null} */
+    this._eggPanel = null;
     // Modo de cámara del 3D (MC-7): 'aerial' | 'fps'; lo comunica la isla.
     this.mode3d = 'aerial';
     // Sonido de la isla (MC-11): preferencia persistida; el motor WebAudio
@@ -2427,6 +2440,11 @@ export class CareerApp extends LitElement {
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
+    // Huevos de pascua (RMR-TSK-0393): carga perezosa + memo por isla.
+    if (changed.has('map')) {
+      this._ensureEggs();
+      this._refreshIslandEggsMemo();
+    }
     // Musiquita de mar (RMR-TSK-0390): suena con el archipiélago abierto o el
     // barco navegando; para al cerrar/llegar. Respeta el silencio del HUD.
     if (changed.has('showArchipelago') || changed.has('voyage')) {
@@ -2793,6 +2811,106 @@ export class CareerApp extends LitElement {
       return;
     }
     if (this._seabed === 'descending') this._seabed = 'open';
+  }
+
+  // ── Huevos de pascua (RMR-PCS-0030 · F3) ────────────────────────────────────
+
+  /** Huevos objeto-isla ACTIVOS de la isla actual, MEMOIZADOS (referencia
+   *  estable: pasar un array nuevo en cada render dispararía el rebuild del
+   *  grupo estático de la isla — lección de challengeStops, JG-5). */
+  _islandEggs() {
+    return this._islandEggsMemo ?? CareerApp.EMPTY_EGGS;
+  }
+
+  /** Recalcula el memo de huevos de la isla (al cambiar mapa o huevos). */
+  _refreshIslandEggsMemo() {
+    const eggs = (this._activeEggs ?? []).filter(
+      (e) => e.type === 'objeto-isla' && e.islandId === this.map?.id,
+    );
+    this._islandEggsMemo = eggs.length > 0 ? eggs : CareerApp.EMPTY_EGGS;
+  }
+
+  /** Carga perezosa de los huevos activos (una consulta por sesión). */
+  async _ensureEggs() {
+    if (this._activeEggs !== null || this._eggsLoading) return;
+    this._eggsLoading = true;
+    try {
+      this._activeEggs = await listActiveEggs();
+    } catch {
+      this._activeEggs = []; // sin huevos: el juego sigue igual
+    } finally {
+      this._eggsLoading = false;
+      this._refreshIslandEggsMemo();
+    }
+  }
+
+  /** Abre el panel del reto de un huevo y REGISTRA el hallazgo (CF, idempotente). */
+  async _openEgg(eggId) {
+    const egg = (this._activeEggs ?? []).find((e) => e.id === eggId);
+    if (!egg) return;
+    this._eggPanel = { egg, status: 'registrando', foundAt: null, solved: false, word: '', wordError: false };
+    try {
+      const res = await registerEggFind(egg.id);
+      this._eggPanel = { ...this._eggPanel, status: 'ok', foundAt: res.foundAt, solved: res.solved === true };
+    } catch (err) {
+      this._eggPanel = { ...this._eggPanel, status: 'error' };
+    }
+  }
+
+  /** Envía la palabra clave del reto a la CF (marca resuelto si acierta). */
+  async _submitEggWord() {
+    const p = this._eggPanel;
+    if (!p || !p.word.trim() || p.solved) return;
+    try {
+      const res = await registerEggFind(p.egg.id, p.word.trim());
+      this._eggPanel = { ...p, solved: res.solved === true, wordError: res.wordError === true };
+    } catch {
+      this._eggPanel = { ...p, wordError: true };
+    }
+  }
+
+  /** Panel del reto del huevo (overlay propio, cierre con ✕ o fondo). */
+  _renderEggPanel() {
+    const p = this._eggPanel;
+    if (!p) return nothing;
+    const showPrize = p.solved || !p.egg.hasSecret;
+    let estado = nothing;
+    if (p.status === 'registrando') estado = html`<p class="egg-state">Registrando tu hallazgo…</p>`;
+    else if (p.status === 'error') estado = html`<p class="egg-state err">No se pudo registrar el hallazgo (¿tu cuenta está vinculada a una persona?).</p>`;
+    else if (p.foundAt) estado = html`<p class="egg-state ok">🥚 Hallazgo registrado${p.foundAt ? ` · ${new Date(p.foundAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}` : ''}</p>`;
+    return html`
+      <style>
+        .egg-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(10, 14, 18, 0.55); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        .egg-panel { box-sizing: border-box; width: min(94%, 34rem); max-height: 90vh; overflow-y: auto; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border: 2px solid #e9c46a; border-radius: 14px; padding: 1.2rem 1.4rem; box-shadow: 0 12px 42px rgba(0, 0, 0, 0.4); }
+        .egg-panel h3 { margin: 0 0 0.6rem; }
+        .egg-panel .close { float: right; border: 0; background: none; font-size: 1.3rem; cursor: pointer; color: var(--rm-muted, #6b7280); }
+        .egg-panel .instructions { white-space: pre-wrap; line-height: 1.5; }
+        .egg-state { font-weight: 600; }
+        .egg-state.ok { color: var(--rm-accent, #2a9d8f); }
+        .egg-state.err { color: var(--rm-danger, #dc2626); }
+        .egg-word { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; }
+        .egg-word input { flex: 1; min-width: 10rem; padding: 0.45rem 0.6rem; border: 1.5px solid var(--rm-border, #d1d5db); border-radius: 8px; font: inherit; }
+        .egg-prize { margin-top: 0.9rem; border: 1.5px dashed #e9c46a; border-radius: 10px; padding: 0.7rem 0.9rem; background: color-mix(in srgb, #e9c46a 10%, transparent); white-space: pre-wrap; }
+        .egg-err { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
+      </style>
+      <div class="egg-overlay" @click=${(e) => { if (e.target === e.currentTarget) this._eggPanel = null; }}>
+        <div class="egg-panel" role="dialog" aria-label=${p.egg.title}>
+          <button type="button" class="close" aria-label="Cerrar" @click=${() => { this._eggPanel = null; }}>×</button>
+          <h3>🏴‍☠️ ${p.egg.title}</h3>
+          ${estado}
+          ${p.egg.instructions ? html`<p class="instructions">${p.egg.instructions}</p>` : nothing}
+          ${p.egg.hasSecret && !p.solved
+            ? html`<div class="egg-word">
+                <input placeholder="Palabra clave del reto" .value=${p.word}
+                  @input=${(e) => { this._eggPanel = { ...this._eggPanel, word: e.target.value, wordError: false }; }}
+                  @keydown=${(e) => { if (e.key === 'Enter') this._submitEggWord(); }}>
+                <button type="button" class="primary" @click=${() => this._submitEggWord()}>Resolver</button>
+              </div>
+              ${p.wordError ? html`<p class="egg-err">Esa no es la palabra… sigue las pistas.</p>` : nothing}`
+            : nothing}
+          ${showPrize && p.egg.prize ? html`<div class="egg-prize">🏆 ${p.egg.prize}</div>` : nothing}
+        </div>
+      </div>`;
   }
 
   /** Volver a la superficie desde la vista del lecho, con la transición de
@@ -7224,11 +7342,18 @@ export class CareerApp extends LitElement {
    */
   _renderCityWhat(sel) {
     const summary = (sel.summary ?? '').trim();
+    // Huevo de pascua escondido en ESTA casa (RMR-TSK-0394): un detalle sutil al
+    // final del texto; clic → registra el hallazgo y abre el panel del premio.
+    const egg = (this._activeEggs ?? []).find((e) => e.type === 'clic-en-casa' && e.cityId === sel.id);
+    const eggMark = egg
+      ? html` <button type="button" class="egg-hidden" title="…" aria-label="Un detalle curioso"
+          @click=${(ev) => { ev.stopPropagation(); this._openEgg(egg.id); }}>🥚</button>`
+      : nothing;
     return html`<section class="cardsec whatsec">
       <h4>¿Qué es?</h4>
       ${summary
-        ? html`<p class="summary">${summary}</p>`
-        : html`<p class="placeholder">Resumen en preparación.</p>`}
+        ? html`<p class="summary">${summary}${eggMark}</p>`
+        : html`<p class="placeholder">Resumen en preparación.${eggMark}</p>`}
     </section>`;
   }
 
@@ -7587,6 +7712,7 @@ export class CareerApp extends LitElement {
     );
     return html`
       ${this._renderSeabed()}
+      ${this._renderEggPanel()}
       ${fps
         ? null
         : html`
@@ -7641,11 +7767,13 @@ export class CareerApp extends LitElement {
               .teammates=${this.showTeam ? this.teammates : CareerApp.EMPTY_TEAMMATES}
               .wizardState=${hutState}
               .seabed=${hasSeabed(this.archipelago?.islands)}
+              .eggs=${this._islandEggs()}
               @select-city=${this._onSelect}
               @select-teammate=${this._onSelectTeammate}
               @open-archipelago=${this._onOpenArchipelago}
               @open-wizard=${this._onOpenWizard}
               @dive-seabed=${this._dive}
+              @open-egg=${(e) => this._openEgg(e.detail.eggId)}
               @webgl-unavailable=${this._onWebglUnavailable}
               @mode-change=${this._onModeChange}
             ></career-island-3d>
