@@ -2785,11 +2785,23 @@ export class CareerApp extends LitElement {
     if (this._seabed === 'descending') this._seabed = 'open';
   }
 
-  /** Volver a la superficie desde la vista del lecho. */
+  /** Volver a la superficie desde la vista del lecho, con la transición de
+   *  ASCENSO inversa al descenso (RMR-BUG-0079): burbujas subiendo y el
+   *  gradiente aclarándose hacia el cielo antes de reaparecer en la isla. */
   _surface() {
-    this._seabed = null;
-    // De vuelta en superficie: reanuda el ambiente de la isla (RMR-BUG-0078).
-    this.renderRoot.querySelector('career-island-3d')?.setAmbiencePaused(false);
+    if (this._seabed !== 'open') {
+      // Descenso a medias abortado: vuelta directa.
+      this._seabed = null;
+      this.renderRoot.querySelector('career-island-3d')?.setAmbiencePaused(false);
+      return;
+    }
+    this._seabed = 'ascending';
+    globalThis.setTimeout(() => {
+      if (this._seabed !== 'ascending') return;
+      this._seabed = null;
+      // De vuelta en superficie: reanuda el ambiente de la isla (RMR-BUG-0078).
+      this.renderRoot.querySelector('career-island-3d')?.setAmbiencePaused(false);
+    }, 1100);
   }
 
   /**
@@ -2834,7 +2846,11 @@ export class CareerApp extends LitElement {
           background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.8), rgba(160,220,255,0.2) 60%, transparent 70%);
           animation: seabed-rise 1.1s linear forwards;
         }
+        /* Ascenso (RMR-BUG-0079): el mismo gradiente recorrido a la INVERSA
+           (de lo profundo hacia el cielo), con las burbujas subiendo. */
+        .descent.ascend { animation-name: seabed-float; }
         @keyframes seabed-sink { from { background-position: 0 0%; } to { background-position: 0 100%; } }
+        @keyframes seabed-float { from { background-position: 0 100%; } to { background-position: 0 0%; } }
         @keyframes seabed-cap { 0% { opacity: 0; transform: translateY(-8px); } 30% { opacity: 1; } 100% { opacity: 0.85; transform: translateY(6px); } }
         @keyframes seabed-rise { from { transform: translateY(0); opacity: 0; } 20% { opacity: 0.9; } to { transform: translateY(-110vh); opacity: 0; } }
         @media (prefers-reduced-motion: reduce) {
@@ -2842,23 +2858,29 @@ export class CareerApp extends LitElement {
           .descent .b { display: none; }
         }
       </style>
-      <div class="seabed-overlay">
-        ${this._seabed === 'open' && this._seabedMap
-          ? html`<seabed-view
-              .map=${this._seabedMap}
-              .journey=${this.journey}
-              .canPlay=${this._canPlayJourney}
-              .onToggle=${(cityId) => this._toggleArrecife(cityId)}
-              @surface=${this._surface}
-            ></seabed-view>`
-          : html`<div class="descent">
-              <span class="b" style="left:20%;width:7px;height:7px;animation-delay:0s"></span>
-              <span class="b" style="left:44%;width:5px;height:5px;animation-delay:0.15s"></span>
-              <span class="b" style="left:63%;width:9px;height:9px;animation-delay:0.05s"></span>
-              <span class="b" style="left:81%;width:6px;height:6px;animation-delay:0.25s"></span>
-              <span class="cap">Sumergiéndote al lecho…</span>
-            </div>`}
-      </div>`;
+      <div class="seabed-overlay">${this._renderSeabedInner()}</div>`;
+  }
+
+  /** Contenido del overlay del lecho según la fase: vista abierta, ascenso o
+   *  descenso (extraído para no anidar ternarios — RMR-BUG-0079). */
+  _renderSeabedInner() {
+    if (this._seabed === 'open' && this._seabedMap) {
+      return html`<seabed-view
+        .map=${this._seabedMap}
+        .journey=${this.journey}
+        .canPlay=${this._canPlayJourney}
+        .onToggle=${(cityId) => this._toggleArrecife(cityId)}
+        @surface=${this._surface}
+      ></seabed-view>`;
+    }
+    const ascending = this._seabed === 'ascending';
+    return html`<div class="descent ${ascending ? 'ascend' : ''}">
+      <span class="b" style="left:20%;width:7px;height:7px;animation-delay:0s"></span>
+      <span class="b" style="left:44%;width:5px;height:5px;animation-delay:0.15s"></span>
+      <span class="b" style="left:63%;width:9px;height:9px;animation-delay:0.05s"></span>
+      <span class="b" style="left:81%;width:6px;height:6px;animation-delay:0.25s"></span>
+      <span class="cap">${ascending ? 'Subiendo a la superficie…' : 'Sumergiéndote al lecho…'}</span>
+    </div>`;
   }
 
   _onSelect(event) {
