@@ -2844,6 +2844,9 @@ export class CareerIsland3D extends LitElement {
     group.add(this._buildSky());
     this._clouds = this._buildClouds();
     for (const cloud of this._clouds) group.add(cloud);
+    // Hueco al lecho (RMR-BUG-0078): el sitio se calcula ANTES de la vegetación
+    // (que lo excluye) y DESPEJADO de casas, brujo y puerto — nada encima.
+    this._diveSpot = this.seabed ? this._computeDiveSpot() : null;
     group.add(this._buildVegetation());
 
     // Comarcas: parche circular sutil + etiqueta flotante con el nombre.
@@ -2897,9 +2900,8 @@ export class CareerIsland3D extends LitElement {
     // Hueco al LECHO en el CENTRO de la isla (RMR-PCS-0028 · rework A): si hay
     // lecho, una abertura bioluminiscente en el centro por la que se desciende al
     // ponerte encima (descenso inmediato). Reemplaza la baliza del muelle de F3b.
-    if (this.seabed) {
-      group.add(this._buildDiveHole());
-      this._diveSpot = { x: 0, z: 0 }; // centro de la isla (origen del mundo)
+    if (this.seabed && this._diveSpot) {
+      group.add(this._buildDiveHole(this._diveSpot));
     }
     // Isla sin ciudades (aún sin contenido, MC-14): cartel «En construcción»
     // recibiendo al viajero junto al puerto. La generación del resto de la
@@ -2913,18 +2915,36 @@ export class CareerIsland3D extends LitElement {
    * abertura) con anillo bioluminiscente cian y luz — se ve como un pozo por el
    * que bajar. Al pisarlo, _updateProximity dispara el descenso de inmediato.
    */
-  _buildDiveHole() {
+  /** Hueco al lecho con aspecto de AGUA (RMR-BUG-0078): poza azul mar (fondo
+   *  profundo + lámina clara translúcida + destello) en vez del disco negro. */
+  _buildDiveHole(spot) {
     const THREE = this._THREE;
     const g = new THREE.Group();
-    g.position.set(0, GROUND_Y + 0.03, 0);
-    // La abertura: disco muy oscuro (el «hueco»).
-    const hole = new THREE.Mesh(
+    g.position.set(spot.x, GROUND_Y + 0.03, spot.z);
+    // Fondo de la poza: azul mar profundo.
+    const deep = new THREE.Mesh(
       new THREE.CircleGeometry(2.2, 40),
-      new THREE.MeshBasicMaterial({ color: 0x041018, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: 0x0d5c8c, side: THREE.DoubleSide }),
     );
-    hole.rotation.x = -Math.PI / 2;
-    g.add(hole);
-    // Anillo bioluminiscente que lo delata.
+    deep.rotation.x = -Math.PI / 2;
+    g.add(deep);
+    // Lámina de agua clara translúcida encima (simula la superficie).
+    const sheet = new THREE.Mesh(
+      new THREE.CircleGeometry(1.9, 40),
+      new THREE.MeshBasicMaterial({ color: 0x4db8e8, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    sheet.rotation.x = -Math.PI / 2;
+    sheet.position.y = 0.015;
+    g.add(sheet);
+    // Destello de sol descentrado, como en el agua del mar.
+    const glint = new THREE.Mesh(
+      new THREE.CircleGeometry(0.55, 20),
+      new THREE.MeshBasicMaterial({ color: 0xd9f4ff, transparent: true, opacity: 0.75, depthWrite: false }),
+    );
+    glint.rotation.x = -Math.PI / 2;
+    glint.position.set(0.6, 0.03, -0.45);
+    g.add(glint);
+    // Anillo que lo delata (borde de la poza).
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(2.2, 2.7, 40),
       new THREE.MeshBasicMaterial({ color: 0x4dd0e1, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }),
@@ -2932,12 +2952,44 @@ export class CareerIsland3D extends LitElement {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.02;
     g.add(ring);
-    const light = new THREE.PointLight(0x4dd0e1, 7, 16, 2);
+    const light = new THREE.PointLight(0x63c7ff, 7, 16, 2);
     light.position.set(0, 1.4, 0);
     g.add(light);
     g.userData.diveHole = true;
     this._diveGroup = g;
     return g;
+  }
+
+  /** Punto DESPEJADO para el hueco al lecho (RMR-BUG-0078): el centro si está
+   *  libre; si no, se busca en anillos crecientes (orden determinista por isla)
+   *  el primer punto con holgura respecto a casas, brujo y puerto. */
+  _computeDiveSpot() {
+    /** @type {{x: number, z: number, r: number}[]} */
+    const obstacles = this._walkCities.map((c) => ({
+      x: c.wx,
+      z: c.wz,
+      r: CITY_COLLIDER_RADIUS + DIVE_HOLE_RADIUS + 2,
+    }));
+    if (this._wizardSpotW) {
+      obstacles.push({ x: this._wizardSpotW.wx, z: this._wizardSpotW.wz, r: WIZARD.colliderRadius + DIVE_HOLE_RADIUS + 2 });
+    }
+    if (this.map.startPort) {
+      const p = worldFromMap(this.map.startPort.x, this.map.startPort.y);
+      obstacles.push({ x: p.wx, z: p.wz, r: 14 });
+    }
+    const clear = (x, z) => obstacles.every((o) => Math.hypot(x - o.x, z - o.z) >= o.r);
+    if (clear(0, 0)) return { x: 0, z: 0 };
+    const maxR = Math.max(6, this._walkRadius - DIVE_HOLE_RADIUS - 2);
+    const spin = hashUnit(hashId(`dive:${this.map.id}`), 0) * Math.PI * 2;
+    for (let r = 6; r <= maxR; r += 4) {
+      for (let k = 0; k < 14; k += 1) {
+        const a = spin + (k / 14) * Math.PI * 2;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        if (clear(x, z)) return { x, z };
+      }
+    }
+    return { x: 0, z: 0 }; // isla imposible de despejar: centro como último recurso
   }
 
   /**
@@ -5073,10 +5125,10 @@ export class CareerIsland3D extends LitElement {
     for (const spot of this._areaSignSpots.values()) {
       exclusions.push({ x: spot.wx, z: spot.wz, r: 2.2 });
     }
-    // Hueco de bajada al lecho (RMR-PCS-0028): que ningún árbol lo tape ni caiga
-    // encima del agujero del centro de la isla.
-    if (this.seabed) {
-      exclusions.push({ x: 0, z: 0, r: DIVE_HOLE_RADIUS + 5 });
+    // Hueco de bajada al lecho (RMR-PCS-0028/RMR-BUG-0078): que ningún árbol ni
+    // roca caiga encima del agujero (esté donde esté).
+    if (this._diveSpot) {
+      exclusions.push({ x: this._diveSpot.x, z: this._diveSpot.z, r: DIVE_HOLE_RADIUS + 5 });
     }
     const pathIds = [
       ...(this.journey?.visitedCities ?? []),
@@ -5970,6 +6022,13 @@ export class CareerIsland3D extends LitElement {
   /** Estado actual de silencio del audio de la isla. */
   get audioMuted() {
     return this._audio.muted;
+  }
+
+  /** Pausa/reanuda el AMBIENTE de la isla sin tocar la preferencia del usuario
+   *  (RMR-BUG-0078): al sumergirse al lecho no deben oírse olas ni gaviotas. */
+  setAmbiencePaused(paused) {
+    if (paused) this._audio.suspend();
+    else this._audio.resume();
   }
 
   /**

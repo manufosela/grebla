@@ -14,7 +14,8 @@
  * que <career-app> no cambia. Fallback legible si WebGL no está disponible.
  */
 import { LitElement, html, css, nothing } from 'lit';
-import { seabedScene, seabedProgress, arrecifeOrder } from '../../tools/career/domain/seabed.js';
+import { seabedScene, seabedProgress, arrecifeSequence } from '../../tools/career/domain/seabed.js';
+import { readStoredMuted } from './islandAudio.js';
 
 const STATUS_LABEL = { visited: 'encendido', available: 'disponible', blocked: 'bloqueado' };
 const KIND_LABEL = { milestone: 'Hito', tech: 'Tecnología', skill: 'Competencia' };
@@ -109,6 +110,8 @@ export class SeabedView extends LitElement {
     this._drag = null;        // {x,y} durante el arrastre de mirada
     this._exitParts = [];
     this._surfacing = false;  // guard: subir a la superficie una sola vez
+    /** @type {{ ctx: AudioContext, timer: number }|null} ambiente submarino propio */
+    this._sea = null;
   }
 
   connectedCallback() {
@@ -186,6 +189,7 @@ export class SeabedView extends LitElement {
       this._buildExit();
       this._buildReefs();
       this._loop();
+      this._startAmbience();
     } catch (err) {
       this._error = 'No se pudo cargar la vista 3D del lecho (WebGL no disponible).';
       console.error('[seabed-view] init 3D falló:', err);
@@ -212,7 +216,7 @@ export class SeabedView extends LitElement {
     this._reefs = [];
     const { nodes } = seabedScene(this.map);
     const { statusById } = seabedProgress(this.map, this.journey);
-    const order = arrecifeOrder(this.map);
+    const order = arrecifeSequence(this.map);
     for (const n of nodes) {
       const status = statusById.get(n.id) ?? 'available';
       const milestone = n.kind === 'milestone';
@@ -407,7 +411,81 @@ export class SeabedView extends LitElement {
     });
   }
 
+  /** Ambiente SUBMARINO propio (RMR-BUG-0078): rumor grave (ruido browniano por
+   *  paso-bajo con vaivén lento) + burbujas ocasionales. Nada de viento ni
+   *  gaviotas — eso es de superficie. Respeta la preferencia de silencio del
+   *  usuario (la misma del HUD de la isla). La aleatoriedad en audio está
+   *  permitida (intervalo/tono de las burbujas), como en islandAudio. */
+  _startAmbience() {
+    if (readStoredMuted() || this._sea) return;
+    try {
+      const Ctx = globalThis.AudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const master = ctx.createGain();
+      master.gain.value = 0.16;
+      master.connect(ctx.destination);
+      // Rumor grave: ruido browniano → paso-bajo ~220Hz con LFO lento (marea).
+      const len = ctx.sampleRate * 2;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i += 1) {
+        const white = Math.random() * 2 - 1;
+        last = (last + 0.02 * white) / 1.02;
+        data[i] = last * 3.5;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 220;
+      lp.Q.value = 0.7;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.08;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 60;
+      lfo.connect(lfoGain);
+      lfoGain.connect(lp.frequency);
+      src.connect(lp);
+      lp.connect(master);
+      src.start();
+      lfo.start();
+      // Burbujas: blip ascendente corto cada 2.5–7s.
+      const bubble = () => {
+        if (!this._sea) return;
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180 + Math.random() * 120, t);
+        osc.frequency.exponentialRampToValueAtTime(700 + Math.random() * 500, t + 0.12);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.06, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+        osc.connect(g);
+        g.connect(master);
+        osc.start(t);
+        osc.stop(t + 0.2);
+        this._sea.timer = globalThis.setTimeout(bubble, 2500 + Math.random() * 4500);
+      };
+      this._sea = { ctx, timer: globalThis.setTimeout(bubble, 1500) };
+      if (ctx.state === 'suspended') ctx.resume?.()?.catch?.(() => {});
+    } catch {
+      this._sea = null; // sin WebAudio: silencio, sin errores
+    }
+  }
+
+  _stopAmbience() {
+    if (!this._sea) return;
+    globalThis.clearTimeout(this._sea.timer);
+    this._sea.ctx.close?.()?.catch?.(() => {});
+    this._sea = null;
+  }
+
   _teardown() {
+    this._stopAmbience();
     cancelAnimationFrame(this._raf);
     this._ro?.disconnect();
     globalThis.removeEventListener('pointermove', this._onMove);
@@ -429,7 +507,7 @@ export class SeabedView extends LitElement {
       <header class="deep">
         <div class="titles">
           <h3>${this.map?.name ?? 'El lecho que sostiene'}</h3>
-          <p>Bucea por el lecho: entra a las casas-coral por su puerta para descubrir qué te espera dentro.</p>
+          <p>Bucea por el lecho: entra a las casas-coral por su puerta. Los números marcan el orden recomendado (1 → ${(this.map?.cities ?? []).filter((c) => !c.deprecated).length || '…'}).</p>
           ${total > 0 ? html`<p class="count"><span class="lit-dot" aria-hidden="true"></span> ${lit}/${total} arrecifes encendidos</p>` : nothing}
         </div>
         <button type="button" class="surface" @click=${this._surface}>🌊 Volver a la superficie</button>
