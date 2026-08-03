@@ -2095,7 +2095,10 @@ export class SuperadminPanel extends LitElement {
    *  nadie sostiene (sin inferior) va en la punta de ABAJO; hacia arriba, ensanchando,
    *  quienes son sostenidos. Cada franja es un nivel; el color, su rama. */
   _renderOrgPyramid() {
-    const roles = this._orgRoles;
+    // «Genérico» es el cajón de lo NO identificado, no un estrato de la
+    // organización: fuera de la pirámide (RMR-BUG-0073). En la tabla de Roles
+    // sigue visible para poder gestionarlo.
+    const roles = this._orgRoles.filter((r) => r.branch !== 'generico');
     if (roles.length === 0) return html`<p class="empty">Aún no hay roles. Créalos en el Editor.</p>`;
     // Profundidad de cada rol (0 = base/sin inferior). Se agrupa por profundidad.
     const depthOf = (id) => Math.max(0, roleChain(roles, id).length - 1);

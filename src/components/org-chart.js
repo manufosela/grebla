@@ -130,10 +130,16 @@ export class OrgChart extends LitElement {
     </span>`;
   }
 
+  /** Roles VISIBLES del organigrama: «Genérico» es el cajón de lo no identificado,
+   *  no un estrato de la organización — fuera de las vistas (RMR-BUG-0073). */
+  get _visibleRoles() {
+    return this._roles.filter((r) => r.branch !== 'generico');
+  }
+
   render() {
     if (!this._ready) return html`<p class="lead">Cargando organigrama…</p>`;
     if (this._error) return html`<p class="error">${this._error}</p>`;
-    if (this._roles.length === 0) return html`<p class="empty">El organigrama aún no está configurado.</p>`;
+    if (this._visibleRoles.length === 0) return html`<p class="empty">El organigrama aún no está configurado.</p>`;
     return html`
       <p class="lead">Pirámide invertida: quien tiene <strong>más responsabilidad</strong> (a quien nadie sostiene) está <strong>abajo</strong>, sosteniendo a todos. Las flechas suben: cada nivel sostiene al de encima.</p>
       <div class="modes">
@@ -144,7 +150,7 @@ export class OrgChart extends LitElement {
   }
 
   _renderGlobal() {
-    const levels = this._levelsOf(this._roles);
+    const levels = this._levelsOf(this._visibleRoles);
     const maxDepth = levels.length - 1;
     return html`
       <div class="pyramid">
@@ -173,10 +179,11 @@ export class OrgChart extends LitElement {
   /** Una mini-pirámide invertida POR RAMA: cada rama con su cabeza (sin inferior)
    *  en la punta de abajo y sus roles hacia arriba, en columnas lado a lado. */
   _renderByBranch() {
-    // Ramas a mostrar: TODAS las presentes en los roles (aunque falte su metadato
-    // en /orgBranches), para no perder ningún rol en esta vista. Primero las
-    // catalogadas (en su orden), luego las huérfanas; _branchLabel cae al id.
-    const roleBranchIds = new Set(this._roles.map((r) => r.branch));
+    // Ramas a mostrar: TODAS las presentes en los roles VISIBLES (aunque falte su
+    // metadato en /orgBranches), para no perder ningún rol en esta vista. Primero
+    // las catalogadas (en su orden), luego las huérfanas; _branchLabel cae al id.
+    const visible = this._visibleRoles;
+    const roleBranchIds = new Set(visible.map((r) => r.branch));
     const branchIds = [
       ...this._branches.filter((b) => roleBranchIds.has(b.id)).map((b) => b.id),
       ...[...roleBranchIds].filter((id) => !this._branches.some((b) => b.id === id)),
@@ -186,7 +193,7 @@ export class OrgChart extends LitElement {
       <div class="branch-grid">
         ${branchIds.map((bid) => {
           const color = this._branchColor(bid);
-          const levels = this._levelsOf(this._roles.filter((r) => r.branch === bid));
+          const levels = this._levelsOf(visible.filter((r) => r.branch === bid));
           return html`<div class="branch-col">
             <div class="branch-title" style="color:${color}"><span class="pyr-dot" style="background:${color}"></span> ${this._branchLabel(bid)}</div>
             <div class="pyramid mini">
