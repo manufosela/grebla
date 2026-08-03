@@ -286,6 +286,8 @@ export class SuperadminPanel extends LitElement {
     .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
     .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
+    .pyr-lvl { flex: 100%; text-align: center; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--rm-muted, #9ca3af); }
+    .pyr-lvl.base { color: var(--rm-accent, #2a9d8f); }
     .pyr-crown { width: 100%; text-align: center; padding: 0.7rem 1rem; border-radius: 12px; border: 2px dashed var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 10%, transparent); font-weight: 800; font-size: 1rem; display: flex; flex-direction: column; gap: 0.15rem; }
     .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
@@ -2115,9 +2117,16 @@ export class SuperadminPanel extends LitElement {
           // Invertida: la PRIMERA fila (arriba, más profunda) es la más ancha; la
           // ÚLTIMA (la base, sin inferior) es la punta estrecha.
           const width = 100 - i * (60 / Math.max(1, levels.length));
+          // Profundidad real de la banda (0 = base) y su etiqueta de NIVEL, para
+          // leer de un vistazo qué estrato es cada franja (RMR-BUG-0071). levels
+          // va de la banda más profunda (arriba) a la base: depth = restantes.
+          const depth = levels.length - 1 - i;
           // Roles agrupados por rama dentro de la franja (cada grupo con su color).
           const groups = Object.groupBy(level, (r) => r.branch);
           return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
+            ${depth === 0
+              ? html`<span class="pyr-lvl base">Base · sostiene a todos</span>`
+              : html`<span class="pyr-lvl">Nivel ${depth}</span>`}
             ${Object.entries(groups).map(([branch, roles]) => html`
               <div class="pyr-group" style="--g:${branchColor(branch)}">
                 ${roles.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
