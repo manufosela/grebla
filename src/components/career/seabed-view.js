@@ -114,6 +114,8 @@ export class SeabedView extends LitElement {
     this._surfacing = false;  // guard: subir a la superficie una sola vez
     /** @type {{ ctx: AudioContext, timer: number }|null} ambiente submarino propio */
     this._sea = null;
+    /** @type {string|null} autopiloto de nado hacia un arrecife (RMR-BUG-0083) */
+    this._autoTarget = null;
   }
 
   connectedCallback() {
@@ -129,7 +131,11 @@ export class SeabedView extends LitElement {
       }
       if (this._selected) return; // con la ficha abierta no se bucea
       if (e.code === 'KeyE') { this._interact(); return; }
-      if (MOVE_CODES.has(e.code)) { this._keys.add(e.code); e.preventDefault(); }
+      if (MOVE_CODES.has(e.code)) {
+        this._autoTarget = null; // tomar el control cancela el autopiloto (como en la isla)
+        this._keys.add(e.code);
+        e.preventDefault();
+      }
     };
     this._onKeyUp = (e) => { this._keys.delete(e.code); };
     globalThis.addEventListener('keydown', this._onKeyDown);
@@ -353,6 +359,8 @@ export class SeabedView extends LitElement {
         // Nadar CONTRA la puerta entra; nadar hacia la corriente sube (como en la
         // isla: chocar de frente con la puerta / pisar el agujero, sin [E]).
         this._checkSwimInto(vx, vz);
+      } else if (this._autoTarget) {
+        this._autoSwimStep(camera);
       }
     }
     camera.rotation.y = this._yaw; camera.rotation.x = this._pitch;
@@ -374,6 +382,58 @@ export class SeabedView extends LitElement {
     if (near !== this._near) this._near = near;
     const atExit = this._exitSpot ? Math.hypot(x - this._exitSpot.x, z - this._exitSpot.z) < EXIT_RADIUS : false;
     if (atExit !== this._nearExit) this._nearExit = atExit;
+  }
+
+  /** Autopiloto de nado (RMR-BUG-0083): cierra la ficha y NADA solo hasta el
+   *  arrecife (como el autowalk de la isla) — apunta a la PUERTA (que mira al
+   *  centro) y, al llegar de frente, la entrada natural abre su ficha. */
+  _autoSwimTo(cityId) {
+    if (!this._reefs.some((r) => r.cityId === cityId)) return;
+    this._selected = null;
+    this._autoTarget = cityId;
+  }
+
+  /** Un paso del autopiloto: gira suave hacia el punto DELANTE de la puerta y
+   *  avanza; la entrada frontal (_checkSwimInto) abre la ficha al llegar. */
+  _autoSwimStep(camera) {
+    const reef = this._reefs.find((r) => r.cityId === this._autoTarget);
+    if (!reef) { this._autoTarget = null; return; }
+    // Punto de aproximación: unos pasos DELANTE de la puerta (lado del centro).
+    const rr = Math.hypot(reef.spot.x, reef.spot.z) || 1;
+    const nx = -reef.spot.x / rr; const nz = -reef.spot.z / rr;
+    const nearDoor = Math.hypot(camera.position.x - reef.spot.x, camera.position.z - reef.spot.z) < HOUSE_DOOR_RADIUS + 4;
+    // Lejos: nada hacia el punto frente a la puerta; cerca: hacia la casa misma
+    // (la entrada frontal de _checkSwimInto hace el resto).
+    const tx = nearDoor ? reef.spot.x : reef.spot.x + nx * 7;
+    const tz = nearDoor ? reef.spot.z : reef.spot.z + nz * 7;
+    let dx = tx - camera.position.x; let dz = tz - camera.position.z;
+    let dist = Math.hypot(dx, dz);
+    if (dist < 0.4) {
+      // Waypoint alcanzado: fase siguiente — directo a la casa (nunca se queda
+      // clavado en el punto intermedio).
+      dx = reef.spot.x - camera.position.x;
+      dz = reef.spot.z - camera.position.z;
+      dist = Math.hypot(dx, dz) || 1;
+    }
+    // Giro SUAVE hacia el objetivo (mismo modelo de rumbo: fwd = (-sin, -cos)).
+    const targetYaw = Math.atan2(-dx, -dz);
+    let delta = targetYaw - this._yaw;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    this._yaw += Math.max(-0.08, Math.min(0.08, delta));
+    // Avanza hacia el objetivo (no hacia donde aún mira la cámara: converge igual
+    // y no se orbita alrededor de la casa mientras gira).
+    const vx = dx / dist; const vz = dz / dist;
+    camera.position.x += vx * SWIM_SPEED;
+    camera.position.z += vz * SWIM_SPEED;
+    // MISMO límite del mundo que el nado manual: dentro del radio nadable.
+    const worldD = Math.hypot(camera.position.x, camera.position.z);
+    if (worldD > SCENE_R) {
+      camera.position.x *= SCENE_R / worldD;
+      camera.position.z *= SCENE_R / worldD;
+    }
+    this._checkSwimInto(vx, vz);
+    if (this._selected) this._autoTarget = null; // llegó: ficha abierta
   }
 
   /** Entrar en una casa-coral al nadar contra su PUERTA, o subir al nadar hacia la
@@ -541,8 +601,8 @@ export class SeabedView extends LitElement {
     if (pending.length === 0) return nothing;
     return html`<h5>Te falta antes</h5>
       <div class="res">
-        ${pending.map((p) => html`<button type="button" class="prereq-link" @click=${() => { this._selected = p.id; }}>
-          <span class="rk">#${seq.get(p.id) ?? '·'}</span> ${p.name}</button>`)}
+        ${pending.map((p) => html`<button type="button" class="prereq-link" @click=${() => this._autoSwimTo(p.id)}>
+          <span class="rk">#${seq.get(p.id) ?? '·'}</span> ${p.name} →</button>`)}
       </div>`;
   }
 
