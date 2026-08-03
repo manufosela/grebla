@@ -18,7 +18,7 @@
  */
 import { getMyPerson } from './engineer.js';
 import { listToolPolicies } from './toolPolicies.js';
-import { canUseTool } from '../tools/team/domain/toolAccess.js';
+import { canUseTool, canManageTool } from '../tools/team/domain/toolAccess.js';
 import { TOOL_LABELS } from '../tools/team/data/tools.js';
 
 /**
@@ -61,25 +61,35 @@ function buildNoAccessSection(toolId) {
 
 /**
  * ¿Puede esta persona usar la herramienta? Si NO, sustituye `appEl` por la
- * pantalla de sin-acceso. Devuelve true/false para que el entry corte.
+ * pantalla de sin-acceso y devuelve false. Si SÍ, devuelve `{ manage }` — el
+ * grant managedBy de la política (RMR-TSK-0388), para que el entry COMPONGA sus
+ * controles de administración con los roles legacy (las reglas lo respaldan vía
+ * el espejo /toolManagers, RMR-TSK-0389). El objeto es truthy: los entries que
+ * solo comprueban `if (!gate)` siguen funcionando igual.
  * @param {string} toolId
  * @param {{ uid: string }|null} user
  * @param {{ isSuperadmin?: boolean, appEl?: Element|null }} [opts]
- * @returns {Promise<boolean>}
+ * @returns {Promise<false | { manage: boolean }>}
  */
 export async function guardToolPage(toolId, user, { isSuperadmin = false, appEl = null } = {}) {
-  if (isSuperadmin) return true;
+  if (isSuperadmin) return { manage: true };
   let allowed = true;
+  let manage = false;
   try {
     const [person, policies] = await Promise.all([getMyPerson(user?.uid), listToolPolicies()]);
     if (policies.length > 0) {
       const policy = policies.find((p) => p.toolId === toolId) ?? null;
-      allowed = policy != null && canUseTool(buildPersonRef(person), policy);
+      const ref = buildPersonRef(person);
+      allowed = policy != null && canUseTool(ref, policy);
+      manage = policy != null && canManageTool(ref, policy);
     }
   } catch (err) {
     console.error(`[toolGate] no se pudo evaluar el acceso a «${toolId}» — se permite el paso:`, err);
-    return true;
+    return { manage: false };
   }
-  if (!allowed && appEl) appEl.replaceWith(buildNoAccessSection(toolId));
-  return allowed;
+  if (!allowed) {
+    if (appEl) appEl.replaceWith(buildNoAccessSection(toolId));
+    return false;
+  }
+  return { manage };
 }

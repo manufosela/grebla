@@ -20,7 +20,8 @@ onUserChanged(async (user) => {
     const { role } = access;
     // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
     // (si deniega, pantalla de sin-acceso); después los requisitos internos.
-    if (!(await guardToolPage('lean', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+    const gate = await guardToolPage('lean', user, { isSuperadmin: canGovern(access), appEl: app });
+    if (!gate) return;
     if (!role) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
@@ -31,7 +32,8 @@ onUserChanged(async (user) => {
       leaderUid: user.uid,
       viewAll: canGovern(access), // el gobierno de instancia ve y gestiona las unidades de toda la organización
     });
-    app.canEdit = canGovern(access) || role === 'leader';
+    // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy.
+    app.canEdit = canGovern(access) || role === 'leader' || gate.manage;
     app.refresh = refresh;
     app.discover = discover;
     app.interpret = interpretMetrics; // (re)generar la interpretación: solo el gobierno

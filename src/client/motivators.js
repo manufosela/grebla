@@ -33,13 +33,16 @@ onUserChanged(async (user) => {
     const access = await resolveAccess(user);
     // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
     // (si deniega, pantalla de sin-acceso); después los requisitos internos.
-    if (!(await guardToolPage('motivators', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+    const gate = await guardToolPage('motivators', user, { isSuperadmin: canGovern(access), appEl: app });
+    if (!gate) return;
     if (!access.role) {
       app.error = 'No tienes acceso. Inicia sesión con tu cuenta del equipo.';
       return;
     }
 
     app.role = access.role;
+    // Gestión por política (RMR-TSK-0388): la pestaña Rondas también por managedBy.
+    app.canManageRounds = canGovern(access) || gate.manage;
     app.uid = user.uid;
     const person = access.role === 'engineer' ? await getMyPerson(user.uid) : null;
     app.identity = buildPlayerIdentity(access, person);

@@ -21,11 +21,13 @@ onUserChanged(async (user) => {
   try {
     const access = await resolveAccess(user);
     // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de crear nada.
-    if (!(await guardToolPage('retros', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+    const gate = await guardToolPage('retros', user, { isSuperadmin: canGovern(access), appEl: app });
+    if (!gate) return;
 
     const { role } = access;
     app.uid = user.uid;
-    if (role === 'leader' || role === 'supermanager' || canGovern(access)) {
+    // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy.
+    if (role === 'leader' || role === 'supermanager' || canGovern(access) || gate.manage) {
       app.leaderUid = user.uid;
       app.canManage = true;
       // Alcance de rama (RMR-TSK-0294): el supermanager ve las retros y el roster
