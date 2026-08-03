@@ -10,6 +10,7 @@ import { isSurveyAdmin } from '../lib/survey.js';
 import { getMyPerson, ensureEmployeePerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
 import { canUseTool } from '../tools/team/domain/toolAccess.js';
+import { buildPersonRef } from '../lib/toolGate.js';
 import { getEmployeeDomain } from '../lib/orgConfig.js';
 
 const VIEW_FLAG = 'grebla-view';
@@ -75,9 +76,9 @@ onUserChanged(async (user) => {
     } catch {
       filterFailed = true;
     }
-    const personRef = person
-      ? { personId: person.id, branch: person.orgBranch ?? 'generico', roleId: person.orgRole ?? null }
-      : { personId: null, branch: 'generico', roleId: null };
+    // buildPersonRef incluye los toolOverrides: las excepciones por persona
+    // cuentan también en la visibilidad de la landing (RMR-TSK-0387).
+    const personRef = buildPersonRef(person);
     const isLeaderish = canGovern(access) || role === 'leader'
       || access.functionalRole === 'leader' || access.functionalRole === 'supermanager';
     showTools({ personRef, policies, isSuperadmin: canGovern(access), isLeaderish, canManageSurveys, filterFailed });

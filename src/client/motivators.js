@@ -7,11 +7,13 @@
 import '../components/motivators/motivators-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
+import { canGovern } from '../lib/accessRoles.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { createMotivatorsContainer } from '../tools/motivators/composition/container.js';
 import { buildPlayerIdentity } from '../tools/motivators/application/identity.js';
 import { getActiveRound, listRounds } from '../tools/motivators/application/usecases.js';
 import { listLeaders } from '../lib/leaders.js';
+import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('motivators-app');
 
@@ -29,10 +31,14 @@ onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
     const access = await resolveAccess(user);
+    // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
+    // (si deniega, pantalla de sin-acceso); después los requisitos internos.
+    if (!(await guardToolPage('motivators', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
     if (!access.role) {
       app.error = 'No tienes acceso. Inicia sesión con tu cuenta del equipo.';
       return;
     }
+
     app.role = access.role;
     app.uid = user.uid;
     const person = access.role === 'engineer' ? await getMyPerson(user.uid) : null;

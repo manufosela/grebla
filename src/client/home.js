@@ -9,6 +9,8 @@ import { ROLES } from '../data/roles.js';
 import { onUserChanged } from '../lib/auth.js';
 import { getOrgConfig } from '../lib/firestore.js';
 import { resolveAccess } from '../lib/access.js';
+import { canGovern } from '../lib/accessRoles.js';
+import { guardToolPage } from '../lib/toolGate.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 
@@ -40,7 +42,11 @@ if (el) {
       return;
     }
     try {
-      const { role } = await resolveAccess(user);
+      const access = await resolveAccess(user);
+      const { role } = access;
+      // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
+      // (si deniega, pantalla de sin-acceso); después los requisitos internos.
+      if (!(await guardToolPage('rolemirror', user, { isSuperadmin: canGovern(access), appEl: el }))) return;
       if (!role) {
         el.orgConfig = null;
         return;

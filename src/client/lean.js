@@ -9,6 +9,7 @@ import { createLeanContainer } from '../tools/lean/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern } from '../lib/accessRoles.js';
 import { interpretMetrics, loadInterpretation } from '../lib/metricsAi.js';
+import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('lean-app');
 
@@ -17,10 +18,14 @@ onUserChanged(async (user) => {
   try {
     const access = await resolveAccess(user);
     const { role } = access;
+    // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
+    // (si deniega, pantalla de sin-acceso); después los requisitos internos.
+    if (!(await guardToolPage('lean', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
     if (!role) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
+
     const { persistence, refresh, discover } = await createLeanContainer({
       mode: 'firestore',
       leaderUid: user.uid,

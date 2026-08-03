@@ -19,6 +19,7 @@ import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { listLeaders } from '../lib/leaders.js';
 import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
+import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('career-app');
 
@@ -34,6 +35,9 @@ onUserChanged(async (user) => {
     // ingeniero" para el branch de jugar su plan; el gobierno (canGovern) da el
     // "ver todo"; la rama sale del rol funcional.
     const access = await resolveAccess(user);
+    // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de crear nada.
+    if (!(await guardToolPage('career', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+
     const { role } = access;
     if (!role) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';

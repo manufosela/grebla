@@ -12,6 +12,7 @@ import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { listLeaders } from '../lib/leaders.js';
 import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
+import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('poker-app');
 
@@ -23,6 +24,9 @@ onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
     const access = await resolveAccess(user);
+    // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de crear nada.
+    if (!(await guardToolPage('poker', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+
     const { role } = access;
     const person = await getMyPerson(user.uid).catch(() => null);
     app.uid = user.uid;
