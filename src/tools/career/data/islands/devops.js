@@ -125,6 +125,8 @@ export const DEVOPS_ISLAND = {
       resources: [
         { kind: 'doc', label: 'Docker — documentación oficial', url: 'https://docs.docker.com' },
         { kind: 'curso', label: 'Play with Docker — laboratorio', url: 'https://labs.play-with-docker.com' },
+        { kind: 'curso', label: 'Introducción a Docker y docker-compose (API Node + Mongo) — @manufosela', url: 'https://github.com/manufosela/introduccion-docker' },
+        { kind: 'curso', label: 'Tutorial app fullstack sobre Docker — @manufosela', url: 'https://github.com/manufosela/tutorial-docker-fullstack-app' },
       ],
     },
     {
@@ -148,6 +150,7 @@ export const DEVOPS_ISLAND = {
       resources: [
         { kind: 'doc', label: 'Open Container Initiative', url: 'https://opencontainers.org' },
         { kind: 'doc', label: 'Docker — documentación oficial', url: 'https://docs.docker.com' },
+        { kind: 'curso', label: 'Tutorial app fullstack sobre Docker (build de imágenes reales) — @manufosela', url: 'https://github.com/manufosela/tutorial-docker-fullstack-app' },
       ],
     },
     {
