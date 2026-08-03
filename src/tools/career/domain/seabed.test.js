@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasSeabed, seabedRef, seabedScene, seabedProgress, arrecifeOrder } from './seabed.js';
+import { hasSeabed, seabedRef, seabedScene, seabedProgress, arrecifeSequence } from './seabed.js';
 
 describe('career — lecho (helpers puros, RMR-PCS-0028 · F3)', () => {
   const islands = [
@@ -71,28 +71,31 @@ describe('career — lecho (helpers puros, RMR-PCS-0028 · F3)', () => {
   });
 });
 
-describe('arrecifeOrder — número de orden por nivel de prereqs (rework B)', () => {
-  it('nivel 1 los raíz, +1 por cada capa de prereqs', () => {
+describe('arrecifeSequence — numeración SECUENCIAL recomendada (RMR-BUG-0078)', () => {
+  it('números 1..N ÚNICOS con los prereqs siempre antes (y peso alto primero)', () => {
     const map = { cities: [
-      { id: 'a', prereqs: [] },
-      { id: 'b', prereqs: ['a'] },
-      { id: 'c', prereqs: ['b'] },
-      { id: 'd', prereqs: [] },              // otra raíz
-      { id: 'e', prereqs: ['b', 'd'] },       // 1 + max(nivel b=2, nivel d=1) = 3
+      { id: 'a', weight: 3, prereqs: [] },
+      { id: 'b', weight: 2, prereqs: ['a'] },
+      { id: 'c', weight: 2, prereqs: ['b'] },
+      { id: 'd', weight: 1, prereqs: [] },        // raíz de menor peso: después de a
+      { id: 'e', weight: 2, prereqs: ['b', 'd'] },
     ] };
-    const order = arrecifeOrder(map);
-    expect(order.get('a')).toBe(1);
-    expect(order.get('d')).toBe(1);
-    expect(order.get('b')).toBe(2);
-    expect(order.get('c')).toBe(3);
-    expect(order.get('e')).toBe(3);
+    const seq = arrecifeSequence(map);
+    // Únicos y completos 1..5 (nada de «varios 1, varios 2»).
+    expect([...seq.values()].toSorted((x, y) => x - y)).toEqual([1, 2, 3, 4, 5]);
+    // Prereqs siempre con número menor que quien los requiere.
+    expect(seq.get('a')).toBeLessThan(seq.get('b'));
+    expect(seq.get('b')).toBeLessThan(seq.get('c'));
+    expect(seq.get('b')).toBeLessThan(seq.get('e'));
+    expect(seq.get('d')).toBeLessThan(seq.get('e'));
+    // Entre disponibles, el peso manda: a (3) antes que d (1).
+    expect(seq.get('a')).toBe(1);
   });
 
-  it('ignora prereqs inexistentes y tolera vacío/ciclos', () => {
-    expect(arrecifeOrder({ cities: [{ id: 'x', prereqs: ['fantasma'] }] }).get('x')).toBe(1);
-    expect(arrecifeOrder(null).size).toBe(0);
-    // ciclo preexistente: no cuelga
+  it('con un ciclo cae a un orden estable por datos, sin colgarse', () => {
     const cyc = { cities: [{ id: 'p', prereqs: ['q'] }, { id: 'q', prereqs: ['p'] }] };
-    expect(() => arrecifeOrder(cyc)).not.toThrow();
+    const seq = arrecifeSequence(cyc);
+    expect([...seq.values()].toSorted((x, y) => x - y)).toEqual([1, 2]);
+    expect(arrecifeSequence(null).size).toBe(0);
   });
 });

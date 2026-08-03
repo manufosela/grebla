@@ -2770,12 +2770,16 @@ export class CareerApp extends LitElement {
   async _dive() {
     if (this._seabed) return;
     this._seabed = 'descending';
+    // Bajo el agua no hay viento ni gaviotas (RMR-BUG-0078): pausa el ambiente
+    // de la isla (sin tocar la preferencia de silencio del usuario).
+    this.renderRoot.querySelector('career-island-3d')?.setAmbiencePaused(true);
     const loading = this._ensureIslandMap(SEABED_ISLAND_ID);
     await new Promise((resolve) => { globalThis.setTimeout(resolve, 1100); });
     try {
       this._seabedMap = await loading;
     } catch {
       this._seabed = null;
+      this.renderRoot.querySelector('career-island-3d')?.setAmbiencePaused(false);
       return;
     }
     if (this._seabed === 'descending') this._seabed = 'open';
@@ -2784,6 +2788,8 @@ export class CareerApp extends LitElement {
   /** Volver a la superficie desde la vista del lecho. */
   _surface() {
     this._seabed = null;
+    // De vuelta en superficie: reanuda el ambiente de la isla (RMR-BUG-0078).
+    this.renderRoot.querySelector('career-island-3d')?.setAmbiencePaused(false);
   }
 
   /**

@@ -168,6 +168,22 @@ export class IslandAudio {
     return this.muted;
   }
 
+  /** Pausa el AMBIENTE de la isla SIN tocar la preferencia persistida (p.ej. al
+   *  sumergirse al lecho, RMR-BUG-0078: bajo el agua no hay viento ni gaviotas).
+   *  Silencia por la ganancia MAESTRA de esta clase (no suspende el AudioContext:
+   *  quirúrgico y sin depender de promesas de la autoplay policy). */
+  suspend() {
+    this._stopSeagulls();
+    if (this._master) this._master.gain.value = 0;
+  }
+
+  /** Reanuda tras suspend() — solo si el usuario no tiene el audio silenciado. */
+  resume() {
+    if (this.muted || !this._ctx || !this._master) return;
+    this._master.gain.value = VOLUMES.master;
+    this._startSeagulls();
+  }
+
   // ---- Ambiente: olas y gaviota ------------------------------------------------
 
   /** Buffer de ruido blanco compartido (Math.random: permitido en audio). */

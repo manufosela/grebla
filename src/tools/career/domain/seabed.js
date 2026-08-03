@@ -9,6 +9,7 @@
  * @typedef {import('./types.js').Journey} Journey
  */
 import { cityStatus } from './progress.js';
+import { challengeRouteForIsland } from './challenge.js';
 
 /**
  * ¿Hay un lecho (isla transversal con seabed:true) en el índice?
@@ -72,31 +73,22 @@ export function seabedScene(map) {
 }
 
 /**
- * Número de ORDEN de cada arrecife (RMR-PCS-0028 · rework B): su «nivel» en el
- * grafo de prereqs — 1 para los que no dependen de nada, y 1 + el máximo nivel de
- * sus prereqs para el resto. Arrecifes del mismo nivel comparten número (se
- * pueden abordar en paralelo). Corta con seguridad ante ciclos preexistentes.
- * Función PURA.
+ * Numeración SECUENCIAL recomendada de los arrecifes (RMR-BUG-0078): 1..N únicos
+ * siguiendo el mismo orden que la ruta del Modo Reto (prereqs siempre antes;
+ * entre disponibles, mayor peso primero) — la numeración por niveles repetía
+ * números («varios 1, varios 2») y despistaba. Si el mapa tuviera un ciclo
+ * (edición manual), cae a un orden estable por posición en los datos. Función PURA.
  * @param {CareerMap|null|undefined} map
- * @returns {Map<string, number>} id del arrecife → número de orden (≥1)
+ * @returns {Map<string, number>} id del arrecife → número 1..N
  */
-export function arrecifeOrder(map) {
-  const cities = map?.cities ?? [];
-  const byId = new Map(cities.map((c) => [c.id, c]));
-  const memo = new Map();
-  const level = (id, stack) => {
-    if (memo.has(id)) return memo.get(id);
-    if (stack.has(id)) return 1; // ciclo: corta
-    const prereqs = (byId.get(id)?.prereqs ?? []).filter((p) => byId.has(p));
-    stack.add(id);
-    const lv = prereqs.length === 0 ? 1 : 1 + Math.max(...prereqs.map((p) => level(p, stack)));
-    stack.delete(id);
-    memo.set(id, lv);
-    return lv;
-  };
-  const out = new Map();
-  for (const c of cities) out.set(c.id, level(c.id, new Set()));
-  return out;
+export function arrecifeSequence(map) {
+  try {
+    const { stops } = challengeRouteForIsland(map);
+    return new Map(stops.map((id, i) => [id, i + 1]));
+  } catch {
+    const cities = (map?.cities ?? []).filter((c) => !c.deprecated);
+    return new Map(cities.map((c, i) => [c.id, i + 1]));
+  }
 }
 
 /**
