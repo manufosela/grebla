@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, roleChain, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor } from './orgRoles.js';
+import { rootRoles, childrenOf, roleChain, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -132,5 +132,18 @@ describe('branchColor — color estable por rama (var override + fallback determ
 
   it('tolera id vacío cayendo al genérico', () => {
     expect(branchColor('')).toBe('var(--rm-branch-generico, #6b7280)');
+  });
+});
+
+describe('layerColor — color por capa de la pirámide (RMR-BUG-0072)', () => {
+  it('la base (0) es el acento y cada capa tiene tono propio, cíclico', () => {
+    expect(layerColor(0)).toBe('#2a9d8f');
+    expect(layerColor(1)).not.toBe(layerColor(0));
+    expect(layerColor(2)).not.toBe(layerColor(1));
+    expect(layerColor(6)).toBe(layerColor(0)); // ciclo de 6
+  });
+  it('tolera profundidades inválidas cayendo a la base', () => {
+    expect(layerColor(-1)).toBe(layerColor(0));
+    expect(layerColor(undefined)).toBe(layerColor(0));
   });
 });

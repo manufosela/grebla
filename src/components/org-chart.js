@@ -10,7 +10,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { listOrgRoles } from '../lib/orgRoles.js';
 import { listOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { roleChain, branchColor } from '../tools/team/domain/orgRoles.js';
+import { roleChain, branchColor, layerColor } from '../tools/team/domain/orgRoles.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -32,14 +32,18 @@ export class OrgChart extends LitElement {
       --rm-branch-engineering: #2a9d8f; --rm-branch-product: #e76f51; --rm-branch-people: #9d4edd;
       --rm-branch-data: #457b9d; --rm-branch-generico: #6b7280;
     }
-    .pyr-level { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; }
+    .pyr-level { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; box-sizing: border-box; }
+    .pyramid:not(.mini) .pyr-level { padding: 1.5rem 1rem 0.9rem; border: 1.5px solid color-mix(in srgb, var(--lv, #6b7280) 55%, transparent); background: color-mix(in srgb, var(--lv, #6b7280) 9%, transparent); border-radius: 14px; }
+    .pyr-level.base-level { border-width: 3px; background: color-mix(in srgb, var(--lv, #2a9d8f) 15%, transparent); }
     .pyr-group { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.4rem 0.55rem; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 45%, transparent); background: color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 7%, transparent); }
     .pyr-level:not(:last-child)::after { content: '↑'; position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); color: var(--rm-muted, #9ca3af); font-size: 1rem; font-weight: 700; }
     .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
     .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
-    .pyr-lvl { flex: 100%; text-align: center; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--rm-muted, #9ca3af); }
-    .pyr-lvl.base { color: var(--rm-accent, #2a9d8f); }
+    /* Etiqueta de capa: solo la pirámide GLOBAL la renderiza; en mini (por ramas),
+       si apareciera, fluye en normal-flow (sin solaparse con las fichas). */
+    .pyr-lvl { flex: 100%; text-align: center; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lv, #9ca3af); }
+    .pyramid:not(.mini) .pyr-lvl { position: absolute; top: 0.35rem; left: 0.85rem; flex: none; text-align: left; }
     /* Nivel SIMBÓLICO en la cima: los usuarios del producto (no son fichas). */
     .pyr-crown {
       width: 100%; text-align: center; padding: 0.7rem 1rem; border-radius: 12px;
@@ -153,9 +157,9 @@ export class OrgChart extends LitElement {
           // Dentro de cada franja, los roles se AGRUPAN por rama (cada grupo con
           // el color de su rama, separados) para ver qué va con qué.
           const groups = Object.groupBy(level, (r) => r.branch);
-          return html`<div class="pyr-level" style="width:${Math.max(28, width)}%">
+          return html`<div class="pyr-level ${depth === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(depth)}">
             ${depth === 0
-              ? html`<span class="pyr-lvl base">Base · sostiene a todos</span>`
+              ? html`<span class="pyr-lvl">Base · sostiene a todos</span>`
               : html`<span class="pyr-lvl">Nivel ${depth}</span>`}
             ${Object.entries(groups).map(([branch, roles]) => html`
               <div class="pyr-group" style="--g:${this._branchColor(branch)}">

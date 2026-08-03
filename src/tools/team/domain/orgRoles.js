@@ -41,6 +41,20 @@ function branchColorFallback(key) {
   return `hsl(${h % 360} 55% 58%)`;
 }
 
+/** Paleta de las CAPAS de la pirámide invertida (RMR-BUG-0072): la base (depth 0)
+ *  en el acento; hacia arriba, tonos distintos que separan cada estrato. */
+const LAYER_COLORS = ['#2a9d8f', '#e9c46a', '#457b9d', '#9d4edd', '#e76f51', '#5fa8d3'];
+
+/**
+ * Color propio de una CAPA de la pirámide por su profundidad (0 = base). Cíclico
+ * si hay más estratos que colores. Función PURA.
+ * @param {number} depth @returns {string} color CSS
+ */
+export function layerColor(depth) {
+  const d = Number.isInteger(depth) && depth >= 0 ? depth : 0;
+  return LAYER_COLORS[d % LAYER_COLORS.length];
+}
+
 /**
  * Color de una rama por su id, como expresión CSS. Preserva el contrato de override
  * por variable (`var(--rm-branch-<id>, …)`) para que un tema pueda re-teñir una rama,
