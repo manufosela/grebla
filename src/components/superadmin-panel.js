@@ -152,6 +152,8 @@ export class SuperadminPanel extends LitElement {
     _orgConfirmDelete: { state: true },
     _editRoleId: { state: true },
     _editRoleLabel: { state: true },
+    _editEmailId: { state: true },
+    _editEmailValue: { state: true },
     _toolPolicies: { state: true },
     _toolError: { state: true },
     _toolNotice: { state: true },
@@ -477,6 +479,9 @@ export class SuperadminPanel extends LitElement {
     /** @type {string|null} id de rol en edición de nombre (inline) */
     this._editRoleId = null;
     this._editRoleLabel = '';
+    /** @type {string|null} id de persona en edición de email de invitación (inline) */
+    this._editEmailId = null;
+    this._editEmailValue = '';
     /** @type {import('../tools/team/domain/toolAccess.js').ToolPolicy[]} políticas de herramientas */
     this._toolPolicies = [];
     this._toolError = '';
@@ -1014,6 +1019,50 @@ export class SuperadminPanel extends LitElement {
     } catch (err) {
       this._peopleError = 'No se pudo añadir la persona.';
     }
+  }
+
+  /** Guarda el email de INVITACIÓN de una persona sin cuenta (RMR-BUG-0075):
+   *  pendingEmail se vincula en su primer login vía Cloud Function. Vacío = quitar
+   *  la invitación. Solo aplica a fichas sin uid (con cuenta, el email es el de la
+   *  cuenta y no se edita aquí). */
+  async _savePersonEmail(personId) {
+    this._peopleError = '';
+    this._peopleNotice = '';
+    const person = this._peopleList.find((p) => p.id === personId);
+    if (!person || person.uid) return;
+    const email = this._editEmailValue.trim().toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this._peopleError = 'Ese email no parece válido.';
+      return;
+    }
+    try {
+      await this.persistence.people.update(personId, { pendingEmail: email || null });
+      this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, pendingEmail: email || null } : p));
+      this._editEmailId = null;
+      this._editEmailValue = '';
+      this._peopleNotice = email
+        ? `Invitación guardada: «${person.name}» se vinculará en su primer login con ${email}.`
+        : 'Invitación retirada.';
+    } catch (err) {
+      this._peopleError = err instanceof Error ? err.message : 'No se pudo guardar el email.';
+    }
+  }
+
+  /** Celda de email de la tabla de personas: con cuenta, solo lectura (el de la
+   *  cuenta); sin cuenta, editable inline (lápiz → input, Enter guarda, Esc cancela). */
+  _renderPersonEmailCell(p) {
+    const email = this._personEmail(p);
+    if (p.uid) return html`${email ?? html`<span class="muted">—</span>`}`;
+    if (this._editEmailId === p.id) {
+      return html`<input class="role-rename" type="email" placeholder="email@empresa.com" .value=${this._editEmailValue}
+          @input=${(e) => { this._editEmailValue = e.target.value; }}
+          @keydown=${(e) => { if (e.key === 'Enter') this._savePersonEmail(p.id); else if (e.key === 'Escape') { this._editEmailId = null; } }}>
+        <button type="button" class="ord-btn" @click=${() => this._savePersonEmail(p.id)}>Guardar</button>
+        <button type="button" class="ord-btn" @click=${() => { this._editEmailId = null; }}>✕</button>`;
+    }
+    return html`${email ?? html`<span class="muted">—</span>`}
+      <button type="button" class="rename-btn" title="Editar email de invitación" aria-label="Editar email de ${p.name}"
+        @click=${() => { this._editEmailId = p.id; this._editEmailValue = email ?? ''; }}>✎</button>`;
   }
 
   /** Estado de acceso (superadmin/viewer/People) de la cuenta vinculada a una persona. */
@@ -2360,14 +2409,13 @@ export class SuperadminPanel extends LitElement {
             <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Rama</th><th>Superior</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
             <tbody>
               ${this._peopleList.map((p) => {
-                const email = this._personEmail(p);
                 let account;
                 if (p.uid) account = html`<span class="badge" style="background:var(--rm-accent,#2a9d8f)">Vinculada</span>`;
                 else if (p.pendingEmail) account = html`<span class="muted">Pendiente</span>`;
                 else account = html`<span class="muted">Sin cuenta</span>`;
                 return html`<tr>
                   <td>${p.name}</td>
-                  <td>${email ?? html`<span class="muted">—</span>`}</td>
+                  <td>${this._renderPersonEmailCell(p)}</td>
                   <td>
                     <select @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
                       <option value="" disabled ?selected=${!this._orgRoles.some((r) => r.id === p.orgRole)}>— sin rol —</option>
