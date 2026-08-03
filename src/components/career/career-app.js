@@ -190,6 +190,7 @@ import './player-card.js';
 import './game-dialog.js';
 import './city-references.js';
 import { readStoredMuted, writeStoredMuted } from './islandAudio.js';
+import { SeaMusic } from './seaMusic.js';
 import {
   getJourney,
   toggleVisited,
@@ -2339,6 +2340,8 @@ export class CareerApp extends LitElement {
     /** @type {{ toId: string, toName: string, path: import('../../tools/career/domain/voyage.js').VoyageCurve, duration: number }|null} */
     this.voyage = null;
     this._voyageRaf = 0;
+    /** Musiquita de mar del archipiélago/travesía (RMR-TSK-0390). */
+    this._seaMusic = new SeaMusic();
     this._voyageStart = 0;
     this._voyageWakeAt = 0;
     // Puntero grueso (táctil): la primera persona necesita ratón y teclado; el
@@ -2424,6 +2427,13 @@ export class CareerApp extends LitElement {
 
   /** @param {Map<string, unknown>} changed */
   updated(changed) {
+    // Musiquita de mar (RMR-TSK-0390): suena con el archipiélago abierto o el
+    // barco navegando; para al cerrar/llegar. Respeta el silencio del HUD.
+    if (changed.has('showArchipelago') || changed.has('voyage')) {
+      const sailing = this.showArchipelago || Boolean(this.voyage);
+      if (sailing && !this.audioMuted) this._seaMusic.start();
+      else this._seaMusic.stop();
+    }
     if (changed.has('personId')) {
       this.selected = null;
       this.teammatePopover = null; // el resumen abierto era de otro contexto
@@ -3120,6 +3130,9 @@ export class CareerApp extends LitElement {
     const next = !this.audioMuted;
     const island = this.renderRoot.querySelector('career-island-3d');
     this.audioMuted = island ? island.setAudioMuted(next) : writeStoredMuted(next);
+    // La musiquita de mar obedece al mismo botón (RMR-TSK-0390).
+    if (this.audioMuted) this._seaMusic.stop();
+    else if (this.showArchipelago || this.voyage) this._seaMusic.start();
   }
 
   // ---- Archipiélago: mapa del mar y viaje en barco (MC-14) -------------------
@@ -6483,6 +6496,8 @@ export class CareerApp extends LitElement {
     // Y el cronómetro de juego, con su volcado final best-effort (MC-23).
     this._playtimeTracker?.stop();
     this._playtimeTracker = null;
+    // Y la musiquita de mar (RMR-TSK-0390).
+    this._seaMusic.dispose();
     this._playtimePerson = null;
   }
 
