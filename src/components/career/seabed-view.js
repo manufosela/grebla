@@ -82,6 +82,8 @@ export class SeabedView extends LitElement {
     .sheet .res { display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .sheet .res a, .sheet .res span { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; border: 1px solid rgba(120, 210, 255, 0.35); border-radius: 999px; padding: 0.3rem 0.7rem; color: #cdeefb; text-decoration: none; }
     .sheet .res a:hover, .sheet .res a:focus-visible { border-color: #7fdfff; color: #fff; outline: none; }
+    .sheet .prereq-link { display: inline-flex; align-items: center; gap: 0.35rem; font: inherit; font-size: 0.82rem; border: 1.5px solid rgba(77, 208, 225, 0.55); border-radius: 999px; padding: 0.3rem 0.7rem; color: #cdeefb; background: rgba(77, 208, 225, 0.08); cursor: pointer; }
+    .sheet .prereq-link:hover, .sheet .prereq-link:focus-visible { border-color: #7fdfff; color: #fff; outline: none; box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.25); }
     .sheet .res .rk { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: #7fbdd2; }
     .sheet .act { margin-top: 1.2rem; }
     .sheet .certify { border: 1.5px solid #4dd0e1; background: rgba(77, 208, 225, 0.14); color: #eaf7fc; border-radius: 999px; padding: 0.5rem 1.05rem; font: inherit; font-weight: 700; cursor: pointer; }
@@ -523,6 +525,24 @@ export class SeabedView extends LitElement {
     `;
   }
 
+  /** Prereqs PENDIENTES de un arrecife bloqueado, como enlaces que abren su ficha
+   *  directamente (RMR-BUG-0081) — sin nadar a buscarlos. Los ya encendidos no se
+   *  listan (solo lo que falta). */
+  _renderPendingPrereqs(city) {
+    const visited = new Set(this.journey?.visitedCities ?? []);
+    const seq = arrecifeSequence(this.map);
+    const pending = (city.prereqs ?? [])
+      .filter((id) => !visited.has(id))
+      .map((id) => this._city(id))
+      .filter(Boolean);
+    if (pending.length === 0) return nothing;
+    return html`<h5>Te falta antes</h5>
+      <div class="res">
+        ${pending.map((p) => html`<button type="button" class="prereq-link" @click=${() => { this._selected = p.id; }}>
+          <span class="rk">#${seq.get(p.id) ?? '·'}</span> ${p.name}</button>`)}
+      </div>`;
+  }
+
   _renderSheet() {
     const city = this._selected ? this._city(this._selected) : null;
     if (!city) return html``;
@@ -543,6 +563,7 @@ export class SeabedView extends LitElement {
         ${city.keyPoints?.length ? html`<h5>Claves</h5><ul>${city.keyPoints.map((p) => html`<li>${p}</li>`)}</ul>` : nothing}
         ${city.aiFocus ? html`<h5>En la era de la IA</h5><p class="aifocus">${city.aiFocus}</p>` : nothing}
         ${city.resources?.length ? html`<h5>Recursos</h5><div class="res">${city.resources.map((r) => this._resource(r))}</div>` : nothing}
+        ${blocked ? this._renderPendingPrereqs(city) : nothing}
         ${this.canPlay
           ? html`<div class="act"><button type="button" class="certify ${visited ? 'on' : ''}" ?disabled=${(blocked && !visited) || this._pending} @click=${() => this._toggle(city.id)}>${certifyLabel}</button></div>`
           : nothing}
