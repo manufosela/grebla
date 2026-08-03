@@ -84,6 +84,37 @@ export function seaIslands(islands) {
 }
 
 /**
+ * TEMÁTICA visual de una isla por su disciplina (RMR-BUG-0080): agrupa las islas
+ * en familias para diferenciarlas de un vistazo en el archipiélago — ingeniería
+ * pura vs IA vs gestión (EM) vs producto (PM). Toda disciplina no listada cae en
+ * 'code' (ingeniería). Función PURA.
+ * @param {string|undefined|null} discipline
+ * @returns {'code'|'ia'|'management'|'product'}
+ */
+export function islandTheme(discipline) {
+  if (discipline === 'ai-engineer' || discipline === 'fde') return 'ia';
+  if (discipline === 'engineering-manager') return 'management';
+  if (discipline === 'product-manager') return 'product';
+  return 'code';
+}
+
+/** Color del BORDE de cada temática (mismo lenguaje que las capas de la pirámide). */
+export const ISLAND_THEME_COLORS = Object.freeze({
+  code: '#2a9d8f',
+  ia: '#9d4edd',
+  management: '#e9c46a',
+  product: '#e76f51',
+});
+
+/** Etiqueta corta de cada temática, para la leyenda del mapa. */
+export const ISLAND_THEME_LABELS = Object.freeze({
+  code: 'Ingeniería',
+  ia: 'IA',
+  management: 'EM',
+  product: 'PM',
+});
+
+/**
  * Semilla/fallback del índice: copia profunda de las 13 islas en código. Se usa
  * cuando todavía no existe el documento /careerMap/_archipelago en Firestore
  * (y es lo que siembra scripts/seed-archipelago.mjs).
