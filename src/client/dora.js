@@ -20,7 +20,8 @@ onUserChanged(async (user) => {
     const { role } = access;
     // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
     // (si deniega, pantalla de sin-acceso); después los requisitos internos.
-    if (!(await guardToolPage('dora', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+    const gate = await guardToolPage('dora', user, { isSuperadmin: canGovern(access), appEl: app });
+    if (!gate) return;
     if (!role) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
@@ -32,7 +33,9 @@ onUserChanged(async (user) => {
     });
     // El manager gestiona SUS repos; el gobierno, todos. El viewer (solo lectura,
     // tipo C-level) nunca edita: solo ve la lista.
-    app.canEdit = canGovern(access) || role === 'leader';
+    // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy
+    // (las reglas lo respaldan vía /toolManagers).
+    app.canEdit = canGovern(access) || role === 'leader' || gate.manage;
     app.refresh = refresh;
     app.interpret = interpretMetrics; // (re)generar la interpretación: solo el gobierno
     app.loadSaved = loadInterpretation; // interpretación guardada: la ven todos

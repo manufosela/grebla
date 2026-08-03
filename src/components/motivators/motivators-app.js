@@ -21,6 +21,7 @@ export class MotivatorsApp extends LitElement {
     identity: { attribute: false },
     round: { attribute: false },
     role: { type: String },
+    canManageRounds: { type: Boolean },
     uid: { type: String },
     rounds: { attribute: false },
     leaderNames: { attribute: false },
@@ -121,7 +122,8 @@ export class MotivatorsApp extends LitElement {
     const tabs = [];
     if (this._canPlay) tabs.push({ id: 'play', label: 'Jugar' }, { id: 'mine', label: 'Mis resultados' });
     tabs.push({ id: 'results', label: 'Resultados' });
-    if (this.role === 'superadmin') tabs.push({ id: 'rounds', label: 'Rondas' });
+    // Rondas: superadmin o gestor por política de la herramienta (RMR-TSK-0388).
+    if (this.role === 'superadmin' || this.canManageRounds) tabs.push({ id: 'rounds', label: 'Rondas' });
     return tabs;
   }
 
