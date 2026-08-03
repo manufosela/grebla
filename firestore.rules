@@ -23,6 +23,15 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/surveyAdmins/$(request.auth.uid));
     }
+    // Gestor de una HERRAMIENTA por su política (RMR-TSK-0389, ADR /toolManagers):
+    // el grant managedBy de /toolPolicies se MATERIALIZA en /toolManagers
+    // ({toolId}--{uid}) por la CF syncToolManagers; aquí solo se consulta con
+    // exists() (generaliza el precedente /surveyAdmins). Compone con las reglas
+    // legacy de cada colección: nunca resta acceso a líder dueño ni superadmin.
+    function managesToolByPolicy(toolId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/toolManagers/$(toolId + '--' + request.auth.uid));
+    }
     function isViewer() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/viewers/$(request.auth.uid));
@@ -66,6 +75,14 @@ service cloud.firestore {
     // Espejo de miembros por uid: lo escribe SOLO el trigger (Admin SDK, que se
     // salta las reglas). Ningún cliente puede auto-registrarse aquí.
     match /members/{memberUid} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Espejo de GESTORES por herramienta ({toolId}--{uid}, RMR-TSK-0389): lo
+    // escribe SOLO la CF syncToolManagers (Admin SDK). Legible por autenticados
+    // (la pertenencia se deriva de la política, no es secreta) para depurar/UI.
+    match /toolManagers/{grantId} {
       allow read: if isSignedIn();
       allow write: if false;
     }
@@ -449,12 +466,12 @@ service cloud.firestore {
     match /dora/{repoId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()
-        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
+        || ((isLeader() || managesToolByPolicy('dora')) && request.resource.data.ownerLeaderUid == request.auth.uid);
       allow update: if isSuperAdmin()
-        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid
+        || ((isLeader() || managesToolByPolicy('dora')) && resource.data.ownerLeaderUid == request.auth.uid
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
       allow delete: if isSuperAdmin()
-        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
+        || ((isLeader() || managesToolByPolicy('dora')) && resource.data.ownerLeaderUid == request.auth.uid);
 
       // Eventos de despliegue real de un repo (registro manual; base de la
       // frecuencia real, y luego de Lead Time/CFR/MTTR). Los gestiona el líder
@@ -462,7 +479,7 @@ service cloud.firestore {
       match /deployments/{deployId} {
         allow read: if isSignedIn();
         allow create, update, delete: if isSuperAdmin()
-          || (isLeader()
+          || ((isLeader() || managesToolByPolicy('dora'))
               && 'ownerLeaderUid' in get(/databases/$(database)/documents/dora/$(repoId)).data
               && get(/databases/$(database)/documents/dora/$(repoId)).data.ownerLeaderUid == request.auth.uid);
       }
@@ -473,7 +490,7 @@ service cloud.firestore {
       match /incidents/{incidentId} {
         allow read: if isSignedIn();
         allow create, update, delete: if isSuperAdmin()
-          || (isLeader()
+          || ((isLeader() || managesToolByPolicy('dora'))
               && 'ownerLeaderUid' in get(/databases/$(database)/documents/dora/$(repoId)).data
               && get(/databases/$(database)/documents/dora/$(repoId)).data.ownerLeaderUid == request.auth.uid);
       }
@@ -484,12 +501,12 @@ service cloud.firestore {
     match /leanTeams/{teamId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()
-        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
+        || ((isLeader() || managesToolByPolicy('lean')) && request.resource.data.ownerLeaderUid == request.auth.uid);
       allow update: if isSuperAdmin()
-        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid
+        || ((isLeader() || managesToolByPolicy('lean')) && resource.data.ownerLeaderUid == request.auth.uid
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
       allow delete: if isSuperAdmin()
-        || (isLeader() && resource.data.ownerLeaderUid == request.auth.uid);
+        || ((isLeader() || managesToolByPolicy('lean')) && resource.data.ownerLeaderUid == request.auth.uid);
     }
 
     // Mapa de Carrera: el journey de cada persona, solo suyo.
@@ -584,7 +601,7 @@ service cloud.firestore {
     // Rondas globales: las crea/edita el superadmin; las lee cualquier autenticado.
     match /motivatorRounds/{roundId} {
       allow read: if isSignedIn();
-      allow write: if isSuperAdmin();
+      allow write: if isSuperAdmin() || managesToolByPolicy('motivators');
     }
 
     // Sesiones PRIVADAS del jugador. Id determinista {roundId}__{usuarioId}; cada
@@ -627,7 +644,8 @@ service cloud.firestore {
     // líder y su owner (o el líder) marca hecha/pendiente.
     match /retros/{retroId} {
       allow read: if canAccessRetro();
-      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+      allow create: if (isLeader() || managesToolByPolicy('retros'))
+        && request.resource.data.ownerLeaderUid == request.auth.uid;
       allow update, delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
 
@@ -704,7 +722,8 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/pokerSessions/$(sessionId)).data.ownerLeaderUid == request.auth.uid;
       }
       allow read: if canAccessRetro();
-      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+      allow create: if (isLeader() || managesToolByPolicy('poker'))
+        && request.resource.data.ownerLeaderUid == request.auth.uid;
       // El dueño gestiona todo (tema, ronda, cerrar); cualquiera con acceso solo revela (false→true).
       allow update: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)

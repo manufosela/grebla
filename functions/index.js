@@ -321,6 +321,94 @@ export const mirrorAccessOnPersonWrite = onDocumentWritten(
   },
 );
 
+// ── Espejo /toolManagers (RMR-TSK-0389, ADR «managesToolByPolicy») ────────────
+// El grant managedBy de /toolPolicies se materializa en /toolManagers con doc id
+// {toolId}--{uid}, para que las reglas lo consulten con un exists() barato
+// (generaliza el precedente /surveyAdmins). DUPLICACIÓN CONTROLADA del dominio
+// src/tools/team/domain/toolAccess.js (las functions no empaquetan src/): si se
+// cambia el matcher allí, cambiarlo también aquí.
+
+/** ¿La persona encaja en un grant? Unión de reglas everyone/branches/roleIds/personIds. */
+function matchesToolGrant(grant, person) {
+  if (!grant) return false;
+  if (grant.everyone) return true;
+  if (person.branch && (grant.branches ?? []).includes(person.branch)) return true;
+  if (person.roleId && (grant.roleIds ?? []).includes(person.roleId)) return true;
+  if (person.personId && (grant.personIds ?? []).includes(person.personId)) return true;
+  return false;
+}
+
+/** ¿Gestiona la herramienta? Override individual manda; si no, el grant managedBy. */
+function personManagesTool(person, policy) {
+  const ov = person.toolOverrides?.[policy.toolId]?.manage;
+  if (ov === true || ov === false) return ov;
+  return matchesToolGrant(policy.managedBy, person);
+}
+
+/**
+ * Recalcula el espejo COMPLETO (idempotente): docs deseados = personas activas
+ * CON uid cuyo manage efectivo es true, por herramienta. Añade los que faltan y
+ * borra los sobrantes. A esta escala (~11 tools × ~30 personas) el recomputo
+ * completo por trigger es más simple y seguro que el diff incremental.
+ */
+async function recomputeToolManagers(reason) {
+  const db = getFirestore();
+  const [policiesSnap, peopleSnap, existingSnap] = await Promise.all([
+    db.collection('toolPolicies').get(),
+    db.collection('people').get(),
+    db.collection('toolManagers').get(),
+  ]);
+  const people = peopleSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((p) => typeof p.uid === 'string' && p.uid && p.active !== false)
+    .map((p) => ({
+      personId: p.id,
+      uid: p.uid,
+      branch: p.orgBranch ?? 'generico',
+      roleId: p.orgRole ?? null,
+      toolOverrides: p.toolOverrides ?? {},
+    }));
+  const desired = new Set();
+  for (const doc of policiesSnap.docs) {
+    const policy = { toolId: doc.id, ...doc.data() };
+    for (const person of people) {
+      if (personManagesTool(person, policy)) desired.add(`${policy.toolId}--${person.uid}`);
+    }
+  }
+  const existing = new Set(existingSnap.docs.map((d) => d.id));
+  const toAdd = [...desired].filter((id) => !existing.has(id));
+  const toRemove = [...existing].filter((id) => !desired.has(id));
+  await Promise.all([
+    ...toAdd.map((id) => db.doc(`toolManagers/${id}`).set({ grantedAt: FieldValue.serverTimestamp(), source: 'policy' })),
+    ...toRemove.map((id) => db.doc(`toolManagers/${id}`).delete()),
+  ]);
+  if (toAdd.length || toRemove.length) {
+    logger.info(`[toolManagers] ${reason}: +${toAdd.length} −${toRemove.length} (total ${desired.size})`);
+  }
+}
+
+/** Cambió una política → resincroniza el espejo. */
+export const syncToolManagersOnPolicyWrite = onDocumentWritten(
+  { document: 'toolPolicies/{toolId}', region: 'europe-west1' },
+  () => recomputeToolManagers('policy'),
+);
+
+/** Cambió una persona en algo relevante (uid/rol/rama/overrides/active — cubre
+ *  también el sellado de sealInvite) → resincroniza. El resto de ediciones de la
+ *  ficha (nombre, gremios, notas…) no disparan el recomputo. */
+export const syncToolManagersOnPersonWrite = onDocumentWritten(
+  { document: 'people/{personId}', region: 'europe-west1' },
+  async (event) => {
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    const relevant = (p) => JSON.stringify([
+      p?.uid ?? null, p?.orgRole ?? null, p?.orgBranch ?? null, p?.toolOverrides ?? null, p?.active ?? true,
+    ]);
+    if (before && after && relevant(before) === relevant(after)) return;
+    await recomputeToolManagers(`person ${event.params.personId}`);
+  },
+);
+
 /**
  * Borra DEFINITIVAMENTE a una persona con su subárbol completo (plan de carrera,
  * valoraciones, lecturas, conversaciones, notas, sesiones de Role Mirror…) con
