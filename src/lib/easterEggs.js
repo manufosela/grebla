@@ -17,7 +17,7 @@
  * @property {number} y
  * @property {boolean} hasSecret    Si el reto exige palabra clave (el valor vive en private).
  */
-import { doc, collection, getDocs, getDoc, setDoc, deleteDoc, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, getDocs, getDoc, setDoc, deleteDoc, query, where, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, app } from './firebase.js';
 
@@ -65,6 +65,18 @@ export function deleteEgg(id) {
 /** Guarda la palabra clave del reto (subdoc private, ilegible para jugadores). */
 export function saveEggSecret(id, word) {
   return setDoc(doc(db, 'easterEggs', id, 'private', 'secret'), { word: word ?? '' });
+}
+
+/**
+ * Guarda huevo + palabra clave de forma ATÓMICA (un batch): o se persisten los
+ * dos o ninguno — sin estados a medias entre el doc y su private/secret.
+ * @param {string} id @param {Omit<EasterEgg, 'id'>} egg @param {string} word
+ */
+export function saveEggWithSecret(id, egg, word) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'easterEggs', id), { ...egg, updatedAt: serverTimestamp() }, { merge: true });
+  batch.set(doc(db, 'easterEggs', id, 'private', 'secret'), { word: word ?? '' });
+  return batch.commit();
 }
 
 /** Lee la palabra clave (solo superadmin; para precargar el editor). */
