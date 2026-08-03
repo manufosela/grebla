@@ -2402,3 +2402,67 @@ export const respondCarpoolInvitation = onCall({ region: 'europe-west1' }, async
     return { ok: true, joined: true };
   });
 });
+
+// ── Huevos de pascua (RMR-PCS-0030 · F1) ──────────────────────────────────────
+
+/**
+ * Registra el HALLAZGO de un huevo de pascua (RMR-TSK-0391): quién y cuándo,
+ * inviolable — timestamp de servidor, un doc por persona (idempotente) y solo
+ * con el huevo ACTIVO. Con `secretWord` valida además la palabra clave del reto
+ * (guardada en el subdoc private, ilegible para clientes) y marca el completado.
+ * Devuelve el estado para que el cliente pinte premio/fecha sin inventar nada.
+ */
+export const registerEggFind = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const eggId = typeof request.data?.eggId === 'string' ? request.data.eggId.trim() : '';
+  if (!eggId) throw new HttpsError('invalid-argument', 'Falta el huevo (eggId).');
+  const rawWord = typeof request.data?.secretWord === 'string' ? request.data.secretWord.trim() : '';
+
+  const db = getFirestore();
+  const eggSnap = await db.doc(`easterEggs/${eggId}`).get();
+  if (!eggSnap.exists || eggSnap.data().active !== true) {
+    throw new HttpsError('failed-precondition', 'Ese huevo no existe o no está activo.');
+  }
+
+  // La persona del que llama (por uid): el hallazgo se registra por personId.
+  const personSnap = await db.collection('people').where('uid', '==', caller.uid).limit(1).get();
+  const personDoc = personSnap.docs.at(0);
+  if (!personDoc) throw new HttpsError('failed-precondition', 'Tu cuenta no está vinculada a ninguna persona.');
+  const personId = personDoc.id;
+  const personName = personDoc.data().name ?? 'Sin nombre';
+
+  const findRef = db.doc(`easterEggs/${eggId}/finds/${personId}`);
+  const findSnap = await findRef.get();
+  const already = findSnap.exists;
+  if (!already) {
+    await findRef.set({ personId, name: personName, uid: caller.uid, foundAt: FieldValue.serverTimestamp() });
+  }
+
+  // Palabra clave (opcional, tipo objeto-isla): compara sin mayúsculas/acentos.
+  let solved = findSnap.data()?.solved === true;
+  let wordError = false;
+  if (rawWord && !solved) {
+    const secretSnap = await db.doc(`easterEggs/${eggId}/private/secret`).get();
+    const secret = String(secretSnap.data()?.word ?? '').trim();
+    const norm = (s) => s.normalize('NFD').replaceAll(/\p{Diacritic}/gu, '').toLowerCase();
+    if (secret && norm(rawWord) === norm(secret)) {
+      await findRef.set({ solved: true, solvedAt: FieldValue.serverTimestamp() }, { merge: true });
+      solved = true;
+    } else {
+      wordError = true;
+    }
+  }
+
+  logger.info(`[eggs] ${eggId}: hallazgo de ${personName} (${personId})${solved ? ' RESUELTO' : ''}${already ? ' [repetido]' : ''}`);
+  // Estado FINAL re-leído tras las escrituras: el primer hallazgo también
+  // devuelve su foundAt real (timestamp de servidor ya resuelto).
+  const finalSnap = await findRef.get();
+  return {
+    ok: true,
+    already,
+    solved,
+    wordError,
+    foundAt: finalSnap.data()?.foundAt?.toDate?.()?.toISOString() ?? null,
+  };
+});

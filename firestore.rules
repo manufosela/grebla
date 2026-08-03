@@ -87,6 +87,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Huevos de pascua (RMR-PCS-0030): el doc del huevo lo lee cualquier
+    // autenticado (el juego necesita saber dónde renderizarlo) y lo gestiona
+    // SOLO el superadmin. La palabra clave vive en private (ilegible: la valida
+    // la CF registerEggFind) y los hallazgos los escribe SOLO esa CF — quién y
+    // cuándo son inviolables; su tabla la ve el superadmin.
+    match /easterEggs/{eggId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+
+      match /private/{doc} {
+        allow read, write: if isSuperAdmin();
+      }
+      match /finds/{personId} {
+        allow read: if isSuperAdmin();
+        allow write: if false;
+      }
+    }
+
     // Superadmins: legible por autenticados; escritura solo por un superadmin
     // existente (el primero se crea con el Admin SDK, que omite las reglas).
     match /admins/{adminId} {
