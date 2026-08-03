@@ -245,8 +245,15 @@ export class SuperadminPanel extends LitElement {
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     /* La tabla de usuarios hace scroll propio si no cabe, para no desbordar el
        panel. Ancho mínimo para que las columnas no se compriman. */
-    .table-wrap { overflow-x: auto; }
+    /* Tablas anchas (RMR-BUG-0074): el scroll (vertical y horizontal) vive en la
+       PROPIA tabla — así la barra horizontal siempre está a la vista sin llegar
+       al fondo de la página. Cabecera pegajosa y PRIMERA COLUMNA FIJA para no
+       perder de vista a la persona/rol al desplazarse en horizontal. */
+    .table-wrap { overflow: auto; max-height: 70vh; }
     .table-wrap table { min-width: 46rem; }
+    .table-wrap thead th { position: sticky; top: 0; background: var(--rm-surface, #fff); z-index: 2; }
+    .table-wrap th:first-child, .table-wrap td:first-child { position: sticky; left: 0; background: var(--rm-surface, #fff); z-index: 1; }
+    .table-wrap thead th:first-child { z-index: 3; }
     /* Resumen de ancho FIJO para que todas las celdas (— / Superadmin / People
        account) tengan el mismo ancho y la columna no baile. */
     .access summary { cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--rm-text, #111827); list-style: none; padding: 0.25rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; display: inline-flex; justify-content: space-between; align-items: center; gap: 0.5rem; min-width: 8.5rem; box-sizing: border-box; white-space: nowrap; }
