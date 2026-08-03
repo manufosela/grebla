@@ -278,7 +278,10 @@ export class SeabedView extends LitElement {
     ctx.lineWidth = 7; ctx.strokeStyle = `#${color.toString(16).padStart(6, '0')}`; ctx.stroke();
     ctx.fillStyle = '#eaf7fc'; ctx.font = 'bold 68px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(String(num), 64, 70);
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
+    // Con oclusión (depthTest por defecto): el número de una casa lejana NO se ve
+    // a través de las casas cercanas (RMR-BUG-0082) — flota sobre SU casa y las
+    // demás lo tapan, como cualquier objeto de la escena.
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
     spr.scale.set(7, 7, 1); spr.position.y = height + 5;
     return spr;
   }
