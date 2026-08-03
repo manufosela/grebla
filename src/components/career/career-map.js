@@ -30,7 +30,7 @@ import { cityStatus } from '../../tools/career/domain/progress.js';
 import { shapeForArea, houseShapePath } from '../../tools/career/domain/houseShapes.js';
 import { stopNumberByCity } from '../../tools/career/domain/challenge.js';
 import { routeNumberByCity } from '../../tools/career/domain/route.js';
-import { seaIslands } from '../../tools/career/data/archipelago.js';
+import { seaIslands, islandTheme, ISLAND_THEME_COLORS, ISLAND_THEME_LABELS } from '../../tools/career/data/archipelago.js';
 import { hasSeabed } from '../../tools/career/domain/seabed.js';
 import {
   islandCircles,
@@ -351,7 +351,13 @@ export class CareerMapView extends LitElement {
           ? (e) => this._onKeyActivate(e, () => this._toggleIsland(circle.id))
           : nothing}
       >
-        <circle class="land" cx=${circle.cx} cy=${circle.cy} r=${circle.r} />
+        <circle
+          class="land"
+          cx=${circle.cx}
+          cy=${circle.cy}
+          r=${circle.r}
+          style="stroke:${ISLAND_THEME_COLORS[islandTheme(lay.metaById.get(circle.id)?.discipline)]};stroke-width:0.6"
+        />
         ${name}
         ${themes}
       </g>
@@ -498,12 +504,19 @@ export class CareerMapView extends LitElement {
   _renderLegend() {
     const challenge = Boolean(this.journey?.challenge?.stops?.length);
     const free = !challenge && (this.journey?.plannedRoute ?? []).length > 0;
+    // Temáticas de isla (RMR-BUG-0080): el borde de cada isla dice su familia.
+    // Solo a escala archipiélago (en una isla suelta no hay bordes que comparar).
+    const themes = this.archipelago
+      ? Object.keys(ISLAND_THEME_COLORS).map((t) => html`<span>
+          <i class="theme" style="background:none;border:2px solid ${ISLAND_THEME_COLORS[t]}"></i>${ISLAND_THEME_LABELS[t]}</span>`)
+      : nothing;
     return html`<div class="legend">
       <span><i class="visited"></i>Certificada</span>
       <span><i class="available"></i>Disponible</span>
       <span><i class="blocked"></i>Bloqueada</span>
       ${challenge ? html`<span><i class="rchallenge"></i>Reto</span>` : nothing}
       ${free ? html`<span><i class="rfree"></i>Tu ruta</span>` : nothing}
+      ${themes}
     </div>`;
   }
 

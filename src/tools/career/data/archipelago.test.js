@@ -6,6 +6,9 @@ import {
   seedArchipelago,
   normalizeArchipelago,
   serializeArchipelago,
+  islandTheme,
+  ISLAND_THEME_COLORS,
+  ISLAND_THEME_LABELS,
 } from './archipelago.js';
 
 describe('career — archipiélago (índice de islas, helpers puros)', () => {
@@ -178,5 +181,23 @@ describe('career — archipiélago (índice de islas, helpers puros)', () => {
     expect(arch.islands[0]).toMatchObject({ citizenshipPct: 100, citiesTotal: 0 });
     expect(arch.islands[1]).toMatchObject({ citizenshipPct: 67, citiesTotal: 8 });
     expect(arch.islands[2]).toMatchObject({ citizenshipPct: DEFAULT_CITIZENSHIP_PCT, citiesTotal: 0 });
+  });
+});
+
+describe('islandTheme — temática visual por disciplina (RMR-BUG-0080)', () => {
+  it('agrupa: IA (ai-engineer, fde), EM, PM y el resto como ingeniería', () => {
+    expect(islandTheme('ai-engineer')).toBe('ia');
+    expect(islandTheme('fde')).toBe('ia');
+    expect(islandTheme('engineering-manager')).toBe('management');
+    expect(islandTheme('product-manager')).toBe('product');
+    expect(islandTheme('frontend')).toBe('code');
+    expect(islandTheme('bases')).toBe('code');
+    expect(islandTheme(undefined)).toBe('code');
+  });
+  it('toda temática tiene color y etiqueta', () => {
+    for (const t of ['code', 'ia', 'management', 'product']) {
+      expect(ISLAND_THEME_COLORS[t]).toMatch(/^#/);
+      expect(ISLAND_THEME_LABELS[t]).toBeTruthy();
+    }
   });
 });
