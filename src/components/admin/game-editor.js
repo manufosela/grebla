@@ -53,6 +53,7 @@ import {
   appendStopToIsland,
 } from '../../tools/career/domain/careerRoutes.js';
 import { shapeForArea, houseShapePath, HOUSE_SHAPE_LABEL } from '../../tools/career/domain/houseShapes.js';
+import { listEggs, saveEgg, deleteEgg, saveEggWithSecret, getEggSecret, listEggFinds } from '../../lib/easterEggs.js';
 
 /** Rótulos humanos del tipo de casa. */
 const KIND_LABEL = Object.freeze({ tech: 'Tecnología', skill: 'Skill', milestone: 'Hito' });
@@ -182,6 +183,10 @@ export class GameEditor extends LitElement {
     ready: { attribute: false },
     embedded: { attribute: false },
     _tab: { state: true },
+    _eggs: { state: true },
+    _eggForm: { state: true },
+    _eggFinds: { state: true },
+    _confirmEgg: { state: true },
     _arch: { state: true },
     _islands: { state: true },
     _routes: { state: true },
@@ -378,6 +383,20 @@ export class GameEditor extends LitElement {
     .route-group h3 { margin-top: 0; }
     .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem; }
     .empty { color: var(--rm-muted, #9ca3af); padding: 0.75rem 0; }
+    /* Huevos de pascua (RMR-PCS-0030 · F2) */
+    .hint { color: var(--rm-muted, #6b7280); font-size: 0.85rem; max-width: 70ch; }
+    .egg-row { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
+    .egg-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; }
+    .egg-head .muted { color: var(--rm-muted, #6b7280); font-size: 0.82rem; }
+    .egg-head .confirm { font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .ord-btn { font-size: 0.8rem; }
+    .egg-form { border: 1.5px solid var(--rm-accent, #3b82f6); border-radius: 12px; padding: 0.9rem 1rem; margin-top: 0.75rem; display: grid; gap: 0.6rem; }
+    .egg-form label { display: grid; gap: 0.25rem; font-size: 0.85rem; font-weight: 600; }
+    .egg-form .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 0.6rem; }
+    .egg-form label.chk, .egg-head label.chk { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; }
+    .egg-form .actions-row { display: flex; gap: 0.5rem; }
+    table.egg-finds { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.5rem; }
+    table.egg-finds th, table.egg-finds td { text-align: left; padding: 0.3rem 0.55rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
     .add-stop { display: flex; gap: 0.5rem; align-items: end; flex-wrap: wrap; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--rm-border, #e5e7eb); }
     .add-stop .field { min-width: 10rem; }
     /* ── Editor de ruta rediseñado (RMR-TSK-0265): pestañas + datos aireados ── */
@@ -413,8 +432,15 @@ export class GameEditor extends LitElement {
     this.ready = false;
     this.embedded = false; // true cuando vive dentro del panel (oculta su cabecera)
     this._loaded = false;
-    /** @type {'islands'|'routes'} */
+    /** @type {'islands'|'routes'|'eggs'} */
     this._tab = 'islands';
+    /** @type {import('../../lib/easterEggs.js').EasterEgg[]|null} Huevos (lazy al abrir la pestaña). */
+    this._eggs = null;
+    /** @type {(Partial<import('../../lib/easterEggs.js').EasterEgg> & { secretWord?: string })|null} */
+    this._eggForm = null;
+    /** @type {Map<string, Array>} hallazgos cargados por huevo. */
+    this._eggFinds = new Map();
+    this._confirmEgg = null;
     /** @type {import('../../tools/career/domain/types.js').Archipelago|null} */
     this._arch = null;
     /** @type {Map<string, import('../../tools/career/domain/types.js').CareerMap>|null} */
@@ -976,16 +1002,208 @@ export class GameEditor extends LitElement {
       <nav class="tabs" aria-label="Secciones del editor">
         <button class=${islandsClass} @click=${() => { this._tab = 'islands'; }}>🏝️ Islas</button>
         <button class=${routesClass} @click=${() => { this._tab = 'routes'; }}>🗺️ Rutas</button>
+        <button class=${this._tab === 'eggs' ? 'tab active' : 'tab'} @click=${() => this._openEggsTab()}>🥚 Huevos</button>
       </nav>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._notice ? html`<p class="notice" role="status">${this._notice}</p>` : null}
-      ${this._tab === 'islands' ? this._renderIslandsTab() : this._renderRoutesTab()}
+      ${this._renderActiveTab()}
       ${this._renderDeleteCityModal()}
       ${this._renderDeleteRouteModal()}
     `;
   }
 
   // ── Render: pestaña Islas ────────────────────────────────────────────────
+
+  /** Enruta la pestaña activa (islas / rutas / huevos) sin ternarios anidados. */
+  _renderActiveTab() {
+    if (this._tab === 'routes') return this._renderRoutesTab();
+    if (this._tab === 'eggs') return this._renderEggsTab();
+    return this._renderIslandsTab();
+  }
+
+  // ── Huevos de pascua (RMR-PCS-0030 · F2) ───────────────────────────────────
+
+  /** Abre la pestaña de huevos cargándolos la primera vez (lazy). */
+  async _openEggsTab() {
+    this._tab = 'eggs';
+    if (this._eggs !== null) return;
+    try {
+      this._eggs = await listEggs();
+    } catch {
+      // _eggs se queda en null: reabrir la pestaña REINTENTA la carga.
+      this._error = 'No se pudieron cargar los huevos de pascua. Vuelve a abrir la pestaña para reintentar.';
+    }
+  }
+
+  /** Guarda el huevo del formulario (alta o edición). */
+  async _saveEgg() {
+    const f = this._eggForm;
+    if (!f) return;
+    this._error = '';
+    this._notice = '';
+    const title = (f.title ?? '').trim();
+    if (!title) { this._error = 'El título del huevo es obligatorio.'; return; }
+    if (!f.islandId) { this._error = 'Elige la isla del huevo.'; return; }
+    if (f.type === 'clic-en-casa' && !f.cityId) { this._error = 'Elige la casa donde se esconde.'; return; }
+    const id = f.id ?? `${slugify(title)}-${Date.now().toString(36)}`;
+    const secretWord = (f.secretWord ?? '').trim();
+    const egg = {
+      type: f.type === 'clic-en-casa' ? 'clic-en-casa' : 'objeto-isla',
+      active: f.active === true,
+      title,
+      instructions: (f.instructions ?? '').trim(),
+      prize: (f.prize ?? '').trim(),
+      islandId: f.islandId,
+      cityId: f.type === 'clic-en-casa' ? f.cityId : null,
+      x: Number.isFinite(Number(f.x)) ? Number(f.x) : 50,
+      y: Number.isFinite(Number(f.y)) ? Number(f.y) : 20,
+      hasSecret: secretWord !== '',
+    };
+    try {
+      // Atómico (batch): huevo y palabra clave se persisten juntos o ninguno.
+      await saveEggWithSecret(id, egg, secretWord);
+      const next = { id, ...egg };
+      this._eggs = [...(this._eggs ?? []).filter((e) => e.id !== id), next];
+      this._eggForm = null;
+      this._notice = `Huevo «${title}» guardado.`;
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo guardar el huevo.';
+    }
+  }
+
+  /** Activa/desactiva un huevo: optimista con ROLLBACK si la escritura falla. */
+  async _toggleEggActive(id, active) {
+    const prev = this._eggs;
+    this._eggs = this._eggs.map((x) => (x.id === id ? { ...x, active } : x));
+    try {
+      await saveEgg(id, { active });
+    } catch (err) {
+      this._eggs = prev;
+      this._error = err instanceof Error ? err.message : 'No se pudo cambiar el estado del huevo.';
+    }
+  }
+
+  /** Abre el formulario para editar (precargando la palabra clave). */
+  async _editEgg(egg) {
+    let secretWord = '';
+    if (egg.hasSecret) {
+      try { secretWord = await getEggSecret(egg.id); } catch { /* sin acceso: vacío */ }
+    }
+    this._eggForm = { ...egg, secretWord };
+  }
+
+  async _removeEgg(id) {
+    this._error = '';
+    try {
+      await deleteEgg(id);
+      this._eggs = (this._eggs ?? []).filter((e) => e.id !== id);
+      this._confirmEgg = null;
+      this._notice = 'Huevo borrado (sus hallazgos quedan en el histórico).';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo borrar el huevo.';
+    }
+  }
+
+  /** Carga (lazy) y muestra los hallazgos de un huevo. */
+  async _toggleEggFinds(id) {
+    if (this._eggFinds.has(id)) {
+      const next = new Map(this._eggFinds);
+      next.delete(id);
+      this._eggFinds = next;
+      return;
+    }
+    try {
+      const finds = await listEggFinds(id);
+      this._eggFinds = new Map(this._eggFinds).set(id, finds);
+    } catch {
+      this._error = 'No se pudieron cargar los hallazgos.';
+    }
+  }
+
+  _renderEggsTab() {
+    const eggs = this._eggs ?? [];
+    return html`
+      <section>
+        <h2>🥚 Huevos de pascua</h2>
+        <p class="hint">Retos escondidos con premio: un OBJETO en la isla (cofre al que acercarse) o un huevo en el «¿Qué es?» de una casa. Quién lo encuentra y cuándo queda registrado (inviolable, vía Cloud Function). Solo tú ves esta pestaña y los hallazgos.</p>
+        ${eggs.length === 0 && this._eggs !== null ? html`<p class="empty">Aún no hay huevos. Crea el primero.</p>` : null}
+        ${eggs.map((egg) => this._renderEggRow(egg))}
+        ${this._eggForm ? this._renderEggForm() : html`<button class="primary" @click=${() => { this._eggForm = { type: 'objeto-isla', active: false, islandId: this._arch.islands.at(0)?.id ?? '', x: 50, y: 20 }; }}>➕ Nuevo huevo</button>`}
+      </section>`;
+  }
+
+  _renderEggRow(egg) {
+    const islandName = this._arch.islands.find((i) => i.id === egg.islandId)?.name ?? egg.islandId;
+    const target = egg.type === 'clic-en-casa' ? `${islandName} · ${egg.cityId}` : `${islandName} (${egg.x}, ${egg.y})`;
+    const finds = this._eggFinds.get(egg.id);
+    return html`<div class="egg-row">
+      <div class="egg-head">
+        <strong>${egg.title}</strong>
+        <span class="muted">${egg.type === 'clic-en-casa' ? '🖱 clic en casa' : '📦 objeto en isla'} · ${target}</span>
+        <label class="chk"><input type="checkbox" .checked=${egg.active}
+          @change=${(e) => this._toggleEggActive(egg.id, e.target.checked)}> activo</label>
+        <button class="ord-btn" @click=${() => this._editEgg(egg)}>Editar</button>
+        <button class="ord-btn" @click=${() => this._toggleEggFinds(egg.id)}>${finds ? 'Ocultar hallazgos' : 'Hallazgos'}</button>
+        ${this._confirmEgg === egg.id
+          ? html`<span class="confirm">¿Borrar? <button @click=${() => this._removeEgg(egg.id)}>Sí</button> <button @click=${() => { this._confirmEgg = null; }}>No</button></span>`
+          : html`<button class="danger" @click=${() => { this._confirmEgg = egg.id; }}>Borrar</button>`}
+      </div>
+      ${finds ? this._renderEggFinds(finds) : null}
+    </div>`;
+  }
+
+  _renderEggFinds(finds) {
+    if (finds.length === 0) return html`<p class="empty">Nadie lo ha encontrado todavía.</p>`;
+    const fmt = (d) => (d ? d.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+    return html`<table class="egg-finds">
+      <thead><tr><th>Quién</th><th>Encontrado</th><th>Resuelto</th></tr></thead>
+      <tbody>${finds.map((f) => html`<tr>
+        <td>${f.name}</td><td>${fmt(f.foundAt)}</td><td>${f.solved ? `✓ ${fmt(f.solvedAt)}` : '—'}</td>
+      </tr>`)}</tbody>
+    </table>`;
+  }
+
+  _renderEggForm() {
+    const f = this._eggForm;
+    const patch = (p) => { this._eggForm = { ...this._eggForm, ...p }; };
+    const islandCities = this._islands.get(f.islandId)?.cities ?? [];
+    return html`<div class="egg-form">
+      <h3>${f.id ? 'Editar huevo' : 'Nuevo huevo'}</h3>
+      <div class="fields">
+        <label>Tipo
+          <select @change=${(e) => patch({ type: e.target.value })}>
+            <option value="objeto-isla" ?selected=${f.type !== 'clic-en-casa'}>📦 Objeto en la isla</option>
+            <option value="clic-en-casa" ?selected=${f.type === 'clic-en-casa'}>🖱 Clic en el «¿Qué es?» de una casa</option>
+          </select></label>
+        <label>Título <input .value=${f.title ?? ''} @input=${(e) => patch({ title: e.target.value })} placeholder="La botella del náufrago"></label>
+        <label>Isla
+          <select @change=${(e) => patch({ islandId: e.target.value, cityId: '' })}>
+            ${this._arch.islands.map((i) => html`<option value=${i.id} ?selected=${f.islandId === i.id}>${i.name}</option>`)}
+          </select></label>
+        ${f.type === 'clic-en-casa'
+          ? html`<label>Casa
+              <select @change=${(e) => patch({ cityId: e.target.value })}>
+                <option value="" ?selected=${!f.cityId}>— elige casa —</option>
+                ${islandCities.map((c) => html`<option value=${c.id} ?selected=${f.cityId === c.id}>${c.name}</option>`)}
+              </select></label>`
+          : html`<label>Posición x <input type="number" min="0" max="100" .value=${String(f.x ?? 50)} @input=${(e) => patch({ x: e.target.value })}></label>
+            <label>Posición y <input type="number" min="0" max="100" .value=${String(f.y ?? 20)} @input=${(e) => patch({ y: e.target.value })}></label>`}
+      </div>
+      <label class="wide">Reto / instrucciones (lo que ve quien lo encuentra)
+        <textarea rows="3" .value=${f.instructions ?? ''} @input=${(e) => patch({ instructions: e.target.value })}></textarea></label>
+      <label class="wide">Premio (se revela al encontrar/resolver)
+        <textarea rows="2" .value=${f.prize ?? ''} @input=${(e) => patch({ prize: e.target.value })}></textarea></label>
+      <div class="fields">
+        <label>Palabra clave (opcional; si la pones, el reto pide resolverla)
+          <input .value=${f.secretWord ?? ''} @input=${(e) => patch({ secretWord: e.target.value })} placeholder="p.ej. brújula"></label>
+        <label class="chk"><input type="checkbox" .checked=${f.active === true} @change=${(e) => patch({ active: e.target.checked })}> Activo (visible en el juego)</label>
+      </div>
+      <div class="actions-row">
+        <button class="primary" @click=${() => this._saveEgg()}>Guardar huevo</button>
+        <button @click=${() => { this._eggForm = null; }}>Cancelar</button>
+      </div>
+    </div>`;
+  }
 
   _renderIslandsTab() {
     const island = this._island;
