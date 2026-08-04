@@ -4,24 +4,56 @@
       "collectionGroup": "retros",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ownerLeaderUid", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "ownerLeaderUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "retroActions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ownerLeaderUid", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "ownerLeaderUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "pokerSessions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ownerLeaderUid", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "ownerLeaderUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "kudos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "recipientPersonId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],
@@ -30,7 +62,10 @@
       "collectionGroup": "entries",
       "fieldPath": "weekIso",
       "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     }
   ]

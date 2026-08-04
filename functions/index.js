@@ -2489,3 +2489,97 @@ export const jd = onRequest({ region: 'europe-west1', cors: true }, async (req, 
   res.set('Cache-Control', 'public, max-age=300');
   res.status(200).json(data.payload);
 });
+
+// ── Kudos (RMR-PCS-0032 · F1, ADR de anonimato) ──────────────────────────────
+
+/** Longitud máxima de cada mensaje de kudo. ESPEJO de KUDO_MAX_LEN en
+ * src/tools/kudos/domain/kudos.js (functions no importa de src): si cambia
+ * allí, cambiar aquí. */
+const KUDO_MAX_LEN = 280;
+
+/** Normaliza un texto de kudo (trim, vacío→null, tope de longitud). Espejo de
+ * normalizeText del dominio de src — mantener ambos alineados. */
+const normalizeKudoText = (value, field) => {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string') {
+    throw new HttpsError('invalid-argument', `El texto «${field}» debe ser una cadena.`);
+  }
+  const text = value.trim();
+  if (!text) return null;
+  if (text.length > KUDO_MAX_LEN) {
+    throw new HttpsError(
+      'invalid-argument',
+      `El mensaje «${field}» supera los ${KUDO_MAX_LEN} caracteres: sé conciso, no es una carta.`,
+    );
+  }
+  return text;
+};
+
+/** Clave de semana ISO-8601 (YYYY-Www) en UTC. Espejo de isoWeekKey del
+ * dominio de src — mantener ambos alineados. */
+const kudoWeekKey = (date) => {
+  const thursday = new Date(date.getTime());
+  thursday.setUTCHours(0, 0, 0, 0);
+  thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
+  const year = thursday.getUTCFullYear();
+  const week = Math.ceil(((thursday.getTime() - Date.UTC(year, 0, 1)) / 86_400_000 + 1) / 7);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+};
+
+/**
+ * Alta de un kudo — ÚNICO camino de escritura (el cliente no puede escribir
+ * /kudos: write:false en reglas). Garantiza el anonimato del ADR: el doc
+ * público no lleva autor; el privado solo lo lee el destinatario; el remitente
+ * queda en /kudosMeta SELLADO (ilegible por reglas, solo Admin SDK ante un
+ * abuso denunciado). Valida concisión (≤280), al menos un mensaje, que el
+ * destinatario existe y que nadie se agradece a sí mismo.
+ */
+export const submitKudo = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+
+  const recipientPersonId =
+    typeof request.data?.recipientPersonId === 'string' ? request.data.recipientPersonId.trim() : '';
+  if (!recipientPersonId) throw new HttpsError('invalid-argument', 'El kudo necesita un destinatario.');
+  const publicText = normalizeKudoText(request.data?.publicText, 'público');
+  const privateText = normalizeKudoText(request.data?.privateText, 'privado');
+  if (!publicText && !privateText) {
+    throw new HttpsError('invalid-argument', 'Escribe al menos un mensaje (público o privado).');
+  }
+
+  const db = getFirestore();
+  const personSnap = await db.doc(`people/${recipientPersonId}`).get();
+  if (!personSnap.exists || personSnap.data().active === false) {
+    throw new HttpsError('not-found', 'Esa persona no existe o ya no está activa.');
+  }
+  const person = personSnap.data();
+  if (person.uid && person.uid === caller.uid) {
+    throw new HttpsError('failed-precondition', 'No puedes darte las gracias a ti mismo.');
+  }
+
+  const kudoRef = db.collection('kudos').doc();
+  const batch = db.batch();
+  batch.set(kudoRef, {
+    recipientPersonId,
+    recipientName: person.name ?? 'Alguien del equipo',
+    weekKey: kudoWeekKey(new Date()),
+    publicText,
+    hasPrivate: Boolean(privateText),
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  if (privateText) {
+    // recipientPersonId también aquí: la regla de lectura del privado resuelve
+    // el titular con un único get(people/...) sin mirar el doc padre.
+    batch.set(kudoRef.collection('private').doc('message'), { text: privateText, recipientPersonId });
+  }
+  // Traza anti-abuso SELLADA (ADR): ningún cliente puede leerla — el anonimato
+  // lo garantizan las reglas; solo el Admin SDK ante una denuncia.
+  batch.set(db.doc(`kudosMeta/${kudoRef.id}`), {
+    senderUid: caller.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await batch.commit();
+
+  logger.info(`[kudos] nuevo kudo para ${recipientPersonId} (${publicText ? 'público' : ''}${publicText && privateText ? '+' : ''}${privateText ? 'privado' : ''})`);
+  return { ok: true, kudoId: kudoRef.id };
+});
