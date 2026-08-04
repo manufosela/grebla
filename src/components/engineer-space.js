@@ -33,7 +33,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { listCareerRoutes } from '../lib/careerMap.js';
-import { subLevelForPerson } from '../tools/career/domain/subLevel.js';
+import { subLevelForPerson, effectiveSubLevel } from '../tools/career/domain/subLevel.js';
 import './role-result.js';
 import './role-questionnaire.js';
 import './career/career-map.js';
@@ -905,18 +905,23 @@ export class EngineerSpace extends LitElement {
     const title = fw ? composeTitle(fw, p.levelId, p.disciplines) : '';
     const discNames = (p.disciplines ?? []).map((id) => fw?.disciplines?.find((d) => d.id === id)?.name ?? id);
     this._ensureCareerRoutes();
-    const subLevel = subLevelForPerson({
-      person: p,
-      framework: fw,
-      routes: this._careerRoutes ?? [],
-      journey: this.journey,
-    });
+    const levelCode = fw?.levels?.find((l) => l.id === p.levelId)?.code ?? null;
+    const subLevel = effectiveSubLevel(
+      p,
+      subLevelForPerson({ person: p, framework: fw, routes: this._careerRoutes ?? [], journey: this.journey }),
+      levelCode,
+    );
+    const subText = subLevel
+      ? [
+          subLevel.label,
+          subLevel.pct === null ? null : `${subLevel.pct}% del camino al siguiente nivel (${subLevel.done}/${subLevel.total} paradas certificadas)`,
+          subLevel.source === 'manual' ? `ajustado por tu manager${subLevel.note ? `: «${subLevel.note}»` : ''}` : null,
+        ].filter(Boolean).join(' — ')
+      : null;
     const rows = [
       ['Nombre', p.name],
       ['Título', title || null],
-      ['Progresión', subLevel
-        ? `${subLevel.label} — ${subLevel.pct}% del camino al siguiente nivel (${subLevel.done}/${subLevel.total} paradas certificadas)`
-        : null],
+      ['Progresión', subText],
       ['Disciplinas', discNames.join(', ') || null],
       ['Fecha de alta', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${p.startDate}T00:00:00`)) : null],
       ['Gremios', (p.guilds ?? []).join(', ') || null],

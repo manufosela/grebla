@@ -96,3 +96,30 @@ export function subLevelForPerson({ person, framework, routes, journey }) {
   if (!result) return null;
   return { ...result, label: subLevelLabel(current.code ?? current.id, result.sub) };
 }
+
+/**
+ * Sub-nivel EFECTIVO: el ajuste manual del manager (person.subLevelOverride,
+ * F3) manda sobre el derivado — el juicio humano decide, el juego informa. El
+ * override aplica incluso sin derivado (sin ruta publicada); uno inválido se
+ * ignora. Sin código de nivel no hay etiqueta posible → null.
+ * @param {{ subLevelOverride?: { value?: number, note?: string|null } | null }} person
+ * @param {{ sub: 1|2|3, done: number, total: number, pct: number, label: string } | null} derived
+ * @param {string|null} levelCode
+ * @returns {{ sub: 1|2|3, done: number|null, total: number|null, pct: number|null, label: string, source: 'auto'|'manual', note: string|null } | null}
+ */
+export function effectiveSubLevel(person, derived, levelCode) {
+  const override = person?.subLevelOverride;
+  const value = Number(override?.value);
+  if (override && [1, 2, 3].includes(value) && levelCode) {
+    return {
+      sub: /** @type {1|2|3} */ (value),
+      done: derived?.done ?? null,
+      total: derived?.total ?? null,
+      pct: derived?.pct ?? null,
+      label: subLevelLabel(levelCode, /** @type {1|2|3} */ (value)),
+      source: 'manual',
+      note: override.note ?? null,
+    };
+  }
+  return derived ? { ...derived, source: 'auto', note: null } : null;
+}
