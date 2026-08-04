@@ -1217,6 +1217,14 @@ export class CareerApp extends LitElement {
     }
     .retos .error { color: var(--rm-danger, #dc2626); }
     .reto-lead { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    /* Enlace a la Biblioteca de la bodega (RMR-PCS-0033): en el plan de rutas
+       y al pie de los recursos de cada casa. */
+    .bodega-link { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .bodega-link a { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; }
+    .bodega-link a:hover { text-decoration: underline; }
+    /* En el papel del pergamino el accent no se re-tiñe (RMR-261): navy. */
+    .ressec .bodega-link { margin: 0.6rem 0 0; }
+    .ressec .bodega-link a { color: var(--rm-navy, #1e3a5f); }
     .reto-activo {
       margin: 0 0 0.85rem;
       padding: 0.6rem 0.8rem;
@@ -3911,6 +3919,11 @@ export class CareerApp extends LitElement {
               path: multi-isla y entrando por Bases. Al lograr cada
               certificado el juego te señala la siguiente casa.
             </p>`}
+        <p class="bodega-link">
+          <a href="/biblioteca">📚 Biblioteca de la bodega</a> — los libros
+          técnicos recomendados para el viaje: llévate los físicos (con fecha de
+          devolución) o abre los digitales.
+        </p>
         ${this._renderFreeRouteOption(Boolean(challenge))}
         ${groups.length === 0
           ? html`<p class="reto-lead">
@@ -7444,6 +7457,10 @@ export class CareerApp extends LitElement {
           </ul>
         </div>`,
       )}
+      <p class="bodega-link">
+        <a href="/biblioteca">📚 Biblioteca de la bodega</a> — más libros
+        recomendados, préstamos y peticiones.
+      </p>
     </section>`;
   }
 
