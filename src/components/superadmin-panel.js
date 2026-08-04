@@ -31,6 +31,8 @@ import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
+import { listJds, saveJd, publishJd, unpublishJd, deleteJd } from '../lib/jobDescriptions.js';
+import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
 import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows, branchColor, layerColor } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
@@ -174,6 +176,12 @@ export class SuperadminPanel extends LitElement {
     _branchError: { state: true },
     _orgCrown: { state: true },
     _branchDraft: { state: true },
+    _jds: { state: true },
+    _jdForm: { state: true },
+    _jdPreview: { state: true },
+    _jdError: { state: true },
+    _jdNotice: { state: true },
+    _confirmJd: { state: true },
   };
 
   static styles = css`
@@ -279,6 +287,17 @@ export class SuperadminPanel extends LitElement {
     table.org-roles tbody tr:first-child td { border-top: 0; }
     .branch-draft { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
     .branch-draft input { min-width: 12rem; }
+    /* Job Descriptions (RMR-PCS-0031 · F3): filas y formulario. */
+    .egg-row { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
+    .egg-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; }
+    .egg-head .muted { color: var(--rm-muted, #6b7280); font-size: 0.82rem; }
+    .egg-head a { color: var(--rm-accent, #2a9d8f); font-size: 0.82rem; word-break: break-all; }
+    .egg-form { border: 1.5px solid var(--rm-accent, #2a9d8f); border-radius: 12px; padding: 0.9rem 1rem; margin-top: 0.75rem; display: grid; gap: 0.6rem; }
+    .egg-form label { display: grid; gap: 0.25rem; font-size: 0.85rem; font-weight: 600; }
+    .egg-form .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 0.6rem; }
+    .egg-form label.chk { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .egg-form .actions-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .jd-preview pre { max-height: 22rem; overflow: auto; background: var(--rm-track, #f3f4f6); border-radius: 8px; padding: 0.7rem; font-size: 0.75rem; }
     .rename-btn { border: 0; background: none; color: var(--rm-muted, #9ca3af); cursor: pointer; font: inherit; padding: 0 0.25rem; opacity: 0.55; }
     .rename-btn:hover, .rename-btn:focus-visible { color: var(--rm-accent, #2a9d8f); opacity: 1; outline: none; }
     input.role-rename { min-width: 11rem; }
@@ -510,6 +529,15 @@ export class SuperadminPanel extends LitElement {
     this._branchError = '';
     /** @type {{for: string, label: string}|null} rama nueva en creación desde un select de rol ('__form__' = form de nuevo rol). */
     this._branchDraft = null;
+    /** @type {import('../lib/jobDescriptions.js').JdRecord[]|null} JDs (lazy). */
+    this._jds = null;
+    /** @type {{ roleName: string, levelA: string, levelB: string, disciplineIds: string[], descriptionIntro: string, id?: string }|null} */
+    this._jdForm = null;
+    /** @type {Record<string, unknown>|null} payload de la vista previa. */
+    this._jdPreview = null;
+    this._jdError = '';
+    this._jdNotice = '';
+    this._confirmJd = null;
     /** @type {string} etiqueta del nivel simbólico (usuarios del producto) en la cima. */
     this._orgCrown = '';
     this._loaded = false;
@@ -1370,11 +1398,193 @@ export class SuperadminPanel extends LitElement {
   /** «Carrera» con dos sub-pestañas (RMR-TSK-0262): el framework de rol (niveles/
    *  disciplinas/expectativas) y el mapa/archipiélago, antes dos pestañas de
    *  primer nivel con nombres casi iguales. Simétrico a «Mi carrera» del ingeniero. */
+  /** Enruta la sub-pestaña de Carrera (framework/mapa/JD) sin ternarios anidados. */
+  _renderCareerSub(sub) {
+    if (sub === 'map') return this._renderCareerMap();
+    if (sub === 'jd') return this._renderJds();
+    return this._renderFramework();
+  }
+
+  // ── Job Descriptions (RMR-PCS-0031 · F3) ────────────────────────────────────
+
+  /** Carga perezosa de las JDs (reintenta si falló: _jds queda null). */
+  async _ensureJds() {
+    if (this._jds !== null) return;
+    try {
+      this._jds = await listJds();
+    } catch {
+      this._jdError = 'No se pudieron cargar las Job Descriptions. Reabre la pestaña para reintentar.';
+    }
+  }
+
+  /** Genera la vista previa (payload validado) desde el formulario. */
+  _previewJd() {
+    this._jdError = '';
+    const f = this._jdForm;
+    if (!f || !this._framework) return;
+    const levelIds = [f.levelA, f.levelB].filter(Boolean);
+    try {
+      const id = f.id ?? `jd-${slugify(f.roleName)}-${Date.now().toString(36)}`;
+      const payload = generateJobDescription(this._framework, {
+        jdId: id,
+        roleName: f.roleName.trim(),
+        levelIds,
+        disciplineIds: f.disciplineIds,
+        datePosted: new Date().toISOString().slice(0, 10),
+        descriptionIntro: f.descriptionIntro,
+      });
+      const { valid, errors } = validateJobDescription(payload);
+      if (!valid) { this._jdError = `El payload no valida: ${errors.join(' ')}`; return; }
+      this._jdForm = { ...f, id };
+      this._jdPreview = payload;
+    } catch (err) {
+      this._jdError = err instanceof Error ? err.message : 'No se pudo generar la vista previa.';
+      this._jdPreview = null;
+    }
+  }
+
+  /** Guarda la JD (borrador; si ya existía conserva su estado). */
+  async _saveJd() {
+    const f = this._jdForm;
+    if (!f?.id || !this._jdPreview) { this._jdError = 'Genera la vista previa antes de guardar.'; return; }
+    this._jdError = '';
+    this._jdNotice = '';
+    try {
+      await saveJd(f.id, {
+        roleName: f.roleName.trim(),
+        levelIds: [f.levelA, f.levelB].filter(Boolean),
+        disciplineIds: f.disciplineIds,
+        descriptionIntro: f.descriptionIntro,
+        datePosted: String(this._jdPreview.datePosted),
+        payload: this._jdPreview,
+      });
+      const prev = (this._jds ?? []).find((j) => j.id === f.id);
+      const next = {
+        id: f.id,
+        status: prev?.status ?? 'borrador',
+        roleName: f.roleName.trim(),
+        levelIds: [f.levelA, f.levelB].filter(Boolean),
+        disciplineIds: f.disciplineIds,
+        descriptionIntro: f.descriptionIntro,
+        datePosted: String(this._jdPreview.datePosted),
+        payload: this._jdPreview,
+        publishedAt: prev?.publishedAt ?? null,
+      };
+      this._jds = [...(this._jds ?? []).filter((j) => j.id !== f.id), next];
+      this._jdForm = null;
+      this._jdPreview = null;
+      this._jdNotice = `JD «${next.roleName}» guardada${next.status === 'publicada' ? ' (sigue publicada, payload actualizado)' : ' como borrador'}.`;
+    } catch (err) {
+      this._jdError = err instanceof Error ? err.message : 'No se pudo guardar la JD.';
+    }
+  }
+
+  /** Publica/despublica con rollback optimista. */
+  async _toggleJdPublished(jdRecord) {
+    this._jdError = '';
+    const publish = jdRecord.status !== 'publicada';
+    const prev = this._jds;
+    this._jds = this._jds.map((j) => (j.id === jdRecord.id ? { ...j, status: publish ? 'publicada' : 'borrador' } : j));
+    try {
+      await (publish ? publishJd(jdRecord.id) : unpublishJd(jdRecord.id));
+      this._jdNotice = publish ? `Publicada: /jd/${jdRecord.id}` : 'Despublicada (su URL responde 404).';
+    } catch (err) {
+      this._jds = prev;
+      this._jdError = err instanceof Error ? err.message : 'No se pudo cambiar el estado.';
+    }
+  }
+
+  async _removeJd(id) {
+    this._jdError = '';
+    try {
+      await deleteJd(id);
+      this._jds = (this._jds ?? []).filter((j) => j.id !== id);
+      this._confirmJd = null;
+      this._jdNotice = 'JD borrada.';
+    } catch (err) {
+      this._jdError = err instanceof Error ? err.message : 'No se pudo borrar.';
+    }
+  }
+
+  _jdPublicUrl(id) {
+    return `${globalThis.location?.origin ?? ''}/jd/${id}`;
+  }
+
+  _renderJds() {
+    const jds = (this._jds ?? []).toSorted((a, b) => a.roleName.localeCompare(b.roleName));
+    const levels = this._framework?.levels ?? [];
+    const disciplines = this._framework?.disciplines ?? [];
+    return html`
+      <section>
+        <h2>Job Descriptions desde el framework</h2>
+        <p class="ro-note">Genera una JD desde tus niveles reales (nivel único o rango «entre niveles»), guárdala y PUBLÍCALA: obtiene una URL pública estable (<code>/jd/{id}</code>) con el JSON-LD estándar (JobPosting + x-careerLevel) que cualquier consumidor puede leer. Despublicar deja la URL en 404.</p>
+        ${this._jdError ? html`<p class="error">${this._jdError}</p>` : null}
+        ${this._jdNotice ? html`<p class="notice">${this._jdNotice}</p>` : null}
+        ${jds.map((j) => this._renderJdRow(j))}
+        ${this._jdForm ? this._renderJdForm(levels, disciplines) : html`<button class="primary" @click=${() => { this._jdForm = { roleName: '', levelA: levels.at(0)?.id ?? '', levelB: '', disciplineIds: [], descriptionIntro: '' }; this._jdPreview = null; }}>➕ Nueva Job Description</button>`}
+      </section>`;
+  }
+
+  _renderJdRow(j) {
+    const published = j.status === 'publicada';
+    const url = this._jdPublicUrl(j.id);
+    return html`<div class="egg-row">
+      <div class="egg-head">
+        <strong>${j.roleName}</strong>
+        <span class="muted">${j.levelIds.join(' – ')}${j.disciplineIds.length ? ` · ${j.disciplineIds.join(', ')}` : ''}</span>
+        ${published
+          ? html`<a href=${url} target="_blank" rel="noopener">${url}</a>
+            <button class="ord-btn" @click=${() => navigator.clipboard?.writeText(url)}>Copiar URL</button>`
+          : html`<span class="muted">borrador</span>`}
+        <button class="ord-btn" @click=${() => { this._jdForm = { id: j.id, roleName: j.roleName, levelA: j.levelIds[0] ?? '', levelB: j.levelIds[1] ?? '', disciplineIds: j.disciplineIds, descriptionIntro: j.descriptionIntro }; this._jdPreview = j.payload; }}>Editar</button>
+        <button class="ord-btn" @click=${() => this._toggleJdPublished(j)}>${published ? 'Despublicar' : 'Publicar'}</button>
+        ${this._confirmJd === j.id
+          ? html`<span class="confirm">¿Borrar? <button @click=${() => this._removeJd(j.id)}>Sí</button> <button @click=${() => { this._confirmJd = null; }}>No</button></span>`
+          : html`<button class="del-btn" @click=${() => { this._confirmJd = j.id; }}>Borrar</button>`}
+      </div>
+    </div>`;
+  }
+
+  _renderJdForm(levels, disciplines) {
+    const f = this._jdForm;
+    const patch = (p) => { this._jdForm = { ...this._jdForm, ...p }; this._jdPreview = null; };
+    return html`<div class="egg-form">
+      <h3>${f.id ? 'Editar JD' : 'Nueva JD'}</h3>
+      <div class="fields">
+        <label>Rol <input .value=${f.roleName} @input=${(e) => patch({ roleName: e.target.value })} placeholder="Backend Engineer"></label>
+        <label>Nivel
+          <select @change=${(e) => patch({ levelA: e.target.value })}>
+            ${levels.map((l) => html`<option value=${l.id} ?selected=${f.levelA === l.id}>${l.code} · ${l.title}</option>`)}
+          </select></label>
+        <label>Hasta nivel (opcional: rango)
+          <select @change=${(e) => patch({ levelB: e.target.value })}>
+            <option value="" ?selected=${!f.levelB}>— solo un nivel —</option>
+            ${levels.map((l) => html`<option value=${l.id} ?selected=${f.levelB === l.id}>${l.code} · ${l.title}</option>`)}
+          </select></label>
+      </div>
+      <div class="fields">
+        ${disciplines.map((d) => html`<label class="chk"><input type="checkbox"
+          .checked=${f.disciplineIds.includes(d.id)}
+          @change=${(e) => patch({ disciplineIds: e.target.checked ? [...f.disciplineIds, d.id] : f.disciplineIds.filter((x) => x !== d.id) })}> ${d.name}</label>`)}
+      </div>
+      <label class="wide">Intro opcional (encabezado de la descripción)
+        <textarea rows="2" .value=${f.descriptionIntro} @input=${(e) => patch({ descriptionIntro: e.target.value })}></textarea></label>
+      <div class="actions-row">
+        <button @click=${() => this._previewJd()}>👁 Vista previa</button>
+        <button class="primary" ?disabled=${!this._jdPreview} @click=${() => this._saveJd()}>Guardar</button>
+        <button @click=${() => { this._jdForm = null; this._jdPreview = null; }}>Cancelar</button>
+      </div>
+      ${this._jdPreview ? html`<details open class="jd-preview"><summary>Vista previa (JSON-LD válido ✓)</summary><pre>${JSON.stringify(this._jdPreview, null, 2)}</pre></details>` : null}
+    </div>`;
+  }
+
   _renderCareer() {
-    const sub = this._careerSub === 'map' ? 'map' : 'framework';
+    const valid = ['map', 'jd'];
+    const sub = valid.includes(this._careerSub) ? this._careerSub : 'framework';
     const subs = [
       ['framework', 'Framework (niveles y disciplinas)'],
       ['map', 'Mapa (archipiélago)'],
+      ['jd', 'Job Descriptions'],
     ];
     return html`
       <div class="csubtabs" role="tablist" aria-label="Secciones de Carrera">
@@ -1383,12 +1593,12 @@ export class SuperadminPanel extends LitElement {
             role="tab"
             aria-selected=${sub === id}
             class="csubtab ${sub === id ? 'on' : ''}"
-            @click=${() => { this._careerSub = id; }}
+            @click=${() => { this._careerSub = id; if (id === 'jd') this._ensureJds(); }}
           >${label}</button>`,
         )}
       </div>
       <div role="tabpanel">
-        ${sub === 'map' ? this._renderCareerMap() : this._renderFramework()}
+        ${this._renderCareerSub(sub)}
       </div>
     `;
   }
