@@ -7,6 +7,7 @@
  * calcula al vuelo en los dashboards).
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { parsePadron } from '../../tools/survey/domain/padron.js';
 import { listPadron, addPadronPerson, updatePadronPerson, deletePadronPerson, importPadron } from '../../lib/padron.js';
@@ -167,6 +168,7 @@ export class SurveyPadron extends LitElement {
 
   render() {
     return html`
+      ${this._busy ? html`<busy-overlay message="Guardando el padrón…"></busy-overlay>` : null}
       <h2>Padrón de empresa</h2>
       <p class="lead">Las personas y sus datos alimentan la segmentación de las encuestas. Importa el CSV (upsert por email), añade a mano, edita o borra. Se guarda la fecha de nacimiento; la edad se calcula sola.</p>
       <div class="toolbar">
