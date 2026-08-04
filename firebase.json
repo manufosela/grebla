@@ -32,6 +32,12 @@
     "cleanUrls": true,
     "trailingSlash": false,
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/jd/**",
+        "function": { "functionId": "jd", "region": "europe-west1" }
+      }
+    ],
     "headers": [
       {
         "source": "/sw.js",

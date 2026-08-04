@@ -6,7 +6,7 @@
  * documento /admins/{uid}. El primer admin se crea con el bootstrap de la UI
  * (/login) o con el script de seed.
  */
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
@@ -2465,4 +2465,27 @@ export const registerEggFind = onCall({ region: 'europe-west1' }, async (request
     wordError,
     foundAt: finalSnap.data()?.foundAt?.toDate?.()?.toISOString() ?? null,
   };
+});
+
+// ── Job Descriptions públicas (RMR-PCS-0031 · F3, ADR CF+rewrite) ─────────────
+
+/**
+ * Sirve el JSON-LD de una Job Description PUBLICADA: GET /jd/{id} (URL bonita
+ * vía rewrite de hosting). Solo expone docs con status «publicada» — nada más
+ * del contenido de GREBLA. Cache corto para que despublicar surta efecto rápido.
+ */
+export const jd = onRequest({ region: 'europe-west1', cors: true }, async (req, res) => {
+  const id = String(req.path ?? '').split('/').filter(Boolean).at(-1) ?? '';
+  if (!id || id === 'jd') {
+    res.status(404).json({ error: 'Falta el id de la Job Description (/jd/{id}).' });
+    return;
+  }
+  const snap = await getFirestore().doc(`jobDescriptions/${id}`).get();
+  const data = snap.exists ? snap.data() : null;
+  if (!data || data.status !== 'publicada' || !data.payload) {
+    res.status(404).json({ error: 'Job Description no publicada.' });
+    return;
+  }
+  res.set('Cache-Control', 'public, max-age=300');
+  res.status(200).json(data.payload);
 });

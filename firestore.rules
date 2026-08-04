@@ -87,6 +87,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Job Descriptions (RMR-PCS-0031): las gestiona SOLO el superadmin. El
+    // público NUNCA toca Firestore: el acceso externo es la CF «jd» (Admin SDK)
+    // que sirve únicamente las publicadas vía /jd/{id}.
+    match /jobDescriptions/{jdId} {
+      allow read, write: if isSuperAdmin();
+    }
+
     // Huevos de pascua (RMR-PCS-0030): el doc del huevo lo lee cualquier
     // autenticado (el juego necesita saber dónde renderizarlo) y lo gestiona
     // SOLO el superadmin. La palabra clave vive en private (ilegible: la valida
