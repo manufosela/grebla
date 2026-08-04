@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Biblioteca de la bodega (RMR-PCS-0033): libros técnicos recomendados —
+ * físicos que se prestan con compromiso de devolución y digitales con enlace.
+ * Se llega desde el plan de carrera; ruta protegida con gate en
+ * client/library.js.
+ */
+---
+
+<Base title="GREBLA — Biblioteca de la bodega" requireAuth={true}>
+  <tool-nav href="/tools/career-map" name="Biblioteca de la bodega" icon="📚"></tool-nav>
+  <p class="page-lead">
+    Los libros técnicos que recomendamos leer. Los físicos se toman prestados
+    diciendo quién los tiene y hasta cuándo — un pequeño compromiso de lectura —;
+    los digitales se abren con su enlace. ¿Falta uno? Pídelo.
+  </p>
+
+  <library-app></library-app>
+</Base>
+
+<script>
+  import '../client/library.js';
+</script>
