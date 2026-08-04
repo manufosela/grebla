@@ -9,6 +9,7 @@
  * Recibe `persistence` (inyectada por src/client/o2o.js), `people` y `canEdit`.
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import './o2o-register.js';
 import './o2o-actions.js';
@@ -173,7 +174,9 @@ export class O2OApp extends LitElement {
   render() {
     if (this.error && !this._period) return html`<section class="panel"><p class="error">${this.error}</p></section>`;
     if (this.loading) return html`<section class="panel">${skeletonLines(5)}</section>`;
-    return this._period ? this._renderWorkspace() : this._renderPeriodsList();
+    return html`
+      ${this._busy ? html`<busy-overlay message="Guardando el periodo…"></busy-overlay>` : null}
+      ${this._period ? this._renderWorkspace() : this._renderPeriodsList()}`;
   }
 
   // ── Landing: lista de periodos ─────────────────────────────────────────────

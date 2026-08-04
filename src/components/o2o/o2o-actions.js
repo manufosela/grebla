@@ -9,6 +9,7 @@
  * Recibe `persistence` (con el repo de acciones) y la lista `people` del equipo.
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import {
   listActions, createAction, toggleAction, removeAction,
@@ -139,6 +140,7 @@ export class O2OActions extends LitElement {
 
   render() {
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando la acción…"></busy-overlay>` : null}
       ${this._renderPicker()}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderBody()}
