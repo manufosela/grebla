@@ -10,7 +10,6 @@
  * @property {string} recipientName
  * @property {string} weekKey        Semana ISO (YYYY-Www).
  * @property {string|null} publicText
- * @property {boolean} hasPrivate
  * @property {Date|null} createdAt
  */
 import { doc, collection, getDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
@@ -24,7 +23,6 @@ const toKudo = (d, id) => ({
   recipientName: d.recipientName ?? 'Alguien del equipo',
   weekKey: d.weekKey,
   publicText: d.publicText ?? null,
-  hasPrivate: Boolean(d.hasPrivate),
   createdAt: d.createdAt?.toDate?.() ?? null,
 });
 
@@ -37,6 +35,19 @@ export async function listKudosRecipients() {
   const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'listKudosRecipients');
   const { data } = await fn();
   return data.people ?? [];
+}
+
+/**
+ * Garantiza el destinatario por email (RMR-TSK-0405): lo busca por email o
+ * pendingEmail y, si no existe, la CF crea una ficha mínima pre-invitada — sus
+ * kudos privados le esperan hasta su primer login.
+ * @param {string} email @param {string} [name]
+ * @returns {Promise<{ personId: string, name: string, created: boolean }>}
+ */
+export async function ensureKudosRecipient(email, name) {
+  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'ensureKudosRecipient');
+  const { data } = await fn({ email, name });
+  return data;
 }
 
 /**
@@ -75,8 +86,9 @@ export async function listMyKudos(personId) {
 
 /**
  * Mensaje privado de un kudo recibido, o null si no lo hay. Solo el titular de
- * la persona destinataria puede leerlo (reglas); para cualquier otro la
- * promesa rechaza con permission-denied.
+ * la persona destinataria puede leerlo (reglas). Sin flag público que delate
+ * su existencia (RMR-TSK-0405): «Los míos» lo intenta en cada kudo y un doc
+ * inexistente devuelve null.
  * @param {string} kudoId
  * @returns {Promise<string|null>}
  */

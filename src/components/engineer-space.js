@@ -37,6 +37,7 @@ import './role-questionnaire.js';
 import './career/career-map.js';
 import './career/player-card.js';
 import './marea/marea-app.js';
+import './kudos/kudos-app.js';
 import './retro/retro-app.js';
 import './my-ficha-editor.js';
 import {
@@ -58,9 +59,9 @@ import { squadNames } from '../tools/team/application/usecases/squads.js';
  * atrás/adelante, igual que el patrón de <superadmin-panel>. El mapa vive como
  * sub-pestaña dentro de «carrera» (RMR-TSK-0262); el hash legado `#mapa` sigue
  * aterrizando ahí. `datos` solo la ven los EXTERNOS (no tienen carrera/rolemirror).
- * @type {ReadonlyArray<'ficha'|'carrera'|'rolemirror'|'motivadores'|'o2o'|'datos'|'marea'|'retros'>}
+ * @type {ReadonlyArray<'ficha'|'carrera'|'rolemirror'|'motivadores'|'o2o'|'datos'|'marea'|'retros'|'kudos'>}
  */
-const TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'datos', 'marea', 'retros'];
+const TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'datos', 'marea', 'retros', 'kudos'];
 /** Búsqueda O(1) de existencia (validar el hash de la URL). */
 const TAB_SET = new Set(TABS);
 
@@ -78,6 +79,7 @@ const TAB_META = {
   datos: { label: 'Mis datos', heading: 'Mis datos', cls: 'datos' },
   marea: { label: 'Marea', heading: 'Marea', cls: 'marea' },
   retros: { label: 'Retros', heading: 'Retros', cls: 'retros' },
+  kudos: { label: 'Kudos', heading: 'Kudos', cls: 'kudos' },
 };
 
 export class EngineerSpace extends LitElement {
@@ -144,6 +146,7 @@ export class EngineerSpace extends LitElement {
       background: var(--rm-surface-hover, #eef3f5); border-radius: 8px; padding: 0.7rem 0.9rem; }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
     section.o2o { border-left: 4px solid var(--rm-navy, #1e3a5f); }
+    section.kudos { border-left: 4px solid var(--rm-accent, #2a9d8f); }
 
     /* ── Sección Mis O2O (solo lo compartido por el manager) ── */
     .o2o-list { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -839,6 +842,7 @@ export class EngineerSpace extends LitElement {
       datos: () => this._renderDatos(),
       marea: () => this._renderMarea(),
       retros: () => this._renderRetros(),
+      kudos: () => this._renderKudos(),
     }[tab];
 
     return html`
@@ -864,6 +868,12 @@ export class EngineerSpace extends LitElement {
   /** Pestaña Marea: el pulso semanal del propio ingeniero (RMR-BUG-0036). */
   _renderMarea() {
     return html`<marea-app .uid=${this.person?.uid ?? null}></marea-app>`;
+  }
+
+  /** Pestaña Kudos (RMR-TSK-0405): la herramienta general completa —
+   *  muro semanal, dar las gracias y los privados propios. */
+  _renderKudos() {
+    return html`<kudos-app .uid=${this.person?.uid ?? null}></kudos-app>`;
   }
 
   /** Pestaña Retros: las retros del equipo del ingeniero, para participar (RMR-TSK-0247). */

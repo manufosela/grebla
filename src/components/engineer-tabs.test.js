@@ -2,15 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 
 describe('engineer-space: pestañas por tipo de persona', () => {
-  it('un externo ve ficha + motivadores + o2o + marea + retros', () => {
-    expect(visibleTabsFor({ external: true })).toEqual(['ficha', 'motivadores', 'o2o', 'marea', 'retros']);
+  it('un externo ve ficha + motivadores + o2o + marea + retros + kudos', () => {
+    expect(visibleTabsFor({ external: true })).toEqual(['ficha', 'motivadores', 'o2o', 'marea', 'retros', 'kudos']);
   });
 
-  it('un interno ve ficha primera + carrera/rolemirror/motivadores/o2o + marea + retros (mapa va dentro de carrera)', () => {
-    const internal = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros'];
+  it('un interno ve ficha primera + carrera/rolemirror/motivadores/o2o + marea + retros + kudos (mapa va dentro de carrera)', () => {
+    const internal = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros', 'kudos'];
     expect(visibleTabsFor({ external: false })).toEqual(internal);
     expect(visibleTabsFor({})).toEqual(internal);
     expect(visibleTabsFor(null)).toEqual(internal);
+  });
+
+  it('kudos es general: la ven internos Y externos (RMR-TSK-0405)', () => {
+    expect(effectiveTabFor('kudos', { external: true })).toBe('kudos');
+    expect(effectiveTabFor('kudos', {})).toBe('kudos');
   });
 
   it('«mapa» ya no es una pestaña de primer nivel (RMR-TSK-0262)', () => {

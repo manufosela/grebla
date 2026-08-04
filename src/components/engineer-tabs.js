@@ -6,11 +6,12 @@
  * @typedef {{ external?: boolean }} PersonLike
  */
 
-/** Pestañas visibles para un externo (sin carrera/rolemirror/mapa; ficha + motivadores + Marea + Retros). */
-export const EXTERNAL_TABS = ['ficha', 'motivadores', 'o2o', 'marea', 'retros'];
+/** Pestañas visibles para un externo (sin carrera/rolemirror/mapa; ficha + motivadores + Marea + Retros + Kudos). */
+export const EXTERNAL_TABS = ['ficha', 'motivadores', 'o2o', 'marea', 'retros', 'kudos'];
 /** Pestañas visibles para un interno. «Carrera» integra nivel/expectativas y el
- *  mapa de carrera como sub-pestañas (RMR-TSK-0262): ya no hay pestaña «mapa» suelta. */
-export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros'];
+ *  mapa de carrera como sub-pestañas (RMR-TSK-0262): ya no hay pestaña «mapa» suelta.
+ *  «Kudos» es herramienta general (RMR-TSK-0405): la ven todos. */
+export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros', 'kudos'];
 
 /**
  * Pestañas visibles según el tipo de persona.

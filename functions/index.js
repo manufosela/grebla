@@ -2564,7 +2564,6 @@ export const submitKudo = onCall({ region: 'europe-west1' }, async (request) => 
     recipientName: person.name ?? 'Alguien del equipo',
     weekKey: kudoWeekKey(new Date()),
     publicText,
-    hasPrivate: Boolean(privateText),
     createdAt: FieldValue.serverTimestamp(),
   });
   if (privateText) {
@@ -2598,4 +2597,75 @@ export const listKudosRecipients = onCall({ region: 'europe-west1' }, async (req
     .map((d) => ({ personId: d.id, name: d.data().name ?? 'Sin nombre' }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
   return { people };
+});
+
+/**
+ * Garantiza que existe una persona a la que dar las gracias, por su email
+ * (RMR-TSK-0405): busca la ficha por email o pendingEmail y, si no existe,
+ * crea una MÍNIMA 'generico' con pendingEmail — el primer login la sella
+ * (sealInvite) y sus kudos privados le estarán esperando. Si la instancia
+ * tiene dominio de empleados configurado, solo admite emails de ese dominio.
+ */
+export const ensureKudosRecipient = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const email = typeof request.data?.email === 'string' ? request.data.email.trim().toLowerCase() : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new HttpsError('invalid-argument', 'Escribe un email válido.');
+  }
+
+  const db = getFirestore();
+  const orgSnap = await db.doc('config/org').get();
+  const domain = (orgSnap.exists ? (orgSnap.data().employeeDomain ?? '') : '')
+    .toString().trim().toLowerCase().replace(/^@/, '');
+  if (domain && !email.endsWith('@' + domain)) {
+    throw new HttpsError('invalid-argument', `Solo emails de la organización (@${domain}).`);
+  }
+
+  // Alta IDEMPOTENTE y sin carreras: un índice determinista por email
+  // (peopleByEmail/{email}, solo Admin SDK — mismo patrón que peopleByUid) y
+  // las búsquedas dentro de la MISMA transacción que la creación.
+  const rawName = typeof request.data?.name === 'string' ? request.data.name.trim() : '';
+  const indexRef = db.collection('peopleByEmail').doc(email);
+  const outcome = await db.runTransaction(async (tx) => {
+    const idx = await tx.get(indexRef);
+    if (idx.exists && idx.data().personId) {
+      const person = await tx.get(db.doc(`people/${idx.data().personId}`));
+      if (person.exists) {
+        return { personId: person.id, name: person.data().name ?? email, created: false };
+      }
+      // Índice huérfano (la ficha ya no existe): sigue el flujo normal — el
+      // tx.set del índice de abajo lo repara apuntando a la ficha nueva/hallada.
+    }
+    const [byEmail, byPending] = await Promise.all([
+      tx.get(db.collection('people').where('email', '==', email).limit(1)),
+      tx.get(db.collection('people').where('pendingEmail', '==', email).limit(1)),
+    ]);
+    const existing = byEmail.docs.at(0) ?? byPending.docs.at(0);
+    if (existing) {
+      tx.set(indexRef, { personId: existing.id, createdAt: FieldValue.serverTimestamp() });
+      return { personId: existing.id, name: existing.data().name ?? email, created: false };
+    }
+    // Alta mínima 'generico' con pendingEmail (mismo perfil que
+    // ensureEmployeePerson, pero sin uid: se sella en su primer login).
+    const name = rawName || email.split('@')[0].replaceAll('.', ' ');
+    const personRef = db.collection('people').doc();
+    tx.set(personRef, {
+      name,
+      pendingEmail: email,
+      orgRole: 'generico',
+      orgBranch: 'generico',
+      active: true,
+      startDate: new Date().toISOString().slice(0, 10),
+      guilds: [],
+      disciplines: [],
+      labels: [],
+    });
+    tx.set(indexRef, { personId: personRef.id, createdAt: FieldValue.serverTimestamp() });
+    return { personId: personRef.id, name, created: true };
+  });
+  if (outcome.created) {
+    logger.info(`[kudos] persona pre-invitada por kudo: ${outcome.name} <${email}> (${outcome.personId})`);
+  }
+  return outcome;
 });
