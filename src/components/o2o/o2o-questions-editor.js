@@ -9,6 +9,7 @@
  * formulario embebidos del periodo). Emite `saved` tras guardar (con el nuevo valor).
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import '../app-modal.js';
 import { savePeriodGuide, savePeriodForm } from '../../tools/o2o/application/usecases/periods.js';
 import { parseQuestionsMarkdown } from '../../tools/o2o/application/markdown.js';
@@ -218,6 +219,7 @@ export class O2OQuestionsEditor extends LitElement {
   render() {
     const groupWord = this.kind === 'form' ? 'sección' : 'bloque';
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando las preguntas…"></busy-overlay>` : null}
       <p class="lead">
         Edita las preguntas de este periodo. Cada O2O puede tener preguntas propias.
         Puedes escribirlas a mano o <strong>importar un .md</strong>

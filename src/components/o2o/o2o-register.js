@@ -11,6 +11,7 @@
  * equipo y la `guide` cargada (para pintar las preguntas a responder).
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import {
   listSessions, createSession, updateSession, removeSession,
@@ -229,6 +230,7 @@ export class O2ORegister extends LitElement {
 
   render() {
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando el registro del O2O…"></busy-overlay>` : null}
       ${this._renderPicker()}
       ${this._renderRoleMirrorContext()}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
