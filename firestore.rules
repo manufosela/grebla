@@ -829,6 +829,31 @@ service cloud.firestore {
       allow read, write: if isSuperAdmin() || isSurveyAdmin();
     }
 
+    // Kudos (RMR-PCS-0032, ADR de anonimato): el muro es de todos, la escritura
+    // SOLO de la CF submitKudo (write:false — el doc público nunca lleva autor).
+    match /kudos/{kudoId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+
+      // Mensaje privado: solo lo lee el TITULAR de la persona destinataria
+      // (people.uid == auth.uid). El doc lleva su recipientPersonId (lo escribe
+      // la CF) para resolver el titular con un único get(), mismo patrón que el
+      // jugador vinculado. Nunca lleva autor.
+      match /private/{doc} {
+        allow read: if isSignedIn()
+          && 'uid' in get(/databases/$(database)/documents/people/$(resource.data.recipientPersonId)).data
+          && get(/databases/$(database)/documents/people/$(resource.data.recipientPersonId)).data.uid == request.auth.uid;
+        allow write: if false;
+      }
+    }
+
+    // Remitentes de kudos SELLADOS (ADR): ilegibles e inescribibles por
+    // cualquier cliente — el anonimato lo garantizan estas reglas; la traza
+    // solo existe para el Admin SDK ante un abuso denunciado.
+    match /kudosMeta/{kudoId} {
+      allow read, write: if false;
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;
