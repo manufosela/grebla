@@ -847,6 +847,77 @@ service cloud.firestore {
       }
     }
 
+    // Biblioteca de la bodega (RMR-PCS-0033): catálogo de libros técnicos.
+    // El catálogo lo curan managers/superadmin; cualquier persona logada se
+    // lleva o devuelve un libro tocando SOLO los campos del préstamo (acto de
+    // confianza visible: quién lo tiene y hasta cuándo se compromete a leerlo).
+    match /libraryBooks/{bookId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isSuperAdmin() || isLeader();
+      // Préstamo con identidad ANCLADA: llevarse un libro exige que esté libre,
+      // que borrowedByUid sea el uid que firma Y que el nombre/persona sean los
+      // PROPIOS (la ficha vinculada por uid, o el nombre del token si no hay
+      // ficha) — nadie apunta un préstamo a nombre de otro. Devolverlo: solo
+      // quien lo tiene. Managers/superadmin corrigen cualquier cosa.
+      function loanIsSelf() {
+        return request.resource.data.borrowedByUid == request.auth.uid
+          // Préstamo COMPLETO: sin fecha de compromiso ni marca temporal no
+          // hay préstamo (la lib siempre las manda; la regla es la frontera).
+          && request.resource.data.get('dueDate', null) is string
+          && request.resource.data.get('borrowedAt', null) is timestamp
+          && (
+            (request.resource.data.get('borrowedByPersonId', null) != null
+              && get(/databases/$(database)/documents/people/$(request.resource.data.borrowedByPersonId)).data.get('uid', null) == request.auth.uid
+              && request.resource.data.borrowedByName == get(/databases/$(database)/documents/people/$(request.resource.data.borrowedByPersonId)).data.name)
+            || (request.resource.data.get('borrowedByPersonId', null) == null
+              && request.resource.data.borrowedByName == request.auth.token.name)
+          );
+      }
+      allow update: if isSuperAdmin() || isLeader()
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'borrowedByUid', 'borrowedByPersonId', 'borrowedByName', 'borrowedAt', 'dueDate'
+            ])
+            && (
+              (resource.data.get('borrowedByUid', null) == null && loanIsSelf())
+              || (resource.data.get('borrowedByUid', null) == request.auth.uid
+                && request.resource.data.get('borrowedByUid', null) == null
+                && request.resource.data.get('borrowedByPersonId', null) == null
+                && request.resource.data.get('borrowedByName', null) == null
+                && request.resource.data.get('borrowedAt', null) == null
+                && request.resource.data.get('dueDate', null) == null)
+            ));
+    }
+
+    // Peticiones de libros (comprar físico / subir digital): las crea cualquier
+    // persona logada — con su identidad anclada (requestedByUid == auth.uid y
+    // nombre/persona PROPIOS: ficha vinculada por uid, o el nombre del token si
+    // no hay ficha), estado inicial «abierta» y solo las claves del
+    // formulario —; las resuelven (o borran) managers/superadmin.
+    match /libraryRequests/{requestId} {
+      function requestIsSelf() {
+        return request.resource.data.requestedByUid == request.auth.uid
+          && (
+            (request.resource.data.get('requestedByPersonId', null) != null
+              && get(/databases/$(database)/documents/people/$(request.resource.data.requestedByPersonId)).data.get('uid', null) == request.auth.uid
+              && request.resource.data.requestedByName == get(/databases/$(database)/documents/people/$(request.resource.data.requestedByPersonId)).data.name)
+            || (request.resource.data.get('requestedByPersonId', null) == null
+              && request.resource.data.requestedByName == request.auth.token.name)
+          );
+      }
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && requestIsSelf()
+        && request.resource.data.status == 'abierta'
+        && request.resource.data.type in ['buy', 'upload']
+        && request.resource.data.keys().hasOnly([
+          'type', 'title', 'author', 'reason',
+          'requestedByUid', 'requestedByPersonId', 'requestedByName',
+          'status', 'createdAt'
+        ]);
+      allow update, delete: if isSuperAdmin() || isLeader();
+    }
+
     // Remitentes de kudos SELLADOS (ADR): ilegibles e inescribibles por
     // cualquier cliente — el anonimato lo garantizan estas reglas; la traza
     // solo existe para el Admin SDK ante un abuso denunciado.
