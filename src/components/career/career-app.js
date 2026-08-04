@@ -467,6 +467,10 @@ export class CareerApp extends LitElement {
   static TEAM_VISIBLE_KEY = 'grebla:career:teamVisible';
   /** Clave del flag «ya vio el cartel de bienvenida» (onboarding, MC-13). */
   static ONBOARDED_KEY = 'grebla:career:onboarded';
+
+  /** Clave del flag «ya leyó el disclaimer» (RMR-TSK-0398): los jugadores ya
+   * onboardeados ven el cartel UNA vez más con la cita nueva. */
+  static DISCLAIMER_KEY = 'grebla:career:disclaimer';
   /**
    * Tope de journeys de compañeros a cargar (MC-12): 1 lectura de Firestore
    * por persona es aceptable en equipos pequeños; con más de 25 personas
@@ -1126,6 +1130,18 @@ export class CareerApp extends LitElement {
       font-weight: 700;
     }
     .onboard .play { width: 100%; font-size: 0.95rem; padding: 0.6rem 1rem; }
+    /* Disclaimer (RMR-TSK-0398): recordatorio honesto sobre el sentido de la
+       formación — cita destacada, mismo texto en claro y oscuro (AA). */
+    .onboard .disclaimer {
+      margin: 0 0 1rem;
+      padding: 0.6rem 0.85rem;
+      border-left: 3px solid var(--game-accent, #3dd6c3);
+      border-radius: 0 8px 8px 0;
+      background: color-mix(in srgb, var(--game-accent, #3dd6c3) 10%, var(--rm-surface, #fff));
+      font-size: 0.85rem;
+      font-style: italic;
+      color: var(--rm-text, #111827);
+    }
     /* Mapa del ARCHIPIÉLAGO (MC-14): modal fixed sobre toda la vista con un
        mar estilizado y las islas en su x/y del índice. */
     .sea-backdrop {
@@ -2166,8 +2182,9 @@ export class CareerApp extends LitElement {
     this.teammatePopover = null;
     // Onboarding (MC-13): el cartel de bienvenida sale la PRIMERA vez que se
     // entra al mapa 3D; el flag de localStorage lo silencia para siempre y el
-    // botón «?» del HUD lo reabre a demanda.
-    this.showOnboarding = !this._readOnboarded();
+    // botón «?» del HUD lo reabre a demanda. El disclaimer (RMR-TSK-0398)
+    // tiene flag propio: quien ya estaba onboardeado ve el cartel una vez más.
+    this.showOnboarding = !this._readOnboarded() || !this._readDisclaimerSeen();
     // Archipiélago (MC-14): isla actual (viene del journey de la persona),
     // índice de islas, ids con doc real (para atenuar «En construcción» en el
     // mapa del mar, cacheado por sesión), overlay abierto y fundido de viaje.
@@ -2371,14 +2388,22 @@ export class CareerApp extends LitElement {
     return localStorage.getItem(CareerApp.ONBOARDED_KEY) === 'done';
   }
 
+  /** true si el disclaimer del cartel ya se leyó (RMR-TSK-0398; SSR = visto). */
+  _readDisclaimerSeen() {
+    if (typeof localStorage === 'undefined') return true;
+    return localStorage.getItem(CareerApp.DISCLAIMER_KEY) === 'done';
+  }
+
   /**
-   * Cierra el cartel de bienvenida («¡A jugar!» o Escape) y persiste el flag:
-   * no vuelve a salir solo. El foco vuelve al HUD para no perder el teclado.
+   * Cierra el cartel de bienvenida («¡A jugar!» o Escape) y persiste los flags
+   * (bienvenida y disclaimer): no vuelve a salir solo. El foco vuelve al HUD
+   * para no perder el teclado.
    */
   _closeOnboarding() {
     this.showOnboarding = false;
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(CareerApp.ONBOARDED_KEY, 'done');
+      localStorage.setItem(CareerApp.DISCLAIMER_KEY, 'done');
     }
     this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
   }
@@ -6947,6 +6972,12 @@ export class CareerApp extends LitElement {
             para ir a él.
           </li>
         </ul>
+        <blockquote class="disclaimer">
+          Hacer cursos, másteres, formaciones, leer… está bien si tienes interés
+          en ello, pero recuerda que acumular conocimientos no te hace más sabio
+          ni mejor. Igual que acumular herramientas no te hace mejor carpintero,
+          ni acumular ladrillos construyen una casa.
+        </blockquote>
         <button class="primary play" @click=${this._closeOnboarding}>¡A jugar!</button>
       </section>
     </div>`;
