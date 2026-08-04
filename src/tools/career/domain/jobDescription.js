@@ -43,7 +43,7 @@
  */
 
 /** Versión VIGENTE del contrato. */
-export const JD_SCHEMA_VERSION = '1.0.0';
+export const JD_SCHEMA_VERSION = '1.1.0';
 
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -86,6 +86,12 @@ export function validateJobDescription(payload) {
     errors.push('identifier debe ser un PropertyValue con propertyID "grebla-jd" y value (id de la JD).');
   }
   if (!isNonEmptyString(jd.qualifications)) errors.push('qualifications es obligatorio.');
+  if (!isNonEmptyString(jd.responsibilities)) {
+    errors.push('responsibilities es obligatorio (bullets del nivel base, 1.1.0).');
+  }
+  if (jd['x-niceToHave'] !== null && jd['x-niceToHave'] !== undefined && !isNonEmptyString(jd['x-niceToHave'])) {
+    errors.push('x-niceToHave debe ser un texto o null.');
+  }
   if (!isStringArray(jd.skills)) errors.push('skills debe ser un array de textos no vacíos.');
   if (!isNonEmptyString(jd.experienceRequirements)) errors.push('experienceRequirements es obligatorio.');
   errors.push(...validateCareerLevel(jd['x-careerLevel']));
@@ -171,6 +177,28 @@ export function generateJobDescription(framework, opts) {
     ...levels.map((l) => (isNonEmptyString(l.description) ? `${l.code}: ${l.description}` : null)).filter(Boolean),
   ].filter(isNonEmptyString).join('\n\n');
 
+  // 1.1.0 — campos DIRECTOS para el prefill del consumidor (el portal no
+  // debería tener que bucear en x-careerLevel): lo que harás = expectativas del
+  // nivel BASE; lo valorable = las del nivel SUPERIOR del rango (si lo hay).
+  const responsibilities = dimensions
+    .map((dim) => `• ${dim.name}: ${dim.expectations[0].text}`)
+    .join('\n');
+  const topLevelId = levels.at(-1).id;
+  const niceToHave = isRange
+    ? dimensions
+        .map((dim) => {
+          const top = dim.expectations.find((e) => e.level === topLevelId);
+          return top && dim.expectations.length > 1 ? `• ${dim.name}: ${top.text}` : null;
+        })
+        .filter(Boolean)
+        .join('\n') || null
+    : null;
+  const qualifications = [
+    profileBits.length ? `Experiencia típica: ${profileBits.join(' / ')}.` : null,
+    disciplineNames.length ? `Disciplinas: ${disciplineNames.join(', ')}.` : null,
+    `Se evalúa con el framework ${framework.name ?? framework.id ?? 'de carrera'} en: ${dimensions.map((d) => d.name).join(' · ')}.`,
+  ].filter(Boolean).join(' ');
+
   return {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',
@@ -179,7 +207,9 @@ export function generateJobDescription(framework, opts) {
     description,
     datePosted,
     identifier: { '@type': 'PropertyValue', propertyID: 'grebla-jd', value: jdId },
-    qualifications: dimensions.map((d) => d.name).join(' · '),
+    qualifications,
+    responsibilities,
+    'x-niceToHave': niceToHave,
     skills: [...disciplineNames, ...dimensions.map((d) => d.name)],
     experienceRequirements: profileBits.length ? `${rangeText} Perfil típico: ${profileBits.join(' / ')}.` : rangeText,
     'x-careerLevel': {

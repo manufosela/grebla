@@ -11,6 +11,8 @@ const validJd = () => ({
   datePosted: '2026-08-03',
   identifier: { '@type': 'PropertyValue', propertyID: 'grebla-jd', value: 'jd-abc123' },
   qualifications: 'Diseño de APIs, testing, operación básica de producción.',
+  responsibilities: '• Ownership: Saca adelante tareas acotadas sin supervisión.\n• Craft: Código legible y testeado.',
+  'x-niceToHave': '• Ownership: Responde de un área completa.',
   skills: ['Python', 'PostgreSQL', 'Testing'],
   experienceRequirements: 'Entre nivel L2 y L3 del framework de ingeniería.',
   'x-careerLevel': {
@@ -151,6 +153,45 @@ describe('generateJobDescription — generador desde el framework (F2)', async (
     expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: ['l1'], disciplineIds: ['cobol'], datePosted: '2026-08-03' })).toThrow(/disciplina/);
     expect(() => generateJobDescription(fw, { jdId: '', roleName: 'R', levelIds: ['l1'], datePosted: '2026-08-03' })).toThrow(/jdId/);
     expect(() => generateJobDescription(fw, { jdId: 'x', roleName: 'R', levelIds: ['l1'], datePosted: 'hoy' })).toThrow(/ISO/);
+  });
+
+  it('1.1.0: responsibilities = expectativas del nivel BASE por dimensión (bullets)', () => {
+    const jd = generateJobDescription(fw, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2', 'l3'], disciplineIds: ['backend'], datePosted: '2026-08-04',
+    });
+    expect(jd.responsibilities).toMatch(/^• /);
+    // Cada línea es un bullet «• Dimensión: texto» del nivel más bajo del rango.
+    for (const line of jd.responsibilities.split('\n')) expect(line).toMatch(/^• .+: .+/);
+    expect(validateJobDescription(jd).valid).toBe(true);
+  });
+
+  it('1.1.0: x-niceToHave = expectativas del nivel SUPERIOR en un rango; null con nivel único', () => {
+    const range = generateJobDescription(fw, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2', 'l3'], disciplineIds: ['backend'], datePosted: '2026-08-04',
+    });
+    expect(range['x-niceToHave']).toMatch(/^• /);
+    const single = generateJobDescription(fw, {
+      jdId: 'jd-y', roleName: 'Backend Engineer', levelIds: ['l2'], disciplineIds: ['backend'], datePosted: '2026-08-04',
+    });
+    expect(single['x-niceToHave']).toBeNull();
+    expect(validateJobDescription(single).valid).toBe(true);
+  });
+
+  it('1.1.0: qualifications lleva experiencia, disciplinas y dimensiones (no solo nombres)', () => {
+    const jd = generateJobDescription(fw, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2'], disciplineIds: ['backend'], datePosted: '2026-08-04',
+    });
+    expect(jd.qualifications).toContain('Backend');
+    expect(jd.qualifications).toMatch(/framework/i);
+  });
+
+  it('el validador exige responsibilities y x-niceToHave string|null', () => {
+    const jd = validJd();
+    delete jd.responsibilities;
+    expect(validateJobDescription(jd).errors.some((e) => /responsibilities/.test(e))).toBe(true);
+    const jd2 = validJd();
+    jd2['x-niceToHave'] = 42;
+    expect(validateJobDescription(jd2).errors.some((e) => /niceToHave/.test(e))).toBe(true);
   });
 
   it('omite dimensiones sin expectativa y falla si NINGUNA tiene', () => {
