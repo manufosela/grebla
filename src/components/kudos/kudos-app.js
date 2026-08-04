@@ -13,7 +13,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { getMyPerson } from '../../lib/engineer.js';
-import { listWallKudos, listKudosRecipients, submitKudo, listMyKudos, getMyPrivateMessage } from '../../lib/kudos.js';
+import { listWallKudos, listKudosRecipients, submitKudo, listMyKudos, getMyPrivateMessage, ensureKudosRecipient } from '../../lib/kudos.js';
 import { KUDO_MAX_LEN, isoWeekKey, groupWallByWeek, validateKudoInput } from '../../tools/kudos/domain/kudos.js';
 
 /** Etiqueta humana de una clave YYYY-Www. @param {string} weekKey */
@@ -60,13 +60,12 @@ export class KudosApp extends LitElement {
     .card li { font-size: 0.88rem; color: var(--rm-text, #111827); font-style: italic; }
     .card li::before { content: '“'; color: var(--gr-teal, #2a9d8f); }
     .card li::after { content: '”'; color: var(--gr-teal, #2a9d8f); }
-    .private-only { font-size: 0.82rem; color: var(--rm-muted, #6b7280); margin: 0.45rem 0 0; }
 
     /* Formulario */
     form { display: flex; flex-direction: column; gap: 0.9rem; }
     label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.88rem; font-weight: 600; color: var(--rm-navy, #1e3a5f); }
-    select, textarea { font: inherit; font-size: 0.9rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; padding: 0.55rem 0.7rem; background: var(--rm-field, color-mix(in srgb, var(--rm-text, #111827) 4%, var(--rm-surface, #fff))); color: var(--rm-text, #111827); }
-    select:focus, textarea:focus { background: var(--rm-surface, #fff); }
+    input[type='text'], textarea { font: inherit; font-size: 0.9rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; padding: 0.55rem 0.7rem; background: var(--rm-field, color-mix(in srgb, var(--rm-text, #111827) 4%, var(--rm-surface, #fff))); color: var(--rm-text, #111827); }
+    input[type='text']:focus, textarea:focus { background: var(--rm-surface, #fff); }
     textarea { min-height: 4.6rem; resize: vertical; }
     .hint { font-weight: 400; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
     .count { font-weight: 400; font-size: 0.78rem; color: var(--rm-muted, #6b7280); align-self: flex-end; font-variant-numeric: tabular-nums; }
@@ -92,7 +91,7 @@ export class KudosApp extends LitElement {
     this._error = null;
     this._sending = false;
     this._sent = false;
-    this._form = { recipientPersonId: '', publicText: '', privateText: '' };
+    this._form = { recipientQuery: '', publicText: '', privateText: '' };
     /** @type {{ kudo: import('../../lib/kudos.js').WallKudo, privateText: string|null }[]} */
     this._mine = [];
     /** 'idle' | 'loading' | 'ready' | 'unlinked' | 'error' */
@@ -144,10 +143,12 @@ export class KudosApp extends LitElement {
         return;
       }
       const kudos = await listMyKudos(person.id);
+      // Sin flag público que delate el privado: se intenta leer en cada kudo
+      // (solo el titular puede; un doc inexistente devuelve null).
       this._mine = await Promise.all(
         kudos.map(async (kudo) => ({
           kudo,
-          privateText: kudo.hasPrivate ? await getMyPrivateMessage(kudo.id) : null,
+          privateText: await getMyPrivateMessage(kudo.id).catch(() => null),
         })),
       );
       this._mineState = 'ready';
@@ -170,40 +171,52 @@ export class KudosApp extends LitElement {
     if (next) this._weekKey = next;
   }
 
+  /** Resuelve lo escrito en el buscador a un personId: nombre exacto
+   * (case-insensitive) del directorio, o alta por email si parece un email. */
+  async _resolveRecipient() {
+    const query = this._form.recipientQuery.trim();
+    if (!query) throw new Error('El kudo necesita un destinatario');
+    const match = (this._people ?? []).find((p) => p.name.toLowerCase() === query.toLowerCase());
+    if (match) return match.personId;
+    if (query.includes('@')) {
+      const added = await ensureKudosRecipient(query);
+      if (added.created && this._people) {
+        this._people = [...this._people, { personId: added.personId, name: added.name }];
+      }
+      return added.personId;
+    }
+    throw new Error(
+      'No encuentro a nadie con ese nombre: elige una persona de la lista o escribe su email para añadirla',
+    );
+  }
+
   async _submit(event) {
     event.preventDefault();
-    const input = {
-      recipientPersonId: this._form.recipientPersonId,
-      publicText: this._form.publicText,
-      privateText: this._form.privateText,
-    };
-    try {
-      validateKudoInput(input);
-    } catch (err) {
-      this._error = err.message;
-      return;
-    }
     this._sending = true;
     this._error = null;
+    let input;
+    try {
+      const recipientPersonId = await this._resolveRecipient();
+      input = validateKudoInput({
+        recipientPersonId,
+        publicText: this._form.publicText,
+        privateText: this._form.privateText,
+      });
+    } catch (err) {
+      this._error = err.message;
+      this._sending = false;
+      return;
+    }
     try {
       await submitKudo(input);
       this._sent = true;
-      this._form = { recipientPersonId: '', publicText: '', privateText: '' };
+      this._form = { recipientQuery: '', publicText: '', privateText: '' };
       this._loadWall();
     } catch (err) {
       console.error('[kudos] fallo al enviar:', err);
       this._error = err.message ?? 'No se pudo enviar el kudo. Inténtalo de nuevo.';
     } finally {
       this._sending = false;
-    }
-  }
-
-  /** Sincroniza el valor del select tras el render (gotcha de Lit con
-   * opciones dinámicas: el value no se refleja si las option llegan después). */
-  updated() {
-    const select = this.renderRoot.querySelector('select');
-    if (select && select.value !== this._form.recipientPersonId) {
-      select.value = this._form.recipientPersonId;
     }
   }
 
@@ -232,7 +245,7 @@ export class KudosApp extends LitElement {
                 <h3>${p.recipientName} <span class="thanks">ha recibido las gracias</span></h3>
                 ${p.messages.length > 0
                   ? html`<ul>${p.messages.map((m) => html`<li>${m}</li>`)}</ul>`
-                  : html`<p class="private-only">Con mensaje privado 💌</p>`}
+                  : nothing}
               </li>`,
             )}
           </ul>`}
@@ -255,17 +268,25 @@ export class KudosApp extends LitElement {
         </p>
         <label>
           ¿A quién le das las gracias?
-          <select
+          <span class="hint">
+            Escribe su nombre para buscar. ¿No aparece? Escribe su email de
+            tribbu y la añadimos (sus kudos le esperarán a que entre).
+          </span>
+          <input
+            type="text"
             required
-            @change=${(e) => { this._form = { ...this._form, recipientPersonId: e.target.value }; }}
-          >
-            <option value="" disabled selected>${this._people === null ? 'Cargando personas…' : 'Elige una persona'}</option>
+            list="kudos-people"
+            placeholder=${this._people === null ? 'Cargando personas…' : 'Nombre o email…'}
+            .value=${this._form.recipientQuery}
+            @input=${(e) => { this._form = { ...this._form, recipientQuery: e.target.value }; }}
+          />
+          <datalist id="kudos-people">
             ${repeat(
               this._people ?? [],
               (p) => p.personId,
-              (p) => html`<option value=${p.personId}>${p.name}</option>`,
+              (p) => html`<option value=${p.name}></option>`,
             )}
-          </select>
+          </datalist>
         </label>
         <label>
           Mensaje público
