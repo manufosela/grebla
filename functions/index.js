@@ -2583,3 +2583,19 @@ export const submitKudo = onCall({ region: 'europe-west1' }, async (request) => 
   logger.info(`[kudos] nuevo kudo para ${recipientPersonId} (${publicText ? 'público' : ''}${publicText && privateText ? '+' : ''}${privateText ? 'privado' : ''})`);
   return { ok: true, kudoId: kudoRef.id };
 });
+
+/**
+ * Directorio mínimo para el selector de Kudos: personas activas {personId,
+ * name}. /people no es legible por cualquier logado (contiene datos de
+ * carrera/equipo) y el kudo solo necesita a quién dar las gracias — esta CF
+ * expone únicamente id+nombre a usuarios autenticados.
+ */
+export const listKudosRecipients = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const snap = await getFirestore().collection('people').get();
+  const people = snap.docs
+    .filter((d) => d.data().active !== false)
+    .map((d) => ({ personId: d.id, name: d.data().name ?? 'Sin nombre' }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  return { people };
+});
