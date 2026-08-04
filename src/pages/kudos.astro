@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * Kudos (RMR-PCS-0032): herramienta GENERAL — dar las gracias de forma anónima.
+ * Cada semana, el muro muestra a las personas que han recibido kudos (no es una
+ * competición: sin rankings). Ruta protegida; el gate de política corta en
+ * client/kudos.js antes de montar.
+ */
+---
+
+<Base title="GREBLA — Kudos" requireAuth={true}>
+  <tool-nav href="/" name="Kudos" icon="💚"></tool-nav>
+  <p class="page-lead">
+    Da las gracias a quien te ha hecho la semana mejor. Los mensajes son anónimos
+    y cortos; cada semana el muro muestra a las personas agradecidas — sin
+    rankings ni «empleado del mes».
+  </p>
+
+  <kudos-app></kudos-app>
+</Base>
+
+<script>
+  import '../client/kudos.js';
+</script>

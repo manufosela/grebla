@@ -29,6 +29,17 @@ const toKudo = (d, id) => ({
 });
 
 /**
+ * Directorio mínimo para el selector: personas activas {personId, name} vía CF
+ * (el cliente no puede listar /people).
+ * @returns {Promise<{ personId: string, name: string }[]>}
+ */
+export async function listKudosRecipients() {
+  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'listKudosRecipients');
+  const { data } = await fn();
+  return data.people ?? [];
+}
+
+/**
  * Da un kudo vía CF (anónimo; valida en servidor).
  * @param {{ recipientPersonId: string, publicText: string|null, privateText: string|null }} input
  * @returns {Promise<{ ok: boolean, kudoId: string }>}
