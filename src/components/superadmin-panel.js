@@ -1418,10 +1418,17 @@ export class SuperadminPanel extends LitElement {
   }
 
   /** Genera la vista previa (payload validado) desde el formulario. */
-  _previewJd() {
+  /**
+   * Genera y valida el payload desde el ESTADO ACTUAL del formulario (única
+   * fuente de verdad: lo usan la vista previa y Guardar — así Guardar nunca
+   * depende de haber pulsado antes la vista previa ni puede persistir un
+   * payload desactualizado, RMR-BUG-0084). Fija el id en el form la primera
+   * vez. @returns {Record<string, unknown>|null} null si no valida (deja el error puesto).
+   */
+  _buildJdPayload() {
     this._jdError = '';
     const f = this._jdForm;
-    if (!f || !this._framework) return;
+    if (!f || !this._framework) return null;
     const levelIds = [f.levelA, f.levelB].filter(Boolean);
     try {
       const id = f.id ?? `jd-${slugify(f.roleName)}-${Date.now().toString(36)}`;
@@ -1434,20 +1441,26 @@ export class SuperadminPanel extends LitElement {
         descriptionIntro: f.descriptionIntro,
       });
       const { valid, errors } = validateJobDescription(payload);
-      if (!valid) { this._jdError = `El payload no valida: ${errors.join(' ')}`; return; }
+      if (!valid) { this._jdError = `El payload no valida: ${errors.join(' ')}`; return null; }
       this._jdForm = { ...f, id };
-      this._jdPreview = payload;
+      return payload;
     } catch (err) {
-      this._jdError = err instanceof Error ? err.message : 'No se pudo generar la vista previa.';
-      this._jdPreview = null;
+      this._jdError = err instanceof Error ? err.message : 'No se pudo generar la JD.';
+      return null;
     }
+  }
+
+  _previewJd() {
+    this._jdPreview = this._buildJdPayload();
   }
 
   /** Guarda la JD (borrador; si ya existía conserva su estado). */
   async _saveJd() {
+    // Regenera y valida SIEMPRE desde el form actual: no exige haber pulsado
+    // la vista previa y nunca persiste un payload desactualizado (RMR-BUG-0084).
+    const payload = this._buildJdPayload();
+    if (!payload) return;
     const f = this._jdForm;
-    if (!f?.id || !this._jdPreview) { this._jdError = 'Genera la vista previa antes de guardar.'; return; }
-    this._jdError = '';
     this._jdNotice = '';
     try {
       await saveJd(f.id, {
@@ -1455,8 +1468,8 @@ export class SuperadminPanel extends LitElement {
         levelIds: [f.levelA, f.levelB].filter(Boolean),
         disciplineIds: f.disciplineIds,
         descriptionIntro: f.descriptionIntro,
-        datePosted: String(this._jdPreview.datePosted),
-        payload: this._jdPreview,
+        datePosted: payload.datePosted,
+        payload,
       });
       const prev = (this._jds ?? []).find((j) => j.id === f.id);
       const next = {
@@ -1466,8 +1479,8 @@ export class SuperadminPanel extends LitElement {
         levelIds: [f.levelA, f.levelB].filter(Boolean),
         disciplineIds: f.disciplineIds,
         descriptionIntro: f.descriptionIntro,
-        datePosted: String(this._jdPreview.datePosted),
-        payload: this._jdPreview,
+        datePosted: payload.datePosted,
+        payload,
         publishedAt: prev?.publishedAt ?? null,
       };
       this._jds = [...(this._jds ?? []).filter((j) => j.id !== f.id), next];
@@ -1571,7 +1584,7 @@ export class SuperadminPanel extends LitElement {
         <textarea rows="2" .value=${f.descriptionIntro} @input=${(e) => patch({ descriptionIntro: e.target.value })}></textarea></label>
       <div class="actions-row">
         <button @click=${() => this._previewJd()}>👁 Vista previa</button>
-        <button class="primary" ?disabled=${!this._jdPreview} @click=${() => this._saveJd()}>Guardar</button>
+        <button class="primary" ?disabled=${!f.roleName.trim()} @click=${() => this._saveJd()}>Guardar</button>
         <button @click=${() => { this._jdForm = null; this._jdPreview = null; }}>Cancelar</button>
       </div>
       ${this._jdPreview ? html`<details open class="jd-preview"><summary>Vista previa (JSON-LD válido ✓)</summary><pre>${JSON.stringify(this._jdPreview, null, 2)}</pre></details>` : null}
