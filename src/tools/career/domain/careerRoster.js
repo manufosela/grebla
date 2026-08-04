@@ -37,7 +37,7 @@ const EMPTY_JOURNEY = { visitedCities: [], visitedIslands: [], currentCity: null
  * @param {CareerFramework|null} params.framework     framework (para el rótulo de nivel)
  * @returns {CareerRosterRow[]}
  */
-export function careerRoster({ people, journeyById, islands, framework }) {
+export function careerRoster({ people, journeyById, islands, framework, subLevelById }) {
   const levelOf = (id) => (framework?.levels ?? []).find((l) => l.id === id) ?? null;
   const islandName = (id) => (islands ?? []).find((i) => i.id === id)?.name ?? id;
   return (people ?? []).map((p) => {
@@ -45,12 +45,15 @@ export function careerRoster({ people, journeyById, islands, framework }) {
     const prog = archipelagoProgress(journey ?? EMPTY_JOURNEY, islands ?? []);
     const certificates = (prog.islands ?? []).reduce((sum, i) => sum + (i.certificates ?? 0), 0);
     const level = levelOf(p.careerTargetLevelId);
+    const currentLevel = levelOf(p.levelId);
     const started = Boolean(journey?.currentCity);
     return {
       personId: p.id,
       name: p.name,
       levelCode: level?.code ?? null,
       levelTitle: level?.title ?? null,
+      currentLevelCode: currentLevel?.code ?? null,
+      subLevel: subLevelById?.get?.(p.id) ?? null,
       citizenships: prog.citizenships ?? 0,
       certificates,
       islandsVisited: prog.islandsVisited ?? 0,
