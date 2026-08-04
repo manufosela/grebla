@@ -11,6 +11,7 @@
  * silenciosos.
  */
 import { LitElement, html, css, nothing } from 'lit';
+import '../common/busy-overlay.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { getMyPerson } from '../../lib/engineer.js';
 import { listWallKudos, listKudosRecipients, submitKudo, listMyKudos, getMyPrivateMessage, ensureKudosRecipient } from '../../lib/kudos.js';
@@ -354,6 +355,7 @@ export class KudosApp extends LitElement {
         <button role="tab" aria-selected=${this._tab === 'give'} @click=${this._openGiveTab}>Dar las gracias</button>
         <button role="tab" aria-selected=${this._tab === 'mine'} @click=${this._openMineTab}>Los míos</button>
       </div>
+      ${this._sending ? html`<busy-overlay message="Enviando tu kudo…"></busy-overlay>` : nothing}
       ${this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
       <div ?hidden=${this._tab !== 'wall'}>${this._renderWall()}</div>
       <div ?hidden=${this._tab !== 'give'}>${this._tab === 'give' ? this._renderForm() : nothing}</div>

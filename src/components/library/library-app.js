@@ -10,6 +10,7 @@
  * libre para el nombre.
  */
 import { LitElement, html, css, nothing } from 'lit';
+import '../common/busy-overlay.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { getMyPerson } from '../../lib/engineer.js';
 import {
@@ -118,6 +119,8 @@ export class LibraryApp extends LitElement {
     this._requests = null;
     this._error = null;
     this._busy = false;
+    /** Mensaje de la capa bloqueante mientras dura la escritura. */
+    this._busyMessage = '';
     /** Libro con el panel «Llévatelo» abierto, o null. */
     this._borrowingId = null;
     this._dueDate = localIsoFromToday(21);
@@ -168,6 +171,7 @@ export class LibraryApp extends LitElement {
       return;
     }
     this._busy = true;
+    this._busyMessage = 'Registrando el préstamo…';
     this._error = null;
     try {
       await borrowBook(book.id, loan, this.uid);
@@ -183,6 +187,7 @@ export class LibraryApp extends LitElement {
 
   async _return(book) {
     this._busy = true;
+    this._busyMessage = 'Registrando la devolución…';
     this._error = null;
     try {
       await returnBook(book.id);
@@ -209,6 +214,7 @@ export class LibraryApp extends LitElement {
       return;
     }
     this._busy = true;
+    this._busyMessage = 'Guardando el libro…';
     this._error = null;
     try {
       await saveBook(form.id, book);
@@ -224,6 +230,7 @@ export class LibraryApp extends LitElement {
 
   async _toggleActive(book) {
     this._busy = true;
+    this._busyMessage = 'Actualizando la estantería…';
     try {
       await saveBook(book.id, { active: !book.active });
       await this._load();
@@ -250,6 +257,7 @@ export class LibraryApp extends LitElement {
       return;
     }
     this._busy = true;
+    this._busyMessage = 'Enviando la petición…';
     this._error = null;
     try {
       await submitRequest(request, { uid: this.uid, personId, name: personName });
@@ -265,6 +273,7 @@ export class LibraryApp extends LitElement {
 
   async _resolve(request) {
     this._busy = true;
+    this._busyMessage = 'Marcando como resuelta…';
     try {
       await resolveRequest(request.id);
       await this._load();
@@ -463,6 +472,7 @@ export class LibraryApp extends LitElement {
         <button role="tab" aria-selected=${this._tab === 'shelf'} @click=${() => { this._tab = 'shelf'; }}>Estantería</button>
         <button role="tab" aria-selected=${this._tab === 'requests'} @click=${() => { this._tab = 'requests'; }}>Peticiones</button>
       </div>
+      ${this._busy ? html`<busy-overlay message=${this._busyMessage}></busy-overlay>` : nothing}
       ${this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
       <div ?hidden=${this._tab !== 'shelf'}>${this._renderShelf()}</div>
       <div ?hidden=${this._tab !== 'requests'}>${this._renderRequests()}</div>
