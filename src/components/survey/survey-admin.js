@@ -6,6 +6,7 @@
  * tokens y las respuestas siguen siendo exclusivos de las Cloud Functions.
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
 import './survey-flow-canvas.js';
@@ -1270,6 +1271,7 @@ export class SurveyAdmin extends LitElement {
 
   render() {
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando la encuesta…"></busy-overlay>` : null}
       <h2>Encuestas de clima</h2>
       <p class="lead">Crea y gestiona las encuestas anónimas. Solo tú (People) ves esto; las respuestas son anónimas.</p>
       ${this._phase === 'edit' ? this._renderEdit()

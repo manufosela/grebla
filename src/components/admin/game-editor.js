@@ -21,6 +21,7 @@
  *  - ready: boolean  (lo activa el glue cuando hay sesión de superadmin)
  */
 import { LitElement, html, css, svg } from 'lit';
+import '../common/busy-overlay.js';
 import '../app-modal.js';
 import '@manufosela/multi-select';
 import {
@@ -993,6 +994,7 @@ export class GameEditor extends LitElement {
     const islandsClass = this._tab === 'islands' ? 'tab active' : 'tab';
     const routesClass = this._tab === 'routes' ? 'tab active' : 'tab';
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando los cambios del juego…"></busy-overlay>` : null}
       ${this.embedded
         ? null
         : html`<div class="bar">
