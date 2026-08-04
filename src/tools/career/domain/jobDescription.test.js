@@ -6,15 +6,21 @@ const validJd = () => ({
   '@context': 'https://schema.org',
   '@type': 'JobPosting',
   'x-schemaVersion': JD_SCHEMA_VERSION,
-  title: 'Backend Engineer (L2–L3)',
+  title: 'Backend Engineer (Senior)',
   description: 'Construirás servicios de producción con criterio y autonomía creciente.',
   datePosted: '2026-08-03',
   identifier: { '@type': 'PropertyValue', propertyID: 'grebla-jd', value: 'jd-abc123' },
   qualifications: 'Diseño de APIs, testing, operación básica de producción.',
   responsibilities: '• Ownership: Saca adelante tareas acotadas sin supervisión.\n• Craft: Código legible y testeado.',
+  'x-mustHave': '• Experiencia típica: 3+ años.\n• Disciplinas: Backend.\n• Áreas de evaluación: Ownership · Craft.',
   'x-niceToHave': '• Ownership: Responde de un área completa.',
+  'x-onboardingExpectations': {
+    month1: 'Aterrizar: conocer al equipo, el producto y el código.',
+    month3: 'Entregar con autonomía creciente.',
+    month6: 'Operar plenamente al nivel Senior.',
+  },
   skills: ['Python', 'PostgreSQL', 'Testing'],
-  experienceRequirements: 'Entre nivel L2 y L3 del framework de ingeniería.',
+  experienceRequirements: 'Experiencia típica: 3+ años.',
   'x-careerLevel': {
     framework: 'engineering',
     track: 'ic',
@@ -118,7 +124,7 @@ describe('generateJobDescription — generador desde el framework (F2)', async (
       disciplineIds: ['backend'], datePosted: '2026-08-03',
     });
     expect(validateJobDescription(jd).errors).toEqual([]);
-    expect(jd.title).toBe('Backend Engineer (L2)');
+    expect(jd.title).toBe('Backend Engineer (Senior Engineer)');
     expect(jd['x-careerLevel'].track).toBe('ic');
     expect(jd['x-careerLevel'].disciplines).toEqual(['Backend']);
     // Las 7 dimensiones del seed tienen expectativa en l2.
@@ -132,7 +138,7 @@ describe('generateJobDescription — generador desde el framework (F2)', async (
       datePosted: '2026-08-03',
     });
     expect(validateJobDescription(jd).errors).toEqual([]);
-    expect(jd.title).toBe('Senior Engineer (L2–L3)');
+    expect(jd.title).toBe('Senior Engineer (Senior Engineer – Senior Engineer II)');
     const tech = jd['x-careerLevel'].dimensions.find((d) => d.id === 'tech');
     expect(tech.expectations.map((e) => e.level)).toEqual(['l2', 'l3']);
   });
@@ -182,7 +188,7 @@ describe('generateJobDescription — generador desde el framework (F2)', async (
       jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2'], disciplineIds: ['backend'], datePosted: '2026-08-04',
     });
     expect(jd.qualifications).toContain('Backend');
-    expect(jd.qualifications).toMatch(/framework/i);
+    expect(jd.qualifications).toMatch(/Áreas de evaluación/);
   });
 
   it('el validador exige responsibilities y x-niceToHave string|null', () => {
@@ -192,6 +198,50 @@ describe('generateJobDescription — generador desde el framework (F2)', async (
     const jd2 = validJd();
     jd2['x-niceToHave'] = 42;
     expect(validateJobDescription(jd2).errors.some((e) => /niceToHave/.test(e))).toBe(true);
+  });
+
+  it('1.2.0: los campos humanos NO llevan códigos internos Lx (nomenclatura pública)', () => {
+    const jd = generateJobDescription(fw, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2', 'l3'], disciplineIds: ['backend'], datePosted: '2026-08-04',
+    });
+    for (const field of [jd.title, jd.description, jd.experienceRequirements, jd.qualifications, jd['x-mustHave']]) {
+      expect(field).not.toMatch(/\bL\d/);
+    }
+    // El metadato interno x-careerLevel SÍ conserva los ids/labels de máquina.
+    expect(jd['x-careerLevel'].levels).toEqual(['l2', 'l3']);
+  });
+
+  it('1.2.0: seniority pública con dedupe (publicLabel ?? title) en el título', () => {
+    const withLabels = structuredClone(fw);
+    for (const l of withLabels.levels) {
+      if (l.id === 'l2' || l.id === 'l3') l.publicLabel = 'Senior';
+    }
+    const jd = generateJobDescription(withLabels, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2', 'l3'], disciplineIds: ['backend'], datePosted: '2026-08-04',
+    });
+    expect(jd.title).toBe('Backend Engineer (Senior)');
+    expect(jd['x-careerLevel'].seniorityLabels).toEqual(['Senior', 'Senior']);
+  });
+
+  it('1.2.0: x-mustHave en bullets y x-onboardingExpectations con 1/3/6 meses', () => {
+    const jd = generateJobDescription(fw, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2'], disciplineIds: ['backend'], datePosted: '2026-08-04',
+    });
+    expect(jd['x-mustHave']).toMatch(/^• /);
+    const onboarding = jd['x-onboardingExpectations'];
+    expect(onboarding.month1).toMatch(/./);
+    expect(onboarding.month3).toMatch(/./);
+    expect(onboarding.month6).toMatch(/./);
+    expect(validateJobDescription(jd).valid).toBe(true);
+  });
+
+  it('el validador exige x-mustHave y x-onboardingExpectations completos', () => {
+    const jd = validJd();
+    delete jd['x-mustHave'];
+    expect(validateJobDescription(jd).errors.some((e) => /mustHave/.test(e))).toBe(true);
+    const jd2 = validJd();
+    jd2['x-onboardingExpectations'] = { month1: 'x' };
+    expect(validateJobDescription(jd2).errors.some((e) => /onboarding/i.test(e))).toBe(true);
   });
 
   it('omite dimensiones sin expectativa y falla si NINGUNA tiene', () => {
