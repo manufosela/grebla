@@ -43,7 +43,7 @@
  */
 
 /** Versión VIGENTE del contrato. */
-export const JD_SCHEMA_VERSION = '1.1.0';
+export const JD_SCHEMA_VERSION = '1.2.0';
 
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -91,6 +91,14 @@ export function validateJobDescription(payload) {
   }
   if (jd['x-niceToHave'] !== null && jd['x-niceToHave'] !== undefined && !isNonEmptyString(jd['x-niceToHave'])) {
     errors.push('x-niceToHave debe ser un texto o null.');
+  }
+  if (!isNonEmptyString(jd['x-mustHave'])) {
+    errors.push('x-mustHave es obligatorio (bullets de imprescindibles, 1.2.0).');
+  }
+  const onboarding = jd['x-onboardingExpectations'];
+  if (!onboarding || typeof onboarding !== 'object' || Array.isArray(onboarding)
+    || !['month1', 'month3', 'month6'].every((k) => isNonEmptyString(onboarding[k]))) {
+    errors.push('x-onboardingExpectations debe llevar month1, month3 y month6 (qué se espera a 1/3/6 meses).');
   }
   if (!isStringArray(jd.skills)) errors.push('skills debe ser un array de textos no vacíos.');
   if (!isNonEmptyString(jd.experienceRequirements)) errors.push('experienceRequirements es obligatorio.');
@@ -167,14 +175,22 @@ export function generateJobDescription(framework, opts) {
     throw new Error('El framework no tiene expectativas para esos niveles: no se puede generar la JD.');
   }
 
-  const rangeText = isRange
-    ? `Entre los niveles ${codes[0]} (${levels[0].title}) y ${codes[1]} (${levels[1].title}) del framework ${framework.name ?? framework.id ?? 'de carrera'}.`
-    : `Nivel ${codes[0]} (${levels[0].title}) del framework ${framework.name ?? framework.id ?? 'de carrera'}.`;
+  // Nomenclatura PÚBLICA (1.2.0): los códigos Lx son internos — de cara a la
+  // oferta se usa la etiqueta pública del nivel (publicLabel del framework,
+  // p. ej. Junior/Mid/Senior; fallback al título). Con dedupe: un rango
+  // Senior–Senior se publica como «Senior».
+  const seniorityLabels = levels.map((l) => (isNonEmptyString(l.publicLabel) ? l.publicLabel.trim() : l.title));
+  const seniorityPublic = [...new Set(seniorityLabels)].join(' – ');
   const profileBits = levels.map((l) => l.typicalProfile).filter(isNonEmptyString);
   const description = [
     descriptionIntro.trim(),
-    `Buscamos ${roleName}${disciplineNames.length ? ` (${disciplineNames.join(', ')})` : ''}. ${rangeText}`,
-    ...levels.map((l) => (isNonEmptyString(l.description) ? `${l.code}: ${l.description}` : null)).filter(Boolean),
+    `Buscamos ${roleName}${disciplineNames.length ? ` (${disciplineNames.join(', ')})` : ''}. Seniority: ${seniorityPublic}.`,
+    ...(isRange
+      ? [
+          isNonEmptyString(levels[0].description) ? `Perfil de entrada: ${levels[0].description}` : null,
+          isNonEmptyString(levels[1].description) ? `Crecerás hacia: ${levels[1].description}` : null,
+        ]
+      : [isNonEmptyString(levels[0].description) ? levels[0].description : null]),
   ].filter(isNonEmptyString).join('\n\n');
 
   // 1.1.0 — campos DIRECTOS para el prefill del consumidor (el portal no
@@ -193,30 +209,50 @@ export function generateJobDescription(framework, opts) {
         .filter(Boolean)
         .join('\n') || null
     : null;
-  const qualifications = [
+  // Imprescindible explícito (1.2.0): bullets para el prefill del consumidor;
+  // qualifications (schema.org) lleva el mismo contenido en prosa.
+  const mustHaveBits = [
     profileBits.length ? `Experiencia típica: ${profileBits.join(' / ')}.` : null,
     disciplineNames.length ? `Disciplinas: ${disciplineNames.join(', ')}.` : null,
-    `Se evalúa con el framework ${framework.name ?? framework.id ?? 'de carrera'} en: ${dimensions.map((d) => d.name).join(' · ')}.`,
-  ].filter(Boolean).join(' ');
+    `Áreas de evaluación: ${dimensions.map((d) => d.name).join(' · ')}.`,
+  ].filter(Boolean);
+  const mustHave = mustHaveBits.map((b) => `• ${b}`).join('\n');
+  const qualifications = mustHaveBits.join(' ');
+
+  // Qué se espera de ti a 1/3/6 meses (1.2.0, teórico pero honesto): derivado
+  // del nivel BASE — aterrizar, entregar con autonomía creciente (expectativa
+  // de ejecución si existe) y operar plenamente al nivel.
+  const executionBase = dimensions.find((d) => d.id === 'execution')?.expectations[0]?.text
+    ?? dimensions[0].expectations[0].text;
+  const onboardingExpectations = {
+    month1: `Aterrizar: conocer al equipo, el producto y el código; primeras entregas acotadas${disciplineNames.length ? ` en ${disciplineNames.join(', ')}` : ''} con acompañamiento.`,
+    month3: `Entregar con autonomía creciente. ${executionBase}`,
+    month6: `Operar plenamente al nivel ${seniorityLabels[0]} en ${dimensions.map((d) => d.name).join(', ')}.`,
+  };
 
   return {
     '@context': 'https://schema.org',
     '@type': 'JobPosting',
     'x-schemaVersion': JD_SCHEMA_VERSION,
-    title: `${roleName} (${codes.join('–')})`,
+    title: `${roleName} (${seniorityPublic})`,
     description,
     datePosted,
     identifier: { '@type': 'PropertyValue', propertyID: 'grebla-jd', value: jdId },
     qualifications,
     responsibilities,
+    'x-mustHave': mustHave,
     'x-niceToHave': niceToHave,
+    'x-onboardingExpectations': onboardingExpectations,
     skills: [...disciplineNames, ...dimensions.map((d) => d.name)],
-    experienceRequirements: profileBits.length ? `${rangeText} Perfil típico: ${profileBits.join(' / ')}.` : rangeText,
+    experienceRequirements: profileBits.length
+      ? `Experiencia típica: ${profileBits.join(' / ')}.`
+      : `Seniority: ${seniorityPublic}.`,
     'x-careerLevel': {
       framework: framework.id ?? 'engineering',
       track,
       levels: levels.map((l) => l.id),
       levelLabels,
+      seniorityLabels,
       disciplines: disciplineNames,
       dimensions,
     },

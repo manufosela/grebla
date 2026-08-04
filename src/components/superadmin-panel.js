@@ -1928,6 +1928,9 @@ export class SuperadminPanel extends LitElement {
           <label>Perfil típico
             <input type="text" .value=${l.typicalProfile ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('levels', l.id, { typicalProfile: e.target.value })} />
           </label>
+          <label>Etiqueta pública (JD)
+            <input type="text" placeholder="Junior / Mid / Senior…" .value=${l.publicLabel ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('levels', l.id, { publicLabel: e.target.value })} />
+          </label>
           <label class="full">Descripción
             <input type="text" .value=${l.description ?? ''} ?disabled=${this.readOnly} @input=${(e) => this._patchFwItem('levels', l.id, { description: e.target.value })} />
           </label>
