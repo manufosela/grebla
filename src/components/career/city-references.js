@@ -8,6 +8,7 @@
  * heredar el pergamino del panel que lo contiene.
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { watchCityReferences, addCityReference, deleteCityReference } from '../../lib/cityReferences.js';
 import { isValidReference, sanitizeReference } from '../../tools/career/domain/references.js';
 
@@ -188,6 +189,7 @@ export class CityReferences extends LitElement {
 
   render() {
     return html`
+      ${this._saving ? html`<busy-overlay message="Compartiendo tu referencia…"></busy-overlay>` : null}
       <div class="sec">
         <h4>🧭 Aportado por la tripulación ${this._refs.length ? html`(${this._refs.length})` : ''}</h4>
         ${this._refs.length
