@@ -12,6 +12,7 @@ export const TOOLS = [
   { toolId: 'marea', label: 'Marea', audience: { everyone: true }, managedBy: {} },
   { toolId: 'motivators', label: 'Moving & Affective Motivators', audience: { everyone: true }, managedBy: {} },
   { toolId: 'surveys', label: 'Encuestas de clima', audience: { everyone: true }, managedBy: { branches: ['people'] } },
+  { toolId: 'kudos', label: 'Kudos', audience: { everyone: true }, managedBy: {} },
   { toolId: 'career', label: 'Mapa de carrera', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
   { toolId: 'rolemirror', label: 'Role Mirror', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
   { toolId: 'dora', label: 'DORA', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
