@@ -4,6 +4,7 @@
  * deriva de las fechas; «cerrar» aquí desactiva la ronda antes de tiempo.
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { listRounds, createRound, setRoundActive, updateRound, deleteRound } from '../../tools/motivators/application/usecases.js';
 import { roundStatus, dayWindowToIso } from '../../tools/motivators/domain/rounds.js';
 import { accentStyle } from './accent.js';
@@ -185,6 +186,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
   render() {
     const rounds = this._rounds ?? [];
     return html`<div style=${accentStyle(this.accent)}>
+      ${this._busy ? html`<busy-overlay message="Guardando la ronda…"></busy-overlay>` : null}
       ${this._renderForm()}
       ${this._loading && !this._rounds ? html`<p class="empty">Cargando rondas…</p>` : this._renderList(rounds)}
       ${this._renderConfirm()}

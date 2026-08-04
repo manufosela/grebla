@@ -6,6 +6,7 @@
  * siguientes.
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { toolShellStyles, toolDisclaimer } from '../shared/toolShellStyles.js';
 import { getDeck } from '../../tools/motivators/domain/decks.js';
 import { saveSession, getMyHistory } from '../../tools/motivators/application/usecases.js';
@@ -198,6 +199,7 @@ export class MotivatorsApp extends LitElement {
     if (this.error && !this.persistence) return html`<p class="error">${this.error}</p>`;
     const view = this._view;
     return html`
+      ${this._busy ? html`<busy-overlay message="Guardando tu resultado…"></busy-overlay>` : null}
       <nav class="tabs">
         ${this._tabs.map((t) => html`<button class="tab ${view === t.id ? 'active' : ''}"
           @click=${() => { this.view = t.id; }}>${t.label}</button>`)}
