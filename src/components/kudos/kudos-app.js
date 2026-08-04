@@ -264,7 +264,8 @@ export class KudosApp extends LitElement {
       <form @submit=${this._submit}>
         <p class="anon">
           Los kudos son <strong>anónimos</strong>: nadie verá quién los escribe.
-          Si quieres que se sepa, fírmalo dentro del mensaje.
+          Si quieres que se sepa, fírmalo dentro del mensaje. Escribe el mensaje
+          público, el privado o los dos.
         </p>
         <label>
           ¿A quién le das las gracias?
@@ -300,7 +301,7 @@ export class KudosApp extends LitElement {
         </label>
         <label>
           Mensaje privado
-          <span class="hint">Solo lo leerá esa persona. Público, privado o ambos — al menos uno.</span>
+          <span class="hint">Solo lo leerá esa persona.</span>
           <textarea
             maxlength=${KUDO_MAX_LEN + 20}
             .value=${this._form.privateText}
