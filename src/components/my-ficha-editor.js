@@ -7,6 +7,7 @@
  * `ficha-updated` con la persona ya actualizada para que el contenedor refresque.
  */
 import { LitElement, html, css } from 'lit';
+import './common/busy-overlay.js';
 import { updateMyPersonBasics, deleteMyPerson } from '../lib/engineer.js';
 
 export class MyFichaEditor extends LitElement {
@@ -222,6 +223,7 @@ export class MyFichaEditor extends LitElement {
   render() {
     if (!this.person) return null;
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando tu ficha…"></busy-overlay>` : null}
       <div class="card">
         <div class="head">
           <div>

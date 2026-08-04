@@ -8,6 +8,7 @@
  * Props: surveyId, token (del glue que lee la URL).
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { scaleRange, isScale, isText, isChoice, choiceOptions, validateResponses, sanitizeResponses, canAdvance } from '../../tools/survey/domain/questions.js';
 import { END, firstQuestionId, hasBranching, resolveNext } from '../../tools/survey/domain/flow.js';
 import { getSurveyForToken, submitSurveyResponse } from '../../lib/survey.js';
@@ -260,7 +261,8 @@ export class SurveyRespond extends LitElement {
     if (this._saving) submitLabel = 'Guardando…';
     else if (this._saved) submitLabel = 'Actualizar respuesta';
     const showRequiredHint = isLast && !this._valid;
-    return html`<div class="card">
+    return html`
+      ${this._saving ? html`<busy-overlay message="Enviando tus respuestas…"></busy-overlay>` : null}<div class="card">
       <h1>${this._survey.title}</h1>
       <p class="lead">Tus respuestas son anónimas. Puedes editarlas hasta que se cierre la encuesta.</p>
       ${this._saved && !this._error ? html`<p class="banner ok">✓ Respuesta guardada. Puedes seguir editándola.</p>` : null}

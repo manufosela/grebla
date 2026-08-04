@@ -8,6 +8,7 @@
  * Props: uid (lo inyecta el glue de cliente tras resolver la sesión).
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { saveMyPulse, getMyCurrentWeekPulse } from '../../lib/pulse.js';
 import { pulseReading, dayKey, isoWeekKey, parseWeekIso } from '../../tools/pulse/domain/pulse.js';
 import { weekRangeLabel } from './weekLabel.js';
@@ -229,6 +230,7 @@ export class MareaFill extends LitElement {
     // Compuesto en JS para no anidar ternarios dentro de la plantilla.
     const rangeChip = range ? html`<span class="wk-range">${range}</span> · ` : null;
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando tu marea…"></busy-overlay>` : null}
       ${week ? html`<h2 class="wk-head"><span class="wk-title">Semana ${week.week}</span><span class="wk-sub">${rangeChip}${week.year} · tu marea de esta semana</span></h2>` : null}
       <p class="lead">Coloca tu boya según tu <b>energía</b> y tu <b>ánimo</b>, y ajusta las cuatro anclas. No hay respuesta correcta: una marea sube y baja.</p>
       ${this._renderStatus()}
