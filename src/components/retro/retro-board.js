@@ -9,6 +9,7 @@
  * Props: retroId, uid (usuario logado).
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
 import { groupNotes, summaryGroups, groupPatch, ungroupPatch, groupAuthors } from '../../tools/retro/domain/grouping.js';
@@ -26,6 +27,7 @@ const BARCO_ICON = { viento: '🌬️', ancla: '⚓', rocas: '🪨', isla: '🏝
 
 export class RetroBoard extends LitElement {
   static properties = {
+    _saving: { state: true },
     retroId: { attribute: false },
     uid: { attribute: false },
     members: { attribute: false },
@@ -186,6 +188,7 @@ export class RetroBoard extends LitElement {
 
   constructor() {
     super();
+    this._saving = false;
     this.retroId = null;
     this.uid = null;
     this._retro = null;
@@ -282,13 +285,16 @@ export class RetroBoard extends LitElement {
 
   async _addNote(columnId) {
     const text = (this._drafts[columnId] ?? '').trim();
-    if (!text || !this.uid) return;
+    if (!text || !this.uid || this._saving) return;
     this._error = '';
+    this._saving = true;
     try {
       await addNote(this.retroId, columnId, text, this.uid, this._myName);
       this._drafts = { ...this._drafts, [columnId]: '' };
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo añadir la nota.';
+    } finally {
+      this._saving = false;
     }
   }
 
@@ -661,6 +667,7 @@ export class RetroBoard extends LitElement {
     const cols = format?.columns ?? [];
     const boardStyle = '--cols:' + cols.length;
     return html`
+      ${this._saving ? html`<busy-overlay message="Añadiendo tu nota…"></busy-overlay>` : null}
       <div class="head">
         <h2>${this._retro.name}</h2>
         <span class="chip fmt">${format?.name ?? this._retro.format}</span>

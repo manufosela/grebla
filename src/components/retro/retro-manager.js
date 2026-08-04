@@ -7,6 +7,7 @@
  * Props: uid (del manager, lo inyecta el glue de cliente).
  */
 import { LitElement, html, css } from 'lit';
+import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';
 import { createRetro, listRetros, closeRetro, deleteRetro } from '../../lib/retros.js';
@@ -231,6 +232,7 @@ export class RetroManager extends LitElement {
 
   render() {
     return html`
+      ${this._saving ? html`<busy-overlay message="Guardando la retro…"></busy-overlay>` : null}
       <p class="lead">Crea una retrospectiva y gestiónala. El equipo aporta desde su espacio (en anónimo hasta que reveles cada zona); de la retro salen acciones con owner que se arrastran a la siguiente.</p>
 
       <div class="create">
