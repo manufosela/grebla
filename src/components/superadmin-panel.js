@@ -298,7 +298,10 @@ export class SuperadminPanel extends LitElement {
     .egg-form .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 0.6rem; }
     .egg-form label.chk { display: inline-flex; align-items: center; gap: 0.35rem; }
     .egg-form .actions-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .jd-preview pre { max-height: 22rem; overflow: auto; background: var(--rm-track, #f3f4f6); border-radius: 8px; padding: 0.7rem; font-size: 0.75rem; }
+    /* El details es ITEM del grid .egg-form: sin min-width:0, el min-content
+       de la línea más larga del JSON estira TODO el grid (RMR-BUG-0086). */
+    .jd-preview { min-width: 0; max-width: 100%; }
+    .jd-preview pre { max-height: 22rem; overflow: auto; background: var(--rm-track, #f3f4f6); border-radius: 8px; padding: 0.7rem; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; }
     .rename-btn { border: 0; background: none; color: var(--rm-muted, #9ca3af); cursor: pointer; font: inherit; padding: 0 0.25rem; opacity: 0.55; }
     .rename-btn:hover, .rename-btn:focus-visible { color: var(--rm-accent, #2a9d8f); opacity: 1; outline: none; }
     input.role-rename { min-width: 11rem; }
