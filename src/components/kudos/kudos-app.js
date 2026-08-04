@@ -12,7 +12,8 @@
  */
 import { LitElement, html, css, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { listWallKudos, listKudosRecipients, submitKudo } from '../../lib/kudos.js';
+import { getMyPerson } from '../../lib/engineer.js';
+import { listWallKudos, listKudosRecipients, submitKudo, listMyKudos, getMyPrivateMessage } from '../../lib/kudos.js';
 import { KUDO_MAX_LEN, isoWeekKey, groupWallByWeek, validateKudoInput } from '../../tools/kudos/domain/kudos.js';
 
 /** Etiqueta humana de una clave YYYY-Www. @param {string} weekKey */
@@ -32,6 +33,8 @@ export class KudosApp extends LitElement {
     _sending: { state: true },
     _sent: { state: true },
     _form: { state: true },
+    _mine: { state: true },
+    _mineState: { state: true },
   };
 
   static styles = css`
@@ -90,6 +93,10 @@ export class KudosApp extends LitElement {
     this._sending = false;
     this._sent = false;
     this._form = { recipientPersonId: '', publicText: '', privateText: '' };
+    /** @type {{ kudo: import('../../lib/kudos.js').WallKudo, privateText: string|null }[]} */
+    this._mine = [];
+    /** 'idle' | 'loading' | 'ready' | 'unlinked' | 'error' */
+    this._mineState = 'idle';
   }
 
   /** El muro se carga cuando llega el uid (tras auth + gate en client/kudos.js):
@@ -121,6 +128,32 @@ export class KudosApp extends LitElement {
     } catch (err) {
       console.error('[kudos] no se pudo cargar el directorio:', err);
       this._error = 'No se pudo cargar la lista de personas. Cierra y vuelve a intentarlo.';
+    }
+  }
+
+  /** Carga perezosa de «Los míos»: persona vinculada → kudos recibidos → sus
+   * privados (solo el titular puede leerlos; las reglas lo garantizan). */
+  async _openMineTab() {
+    this._tab = 'mine';
+    if (this._mineState === 'ready' || this._mineState === 'loading') return;
+    this._mineState = 'loading';
+    try {
+      const person = await getMyPerson(this.uid);
+      if (!person) {
+        this._mineState = 'unlinked';
+        return;
+      }
+      const kudos = await listMyKudos(person.id);
+      this._mine = await Promise.all(
+        kudos.map(async (kudo) => ({
+          kudo,
+          privateText: kudo.hasPrivate ? await getMyPrivateMessage(kudo.id) : null,
+        })),
+      );
+      this._mineState = 'ready';
+    } catch (err) {
+      console.error('[kudos] no se pudieron cargar mis kudos:', err);
+      this._mineState = 'error';
     }
   }
 
@@ -261,15 +294,48 @@ export class KudosApp extends LitElement {
     `;
   }
 
+  _renderMine() {
+    if (this._mineState === 'loading' || this._mineState === 'idle') {
+      return html`<p class="empty">Cargando tus kudos…</p>`;
+    }
+    if (this._mineState === 'unlinked') {
+      return html`<p class="empty">
+        Tu cuenta aún no está vinculada a una ficha de persona, así que no hay
+        dónde buscar tus kudos. Pídele a un superadmin que te vincule.
+      </p>`;
+    }
+    if (this._mineState === 'error') {
+      return html`<p class="error" role="alert">No se pudieron cargar tus kudos. Recarga para reintentar.</p>`;
+    }
+    if (this._mine.length === 0) {
+      return html`<p class="empty">Todavía no has recibido ningún kudo. Todo llega 💚</p>`;
+    }
+    return html`<ul class="wall">
+      ${repeat(
+        this._mine,
+        ({ kudo }) => kudo.id,
+        ({ kudo, privateText }) => html`<li class="card">
+          <h3><span class="thanks">${weekLabel(kudo.weekKey)}</span></h3>
+          <ul>
+            ${kudo.publicText ? html`<li>${kudo.publicText}</li>` : nothing}
+            ${privateText ? html`<li>💌 ${privateText}</li>` : nothing}
+          </ul>
+        </li>`,
+      )}
+    </ul>`;
+  }
+
   render() {
     return html`
       <div class="seg" role="tablist" aria-label="Kudos">
         <button role="tab" aria-selected=${this._tab === 'wall'} @click=${() => { this._tab = 'wall'; this._loadWall(); }}>Muro</button>
         <button role="tab" aria-selected=${this._tab === 'give'} @click=${this._openGiveTab}>Dar las gracias</button>
+        <button role="tab" aria-selected=${this._tab === 'mine'} @click=${this._openMineTab}>Los míos</button>
       </div>
       ${this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
       <div ?hidden=${this._tab !== 'wall'}>${this._renderWall()}</div>
       <div ?hidden=${this._tab !== 'give'}>${this._tab === 'give' ? this._renderForm() : nothing}</div>
+      <div ?hidden=${this._tab !== 'mine'}>${this._tab === 'mine' ? this._renderMine() : nothing}</div>
     `;
   }
 }
