@@ -181,6 +181,7 @@ export class SuperadminPanel extends LitElement {
     _jdPreview: { state: true },
     _jdError: { state: true },
     _jdNotice: { state: true },
+    _jdCopiedId: { state: true },
     _confirmJd: { state: true },
   };
 
@@ -322,6 +323,8 @@ export class SuperadminPanel extends LitElement {
     .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .ord-btn:active { transform: scale(0.94); }
+    .ord-btn.copied { border-color: var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 16%, var(--rm-surface, #fff)); color: var(--rm-text, #111827); transition: background 0.15s; }
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .notice { color: var(--rm-accent, #2a9d8f); font-size: 0.85rem; font-weight: 600; }
@@ -537,6 +540,8 @@ export class SuperadminPanel extends LitElement {
     this._jdPreview = null;
     this._jdError = '';
     this._jdNotice = '';
+    /** JD cuyo enlace se acaba de copiar («✔ Copiado» temporal), o null. */
+    this._jdCopiedId = null;
     this._confirmJd = null;
     /** @type {string} etiqueta del nivel simbólico (usuarios del producto) en la cima. */
     this._orgCrown = '';
@@ -1538,6 +1543,28 @@ export class SuperadminPanel extends LitElement {
       </section>`;
   }
 
+  /**
+   * Copia la URL pública con feedback INMEDIATO en el propio botón
+   * (RMR-BUG-0085): «✔ Copiado» ~1,6s; si el portapapeles falla o no existe,
+   * error visible — nunca un clic mudo.
+   * @param {{ id: string }} j
+   */
+  async _copyJdUrl(j) {
+    const url = this._jdPublicUrl(j.id);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard no disponible');
+      await navigator.clipboard.writeText(url);
+      this._jdError = '';
+      this._jdCopiedId = j.id;
+      setTimeout(() => {
+        if (this._jdCopiedId === j.id) this._jdCopiedId = null;
+      }, 1600);
+    } catch (err) {
+      console.error('[jd] no se pudo copiar la URL:', err);
+      this._jdError = 'No se pudo copiar al portapapeles: copia el enlace a mano (clic derecho sobre él).';
+    }
+  }
+
   _renderJdRow(j) {
     const published = j.status === 'publicada';
     const url = this._jdPublicUrl(j.id);
@@ -1547,7 +1574,10 @@ export class SuperadminPanel extends LitElement {
         <span class="muted">${j.levelIds.join(' – ')}${j.disciplineIds.length ? ` · ${j.disciplineIds.join(', ')}` : ''}</span>
         ${published
           ? html`<a href=${url} target="_blank" rel="noopener">${url}</a>
-            <button class="ord-btn" @click=${() => navigator.clipboard?.writeText(url)}>Copiar URL</button>`
+            <button
+              class="ord-btn ${this._jdCopiedId === j.id ? 'copied' : ''}"
+              @click=${() => this._copyJdUrl(j)}
+            >${this._jdCopiedId === j.id ? '✔ Copiado' : 'Copiar URL'}</button>`
           : html`<span class="muted">borrador</span>`}
         <button class="ord-btn" @click=${() => { this._jdForm = { id: j.id, roleName: j.roleName, levelA: j.levelIds[0] ?? '', levelB: j.levelIds[1] ?? '', disciplineIds: j.disciplineIds, descriptionIntro: j.descriptionIntro }; this._jdPreview = j.payload; }}>Editar</button>
         <button class="ord-btn" @click=${() => this._toggleJdPublished(j)}>${published ? 'Despublicar' : 'Publicar'}</button>
