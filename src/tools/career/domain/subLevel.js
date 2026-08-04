@@ -15,6 +15,8 @@
  * Aritmética en ENTEROS (done·100 vs total·umbral), como la ciudadanía.
  */
 
+import { routeDocId, suggestedTierKey } from './careerRoutes.js';
+
 /** Umbrales en % sobre la ruta del siguiente nivel. */
 export const SUB_LEVEL_THRESHOLDS = Object.freeze({ consolidating: 25, atTheGates: 70 });
 
@@ -63,4 +65,34 @@ export function subLevelFor(routeStops, journey) {
  */
 export function subLevelLabel(code, sub) {
   return `${code}.${sub}`;
+}
+
+/**
+ * Resolución completa persona → badge de sub-nivel: nivel actual → siguiente
+ * nivel del track → hito de ruta (posición relativa) → ruta publicada de su
+ * disciplina → subLevelFor sobre el journey. Cualquier pieza ausente (sin
+ * nivel, sin siguiente, sin disciplina, ruta no publicada) → null: el badge no
+ * se inventa.
+ * @param {{ person: { levelId?: string|null, disciplines?: string[] }, framework: { levels?: any[] }|null, routes: ReadonlyArray<{ routeId: string, stops: string[] }>|null, journey: { visitedCities?: string[] }|null }} input
+ * @returns {{ sub: 1|2|3, done: number, total: number, pct: number, label: string } | null}
+ */
+export function subLevelForPerson({ person, framework, routes, journey }) {
+  const levels = framework?.levels ?? [];
+  const current = levels.find((l) => l.id === person?.levelId);
+  if (!current) return null;
+  const next = nextLevelFor(levels, current.id);
+  if (!next) return null;
+  const discipline = (person?.disciplines ?? []).at(0);
+  const tierKey = suggestedTierKey(next.id, levels);
+  if (!discipline || !tierKey) return null;
+  let routeId;
+  try {
+    routeId = routeDocId(discipline, tierKey);
+  } catch {
+    return null;
+  }
+  const route = (routes ?? []).find((r) => r.routeId === routeId);
+  const result = subLevelFor(route?.stops, journey);
+  if (!result) return null;
+  return { ...result, label: subLevelLabel(current.code ?? current.id, result.sub) };
 }

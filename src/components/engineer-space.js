@@ -32,6 +32,8 @@
  * @typedef {import('../tools/career/domain/types.js').Journey} Journey
  */
 import { LitElement, html, css } from 'lit';
+import { listCareerRoutes } from '../lib/careerMap.js';
+import { subLevelForPerson } from '../tools/career/domain/subLevel.js';
 import './role-result.js';
 import './role-questionnaire.js';
 import './career/career-map.js';
@@ -870,6 +872,17 @@ export class EngineerSpace extends LitElement {
     return html`<marea-app .uid=${this.person?.uid ?? null}></marea-app>`;
   }
 
+  /** Rutas del reto para el sub-nivel derivado (RMR-PCS-0034): carga perezosa
+   *  y tolerante — sin rutas, la ficha sale sin la fila de progresión. */
+  async _ensureCareerRoutes() {
+    if (this._careerRoutes !== undefined) return;
+    this._careerRoutes = null;
+    try {
+      this._careerRoutes = await listCareerRoutes();
+      this.requestUpdate();
+    } catch { /* sin badges */ }
+  }
+
   /** Pestaña Kudos (RMR-TSK-0405): la herramienta general completa —
    *  muro semanal, dar las gracias y los privados propios. */
   _renderKudos() {
@@ -891,9 +904,19 @@ export class EngineerSpace extends LitElement {
     const fw = this.framework;
     const title = fw ? composeTitle(fw, p.levelId, p.disciplines) : '';
     const discNames = (p.disciplines ?? []).map((id) => fw?.disciplines?.find((d) => d.id === id)?.name ?? id);
+    this._ensureCareerRoutes();
+    const subLevel = subLevelForPerson({
+      person: p,
+      framework: fw,
+      routes: this._careerRoutes ?? [],
+      journey: this.journey,
+    });
     const rows = [
       ['Nombre', p.name],
       ['Título', title || null],
+      ['Progresión', subLevel
+        ? `${subLevel.label} — ${subLevel.pct}% del camino al siguiente nivel (${subLevel.done}/${subLevel.total} paradas certificadas)`
+        : null],
       ['Disciplinas', discNames.join(', ') || null],
       ['Fecha de alta', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${p.startDate}T00:00:00`)) : null],
       ['Gremios', (p.guilds ?? []).join(', ') || null],
