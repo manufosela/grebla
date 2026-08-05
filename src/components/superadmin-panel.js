@@ -34,6 +34,7 @@ import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '.
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
+import { frameworkToMarkdown } from '../tools/career/domain/frameworkMarkdown.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
 import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows, branchColor, layerColor } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
@@ -184,6 +185,7 @@ export class SuperadminPanel extends LitElement {
     _jdNotice: { state: true },
     _jdBusy: { state: true },
     _jdCopiedId: { state: true },
+    _fwExportLevel: { state: true },
     _confirmJd: { state: true },
   };
 
@@ -547,6 +549,8 @@ export class SuperadminPanel extends LitElement {
     this._jdNotice = '';
     /** JD cuyo enlace se acaba de copiar («✔ Copiado» temporal), o null. */
     this._jdCopiedId = null;
+    /** Nivel a exportar en el MD del framework ('' = todos). */
+    this._fwExportLevel = '';
     /** true mientras se pule/guarda una JD (capa bloqueante). */
     this._jdBusy = false;
     this._confirmJd = null;
@@ -1663,6 +1667,30 @@ export class SuperadminPanel extends LitElement {
     </div>`;
   }
 
+  /**
+   * Exporta el framework VIVO a Markdown (RMR-TSK-0428): completo o un nivel
+   * concreto. Generación pura en dominio; descarga vía Blob en cliente.
+   */
+  _exportFrameworkMd() {
+    try {
+      const levelId = this._fwExportLevel || null;
+      const md = frameworkToMarkdown(this._framework, {
+        levelId,
+        generatedAt: new Date().toISOString().slice(0, 10),
+      });
+      const level = levelId ? this._framework.levels.find((l) => l.id === levelId) : null;
+      const name = level ? `framework-${level.code.toLowerCase()}.md` : 'framework-niveles.md';
+      const url = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      this._fwError = err instanceof Error ? err.message : 'No se pudo exportar el framework.';
+    }
+  }
+
   _renderCareer() {
     const valid = ['map', 'jd'];
     const sub = valid.includes(this._careerSub) ? this._careerSub : 'framework';
@@ -1719,15 +1747,20 @@ export class SuperadminPanel extends LitElement {
                     @click=${() => { this._fwSubtab = id; }}>${label}</button>`)}
               </div>
               ${this._renderFwActiveSubtab(fw)}
-              ${this.readOnly
-                ? null
-                : html`
-                    <div class="toolbar" style="margin-top:1rem">
-                      <button class="primary" ?disabled=${this._fwSaving} @click=${() => this._saveFramework()}>
-                        ${this._fwSaving ? 'Guardando…' : 'Guardar framework'}
-                      </button>
-                    </div>
-                  `}
+              <div class="toolbar" style="margin-top:1rem">
+                ${this.readOnly
+                  ? null
+                  : html`<button class="primary" ?disabled=${this._fwSaving} @click=${() => this._saveFramework()}>
+                      ${this._fwSaving ? 'Guardando…' : 'Guardar framework'}
+                    </button>`}
+                <select aria-label="Nivel a exportar" @change=${(e) => { this._fwExportLevel = e.target.value; }}>
+                  <option value="" ?selected=${!this._fwExportLevel}>Todos los niveles</option>
+                  ${(fw.levels ?? []).toSorted((a, b) => a.order - b.order).map(
+                    (l) => html`<option value=${l.id} ?selected=${this._fwExportLevel === l.id}>${l.code} · ${l.title}</option>`,
+                  )}
+                </select>
+                <button class="ord-btn" @click=${() => this._exportFrameworkMd()}>⬇ Exportar MD</button>
+              </div>
             `}
       </section>
     `;
