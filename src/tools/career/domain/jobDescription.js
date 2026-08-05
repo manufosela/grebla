@@ -43,7 +43,9 @@
  */
 
 /** Versión VIGENTE del contrato. */
-export const JD_SCHEMA_VERSION = '1.2.0';
+import { toCapabilityItems, toResponsibilityItems } from './requirementPhrasing.js';
+
+export const JD_SCHEMA_VERSION = '1.3.0';
 
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -196,17 +198,21 @@ export function generateJobDescription(framework, opts) {
   // 1.1.0 — campos DIRECTOS para el prefill del consumidor (el portal no
   // debería tener que bucear en x-careerLevel): lo que harás = expectativas del
   // nivel BASE; lo valorable = las del nivel SUPERIOR del rango (si lo hay).
+  // 1.3.0: cada frase de expectativa es un ÍTEM concreto — responsabilidades
+  // en infinitivo («Tomar decisiones…»), sin conducta futurible ni prefijo de
+  // dimensión (las áreas ya van en qualifications).
   const responsibilities = dimensions
-    .map((dim) => `• ${dim.name}: ${dim.expectations[0].text}`)
+    .flatMap((dim) => toResponsibilityItems(dim.expectations[0].text))
+    .map((item) => `• ${item}`)
     .join('\n');
   const topLevelId = levels.at(-1).id;
   const niceToHave = isRange
     ? dimensions
-        .map((dim) => {
+        .flatMap((dim) => {
           const top = dim.expectations.find((e) => e.level === topLevelId);
-          return top && dim.expectations.length > 1 ? `• ${dim.name}: ${top.text}` : null;
+          return top && dim.expectations.length > 1 ? toCapabilityItems(top.text) : [];
         })
-        .filter(Boolean)
+        .map((item) => `• ${item}`)
         .join('\n') || null
     : null;
   // Imprescindible explícito (1.2.0): bullets para el prefill del consumidor;
@@ -226,7 +232,7 @@ export function generateJobDescription(framework, opts) {
     ?? dimensions[0].expectations[0].text;
   const onboardingExpectations = {
     month1: `Aterrizar: conocer al equipo, el producto y el código; primeras entregas acotadas${disciplineNames.length ? ` en ${disciplineNames.join(', ')}` : ''} con acompañamiento.`,
-    month3: `Entregar con autonomía creciente. ${executionBase}`,
+    month3: `Entregar con autonomía creciente: ${toResponsibilityItems(executionBase).map((i) => i.charAt(0).toLocaleLowerCase('es') + i.slice(1)).join('; ')}.`,
     month6: `Operar plenamente al nivel ${seniorityLabels[0]} en ${dimensions.map((d) => d.name).join(', ')}.`,
   };
 
