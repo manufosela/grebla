@@ -312,6 +312,7 @@ export class TeamApp extends LitElement {
     switch (this.view) {
       case 'people':
         return html`<team-people
+          .careerStore=${this.careerStore}
           .persistence=${this.persistence}
           .members=${this.members}
           .heads=${this.heads}
