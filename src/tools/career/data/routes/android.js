@@ -4,6 +4,7 @@
  */
 
 import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
+import { L3_READINESS_STOPS } from './l3Readiness.js';
 /** Paradas del hito Peritus (14): construir una app funcional con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -51,6 +52,7 @@ const VETERANUS_STOPS = Object.freeze([
   'android/firmas-play',
   'devops/ci',
   ...ORCHESTRATION_VETERANUS_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** Paradas del hito Magister (36): la isla completa (DI, modularización,
@@ -94,6 +96,7 @@ const MAGISTER_STOPS = Object.freeze([
   'ai-engineer/apis-modelos',
   'product-manager/lanzamientos',
   ...ORCHESTRATION_MAGISTER_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

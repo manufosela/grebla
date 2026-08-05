@@ -53,7 +53,7 @@ export const DEFAULT_CITIZENSHIP_PCT = 80;
  * @type {ReadonlyArray<IslandRef>}
  */
 export const ARCHIPELAGO_ISLANDS = [
-  { id: 'island', name: 'Bases de software', discipline: 'bases', x: 50, y: 76, startIsland: true, citizenshipPct: 100, citiesTotal: 25 },
+  { id: 'island', name: 'Bases de software', discipline: 'bases', x: 50, y: 76, startIsland: true, citizenshipPct: 100, citiesTotal: 26 },
   { id: 'frontend', name: 'Isla Frontend', discipline: 'frontend', x: 28, y: 54, citizenshipPct: 80, citiesTotal: 24 },
   { id: 'backend-php', name: 'Isla Backend PHP', discipline: 'backend-php', x: 16, y: 30, citizenshipPct: 80, citiesTotal: 23 },
   { id: 'backend-python', name: 'Isla Backend Python', discipline: 'backend-python', x: 32, y: 16, citizenshipPct: 80, citiesTotal: 21 },
@@ -63,7 +63,7 @@ export const ARCHIPELAGO_ISLANDS = [
   { id: 'devops', name: 'Isla DevOps', discipline: 'devops', x: 88, y: 48, citizenshipPct: 75, citiesTotal: 24 },
   { id: 'postgres', name: 'Isla Postgres', discipline: 'postgres', x: 78, y: 62, citizenshipPct: 85, citiesTotal: 23 },
   { id: 'engineering-manager', name: 'Isla Engineering Manager', discipline: 'engineering-manager', x: 16, y: 68, citizenshipPct: 90, citiesTotal: 22 },
-  { id: 'software-architect', name: 'Isla Software Architect', discipline: 'software-architect', x: 64, y: 38, citizenshipPct: 85, citiesTotal: 23 },
+  { id: 'software-architect', name: 'Isla Software Architect', discipline: 'software-architect', x: 64, y: 38, citizenshipPct: 85, citiesTotal: 24 },
   { id: 'product-manager', name: 'Isla Product Manager', discipline: 'product-manager', x: 40, y: 38, citizenshipPct: 90, citiesTotal: 20 },
   { id: 'fde', name: 'Isla FDE', discipline: 'fde', x: 66, y: 74, citizenshipPct: 70, citiesTotal: 20 },
   // El LECHO (RMR-PCS-0028): eje transversal «Orquestación y juicio». No es una
