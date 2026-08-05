@@ -11,6 +11,9 @@
  *  - isAdmin: boolean
  */
 import { LitElement, html, css } from 'lit';
+import { listCareerRoutes } from '../../lib/careerMap.js';
+import { getJourney } from '../../tools/career/application/usecases.js';
+import { subLevelForPerson, effectiveSubLevel } from '../../tools/career/domain/subLevel.js';
 import { getMyPerson } from '../../lib/engineer.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { skeletonLines } from '../app-skeleton.js';
@@ -52,6 +55,8 @@ export class TeamPeople extends LitElement {
   static properties = {
     persistence: { attribute: false },
     members: { attribute: false },
+    careerStore: { attribute: false },
+    _subLevels: { state: true },
     heads: { attribute: false },
     currentUid: { attribute: false },
     isAdmin: { attribute: false },
@@ -89,6 +94,8 @@ export class TeamPeople extends LitElement {
   };
 
   static styles = css`
+    .lvl-sub { display: inline-block; font-weight: 700; font-size: 0.78rem; color: var(--rm-navy, #1e3a5f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 16%, var(--rm-surface, #fff)); border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 999px; padding: 0.05rem 0.5rem; cursor: help; white-space: nowrap; }
+    .lvl-sub.manual { background: #e9c46a; border-color: #b8860b; color: #4a3800; }
     :host { display: block; }
     section {
       background: var(--rm-surface, #fff);
@@ -285,6 +292,9 @@ export class TeamPeople extends LitElement {
     this._transferFor = null;
     /** @type {string} nuevo dueño seleccionado en el modal Transferir */
     this._transferSel = '';
+    /** Badge LX.Y por persona (RMR-TSK-0429): Map personId→efectivo|null; null = sin datos. */
+    this._subLevels = null;
+    this._careerRoutes = undefined;
     /** @type {boolean} confirmación de transferencia */
     this._confirmTransfer = false;
     this._loaded = false;
@@ -651,6 +661,56 @@ export class TeamPeople extends LitElement {
     return html`<span class="chips">${list.map((x) => this._chipEl(x, catalog ? this._catalogColor(x, catalog) : ''))}</span>`;
   }
 
+  /** @param {Map<string, unknown>} changed */
+  updated(changed) {
+    if (changed.has('people') || changed.has('framework') || changed.has('careerStore')) {
+      this._loadSubLevels();
+    }
+  }
+
+  /** Badges LX.Y de la tabla (RMR-TSK-0429): derivados del mapa (ruta del
+   * siguiente nivel + journey) con el override del manager encima. Carga
+   * perezosa y tolerante: sin rutas/journeys, la tabla sale sin badges. */
+  async _loadSubLevels() {
+    if (!this.framework || !this.careerStore || !(this.people?.length)) return;
+    try {
+      if (this._careerRoutes === undefined) {
+        this._careerRoutes = null;
+        this._careerRoutes = await listCareerRoutes();
+      }
+      if (!this._careerRoutes) return;
+      const routes = this._careerRoutes;
+      const levelCodeOf = (id) => (this.framework.levels ?? []).find((l) => l.id === id)?.code ?? null;
+      const entries = await Promise.all(
+        (this.people ?? []).map(async (p) => {
+          try {
+            const journey = await getJourney(this.careerStore, p.id);
+            const derived = subLevelForPerson({ person: p, framework: this.framework, routes, journey });
+            return [p.id, effectiveSubLevel(p, derived, levelCodeOf(p.levelId))];
+          } catch {
+            return [p.id, null];
+          }
+        }),
+      );
+      this._subLevels = new Map(entries);
+    } catch {
+      /* sin badges: la tabla no se rompe */
+    }
+  }
+
+  /** Chip LX.Y junto al título de carrera (mismo lenguaje que Equipo→Carrera). */
+  _renderSubLevelChip(p) {
+    const s = this._subLevels?.get?.(p.id) ?? null;
+    if (!s) return null;
+    const auto = s.pct === null
+      ? 'sin ruta publicada'
+      : `${s.pct}% del camino al siguiente nivel (${s.done}/${s.total} paradas certificadas)`;
+    const tip = s.source === 'manual'
+      ? `Ajustado por el manager${s.note ? `: ${s.note}` : ''} · cálculo: ${auto}`
+      : auto;
+    return html`<span class="lvl-sub ${s.source === 'manual' ? 'manual' : ''}" title=${tip}>${s.label}</span>`;
+  }
+
   /** Una fila de la tabla de personas. */
   _renderPersonRow(p) {
     const title = composeTitle(this.framework, p.levelId, p.disciplines);
@@ -662,7 +722,7 @@ export class TeamPeople extends LitElement {
       <tr class="rowlink" @click=${() => this._openPerson(p)} title="Abrir ficha">
         <td>${p.name}${ext}${pending}</td>
         ${this.isAdmin ? html`<td>${this._renderSuperiorCell(p)}</td>` : null}
-        <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`}</td>
+        <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`} ${this._renderSubLevelChip(p)}</td>
         <td>${this._renderChips(p.guilds)}</td>
         <td>${this._renderChips(squadNames(p.squadIds, this.squads), this.squads)}</td>
         <td>${formatDate(p.startDate)}</td>
