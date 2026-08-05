@@ -12,7 +12,7 @@ import './survey-padron.js';
 import './survey-flow-canvas.js';
 import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } from '../../tools/survey/domain/templates.js';
 import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
-import { defaultEmailTemplate } from '../../tools/survey/domain/email.js';
+import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domain/email.js';
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { listPadron } from '../../lib/padron.js';
@@ -86,6 +86,7 @@ export class SurveyAdmin extends LitElement {
     _sendBusy: { state: true },
     _testAnswers: { state: true },
     _showTestAnswers: { state: true },
+    _thanksMessage: { state: true },
     _sendNotice: { state: true },
     _confirmBulk: { state: true },
     _copiedAll: { state: true },
@@ -293,6 +294,7 @@ export class SurveyAdmin extends LitElement {
     /** Respuestas de PRUEBA (visor 🧪, RMR-TSK-0425): null = sin cargar. */
     this._testAnswers = null;
     this._showTestAnswers = false;
+    this._thanksMessage = '';
     this._sendNotice = '';
     this._confirmBulk = false;
     this._copiedAll = false;
@@ -353,6 +355,7 @@ export class SurveyAdmin extends LitElement {
     const tpl = defaultEmailTemplate();
     this._emailSubject = survey.email?.subject ?? tpl.subject;
     this._emailBody = survey.email?.body ?? tpl.body;
+    this._thanksMessage = survey.thanksMessage ?? '';
     this._flowLayout = survey.layout ?? {};
     this._editTab = 'questions';
     this._error = '';
@@ -546,6 +549,7 @@ export class SurveyAdmin extends LitElement {
         title, questions, threshold: this._threshold, defaultScale,
         email: { subject: this._emailSubject, body: this._emailBody },
         layout: this._flowLayout,
+        thanksMessage: this._thanksMessage,
       });
       if (this._editId) await updateSurvey(this._editId, payload);
       else await createSurvey(payload);
@@ -1169,6 +1173,12 @@ export class SurveyAdmin extends LitElement {
         <label for="eb">Cuerpo</label>
         <textarea id="eb" rows="9" .value=${this._emailBody}
           @input=${(e) => { this._emailBody = e.target.value; }}></textarea>
+      </div>
+      <div class="field">
+        <label for="tm">Mensaje de gracias (al enviar la respuesta)</label>
+        <input id="tm" class="title" type="text" placeholder="¡Gracias! Tu respuesta se ha recibido."
+          .value=${this._thanksMessage}
+          @input=${(e) => { this._thanksMessage = e.target.value; }} />
       </div>`;
   }
 
@@ -1317,7 +1327,7 @@ export class SurveyAdmin extends LitElement {
     const open = this._partSurvey?.status === 'open';
     return html`
       <h3>Enviar por correo</h3>
-      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. El mensaje debe incluir <code>{link}</code> (pestaña de edición). La <strong>prueba</strong> se puede enviar con la encuesta en borrador; el envío a todos exige abrirla.</p>
+      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. El mensaje debe incluir <code>${LINK_PLACEHOLDER}</code> (pestaña de edición). La <strong>prueba</strong> se puede enviar con la encuesta en borrador; el envío a todos exige abrirla.</p>
       ${this._sendNotice ? html`<p class="notice">${this._sendNotice}</p>` : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">

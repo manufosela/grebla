@@ -12,6 +12,7 @@ import '../common/busy-overlay.js';
 import { scaleRange, isScale, isText, isChoice, choiceOptions, validateResponses, sanitizeResponses, canAdvance } from '../../tools/survey/domain/questions.js';
 import { END, firstQuestionId, hasBranching, resolveNext } from '../../tools/survey/domain/flow.js';
 import { getSurveyForToken, submitSurveyResponse } from '../../lib/survey.js';
+import { DEFAULT_THANKS_MESSAGE } from '../../tools/survey/domain/questions.js';
 
 export class SurveyRespond extends LitElement {
   static properties = {
@@ -25,6 +26,7 @@ export class SurveyRespond extends LitElement {
     _saving: { state: true },
     _saved: { state: true },
     _isTest: { state: true },
+    _justSent: { state: true },
     _error: { state: true },
   };
 
@@ -50,6 +52,10 @@ export class SurveyRespond extends LitElement {
     button.submit:disabled { opacity: 0.5; cursor: default; }
     .banner { border-radius: 9px; padding: 0.7rem 0.9rem; font-size: 0.9rem; font-weight: 600; }
     .banner.ok { background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 15%, transparent); color: var(--rm-accent-700, #1f7a6e); }
+    .ghost { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); border-radius: 999px; font: inherit; font-size: 0.9rem; font-weight: 600; padding: 0.5rem 1.2rem; cursor: pointer; color: var(--rm-text, #111827); }
+    .card.center { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; }
+    .thanks-check { font-size: 3rem; line-height: 1; margin: 0.5rem 0 0; color: var(--rm-accent, #2a9d8f); font-weight: 800; }
+    .card.center h2 { margin: 0; }
     .banner.test { background: #e9c46a; color: #4a3800; border-radius: 8px; padding: 0.5rem 0.8rem; font-weight: 700; }
     .banner.err { background: #fdecea; color: #b42318; }
     .muted { color: var(--rm-muted, #5b6b7d); font-size: 0.86rem; }
@@ -75,6 +81,7 @@ export class SurveyRespond extends LitElement {
     this._navError = '';
     this._saving = false;
     this._saved = false;
+    this._justSent = false;
     this._error = '';
     this._loadedFor = null;
   }
@@ -200,6 +207,7 @@ export class SurveyRespond extends LitElement {
       const clean = sanitizeResponses(this._survey.questions, this._responses);
       await submitSurveyResponse(this.surveyId, this.token, clean);
       this._saved = true;
+      this._justSent = true;
     } catch (err) {
       this._error = this._friendly(err);
     } finally {
@@ -250,6 +258,17 @@ export class SurveyRespond extends LitElement {
   render() {
     if (this._phase === 'loading') return html`<div class="card"><p class="center muted">Cargando la encuesta…</p></div>`;
     if (this._phase === 'error') return html`<div class="card"><p class="banner err">${this._error}</p></div>`;
+    // Pantalla de GRACIAS tras enviar (RMR-TSK-0426): mensaje configurable por
+    // encuesta con default; se puede volver a ajustar hasta el cierre.
+    if (this._justSent) {
+      return html`<div class="card center">
+        ${this._isTest ? html`<p class="banner test">🧪 Modo prueba: tu respuesta NO contará en los resultados.</p>` : null}
+        <p class="thanks-check" aria-hidden="true">✓</p>
+        <h2>${this._survey?.thanksMessage?.trim() || DEFAULT_THANKS_MESSAGE}</h2>
+        <p class="muted">Puedes ajustar tu respuesta hasta el cierre de la encuesta.</p>
+        <button class="ghost" @click=${() => { this._justSent = false; }}>Revisar o ajustar mi respuesta</button>
+      </div>`;
+    }
 
     const questions = this._questions;
     const total = questions.length;

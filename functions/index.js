@@ -547,7 +547,7 @@ export const getSurveyForToken = onCall(
     }
     const ansSnap = await db.doc(`surveys/${surveyId}/answers/${answerId(token, SURVEY_SALT.value())}`).get();
     return {
-      survey: { title: survey.title ?? '', questions: survey.questions ?? [] },
+      survey: { title: survey.title ?? '', questions: survey.questions ?? [], thanksMessage: survey.thanksMessage ?? '' },
       responses: ansSnap.exists ? (ansSnap.data().answers ?? null) : null,
       isTest,
     };
