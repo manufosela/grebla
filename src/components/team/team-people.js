@@ -529,7 +529,12 @@ export class TeamPeople extends LitElement {
     let superiorUid = id.superiorUidLegacy;
     if (id.superiorPersonId) {
       const supFicha = (this.people ?? []).find((p) => p.id === id.superiorPersonId);
-      superiorUid = supFicha?.uid ?? null;
+      // La ficha del superior puede NO estar en el roster visible (p. ej. la
+      // self-ficha del propio manager): con organigrama y propiedad ya
+      // SINCRONIZADOS (RMR-PCS-0035), el ownerLeaderUid es el mismo jefe — se
+      // usa para pintar el nombre en vez de mentir con «Sin manager»
+      // (RMR-BUG-0091).
+      superiorUid = supFicha?.uid ?? id.superiorUidLegacy ?? null;
     }
     return {
       role: id.orgRole,
