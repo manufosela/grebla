@@ -408,6 +408,19 @@ export class RoleQuestionnaire extends LitElement {
     }
   }
 
+  /**
+   * Aviso cuando no hay persona: a un EDITOR LOGADO (manager con editorUid) le
+   * falta elegir persona — no sesión (RMR-BUG-0087); el texto de «inicia
+   * sesión» queda solo para el visitante anónimo del modo local.
+   */
+  _renderNoPersonNotice() {
+    if (this.personId) return null;
+    if (this.editorUid) {
+      return html`<div class="notice">Elige arriba a la persona del equipo para que la evaluación se guarde en su ficha.</div>`;
+    }
+    return html`<div class="notice">Estás en modo local: inicia sesión con Google para guardar tu progreso.</div>`;
+  }
+
   render() {
     const visible = getVisibleItems(this.items, this.answers);
     const profile = this._profile;
@@ -416,9 +429,7 @@ export class RoleQuestionnaire extends LitElement {
     return html`
       <div class="layout">
         <div class="questions">
-          ${this.personId
-            ? null
-            : html`<div class="notice">Estás en modo local: inicia sesión con Google para guardar tu progreso.</div>`}
+          ${this._renderNoPersonNotice()}
           ${this.sessionId ? null : html`<p class="default-hint">📋 Propuesta inicial (sin guardar): el rol se fija de forma conjunta. Ajusta lo que consideres y se guardará al primer cambio.</p>`}
           ${this._isManagerView
             ? html`<div class="template">
