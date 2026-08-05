@@ -15,6 +15,13 @@ import { getEmployeeDomain } from '../lib/orgConfig.js';
 
 const VIEW_FLAG = 'grebla-view';
 const landing = document.getElementById('platform-landing');
+const hubLoading = document.getElementById('hub-loading');
+// Cortafuegos (RMR-BUG-0090): si el arranque no resuelve en 10 s (auth colgada,
+// red rota), cae a la landing en vez de dejar el spinner eterno. Cualquier
+// showLanding/showTools posterior sigue mandando.
+setTimeout(() => {
+  if (hubLoading && !hubLoading.hidden) showLanding();
+}, 10_000);
 const tools = document.getElementById('tenant-tools');
 const backToAdmin = document.getElementById('back-to-admin');
 
@@ -89,12 +96,14 @@ onUserChanged(async (user) => {
 });
 
 function showLanding() {
+  hubLoading?.setAttribute('hidden', '');
   backToAdmin?.setAttribute('hidden', '');
   tools?.setAttribute('hidden', '');
   landing?.removeAttribute('hidden');
 }
 
 function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish = false, canManageSurveys = false, filterFailed = false }) {
+  hubLoading?.setAttribute('hidden', '');
   landing?.setAttribute('hidden', '');
   tools?.removeAttribute('hidden');
   const policyById = new Map(policies.map((p) => [p.toolId, p]));
