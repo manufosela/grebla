@@ -20,8 +20,8 @@ import {
  *  veteranus y +7 en magister sobre los rangos originales. */
 const TIER_SIZES = {
   peritus: { min: 8, max: 16 },
-  veteranus: { min: 16, max: 30 },
-  magister: { min: 26, max: 47 },
+  veteranus: { min: 16, max: 33 },
+  magister: { min: 26, max: 50 },
 };
 
 /** Nº mínimo de paradas de Bases con las que arranca toda ruta. */

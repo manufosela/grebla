@@ -8,6 +8,7 @@
  */
 
 import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
+import { L3_READINESS_STOPS } from './l3Readiness.js';
 /** Paradas del hito Peritus (13): operar sistemas y contenedores con
  * autonomía. */
 const PERITUS_STOPS = Object.freeze([
@@ -52,6 +53,7 @@ const VETERANUS_STOPS = Object.freeze([
   'devops/alertas',
   'postgres/backups-recuperacion',
   ...ORCHESTRATION_VETERANUS_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** Paradas del hito Magister (36): la isla casi completa (GitOps, Helm,
@@ -96,6 +98,7 @@ const MAGISTER_STOPS = Object.freeze([
   'software-architect/platform-engineering',
   'software-architect/observabilidad',
   ...ORCHESTRATION_MAGISTER_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

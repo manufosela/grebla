@@ -472,6 +472,31 @@ export const BASES_ISLAND = {
       ],
     },
     {
+      id: 'bases/mutation-testing',
+      name: 'Mutation testing',
+      kind: 'skill',
+      area: 'construir',
+      x: 76,
+      y: 28,
+      weight: 2,
+      summary: 'El mutation testing mide si tus tests detectan errores DE VERDAD: introduce fallos pequeños (mutantes) en el código y comprueba que algún test los caza. Consiste en ejecutar las mutaciones y matar a los supervivientes con mejores asserts. Te capacita para saber si tu cobertura protege o solo decora.',
+      prereqs: ['bases/testing'],
+      keyPoints: [
+        'La cobertura dice qué líneas se EJECUTAN; el mutation score dice qué errores se DETECTAN. No es lo mismo.',
+        'Un mutante superviviente es un agujero real: o falta un test o el assert no comprueba nada.',
+        'Ejecútalo sobre el código crítico, no sobre todo: es caro y el valor está en el núcleo.',
+        'Úsalo como auditoría periódica de la suite, no como gate de cada commit.',
+        'Con tests generados por IA es aún más necesario: caza las suites que pasan siempre.',
+      ],
+      aiFocus:
+        'La IA genera tests que parecen protección y a veces no comprueban nada. El mutation testing es el detector perfecto de esa suite hueca: si los mutantes sobreviven, te dieron decorado. Profundiza en leer los mutantes supervivientes y convertirlos en asserts con dientes.',
+      resources: [
+        { kind: 'doc', label: 'Stryker Mutator — JS/TS', url: 'https://stryker-mutator.io' },
+        { kind: 'doc', label: 'Infection — mutation testing para PHP', url: 'https://infection.github.io' },
+        { kind: 'doc', label: 'PIT — mutation testing para JVM', url: 'https://pitest.org' },
+      ],
+    },
+    {
       id: 'bases/clean-code',
       name: 'Código legible',
       kind: 'skill',

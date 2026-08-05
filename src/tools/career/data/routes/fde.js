@@ -8,6 +8,7 @@
  */
 
 import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
+import { L3_READINESS_STOPS } from './l3Readiness.js';
 /** Paradas del hito Peritus (15): entregar valor en terreno con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -58,6 +59,7 @@ const VETERANUS_STOPS = Object.freeze([
   'devops/docker',
   'product-manager/entrevistas-usuarios',
   ...ORCHESTRATION_VETERANUS_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** Paradas del hito Magister (37): la isla completa (expectativas, puente
@@ -103,6 +105,7 @@ const MAGISTER_STOPS = Object.freeze([
   'ai-engineer/agentes',
   'software-architect/apis-y-contratos',
   ...ORCHESTRATION_MAGISTER_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

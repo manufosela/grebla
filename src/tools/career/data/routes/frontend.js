@@ -4,6 +4,7 @@
  */
 
 import { ORCHESTRATION_VETERANUS_STOPS, ORCHESTRATION_MAGISTER_STOPS } from './orchestration.js';
+import { L3_READINESS_STOPS } from './l3Readiness.js';
 /** Paradas del hito Peritus (14): construir interfaces reales con autonomía. */
 const PERITUS_STOPS = Object.freeze([
   'bases/logica-descomposicion',
@@ -51,6 +52,7 @@ const VETERANUS_STOPS = Object.freeze([
   'frontend/generar-ui-con-ia',
   'devops/ci',
   ...ORCHESTRATION_VETERANUS_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** Paradas del hito Magister (36): tooling y design systems, el ciclo completo
@@ -93,6 +95,7 @@ const MAGISTER_STOPS = Object.freeze([
   'software-architect/devex',
   'product-manager/metricas-activacion-retencion',
   ...ORCHESTRATION_MAGISTER_STOPS,
+  ...L3_READINESS_STOPS,
 ]);
 
 /** @type {import('./index.js').RouteTiers} */

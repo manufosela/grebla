@@ -348,6 +348,31 @@ export const SOFTWARE_ARCHITECT_ISLAND = {
       ],
     },
     {
+      id: 'software-architect/rfcs',
+      name: 'RFCs: proponer cambios',
+      kind: 'skill',
+      area: 'calidad',
+      x: 50,
+      y: 40,
+      weight: 3,
+      summary: 'Los RFCs (Request for Comments) son proponer un cambio técnico por escrito ANTES de construirlo, para que el equipo lo critique y lo mejore. Consiste en exponer problema, opciones con sus trade-offs y una propuesta concreta, y recoger el feedback con plazo. Te capacita para influir en decisiones que superan tu área — pasar de ejecutar a proponer.',
+      prereqs: ['software-architect/adrs'],
+      keyPoints: [
+        'Un RFC propone ANTES de construir: problema, contexto, opciones con trade-offs y propuesta concreta.',
+        'Audiencia y plazo explícitos: quién debe opinar y hasta cuándo — un RFC sin fecha de cierre es un debate eterno.',
+        'El feedback se incorpora POR ESCRITO: las objeciones y su respuesta quedan en el documento, no en la llamada.',
+        'Aprobado el RFC, la decisión se sella como ADR: el RFC es la conversación; el ADR, el veredicto.',
+        'Proponer por escrito escala tu influencia: es como se decide más allá de tu equipo.',
+      ],
+      aiFocus:
+        'La IA redacta borradores de RFC en minutos — pero la propuesta, los trade-offs sinceros y el olfato de a quién afecta son tuyos. Úsala para estructurar y pulir, nunca para decidir qué proponer: un RFC generado sin criterio se nota (y se rechaza) a la primera.',
+      resources: [
+        { kind: 'post', label: 'Design Docs at Google', url: 'https://www.industrialempathy.com/posts/design-docs-at-google/' },
+        { kind: 'post', label: 'Pragmatic Engineer — decidir por escrito (RFCs)', url: 'https://blog.pragmaticengineer.com/scaling-engineering-teams-via-writing-things-down-rfcs/' },
+        { kind: 'doc', label: 'Rust RFCs — un proceso de referencia', url: 'https://github.com/rust-lang/rfcs' },
+      ],
+    },
+    {
       id: 'software-architect/fitness-functions',
       name: 'Fitness functions',
       kind: 'skill',
