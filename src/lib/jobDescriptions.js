@@ -16,7 +16,22 @@
  * @property {Date|null} publishedAt
  */
 import { doc, collection, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db, app } from './firebase.js';
+
+/**
+ * Pulido IA de los ítems deterministas (RMR-TSK-0418): Haiku corrige SOLO
+ * gramática/concordancia con barandillas en servidor. Lanza si la instancia no
+ * tiene IA configurada — el caller decide el fallback (guardar determinista
+ * con aviso, nunca en silencio).
+ * @param {{ responsibilities: string[], niceToHave: string[], month3: string }} input
+ * @returns {Promise<{ responsibilities: string[], niceToHave: string[], month3: string, changed: number }>}
+ */
+export async function polishJdRequirements(input) {
+  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'polishJdRequirements');
+  const { data } = await fn(input);
+  return data;
+}
 
 /** @param {import('firebase/firestore').DocumentData} d @param {string} id @returns {JdRecord} */
 const toJd = (d, id) => ({

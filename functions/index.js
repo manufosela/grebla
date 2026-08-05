@@ -16,6 +16,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import * as coins from './coins.js';
+import { JD_POLISH_MODEL, JD_POLISH_TOOL, buildPolishPrompt, sanitizePolishedItems } from './jdPolish.js';
 import { sign, coinsKmsKeyName } from './signer.js';
 import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
 import {
@@ -2669,3 +2670,70 @@ export const ensureKudosRecipient = onCall({ region: 'europe-west1' }, async (re
   }
   return outcome;
 });
+
+// ── JD: pulido de redacción con IA (RMR-TSK-0418) ────────────────────────────
+
+/**
+ * Corrige SOLO gramática/concordancia de los ítems deterministas de una JD
+ * (Haiku, tool-use). Las barandillas de jdPolish.js garantizan que la IA no
+ * inventa: mismo número de ítems, no vacíos, longitud acotada — lo que no
+ * cumpla conserva su versión determinista. Solo superadmin (las JDs son
+ * suyas). Sin API key configurada → failed-precondition (el panel lo avisa y
+ * guarda la versión determinista).
+ */
+export const polishJdRequirements = onCall(
+  { region: 'europe-west1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+    const adminSnap = await getFirestore().doc(`admins/${uid}`).get();
+    if (!adminSnap.exists) throw new HttpsError('permission-denied', 'Solo un superadmin puede pulir JDs.');
+
+    const responsibilities = Array.isArray(request.data?.responsibilities)
+      ? request.data.responsibilities.filter((s) => typeof s === 'string' && s.trim())
+      : [];
+    const niceToHave = Array.isArray(request.data?.niceToHave)
+      ? request.data.niceToHave.filter((s) => typeof s === 'string' && s.trim())
+      : [];
+    const month3 = typeof request.data?.month3 === 'string' ? request.data.month3 : '';
+    if (responsibilities.length === 0) throw new HttpsError('invalid-argument', 'No hay ítems que pulir.');
+
+    const apiKey = ANTHROPIC_API_KEY.value();
+    if (!apiKey) throw new HttpsError('failed-precondition', 'La IA no está configurada en esta instancia.');
+
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: JD_POLISH_MODEL,
+          max_tokens: 3000,
+          tools: [JD_POLISH_TOOL],
+          tool_choice: { type: 'tool', name: 'emit_polished_jd' },
+          messages: [{ role: 'user', content: buildPolishPrompt({ responsibilities, niceToHave, month3 }) }],
+        }),
+      });
+    } catch {
+      throw new HttpsError('unavailable', 'No se pudo contactar con la IA.');
+    }
+    if (!res.ok) {
+      console.error(`Anthropic error ${res.status}: ${await res.text().catch(() => '')}`);
+      throw new HttpsError('internal', 'La IA no pudo pulir la redacción.');
+    }
+    const payload = await res.json();
+    const block = (payload.content ?? []).find((c) => c.type === 'tool_use');
+    if (!block) throw new HttpsError('internal', 'La IA no devolvió una corrección válida.');
+
+    const resp = sanitizePolishedItems(responsibilities, block.input.responsibilities);
+    const nice = sanitizePolishedItems(niceToHave, block.input.niceToHave);
+    const m3 = sanitizePolishedItems([month3], [block.input.month3]);
+    logger.info(`[jd] pulido IA: ${resp.changed + nice.changed + m3.changed} ítems corregidos`);
+    return {
+      responsibilities: resp.items,
+      niceToHave: nice.items,
+      month3: m3.items[0],
+      changed: resp.changed + nice.changed + m3.changed,
+    };
+  },
+);
