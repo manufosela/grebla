@@ -24,6 +24,7 @@ export class SurveyRespond extends LitElement {
     _navError: { state: true },
     _saving: { state: true },
     _saved: { state: true },
+    _isTest: { state: true },
     _error: { state: true },
   };
 
@@ -49,6 +50,7 @@ export class SurveyRespond extends LitElement {
     button.submit:disabled { opacity: 0.5; cursor: default; }
     .banner { border-radius: 9px; padding: 0.7rem 0.9rem; font-size: 0.9rem; font-weight: 600; }
     .banner.ok { background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 15%, transparent); color: var(--rm-accent-700, #1f7a6e); }
+    .banner.test { background: #e9c46a; color: #4a3800; border-radius: 8px; padding: 0.5rem 0.8rem; font-weight: 700; }
     .banner.err { background: #fdecea; color: #b42318; }
     .muted { color: var(--rm-muted, #5b6b7d); font-size: 0.86rem; }
     .center { text-align: center; padding: 2rem 1rem; }
@@ -100,7 +102,8 @@ export class SurveyRespond extends LitElement {
   async _load() {
     this._phase = 'loading';
     try {
-      const { survey, responses } = await getSurveyForToken(this.surveyId, this.token);
+      const { survey, responses, isTest } = await getSurveyForToken(this.surveyId, this.token);
+      this._isTest = isTest === true;
       this._survey = survey;
       this._responses = { ...responses };
       const first = firstQuestionId(survey?.questions ?? []);
@@ -262,7 +265,8 @@ export class SurveyRespond extends LitElement {
     else if (this._saved) submitLabel = 'Actualizar respuesta';
     const showRequiredHint = isLast && !this._valid;
     return html`
-      ${this._saving ? html`<busy-overlay message="Enviando tus respuestas…"></busy-overlay>` : null}<div class="card">
+      ${this._saving ? html`<busy-overlay message="Enviando tus respuestas…"></busy-overlay>` : null}
+      ${this._isTest ? html`<p class="banner test">🧪 Modo prueba: tu respuesta NO contará en los resultados.</p>` : null}<div class="card">
       <h1>${this._survey.title}</h1>
       <p class="lead">Tus respuestas son anónimas. Puedes editarlas hasta que se cierre la encuesta.</p>
       ${this._saved && !this._error ? html`<p class="banner ok">✓ Respuesta guardada. Puedes seguir editándola.</p>` : null}

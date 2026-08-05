@@ -84,6 +84,8 @@ export class SurveyAdmin extends LitElement {
     _padronError: { state: true },
     _testEmail: { state: true },
     _sendBusy: { state: true },
+    _testAnswers: { state: true },
+    _showTestAnswers: { state: true },
     _sendNotice: { state: true },
     _confirmBulk: { state: true },
     _copiedAll: { state: true },
@@ -142,6 +144,9 @@ export class SurveyAdmin extends LitElement {
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
     .muted { color: var(--rm-muted, #6b7280); font-size: 0.85rem; align-self: center; }
+    .test-answer { border: 1px dashed var(--rm-border, #cbd5e1); border-radius: 8px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
+    .test-answer ul { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.86rem; }
+    .test-answer li { margin: 0.15rem 0; }
     .notice { color: var(--rm-accent-700, #1f7a6e); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 12%, transparent);
       border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.85rem; }
     .reset-confirm { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
@@ -285,6 +290,9 @@ export class SurveyAdmin extends LitElement {
     this._padronError = '';
     this._testEmail = '';
     this._sendBusy = false;
+    /** Respuestas de PRUEBA (visor 🧪, RMR-TSK-0425): null = sin cargar. */
+    this._testAnswers = null;
+    this._showTestAnswers = false;
     this._sendNotice = '';
     this._confirmBulk = false;
     this._copiedAll = false;
@@ -601,6 +609,9 @@ export class SurveyAdmin extends LitElement {
     this._partSurvey = survey;
     this._partText = '';
     this._partTokens = [];
+    // El visor 🧪 se resetea al cambiar de encuesta: la caché era de la anterior.
+    this._testAnswers = null;
+    this._showTestAnswers = false;
     this._padron = [];
     this._padronDept = '';
     this._padronActive = true;
@@ -685,6 +696,52 @@ export class SurveyAdmin extends LitElement {
     } finally {
       this._sendBusy = false;
     }
+  }
+
+  /** Visor 🧪: carga perezosa de las respuestas de prueba (excluidas SIEMPRE de los resultados). */
+  async _toggleTestAnswers() {
+    this._showTestAnswers = !this._showTestAnswers;
+    if (!this._showTestAnswers || this._testAnswers !== null) return;
+    try {
+      const answers = await listAnswers(this._partSurvey.id);
+      this._testAnswers = answers.filter((a) => a.test === true);
+    } catch (err) {
+      console.error('[encuestas] no se pudieron cargar las respuestas de prueba:', err);
+      this._error = 'No se pudieron cargar las respuestas de prueba.';
+      this._showTestAnswers = false;
+    }
+  }
+
+  /** Valor de una respuesta formateado para el visor de pruebas. */
+  _fmtAnswer(value) {
+    if (Array.isArray(value)) return value.join(', ');
+    if (value === null || value === undefined || value === '') return '—';
+    return String(value);
+  }
+
+  _renderTestAnswers() {
+    const questions = this._partSurvey?.questions ?? [];
+    const labelOf = (id) => questions.find((q) => q.id === id)?.label ?? id;
+    return html`
+      <div class="save-row">
+        <button class="ghost" @click=${() => this._toggleTestAnswers()}>
+          🧪 ${this._showTestAnswers ? 'Ocultar' : 'Ver'} respuestas de prueba${this._testAnswers ? ` (${this._testAnswers.length})` : ''}
+        </button>
+      </div>
+      ${this._showTestAnswers && this._testAnswers
+        ? this._testAnswers.length === 0
+          ? html`<p class="muted">No hay respuestas de prueba todavía.</p>`
+          : this._testAnswers.map(
+              (a) => html`<div class="test-answer">
+                <p class="muted">Prueba · ${a.updatedAt ? new Date(a.updatedAt).toLocaleString('es-ES') : 'sin fecha'} — no cuenta en los resultados</p>
+                <ul>
+                  ${Object.entries(a.answers ?? {}).map(
+                    ([qid, value]) => html`<li><strong>${labelOf(qid)}:</strong> ${this._fmtAnswer(value)}</li>`,
+                  )}
+                </ul>
+              </div>`,
+            )
+        : null}`;
   }
 
   _askBulk() { this._confirmBulk = true; this._error = ''; this._sendNotice = ''; }
@@ -1274,7 +1331,8 @@ export class SurveyAdmin extends LitElement {
               <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._cancelBulk()}>Cancelar</button>`
           : html`<button class="primary" ?disabled=${!open || !total || this._sendBusy} @click=${() => this._askBulk()}>Enviar a todos (${total})</button>
               ${open ? null : html`<span class="muted">Abre la encuesta para poder enviarla a todos.</span>`}`}
-      </div>`;
+      </div>
+      ${this._renderTestAnswers()}`;
   }
 
   render() {

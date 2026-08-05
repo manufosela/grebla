@@ -537,13 +537,19 @@ export const getSurveyForToken = onCall(
     const surveySnap = await db.doc(`surveys/${surveyId}`).get();
     if (!surveySnap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
     const survey = surveySnap.data();
-    if (survey.status !== 'open') throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
     const tokenSnap = await db.doc(`surveys/${surveyId}/tokens/${token}`).get();
     if (!tokenSnap.exists) throw new HttpsError('permission-denied', 'Enlace no válido.');
+    // El token de PRUEBA puede responder también en borrador (RMR-TSK-0425):
+    // su respuesta va marcada test y NUNCA cuenta en los agregados.
+    const isTest = tokenSnap.data().test === true;
+    if (survey.status !== 'open' && !isTest) {
+      throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
+    }
     const ansSnap = await db.doc(`surveys/${surveyId}/answers/${answerId(token, SURVEY_SALT.value())}`).get();
     return {
       survey: { title: survey.title ?? '', questions: survey.questions ?? [] },
       responses: ansSnap.exists ? (ansSnap.data().answers ?? null) : null,
+      isTest,
     };
   },
 );
@@ -558,10 +564,14 @@ export const submitSurveyResponse = onCall(
     const surveySnap = await db.doc(`surveys/${surveyId}`).get();
     if (!surveySnap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
     const survey = surveySnap.data();
-    if (survey.status !== 'open') throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
     const tokenRef = db.doc(`surveys/${surveyId}/tokens/${token}`);
     const tokenSnap = await tokenRef.get();
     if (!tokenSnap.exists) throw new HttpsError('permission-denied', 'Enlace no válido.');
+    // Token de PRUEBA: puede responder en borrador (respuesta marcada test,
+    // excluida siempre de los agregados). El resto exige encuesta abierta.
+    if (survey.status !== 'open' && tokenSnap.data().test !== true) {
+      throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
+    }
     // Solo se guardan respuestas a preguntas de la encuesta: un token válido no
     // debe poder inyectar campos extra en el documento.
     const clean = sanitizeResponses(survey.questions ?? [], responses ?? {});
