@@ -1,6 +1,6 @@
 {
   "name": "grebla",
-  "version": "1.142.9",
+  "version": "1.142.10",
   "type": "module",
   "private": true,
   "packageManager": "pnpm@10.20.0",

@@ -126,8 +126,22 @@ const TOOL_ID: Record<string, string> = {
     </p>
   </section>
 
-  <!-- Sin sesión/acceso: visible por defecto. landing.js la oculta al entrar. -->
-  <section id="platform-landing" class="landing">
+  <!-- Cargando (RMR-BUG-0090): visible por DEFECTO para no enseñar la landing
+       pública a quien vuelve con sesión; landing.js decide (skeleton → tools o
+       landing). Altura reservada contra el layout shift. -->
+  <noscript>
+    <style>
+      #hub-loading { display: none; }
+      #platform-landing[hidden] { display: block; }
+    </style>
+  </noscript>
+  <section id="hub-loading" class="hub-loading" aria-busy="true">
+    <span class="hub-spinner" aria-hidden="true"></span>
+    <p class="muted">Cargando tu espacio…</p>
+  </section>
+
+  <!-- Sin sesión/acceso: OCULTA hasta confirmar que no hay sesión. -->
+  <section id="platform-landing" class="landing" hidden>
     <p class="page-lead">Inicia sesión arriba a la derecha para acceder a las herramientas.</p>
     <p class="muted">
       Si no tienes acceso, pide a un superadmin de la organización que te dé de alta como manager.
@@ -162,6 +176,11 @@ const TOOL_ID: Record<string, string> = {
 </Base>
 
 <style>
+  .hub-loading { min-height: 40vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8rem; }
+  .hub-spinner { width: 2rem; height: 2rem; border-radius: 50%; border: 3px solid var(--rm-track, #e9f0f2); border-top-color: var(--rm-accent, #2a9d8f); animation: hub-spin 0.8s linear infinite; }
+  @keyframes hub-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .hub-spinner { animation: none; } }
+
   .hero { margin-bottom: 2rem; }
   .page-tagline {
     margin: 0 0 0.75rem;
