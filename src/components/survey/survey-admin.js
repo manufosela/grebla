@@ -87,6 +87,7 @@ export class SurveyAdmin extends LitElement {
     _testAnswers: { state: true },
     _showTestAnswers: { state: true },
     _thanksMessage: { state: true },
+    _openParts: { state: true },
     _sendNotice: { state: true },
     _confirmBulk: { state: true },
     _copiedAll: { state: true },
@@ -145,6 +146,10 @@ export class SurveyAdmin extends LitElement {
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
     .muted { color: var(--rm-muted, #6b7280); font-size: 0.85rem; align-self: center; }
+    .csv-details { border: 1px dashed var(--rm-border, #cbd5e1); border-radius: 10px; padding: 0.5rem 0.9rem; margin: 0.75rem 0 1rem; }
+    .csv-details summary { cursor: pointer; font-weight: 700; font-size: 0.95rem; padding: 0.25rem 0; }
+    .pb-toggle { width: 100%; border: 0; background: none; font: inherit; text-align: left; display: flex; align-items: center; gap: 0.55rem; cursor: pointer; padding: 0.1rem 0; color: inherit; }
+    .pb-caret { color: var(--rm-muted, #6b7280); font-size: 0.8rem; width: 0.9rem; }
     .test-answer { border: 1px dashed var(--rm-border, #cbd5e1); border-radius: 8px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
     .test-answer ul { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.86rem; }
     .test-answer li { margin: 0.15rem 0; }
@@ -295,6 +300,8 @@ export class SurveyAdmin extends LitElement {
     this._testAnswers = null;
     this._showTestAnswers = false;
     this._thanksMessage = '';
+    /** Tokens con la fila desplegada en la lista de participantes. @type {Set<string>} */
+    this._openParts = new Set();
     this._sendNotice = '';
     this._confirmBulk = false;
     this._copiedAll = false;
@@ -613,9 +620,10 @@ export class SurveyAdmin extends LitElement {
     this._partSurvey = survey;
     this._partText = '';
     this._partTokens = [];
-    // El visor 🧪 se resetea al cambiar de encuesta: la caché era de la anterior.
+    // El visor 🧪 y las filas desplegadas se resetean al cambiar de encuesta.
     this._testAnswers = null;
     this._showTestAnswers = false;
+    this._openParts = new Set();
     this._padron = [];
     this._padronDept = '';
     this._padronActive = true;
@@ -1265,14 +1273,30 @@ export class SurveyAdmin extends LitElement {
 
   /** Fila editable de un participante: campos de segmentación + guardar/borrar. */
   /** Bloque de un participante: cabecera (email+estado), campos, y pie (enlace+acciones). */
+  /** Despliega/pliega una fila de participante (RMR-TSK-0427). */
+  _togglePart(token) {
+    const next = new Set(this._openParts);
+    if (next.has(token)) next.delete(token);
+    else next.add(token);
+    this._openParts = next;
+  }
+
   _renderPartRow(t) {
     const busy = this._partRowBusy === t.token;
+    const open = this._openParts.has(t.token);
     const fields = [['department', 'Departamento'], ['startDate', 'Alta'], ['birthDate', 'Nacimiento'], ['location', 'Ubicación']];
     return html`<div class="part-block">
-      <div class="pb-head">
+      <button
+        type="button"
+        class="pb-head pb-toggle"
+        aria-expanded=${open}
+        @click=${() => this._togglePart(t.token)}
+      >
+        <span class="pb-caret" aria-hidden="true">${open ? '▾' : '▸'}</span>
         <span class="pb-email">${t.email}</span>
         <span class="chip ${t.used ? 'open' : 'draft'}">${t.used ? 'Respondió' : 'Pendiente'}</span>
-      </div>
+      </button>
+      ${open ? html`
       <div class="pb-fields">
         ${fields.map(([f, label]) => html`<label class="pb-field">${label}
           <input type="text" ?disabled=${busy} .value=${String(this._partValue(t, f))}
@@ -1286,7 +1310,7 @@ export class SurveyAdmin extends LitElement {
               <button class="ghost" ?disabled=${busy} @click=${() => this._cancelDeletePart()}>No</button></span>`
           : html`<button class="ghost" ?disabled=${busy} @click=${() => this._savePart(t)}>${busy ? 'Guardando…' : 'Guardar'}</button>
               <button class="q-del" title="Borrar participante" ?disabled=${busy} @click=${() => this._askDeletePart(t.token)}>✕</button>`}
-      </div>
+      </div>` : null}
     </div>`;
   }
 
@@ -1298,27 +1322,34 @@ export class SurveyAdmin extends LitElement {
       <h2>${this._partSurvey.title} · Participantes</h2>
       <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Genera los enlaces personales desde el padrón o subiendo un CSV.</p>
       ${this._renderPadronBlock()}
-      <h3>O bien, sube o pega un CSV</h3>
-      <div class="field">
-        <label for="pp">Sube un <strong>CSV</strong> o pega el padrón. Una persona por fila. Columnas:
-          <code>email</code> (obligatoria), y opcionales <code>departamento</code>, <code>fecha_alta</code>, <code>nacimiento</code> y <code>ubicación</code> (fechas en YYYY-MM-DD).
-          Con cabecera se mapean por nombre en cualquier orden (las columnas extra se ignoran). Re-subir con los mismos emails <strong>actualiza</strong> sus campos sin duplicar el enlace.</label>
-        <input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onCsvFile(e)} />
-        <textarea id="pp" rows="6" placeholder="email,departamento,fecha_alta&#10;ana@tribbuapp.com,People,2024-01-15" .value=${this._partText}
-          @input=${(e) => { this._partText = e.target.value; }}></textarea>
-      </div>
-      <div class="save-row">
-        <button class="primary" ?disabled=${this._partBusy || !this._partText.trim()} @click=${() => this._generate()}>
-          ${this._partBusy ? 'Generando…' : 'Generar enlaces'}
-        </button>
-        ${total ? html`<button class="ghost" @click=${() => this._copyAll()}>${this._copiedAll ? '✓ Copiado' : 'Copiar todos (email, enlace)'}</button>` : null}
-      </div>
+      <details class="csv-details">
+        <summary>O bien, sube o pega un CSV</summary>
+        <div class="field">
+          <label for="pp">Sube un <strong>CSV</strong> o pega el padrón. Una persona por fila. Columnas:
+            <code>email</code> (obligatoria), y opcionales <code>departamento</code>, <code>fecha_alta</code>, <code>nacimiento</code> y <code>ubicación</code> (fechas en YYYY-MM-DD).
+            Con cabecera se mapean por nombre en cualquier orden (las columnas extra se ignoran). Re-subir con los mismos emails <strong>actualiza</strong> sus campos sin duplicar el enlace.</label>
+          <input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onCsvFile(e)} />
+          <textarea id="pp" rows="6" placeholder="email,departamento,fecha_alta&#10;ana@tribbuapp.com,People,2024-01-15" .value=${this._partText}
+            @input=${(e) => { this._partText = e.target.value; }}></textarea>
+        </div>
+        <div class="save-row">
+          <button class="primary" ?disabled=${this._partBusy || !this._partText.trim()} @click=${() => this._generate()}>
+            ${this._partBusy ? 'Generando…' : 'Generar enlaces'}
+          </button>
+        </div>
+      </details>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
+      ${total ? this._renderSendBox() : null}
       ${total ? html`
-        <p class="lead">Edita los campos de segmentación de cada participante (se guardan en su enlace, sin regenerarlo) o bórralo.</p>
-        <div class="parts-list">${this._partTokens.map((t) => this._renderPartRow(t))}</div>` : null}
-      ${total ? this._renderSendBox() : null}`;
+        <h3>Participantes</h3>
+        <p class="lead">Pulsa un participante para desplegar sus campos de segmentación (se guardan en su enlace, sin regenerarlo), su enlace personal y el borrado.</p>
+        <div class="save-row">
+          <button class="ghost" @click=${() => { this._openParts = new Set(this._partTokens.map((t) => t.token)); }}>Desplegar todo</button>
+          <button class="ghost" @click=${() => { this._openParts = new Set(); }}>Plegar todo</button>
+          <button class="ghost" @click=${() => this._copyAll()}>${this._copiedAll ? '✓ Copiado' : 'Copiar todos (email, enlace)'}</button>
+        </div>
+        <div class="parts-list">${this._partTokens.map((t) => this._renderPartRow(t))}</div>` : null}`;
   }
 
   /** Envío por correo: prueba (no cuenta) y masivo (con confirmación inline). */
