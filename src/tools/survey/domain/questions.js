@@ -71,7 +71,7 @@ export function surveyDraftErrors({ title, questions, threshold } = {}) {
  * con valores normalizados. Lo usan TANTO el alta como la edición, así la escala
  * por defecto y el umbral se guardan igual en ambos casos.
  */
-export function draftToPayload({ title, questions, threshold, defaultScale, email, layout } = {}) {
+export function draftToPayload({ title, questions, threshold, defaultScale, email, layout, thanksMessage } = {}) {
   return {
     title: String(title ?? '').trim(),
     questions: questions ?? [],
@@ -85,8 +85,12 @@ export function draftToPayload({ title, questions, threshold, defaultScale, emai
       body: String(email?.body ?? ''),
     },
     layout: sanitizeLayout(layout),
+    thanksMessage: String(thanksMessage ?? '').trim(),
   };
 }
+
+/** Mensaje de gracias por defecto al enviar la respuesta (RMR-TSK-0426). */
+export const DEFAULT_THANKS_MESSAGE = '¡Gracias! Tu respuesta se ha recibido.';
 
 /**
  * Limpia el mapa de posiciones para Firestore: descarta las claves reservadas que

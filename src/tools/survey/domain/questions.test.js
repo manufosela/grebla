@@ -76,7 +76,11 @@ describe('surveyDraftErrors', () => {
 describe('draftToPayload', () => {
   it('incluye la escala por defecto y la plantilla de correo (igual en alta y edición)', () => {
     const payload = draftToPayload({ title: '  Clima  ', questions: [enps], threshold: 7, defaultScale: { min: 2, max: 8 }, email: { subject: ' Hola ', body: 'x' }, layout: { enps: { x: 10, y: 20 } } });
-    expect(payload).toEqual({ title: 'Clima', questions: [enps], threshold: 7, defaultScale: { min: 2, max: 8 }, email: { subject: 'Hola', body: 'x' }, layout: { enps: { x: 10, y: 20 } } });
+    expect(payload).toEqual({ title: 'Clima', questions: [enps], threshold: 7, defaultScale: { min: 2, max: 8 }, email: { subject: 'Hola', body: 'x' }, layout: { enps: { x: 10, y: 20 } }, thanksMessage: '' });
+  });
+  it('recorta el mensaje de gracias y lo deja vacío si no se configura (el default vive en la vista)', () => {
+    expect(draftToPayload({ title: 'x', questions: [], thanksMessage: '  ¡Mil gracias!  ' }).thanksMessage).toBe('¡Mil gracias!');
+    expect(draftToPayload({ title: 'x', questions: [] }).thanksMessage).toBe('');
   });
   it('cae a umbral 5 y escala 1–5 cuando faltan o no son enteros', () => {
     const payload = draftToPayload({ title: 'x', questions: [], threshold: 'no', defaultScale: {} });
