@@ -2780,7 +2780,7 @@ export class SuperadminPanel extends LitElement {
       ${this._peopleList.length === 0
         ? (this._peopleError ? null : html`<p class="empty">Aún no hay personas dadas de alta.</p>`)
         : html`<div class="table-wrap"><table>
-            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Rama</th><th>Superior</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Rama</th><th>Reporta a</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
             <tbody>
               ${this._peopleList.map((p) => {
                 let account;
@@ -2804,7 +2804,7 @@ export class SuperadminPanel extends LitElement {
                   </td>
                   <td>
                     <select @change=${(e) => this._setPersonSuperior(p.id, e.target.value)} title=${nameOf(p.reportsToPersonId)}>
-                      <option value="" ?selected=${!p.reportsToPersonId}>— sin inferior —</option>
+                      <option value="" ?selected=${!p.reportsToPersonId}>— no reporta a nadie —</option>
                       ${this._peopleList.filter((o) => o.id !== p.id).map((o) => html`<option value=${o.id} ?selected=${p.reportsToPersonId === o.id}>${o.name}</option>`)}
                     </select>
                   </td>
