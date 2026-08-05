@@ -119,7 +119,8 @@ export async function createSurveyTokens(surveyId, participants) {
  */
 export async function sendSurveyTestEmail(surveyId, to) {
   const fn = await callable('sendSurveyTestEmail');
-  await fn({ surveyId, to });
+  const { data } = await fn({ surveyId, to });
+  return data;
 }
 
 /** Envío MASIVO: manda a cada participante su enlace. @returns {Promise<{sent,failed}>} */
