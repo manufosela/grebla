@@ -166,8 +166,12 @@ describe('generateJobDescription — generador desde el framework (F2)', async (
       jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2', 'l3'], disciplineIds: ['backend'], datePosted: '2026-08-04',
     });
     expect(jd.responsibilities).toMatch(/^• /);
-    // Cada línea es un bullet «• Dimensión: texto» del nivel más bajo del rango.
-    for (const line of jd.responsibilities.split('\n')) expect(line).toMatch(/^• .+: .+/);
+    // 1.3.0: cada línea es un ÍTEM concreto en infinitivo, sin 3ª persona
+    // futurible al arranque (Toma→Tomar, Empieza a moldear→Moldear…).
+    for (const line of jd.responsibilities.split('\n')) {
+      expect(line).toMatch(/^• \S/);
+      expect(line).not.toMatch(/^• (Empieza|Toma|Sube|Entiende|Puede|Sabe)\b/);
+    }
     expect(validateJobDescription(jd).valid).toBe(true);
   });
 
@@ -260,5 +264,27 @@ describe('generateJobDescription — generador desde el framework (F2)', async (
     expect(jd['x-careerLevel'].dimensions.map((d) => d.id)).toEqual(['a']);
     const vacio = { ...mini, expectations: [] };
     expect(() => generateJobDescription(vacio, { jdId: 'x', roleName: 'R', levelIds: ['l1'], datePosted: '2026-08-03' })).toThrow(/no tiene expectativas/);
+  });
+});
+
+describe('1.3.0 — requisitos concretos, no conducta futurible (RMR-TSK-0417)', async () => {
+  const { seedFramework } = await import('../data/framework.js');
+  const fw2 = seedFramework();
+
+  it('x-niceToHave son ítems «Capacidad para …» (el ejemplo del usuario incluido)', () => {
+    const jd = generateJobDescription(fw2, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2', 'l3'], disciplineIds: ['backend'], datePosted: '2026-08-05',
+    });
+    const lines = jd['x-niceToHave'].split('\n');
+    expect(lines.some((l) => l.startsWith('• Capacidad para '))).toBe(true);
+    expect(jd['x-niceToHave']).toContain('Capacidad para moldear cómo construye el equipo, no solo qué construye');
+    expect(jd['x-niceToHave']).not.toContain('Empieza a moldear');
+  });
+
+  it('responsibilities en infinitivo', () => {
+    const jd = generateJobDescription(fw2, {
+      jdId: 'jd-x', roleName: 'Backend Engineer', levelIds: ['l2'], disciplineIds: ['backend'], datePosted: '2026-08-05',
+    });
+    expect(jd.responsibilities).toContain('• Tomar decisiones de arquitectura');
   });
 });
