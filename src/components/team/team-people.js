@@ -554,8 +554,11 @@ export class TeamPeople extends LitElement {
   _renderSuperiorCell(person) {
     const sup = this._resolveSup(person);
     const name = this._superiorName(sup);
-    if (!name) return html`<span class="muted">${sup.emptyLabel}</span>`;
-    return html`<span class="leader">${name}</span>`;
+    if (name) return html`<span class="leader">${name}</span>`;
+    // HAY superior pero su nombre no resuelve (cuenta sin ficha en las listas):
+    // decir «Sin manager» sería mentir (RMR-PCS-0035).
+    if (sup.superiorUid) return html`<span class="muted" title=${sup.superiorUid}>(cuenta sin ficha visible)</span>`;
+    return html`<span class="muted">${sup.emptyLabel}</span>`;
   }
 
   /** Lista de personas activas: cargando / vacío / tabla (sin ternarios anidados). */
@@ -569,7 +572,7 @@ export class TeamPeople extends LitElement {
         <thead>
           <tr>
             ${this._sortableTh('name', 'Nombre')}
-            ${this.isAdmin ? this._sortableTh('leader', 'Superior') : null}
+            ${this.isAdmin ? this._sortableTh('leader', 'Manager') : null}
             <th>Carrera</th><th>Gremios</th><th>Squads</th>
             ${this._sortableTh('startDate', 'Desde')}
             <th>Acciones</th>

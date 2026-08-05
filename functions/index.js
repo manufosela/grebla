@@ -2750,3 +2750,62 @@ export const polishJdRequirements = onCall(
     };
   },
 );
+
+// ── Propiedad derivada del organigrama (RMR-PCS-0035 · F2) ───────────────────
+
+/** ESPEJO de ownerUidFor en src/tools/team/domain/orgOwnership.js (functions no
+ * importa de src): si cambia allí, cambiar aquí. undefined = no tocar. */
+function orgOwnerUidFor(person, peopleById) {
+  if (person?.self === true) return { ownerUid: undefined, reason: 'self' };
+  const bossId = person?.reportsToPersonId ?? null;
+  if (!bossId) return { ownerUid: null, reason: 'sin-superior' };
+  const boss = peopleById.get(bossId);
+  if (!boss) return { ownerUid: undefined, reason: 'jefe-desconocido' };
+  if (!boss.uid) return { ownerUid: undefined, reason: 'jefe-sin-cuenta' };
+  return { ownerUid: boss.uid, reason: 'org' };
+}
+
+/**
+ * EL ORGANIGRAMA MANDA: cuando cambia una persona, se recalcula la propiedad
+ * derivada. Dos frentes:
+ *  - si cambió SU reportsToPersonId → se recalcula su propio ownerLeaderUid;
+ *  - si cambió SU uid (p. ej. sellado del primer login) → se recalcula el de
+ *    quienes le reportan (ahora su jefe tiene cuenta).
+ * Idempotente: solo escribe cuando el valor difiere (sin bucles de trigger).
+ */
+export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (event) => {
+  const before = event.data?.before?.exists ? event.data.before.data() : null;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  if (!after) return; // borrados: los huérfanos se ven en el backfill, no aquí
+  const reportsChanged = (before?.reportsToPersonId ?? null) !== (after.reportsToPersonId ?? null);
+  const uidChanged = (before?.uid ?? null) !== (after.uid ?? null);
+  if (!reportsChanged && !uidChanged) return;
+
+  const db = getFirestore();
+  const snap = await db.collection('people').get();
+  const peopleById = new Map(snap.docs.map((d) => [d.id, d.data()]));
+  const writes = [];
+
+  if (reportsChanged) {
+    const { ownerUid } = orgOwnerUidFor(after, peopleById);
+    if (ownerUid !== undefined && (after.ownerLeaderUid ?? null) !== ownerUid) {
+      writes.push({ id: event.params.personId, ownerUid });
+    }
+  }
+  if (uidChanged) {
+    for (const d of snap.docs) {
+      const p = d.data();
+      if ((p.reportsToPersonId ?? null) !== event.params.personId) continue;
+      const { ownerUid } = orgOwnerUidFor(p, peopleById);
+      if (ownerUid !== undefined && (p.ownerLeaderUid ?? null) !== ownerUid) {
+        writes.push({ id: d.id, ownerUid });
+      }
+    }
+  }
+  for (const w of writes) {
+    await db.doc(`people/${w.id}`).set({ ownerLeaderUid: w.ownerUid }, { merge: true });
+  }
+  if (writes.length) {
+    logger.info(`[org-owner] sincronizados ${writes.length} dueños desde el organigrama (${event.params.personId})`);
+  }
+});
