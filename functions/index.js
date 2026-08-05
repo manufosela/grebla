@@ -776,12 +776,15 @@ function appBaseUrl() {
  * Lee la encuesta, valida que esté ABIERTA (para que el enlace se pueda responder)
  * y que su plantilla de correo esté completa; devuelve sus datos.
  */
-async function loadSurveyForEmail(db, surveyId) {
+async function loadSurveyForEmail(db, surveyId, { requireOpen = true } = {}) {
   const ref = db.doc(`surveys/${surveyId}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
   const survey = snap.data();
-  if (survey.status !== 'open') {
+  // El envío MASIVO exige encuesta abierta; la PRUEBA no (RMR-TSK-0424): sirve
+  // para verificar entrega y aspecto antes de abrir. La plantilla se valida
+  // siempre.
+  if (requireOpen && survey.status !== 'open') {
     throw new HttpsError('failed-precondition', 'Abre la encuesta antes de enviar los correos.');
   }
   const errors = emailTemplateErrors(survey.email ?? {});
@@ -802,7 +805,7 @@ export const sendSurveyTestEmail = onCall(
     if (!surveyId || !to) throw new HttpsError('invalid-argument', 'Faltan surveyId o to.');
     if (!String(to).includes('@')) throw new HttpsError('invalid-argument', 'El email de prueba no es válido.');
     const db = getFirestore();
-    const { ref, survey } = await loadSurveyForEmail(db, surveyId);
+    const { ref, survey } = await loadSurveyForEmail(db, surveyId, { requireOpen: false });
     const token = randomBytes(18).toString('hex');
     await ref.collection('tokens').doc(token).set({ email: to, metadata: {}, used: false, test: true });
     const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token}`;
@@ -810,7 +813,7 @@ export const sendSurveyTestEmail = onCall(
       apiKey: RESEND_API_KEY.value(), from: MAIL_FROM,
       to, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
     });
-    return { ok: true };
+    return { ok: true, surveyOpen: survey.status === 'open' };
   },
 );
 
