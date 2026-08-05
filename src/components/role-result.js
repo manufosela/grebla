@@ -22,6 +22,7 @@ export class RoleResult extends LitElement {
     targetRole: { attribute: false },
     gap: { attribute: false },
     hideTarget: { attribute: false },
+    managerView: { attribute: false },
   };
 
   static styles = css`
@@ -170,7 +171,9 @@ export class RoleResult extends LitElement {
   render() {
     const profile = this.profile;
     if (!profile || !profile.dominant) {
-      return html`<div class="empty">Responde el cuestionario para ver tu perfil.</div>`;
+      return html`<div class="empty">${this.managerView
+        ? 'Responde el cuestionario para ver el perfil de la persona.'
+        : 'Responde el cuestionario para ver tu perfil.'}</div>`;
     }
     const dominant = profile.dominant;
     return html`

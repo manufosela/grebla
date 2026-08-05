@@ -408,20 +408,11 @@ export class RoleQuestionnaire extends LitElement {
     }
   }
 
-  /**
-   * Aviso cuando no hay persona: a un EDITOR LOGADO (manager con editorUid) le
-   * falta elegir persona — no sesión (RMR-BUG-0087); el texto de «inicia
-   * sesión» queda solo para el visitante anónimo del modo local.
-   */
-  _renderNoPersonNotice() {
-    if (this.personId) return null;
-    if (this.editorUid) {
-      return html`<div class="notice">Elige arriba a la persona del equipo para que la evaluación se guarde en su ficha.</div>`;
-    }
-    return html`<div class="notice">Estás en modo local: inicia sesión con Google para guardar tu progreso.</div>`;
-  }
-
   render() {
+    // Manager sin persona elegida: SOLO el selector de arriba manda — nada de
+    // cuestionario sin destino, placeholders de «tu perfil» ni avisos
+    // redundantes con el propio select (RMR-BUG-0088).
+    if (!this.personId && this.editorUid && this._isManagerView) return null;
     const visible = getVisibleItems(this.items, this.answers);
     const profile = this._profile;
     const gap = this._gapFor(profile);
@@ -429,8 +420,9 @@ export class RoleQuestionnaire extends LitElement {
     return html`
       <div class="layout">
         <div class="questions">
-          ${this._renderNoPersonNotice()}
-          ${this.sessionId ? null : html`<p class="default-hint">📋 Propuesta inicial (sin guardar): el rol se fija de forma conjunta. Ajusta lo que consideres y se guardará al primer cambio.</p>`}
+          ${this.personId || this.editorUid
+            ? null
+            : html`<div class="notice">Estás en modo local: inicia sesión con Google para guardar tu progreso.</div>`}
           ${this._isManagerView
             ? html`<div class="template">
                 <label for="role-template">Empezar desde un rol:</label>
@@ -461,6 +453,7 @@ export class RoleQuestionnaire extends LitElement {
             .roles=${this.roles}
             .targetRole=${this.targetRole}
             .gap=${gap}
+            .managerView=${this._isManagerView}
             @target-changed=${this._onTargetChanged}
           ></role-result>
         </div>
