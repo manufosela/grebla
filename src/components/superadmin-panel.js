@@ -13,6 +13,7 @@
  *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
 import { LitElement, html, css } from 'lit';
+import './common/busy-overlay.js';
 import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
@@ -31,7 +32,7 @@ import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
-import { listJds, saveJd, publishJd, unpublishJd, deleteJd } from '../lib/jobDescriptions.js';
+import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
 import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows, branchColor, layerColor } from '../tools/team/domain/orgRoles.js';
@@ -181,6 +182,7 @@ export class SuperadminPanel extends LitElement {
     _jdPreview: { state: true },
     _jdError: { state: true },
     _jdNotice: { state: true },
+    _jdBusy: { state: true },
     _jdCopiedId: { state: true },
     _confirmJd: { state: true },
   };
@@ -545,6 +547,8 @@ export class SuperadminPanel extends LitElement {
     this._jdNotice = '';
     /** JD cuyo enlace se acaba de copiar («✔ Copiado» temporal), o null. */
     this._jdCopiedId = null;
+    /** true mientras se pule/guarda una JD (capa bloqueante). */
+    this._jdBusy = false;
     this._confirmJd = null;
     /** @type {string} etiqueta del nivel simbólico (usuarios del producto) en la cima. */
     this._orgCrown = '';
@@ -1463,13 +1467,45 @@ export class SuperadminPanel extends LitElement {
   }
 
   /** Guarda la JD (borrador; si ya existía conserva su estado). */
+  /**
+   * Pulido IA de los tres campos redactados (RMR-TSK-0418): Haiku corrige solo
+   * concordancias; si la CF falla o no hay IA, devuelve el payload determinista
+   * con un aviso (visible, nunca silencioso).
+   * @param {Record<string, unknown>} payload
+   * @returns {Promise<{ payload: Record<string, unknown>, notice: string }>}
+   */
+  async _polishJdPayload(payload) {
+    const unbullet = (text) => String(text ?? '').split('\n').map((l) => l.replace(/^• /, '')).filter(Boolean);
+    try {
+      const polished = await polishJdRequirements({
+        responsibilities: unbullet(payload.responsibilities),
+        niceToHave: unbullet(payload['x-niceToHave'] ?? ''),
+        month3: payload['x-onboardingExpectations'].month3,
+      });
+      const next = {
+        ...payload,
+        responsibilities: polished.responsibilities.map((i) => `• ${i}`).join('\n'),
+        'x-niceToHave': payload['x-niceToHave'] ? polished.niceToHave.map((i) => `• ${i}`).join('\n') : null,
+        'x-onboardingExpectations': { ...payload['x-onboardingExpectations'], month3: polished.month3 },
+      };
+      const { valid } = validateJobDescription(next);
+      if (!valid) return { payload, notice: ' (el pulido IA no validó: se guardó la redacción determinista)' };
+      return { payload: next, notice: polished.changed > 0 ? ` (IA: ${polished.changed} ítems afinados)` : '' };
+    } catch (err) {
+      console.error('[jd] pulido IA no disponible:', err);
+      return { payload, notice: ' (sin pulido IA: se guardó la redacción determinista)' };
+    }
+  }
+
   async _saveJd() {
     // Regenera y valida SIEMPRE desde el form actual: no exige haber pulsado
     // la vista previa y nunca persiste un payload desactualizado (RMR-BUG-0084).
-    const payload = this._buildJdPayload();
-    if (!payload) return;
+    const built = this._buildJdPayload();
+    if (!built) return;
     const f = this._jdForm;
     this._jdNotice = '';
+    this._jdBusy = true;
+    const { payload, notice } = await this._polishJdPayload(built);
     try {
       await saveJd(f.id, {
         roleName: f.roleName.trim(),
@@ -1494,9 +1530,11 @@ export class SuperadminPanel extends LitElement {
       this._jds = [...(this._jds ?? []).filter((j) => j.id !== f.id), next];
       this._jdForm = null;
       this._jdPreview = null;
-      this._jdNotice = `JD «${next.roleName}» guardada${next.status === 'publicada' ? ' (sigue publicada, payload actualizado)' : ' como borrador'}.`;
+      this._jdNotice = `JD «${next.roleName}» guardada${next.status === 'publicada' ? ' (sigue publicada, payload actualizado)' : ' como borrador'}${notice}.`;
     } catch (err) {
       this._jdError = err instanceof Error ? err.message : 'No se pudo guardar la JD.';
+    } finally {
+      this._jdBusy = false;
     }
   }
 
@@ -1542,6 +1580,7 @@ export class SuperadminPanel extends LitElement {
         ${this._jdError ? html`<p class="error">${this._jdError}</p>` : null}
         ${this._jdNotice ? html`<p class="notice">${this._jdNotice}</p>` : null}
         ${jds.map((j) => this._renderJdRow(j))}
+        ${this._jdBusy ? html`<busy-overlay message="Puliendo la redacción y guardando la JD…"></busy-overlay>` : null}
         ${this._jdForm ? this._renderJdForm(levels, disciplines) : html`<button class="primary" @click=${() => { this._jdForm = { roleName: '', levelA: levels.at(0)?.id ?? '', levelB: '', disciplineIds: [], descriptionIntro: '' }; this._jdPreview = null; }}>➕ Nueva Job Description</button>`}
       </section>`;
   }
