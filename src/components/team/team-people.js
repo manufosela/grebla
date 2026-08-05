@@ -11,6 +11,8 @@
  *  - isAdmin: boolean
  */
 import { LitElement, html, css } from 'lit';
+import { getMyPerson } from '../../lib/engineer.js';
+import { getCurrentUser } from '../../lib/auth.js';
 import { skeletonLines } from '../app-skeleton.js';
 import '../app-modal.js';
 import {
@@ -462,8 +464,13 @@ export class TeamPeople extends LitElement {
     const orgRole = this.isAdmin ? (this._newOrgRole || 'engineer') : 'engineer';
     const orgBranch = this._orgRolesCat.find((r) => r.id === orgRole)?.branch ?? 'engineering';
     try {
+      // EL ORGANIGRAMA MANDA (RMR-PCS-0035): darla de alta en MI equipo es que
+      // me reporte a mí — el organigrama se apunta en el mismo alta (mi persona
+      // vinculada; si no tengo ficha, queda null y visible en el panel).
+      const myPerson = await getMyPerson(getCurrentUser()?.uid).catch(() => null);
       await addPerson(this.persistence, {
         name,
+        reportsToPersonId: myPerson?.id ?? null,
         disciplines: [...this._selectedDisciplines],
         levelId: this._levelId || null,
         guilds: [...this._selectedGuilds],

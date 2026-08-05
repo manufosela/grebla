@@ -61,6 +61,33 @@ export async function listLinkedUids() {
 export async function assignUserToLeader(user, leaderUid) {
   if (!user?.uid) throw new Error('assignUserToLeader requiere el uid del usuario a vincular');
   if (!leaderUid) throw new Error('assignUserToLeader requiere el uid del líder dueño');
+  // EL ORGANIGRAMA MANDA (RMR-PCS-0035): asignar a un equipo también apunta el
+  // reportsToPersonId a la persona del líder — estar en un equipo ES reportar a
+  // su manager, en los dos ejes a la vez.
+  const leaderPersonSnap = await getDocs(
+    query(collection(db, 'people'), where('uid', '==', leaderUid), limit(1)),
+  );
+  let leaderPersonId = leaderPersonSnap.docs.at(0)?.id ?? null;
+  if (!leaderPersonId) {
+    // Líder sin ficha: se le crea su self-ficha aquí mismo (mismo shape que
+    // createMyPerson) para que el organigrama quede apuntado sin romper el
+    // flujo de asignación. El nombre sale de su doc /leaders.
+    const leaderDoc = await getDoc(doc(db, 'leaders', leaderUid));
+    const leaderName = leaderDoc.data()?.displayName ?? leaderDoc.data()?.email ?? 'Manager';
+    const selfRef = await addDoc(collection(db, 'people'), {
+      name: leaderName,
+      uid: leaderUid,
+      ownerLeaderUid: leaderUid,
+      self: true,
+      active: true,
+      startDate: new Date().toISOString().slice(0, 10),
+      levelId: null,
+      guilds: [],
+      disciplines: [],
+      labels: [],
+    });
+    leaderPersonId = selfRef.id;
+  }
   // El nombre visible es lo único que admite un fallback (displayName → email →
   // literal); los datos de vínculo (uid, ownerLeaderUid) nunca son opcionales.
   const name = user.displayName ?? user.email ?? 'Sin nombre';
@@ -68,6 +95,7 @@ export async function assignUserToLeader(user, leaderUid) {
     name,
     uid: user.uid,
     ownerLeaderUid: leaderUid,
+    reportsToPersonId: leaderPersonId,
     active: true,
     startDate: new Date().toISOString().slice(0, 10),
     guilds: [],
