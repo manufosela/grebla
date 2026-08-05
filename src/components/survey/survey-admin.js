@@ -1254,8 +1254,9 @@ export class SurveyAdmin extends LitElement {
     const total = this._partTokens.length;
     return html`
       <h3>Enviar por correo</h3>
-      <p class="lead">Se envía desde <code>encuestas@tribbuapp.com</code>. La encuesta debe estar <strong>abierta</strong> y tener el mensaje redactado (pestaña de edición).</p>
+      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. La encuesta debe estar <strong>abierta</strong> y tener el mensaje redactado con <code>{link}</code> (pestaña de edición).</p>
       ${this._sendNotice ? html`<p class="notice">${this._sendNotice}</p>` : null}
+      ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">
         <input type="email" placeholder="email para la prueba" .value=${this._testEmail}
           @input=${(e) => { this._testEmail = e.target.value; }} />
@@ -1272,6 +1273,7 @@ export class SurveyAdmin extends LitElement {
   render() {
     return html`
       ${this._saving ? html`<busy-overlay message="Guardando la encuesta…"></busy-overlay>` : null}
+      ${this._sendBusy ? html`<busy-overlay message="Enviando el correo…"></busy-overlay>` : null}
       <h2>Encuestas de clima</h2>
       <p class="lead">Crea y gestiona las encuestas anónimas. Solo tú (People) ves esto; las respuestas son anónimas.</p>
       ${this._phase === 'edit' ? this._renderEdit()
