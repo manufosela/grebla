@@ -37,6 +37,7 @@ import { composeTitle } from '../../tools/career/data/framework.js';
 import { listUsers, unlinkedUsers } from '../../lib/users.js';
 import { setLeaderReportsTo } from '../../lib/leaders.js';
 import { resolvePerson } from '../../tools/team/domain/identity.js';
+import { appendLevelChange } from '../../tools/team/domain/levelHistory.js';
 import { listOrgRoles } from '../../lib/orgRoles.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
@@ -483,6 +484,19 @@ export class TeamPeople extends LitElement {
         reportsToPersonId: myPerson?.id ?? null,
         disciplines: [...this._selectedDisciplines],
         levelId: this._levelId || null,
+        // Historial de nivel (RMR-PCS-0037): el alta con nivel siembra la primera
+        // entrada (from null) con la fecha de incorporación — la persona ES de ese
+        // nivel desde que empezó, y la curva de F2 arranca ahí.
+        ...(this._levelId
+          ? {
+              levelHistory: appendLevelChange([], {
+                from: null,
+                to: this._levelId,
+                at: this._startDate || new Date().toISOString().slice(0, 10),
+                byUid: getCurrentUser()?.uid ?? null,
+              }),
+            }
+          : {}),
         guilds: [...this._selectedGuilds],
         labels: [...this._selectedLabels],
         startDate: this._startDate || new Date().toISOString().slice(0, 10),

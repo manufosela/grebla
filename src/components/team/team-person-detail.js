@@ -33,6 +33,7 @@ import { listToolPolicies } from '../../lib/toolPolicies.js';
 import { listLeaders } from '../../lib/leaders.js';
 import { effectiveToolAccess } from '../../tools/team/domain/toolAccess.js';
 import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
+import { appendLevelChange, normalizeLevelHistory, levelHistoryView } from '../../tools/team/domain/levelHistory.js';
 import { sparkline, sparklineTrend, SPARK_MAX } from '../../tools/team/domain/services/sparkline.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
 import { getCurrentUser } from '../../lib/auth.js';
@@ -214,7 +215,7 @@ export class TeamPersonDetail extends LitElement {
     }
     h3 { font-size: 1rem; margin: 0 0 0.75rem; }
     .form { display: grid; gap: 0.6rem; margin: 0.5rem 0 1rem; }
-    textarea, input[type='date'] {
+    textarea, input[type='date'], input[type='text'] {
       border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem;
       font: inherit; font-size: 0.9rem; color: var(--rm-text, #111827); background: var(--rm-field, #eef2f6);
     }
@@ -419,6 +420,13 @@ export class TeamPersonDetail extends LitElement {
     fieldset.disc legend { font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; padding: 0 0.35rem; }
     .disc-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.35rem 1rem; }
     .disc-check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; }
+    .lvl-history { margin-top: 0.5rem; }
+    .lvl-history .sub { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); margin: 0; }
+    .lvl-history ul { list-style: none; margin: 0.35rem 0 0; padding: 0; display: grid; gap: 0.3rem; }
+    .lvl-history li { font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: baseline; }
+    .lvl-change { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .lvl-when { color: var(--rm-muted, #6b7280); font-size: 0.8rem; }
+    .lvl-note { color: var(--rm-muted, #6b7280); font-style: italic; }
     .fw-admin { margin: 1rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
     .fw-admin a { color: var(--rm-accent, #2a9d8f); font-weight: 600; }
     .link-inline {
@@ -453,8 +461,8 @@ export class TeamPersonDetail extends LitElement {
     this._orgSubtab = 'gremios';
     /** @type {string} sub-sub-pestaña activa dentro de «Carrera» */
     this._careerSubtab = 'nivel';
-    /** @type {{ levelId: string, disciplines: string[] }} edición inline de carrera (nivel + disciplinas) */
-    this._career = { levelId: '', disciplines: [] };
+    /** @type {{ levelId: string, disciplines: string[], note: string }} edición inline de carrera (nivel + disciplinas + nota del cambio de nivel) */
+    this._career = { levelId: '', disciplines: [], note: '' };
     /** @type {boolean} guardado de carrera en curso */
     this._careerSaving = false;
     /** @type {string} error in-place del formulario de carrera */
@@ -608,6 +616,7 @@ export class TeamPersonDetail extends LitElement {
     this._career = {
       levelId: this.person.levelId ?? '',
       disciplines: [...(this.person.disciplines ?? [])],
+      note: '',
     };
     this._careerError = '';
   }
@@ -684,8 +693,21 @@ export class TeamPersonDetail extends LitElement {
     const levelId = this._career.levelId || null;
     const disciplines = [...this._career.disciplines];
     try {
-      await updatePerson(this.persistence, this.person.id, { levelId, disciplines });
-      this.person = { ...this.person, levelId, disciplines };
+      const patch = { levelId, disciplines };
+      // Historial de nivel (RMR-PCS-0037 · F1): si el nivel cambia, el relato se
+      // añade solo — de dónde a dónde, cuándo, quién y la nota opcional del momento.
+      if (levelId && levelId !== (this.person.levelId ?? null)) {
+        patch.levelHistory = appendLevelChange(normalizeLevelHistory(this.person.levelHistory), {
+          from: this.person.levelId ?? null,
+          to: levelId,
+          at: new Date().toISOString(),
+          byUid: getCurrentUser()?.uid ?? null,
+          note: this._career.note,
+        });
+      }
+      await updatePerson(this.persistence, this.person.id, patch);
+      this.person = { ...this.person, ...patch };
+      this._career = { ...this._career, note: '' };
     } catch (err) {
       this._careerError = err instanceof Error ? err.message : 'No se pudo guardar la carrera.';
     } finally {
@@ -1777,6 +1799,17 @@ export class TeamPersonDetail extends LitElement {
             )}
           </select>
         </label>
+        ${selected.levelId && selected.levelId !== (this.person?.levelId ?? '')
+          ? html`<label class="fld">Nota del cambio de nivel (opcional)
+              <input
+                type="text"
+                maxlength="200"
+                placeholder="Ej.: promoción tras el ciclo de evaluación"
+                .value=${selected.note}
+                @input=${(e) => { this._career = { ...this._career, note: e.target.value }; }}
+              />
+            </label>`
+          : null}
         <fieldset class="disc">
           <legend>Disciplinas</legend>
           ${disciplines.length === 0
@@ -1802,6 +1835,32 @@ export class TeamPersonDetail extends LitElement {
             ${this._careerSaving ? 'Guardando…' : 'Guardar carrera'}
           </button>
         </div>
+        ${this._renderLevelTimeline()}
+      </div>
+    `;
+  }
+
+  /**
+   * Línea de tiempo del nivel (RMR-PCS-0037 · F1): los cambios registrados en
+   * `person.levelHistory`, de reciente a antiguo. Las fichas anteriores a la
+   * épica empiezan su relato en el primer cambio — sin historial no se pinta nada.
+   * @returns {import('lit').TemplateResult|null}
+   */
+  _renderLevelTimeline() {
+    const rows = levelHistoryView(this.person?.levelHistory, this.framework?.levels ?? []);
+    if (rows.length === 0) return null;
+    return html`
+      <div class="lvl-history">
+        <p class="sub">Historial de nivel</p>
+        <ul>
+          ${rows.map(
+            (r) => html`<li>
+              <span class="lvl-change">${r.fromCode ? html`${r.fromCode} → ` : ''}${r.toCode}</span>
+              <span class="lvl-when">${r.when}</span>
+              ${r.note ? html`<span class="lvl-note">— ${r.note}</span>` : null}
+            </li>`,
+          )}
+        </ul>
       </div>
     `;
   }

@@ -34,6 +34,7 @@
 import { LitElement, html, css } from 'lit';
 import { listCareerRoutes } from '../lib/careerMap.js';
 import { subLevelForPerson, effectiveSubLevel } from '../tools/career/domain/subLevel.js';
+import { levelHistoryView } from '../tools/team/domain/levelHistory.js';
 import './role-result.js';
 import './role-questionnaire.js';
 import './career/career-map.js';
@@ -186,6 +187,11 @@ export class EngineerSpace extends LitElement {
     /* ── Sección Carrera (marcado espejo de <team-person-detail>) ── */
     .sub { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); margin: 1.1rem 0 0.35rem; }
     .now .code { font-weight: 700; }
+    ul.lvl-history { list-style: none; margin: 0.35rem 0 0; padding: 0; display: grid; gap: 0.3rem; }
+    ul.lvl-history li { font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: baseline; }
+    .lvl-change { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .lvl-when { color: var(--rm-muted, #6b7280); font-size: 0.8rem; }
+    .lvl-note { color: var(--rm-muted, #6b7280); font-style: italic; }
     .now .desc { font-size: 0.85rem; color: var(--rm-text, #111827); margin: 0.2rem 0 0; }
     .now .profile { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0.2rem 0 0; }
     .expect { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
@@ -617,6 +623,8 @@ export class EngineerSpace extends LitElement {
           `
         : html`<p class="empty">Sin nivel asignado.</p>`}
 
+      ${this._renderLevelTimeline(fw)}
+
       ${level
         ? html`
             <p class="sub">Lo que se te reconoce</p>
@@ -643,6 +651,30 @@ export class EngineerSpace extends LitElement {
         : null}
 
       ${level ? this._renderNextSteps(fw) : null}
+    `;
+  }
+
+  /**
+   * Línea de tiempo del nivel propio (RMR-PCS-0037 · F1): los cambios registrados
+   * en `person.levelHistory`, de reciente a antiguo. Las fichas anteriores a la
+   * épica empiezan su relato en el primer cambio — sin historial no se pinta nada.
+   * @param {import('../tools/career/data/framework.js').CareerFramework|null} fw
+   * @returns {import('lit').TemplateResult|null}
+   */
+  _renderLevelTimeline(fw) {
+    const rows = levelHistoryView(this.person?.levelHistory, fw?.levels ?? []);
+    if (rows.length === 0) return null;
+    return html`
+      <p class="sub">Historial de nivel</p>
+      <ul class="lvl-history">
+        ${rows.map(
+          (r) => html`<li>
+            <span class="lvl-change">${r.fromCode ? html`${r.fromCode} → ` : ''}${r.toCode}</span>
+            <span class="lvl-when">${r.when}</span>
+            ${r.note ? html`<span class="lvl-note">— ${r.note}</span>` : null}
+          </li>`,
+        )}
+      </ul>
     `;
   }
 

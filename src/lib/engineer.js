@@ -69,7 +69,8 @@ export async function createMyPerson(user) {
  * nivel y disciplinas. Solo el dueño puede escribir estos campos (regla isOwner);
  * el `hasOnly` del cliente no relaja las reglas, solo evita mandar campos de más.
  * @param {string} personId
- * @param {{ name?: string, levelId?: string|null, disciplines?: string[], startDate?: string }} basics
+ * @param {{ name?: string, levelId?: string|null, disciplines?: string[], startDate?: string,
+ *           levelHistory?: object[] }} basics
  * @returns {Promise<void>}
  */
 export async function updateMyPersonBasics(personId, basics = {}) {
@@ -77,6 +78,8 @@ export async function updateMyPersonBasics(personId, basics = {}) {
   const patch = {};
   if (typeof basics.name === 'string') patch.name = basics.name.trim() || 'Mi ficha';
   if ('levelId' in basics) patch.levelId = basics.levelId || null;
+  // Historial de nivel (RMR-PCS-0037): el caller lo trae ya compuesto (solo-añadir).
+  if (Array.isArray(basics.levelHistory)) patch.levelHistory = basics.levelHistory;
   if (Array.isArray(basics.disciplines)) patch.disciplines = basics.disciplines;
   // Fecha de alta (YYYY-MM-DD); solo se escribe si viene con valor.
   if (typeof basics.startDate === 'string' && basics.startDate) patch.startDate = basics.startDate;
