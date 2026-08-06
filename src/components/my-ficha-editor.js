@@ -9,6 +9,8 @@
 import { LitElement, html, css } from 'lit';
 import './common/busy-overlay.js';
 import { updateMyPersonBasics, deleteMyPerson } from '../lib/engineer.js';
+import { getCurrentUser } from '../lib/auth.js';
+import { appendLevelChange, normalizeLevelHistory } from '../tools/team/domain/levelHistory.js';
 
 export class MyFichaEditor extends LitElement {
   static properties = {
@@ -132,8 +134,18 @@ export class MyFichaEditor extends LitElement {
     this._error = '';
     try {
       const basics = { name: this._name, levelId: this._levelId || null, disciplines: this._disciplines, startDate: this._startDate };
+      // Historial de nivel (RMR-PCS-0037 · F1): también el cambio en la propia
+      // ficha deja su entrada — quién es uno mismo (byUid propio), sin nota.
+      if (basics.levelId && basics.levelId !== (this.person.levelId ?? null)) {
+        basics.levelHistory = appendLevelChange(normalizeLevelHistory(this.person.levelHistory), {
+          from: this.person.levelId ?? null,
+          to: basics.levelId,
+          at: new Date().toISOString(),
+          byUid: getCurrentUser()?.uid ?? null,
+        });
+      }
       await updateMyPersonBasics(this.person.id, basics);
-      const updated = { ...this.person, name: this._name.trim() || 'Mi ficha', levelId: basics.levelId, disciplines: this._disciplines, startDate: this._startDate || this.person.startDate };
+      const updated = { ...this.person, name: this._name.trim() || 'Mi ficha', levelId: basics.levelId, disciplines: this._disciplines, startDate: this._startDate || this.person.startDate, ...(basics.levelHistory ? { levelHistory: basics.levelHistory } : {}) };
       this.dispatchEvent(new CustomEvent('ficha-updated', { detail: updated, bubbles: true, composed: true }));
       this._open = false;
     } catch {
