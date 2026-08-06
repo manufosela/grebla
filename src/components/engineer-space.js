@@ -35,6 +35,8 @@ import { LitElement, html, css } from 'lit';
 import { listCareerRoutes } from '../lib/careerMap.js';
 import { subLevelForPerson, effectiveSubLevel } from '../tools/career/domain/subLevel.js';
 import { levelHistoryView } from '../tools/team/domain/levelHistory.js';
+import { progressionSeries } from '../tools/career/domain/progression.js';
+import './career/career-progression-chart.js';
 import './role-result.js';
 import './role-questionnaire.js';
 import './career/career-map.js';
@@ -52,7 +54,7 @@ import {
 } from '../tools/career/data/framework.js';
 import { stats } from '../tools/career/application/usecases.js';
 import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
-import { setCareerTarget } from '../lib/engineer.js';
+import { setCareerTarget, getPersonLogbook } from '../lib/engineer.js';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 import { squadNames } from '../tools/team/application/usecases/squads.js';
 
@@ -624,6 +626,7 @@ export class EngineerSpace extends LitElement {
         : html`<p class="empty">Sin nivel asignado.</p>`}
 
       ${this._renderLevelTimeline(fw)}
+      ${this._renderProgressionChart(fw)}
 
       ${level
         ? html`
@@ -675,6 +678,29 @@ export class EngineerSpace extends LitElement {
           </li>`,
         )}
       </ul>
+    `;
+  }
+
+  /**
+   * Curva de progresión del sub-nivel propia (RMR-PCS-0037 · F2): derivada al
+   * vuelo de la bitácora + historial de nivel contra las rutas publicadas
+   * (cargas perezosas). Sin puntos no se pinta nada.
+   * @param {import('../tools/career/data/framework.js').CareerFramework|null} fw
+   * @returns {import('lit').TemplateResult|null}
+   */
+  _renderProgressionChart(fw) {
+    this._ensureCareerRoutes();
+    this._ensureLogbook();
+    const { points, milestones } = progressionSeries({
+      person: this.person ?? {},
+      framework: fw,
+      routes: this._careerRoutes ?? [],
+      logbook: this._logbook ?? { entries: [] },
+    });
+    if (points.length === 0) return null;
+    return html`
+      <p class="sub">Progresión en el tiempo</p>
+      <career-progression-chart .points=${points} .milestones=${milestones}></career-progression-chart>
     `;
   }
 
@@ -913,6 +939,17 @@ export class EngineerSpace extends LitElement {
       this._careerRoutes = await listCareerRoutes();
       this.requestUpdate();
     } catch { /* sin badges */ }
+  }
+
+  /** Bitácora propia para la curva de progresión (RMR-PCS-0037 · F2): carga
+   *  perezosa y tolerante — sin bitácora, la gráfica simplemente no sale. */
+  async _ensureLogbook() {
+    if (this._logbook !== undefined || !this.person?.id) return;
+    this._logbook = null;
+    try {
+      this._logbook = await getPersonLogbook(this.person.id);
+      this.requestUpdate();
+    } catch { /* sin curva */ }
   }
 
   /** Pestaña Kudos (RMR-TSK-0405): la herramienta general completa —
