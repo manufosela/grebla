@@ -34,6 +34,9 @@ import { listLeaders } from '../../lib/leaders.js';
 import { effectiveToolAccess } from '../../tools/team/domain/toolAccess.js';
 import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
 import { appendLevelChange, normalizeLevelHistory, levelHistoryView } from '../../tools/team/domain/levelHistory.js';
+import { progressionSeries } from '../../tools/career/domain/progression.js';
+import { listCareerRoutes } from '../../lib/careerMap.js';
+import '../career/career-progression-chart.js';
 import { sparkline, sparklineTrend, SPARK_MAX } from '../../tools/team/domain/services/sparkline.js';
 import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
 import { getCurrentUser } from '../../lib/auth.js';
@@ -181,6 +184,7 @@ export class TeamPersonDetail extends LitElement {
     _confirmNote: { state: true },
     _career: { state: true },
     _logbook: { state: true },
+    _routes: { state: true },
     _datos: { state: true },
     _guildsCat: { state: true },
     _labelsCat: { state: true },
@@ -477,6 +481,8 @@ export class TeamPersonDetail extends LitElement {
     this._assessmentError = '';
     /** @type {boolean} feedback tras guardar la valoración */
     this._assessmentSaved = false;
+    /** @type {import('../../tools/career/domain/careerRoutes.js').CareerRoute[]} rutas publicadas (curva de progresión, F2) */
+    this._routes = [];
     /** @type {{ entries: import('../../tools/career/domain/logbook.js').LogEntry[] }|null}
      * bitácora de la persona (JG-23) para el historial de rutas completadas (F3) */
     this._logbook = null;
@@ -929,7 +935,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat, toolPolicies, leaderUids] =
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat, toolPolicies, leaderUids, routes] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -952,6 +958,9 @@ export class TeamPersonDetail extends LitElement {
           // uids de /leaders: para el alcance del head (¿la persona es un manager?),
           // del MISMO source que la regla personIsMyManager. Best-effort.
           listLeaders().then((ls) => ls.map((l) => l.uid)).catch(() => []),
+          // Rutas publicadas para la curva de progresión (F2): best-effort — sin
+          // rutas la gráfica simplemente no sale.
+          listCareerRoutes().catch(() => []),
         ]);
       this.timeline = timeline;
       this.areas = areas;
@@ -965,6 +974,7 @@ export class TeamPersonDetail extends LitElement {
       this._squadsCat = squadsCat;
       this._toolPolicies = toolPolicies;
       this._leaderUids = leaderUids;
+      this._routes = routes;
       this._seedAssessmentDraft();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
@@ -1836,6 +1846,29 @@ export class TeamPersonDetail extends LitElement {
           </button>
         </div>
         ${this._renderLevelTimeline()}
+        ${this._renderProgressionChart()}
+      </div>
+    `;
+  }
+
+  /**
+   * Curva de progresión del sub-nivel (RMR-PCS-0037 · F2): serie derivada al
+   * vuelo de la bitácora + historial contra las rutas publicadas. Sin puntos
+   * (sin bitácora fechada, sin rutas, sin nivel) no se pinta nada.
+   * @returns {import('lit').TemplateResult|null}
+   */
+  _renderProgressionChart() {
+    const { points, milestones } = progressionSeries({
+      person: this.person ?? {},
+      framework: this.framework,
+      routes: this._routes,
+      logbook: this._logbook,
+    });
+    if (points.length === 0) return null;
+    return html`
+      <div class="lvl-history">
+        <p class="sub">Progresión en el tiempo</p>
+        <career-progression-chart .points=${points} .milestones=${milestones}></career-progression-chart>
       </div>
     `;
   }
