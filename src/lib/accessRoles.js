@@ -259,6 +259,24 @@ export function leadersReportingTo(leaders, supermanagerUid) {
 }
 
 /**
+ * Alcance de rama de un usuario en las tools de equipo (RMR-TSK-0421): si es
+ * líder (o supermanager) y ALGUIEN le reporta en /leaders, su ámbito es
+ * [él, ...su subárbol transitivo]; si no, null (ámbito de líder simple, la
+ * query barata de siempre). Generaliza a todo líder el mecanismo que antes era
+ * solo del supermanager — las reglas lo respaldan vía /leaders.chain.
+ * @param {{ functionalRole?: string|null }|null} access
+ * @param {ReadonlyArray<{ uid?: string, id?: string, reportsTo?: string|null }>} leaders
+ * @param {string} uid
+ * @returns {string[]|null}
+ */
+export function branchScopeFor(access, leaders, uid) {
+  const role = access?.functionalRole;
+  if (role !== 'leader' && role !== 'supermanager') return null;
+  const reports = leadersReportingTo(leaders, uid);
+  return reports.length > 0 ? [uid, ...reports] : null;
+}
+
+/**
  * Cadena de ancestros de cada líder (RMR-TSK-0421): del más cercano al más
  * lejano, siguiendo `reportsTo` hacia arriba. Es la inversa de
  * leadersReportingTo, precomputada para las REGLAS de Firestore (que no pueden

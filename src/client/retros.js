@@ -11,7 +11,7 @@ import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { listTeamMembers } from '../lib/retros.js';
 import { listLeaders } from '../lib/leaders.js';
-import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('retro-app');
@@ -33,9 +33,8 @@ onUserChanged(async (user) => {
       // Alcance de rama (RMR-TSK-0294): el supermanager ve las retros y el roster
       // de los líderes que le reportan a cualquier profundidad, además de los
       // suyos. Crear una retro sigue siendo a su nombre (ownerLeaderUid = su uid).
-      const leaderUids = access.functionalRole === 'supermanager'
-        ? [user.uid, ...leadersReportingTo(await listLeaders(), user.uid)]
-        : null;
+      // Rama transitiva (RMR-TSK-0421): generalizada a todo líder con subárbol.
+      const leaderUids = branchScopeFor(access, await listLeaders(), user.uid);
       app.leaderUids = leaderUids;
       app.members = await listTeamMembers(leaderUids ?? user.uid);
     } else if (role === 'engineer') {

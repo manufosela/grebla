@@ -18,7 +18,7 @@ import { getMyPerson } from '../lib/engineer.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { listLeaders } from '../lib/leaders.js';
-import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('career-app');
@@ -73,9 +73,9 @@ onUserChanged(async (user) => {
     const isManager = role === 'leader' || role === 'supermanager' || canGovern(access);
     if (isManager) {
       app.canEdit = true;
-      const leaderUids = access.functionalRole === 'supermanager'
-        ? [user.uid, ...leadersReportingTo(await listLeaders(), user.uid)]
-        : null;
+      // Rama transitiva (RMR-TSK-0421): todo líder con managers debajo ve el
+      // roster de su subárbol, no solo el supermanager.
+      const leaderUids = branchScopeFor(access, await listLeaders(), user.uid);
       const { persistence } = await createTeamContainer({
         mode: 'firestore',
         leaderUid: user.uid,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, accessAxes, canGovern, leaderChainsFrom, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, branchScopeFor, canGovern, leaderChainsFrom, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
 
 describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
   it('un admin que además es líder conserva las tres vistas', () => {
@@ -370,5 +370,27 @@ describe('leaderChainsFrom — cadenas de ancestros para las reglas (RMR-TSK-042
     expect(chains.get('l1')).toEqual(['h']);
     expect(chains.size).toBe(1);
     expect(leaderChainsFrom(undefined).size).toBe(0);
+  });
+});
+
+describe('branchScopeFor — alcance de rama generalizado (RMR-TSK-0421)', () => {
+  const leaders = [
+    { uid: 'em1', reportsTo: 'lead' },
+    { uid: 'em2', reportsTo: 'em1' },
+    { uid: 'ajeno', reportsTo: 'otro' },
+  ];
+
+  it('líder con subárbol → [él, ...su rama transitiva]', () => {
+    expect(branchScopeFor({ functionalRole: 'leader' }, leaders, 'lead')).toEqual(['lead', 'em1', 'em2']);
+    expect(branchScopeFor({ functionalRole: 'supermanager' }, leaders, 'lead')).toEqual(['lead', 'em1', 'em2']);
+  });
+
+  it('líder sin nadie que le reporte → null (ámbito simple de siempre)', () => {
+    expect(branchScopeFor({ functionalRole: 'leader' }, leaders, 'em2')).toBe(null);
+  });
+
+  it('sin rol de liderazgo → null', () => {
+    expect(branchScopeFor({ functionalRole: 'engineer' }, leaders, 'lead')).toBe(null);
+    expect(branchScopeFor(null, leaders, 'lead')).toBe(null);
   });
 });

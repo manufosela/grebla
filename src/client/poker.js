@@ -11,7 +11,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { listLeaders } from '../lib/leaders.js';
-import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('poker-app');
@@ -38,9 +38,8 @@ onUserChanged(async (user) => {
       app.canManage = true;
       // Alcance de rama (RMR-TSK-0294): el supermanager ve además las sesiones de
       // los líderes que le reportan. Crearlas sigue siendo a su nombre.
-      app.leaderUids = access.functionalRole === 'supermanager'
-        ? [user.uid, ...leadersReportingTo(await listLeaders(), user.uid)]
-        : null;
+      // Rama transitiva (RMR-TSK-0421): generalizada a todo líder con subárbol.
+      app.leaderUids = branchScopeFor(access, await listLeaders(), user.uid);
     } else if (role === 'engineer') {
       app.leaderUid = person?.ownerLeaderUid ?? null;
       app.canManage = false;
