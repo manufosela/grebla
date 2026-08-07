@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diffSessions, normalizeProposal } from './rmProposal.js';
+import { applyAccepted, diffSessions, normalizeProposal } from './rmProposal.js';
 
 describe('diffSessions — qué propone el ingeniero distinto del manager (RMR-PCS-0036)', () => {
   it('devuelve solo las respuestas que difieren, con ambos valores', () => {
@@ -54,5 +54,31 @@ describe('normalizeProposal — lectura tolerante del doc', () => {
   it('conserva los estados de decisión de F2 (approved/rejected)', () => {
     expect(normalizeProposal({ status: 'approved' }).status).toBe('approved');
     expect(normalizeProposal({ status: 'rejected' }).status).toBe('rejected');
+  });
+});
+
+describe('applyAccepted — fusionar en la canónica solo lo aceptado', () => {
+  const canonical = { q1: 3, q2: 5, q3: 'a' };
+  const diffs = [
+    { itemId: 'q1', managerValue: 3, proposedValue: 4 },
+    { itemId: 'q3', managerValue: 'a', proposedValue: 'b' },
+    { itemId: 'q4', managerValue: null, proposedValue: 2 },
+  ];
+
+  it('aplica los aceptados y respeta el resto de la canónica', () => {
+    const merged = applyAccepted(canonical, diffs, ['q1', 'q4']);
+    expect(merged).toEqual({ q1: 4, q2: 5, q3: 'a', q4: 2 });
+    expect(canonical.q1).toBe(3);
+  });
+
+  it('un propuesto null aceptado RETIRA la respuesta de la canónica', () => {
+    const merged = applyAccepted({ q1: 2 }, [{ itemId: 'q1', managerValue: 2, proposedValue: null }], ['q1']);
+    expect('q1' in merged).toBe(false);
+  });
+
+  it('sin aceptados devuelve la canónica intacta (copia)', () => {
+    const merged = applyAccepted(canonical, diffs, []);
+    expect(merged).toEqual(canonical);
+    expect(merged).not.toBe(canonical);
   });
 });

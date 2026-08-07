@@ -40,6 +40,26 @@ export function diffSessions(canonicalAnswers, proposedAnswers) {
   return diffs;
 }
 
+/**
+ * Fusión de la decisión del manager (F2): sobre una COPIA de la canónica,
+ * aplica solo los diffs cuyos itemId estén aceptados. Un valor propuesto null
+ * aceptado retira la respuesta (el ítem vuelve a «sin respuesta»).
+ * @param {Record<string, unknown>|null|undefined} canonicalAnswers
+ * @param {Array<{ itemId: string, proposedValue: unknown }>} diffs
+ * @param {ReadonlyArray<string>} acceptedIds
+ * @returns {Record<string, unknown>}
+ */
+export function applyAccepted(canonicalAnswers, diffs, acceptedIds) {
+  const accepted = new Set(acceptedIds ?? []);
+  const merged = { ...canonicalAnswers };
+  for (const diff of diffs ?? []) {
+    if (!accepted.has(diff.itemId)) continue;
+    if (diff.proposedValue === null) delete merged[diff.itemId];
+    else merged[diff.itemId] = diff.proposedValue;
+  }
+  return merged;
+}
+
 /** Estados válidos de una propuesta; cualquier otro cae a 'open'. */
 const PROPOSAL_STATUSES = Object.freeze(['open', 'approved', 'rejected']);
 

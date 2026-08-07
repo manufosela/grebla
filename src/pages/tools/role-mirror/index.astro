@@ -14,7 +14,10 @@ import RoleMirror from '../../../layouts/RoleMirror.astro';
     <select id="rm-person"><option value="">— Elige una persona —</option></select>
   </label>
 
-  <!-- El web component se define y recibe sus datos desde el script de cliente. -->
+  <!-- Los web components se definen y reciben sus datos desde el script de cliente.
+       La revisión de propuesta (RM-v2) aparece solo si la persona elegida tiene
+       una propuesta abierta con diferencias. -->
+  <rm-proposal-review></rm-proposal-review>
   <role-questionnaire></role-questionnaire>
 </RoleMirror>
 
