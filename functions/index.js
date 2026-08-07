@@ -2765,12 +2765,75 @@ function orgOwnerUidFor(person, peopleById) {
   return { ownerUid: boss.uid, reason: 'org' };
 }
 
+/** ESPEJO de leaderChainsFrom en src/lib/accessRoles.js (functions no importa
+ * de src): cadena de ancestros de cada líder siguiendo reportsTo hacia arriba,
+ * cercano primero, anti-ciclos. Si cambia allí, cambiar aquí. */
+function leaderChainsMirror(leaders) {
+  const reportsToOf = new Map(leaders.map((l) => [l.uid, l.reportsTo ?? null]));
+  const chains = new Map();
+  for (const uid of reportsToOf.keys()) {
+    const chain = [];
+    const seen = new Set([uid]);
+    let current = reportsToOf.get(uid);
+    while (current != null && !seen.has(current)) {
+      chain.push(current);
+      seen.add(current);
+      current = reportsToOf.get(current) ?? null;
+    }
+    chains.set(uid, chain);
+  }
+  return chains;
+}
+
+/**
+ * Espejo /leaders desde el organigrama (RMR-TSK-0421, cierra el F8d de
+ * RMR-PCS-0027): deriva reportsTo de la ficha vinculada de cada líder
+ * (reportsToPersonId → uid del jefe) y precomputa `chain` (ancestros) para que
+ * las reglas autoricen el subárbol transitivo. Prudente con lo no derivable:
+ * líder sin ficha vinculada o jefe sin cuenta → su reportsTo actual se respeta.
+ * Devuelve el nº de docs escritos (solo los que difieren — idempotente).
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {Map<string, any>} peopleById  fichas ya leídas por el caller
+ */
+async function syncLeadersMirror(db, peopleById) {
+  const leadersSnap = await db.collection('leaders').get();
+  const personByUid = new Map();
+  for (const p of peopleById.values()) {
+    if (p.uid) personByUid.set(p.uid, p);
+  }
+  const effective = leadersSnap.docs.map((d) => {
+    const current = d.data().reportsTo ?? null;
+    const persona = personByUid.get(d.id);
+    if (!persona) return { uid: d.id, reportsTo: current, derived: false };
+    const bossId = persona.reportsToPersonId ?? null;
+    if (!bossId) return { uid: d.id, reportsTo: null, derived: true };
+    const boss = peopleById.get(bossId);
+    if (!boss?.uid) return { uid: d.id, reportsTo: current, derived: false };
+    return { uid: d.id, reportsTo: boss.uid, derived: true };
+  });
+  const chains = leaderChainsMirror(effective);
+  let written = 0;
+  for (const doc of leadersSnap.docs) {
+    const next = effective.find((l) => l.uid === doc.id);
+    const chain = chains.get(doc.id) ?? [];
+    const prevChain = Array.isArray(doc.data().chain) ? doc.data().chain : [];
+    const sameChain = prevChain.length === chain.length && prevChain.every((v, i) => v === chain[i]);
+    const sameReports = (doc.data().reportsTo ?? null) === next.reportsTo;
+    if (sameChain && sameReports) continue;
+    await doc.ref.set({ reportsTo: next.reportsTo, chain }, { merge: true });
+    written += 1;
+  }
+  return written;
+}
+
 /**
  * EL ORGANIGRAMA MANDA: cuando cambia una persona, se recalcula la propiedad
  * derivada. Dos frentes:
  *  - si cambió SU reportsToPersonId → se recalcula su propio ownerLeaderUid;
  *  - si cambió SU uid (p. ej. sellado del primer login) → se recalcula el de
  *    quienes le reportan (ahora su jefe tiene cuenta).
+ * Además mantiene el ESPEJO /leaders (reportsTo + chain, RMR-TSK-0421) con el
+ * que las reglas autorizan la visibilidad transitiva del subárbol.
  * Idempotente: solo escribe cuando el valor difiere (sin bucles de trigger).
  */
 export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (event) => {
@@ -2807,5 +2870,9 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
   }
   if (writes.length) {
     logger.info(`[org-owner] sincronizados ${writes.length} dueños desde el organigrama (${event.params.personId})`);
+  }
+  const mirrored = await syncLeadersMirror(db, peopleById);
+  if (mirrored) {
+    logger.info(`[org-owner] espejo /leaders actualizado: ${mirrored} líderes (reportsTo/chain)`);
   }
 });
