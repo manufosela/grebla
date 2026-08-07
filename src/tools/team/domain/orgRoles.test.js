@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, roleChain, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { rootRoles, childrenOf, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -145,5 +145,48 @@ describe('layerColor — color por capa de la pirámide (RMR-BUG-0072)', () => {
   it('tolera profundidades inválidas cayendo a la base', () => {
     expect(layerColor(-1)).toBe(layerColor(0));
     expect(layerColor(undefined)).toBe(layerColor(0));
+  });
+});
+
+describe('superiorCandidatesFor — el superior sale del organigrama de roles (RMR-TSK-0361)', () => {
+  const roles = [
+    { id: 'cto', label: 'CTO', branch: 'engineering', reportsToRoleId: null },
+    { id: 'head', label: 'Head', branch: 'engineering', reportsToRoleId: 'cto' },
+    { id: 'em', label: 'EM', branch: 'engineering', reportsToRoleId: 'head' },
+    { id: 'engineer', label: 'Engineer', branch: 'engineering', reportsToRoleId: 'em' },
+  ];
+  const people = [
+    { id: 'p-cto', name: 'C', orgRole: 'cto' },
+    { id: 'p-head1', name: 'H1', orgRole: 'head' },
+    { id: 'p-head2', name: 'H2', orgRole: 'head' },
+    { id: 'p-em', name: 'M', orgRole: 'em' },
+    { id: 'p-eng', name: 'E', orgRole: 'engineer' },
+  ];
+
+  it('un manager (em) solo puede reportar a los heads, no a otros managers', () => {
+    const { candidates, superiorRole } = superiorCandidatesFor(people[3], people, roles);
+    expect(candidates.map((c) => c.id)).toEqual(['p-head1', 'p-head2']);
+    expect(superiorRole.id).toBe('head');
+  });
+
+  it('un head reporta al cto; el cto (cima) no tiene candidatos', () => {
+    expect(superiorCandidatesFor(people[1], people, roles).candidates.map((c) => c.id)).toEqual(['p-cto']);
+    const top = superiorCandidatesFor(people[0], people, roles);
+    expect(top.candidates).toEqual([]);
+    expect(top.superiorRole).toBe(null);
+  });
+
+  it('sin rol (o rol desconocido) → todas las demás personas (no derivable, no bloquea)', () => {
+    const nobody = { id: 'x', name: 'X', orgRole: null };
+    const { candidates, superiorRole } = superiorCandidatesFor(nobody, people, roles);
+    expect(candidates).toHaveLength(5);
+    expect(superiorRole).toBe(null);
+  });
+
+  it('nunca se ofrece a sí misma, y rol superior sin personas → lista vacía con el rol', () => {
+    const soloHead = [{ id: 'p-em', name: 'M', orgRole: 'em' }];
+    const out = superiorCandidatesFor(soloHead[0], soloHead, roles);
+    expect(out.candidates).toEqual([]);
+    expect(out.superiorRole.id).toBe('head');
   });
 });

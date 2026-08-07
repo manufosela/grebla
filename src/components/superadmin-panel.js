@@ -36,7 +36,7 @@ import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
 import { frameworkToMarkdown } from '../tools/career/domain/frameworkMarkdown.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows, branchColor, layerColor } from '../tools/team/domain/orgRoles.js';
+import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows, branchColor, layerColor, superiorCandidatesFor } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
 
@@ -2771,6 +2771,32 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
+  /**
+   * Select de superior filtrado por el ORGANIGRAMA DE ROLES (RMR-TSK-0361):
+   * candidatos = personas cuyo rol es el rol superior del de esta persona
+   * (manager→heads, engineer→managers…). El superior ACTUAL siempre se pinta
+   * aunque ya no case con el filtro (no se oculta un dato guardado); rol cima →
+   * solo «no reporta a nadie»; rol superior sin personas → aviso honesto.
+   * @param {{ id: string, orgRole?: string|null, reportsToPersonId?: string|null }} p
+   * @param {(id: string|null|undefined) => string} nameOf
+   */
+  _renderSuperiorSelect(p, nameOf) {
+    const { candidates, superiorRole } = superiorCandidatesFor(p, this._peopleList, this._orgRoles);
+    const current = p.reportsToPersonId ?? null;
+    const options = current && !candidates.some((c) => c.id === current)
+      ? [...candidates, ...this._peopleList.filter((o) => o.id === current && o.id !== p.id)]
+      : candidates;
+    return html`
+      <select @change=${(e) => this._setPersonSuperior(p.id, e.target.value)} title=${nameOf(current)}>
+        <option value="" ?selected=${!current}>— no reporta a nadie —</option>
+        ${superiorRole && candidates.length === 0
+          ? html`<option value="" disabled>(aún no hay nadie con rol ${superiorRole.label})</option>`
+          : null}
+        ${options.map((o) => html`<option value=${o.id} ?selected=${current === o.id}>${o.name}</option>`)}
+      </select>
+    `;
+  }
+
   /** Tabla de personas: rol, superior, acceso (si tiene cuenta) y baja. */
   _renderUsersPeople() {
     const nameOf = (id) => this._peopleList.find((x) => x.id === id)?.name ?? '—';
@@ -2802,12 +2828,7 @@ export class SuperadminPanel extends LitElement {
                       ${this._orgBranches.map((b) => html`<option value=${b.id} ?selected=${p.orgBranch === b.id}>${b.label}</option>`)}
                     </select>
                   </td>
-                  <td>
-                    <select @change=${(e) => this._setPersonSuperior(p.id, e.target.value)} title=${nameOf(p.reportsToPersonId)}>
-                      <option value="" ?selected=${!p.reportsToPersonId}>— no reporta a nadie —</option>
-                      ${this._peopleList.filter((o) => o.id !== p.id).map((o) => html`<option value=${o.id} ?selected=${p.reportsToPersonId === o.id}>${o.name}</option>`)}
-                    </select>
-                  </td>
+                  <td>${this._renderSuperiorSelect(p, nameOf)}</td>
                   <td>${account}</td>
                   <td>${this._renderPersonAccess(p)}</td>
                   <td>${this._confirmDeletePerson === p.id
