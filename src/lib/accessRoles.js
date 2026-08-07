@@ -257,3 +257,36 @@ export function leadersReportingTo(leaders, supermanagerUid) {
   }
   return branch;
 }
+
+/**
+ * Cadena de ancestros de cada líder (RMR-TSK-0421): del más cercano al más
+ * lejano, siguiendo `reportsTo` hacia arriba. Es la inversa de
+ * leadersReportingTo, precomputada para las REGLAS de Firestore (que no pueden
+ * recorrer transitividad): `/leaders/{uid}.chain` autoriza la lectura de las
+ * personas del subárbol con un solo `in`. Un `reportsTo` hacia un uid sin doc
+ * de líder (p. ej. un CPO) entra en la cadena pero la corta ahí; los ciclos
+ * accidentales terminan sin duplicar. Pura (sin Firestore) — el espejo de
+ * functions/index.js la replica (cross-comment).
+ * @param {ReadonlyArray<{ uid?: string, id?: string, reportsTo?: string|null }>} leaders
+ * @returns {Map<string, string[]>} uid del líder → uids ancestros (cercano primero)
+ */
+export function leaderChainsFrom(leaders) {
+  const reportsToOf = new Map();
+  for (const leader of leaders ?? []) {
+    const uid = leader.uid ?? leader.id;
+    if (uid != null) reportsToOf.set(uid, leader.reportsTo ?? null);
+  }
+  const chains = new Map();
+  for (const uid of reportsToOf.keys()) {
+    const chain = [];
+    const seen = new Set([uid]);
+    let current = reportsToOf.get(uid);
+    while (current != null && !seen.has(current)) {
+      chain.push(current);
+      seen.add(current);
+      current = reportsToOf.get(current) ?? null;
+    }
+    chains.set(uid, chain);
+  }
+  return chains;
+}

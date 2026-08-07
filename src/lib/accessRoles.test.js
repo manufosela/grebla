@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, accessAxes, canGovern, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, canGovern, leaderChainsFrom, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
 
 describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
   it('un admin que además es líder conserva las tres vistas', () => {
@@ -332,5 +332,43 @@ describe('unlinkedUsers', () => {
   it('lista de usuarios vacía o ausente devuelve lista vacía', () => {
     expect(unlinkedUsers([], ['x'])).toEqual([]);
     expect(unlinkedUsers(undefined, ['x'])).toEqual([]);
+  });
+});
+
+describe('leaderChainsFrom — cadenas de ancestros para las reglas (RMR-TSK-0421)', () => {
+  it('cada líder lleva TODOS sus ancestros, del más cercano al más lejano', () => {
+    const leaders = [
+      { uid: 'head', reportsTo: null },
+      { uid: 'em1', reportsTo: 'head' },
+      { uid: 'em2', reportsTo: 'em1' },
+    ];
+    const chains = leaderChainsFrom(leaders);
+    expect(chains.get('head')).toEqual([]);
+    expect(chains.get('em1')).toEqual(['head']);
+    expect(chains.get('em2')).toEqual(['em1', 'head']);
+  });
+
+  it('un ciclo accidental en los datos termina sin colgarse ni duplicar', () => {
+    const leaders = [
+      { uid: 'a', reportsTo: 'b' },
+      { uid: 'b', reportsTo: 'a' },
+    ];
+    const chains = leaderChainsFrom(leaders);
+    expect(chains.get('a')).toEqual(['b']);
+    expect(chains.get('b')).toEqual(['a']);
+  });
+
+  it('un reportsTo hacia alguien que no es líder corta la cadena ahí (pero se incluye)', () => {
+    // El jefe puede ser un uid sin doc en /leaders (p. ej. un CPO): entra en la
+    // cadena (él autoriza), pero no se puede seguir subiendo desde él.
+    const chains = leaderChainsFrom([{ uid: 'em', reportsTo: 'cpo-uid' }]);
+    expect(chains.get('em')).toEqual(['cpo-uid']);
+  });
+
+  it('docs con id (además de uid), sin identificador, o lista vacía', () => {
+    const chains = leaderChainsFrom([{ id: 'l1', reportsTo: 'h' }, { reportsTo: 'h' }]);
+    expect(chains.get('l1')).toEqual(['h']);
+    expect(chains.size).toBe(1);
+    expect(leaderChainsFrom(undefined).size).toBe(0);
   });
 });
