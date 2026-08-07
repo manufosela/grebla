@@ -6,7 +6,8 @@
  *
  * @typedef {Object} DoraRepo
  * @property {string} id
- * @property {string} [ownerLeaderUid]  Líder dueño del repo (lo añadió). Ausente en repos legacy del superadmin.
+ * @property {string} [ownerLeaderUid]  Líder dueño del repo (lo añadió, o se lo asignó el superadmin). Ausente en repos legacy del superadmin.
+ * @property {string[]} [sharedWithUids]  Líderes que además VEN el repo (RMR-TSK-0185); la gestión sigue siendo del dueño.
  * @property {string} fullName   Identificador GitHub "owner/repo".
  * @property {string|null} [team] Equipo al que pertenece el repo.
  * @property {string[]} guilds    Gremios (cross-team) del repo.

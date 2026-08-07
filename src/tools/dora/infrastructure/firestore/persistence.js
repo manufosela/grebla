@@ -37,7 +37,13 @@ export function createFirestoreDoraPersistence(db, leaderUid, options = {}) {
         // (no hay query directa para "campo ausente OR igual").
         const snap = await getDocs(reposCol(db));
         const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        return viewAll ? all : all.filter((r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid);
+        // Globales + propios + COMPARTIDOS conmigo (RMR-TSK-0185).
+        return viewAll
+          ? all
+          : all.filter(
+              (r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid
+                || (Array.isArray(r.sharedWithUids) && r.sharedWithUids.includes(leaderUid)),
+            );
       },
       async add(input) {
         // El superadmin (viewAll) crea a nivel GLOBAL (sin owner); el líder, personal.

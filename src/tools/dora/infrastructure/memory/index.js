@@ -29,7 +29,11 @@ export function createMemoryDoraPersistence(seed = [], options = {}) {
         if (viewAll || !leaderUid) return all;
         // Ámbito personal/global (como guilds/labels): el líder ve los GLOBALES
         // (sin owner, del superadmin) además de los suyos, no los de otros líderes.
-        return all.filter((r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid);
+        // Globales + propios + COMPARTIDOS conmigo (RMR-TSK-0185).
+        return all.filter(
+          (r) => !r.ownerLeaderUid || r.ownerLeaderUid === leaderUid
+            || (Array.isArray(r.sharedWithUids) && r.sharedWithUids.includes(leaderUid)),
+        );
       },
       async add(input) {
         const id = crypto.randomUUID();

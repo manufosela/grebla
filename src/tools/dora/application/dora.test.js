@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryDoraPersistence } from '../infrastructure/memory/index.js';
 import {
+  assignRepo,
   addRepo,
   listRepos,
   updateRepo,
@@ -333,5 +334,23 @@ describe('DORA — repos owner-scoped (multi-leader)', () => {
     const repo = (await flat.repos.list())[0];
     expect(repo.ownerLeaderUid).toBeUndefined();
     expect((await listRepos(flat)).map((r) => r.fullName)).toEqual(['org/web']);
+  });
+});
+
+describe('assignRepo (RMR-TSK-0185)', () => {
+  it('asigna dueño y compartidos normalizados (sin duplicados ni el propio dueño)', async () => {
+    const p = createMemoryDoraPersistence([{ id: 'r1', fullName: 'org/x' }], { leaderUid: 'super', viewAll: true });
+    await assignRepo(p, 'r1', { ownerLeaderUid: 'l1', sharedWithUids: ['l2', 'l2', 'l1', ' '] });
+    const repo = (await p.repos.list()).find((r) => r.id === 'r1');
+    expect(repo.ownerLeaderUid).toBe('l1');
+    expect(repo.sharedWithUids).toEqual(['l2']);
+  });
+
+  it('dueño null deja el repo global y compartidos vacíos → []', async () => {
+    const p = createMemoryDoraPersistence([{ id: 'r1', fullName: 'org/x', ownerLeaderUid: 'l1' }], { leaderUid: 'super', viewAll: true });
+    await assignRepo(p, 'r1', { ownerLeaderUid: null, sharedWithUids: [] });
+    const repo = (await p.repos.list()).find((r) => r.id === 'r1');
+    expect(repo.ownerLeaderUid).toBe(null);
+    expect(repo.sharedWithUids).toEqual([]);
   });
 });

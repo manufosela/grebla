@@ -15,6 +15,8 @@ export class DoraApp extends MetricsToolApp {
     interpret: { attribute: false },
     loadSaved: { attribute: false },
     canInterpret: { attribute: false },
+    isAdmin: { attribute: false },
+    leaders: { attribute: false },
   };
 
   static tabs = [
@@ -35,7 +37,7 @@ export class DoraApp extends MetricsToolApp {
 
   renderView() {
     return this.view === 'repos'
-      ? html`<dora-repos .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh}></dora-repos>`
+      ? html`<dora-repos .persistence=${this.persistence} .canEdit=${this.canEdit} .refresh=${this.refresh} .isAdmin=${this.isAdmin ?? false} .leaders=${this.leaders ?? []}></dora-repos>`
       : html`<dora-metrics
           .persistence=${this.persistence}
           .interpret=${this.interpret}

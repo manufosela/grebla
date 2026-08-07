@@ -33,3 +33,17 @@ describe('DORA repos con ámbito personal/global (memory)', () => {
     expect(created.ownerLeaderUid).toBe('l1');
   });
 });
+
+describe('DORA repos compartidos (RMR-TSK-0185)', () => {
+  it('el líder ve además los repos compartidos con él', async () => {
+    const p = createMemoryDoraPersistence(
+      [
+        { id: 'a', fullName: 'org/ajeno', ownerLeaderUid: 'l2' },
+        { id: 'b', fullName: 'org/compartido', ownerLeaderUid: 'l2', sharedWithUids: ['l1', 'l3'] },
+      ],
+      { leaderUid: 'l1' },
+    );
+    const list = await p.repos.list();
+    expect(list.map((r) => r.fullName)).toEqual(['org/compartido']);
+  });
+});
