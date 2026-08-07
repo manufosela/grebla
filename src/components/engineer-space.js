@@ -715,8 +715,9 @@ export class EngineerSpace extends LitElement {
   _renderRoleMirror() {
     if (!this.person?.id) return html`<p class="empty">Cargando tu Role Mirror…</p>`;
     return html`
-      <p class="rm-intro">Tu manager ha propuesto un perfil de partida. Aquí puedes <strong>afinarlo tú</strong>: ajusta las respuestas según lo que consideras y se guarda solo (el rol se recalcula). En tus O2O podéis comentarlo y seguir ajustándolo entre los dos.</p>
+      <p class="rm-intro">Tu manager ha propuesto un perfil de partida. Aquí puedes <strong>afinarlo tú</strong>: tus ajustes se guardan como <strong>propuesta</strong> — tu manager verá qué cambia respecto a su versión y lo decidiréis juntos (idealmente en un O2O). Su versión es la que cuenta hasta entonces.</p>
       <role-questionnaire
+        .proposalMode=${true}
         .items=${this.items ?? []}
         .roles=${this.roles ?? []}
         .dimensions=${this.dimensions ?? []}

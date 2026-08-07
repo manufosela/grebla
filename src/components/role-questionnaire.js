@@ -29,7 +29,10 @@ import {
   getSession,
   listSessions,
   upsertUserSummary,
+  getRmProposal,
+  saveRmProposal,
 } from '../lib/firestore.js';
+import { normalizeProposal } from '../lib/rmProposal.js';
 import { isMeasurementStale, tsToMs, pickActiveMeasurement } from '../lib/measurement.js';
 import { fillAnswersFromRole } from '../lib/roleTemplate.js';
 
@@ -45,6 +48,7 @@ export class RoleQuestionnaire extends LitElement {
     orgConfig: { attribute: false },
     personId: { attribute: false },
     sessionId: { attribute: false },
+    proposalMode: { attribute: false },
     editorKind: { type: String },
     editorUid: { type: String },
     editorName: { type: String },
@@ -302,11 +306,23 @@ export class RoleQuestionnaire extends LitElement {
         this.answers = session.answers ?? {};
         this.targetRole = session.targetRole ?? null;
         this._measuredAtMs = tsToMs(session.createdAt);
-      } else {
+      }
+      if (!session) {
         // Sin ninguna medición previa: el rol se fija de forma CONJUNTA (RMR-TSK-0225).
         // Propuesta de entrada visual (patrón "Engineer"), SIN persistir todavía —
         // es una sugerencia, no un hecho, hasta que alguien la toque y guarde.
         this.answers = fillAnswersFromRole(DEFAULT_ROLE_KEY, this.items);
+      }
+      // Modo propuesta (RM-v2, RMR-PCS-0036): la canónica del manager es la BASE
+      // y encima se superpone la propuesta abierta del ingeniero (si retocó algo,
+      // retoma donde lo dejó). Una propuesta ya decidida no se superpone: se
+      // parte de la canónica vigente.
+      if (this.proposalMode) {
+        const proposal = normalizeProposal(await getRmProposal(this.personId));
+        if (proposal && proposal.status === 'open') {
+          this.answers = { ...this.answers, ...proposal.answers };
+          this.targetRole = proposal.targetRole ?? this.targetRole;
+        }
       }
       // Si no hay medición con contenido, quedamos sin sesión: se creará al
       // primer cambio. Así nunca se persisten cuestionarios vacíos.
@@ -358,6 +374,19 @@ export class RoleQuestionnaire extends LitElement {
   async _persist() {
     if (!this.personId) return;
     try {
+      // Modo propuesta (RM-v2): los retoques del ingeniero van al doc de
+      // propuesta, NUNCA a la sesión canónica ni al summary — prevalece el
+      // manager, que verá el diff y decidirá (F2).
+      if (this.proposalMode) {
+        await saveRmProposal(this.personId, {
+          answers: this.answers,
+          targetRole: this.targetRole ?? null,
+          baseSessionId: this.sessionId ?? null,
+          by: { uid: this.editorUid ?? null, name: this.editorName ?? null },
+        });
+        this.status = 'saved';
+        return;
+      }
       // La medición se crea en el PRIMER guardado real (no al entrar) para no
       // generar sesiones vacías. Y si la medición actual superó la ventana
       // (90 días), el guardado crea un NUEVO punto del histórico en vez de
