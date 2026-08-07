@@ -176,3 +176,26 @@ export function orgRoleRows(roles) {
   orphans.forEach((r, i) => rows.push({ role: r, depth: 0, firstOfTree: i === 0 }));
   return rows;
 }
+
+/**
+ * Candidatos a «superior» de una persona, derivados del organigrama de ROLES
+ * (RMR-TSK-0361): el superior de alguien con rol X son las personas cuyo rol es
+ * el `reportsToRoleId` de X — un manager reporta a heads, no a otros managers;
+ * un head al CTO; y varios heads/CTO caben sin cablear nada. Casos límite
+ * honestos: rol cima → sin candidatos (solo «no reporta a nadie»); persona sin
+ * rol (o rol fuera del catálogo) → todas las demás (no derivable: no se bloquea
+ * la gestión); rol superior sin personas → lista vacía CON el rol, para que la
+ * UI avise («aún no hay nadie con rol Head»). Nunca se ofrece a sí misma.
+ * @param {{ id: string, orgRole?: string|null }} person
+ * @param {ReadonlyArray<{ id: string, orgRole?: string|null }>} people
+ * @param {OrgRole[]} roles
+ * @returns {{ candidates: Array<{ id: string, orgRole?: string|null }>, superiorRole: OrgRole|null }}
+ */
+export function superiorCandidatesFor(person, people, roles) {
+  const others = (people ?? []).filter((p) => p.id !== person?.id);
+  const role = (roles ?? []).find((r) => r.id === person?.orgRole) ?? null;
+  if (!role) return { candidates: others, superiorRole: null };
+  const superiorRole = (roles ?? []).find((r) => r.id === role.reportsToRoleId) ?? null;
+  if (!superiorRole) return { candidates: [], superiorRole: null };
+  return { candidates: others.filter((p) => p.orgRole === superiorRole.id), superiorRole };
+}
