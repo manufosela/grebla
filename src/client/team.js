@@ -9,7 +9,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listLeaders, listSupermanagers } from '../lib/leaders.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern, leadersReportingTo } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
 import { getArchipelago } from '../lib/careerMap.js';
@@ -43,17 +43,16 @@ onUserChanged(async (user) => {
     // sesión (mismo patrón que el conmutador de vistas). Un admin puro (sin rol
     // funcional) ve todo, sin control; un líder/head sin gobierno ve lo suyo.
     const SCOPE_KEY = 'grebla-team-scope';
-    const branch = access.functionalRole === 'supermanager';
-    const hasOwnScope = access.functionalRole === 'leader' || branch;
+    const hasOwnScope = access.functionalRole === 'leader' || access.functionalRole === 'supermanager';
     const canChooseScope = canGovern(access) && hasOwnScope;
     const scope = canChooseScope
       ? (sessionStorage.getItem(SCOPE_KEY) || 'mine')
       : (canGovern(access) ? 'all' : 'mine');
     const seeAll = scope === 'all';
-    // Rama del supermanager solo cuando mira lo suyo (con «ver todo» sobra).
-    const leaderUids = (!seeAll && branch)
-      ? [user.uid, ...leadersReportingTo(members, user.uid)]
-      : null;
+    // Rama transitiva (RMR-TSK-0421): TODO líder con managers debajo ve su
+    // subárbol, no solo el supermanager. Solo cuando mira lo suyo (con «ver
+    // todo» sobra). Sin nadie que le reporte → null (ámbito simple de siempre).
+    const leaderUids = !seeAll ? branchScopeFor(access, members, user.uid) : null;
     const { persistence, storage } = await createTeamContainer({
       mode: 'firestore',
       leaderUid: user.uid,
