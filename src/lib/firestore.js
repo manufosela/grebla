@@ -214,6 +214,22 @@ export function saveRmProposal(personId, data) {
   );
 }
 
+/**
+ * Registra la decisión del manager sobre la propuesta (F2): approved/rejected,
+ * quién y cuándo, y qué ítems se aplicaron. La canónica se escribe aparte
+ * (saveSession); esto solo sella la decisión en la propia propuesta.
+ * @param {string} personId
+ * @param {{ status: 'approved'|'rejected', decidedBy: { uid: string|null, name: string|null }, appliedItemIds?: string[] }} decision
+ * @returns {Promise<void>}
+ */
+export function decideRmProposal(personId, decision) {
+  return setDoc(
+    rmProposalDoc(personId),
+    { ...decision, decidedAt: serverTimestamp() },
+    { merge: true },
+  );
+}
+
 // ── Configuración de organización ──────────────────────────────────────────
 
 /**

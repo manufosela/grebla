@@ -4,6 +4,7 @@
  * selector y, al elegir una, inyecta personId en <role-questionnaire>.
  */
 import '../components/role-questionnaire.js';
+import '../components/rm-proposal-review.js';
 import { ITEMS, DIMENSIONS } from '../data/items.js';
 import { ROLES } from '../data/roles.js';
 import { onUserChanged } from '../lib/auth.js';
@@ -15,12 +16,28 @@ import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 
 const el = document.querySelector('role-questionnaire');
+const review = document.querySelector('rm-proposal-review');
 const select = document.querySelector('#rm-person');
 
 if (el) {
   el.items = ITEMS;
   el.roles = ROLES;
   el.dimensions = DIMENSIONS;
+  // Revisión de propuesta (RM-v2, RMR-TSK-0423): mismo catálogo; al decidir,
+  // el cuestionario se re-inicializa para reflejar la canónica resultante.
+  if (review) {
+    review.items = ITEMS;
+    review.roles = ROLES;
+    review.addEventListener('proposal-decided', async () => {
+      // Lit agrupa cambios en el mismo tick: para forzar la re-carga hay que
+      // dejar que el null se asiente antes de re-poner el personId.
+      const personId = el.personId;
+      el.sessionId = null;
+      el.personId = null;
+      await el.updateComplete;
+      el.personId = personId;
+    });
+  }
 
   el.addEventListener('session-created', (event) => {
     const url = new URL(location.href);
@@ -32,6 +49,10 @@ if (el) {
     select.addEventListener('change', () => {
       el.sessionId = null;
       el.personId = select.value || null;
+      if (review) {
+        review.personId = select.value || null;
+        review.personName = select.selectedOptions[0]?.textContent ?? '';
+      }
     });
   }
 
@@ -56,6 +77,11 @@ if (el) {
       el.editorKind = 'leader';
       el.editorUid = user.uid;
       el.editorName = user.displayName ?? null;
+      if (review) {
+        review.orgConfig = el.orgConfig;
+        review.editorUid = user.uid;
+        review.editorName = user.displayName ?? null;
+      }
       // Personas del equipo del manager (reusa la tool Equipo).
       const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid });
       const people = await listActivePeople(persistence);
