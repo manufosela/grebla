@@ -17,6 +17,7 @@ import {
   listRepos,
   removeRepo,
   updateRepoConfig,
+  assignRepo,
   registerDeployment,
   listDeployments,
   removeDeployment,
@@ -78,6 +79,10 @@ export class DoraRepos extends LitElement {
     _editSignal: { state: true },
     _editTagPattern: { state: true },
     _editWorkflowFile: { state: true },
+    isAdmin: { attribute: false },
+    leaders: { attribute: false },
+    _editOwner: { state: true },
+    _editShared: { state: true },
     _deployOpen: { state: true },
     _deployEvents: { state: true },
     _deployLoading: { state: true },
@@ -135,6 +140,8 @@ export class DoraRepos extends LitElement {
     select.edit-in { width: 100%; min-width: 8rem; font-size: 0.82rem; padding: 0.3rem 0.4rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     select.edit-in.guilds { padding: 0.2rem; }
     .del-btn.edit { color: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); margin-right: 0.4rem; }
+    .assign-row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .assign-row label { min-width: 16rem; flex: 1; max-width: 24rem; }
     .tag { display: inline-block; background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.76rem; margin: 0 0.2rem 0.2rem 0; }
     .deploy-toggle { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; border: 0; background: none; padding: 0; color: var(--rm-accent, #2a9d8f); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
     tr.detail > td { background: var(--rm-track, #f7fafb); padding: 1rem 1.1rem; }
@@ -162,6 +169,8 @@ export class DoraRepos extends LitElement {
 
   constructor() {
     super();
+    this.isAdmin = false;
+    this.leaders = [];
     this.persistence = null;
     this.canEdit = false;
     /** @type {import('../../tools/dora/domain/types.js').DoraRepo[]} */
@@ -188,6 +197,8 @@ export class DoraRepos extends LitElement {
     this._editSignal = 'branch';
     this._editTagPattern = '';
     this._editWorkflowFile = '';
+    this._editOwner = '';
+    this._editShared = [];
     /** @type {string|null} id del repo con el panel de despliegues abierto */
     this._deployOpen = null;
     /** @type {import('../../tools/dora/domain/types.js').Deployment[]} */
@@ -269,6 +280,8 @@ export class DoraRepos extends LitElement {
     this._editSignal = repo.deploySignal || 'branch';
     this._editTagPattern = repo.tagPattern || '';
     this._editWorkflowFile = repo.workflowFile || '';
+    this._editOwner = repo.ownerLeaderUid ?? '';
+    this._editShared = [...(repo.sharedWithUids ?? [])];
   }
 
   _cancelEdit() {
@@ -279,6 +292,8 @@ export class DoraRepos extends LitElement {
     this._editSignal = 'branch';
     this._editTagPattern = '';
     this._editWorkflowFile = '';
+    this._editOwner = '';
+    this._editShared = [];
   }
 
   /** Recoge los gremios marcados en el <select multiple> de edición. */
@@ -297,6 +312,13 @@ export class DoraRepos extends LitElement {
         tagPattern: this._editTagPattern,
         workflowFile: this._editWorkflowFile,
       });
+      // Asignación (RMR-TSK-0185): solo el superadmin toca dueño/compartidos.
+      if (this.isAdmin) {
+        await assignRepo(this.persistence, id, {
+          ownerLeaderUid: this._editOwner || null,
+          sharedWithUids: this._editShared,
+        });
+      }
       this._cancelEdit();
       await this._load();
     } catch (err) {
@@ -567,6 +589,42 @@ export class DoraRepos extends LitElement {
     return html`
       <button class="del-btn edit" @click=${() => this._startEdit(repo)}>Configurar</button>
       <button class="del-btn" @click=${() => { this._confirm = repo.id; }}>Quitar</button>
+    `;
+  }
+
+  /**
+   * Fila de asignación (RMR-TSK-0185, solo superadmin editando): líder dueño
+   * (ve Y gestiona; «global» lo ven todos) + compartir con otros líderes (solo
+   * ver — la gestión de despliegues/incidentes sigue siendo del dueño).
+   * @param {import('../../tools/dora/domain/types.js').DoraRepo} repo
+   * @returns {import('lit').TemplateResult|null}
+   */
+  _renderAssignRow(repo) {
+    if (!this.isAdmin || this._editing !== repo.id || (this.leaders ?? []).length === 0) return null;
+    const labelOf = (l) => l.displayName || l.email || l.uid;
+    return html`
+      <tr class="detail">
+        <td colspan=${this.canEdit ? 9 : 8}>
+          <div class="assign-row">
+            <label>Líder dueño (ve y gestiona)
+              <select class="edit-in" @change=${(e) => { this._editOwner = e.target.value; }}>
+                <option value="" ?selected=${!this._editOwner}>— global (lo ven todos) —</option>
+                ${this.leaders.map(
+                  (l) => html`<option value=${l.uid} ?selected=${this._editOwner === l.uid}>${labelOf(l)}</option>`,
+                )}
+              </select>
+            </label>
+            <label>Compartir con (solo ver)
+              <select class="edit-in guilds" multiple size=${Math.min(this.leaders.length, 4)}
+                @change=${(e) => { this._editShared = [...e.target.selectedOptions].map((o) => o.value); }}>
+                ${this.leaders.map(
+                  (l) => html`<option value=${l.uid} ?selected=${this._editShared.includes(l.uid)}>${labelOf(l)}</option>`,
+                )}
+              </select>
+            </label>
+          </div>
+        </td>
+      </tr>
     `;
   }
 
@@ -844,6 +902,7 @@ export class DoraRepos extends LitElement {
                           ${this._metricCells(r)}
                           ${this.canEdit ? html`<td class="num">${this._renderActions(r)}</td>` : null}
                         </tr>
+                        ${this._renderAssignRow(r)}
                         ${this._deployOpen === r.id
                           ? html`<tr class="detail"><td colspan=${this.canEdit ? 9 : 8}>${this._renderDeployPanel(r)}</td></tr>`
                           : null}

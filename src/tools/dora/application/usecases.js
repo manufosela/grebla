@@ -130,6 +130,29 @@ export function updateRepoConfig(persistence, id, input) {
 }
 
 /**
+ * Asigna la propiedad y la compartición de un repo (RMR-TSK-0185, lo hace el
+ * superadmin desde la UI): `ownerLeaderUid` es el líder que lo ve Y gestiona
+ * (null = global, lo ven todos); `sharedWithUids` son líderes que además lo VEN
+ * (la gestión de deployments/incidents sigue siendo del dueño, por reglas).
+ * Normaliza: sin duplicados, sin vacíos y sin el propio dueño en la lista.
+ * @param {DoraPersistence} persistence
+ * @param {string} id
+ * @param {{ ownerLeaderUid?: string|null, sharedWithUids?: string[] }} input
+ * @returns {Promise<void>}
+ */
+export function assignRepo(persistence, id, input) {
+  const ownerLeaderUid = typeof input?.ownerLeaderUid === 'string' && input.ownerLeaderUid.trim()
+    ? input.ownerLeaderUid.trim()
+    : null;
+  const sharedWithUids = [...new Set(
+    (Array.isArray(input?.sharedWithUids) ? input.sharedWithUids : [])
+      .map((uid) => String(uid ?? '').trim())
+      .filter((uid) => uid && uid !== ownerLeaderUid),
+  )];
+  return persistence.repos.update(id, { ownerLeaderUid, sharedWithUids });
+}
+
+/**
  * @param {DoraPersistence} persistence
  * @returns {Promise<DoraRepo[]>}
  */

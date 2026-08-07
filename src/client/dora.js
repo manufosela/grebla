@@ -36,6 +36,13 @@ onUserChanged(async (user) => {
     // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy
     // (las reglas lo respaldan vía /toolManagers).
     app.canEdit = canGovern(access) || role === 'leader' || gate.manage;
+    // Asignar/compartir repos (RMR-TSK-0185): solo el gobierno; necesita el
+    // catálogo de líderes para los selects (best-effort, sin líderes no aparece).
+    app.isAdmin = canGovern(access);
+    if (app.isAdmin) {
+      const { listLeaders } = await import('../lib/leaders.js');
+      app.leaders = await listLeaders().catch(() => []);
+    }
     app.refresh = refresh;
     app.interpret = interpretMetrics; // (re)generar la interpretación: solo el gobierno
     app.loadSaved = loadInterpretation; // interpretación guardada: la ven todos
