@@ -182,6 +182,38 @@ export async function listSessions(personId) {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+// ── Propuesta del ingeniero (RM-v2, RMR-PCS-0036) ──────────────────────────
+
+/** Doc único de propuesta, hermano de summary. La regla isLinkedPlayer del
+ * subárbol /rolemirror ya permite al ingeniero crearlo/actualizarlo. */
+const rmProposalDoc = (personId) =>
+  doc(db, 'people', personId, 'rolemirror', 'proposal');
+
+/**
+ * Propuesta actual de la persona (o null si nunca propuso).
+ * @param {string} personId
+ * @returns {Promise<Object|null>}
+ */
+export async function getRmProposal(personId) {
+  const snapshot = await getDoc(rmProposalDoc(personId));
+  return snapshot.exists() ? snapshot.data() : null;
+}
+
+/**
+ * Guarda la propuesta del ingeniero (merge). Siempre reabre (`status: 'open'`):
+ * retocar tras una decisión del manager es una propuesta nueva.
+ * @param {string} personId
+ * @param {{ answers: Object, targetRole?: string|null, baseSessionId?: string|null, by: { uid: string|null, name: string|null } }} data
+ * @returns {Promise<void>}
+ */
+export function saveRmProposal(personId, data) {
+  return setDoc(
+    rmProposalDoc(personId),
+    { ...data, status: 'open', updatedAt: serverTimestamp() },
+    { merge: true },
+  );
+}
+
 // ── Configuración de organización ──────────────────────────────────────────
 
 /**
