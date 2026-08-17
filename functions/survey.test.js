@@ -81,3 +81,30 @@ describe('answerId', () => {
     expect(answerId('t', 's')).toMatch(/^[0-9a-f]{64}$/);
   });
 });
+
+describe('ejes custom declarados (RMR-TSK-0355)', () => {
+  const REF = '2026-08-17';
+
+  it('bucketMetadata copia SOLO los ejes declarados, recortados', () => {
+    const raw = { department: 'Eng', genero: ' Mujer ', comentario: 'texto libre', startDate: '2024-01-01' };
+    const meta = bucketMetadata(raw, REF, ['genero']);
+    expect(meta.genero).toBe('Mujer');
+    expect(meta.comentario).toBeUndefined();
+    expect(meta.department).toBe('Eng');
+    expect(meta.tenure).toBeDefined();
+  });
+
+  it('un eje declarado no puede pisar una clave fija ni exponer el email', () => {
+    const meta = bucketMetadata({ email: 'a@x.com', department: 'Eng' }, REF, ['email', 'department', 'age']);
+    expect(meta.email).toBeUndefined();
+    expect(meta.department).toBe('Eng'); // el fijo, no re-copiado como eje
+    expect(meta.age).toBeUndefined();
+  });
+
+  it('sanitizeParticipantMeta acepta los ejes declarados y sigue tirando el resto', () => {
+    const out = sanitizeParticipantMeta({ department: 'Eng', genero: 'Otro', evil: 'x' }, ['genero']);
+    expect(out).toEqual({ department: 'Eng', genero: 'Otro' });
+    const sinEjes = sanitizeParticipantMeta({ genero: 'Otro' });
+    expect(sinEjes).toEqual({});
+  });
+});

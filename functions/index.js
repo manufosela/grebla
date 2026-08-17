@@ -585,7 +585,7 @@ export const submitSurveyResponse = onCall(
     // sobrescribe la misma (editable) preservando la fecha de la primera vez.
     await answerRef.set({
       answers: clean,
-      metadata: bucketMetadata(tokenSnap.data().metadata ?? {}, nowIso),
+      metadata: bucketMetadata(tokenSnap.data().metadata ?? {}, nowIso, await declaredAxisIds(db)),
       test: tokenSnap.data().test === true, // respuesta de PRUEBA: se excluye de los agregados
       createdAt: prev.exists ? (prev.data().createdAt ?? nowIso) : nowIso,
       updatedAt: nowIso,
@@ -627,21 +627,25 @@ export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (requ
     const results = [];
     let batch = db.batch();
     let pending = 0;
+    // Lista blanca server-side (RMR-TSK-0355): fijos + ejes declarados; el
+    // cliente no puede colar campos arbitrarios en los tokens.
+    const axisIds = await declaredAxisIds(db);
     for (const p of participants) {
       const email = String(p?.email ?? '').trim();
       if (!email || !email.includes('@')) continue;
       const key = email.toLowerCase();
+      const cleanMeta = sanitizeParticipantMeta(p?.metadata ?? {}, axisIds);
       let token = tokenByEmail.get(key);
       if (!token) {
         token = randomBytes(18).toString('hex');
         tokenByEmail.set(key, token);
-        batch.set(surveyRef.collection('tokens').doc(token), { email, metadata: p?.metadata ?? {}, used: false });
+        batch.set(surveyRef.collection('tokens').doc(token), { email, metadata: cleanMeta, used: false });
         pending += 1;
         if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
-      } else if (p?.metadata && Object.keys(p.metadata).length > 0) {
+      } else if (Object.keys(cleanMeta).length > 0) {
         // El enlace ya existe: re-subir el padrón ACTUALIZA sus campos de segmentación
         // (merge, sin duplicar el token). No borra los que no vengan en esta subida.
-        batch.set(surveyRef.collection('tokens').doc(token), { metadata: p.metadata }, { merge: true });
+        batch.set(surveyRef.collection('tokens').doc(token), { metadata: cleanMeta }, { merge: true });
         pending += 1;
         if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
       }
@@ -658,9 +662,28 @@ export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (requ
 });
 
 /**
+ * Ejes de segmentación a medida DECLARADOS (RMR-TSK-0355): ids del doc
+ * /padron/_axes. Es la LISTA BLANCA server-side de campos custom que pueden
+ * viajar en tokens y respuestas — lo no declarado nunca sale del padrón.
+ * Best-effort: sin doc (o ilegible) no hay ejes custom, nunca revienta.
+ * @param {FirebaseFirestore.Firestore} db
+ * @returns {Promise<string[]>}
+ */
+async function declaredAxisIds(db) {
+  try {
+    const snap = await db.doc('padron/_axes').get();
+    const axes = snap.exists ? snap.data().axes : null;
+    return Array.isArray(axes) ? axes.map((a) => String(a?.id ?? '')).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Actualiza los campos de segmentación (metadata) de UN participante ya creado,
  * localizado por su token, sin regenerar el enlace. Solo superadmin/People. La
- * metadata se sanea a las claves conocidas (nada de campos arbitrarios).
+ * metadata se sanea a las claves conocidas + los ejes declarados (nada de
+ * campos arbitrarios).
  */
 export const updateSurveyParticipant = onCall(
   { region: 'europe-west1', secrets: [SURVEY_SALT] },
@@ -676,7 +699,8 @@ export const updateSurveyParticipant = onCall(
     const tokenSnap = await tokenRef.get();
     if (!tokenSnap.exists) throw new HttpsError('not-found', 'Participante no encontrado.');
 
-    const cleanMeta = sanitizeParticipantMeta(request.data?.metadata ?? {});
+    const axisIds = await declaredAxisIds(db);
+    const cleanMeta = sanitizeParticipantMeta(request.data?.metadata ?? {}, axisIds);
     await tokenRef.set({ metadata: cleanMeta }, { merge: true });
 
     // Si ya respondió, re-bucketizar su respuesta anónima para que los resultados
@@ -687,7 +711,7 @@ export const updateSurveyParticipant = onCall(
       const refIso = tokenSnap.data().respondedAt || new Date().toISOString();
       const answerRef = surveyRef.collection('answers').doc(answerId(token, SURVEY_SALT.value()));
       if ((await answerRef.get()).exists) {
-        await answerRef.set({ metadata: bucketMetadata(cleanMeta, refIso) }, { merge: true });
+        await answerRef.set({ metadata: bucketMetadata(cleanMeta, refIso, axisIds) }, { merge: true });
       }
     }
     return { ok: true };

@@ -88,8 +88,11 @@ export function ageBucket(birthDateIso, refIso) {
  * en los metadatos ANÓNIMOS que se guardan con la respuesta: nunca el email; la
  * fecha de alta se reduce a TRAMO; el resto de campos no sensibles pasan tal cual.
  * Lista blanca explícita para no filtrar un campo sensible por descuido.
+ * `customAxisIds` (RMR-TSK-0355): ejes a medida DECLARADOS en /padron/_axes —
+ * viajan tal cual (categóricos, protegidos con k al mostrar); un campo del
+ * token fuera de la lista blanca sigue sin copiarse jamás.
  */
-export function bucketMetadata(rawMetadata, refIso) {
+export function bucketMetadata(rawMetadata, refIso, customAxisIds = []) {
   const raw = rawMetadata ?? {};
   const meta = {};
   if (raw.department != null) meta.department = raw.department;
@@ -98,21 +101,30 @@ export function bucketMetadata(rawMetadata, refIso) {
   if (tenure != null) meta.tenure = tenure;
   const age = ageBucket(raw.birthDate, refIso);
   if (age != null) meta.age = age;
+  for (const id of customAxisIds) {
+    if (FIXED_META_KEYS.includes(id)) continue; // un eje no puede pisar una clave fija
+    const value = raw[id];
+    if (value != null && String(value).trim()) meta[id] = String(value).trim();
+  }
   // `email`, `startDate`/`birthDate` exactas, `name` y cualquier otro campo NO se copian.
   return meta;
 }
 
-/** Claves de segmentación editables de un participante (las que van al token). */
+/** Claves de segmentación FIJAS de un participante (las de siempre). */
 export const PARTICIPANT_META_KEYS = ['department', 'startDate', 'birthDate', 'location'];
+/** Claves fijas + derivadas: un eje custom nunca puede llamarse así. */
+const FIXED_META_KEYS = [...PARTICIPANT_META_KEYS, 'email', 'name', 'tenure', 'age'];
 
 /**
- * Sanea la metadata editada de un participante: SOLO las claves de segmentación
- * conocidas, como cadenas recortadas (descarta vacías y cualquier campo ajeno).
- * Evita que el cliente inyecte campos arbitrarios en el token.
+ * Sanea la metadata editada de un participante: las claves de segmentación
+ * conocidas + los ejes custom DECLARADOS (RMR-TSK-0355), como cadenas recortadas
+ * (descarta vacías y cualquier campo ajeno). Evita que el cliente inyecte
+ * campos arbitrarios en el token.
  */
-export function sanitizeParticipantMeta(raw) {
+export function sanitizeParticipantMeta(raw, customAxisIds = []) {
   const out = {};
-  for (const key of PARTICIPANT_META_KEYS) {
+  const axisKeys = customAxisIds.filter((id) => !FIXED_META_KEYS.includes(id));
+  for (const key of [...PARTICIPANT_META_KEYS, ...axisKeys]) {
     const value = raw?.[key];
     if (value != null && String(value).trim()) out[key] = String(value).trim();
   }

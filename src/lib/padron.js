@@ -6,7 +6,7 @@
  * generarán a partir de él (Fase 2). Guarda la FECHA DE NACIMIENTO (la edad se
  * calcula al vuelo).
  */
-import { doc, collection, addDoc, getDocs, updateDoc, deleteDoc, writeBatch, query, orderBy } from 'firebase/firestore';
+import { doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, query, orderBy } from 'firebase/firestore';
 import { db } from './firebase.js';
 
 const COL = 'padron';
@@ -21,13 +21,42 @@ function clean(person) {
     birthDate: person.birthDate ?? null,
     location: person.location ?? null,
     active: person.active !== false,
+    // Campos custom (RMR-TSK-0355): columnas arbitrarias del CSV, por slug.
+    ...(person.custom && Object.keys(person.custom).length > 0 ? { custom: person.custom } : {}),
   };
 }
+
+/** Doc de EJES declarados (RMR-TSK-0355): vive dentro de /padron para heredar
+ *  su regla (People); listPadron lo excluye (no es una persona). */
+const AXES_DOC = '_axes';
 
 /** Todo el padrón, ordenado por email. */
 export async function listPadron() {
   const snap = await getDocs(query(collection(db, COL), orderBy('email')));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs.filter((d) => d.id !== AXES_DOC).map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Ejes de segmentación a medida declarados: [{ id, label }]. Sin doc → [].
+ * @returns {Promise<Array<{ id: string, label: string }>>}
+ */
+export async function getPadronAxes() {
+  const snap = await getDoc(doc(db, COL, AXES_DOC));
+  const axes = snap.exists() ? snap.data().axes : null;
+  return Array.isArray(axes)
+    ? axes
+        .filter((a) => a && typeof a.id === 'string' && a.id)
+        .map((a) => ({ id: a.id, label: typeof a.label === 'string' && a.label ? a.label : a.id }))
+    : [];
+}
+
+/**
+ * Guarda la declaración de ejes (reemplaza la lista completa: declarar y
+ * retirar se hace desde la misma pantalla del padrón).
+ * @param {Array<{ id: string, label: string }>} axes
+ */
+export function savePadronAxes(axes) {
+  return setDoc(doc(db, COL, AXES_DOC), { axes });
 }
 
 /** Alta manual de una persona. @returns {Promise<string>} id */
@@ -68,6 +97,11 @@ export async function importPadron(rows) {
       const patch = {};
       for (const key of ['name', 'department', 'hireDate', 'birthDate', 'location']) {
         if (row[key]) patch[key] = row[key];
+      }
+      // Campos custom por clave (dot-path): re-subir el CSV actualiza cada eje
+      // sin pisar los custom que no vengan en esta subida (RMR-TSK-0355).
+      for (const [key, value] of Object.entries(row.custom ?? {})) {
+        if (value) patch[`custom.${key}`] = value;
       }
       batch.update(doc(db, COL, id), patch);
       updated += 1;
