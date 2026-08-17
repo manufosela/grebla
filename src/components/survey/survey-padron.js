@@ -10,13 +10,15 @@ import { LitElement, html, css } from 'lit';
 import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { parsePadron } from '../../tools/survey/domain/padron.js';
-import { listPadron, addPadronPerson, updatePadronPerson, deletePadronPerson, importPadron } from '../../lib/padron.js';
+import { customColumnsOf, validateAxis } from '../../tools/survey/domain/customAxes.js';
+import { listPadron, addPadronPerson, updatePadronPerson, deletePadronPerson, importPadron, getPadronAxes, savePadronAxes } from '../../lib/padron.js';
 
 const EMPTY = { id: null, email: '', name: '', department: '', hireDate: '', birthDate: '', location: '', active: true };
 
 export class SurveyPadron extends LitElement {
   static properties = {
     _rows: { state: true },
+    _axes: { state: true },
     _loading: { state: true },
     _form: { state: true },
     _showForm: { state: true },
@@ -52,11 +54,24 @@ export class SurveyPadron extends LitElement {
     .notice { color: var(--rm-accent-700, var(--teal)); font-size: 0.85rem; }
     .error { color: #b42318; font-size: 0.85rem; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
+    /* Ejes de segmentación a medida (RMR-TSK-0355) */
+    .axes-title { font-size: 1rem; margin: 1.2rem 0 0.3rem; }
+    .axes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 0.8rem; margin: 0 0 1.2rem; }
+    .axis { border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; padding: 0.8rem 0.9rem; display: flex; flex-direction: column; gap: 0.55rem; }
+    .axis.on { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 7%, transparent); }
+    .axis-head { display: flex; align-items: baseline; gap: 0.5rem; justify-content: space-between; }
+    .axis-values { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #1e3a5f); border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.76rem; }
+    .muted-s { color: var(--rm-muted, #5b6b7d); font-size: 0.76rem; }
+    .axis-no { color: var(--rm-muted, #5b6b7d); font-size: 0.8rem; margin: 0; font-style: italic; }
+    .axis button { align-self: start; }
   `;
 
   constructor() {
     super();
     this._rows = [];
+    /** @type {Array<{ id: string, label: string }>} ejes de segmentación declarados */
+    this._axes = [];
     this._loading = false;
     this._form = { ...EMPTY };
     this._showForm = false;
@@ -75,7 +90,7 @@ export class SurveyPadron extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._rows = await listPadron();
+      [this._rows, this._axes] = await Promise.all([listPadron(), getPadronAxes()]);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cargar el padrón.';
     } finally {
@@ -166,6 +181,74 @@ export class SurveyPadron extends LitElement {
     </div>`;
   }
 
+  /** Etiqueta legible de un slug de eje («rango_de_edad» → «Rango de edad»). */
+  _axisLabel(id) {
+    const text = String(id).replaceAll('_', ' ');
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  /** Declara o retira un eje; el guardado reemplaza la lista completa. */
+  async _toggleAxis(col) {
+    const declared = this._axes.some((a) => a.id === col.id);
+    const next = declared
+      ? this._axes.filter((a) => a.id !== col.id)
+      : [...this._axes, { id: col.id, label: this._axisLabel(col.id) }];
+    this._busy = true;
+    this._error = '';
+    try {
+      await savePadronAxes(next);
+      this._axes = next;
+      this._notice = declared ? 'Eje retirado.' : 'Eje declarado: aparecerá en los resultados segmentados.';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo guardar la declaración de ejes.';
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  /**
+   * Ejes de segmentación a medida (RMR-TSK-0355): columnas extra detectadas en
+   * el padrón, con toggle «usar como eje». Solo se pueden declarar las
+   * CATEGÓRICAS (validateAxis rechaza texto libre con su motivo visible). Un eje
+   * declarado cuya columna ya no existe se muestra para poder retirarlo.
+   */
+  _renderAxes() {
+    const cols = customColumnsOf(this._rows);
+    const colIds = new Set(cols.map((c) => c.id));
+    const orphanAxes = this._axes.filter((a) => !colIds.has(a.id));
+    if (cols.length === 0 && orphanAxes.length === 0) return null;
+    return html`
+      <h3 class="axes-title">Ejes de segmentación a medida</h3>
+      <p class="lead">Columnas extra del CSV (género, remoto, rango de edad…). Decláralas como eje y los resultados se podrán segmentar por ellas — siempre con el mínimo de 5 respuestas por grupo. Solo valen columnas categóricas: el texto libre reidentifica.</p>
+      <div class="axes">
+        ${cols.map((col) => {
+          const declared = this._axes.some((a) => a.id === col.id);
+          const reason = declared ? null : validateAxis(col);
+          return html`
+            <div class="axis ${declared ? 'on' : ''}">
+              <div class="axis-head">
+                <strong>${this._axisLabel(col.id)}</strong>
+                <span class="muted-s">${col.count} persona${col.count === 1 ? '' : 's'}</span>
+              </div>
+              <div class="axis-values">${col.values.slice(0, 6).map((v) => html`<span class="chip">${v}</span>`)}${col.values.length > 6 ? html`<span class="muted-s">+${col.values.length - 6}</span>` : null}</div>
+              ${reason
+                ? html`<p class="axis-no">${reason}</p>`
+                : html`<button class=${declared ? 'ghost' : 'primary'} ?disabled=${this._busy} @click=${() => this._toggleAxis(col)}>
+                    ${declared ? 'Retirar eje' : 'Usar como eje'}
+                  </button>`}
+            </div>
+          `;
+        })}
+        ${orphanAxes.map((a) => html`
+          <div class="axis on">
+            <div class="axis-head"><strong>${a.label}</strong> <span class="muted-s">sin columna en el padrón actual</span></div>
+            <button class="ghost" ?disabled=${this._busy} @click=${() => this._toggleAxis({ id: a.id, values: [] })}>Retirar eje</button>
+          </div>
+        `)}
+      </div>
+    `;
+  }
+
   render() {
     return html`
       ${this._busy ? html`<busy-overlay message="Guardando el padrón…"></busy-overlay>` : null}
@@ -178,6 +261,7 @@ export class SurveyPadron extends LitElement {
       </div>
       ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      ${this._renderAxes()}
       ${this._showForm ? this._renderForm() : null}
       ${this._loading ? skeletonLines(5) : this._rows.length ? html`
         <div class="table-wrap"><table>
