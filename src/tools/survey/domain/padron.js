@@ -11,7 +11,9 @@
  * año. Deduplica por email (en minúsculas) para poder hacer upsert.
  */
 
-/** @typedef {{ email: string, name?: string, department?: string, hireDate?: string, birthDate?: string, location?: string }} PadronRow */
+/** @typedef {{ email: string, name?: string, department?: string, hireDate?: string, birthDate?: string, location?: string, custom?: Record<string, string> }} PadronRow */
+
+import { axisSlug, RESERVED_AXIS_IDS } from './customAxes.js';
 
 const HEADER = {
   email: /^(e-?mail|correo)/,
@@ -35,8 +37,15 @@ export function parsePadron(text) {
   let dataRows = rows;
   const header = rows[0].map((cell) => cell.toLowerCase());
   const looksLikeHeader = !rows[0][0].includes('@') && header.some((cell) => HEADER.email.test(cell));
+  /** Columnas EXTRA de la cabecera (RMR-TSK-0355): índice → slug del eje custom. */
+  const customCols = new Map();
   if (looksLikeHeader) {
     for (const key of Object.keys(cols)) cols[key] = header.findIndex((cell) => HEADER[key].test(cell));
+    const known = new Set(Object.values(cols).filter((i) => i >= 0));
+    rows[0].forEach((label, idx) => {
+      const slug = axisSlug(label);
+      if (!known.has(idx) && slug && !RESERVED_AXIS_IDS.includes(slug)) customCols.set(idx, slug);
+    });
     dataRows = rows.slice(1);
   }
 
@@ -48,6 +57,10 @@ export function parsePadron(text) {
     for (const key of ['name', 'department', 'hireDate', 'birthDate', 'location']) {
       const idx = cols[key];
       if (idx >= 0 && cells[idx]) person[key] = cells[idx];
+    }
+    for (const [idx, slug] of customCols) {
+      if (!cells[idx]) continue;
+      person.custom = { ...(person.custom ?? {}), [slug]: cells[idx] };
     }
     byEmail.set(email.toLowerCase(), person);
   }
