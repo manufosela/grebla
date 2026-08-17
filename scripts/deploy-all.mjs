@@ -8,7 +8,9 @@
  * Requiere `deploy.config.json` (gitignored — ver deploy.config.example.json):
  *   { "instances": [ { "name", "project", "account", "buildScript" }, … ] }
  * Las cuentas viven ahí (fuera del repo público) para no exponer datos personales.
- * Necesita `firebase` y `gcloud` autenticados con esas cuentas.
+ * Necesita `firebase` autenticado con esas cuentas; el badge se publica con
+ * publish-version.mjs (Admin SDK, claves de ~/.secrets/firebase — RMR-TSK-0433),
+ * así que gcloud ya no pinta nada y un login caducado no rompe el deploy.
  */
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -52,19 +54,12 @@ for (const inst of instances) {
   run('npm', ['run', buildScript]);
   run('firebase', ['deploy', '--only', 'hosting', '--project', project, '--account', account]);
 
-  // Sincroniza el badge: /config/appVersion = hash desplegado, vía REST con el
-  // token de la cuenta (evita depender de una service account por proyecto).
-  const token = capture('gcloud', ['auth', 'print-access-token', '--account', account]);
-  const now = new Date().toISOString();
-  const url = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents/config/appVersion`
-    + '?updateMask.fieldPaths=version&updateMask.fieldPaths=deployedAt';
-  const body = JSON.stringify({ fields: { version: { stringValue: hash }, deployedAt: { stringValue: now } } });
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body,
-  });
-  if (!res.ok) fail(`${name}: no se pudo sincronizar el badge (${res.status}): ${await res.text()}`);
+  // Sincroniza el badge por el MISMO camino que a mano (RMR-TSK-0433):
+  // publish-version.mjs con el Admin SDK y la clave por instancia de
+  // ~/.secrets/firebase — sin gcloud. El name «demo» es la instancia «app»
+  // para las claves (grebla-app-sa.json).
+  const versionTarget = name === 'demo' ? 'app' : name;
+  run('node', [join('scripts', 'publish-version.mjs'), versionTarget]);
   console.log(`✓ ${name} desplegado · badge = grebla-${hash}`);
 }
 
