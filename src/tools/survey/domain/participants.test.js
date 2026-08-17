@@ -82,3 +82,24 @@ describe('padronToParticipants', () => {
     expect(parseParticipants(csv)[0].metadata).toEqual({ department: 'Eng', birthDate: '1988-05-02', location: 'Bilbao' });
   });
 });
+
+describe('padronToParticipants — ejes custom declarados (RMR-TSK-0355)', () => {
+  const padron = [
+    { email: 'a@x.com', department: 'Data', custom: { genero: 'Mujer', comentario: 'texto libre peligroso' } },
+    { email: 'b@x.com', department: 'Eng', custom: { genero: 'Hombre', remoto: 'Híbrido' } },
+    { email: 'c@x.com', department: 'Eng' },
+  ];
+
+  it('SOLO los ejes declarados viajan al metadata, planos (metadata[id]=valor)', () => {
+    const out = padronToParticipants(padron, { axisIds: ['genero', 'remoto'] });
+    expect(out[0].metadata.genero).toBe('Mujer');
+    expect(out[0].metadata.comentario).toBeUndefined();
+    expect(out[1].metadata.remoto).toBe('Híbrido');
+    expect(out[2].metadata.genero).toBeUndefined();
+  });
+
+  it('sin ejes declarados no viaja ningún custom (comportamiento anterior intacto)', () => {
+    const out = padronToParticipants(padron);
+    expect(out[0].metadata).toEqual({ department: 'Data' });
+  });
+});
