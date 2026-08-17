@@ -15,7 +15,7 @@ import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/su
 import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domain/email.js';
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
-import { listPadron } from '../../lib/padron.js';
+import { listPadron, getPadronAxes } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
@@ -639,6 +639,9 @@ export class SurveyAdmin extends LitElement {
     }
     try {
       this._padron = await listPadron();
+      // Ejes a medida declarados (RMR-TSK-0355): viajan al token al generar
+      // los enlaces. Best-effort: sin doc no hay ejes.
+      this._padronAxes = await getPadronAxes().catch(() => []);
     } catch (err) {
       this._padronError = err instanceof Error ? err.message : 'No se pudo cargar el padrón.';
     }
@@ -651,7 +654,7 @@ export class SurveyAdmin extends LitElement {
 
   /** Personas del padrón que recibirían enlace con el filtro actual. */
   get _padronSelection() {
-    return padronToParticipants(this._padron, { department: this._padronDept || null, onlyActive: this._padronActive });
+    return padronToParticipants(this._padron, { department: this._padronDept || null, onlyActive: this._padronActive, axisIds: (this._padronAxes ?? []).map((a) => a.id) });
   }
 
   /** Lee un CSV subido y vuelca su contenido al área de texto para revisar. */
@@ -802,7 +805,13 @@ export class SurveyAdmin extends LitElement {
     this._error = '';
     this._phase = 'results';
     try {
-      const [answers, tokens] = await Promise.all([listAnswers(survey.id), listTokens(survey.id)]);
+      const [answers, tokens, axes] = await Promise.all([
+        listAnswers(survey.id),
+        listTokens(survey.id),
+        // Ejes a medida declarados (RMR-TSK-0355), para el selector «Agrupar por».
+        getPadronAxes().catch(() => []),
+      ]);
+      this._resAxes = axes;
       // Los enlaces y respuestas de PRUEBA no cuentan en los agregados ni en la participación.
       this._resAnswers = answers.filter((a) => a.test !== true);
       this._resTokens = tokens.filter((t) => t.test !== true);
@@ -813,40 +822,44 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
+  /** Distribución de una pregunta de opción con k-anonimato POR OPCIÓN: se
+   *  ocultan las opciones con menos de `threshold` respuestas y, si hay alguna
+   *  oculta, no se muestra el total (evita inferir su conteo por resta). */
+  _renderChoiceResult(q, answers, threshold) {
+    const { visible, suppressed, total } = choiceTally(answers, q, threshold);
+    if (!visible.length) {
+      return html`<div class="qr">
+        <p class="qr-label">${q.label}</p>
+        <p class="hidden-note">Aún no hay suficientes respuestas por opción (mínimo ${threshold}) para mostrar la distribución sin comprometer el anonimato.</p>
+      </div>`;
+    }
+    return html`<div class="qr">
+      <p class="qr-label">${q.label}</p>
+      ${suppressed.length ? null : html`<p class="qr-summary">n=${total}</p>`}
+      <div class="dist">${visible.map((c) => html`<span class="dchip">${c.key}: ${c.count}</span>`)}</div>
+      ${suppressed.length ? html`<p class="hidden-note">${suppressed.length} opción${suppressed.length === 1 ? '' : 'es'} con muy pocas respuestas se ocultan por privacidad.</p>` : null}
+    </div>`;
+  }
+
+  /** Textos verbatim de una pregunta abierta: pueden identificar a alguien, así
+   *  que se ocultan hasta alcanzar el umbral (como los segmentos numéricos). */
+  _renderTextResult(q, answers, threshold) {
+    const texts = textAnswers(answers, q.id);
+    if (texts.length < threshold) {
+      return html`<div class="qr">
+        <p class="qr-label">${q.label}</p>
+        <p class="hidden-note">${texts.length} respuesta${texts.length === 1 ? '' : 's'} de texto: se ocultan hasta llegar a ${threshold} para no comprometer el anonimato.</p>
+      </div>`;
+    }
+    return html`<div class="qr">
+      <p class="qr-label">${q.label}</p>
+      <ul class="texts">${texts.map((t) => html`<li>${t}</li>`)}</ul>
+    </div>`;
+  }
+
   _renderQuestionResult(q, answers, threshold) {
-    if (q.type === 'choice') {
-      // k-anonimato POR OPCIÓN: se ocultan las opciones con menos de `threshold`
-      // respuestas y, si hay alguna oculta, no se muestra el total (evita inferir
-      // su conteo por resta).
-      const { visible, suppressed, total } = choiceTally(answers, q, threshold);
-      if (!visible.length) {
-        return html`<div class="qr">
-          <p class="qr-label">${q.label}</p>
-          <p class="hidden-note">Aún no hay suficientes respuestas por opción (mínimo ${threshold}) para mostrar la distribución sin comprometer el anonimato.</p>
-        </div>`;
-      }
-      return html`<div class="qr">
-        <p class="qr-label">${q.label}</p>
-        ${suppressed.length ? null : html`<p class="qr-summary">n=${total}</p>`}
-        <div class="dist">${visible.map((c) => html`<span class="dchip">${c.key}: ${c.count}</span>`)}</div>
-        ${suppressed.length ? html`<p class="hidden-note">${suppressed.length} opción${suppressed.length === 1 ? '' : 'es'} con muy pocas respuestas se ocultan por privacidad.</p>` : null}
-      </div>`;
-    }
-    if (q.type === 'text') {
-      const texts = textAnswers(answers, q.id);
-      // Los textos verbatim pueden identificar a alguien: se ocultan hasta
-      // alcanzar el umbral de anonimato (como los segmentos numéricos).
-      if (texts.length < threshold) {
-        return html`<div class="qr">
-          <p class="qr-label">${q.label}</p>
-          <p class="hidden-note">${texts.length} respuesta${texts.length === 1 ? '' : 's'} de texto: se ocultan hasta llegar a ${threshold} para no comprometer el anonimato.</p>
-        </div>`;
-      }
-      return html`<div class="qr">
-        <p class="qr-label">${q.label}</p>
-        <ul class="texts">${texts.map((t) => html`<li>${t}</li>`)}</ul>
-      </div>`;
-    }
+    if (q.type === 'choice') return this._renderChoiceResult(q, answers, threshold);
+    if (q.type === 'text') return this._renderTextResult(q, answers, threshold);
     const r = scaleResult(q, answerValues(answers, q.id));
     const segMin = Math.max(SEGMENT_MIN, threshold);
     const seg = segmentedScale(answers, q, this._segmentField, segMin);
@@ -883,6 +896,7 @@ export class SurveyAdmin extends LitElement {
         <label>Agrupar por:
           <select @change=${(e) => { this._segmentField = e.target.value; }}>
             ${SEGMENT_FIELDS.map((f) => html`<option value=${f} ?selected=${this._segmentField === f}>${SEGMENT_LABELS[f]}</option>`)}
+            ${(this._resAxes ?? []).map((a) => html`<option value=${a.id} ?selected=${this._segmentField === a.id}>${a.label}</option>`)}
           </select>
         </label>
         <span class="seg-hint">Cada grupo con menos de ${Math.max(SEGMENT_MIN, threshold)} respuestas se oculta.</span>
