@@ -9,7 +9,7 @@
 import '../components/engineer-space.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern } from '../lib/accessRoles.js';
+import { canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap, createMyPerson } from '../lib/engineer.js';
 import { getMyO2O } from '../lib/o2o.js';
 import { getFramework } from '../lib/careerFramework.js';
@@ -42,7 +42,7 @@ onUserChanged(async (user) => {
       // manager/superadmin sin ficha ve la vista de ingeniero y puede CREAR su
       // propia ficha para rellenarla. No se le expulsa: el conmutador le deja
       // volver. El resto (rol nulo, viewer) vuelve a la home.
-      if (canGovern(access) || access.role === 'leader') {
+      if (canGovern(access) || leadsTeam(access)) {
         showNoFicha(user);
         return;
       }

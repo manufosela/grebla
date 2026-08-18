@@ -9,7 +9,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listLeaders, listSupermanagers } from '../lib/leaders.js';
 import { resolveAccess } from '../lib/access.js';
-import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern, hasAccess } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
 import { getArchipelago } from '../lib/careerMap.js';
@@ -23,7 +23,7 @@ onUserChanged(async (user) => {
     // el "ver todo" y el mando del catálogo de roles; el alcance de rama sale del
     // rol funcional. Independientes: un admin puede además ser manager o head.
     const access = await resolveAccess(user);
-    if (!access.role) {
+    if (!hasAccess(access)) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }

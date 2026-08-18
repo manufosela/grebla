@@ -20,7 +20,7 @@ onUserChanged(async (user) => {
     // por su ROL real —no por el modo de vista activo— así el conmutador de vistas
     // no le oculta el borrado.
     const panel = document.querySelector('survey-admin');
-    if (panel) panel.canDelete = access.role === 'superadmin';
+    if (panel) panel.canDelete = canGovern(access);
   } catch {
     location.replace('/');
   }

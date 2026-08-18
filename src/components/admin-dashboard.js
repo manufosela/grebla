@@ -32,7 +32,7 @@ export class AdminDashboard extends LitElement {
     roles: { attribute: false },
     leaderUid: { attribute: false },
     uid: { attribute: false },
-    viewerRole: { attribute: false },
+    viewerScope: { attribute: false },
     users: { state: true },
     _confirmDelete: { state: true },
     _confirmDeleteUser: { state: true },
@@ -127,7 +127,8 @@ export class AdminDashboard extends LitElement {
     /** @type {string|null} */
     this.uid = null;
     /** @type {'superadmin'|'leader'|'viewer'|null} quién mira este panel (RMR-TSK-0227) */
-    this.viewerRole = null;
+    /** 'team' (líder: su equipo) | 'all' (gobierno: toda la organización) */
+    this.viewerScope = 'all';
     /** @type {string|null} uid del manager dueño de las personas */
     this.leaderUid = null;
     this._loaded = false;
@@ -317,7 +318,7 @@ export class AdminDashboard extends LitElement {
 
   /** Intro general: qué es Role Mirror y quién hace qué (superadmin vs manager). */
   _renderIntro() {
-    const scope = this.viewerRole === 'leader' ? 'tu equipo' : 'toda la organización';
+    const scope = this.viewerScope === 'team' ? 'tu equipo' : 'toda la organización';
     return html`<section class="intro">
       ${this._help('¿Cómo funciona Role Mirror? (empieza por aquí)', html`
         <p><strong>El rol se fija de forma conjunta, no es una asignación unilateral.</strong></p>

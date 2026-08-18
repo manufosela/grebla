@@ -6,24 +6,14 @@
 import { LitElement, html, css } from 'lit';
 import { onUserChanged, signInWithGoogle, signOutUser } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
-
-/**
- * Etiqueta legible por rol para el badge del botón de sesión.
- * @type {Record<Exclude<import('../lib/access.js').AccessRole, null>, string>}
- */
-const ROLE_LABELS = {
-  superadmin: 'Superadmin',
-  viewer: 'Viewer',
-  leader: 'Manager',
-  engineer: 'Ingeniero',
-};
+import { accessLabel } from '../lib/accessRoles.js';
 
 export class AuthButton extends LitElement {
   static properties = {
     user: { state: true },
     busy: { state: true },
     error: { state: true },
-    role: { state: true },
+    roleLabel: { state: true },
   };
 
   static styles = css`
@@ -99,8 +89,8 @@ export class AuthButton extends LitElement {
     this.user = null;
     this.busy = false;
     this.error = '';
-    /** @type {import('../lib/access.js').AccessRole} */
-    this.role = null;
+    /** Etiqueta del acceso desde los dos ejes (RMR-TSK-0310), o null. */
+    this.roleLabel = null;
     /** @type {(() => void)|null} */
     this._unsub = null;
   }
@@ -109,13 +99,12 @@ export class AuthButton extends LitElement {
     super.connectedCallback();
     this._unsub = onUserChanged(async (user) => {
       this.user = user;
-      this.role = null;
+      this.roleLabel = null;
       if (user) {
         try {
-          const { role } = await resolveAccess(user);
-          this.role = role;
+          this.roleLabel = accessLabel(await resolveAccess(user));
         } catch {
-          this.role = null;
+          this.roleLabel = null;
         }
       }
       this.dispatchEvent(
@@ -162,7 +151,7 @@ export class AuthButton extends LitElement {
             ? html`<img class="avatar" src=${this.user.photoURL} alt="" referrerpolicy="no-referrer" />`
             : null}
           <span class="name">${this.user.displayName ?? this.user.email}</span>
-          ${this.role ? html`<span class="role">${ROLE_LABELS[this.role] ?? this.role}</span>` : null}
+          ${this.roleLabel ? html`<span class="role">${this.roleLabel}</span>` : null}
         </span>
         <button ?disabled=${this.busy} @click=${this._signOut}>Salir</button>
         ${this.error ? html`<span class="error">${this.error}</span>` : null}

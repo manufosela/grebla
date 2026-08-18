@@ -21,13 +21,12 @@ onUserChanged(async (user) => {
   }
   try {
     const access = await resolveAccess(user);
-    const { role } = access;
     // Acceden al panel el gobierno de instancia (admin) y el viewer (solo lectura).
-    if (!canGovern(access) && role !== 'viewer') {
+    if (!canGovern(access) && access.instanceAccess !== 'viewer') {
       location.replace('/');
       return;
     }
-    el.readOnly = role === 'viewer';
+    el.readOnly = !canGovern(access) && access.instanceAccess === 'viewer';
     // "Usar como manager" solo aplica a un superadmin que también sea manager; un
     // viewer nunca gestiona personas propias.
     el.isLeader = canGovern(access) && (await getLeader(user.uid)) != null;

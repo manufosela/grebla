@@ -1,7 +1,7 @@
 /**
  * <motivators-app> — shell de un juego de motivadores (Moving o Affective, según el
  * atributo `deck`). Pestañas según rol; en esta fase, «Jugar» (el tablero). El
- * cliente inyecta persistence, identity (jugador), round (ronda abierta) y role.
+ * cliente inyecta persistence, identity (jugador), round (ronda abierta) e isAdmin.
  * Las demás pestañas (Mis resultados, Resultados, Rondas) se añaden en fases
  * siguientes.
  */
@@ -21,7 +21,7 @@ export class MotivatorsApp extends LitElement {
     persistence: { attribute: false },
     identity: { attribute: false },
     round: { attribute: false },
-    role: { type: String },
+    isAdmin: { attribute: false },
     canManageRounds: { type: Boolean },
     uid: { type: String },
     rounds: { attribute: false },
@@ -55,7 +55,7 @@ export class MotivatorsApp extends LitElement {
     this.persistence = null;
     this.identity = null;
     this.round = null;
-    this.role = '';
+    this.isAdmin = false;
     this.uid = '';
     this.rounds = [];
     this.leaderNames = {};
@@ -124,7 +124,7 @@ export class MotivatorsApp extends LitElement {
     if (this._canPlay) tabs.push({ id: 'play', label: 'Jugar' }, { id: 'mine', label: 'Mis resultados' });
     tabs.push({ id: 'results', label: 'Resultados' });
     // Rondas: superadmin o gestor por política de la herramienta (RMR-TSK-0388).
-    if (this.role === 'superadmin' || this.canManageRounds) tabs.push({ id: 'rounds', label: 'Rondas' });
+    if (this.isAdmin || this.canManageRounds) tabs.push({ id: 'rounds', label: 'Rondas' });
     return tabs;
   }
 

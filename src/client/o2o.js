@@ -9,7 +9,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { createO2OContainer } from '../tools/o2o/composition/container.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern } from '../lib/accessRoles.js';
+import { canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { proposePrep } from '../lib/o2oAi.js';
 import { guardToolPage } from '../lib/toolGate.js';
 import { ROLES } from '../data/roles.js';
@@ -34,7 +34,7 @@ onUserChanged(async (user) => {
     if (!(await guardToolPage('o2o', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
 
     const { role, uid } = access;
-    if (!canGovern(access) && role !== 'leader') {
+    if (!canGovern(access) && !leadsTeam(access)) {
       app.error = 'Esta herramienta es para managers. Tu espacio de O2O está en «Mi espacio».';
       return;
     }
