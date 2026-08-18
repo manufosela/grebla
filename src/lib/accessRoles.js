@@ -154,24 +154,6 @@ export function viewsFor(access) {
 }
 
 /**
- * Wrapper de compatibilidad: vistas a partir del rol único derivado. Se mantiene
- * mientras haya consumidores del modelo antiguo; delega en `viewsFor` mapeando el
- * rol a sus ejes, así que su salida es idéntica a la histórica.
- * @param {'superadmin'|'supermanager'|'viewer'|'leader'|'engineer'|null} [role]
- * @returns {ViewKey[]}
- */
-export function viewsForRole(role) {
-  switch (role) {
-    case 'superadmin': return viewsFor({ instanceAccess: 'admin', functionalRole: null });
-    case 'supermanager': return viewsFor({ instanceAccess: null, functionalRole: 'supermanager' });
-    case 'leader': return viewsFor({ instanceAccess: null, functionalRole: 'leader' });
-    case 'viewer': return viewsFor({ instanceAccess: 'viewer', functionalRole: null });
-    case 'engineer': return viewsFor({ instanceAccess: null, functionalRole: 'engineer' });
-    default: return [];
-  }
-}
-
-/**
  * @typedef {'engineer'|'leader'|'supermanager'|null} FunctionalRole
  * @typedef {'admin'|'viewer'|null} InstanceAccess
  */
@@ -187,12 +169,11 @@ export function viewsForRole(role) {
  *  - `instanceAccess` (GOBIERNO, transversal): admin (gobierna y ve todo) o
  *    viewer (ve todo en solo lectura). admin gana a viewer. Es INDEPENDIENTE del
  *    rol funcional: un admin puede además ser manager o ingeniero.
- *  - `role`: el rol único DERIVADO por compatibilidad mientras se migran los
- *    consumidores. Replica EXACTAMENTE la prioridad histórica
- *    superadmin > supermanager > viewer > leader > engineer.
+ * El rol único derivado se RETIRÓ (RMR-TSK-0310): nadie decide ya con él; los
+ * predicados (canGovern, viewAll, leadsTeam, hasAccess) leen los ejes.
  *
  * @param {{ admin?: boolean, viewer?: boolean, supermanager?: boolean, leader?: boolean, engineer?: boolean }} membership
- * @returns {{ functionalRole: FunctionalRole, instanceAccess: InstanceAccess, role: import('./access.js').AccessRole }}
+ * @returns {{ functionalRole: FunctionalRole, instanceAccess: InstanceAccess }}
  */
 export function accessAxes(membership = {}) {
   const instanceAccess = membership.admin ? 'admin' : membership.viewer ? 'viewer' : null;
@@ -203,15 +184,7 @@ export function accessAxes(membership = {}) {
       : membership.engineer
         ? 'engineer'
         : null;
-  // Compatibilidad: el rol único con la prioridad de siempre.
-  const role = instanceAccess === 'admin'
-    ? 'superadmin'
-    : functionalRole === 'supermanager'
-      ? 'supermanager'
-      : instanceAccess === 'viewer'
-        ? 'viewer'
-        : functionalRole; // 'leader' | 'engineer' | null
-  return { functionalRole, instanceAccess, role };
+  return { functionalRole, instanceAccess };
 }
 
 /**

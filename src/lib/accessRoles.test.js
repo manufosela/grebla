@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor } from './accessRoles.js';
 
 describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
   it('un admin que además es líder conserva las tres vistas', () => {
@@ -29,18 +29,6 @@ describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
   });
 });
 
-describe('viewsForRole sigue siendo equivalente (wrapper de compatibilidad)', () => {
-  it('devuelve lo mismo que antes para cada rol del modelo antiguo', () => {
-    expect(viewsForRole('superadmin')).toEqual(['gestion', 'manager', 'engineer']);
-    expect(viewsForRole('supermanager')).toEqual(['manager', 'engineer']);
-    expect(viewsForRole('leader')).toEqual(['manager', 'engineer']);
-    expect(viewsForRole('viewer')).toEqual(['gestion']);
-    expect(viewsForRole('engineer')).toEqual(['engineer']);
-    expect(viewsForRole(null)).toEqual([]);
-    expect(viewsForRole(undefined)).toEqual([]);
-  });
-});
-
 describe('viewAll y canGovern', () => {
   it('viewAll cuando hay gobierno (admin o viewer ven todo)', () => {
     expect(viewAll({ instanceAccess: 'admin' })).toBe(true);
@@ -57,22 +45,22 @@ describe('viewAll y canGovern', () => {
 
 describe('accessAxes (RMR-TSK-0303: dos ejes ortogonales)', () => {
   it('separa gobierno (instanceAccess) del rol funcional (functionalRole)', () => {
-    // Un admin que además es líder: gobierna Y tiene su equipo. El role derivado
-    // sigue siendo superadmin por compatibilidad, pero ya no pierde su faceta.
+    // Un admin que además es líder: gobierna Y tiene su equipo, sin que ninguna
+    // faceta aplaste a la otra (el rol derivado se retiró en RMR-TSK-0310).
     expect(accessAxes({ admin: true, leader: true })).toEqual({
-      instanceAccess: 'admin', functionalRole: 'leader', role: 'superadmin',
+      instanceAccess: 'admin', functionalRole: 'leader',
     });
   });
 
   it('un líder normal: solo eje funcional', () => {
     expect(accessAxes({ leader: true })).toEqual({
-      instanceAccess: null, functionalRole: 'leader', role: 'leader',
+      instanceAccess: null, functionalRole: 'leader',
     });
   });
 
   it('un admin con ficha de ingeniero conserva su faceta funcional', () => {
     expect(accessAxes({ admin: true, engineer: true })).toEqual({
-      instanceAccess: 'admin', functionalRole: 'engineer', role: 'superadmin',
+      instanceAccess: 'admin', functionalRole: 'engineer',
     });
   });
 
@@ -87,18 +75,8 @@ describe('accessAxes (RMR-TSK-0303: dos ejes ortogonales)', () => {
     expect(accessAxes({ viewer: true }).instanceAccess).toBe('viewer');
   });
 
-  it('el role derivado replica EXACTAMENTE la prioridad actual', () => {
-    const roleOf = (m) => accessAxes(m).role;
-    expect(roleOf({ admin: true, supermanager: true, viewer: true, leader: true, engineer: true })).toBe('superadmin');
-    expect(roleOf({ supermanager: true, viewer: true, leader: true })).toBe('supermanager');
-    expect(roleOf({ viewer: true, leader: true })).toBe('viewer');
-    expect(roleOf({ leader: true, engineer: true })).toBe('leader');
-    expect(roleOf({ engineer: true })).toBe('engineer');
-    expect(roleOf({})).toBe(null);
-  });
-
-  it('sin ninguna pertenencia, ambos ejes son null y role null', () => {
-    expect(accessAxes({})).toEqual({ instanceAccess: null, functionalRole: null, role: null });
+  it('sin ninguna pertenencia, ambos ejes son null', () => {
+    expect(accessAxes({})).toEqual({ instanceAccess: null, functionalRole: null });
   });
 });
 
@@ -113,37 +91,6 @@ describe('ROLE_COLLECTION', () => {
     expect(ROLE_COLLECTION.superadmin).toBe('admins');
     expect(ROLE_COLLECTION.viewer).toBe('viewers');
     expect(ROLE_COLLECTION.leader).toBe('leaders');
-  });
-});
-
-describe('viewsForRole', () => {
-  it('el superadmin recibe SIEMPRE las tres vistas (gestión, herramientas, ingeniero)', () => {
-    // Regresión RMR-BUG-0050: antes solo veía «manager» (herramientas) si además
-    // era líder de un equipo; ahora las tiene siempre (viewAll en cada tool).
-    expect(viewsForRole('superadmin')).toEqual(['gestion', 'manager', 'engineer']);
-  });
-
-  it('el líder conmuta entre manager (herramientas) e ingeniero', () => {
-    expect(viewsForRole('leader')).toEqual(['manager', 'engineer']);
-  });
-
-  it('el supermanager (Head of X) ve las herramientas de su rama y el preview de ingeniero, sin gestión', () => {
-    // RMR-TSK-0291: opera su rama de EMs (como un líder ampliado), pero NO
-    // administra la organización → mismas vistas que el líder, sin «gestion».
-    expect(viewsForRole('supermanager')).toEqual(['manager', 'engineer']);
-  });
-
-  it('el viewer solo tiene gestión (sin conmutador)', () => {
-    expect(viewsForRole('viewer')).toEqual(['gestion']);
-  });
-
-  it('el ingeniero solo tiene su propio espacio', () => {
-    expect(viewsForRole('engineer')).toEqual(['engineer']);
-  });
-
-  it('sin rol no hay ninguna vista', () => {
-    expect(viewsForRole(null)).toEqual([]);
-    expect(viewsForRole(undefined)).toEqual([]);
   });
 });
 
