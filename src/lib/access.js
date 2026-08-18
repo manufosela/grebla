@@ -13,7 +13,6 @@ import { db } from './firebase.js';
 import { getMyPerson, sealInvite } from './engineer.js';
 import { accessAxes, viewsFor } from './accessRoles.js';
 
-/** @typedef {'superadmin'|'supermanager'|'viewer'|'leader'|'engineer'|null} AccessRole */
 /** @typedef {import('./accessRoles.js').FunctionalRole} FunctionalRole */
 /** @typedef {import('./accessRoles.js').InstanceAccess} InstanceAccess */
 
@@ -21,9 +20,6 @@ import { accessAxes, viewsFor } from './accessRoles.js';
  * Resuelve el acceso del usuario en DOS EJES ORTOGONALES (ADR RMR-PCS-0024):
  *  - `functionalRole`: qué es (supermanager/leader/engineer) — define su alcance.
  *  - `instanceAccess`: gobierno de la instancia (admin/viewer), independiente.
- *  - `role`: el rol único DERIVADO por compatibilidad (misma prioridad de
- *    siempre: superadmin > supermanager > viewer > leader > engineer) mientras
- *    se migran los consumidores; NO cambia respecto al modelo anterior.
  *  - `personId`: id de la persona /people/{id} vinculada, si la tiene (ahora
  *    puede acompañar a un admin/leader con ficha; es aditivo, solo lo lee la
  *    vista de ingeniero).
@@ -34,11 +30,13 @@ import { accessAxes, viewsFor } from './accessRoles.js';
  * único paso con efecto, `sealInvite`, se mantiene EXACTAMENTE en el mismo caso
  * que antes: cuando el usuario no tiene ningún acceso (ni funcional ni gobierno).
  * @param {import('firebase/auth').User|null} user
- * @returns {Promise<{ role: AccessRole, uid: string|null, personId?: string,
+ * El rol único derivado se RETIRÓ (RMR-TSK-0310): los consumidores deciden con
+ * los predicados de ejes (canGovern, viewAll, leadsTeam, hasAccess).
+ * @returns {Promise<{ uid: string|null, personId?: string,
  *   functionalRole: FunctionalRole, instanceAccess: InstanceAccess }>}
  */
 export async function resolveAccess(user) {
-  if (!user) return { role: null, uid: null, functionalRole: null, instanceAccess: null };
+  if (!user) return { uid: null, functionalRole: null, instanceAccess: null };
   const [adminSnap, supermanagerSnap, viewerSnap, leaderSnap, person] = await Promise.all([
     getDoc(doc(db, 'admins', user.uid)),
     getDoc(doc(db, 'supermanagers', user.uid)),
@@ -64,8 +62,8 @@ export async function resolveAccess(user) {
     if (linked) { membership = { ...membership, engineer: true }; personId = linked.id; }
   }
 
-  const { role, functionalRole, instanceAccess } = accessAxes(membership);
-  return { role, uid: user.uid, personId, functionalRole, instanceAccess };
+  const { functionalRole, instanceAccess } = accessAxes(membership);
+  return { uid: user.uid, personId, functionalRole, instanceAccess };
 }
 
 /** @typedef {import('./accessRoles.js').ViewKey} ViewKey */
@@ -77,9 +75,9 @@ export async function resolveAccess(user) {
  * funcional. La vista «engineer» se ofrece como preview a manager/head; si no
  * tienen ficha, «Mi espacio» lo avisa.
  * @param {import('firebase/auth').User|null} user
- * @returns {Promise<{ role: AccessRole, uid: string|null, functionalRole: FunctionalRole, instanceAccess: InstanceAccess, views: ViewKey[] }>}
+ * @returns {Promise<{ uid: string|null, functionalRole: FunctionalRole, instanceAccess: InstanceAccess, views: ViewKey[] }>}
  */
 export async function resolveViews(user) {
-  const { role, uid, functionalRole, instanceAccess } = await resolveAccess(user);
-  return { role, uid, functionalRole, instanceAccess, views: viewsFor({ functionalRole, instanceAccess }) };
+  const { uid, functionalRole, instanceAccess } = await resolveAccess(user);
+  return { uid, functionalRole, instanceAccess, views: viewsFor({ functionalRole, instanceAccess }) };
 }
