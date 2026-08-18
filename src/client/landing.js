@@ -60,9 +60,9 @@ onUserChanged(async (user) => {
     }
     // El viewer siempre entra al panel de gestión en modo solo lectura: no
     // gestiona personas propias, así que no hay "usar como manager" para él.
-    // El viewer PURO (sin faceta funcional) entra al panel en solo lectura; un
-    // viewer que además lidera va al hub como cualquier líder (semántica de ejes).
-    if (access.instanceAccess === 'viewer' && !access.functionalRole) {
+    // «Un viewer es viewer»: observador puro, sin faceta funcional (accessAxes
+    // la anula en origen) → siempre al panel en solo lectura.
+    if (access.instanceAccess === 'viewer') {
       location.replace('/admin');
       return;
     }

@@ -14,8 +14,9 @@ describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
     expect(viewsFor({ instanceAccess: 'viewer', functionalRole: null })).toEqual(['gestion']);
   });
 
-  it('un viewer que además es líder puede gestionar su equipo (corrige el modelo)', () => {
-    expect(viewsFor({ instanceAccess: 'viewer', functionalRole: 'leader' })).toEqual(['gestion', 'manager', 'engineer']);
+  it('el viewer solo tiene el panel: «un viewer es viewer», sin faceta funcional', () => {
+    // La combinación viewer+líder no existe: accessAxes la anula en origen.
+    expect(viewsFor(accessAxes({ viewer: true, leader: true }))).toEqual(['gestion']);
   });
 
   it('un líder o head: herramientas + su espacio, sin gestión', () => {
@@ -68,6 +69,14 @@ describe('accessAxes (RMR-TSK-0303: dos ejes ortogonales)', () => {
     expect(accessAxes({ supermanager: true, leader: true, engineer: true }).functionalRole).toBe('supermanager');
     expect(accessAxes({ leader: true, engineer: true }).functionalRole).toBe('leader');
     expect(accessAxes({ engineer: true }).functionalRole).toBe('engineer');
+  });
+
+  it('«un viewer es viewer»: anula cualquier faceta funcional (regla 2026-08-18)', () => {
+    expect(accessAxes({ viewer: true, leader: true })).toEqual({ instanceAccess: 'viewer', functionalRole: null });
+    expect(accessAxes({ viewer: true, supermanager: true })).toEqual({ instanceAccess: 'viewer', functionalRole: null });
+    expect(accessAxes({ viewer: true, engineer: true })).toEqual({ instanceAccess: 'viewer', functionalRole: null });
+    // El admin NO es viewer: conserva su faceta funcional aunque esté en /viewers.
+    expect(accessAxes({ admin: true, viewer: true, leader: true }).functionalRole).toBe('leader');
   });
 
   it('admin gana a viewer en el eje de gobierno', () => {
