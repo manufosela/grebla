@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { rootRoles, childrenOf, coveredRoleLabels, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -188,5 +188,48 @@ describe('superiorCandidatesFor — el superior sale del organigrama de roles (R
     const out = superiorCandidatesFor(soloHead[0], soloHead, roles);
     expect(out.candidates).toEqual([]);
     expect(out.superiorRole.id).toBe('head');
+  });
+});
+
+describe('capas canónicas (RMR-TSK-0434) — el rango sale del rol, no de la cadena', () => {
+  // Data joven: el Head sostiene ICs directamente (sin capa de EMs).
+  const roles = [
+    { id: 'cto', label: 'CTO', branch: 'engineering', reportsToRoleId: null },
+    { id: 'head', label: 'Head', branch: 'engineering', reportsToRoleId: 'cto' },
+    { id: 'em', label: 'EM', branch: 'engineering', reportsToRoleId: 'head' },
+    { id: 'engineer', label: 'Engineer', branch: 'engineering', reportsToRoleId: 'em' },
+    { id: 'head-data', label: 'Head of Data', branch: 'data', reportsToRoleId: 'cto', layer: 1 },
+    { id: 'data-eng', label: 'Data Engineer', branch: 'data', reportsToRoleId: 'head-data', layer: 3 },
+  ];
+
+  it('layerOf: la capa declarada manda; sin declarar, la profundidad de cadena', () => {
+    expect(layerOf(roles, roles.find((r) => r.id === 'data-eng'))).toBe(3);
+    expect(layerOf(roles, roles.find((r) => r.id === 'engineer'))).toBe(3);
+    expect(layerOf(roles, roles.find((r) => r.id === 'em'))).toBe(2);
+    expect(layerOf(roles, roles.find((r) => r.id === 'cto'))).toBe(0);
+  });
+
+  it('pyramidLayers agrupa por capa: los ICs de Data bajan con el resto de ICs', () => {
+    const layers = pyramidLayers(roles);
+    const ids = layers.map((l) => l.roles.map((r) => r.id));
+    expect(ids).toEqual([['cto'], ['head', 'head-data'], ['em'], ['engineer', 'data-eng']]);
+    expect(layers.map((l) => l.layer)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('una capa declarada inválida (negativa, no numérica) cae al fallback', () => {
+    const raros = [{ id: 'x', label: 'X', branch: 'data', reportsToRoleId: null, layer: -2 },
+      { id: 'y', label: 'Y', branch: 'data', reportsToRoleId: 'x', layer: 'tres' }];
+    expect(layerOf(raros, raros[0])).toBe(0);
+    expect(layerOf(raros, raros[1])).toBe(1);
+  });
+
+  it('coveredRoleLabels: el Head de Data «ejerce también de EM» (capa saltada)', () => {
+    expect(coveredRoleLabels(roles, roles.find((r) => r.id === 'head-data'))).toEqual(['EM']);
+    // El Head de engineering no salta capas (sus hijos están justo encima).
+    expect(coveredRoleLabels(roles, roles.find((r) => r.id === 'head'))).toEqual([]);
+    // Capa saltada sin roles conocidos → sin etiqueta (badge genérico en la UI).
+    const sinNombre = [{ id: 'a', label: 'A', branch: 'x', reportsToRoleId: null, layer: 0 },
+      { id: 'b', label: 'B', branch: 'x', reportsToRoleId: 'a', layer: 2 }];
+    expect(coveredRoleLabels(sinNombre, sinNombre[0])).toEqual([]);
   });
 });

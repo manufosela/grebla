@@ -18,6 +18,9 @@ const toOrgRole = (data, id) => ({
   label: data.label ?? id,
   branch: data.branch ?? 'generico',
   reportsToRoleId: data.reportsToRoleId ?? null,
+  // Capa canónica (RMR-TSK-0434): dónde vive en la pirámide; null = auto
+  // (profundidad de cadena). Solo enteros >= 0 (lo demás se descarta).
+  layer: Number.isInteger(data.layer) && data.layer >= 0 ? data.layer : null,
 });
 
 /** @returns {Promise<OrgRole[]>} */
@@ -30,7 +33,7 @@ export async function listOrgRoles() {
  * Crea o actualiza un rol. `id` es la clave estable (slug); `merge` conserva
  * campos no enviados.
  * @param {string} id
- * @param {{ label: string, branch: string, reportsToRoleId?: string|null }} data
+ * @param {{ label: string, branch: string, reportsToRoleId?: string|null, layer?: number|null }} data
  * @returns {Promise<void>}
  */
 export function saveOrgRole(id, data) {
@@ -40,6 +43,7 @@ export function saveOrgRole(id, data) {
       label: data.label,
       branch: data.branch,
       reportsToRoleId: data.reportsToRoleId ?? null,
+      layer: Number.isInteger(data.layer) && data.layer >= 0 ? data.layer : null,
       updatedAt: serverTimestamp(),
     },
     { merge: true },
