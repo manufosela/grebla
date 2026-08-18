@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, accessAxes, branchScopeFor, canGovern, leaderChainsFrom, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, viewsForRole } from './accessRoles.js';
 
 describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
   it('un admin que además es líder conserva las tres vistas', () => {
@@ -392,5 +392,32 @@ describe('branchScopeFor — alcance de rama generalizado (RMR-TSK-0421)', () =>
   it('sin rol de liderazgo → null', () => {
     expect(branchScopeFor({ functionalRole: 'engineer' }, leaders, 'lead')).toBe(null);
     expect(branchScopeFor(null, leaders, 'lead')).toBe(null);
+  });
+});
+
+describe('predicados de ejes (RMR-TSK-0310) — adiós al role derivado', () => {
+  it('leadsTeam: lidera equipo quien es leader o supermanager, gobierne o no', () => {
+    expect(leadsTeam({ functionalRole: 'leader' })).toBe(true);
+    expect(leadsTeam({ functionalRole: 'supermanager', instanceAccess: 'admin' })).toBe(true);
+    expect(leadsTeam({ functionalRole: 'engineer' })).toBe(false);
+    expect(leadsTeam({ instanceAccess: 'admin' })).toBe(false);
+    expect(leadsTeam(null)).toBe(false);
+  });
+
+  it('hasAccess: cualquiera de los dos ejes da acceso; sin ninguno, no', () => {
+    expect(hasAccess({ instanceAccess: 'viewer', functionalRole: null })).toBe(true);
+    expect(hasAccess({ instanceAccess: null, functionalRole: 'engineer' })).toBe(true);
+    expect(hasAccess({ instanceAccess: null, functionalRole: null })).toBe(false);
+    expect(hasAccess(null)).toBe(false);
+  });
+
+  it('accessLabel: etiqueta legible desde los ejes (gobierno primero, luego el funcional)', () => {
+    expect(accessLabel({ instanceAccess: 'admin', functionalRole: null })).toBe('Superadmin');
+    expect(accessLabel({ instanceAccess: 'admin', functionalRole: 'leader' })).toBe('Superadmin · Manager');
+    expect(accessLabel({ instanceAccess: 'viewer', functionalRole: null })).toBe('Viewer');
+    expect(accessLabel({ instanceAccess: null, functionalRole: 'supermanager' })).toBe('Head');
+    expect(accessLabel({ instanceAccess: null, functionalRole: 'leader' })).toBe('Manager');
+    expect(accessLabel({ instanceAccess: null, functionalRole: 'engineer' })).toBe('Ingeniero/a');
+    expect(accessLabel({ instanceAccess: null, functionalRole: null })).toBe(null);
   });
 });
