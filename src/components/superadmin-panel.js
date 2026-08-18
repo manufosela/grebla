@@ -36,7 +36,7 @@ import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
 import { frameworkToMarkdown } from '../tools/career/domain/frameworkMarkdown.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { childrenOf, assertValidReportsTo, roleChain, orgRoleRows, branchColor, layerColor, superiorCandidatesFor } from '../tools/team/domain/orgRoles.js';
+import { childrenOf, assertValidReportsTo, layerOf, roleChain, orgRoleRows, branchColor, layerColor, superiorCandidatesFor } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
 
@@ -2255,6 +2255,40 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
+  /**
+   * Celda «Capa» (RMR-TSK-0434): la capa canónica del rol en la pirámide.
+   * «Auto» = profundidad de su cadena (comportamiento de siempre); fijarla
+   * coloca al rol a esa altura aunque su cadena sea corta (Data: ingenieros en
+   * la capa de ICs aunque reporten a un Head).
+   */
+  _renderRoleLayerCell(role, readOnly) {
+    const effective = layerOf(this._orgRoles, role);
+    if (readOnly) return html`<span class="muted">${role.layer ?? `auto (${effective})`}</span>`;
+    return html`<select title="Capa canónica: 0 = base (dirección); Auto = según la cadena"
+        @change=${(e) => this._setRoleLayer(role.id, e.target.value)}>
+      <option value="" ?selected=${role.layer == null}>Auto (${effective})</option>
+      ${[0, 1, 2, 3, 4, 5].map((n) => html`<option value=${n} ?selected=${role.layer === n}>${n}${n === 0 ? ' · base' : ''}</option>`)}
+    </select>`;
+  }
+
+  /** Fija (o devuelve a auto) la capa canónica de un rol. */
+  async _setRoleLayer(roleId, value) {
+    this._orgError = '';
+    this._orgNotice = '';
+    const role = this._orgRoles.find((r) => r.id === roleId);
+    if (!role) return;
+    const layer = value === '' ? null : Number(value);
+    const prev = role.layer ?? null;
+    this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, layer } : r));
+    try {
+      await saveOrgRole(roleId, { label: role.label, branch: role.branch, reportsToRoleId: role.reportsToRoleId ?? null, layer });
+      this._orgNotice = layer == null ? `«${role.label}» vuelve a capa automática.` : `«${role.label}» fijado en la capa ${layer}.`;
+    } catch (err) {
+      this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, layer: prev } : r));
+      this._orgError = err instanceof Error ? err.message : 'No se pudo cambiar la capa del rol.';
+    }
+  }
+
   /** Reasigna el superior de un rol validando ciclos contra el catálogo actual. */
   async _setRoleParent(roleId, parentId) {
     this._orgError = '';
@@ -2280,7 +2314,7 @@ export class SuperadminPanel extends LitElement {
     const prevBranch = role.branch;
     this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, branch: branchId } : r));
     try {
-      await saveOrgRole(roleId, { label: role.label, branch: branchId, reportsToRoleId: role.reportsToRoleId ?? null });
+      await saveOrgRole(roleId, { label: role.label, branch: branchId, reportsToRoleId: role.reportsToRoleId ?? null, layer: role.layer ?? null });
       this._orgNotice = `«${role.label}» movido a ${this._branchLabel(branchId)}.`;
     } catch (err) {
       this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, branch: prevBranch } : r));
@@ -2298,7 +2332,7 @@ export class SuperadminPanel extends LitElement {
     if (!role) return;
     if (!label) { this._orgError = 'El nombre no puede quedar vacío.'; return; }
     try {
-      await saveOrgRole(roleId, { label, branch: role.branch, reportsToRoleId: role.reportsToRoleId ?? null });
+      await saveOrgRole(roleId, { label, branch: role.branch, reportsToRoleId: role.reportsToRoleId ?? null, layer: role.layer ?? null });
       this._orgRoles = this._orgRoles.map((r) => (r.id === roleId ? { ...r, label } : r));
       this._editRoleId = null;
       this._editRoleLabel = '';
@@ -2440,7 +2474,7 @@ export class SuperadminPanel extends LitElement {
         ${this._orgRoles.length === 0
           ? html`<p class="empty">Aún no hay roles. Créalos abajo o ejecuta el seed inicial.</p>`
           : html`<div class="table-wrap"><table class="org-roles">
-              <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th>${ro ? '' : html`<th></th>`}</tr></thead>
+              <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th><th title="Capa canónica de la pirámide (RMR-TSK-0434)">Capa</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
                 ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfTree }) => html`<tr class=${firstOfTree ? 'branch-start' : ''}>
                   <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${this._renderRoleName(role)}</td>
@@ -2451,6 +2485,7 @@ export class SuperadminPanel extends LitElement {
                         <option value="">— sin inferior (base) —</option>
                         ${this._orgRoles.filter((r) => r.id !== role.id).map((r) => html`<option value=${r.id}>${r.label}</option>`)}
                       </select>`}</td>
+                  <td>${this._renderRoleLayerCell(role, ro)}</td>
                   ${ro ? '' : html`<td>${this._orgConfirmDelete === role.id
                     ? html`<span class="confirm">¿Borrar? <button @click=${() => this._removeRole(role.id)}>Sí</button> <button @click=${() => { this._orgConfirmDelete = null; }}>No</button></span>`
                     : html`<button class="del-btn" @click=${() => { this._orgConfirmDelete = role.id; }}>Borrar</button>`}</td>`}

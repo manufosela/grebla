@@ -14,6 +14,7 @@
  * @property {string} label
  * @property {OrgBranch} branch
  * @property {string|null} reportsToRoleId   rol superior, o null si es cima
+ * @property {number|null} [layer]   capa canónica de la pirámide (RMR-TSK-0434); null = auto
  */
 
 /** @param {OrgRole[]} roles @returns {Map<string, OrgRole>} */
@@ -198,4 +199,65 @@ export function superiorCandidatesFor(person, people, roles) {
   const superiorRole = (roles ?? []).find((r) => r.id === role.reportsToRoleId) ?? null;
   if (!superiorRole) return { candidates: [], superiorRole: null };
   return { candidates: others.filter((p) => p.orgRole === superiorRole.id), superiorRole };
+}
+
+/**
+ * Capa CANÓNICA de un rol (RMR-TSK-0434): dónde vive en la pirámide — 0 la
+ * cima de responsabilidad (dirección), y hacia arriba heads, EMs, ICs. La capa
+ * declarada (`role.layer`, editable en el panel) MANDA; sin declarar (o
+ * inválida) cae a la profundidad de su cadena, que era el comportamiento de
+ * siempre. Así una rama joven (Data: Head con ICs directos) coloca a sus
+ * ingenieros en la capa de ICs aunque su cadena sea corta.
+ * @param {OrgRole[]} roles
+ * @param {OrgRole} role
+ * @returns {number}
+ */
+export function layerOf(roles, role) {
+  const declared = role?.layer;
+  if (Number.isInteger(declared) && declared >= 0) return declared;
+  return roleDepth(roles, role?.id);
+}
+
+/**
+ * Filas de la pirámide agrupadas por CAPA (de la cima 0 hacia arriba), no por
+ * profundidad de cadena. Capas sin roles no generan fila (el hueco lo cuentan
+ * las flechas y el badge de «ejerce también de»).
+ * @param {OrgRole[]} roles
+ * @returns {{ layer: number, roles: OrgRole[] }[]}
+ */
+export function pyramidLayers(roles) {
+  const list = roles ?? [];
+  const byLayer = new Map();
+  for (const role of list) {
+    const layer = layerOf(list, role);
+    byLayer.set(layer, [...(byLayer.get(layer) ?? []), role]);
+  }
+  return [...byLayer.entries()]
+    .toSorted((a, b) => a[0] - b[0])
+    .map(([layer, layerRoles]) => ({ layer, roles: layerRoles }));
+}
+
+/**
+ * Labels de los roles de las capas que un mando SALTA hacia sus hijos (RMR-TSK-0434):
+ * un Head con ICs directos (hijo dos capas más arriba) «ejerce también de EM».
+ * Devuelve los labels únicos de los roles que viven en esas capas intermedias
+ * (de cualquier rama: nombran la capa); vacío si no salta ninguna o si las
+ * capas saltadas no tienen roles que les den nombre.
+ * @param {OrgRole[]} roles
+ * @param {OrgRole} role
+ * @returns {string[]}
+ */
+export function coveredRoleLabels(roles, role) {
+  const list = roles ?? [];
+  const own = layerOf(list, role);
+  const skipped = new Set();
+  for (const child of childrenOf(list, role?.id)) {
+    const childLayer = layerOf(list, child);
+    for (let layer = own + 1; layer < childLayer; layer += 1) skipped.add(layer);
+  }
+  const labels = list
+    .filter((r) => skipped.has(layerOf(list, r)))
+    .map((r) => r.label)
+    .filter(Boolean);
+  return [...new Set(labels)];
 }

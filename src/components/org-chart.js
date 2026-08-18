@@ -10,7 +10,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { listOrgRoles } from '../lib/orgRoles.js';
 import { listOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { roleChain, branchColor, layerColor } from '../tools/team/domain/orgRoles.js';
+import { branchColor, coveredRoleLabels, layerColor, pyramidLayers } from '../tools/team/domain/orgRoles.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -40,6 +40,8 @@ export class OrgChart extends LitElement {
     .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
     .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
+    /* Badge «ejerce también de X» (RMR-TSK-0434): mando que cubre una capa vacía. */
+    .pyr-acts { font-style: normal; font-size: 0.66rem; font-weight: 700; color: #7a5c00; background: color-mix(in srgb, #e9c46a 35%, transparent); border: 1px solid #b8860b; border-radius: 999px; padding: 0.05rem 0.45rem; cursor: help; }
     /* Etiqueta de capa: solo la pirámide GLOBAL la renderiza; en mini (por ramas),
        si apareciera, fluye en normal-flow (sin solaparse con las fichas). */
     .pyr-lvl { flex: 100%; text-align: center; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lv, #9ca3af); }
@@ -113,20 +115,25 @@ export class OrgChart extends LitElement {
 
   _branchColor(b) { return branchColor(b); }
 
-  /** Niveles (por profundidad) de un conjunto de roles, de la base (abajo) a las
-   *  hojas (arriba): array de [rolesEnEseNivel], en orden invertido para pintar. */
+  /** Filas de la pirámide por CAPA CANÓNICA (RMR-TSK-0434), de las hojas
+   *  (arriba) a la base (abajo): la capa declarada del rol manda y, sin declarar,
+   *  cae a la profundidad de su cadena. Así una rama joven (Head con ICs
+   *  directos) mantiene a sus ingenieros en la capa de ICs. Capas vacías no
+   *  generan fila. */
   _levelsOf(roles) {
-    const depthOf = (id) => Math.max(0, roleChain(roles, id).length - 1);
-    const maxDepth = Math.max(0, ...roles.map((r) => depthOf(r.id)));
-    const levels = [];
-    for (let d = maxDepth; d >= 0; d -= 1) levels.push(roles.filter((r) => depthOf(r.id) === d));
-    return levels;
+    return pyramidLayers(roles).toReversed();
   }
 
   _role(r, color) {
+    // Badge derivado (RMR-TSK-0434): un mando cuyos hijos saltan capa «ejerce
+    // también de» los roles de la capa saltada (Head of Data → EM). Se calcula
+    // contra TODOS los roles visibles para que la capa tenga nombre aunque sea
+    // de otra rama.
+    const covers = coveredRoleLabels(this._visibleRoles, r);
     return html`<span class="pyr-role" style="border-color:${color}">
       <span class="pyr-dot" style="background:${color}"></span>${r.label}
       <em class="pyr-branch">${this._branchLabel(r.branch)}</em>
+      ${covers.length ? html`<em class="pyr-acts" title="Sus reportes directos saltan una capa: cubre ese rol mientras la rama crece">ejerce también de ${covers.join(' / ')}</em>` : null}
     </span>`;
   }
 
@@ -151,22 +158,20 @@ export class OrgChart extends LitElement {
 
   _renderGlobal() {
     const levels = this._levelsOf(this._visibleRoles);
-    const maxDepth = levels.length - 1;
     return html`
       <div class="pyramid">
         ${this._crown ? html`<div class="pyr-crown">👥 ${this._crown}<em>a quienes todo el equipo sostiene</em></div>` : null}
-        ${levels.map((level, i) => {
+        ${levels.map(({ layer, roles: level }, i) => {
           const width = 100 - i * (60 / Math.max(1, levels.length));
-          // Etiqueta de NIVEL por banda (RMR-BUG-0071): la base (C-Level) abajo,
-          // los estratos numerados hacia arriba.
-          const depth = maxDepth - i;
+          // Etiqueta de CAPA por banda: la base (C-Level) abajo, los estratos
+          // numerados hacia arriba (capa canónica, no profundidad de cadena).
           // Dentro de cada franja, los roles se AGRUPAN por rama (cada grupo con
           // el color de su rama, separados) para ver qué va con qué.
           const groups = Object.groupBy(level, (r) => r.branch);
-          return html`<div class="pyr-level ${depth === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(depth)}">
-            ${depth === 0
+          return html`<div class="pyr-level ${layer === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(layer)}">
+            ${layer === 0
               ? html`<span class="pyr-lvl">Base · sostiene a todos</span>`
-              : html`<span class="pyr-lvl">Nivel ${depth}</span>`}
+              : html`<span class="pyr-lvl">Nivel ${layer}</span>`}
             ${Object.entries(groups).map(([branch, roles]) => html`
               <div class="pyr-group" style="--g:${this._branchColor(branch)}">
                 ${roles.map((r) => this._role(r, this._branchColor(branch)))}
@@ -197,7 +202,7 @@ export class OrgChart extends LitElement {
           return html`<div class="branch-col">
             <div class="branch-title" style="color:${color}"><span class="pyr-dot" style="background:${color}"></span> ${this._branchLabel(bid)}</div>
             <div class="pyramid mini">
-              ${levels.map((level, i) => {
+              ${levels.map(({ roles: level }, i) => {
                 const width = 100 - i * (50 / Math.max(1, levels.length));
                 return html`<div class="pyr-level" style="width:${Math.max(45, width)}%">
                   ${level.map((r) => this._role(r, color))}
