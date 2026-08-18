@@ -7,7 +7,7 @@
 import '../components/motivators/motivators-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern } from '../lib/accessRoles.js';
+import { canGovern, hasAccess } from '../lib/accessRoles.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { createMotivatorsContainer } from '../tools/motivators/composition/container.js';
 import { buildPlayerIdentity } from '../tools/motivators/application/identity.js';
@@ -35,16 +35,16 @@ onUserChanged(async (user) => {
     // (si deniega, pantalla de sin-acceso); después los requisitos internos.
     const gate = await guardToolPage('motivators', user, { isSuperadmin: canGovern(access), appEl: app });
     if (!gate) return;
-    if (!access.role) {
+    if (!hasAccess(access)) {
       app.error = 'No tienes acceso. Inicia sesión con tu cuenta del equipo.';
       return;
     }
 
-    app.role = access.role;
+    app.isAdmin = canGovern(access);
     // Gestión por política (RMR-TSK-0388): la pestaña Rondas también por managedBy.
     app.canManageRounds = canGovern(access) || gate.manage;
     app.uid = user.uid;
-    const person = access.role === 'engineer' ? await getMyPerson(user.uid) : null;
+    const person = access.functionalRole === 'engineer' && !access.instanceAccess ? await getMyPerson(user.uid) : null;
     app.identity = buildPlayerIdentity(access, person);
     const { persistence } = await createMotivatorsContainer({ mode: 'firestore' });
     app.persistence = persistence;

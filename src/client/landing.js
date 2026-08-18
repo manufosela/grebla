@@ -5,7 +5,7 @@
  */
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern } from '../lib/accessRoles.js';
+import { canGovern, hasAccess, leadsTeam } from '../lib/accessRoles.js';
 import { isSurveyAdmin } from '../lib/survey.js';
 import { getMyPerson, ensureEmployeePerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
@@ -34,7 +34,6 @@ onUserChanged(async (user) => {
   if (!user) return showLanding();
   try {
     const access = await resolveAccess(user);
-    const { role } = access;
     // Empleado del dominio de la instancia (acceso base, RMR-PCS-0027 · F6): con
     // email verificado del dominio configurado (/config/org.employeeDomain) accede
     // al hub aunque no tenga rol. Sin dominio configurado (demo) → siempre false.
@@ -46,22 +45,24 @@ onUserChanged(async (user) => {
     const canManageSurveys = canGovern(access) || (await isSurveyAdmin(user.uid));
     // Sin rol, sin gobierno, sin gestión de encuestas y sin ser empleado del
     // dominio: landing pública (comportamiento anterior, intacto en la demo).
-    if (!role && !canManageSurveys && !isEmployee) return showLanding();
+    if (!hasAccess(access) && !canManageSurveys && !isEmployee) return showLanding();
     // Conmutador de vistas (RMR-TSK-0250): un manager/superadmin que ha elegido
     // «vista de ingeniero» va a su propio «Mi espacio», no a las herramientas.
-    if (sessionStorage.getItem(VIEW_FLAG) === 'engineer' && (canGovern(access) || role === 'leader')) {
+    if (sessionStorage.getItem(VIEW_FLAG) === 'engineer' && (canGovern(access) || leadsTeam(access))) {
       location.replace('/mi-espacio');
       return;
     }
     // El ingeniero (persona vinculada) tiene su propio espacio personal: ni
     // landing pública ni herramientas de manager.
-    if (role === 'engineer') {
+    if (access.functionalRole === 'engineer' && !access.instanceAccess) {
       location.replace('/mi-espacio');
       return;
     }
     // El viewer siempre entra al panel de gestión en modo solo lectura: no
     // gestiona personas propias, así que no hay "usar como manager" para él.
-    if (role === 'viewer') {
+    // El viewer PURO (sin faceta funcional) entra al panel en solo lectura; un
+    // viewer que además lidera va al hub como cualquier líder (semántica de ejes).
+    if (access.instanceAccess === 'viewer' && !access.functionalRole) {
       location.replace('/admin');
       return;
     }
@@ -86,8 +87,7 @@ onUserChanged(async (user) => {
     // buildPersonRef incluye los toolOverrides: las excepciones por persona
     // cuentan también en la visibilidad de la landing (RMR-TSK-0387).
     const personRef = buildPersonRef(person);
-    const isLeaderish = canGovern(access) || role === 'leader'
-      || access.functionalRole === 'leader' || access.functionalRole === 'supermanager';
+    const isLeaderish = canGovern(access) || leadsTeam(access);
     showTools({ personRef, policies, isSuperadmin: canGovern(access), isLeaderish, canManageSurveys, filterFailed });
     if (canGovern(access)) backToAdmin?.removeAttribute('hidden');
   } catch {

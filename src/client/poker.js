@@ -11,7 +11,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { listLeaders } from '../lib/leaders.js';
-import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('poker-app');
@@ -28,19 +28,18 @@ onUserChanged(async (user) => {
     const gate = await guardToolPage('poker', user, { isSuperadmin: canGovern(access), appEl: app });
     if (!gate) return;
 
-    const { role } = access;
     const person = await getMyPerson(user.uid).catch(() => null);
     app.uid = user.uid;
     app.authorName = person?.name ?? user.displayName ?? 'Sin nombre';
     // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy.
-    if (role === 'leader' || role === 'supermanager' || canGovern(access) || gate.manage) {
+    if (leadsTeam(access) || canGovern(access) || gate.manage) {
       app.leaderUid = user.uid;
       app.canManage = true;
       // Alcance de rama (RMR-TSK-0294): el supermanager ve además las sesiones de
       // los líderes que le reportan. Crearlas sigue siendo a su nombre.
       // Rama transitiva (RMR-TSK-0421): generalizada a todo líder con subárbol.
       app.leaderUids = branchScopeFor(access, await listLeaders(), user.uid);
-    } else if (role === 'engineer') {
+    } else if (access.functionalRole === 'engineer') {
       app.leaderUid = person?.ownerLeaderUid ?? null;
       app.canManage = false;
     } else {

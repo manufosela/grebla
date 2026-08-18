@@ -11,7 +11,7 @@ import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { listTeamMembers } from '../lib/retros.js';
 import { listLeaders } from '../lib/leaders.js';
-import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('retro-app');
@@ -24,10 +24,9 @@ onUserChanged(async (user) => {
     const gate = await guardToolPage('retros', user, { isSuperadmin: canGovern(access), appEl: app });
     if (!gate) return;
 
-    const { role } = access;
     app.uid = user.uid;
     // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy.
-    if (role === 'leader' || role === 'supermanager' || canGovern(access) || gate.manage) {
+    if (leadsTeam(access) || canGovern(access) || gate.manage) {
       app.leaderUid = user.uid;
       app.canManage = true;
       // Alcance de rama (RMR-TSK-0294): el supermanager ve las retros y el roster
@@ -37,7 +36,7 @@ onUserChanged(async (user) => {
       const leaderUids = branchScopeFor(access, await listLeaders(), user.uid);
       app.leaderUids = leaderUids;
       app.members = await listTeamMembers(leaderUids ?? user.uid);
-    } else if (role === 'engineer') {
+    } else if (access.functionalRole === 'engineer') {
       const person = await getMyPerson(user.uid);
       app.leaderUid = person?.ownerLeaderUid ?? null;
       app.canManage = false;

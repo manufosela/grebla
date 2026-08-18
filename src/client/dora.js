@@ -7,7 +7,7 @@ import '../components/dora/dora-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createDoraContainer } from '../tools/dora/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern } from '../lib/accessRoles.js';
+import { canGovern, hasAccess, leadsTeam } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 import { interpretMetrics, loadInterpretation } from '../lib/metricsAi.js';
 
@@ -17,12 +17,11 @@ onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
     const access = await resolveAccess(user);
-    const { role } = access;
     // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
     // (si deniega, pantalla de sin-acceso); después los requisitos internos.
     const gate = await guardToolPage('dora', user, { isSuperadmin: canGovern(access), appEl: app });
     if (!gate) return;
-    if (!role) {
+    if (!hasAccess(access)) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
@@ -35,7 +34,7 @@ onUserChanged(async (user) => {
     // tipo C-level) nunca edita: solo ve la lista.
     // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy
     // (las reglas lo respaldan vía /toolManagers).
-    app.canEdit = canGovern(access) || role === 'leader' || gate.manage;
+    app.canEdit = canGovern(access) || leadsTeam(access) || gate.manage;
     // Asignar/compartir repos (RMR-TSK-0185): solo el gobierno; necesita el
     // catálogo de líderes para los selects (best-effort, sin líderes no aparece).
     app.isAdmin = canGovern(access);

@@ -18,7 +18,7 @@ import { getMyPerson } from '../lib/engineer.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { listLeaders } from '../lib/leaders.js';
-import { branchScopeFor, canGovern } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern, hasAccess, leadsTeam } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('career-app');
@@ -31,15 +31,13 @@ onUserChanged(async (user) => {
     return;
   }
   try {
-    // Acceso en dos ejes (RMR-PCS-0024): `role` (derivado) distingue "es SOLO
-    // ingeniero" para el branch de jugar su plan; el gobierno (canGovern) da el
-    // "ver todo"; la rama sale del rol funcional.
+    // Acceso en dos ejes (RMR-PCS-0024): el gobierno (canGovern) da el
+    // "ver todo"; la rama y el branch de ingeniero salen del rol funcional.
     const access = await resolveAccess(user);
     // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de crear nada.
     if (!(await guardToolPage('career', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
 
-    const { role } = access;
-    if (!role) {
+    if (!hasAccess(access)) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
@@ -51,7 +49,7 @@ onUserChanged(async (user) => {
     // vinculada al login (getMyPerson) para cualquier rol.
     const ownPerson = await getMyPerson(user.uid);
     if (!ownPerson) {
-      app.error = role === 'engineer'
+      app.error = access.functionalRole === 'engineer'
         ? 'No se encontró tu persona vinculada. Habla con tu manager.'
         : 'No tienes una ficha propia para jugar tu carrera. Pide que te vinculen una; el progreso de tu equipo está en la herramienta Equipo.';
       return;
@@ -70,7 +68,7 @@ onUserChanged(async (user) => {
     // el ROSTER de su equipo para la cola del brujo (MC-22) y el tiempo agregado
     // (MC-23) — overlays de manager, SIN selector. Alcance (RMR-TSK-0293): admin
     // → toda la organización; supermanager → su rama de líderes; líder → la suya.
-    const isManager = role === 'leader' || role === 'supermanager' || canGovern(access);
+    const isManager = leadsTeam(access) || canGovern(access);
     if (isManager) {
       app.canEdit = true;
       // Rama transitiva (RMR-TSK-0421): todo líder con managers debajo ve el

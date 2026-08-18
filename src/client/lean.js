@@ -7,7 +7,7 @@ import '../components/lean/lean-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createLeanContainer } from '../tools/lean/composition/container.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern } from '../lib/accessRoles.js';
+import { canGovern, hasAccess, leadsTeam } from '../lib/accessRoles.js';
 import { interpretMetrics, loadInterpretation } from '../lib/metricsAi.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
@@ -17,12 +17,11 @@ onUserChanged(async (user) => {
   if (!user || !app) return;
   try {
     const access = await resolveAccess(user);
-    const { role } = access;
     // Gate por política de la herramienta (RMR-TSK-0387): PRIMERO la política
     // (si deniega, pantalla de sin-acceso); después los requisitos internos.
     const gate = await guardToolPage('lean', user, { isSuperadmin: canGovern(access), appEl: app });
     if (!gate) return;
-    if (!role) {
+    if (!hasAccess(access)) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
       return;
     }
@@ -33,7 +32,7 @@ onUserChanged(async (user) => {
       viewAll: canGovern(access), // el gobierno de instancia ve y gestiona las unidades de toda la organización
     });
     // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy.
-    app.canEdit = canGovern(access) || role === 'leader' || gate.manage;
+    app.canEdit = canGovern(access) || leadsTeam(access) || gate.manage;
     app.refresh = refresh;
     app.discover = discover;
     app.interpret = interpretMetrics; // (re)generar la interpretación: solo el gobierno
