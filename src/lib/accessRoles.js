@@ -177,13 +177,20 @@ export function viewsFor(access) {
  */
 export function accessAxes(membership = {}) {
   const instanceAccess = membership.admin ? 'admin' : membership.viewer ? 'viewer' : null;
-  const functionalRole = membership.supermanager
-    ? 'supermanager'
-    : membership.leader
-      ? 'leader'
-      : membership.engineer
-        ? 'engineer'
-        : null;
+  // «Un viewer es viewer» (regla del usuario, 2026-08-18): el viewer es un
+  // observador puro — alguien a quien se le permite VER algunas herramientas —
+  // y NUNCA lidera ni tiene faceta funcional. Si por datos residuales (espejo
+  // del organigrama, altas antiguas) conviven /viewers con /leaders, aquí el
+  // viewer anula la faceta: no se resuelve como líder.
+  const functionalRole = instanceAccess === 'viewer'
+    ? null
+    : membership.supermanager
+      ? 'supermanager'
+      : membership.leader
+        ? 'leader'
+        : membership.engineer
+          ? 'engineer'
+          : null;
   return { functionalRole, instanceAccess };
 }
 
