@@ -259,6 +259,43 @@ export function leadersReportingTo(leaders, supermanagerUid) {
 }
 
 /**
+ * ¿Lidera un equipo o una rama? (RMR-TSK-0310): leader o supermanager en el eje
+ * funcional, gobierne o no la instancia. Es el predicado que sustituye a los
+ * antiguos `role === 'leader' || role === 'supermanager'` del rol derivado.
+ * @param {{ functionalRole?: string|null }|null|undefined} access
+ * @returns {boolean}
+ */
+export function leadsTeam(access) {
+  return access?.functionalRole === 'leader' || access?.functionalRole === 'supermanager';
+}
+
+/**
+ * ¿Tiene ALGÚN acceso? Cualquiera de los dos ejes basta. Sustituye al antiguo
+ * `!access.role` (RMR-TSK-0310).
+ * @param {{ instanceAccess?: string|null, functionalRole?: string|null }|null|undefined} access
+ * @returns {boolean}
+ */
+export function hasAccess(access) {
+  return Boolean(access?.instanceAccess || access?.functionalRole);
+}
+
+/** Etiquetas legibles de cada eje, para el badge de sesión. */
+const INSTANCE_LABEL = { admin: 'Superadmin', viewer: 'Viewer' };
+const FUNCTIONAL_LABEL = { supermanager: 'Head', leader: 'Manager', engineer: 'Ingeniero/a' };
+
+/**
+ * Etiqueta legible del acceso desde los DOS ejes (RMR-TSK-0310): el gobierno
+ * primero y el rol funcional después («Superadmin · Manager»), sin aplastar
+ * ninguna faceta como hacía el rol derivado. Sin acceso → null.
+ * @param {{ instanceAccess?: string|null, functionalRole?: string|null }|null|undefined} access
+ * @returns {string|null}
+ */
+export function accessLabel(access) {
+  const parts = [INSTANCE_LABEL[access?.instanceAccess], FUNCTIONAL_LABEL[access?.functionalRole]].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/**
  * Alcance de rama de un usuario en las tools de equipo (RMR-TSK-0421): si es
  * líder (o supermanager) y ALGUIEN le reporta en /leaders, su ámbito es
  * [él, ...su subárbol transitivo]; si no, null (ámbito de líder simple, la
