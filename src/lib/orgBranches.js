@@ -8,7 +8,7 @@
  * Lectura: cualquier autenticado (para pintar la rama de cada rol). Escritura:
  * solo superadmin (reglas de Firestore).
  */
-import { doc, collection, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, getDocs, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 
 /** @typedef {{ id: string, label: string }} OrgBranch */
@@ -17,6 +17,21 @@ import { db } from './firebase.js';
 export async function listOrgBranches() {
   const snap = await getDocs(collection(db, 'orgBranches'));
   return snap.docs.map((d) => ({ id: d.id, label: d.data().label ?? d.id }));
+}
+
+/**
+ * Suscripción EN VIVO a las ramas (RMR-TSK-0435): renombrar una rama en el
+ * panel se refleja al instante en las vistas abiertas. Devuelve la desuscripción.
+ * @param {(branches: Array<{ id: string, label: string }>) => void} onBranches
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void}
+ */
+export function watchOrgBranches(onBranches, onError) {
+  return onSnapshot(
+    collection(db, 'orgBranches'),
+    (snap) => onBranches(snap.docs.map((d) => ({ id: d.id, label: d.data().label ?? d.id }))),
+    (err) => onError?.(err),
+  );
 }
 
 /**

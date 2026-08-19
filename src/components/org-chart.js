@@ -7,8 +7,8 @@
  */
 import { LitElement, html, css } from 'lit';
 import { onUserChanged } from '../lib/auth.js';
-import { listOrgRoles } from '../lib/orgRoles.js';
-import { listOrgBranches } from '../lib/orgBranches.js';
+import { watchOrgRoles } from '../lib/orgRoles.js';
+import { watchOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
 import { branchColor, coveredRoleLabels, layerColor, pyramidLayers } from '../tools/team/domain/orgRoles.js';
 
@@ -88,30 +88,45 @@ export class OrgChart extends LitElement {
     super.connectedCallback();
     // Espera a la sesión: las reglas exigen estar autenticado para leer el catálogo.
     this._off = onUserChanged((user) => {
+      this._stopWatching();
       if (!user) { this._ready = true; this._error = 'Inicia sesión para consultar el organigrama.'; return; }
-      if (this._loadedForUser === user.uid) return;
       this._loadedForUser = user.uid;
       this._load();
     });
   }
 
+  /** Libera las suscripciones en vivo (RMR-TSK-0435). */
+  _stopWatching() {
+    this._unsubRoles?.();
+    this._unsubBranches?.();
+    this._unsubRoles = null;
+    this._unsubBranches = null;
+  }
+
   disconnectedCallback() {
+    this._stopWatching();
     this._off?.();
     super.disconnectedCallback();
   }
 
+  /**
+   * Carga EN VIVO (RMR-TSK-0435): roles y ramas por onSnapshot — cualquier
+   * cambio del panel (capa, depende-de, renombrar) repinta esta vista al
+   * instante, sin recargar; era lectura única y las pestañas abiertas se
+   * quedaban con la foto vieja. La corona (config) apenas cambia: lectura única.
+   */
   async _load() {
     this._error = '';
-    try {
-      const [roles, branches, crown] = await Promise.all([listOrgRoles(), listOrgBranches(), getUsersCrownLabel()]);
-      this._roles = roles;
-      this._branches = branches;
-      this._crown = crown;
-    } catch (err) {
-      this._error = 'No se pudo cargar el organigrama.';
-    } finally {
-      this._ready = true;
-    }
+    this._unsubRoles = watchOrgRoles(
+      (roles) => { this._roles = roles; this._ready = true; },
+      () => { this._error = 'No se pudo cargar el organigrama.'; this._ready = true; },
+    );
+    this._unsubBranches = watchOrgBranches(
+      (branches) => { this._branches = branches; },
+      () => { /* sin ramas se pintan los ids; el error de roles ya avisa */ },
+    );
+    // Sin corona configurada (o lectura fallida) la cima simplemente no se pinta.
+    this._crown = await getUsersCrownLabel().catch(() => '');
   }
 
   _branchLabel(id) {
@@ -166,31 +181,53 @@ export class OrgChart extends LitElement {
     return html`
       <div class="pyramid">
         ${this._crown ? html`<div class="pyr-crown">👥 ${this._crown}<em>a quienes todo el equipo sostiene</em></div>` : null}
-        ${levels.map(({ layer, subrows }, i) => {
-          const width = 100 - i * (60 / Math.max(1, levels.length));
-          // Etiqueta de CAPA por banda (capa canónica, no profundidad de cadena).
-          // Dentro de la banda: SUBFILAS por dependencia intra-capa (RMR-TSK-0434,
-          // el coCEO depende del CEO y ambos viven en la 0: se apilan, no se
-          // aplanan) y, dentro de cada subfila, grupos por rama.
-          // La subfila de abajo sostiene a la de arriba, como la pirámide grande.
-          return html`<div class="pyr-level stacked ${layer === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(layer)}">
-            ${layer === 0
-              ? html`<span class="pyr-lvl">Base · sostiene a todos</span>`
-              : html`<span class="pyr-lvl">Nivel ${layer}</span>`}
-            ${subrows.map((subrow, j) => {
-              const subGroups = Object.groupBy(subrow, (r) => r.branch);
-              return html`
-                ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
-                <div class="pyr-subrow">
-                  ${Object.entries(subGroups).map(([branch, roles]) => html`
-                    <div class="pyr-group" style="--g:${this._branchColor(branch)}">
-                      ${roles.map((r) => this._role(r, this._branchColor(branch)))}
-                    </div>`)}
-                </div>`;
-            })}
-          </div>`;
-        })}
+        ${levels.map((level, i) => this._globalLevel(level, i, levels.length))}
       </div>`;
+  }
+
+  /**
+   * Banda de la pirámide GLOBAL: etiqueta de capa + subfilas por dependencia
+   * intra-capa (RMR-TSK-0434, el coCEO depende del CEO y ambos viven en la 0:
+   * se apilan, no se aplanan; la subfila de abajo sostiene a la de arriba).
+   * Extraído para no anidar funciones (Sonar S2004).
+   */
+  _globalLevel({ layer, subrows }, i, total) {
+    const width = 100 - i * (60 / Math.max(1, total));
+    return html`<div class="pyr-level stacked ${layer === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(layer)}">
+      ${layer === 0
+        ? html`<span class="pyr-lvl">Base · sostiene a todos</span>`
+        : html`<span class="pyr-lvl">Nivel ${layer}</span>`}
+      ${subrows.map((subrow, j) => this._globalSubrow(subrow, j))}
+    </div>`;
+  }
+
+  /** Subfila de una banda global: flechita intra-capa + grupos por rama. */
+  _globalSubrow(subrow, j) {
+    const groups = Object.entries(Object.groupBy(subrow, (r) => r.branch));
+    return html`
+      ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
+      <div class="pyr-subrow">
+        ${groups.map(([branch, roles]) => html`
+          <div class="pyr-group" style="--g:${this._branchColor(branch)}">
+            ${roles.map((r) => this._role(r, this._branchColor(branch)))}
+          </div>`)}
+      </div>`;
+  }
+
+  /** Banda de una mini-pirámide por rama, con sus subfilas intra-capa apiladas
+   *  (extraído para no anidar funciones — Sonar S2004). */
+  _miniLevel({ subrows }, i, total, color) {
+    const width = 100 - i * (50 / Math.max(1, total));
+    return html`<div class="pyr-level stacked" style="width:${Math.max(45, width)}%">
+      ${subrows.map((subrow, j) => this._miniSubrow(subrow, j, color))}
+    </div>`;
+  }
+
+  /** Subfila de una banda mini: flechita intra-capa + tarjetas de la subfila. */
+  _miniSubrow(subrow, j, color) {
+    return html`
+      ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
+      <div class="pyr-subrow">${subrow.map((r) => this._role(r, color))}</div>`;
   }
 
   /** Una mini-pirámide invertida POR RAMA: cada rama con su cabeza (sin inferior)
@@ -214,14 +251,7 @@ export class OrgChart extends LitElement {
           return html`<div class="branch-col">
             <div class="branch-title" style="color:${color}"><span class="pyr-dot" style="background:${color}"></span> ${this._branchLabel(bid)}</div>
             <div class="pyramid mini">
-              ${levels.map(({ subrows }, i) => {
-                const width = 100 - i * (50 / Math.max(1, levels.length));
-                return html`<div class="pyr-level stacked" style="width:${Math.max(45, width)}%">
-                  ${subrows.map((subrow, j) => html`
-                    ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
-                    <div class="pyr-subrow">${subrow.map((r) => this._role(r, color))}</div>`)}
-                </div>`;
-              })}
+              ${levels.map((level, i) => this._miniLevel(level, i, levels.length, color))}
             </div>
           </div>`;
         })}
