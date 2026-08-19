@@ -54,3 +54,4 @@ pnpm-debug.log*
 .reviews/
 coverage/
 .scannerwork/
+.karajan/policy-decisions.jsonl
