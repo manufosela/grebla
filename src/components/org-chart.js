@@ -33,6 +33,11 @@ export class OrgChart extends LitElement {
       --rm-branch-data: #457b9d; --rm-branch-generico: #6b7280;
     }
     .pyr-level { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; box-sizing: border-box; }
+    /* Apilado intra-capa (RMR-TSK-0434): la banda es columna de subfilas; quien
+       depende de alguien de su misma capa se pinta encima, con su flechita. */
+    .pyr-level.stacked { flex-direction: column; gap: 0.35rem; }
+    .pyr-subrow { display: flex; flex-wrap: wrap; gap: 0.6rem 1.2rem; justify-content: center; align-items: center; max-width: 100%; }
+    .pyr-suparrow { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; font-weight: 700; line-height: 1; cursor: help; }
     .pyramid:not(.mini) .pyr-level { padding: 1.5rem 1rem 0.9rem; border: 1.5px solid color-mix(in srgb, var(--lv, #6b7280) 55%, transparent); background: color-mix(in srgb, var(--lv, #6b7280) 9%, transparent); border-radius: 14px; }
     .pyr-level.base-level { border-width: 3px; background: color-mix(in srgb, var(--lv, #2a9d8f) 15%, transparent); }
     .pyr-group { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.4rem 0.55rem; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 45%, transparent); background: color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 7%, transparent); }
@@ -161,21 +166,28 @@ export class OrgChart extends LitElement {
     return html`
       <div class="pyramid">
         ${this._crown ? html`<div class="pyr-crown">👥 ${this._crown}<em>a quienes todo el equipo sostiene</em></div>` : null}
-        ${levels.map(({ layer, roles: level }, i) => {
+        ${levels.map(({ layer, subrows }, i) => {
           const width = 100 - i * (60 / Math.max(1, levels.length));
-          // Etiqueta de CAPA por banda: la base (C-Level) abajo, los estratos
-          // numerados hacia arriba (capa canónica, no profundidad de cadena).
-          // Dentro de cada franja, los roles se AGRUPAN por rama (cada grupo con
-          // el color de su rama, separados) para ver qué va con qué.
-          const groups = Object.groupBy(level, (r) => r.branch);
-          return html`<div class="pyr-level ${layer === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(layer)}">
+          // Etiqueta de CAPA por banda (capa canónica, no profundidad de cadena).
+          // Dentro de la banda: SUBFILAS por dependencia intra-capa (RMR-TSK-0434,
+          // el coCEO depende del CEO y ambos viven en la 0: se apilan, no se
+          // aplanan) y, dentro de cada subfila, grupos por rama.
+          // La subfila de abajo sostiene a la de arriba, como la pirámide grande.
+          return html`<div class="pyr-level stacked ${layer === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(layer)}">
             ${layer === 0
               ? html`<span class="pyr-lvl">Base · sostiene a todos</span>`
               : html`<span class="pyr-lvl">Nivel ${layer}</span>`}
-            ${Object.entries(groups).map(([branch, roles]) => html`
-              <div class="pyr-group" style="--g:${this._branchColor(branch)}">
-                ${roles.map((r) => this._role(r, this._branchColor(branch)))}
-              </div>`)}
+            ${subrows.map((subrow, j) => {
+              const subGroups = Object.groupBy(subrow, (r) => r.branch);
+              return html`
+                ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
+                <div class="pyr-subrow">
+                  ${Object.entries(subGroups).map(([branch, roles]) => html`
+                    <div class="pyr-group" style="--g:${this._branchColor(branch)}">
+                      ${roles.map((r) => this._role(r, this._branchColor(branch)))}
+                    </div>`)}
+                </div>`;
+            })}
           </div>`;
         })}
       </div>`;
@@ -202,10 +214,12 @@ export class OrgChart extends LitElement {
           return html`<div class="branch-col">
             <div class="branch-title" style="color:${color}"><span class="pyr-dot" style="background:${color}"></span> ${this._branchLabel(bid)}</div>
             <div class="pyramid mini">
-              ${levels.map(({ roles: level }, i) => {
+              ${levels.map(({ subrows }, i) => {
                 const width = 100 - i * (50 / Math.max(1, levels.length));
-                return html`<div class="pyr-level" style="width:${Math.max(45, width)}%">
-                  ${level.map((r) => this._role(r, color))}
+                return html`<div class="pyr-level stacked" style="width:${Math.max(45, width)}%">
+                  ${subrows.map((subrow, j) => html`
+                    ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
+                    <div class="pyr-subrow">${subrow.map((r) => this._role(r, color))}</div>`)}
                 </div>`;
               })}
             </div>
