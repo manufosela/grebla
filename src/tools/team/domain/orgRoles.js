@@ -240,9 +240,10 @@ export function pyramidLayers(roles) {
 /**
  * Labels de los roles de las capas que un mando SALTA hacia sus hijos (RMR-TSK-0434):
  * un Head con ICs directos (hijo dos capas más arriba) «ejerce también de EM».
- * Devuelve los labels únicos de los roles que viven en esas capas intermedias
- * (de cualquier rama: nombran la capa); vacío si no salta ninguna o si las
- * capas saltadas no tienen roles que les den nombre.
+ * Solo nombran la capa los roles DE MANDO (con hijos en el catálogo): un IC que
+ * viva en esa capa (p. ej. un PM colgado del CPO) no es un rol que nadie
+ * «ejerza» — listarlo confunde. Labels únicos, de cualquier rama; vacío si no
+ * salta ninguna capa o si las saltadas no tienen mandos que les den nombre.
  * @param {OrgRole[]} roles
  * @param {OrgRole} role
  * @returns {string[]}
@@ -257,6 +258,7 @@ export function coveredRoleLabels(roles, role) {
   }
   const labels = list
     .filter((r) => skipped.has(layerOf(list, r)))
+    .filter((r) => childrenOf(list, r.id).length > 0)
     .map((r) => r.label)
     .filter(Boolean);
   return [...new Set(labels)];
