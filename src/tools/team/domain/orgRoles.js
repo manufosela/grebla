@@ -219,11 +219,38 @@ export function layerOf(roles, role) {
 }
 
 /**
+ * Ancestros de un rol DENTRO de su misma capa (RMR-TSK-0434): capa y «depende
+ * de» son dimensiones distintas — el coCEO puede depender del CEO y vivir
+ * ambos en la capa 0. Este contador (0 = nadie de tu capa por debajo) permite
+ * APILAR esa dependencia dentro de la banda en vez de aplanarla. Anti-ciclos.
+ * @param {OrgRole[]} roles
+ * @param {OrgRole} role
+ * @returns {number}
+ */
+export function intraLayerDepth(roles, role) {
+  const list = roles ?? [];
+  const byId = new Map(list.map((r) => [r.id, r]));
+  const layer = layerOf(list, role);
+  const seen = new Set([role?.id]);
+  let depth = 0;
+  let current = byId.get(role?.reportsToRoleId) ?? null;
+  while (current && !seen.has(current.id)) {
+    if (layerOf(list, current) === layer) depth += 1;
+    seen.add(current.id);
+    current = byId.get(current.reportsToRoleId) ?? null;
+  }
+  return depth;
+}
+
+/**
  * Filas de la pirámide agrupadas por CAPA (de la cima 0 hacia arriba), no por
  * profundidad de cadena. Capas sin roles no generan fila (el hueco lo cuentan
- * las flechas y el badge de «ejerce también de»).
+ * las flechas y el badge de «ejerce también de»). Cada capa trae además sus
+ * SUBFILAS por dependencia intra-capa: quien depende de alguien de su misma
+ * capa se pinta encima (dentro de la banda), sosteniéndose igual que la
+ * pirámide grande — CEO abajo, coCEO encima, ambos en la capa 0.
  * @param {OrgRole[]} roles
- * @returns {{ layer: number, roles: OrgRole[] }[]}
+ * @returns {{ layer: number, roles: OrgRole[], subrows: OrgRole[][] }[]}
  */
 export function pyramidLayers(roles) {
   const list = roles ?? [];
@@ -234,7 +261,16 @@ export function pyramidLayers(roles) {
   }
   return [...byLayer.entries()]
     .toSorted((a, b) => a[0] - b[0])
-    .map(([layer, layerRoles]) => ({ layer, roles: layerRoles }));
+    .map(([layer, layerRoles]) => {
+      const byDepth = new Map();
+      for (const role of layerRoles) {
+        const d = intraLayerDepth(list, role);
+        byDepth.set(d, [...(byDepth.get(d) ?? []), role]);
+      }
+      // Subfilas de la más dependiente (arriba) a la que sostiene (abajo).
+      const subrows = [...byDepth.entries()].toSorted((a, b) => b[0] - a[0]).map(([, rs]) => rs);
+      return { layer, roles: layerRoles, subrows };
+    });
 }
 
 /**

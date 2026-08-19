@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, coveredRoleLabels, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { rootRoles, childrenOf, coveredRoleLabels, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -235,5 +235,35 @@ describe('capas canónicas (RMR-TSK-0434) — el rango sale del rol, no de la ca
     const sinNombre = [{ id: 'a', label: 'A', branch: 'x', reportsToRoleId: null, layer: 0 },
       { id: 'b', label: 'B', branch: 'x', reportsToRoleId: 'a', layer: 2 }];
     expect(coveredRoleLabels(sinNombre, sinNombre[0])).toEqual([]);
+  });
+});
+
+describe('apilado intra-capa (RMR-TSK-0434): depender de alguien de TU capa se ve', () => {
+  const roles = [
+    { id: 'ceo', label: 'CEO', branch: 'executive', reportsToRoleId: null, layer: null },
+    { id: 'coceo', label: 'coCEO', branch: 'executive', reportsToRoleId: 'ceo', layer: 0 },
+    { id: 'cpo', label: 'CPO', branch: 'product', reportsToRoleId: 'coceo', layer: 1 },
+  ];
+
+  it('intraLayerDepth: ancestros DENTRO de la misma capa', () => {
+    expect(intraLayerDepth(roles, roles.find((r) => r.id === 'ceo'))).toBe(0);
+    expect(intraLayerDepth(roles, roles.find((r) => r.id === 'coceo'))).toBe(1);
+    expect(intraLayerDepth(roles, roles.find((r) => r.id === 'cpo'))).toBe(0);
+  });
+
+  it('pyramidLayers devuelve subfilas: quien depende de alguien de su capa, encima', () => {
+    const base = pyramidLayers(roles).find((l) => l.layer === 0);
+    expect(base.subrows.map((row) => row.map((r) => r.id))).toEqual([['coceo'], ['ceo']]);
+    const capa1 = pyramidLayers(roles).find((l) => l.layer === 1);
+    expect(capa1.subrows).toEqual([[roles[2]]]);
+  });
+
+  it('un ciclo accidental dentro de la capa termina sin colgarse', () => {
+    const raros = [
+      { id: 'a', label: 'A', branch: 'x', reportsToRoleId: 'b', layer: 0 },
+      { id: 'b', label: 'B', branch: 'x', reportsToRoleId: 'a', layer: 0 },
+    ];
+    const base = pyramidLayers(raros).find((l) => l.layer === 0);
+    expect(base.subrows.flat().map((r) => r.id).toSorted()).toEqual(['a', 'b']);
   });
 });
