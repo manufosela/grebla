@@ -7,7 +7,7 @@
  * Lectura: cualquier autenticado (para pintar títulos/organigrama). Escritura:
  * solo superadmin (reglas de Firestore).
  */
-import { doc, collection, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, getDocs, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 
 /** @typedef {import('../tools/team/domain/orgRoles.js').OrgRole} OrgRole */
@@ -22,6 +22,23 @@ const toOrgRole = (data, id) => ({
   // (profundidad de cadena). Solo enteros >= 0 (lo demás se descarta).
   layer: Number.isInteger(data.layer) && data.layer >= 0 ? data.layer : null,
 });
+
+/**
+ * Suscripción EN VIVO al catálogo de roles (RMR-TSK-0435): cada cambio del
+ * panel (capa, depende-de, renombrar) repinta las vistas abiertas sin recargar.
+ * Devuelve la función de desuscripción; los errores van al callback de error
+ * (no se silencian).
+ * @param {(roles: OrgRole[]) => void} onRoles
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void}
+ */
+export function watchOrgRoles(onRoles, onError) {
+  return onSnapshot(
+    collection(db, 'orgRoles'),
+    (snap) => onRoles(snap.docs.map((d) => toOrgRole(d.data(), d.id))),
+    (err) => onError?.(err),
+  );
+}
 
 /** @returns {Promise<OrgRole[]>} */
 export async function listOrgRoles() {
