@@ -148,11 +148,13 @@ export class OrgChart extends LitElement {
     // Badge derivado (RMR-TSK-0434): un mando cuyos hijos saltan capa «ejerce
     // también de» los roles de la capa saltada (Head of Data → EM). Se calcula
     // contra TODOS los roles visibles para que la capa tenga nombre aunque sea
-    // de otra rama.
+    // de otra rama. El «↑ superior» viene de la vista del panel al unificarse
+    // ambas pirámides (RMR-BUG-0092): la dependencia se lee en la propia tarjeta.
     const covers = coveredRoleLabels(this._visibleRoles, r);
+    const boss = r.reportsToRoleId ? this._roles.find((x) => x.id === r.reportsToRoleId)?.label : null;
     return html`<span class="pyr-role" style="border-color:${color}">
       <span class="pyr-dot" style="background:${color}"></span>${r.label}
-      <em class="pyr-branch">${this._branchLabel(r.branch)}</em>
+      <em class="pyr-branch">${this._branchLabel(r.branch)}${boss ? html` · ↑ ${boss}` : ''}</em>
       ${covers.length ? html`<em class="pyr-acts" title="Sus reportes directos saltan una capa: cubre ese rol mientras la rama crece">ejerce también de ${covers.join(' / ')}</em>` : null}
     </span>`;
   }
