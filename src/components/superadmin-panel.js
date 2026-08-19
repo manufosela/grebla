@@ -24,6 +24,7 @@ import {
 import { addViewerByEmail } from '../lib/viewers.js';
 import { addSurveyAdminByEmail } from '../lib/survey.js';
 import './catalog-manager.js';
+import './org-chart.js';
 import '@manufosela/loading-layer';
 import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -35,8 +36,8 @@ import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranc
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
 import { frameworkToMarkdown } from '../tools/career/domain/frameworkMarkdown.js';
-import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { childrenOf, assertValidReportsTo, layerOf, roleChain, orgRoleRows, branchColor, layerColor, superiorCandidatesFor } from '../tools/team/domain/orgRoles.js';
+
+import { childrenOf, assertValidReportsTo, layerOf, orgRoleRows, branchColor, superiorCandidatesFor } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
 
@@ -176,7 +177,6 @@ export class SuperadminPanel extends LitElement {
     _editBranchId: { state: true },
     _editBranchLabel: { state: true },
     _branchError: { state: true },
-    _orgCrown: { state: true },
     _branchDraft: { state: true },
     _jds: { state: true },
     _jdForm: { state: true },
@@ -317,17 +317,7 @@ export class SuperadminPanel extends LitElement {
     .del-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
     .access-inline { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; margin-right: 0.5rem; }
     /* Pirámide invertida del organigrama (RMR-PRP-0002) */
-    .pyramid { display: flex; flex-direction: column; align-items: center; gap: 1.3rem; padding: 1rem 0 0.5rem; --rm-branch-engineering: #2a9d8f; --rm-branch-product: #e76f51; --rm-branch-people: #9d4edd; --rm-branch-data: #457b9d; --rm-branch-generico: #6b7280; }
-    .pyr-level { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; box-sizing: border-box; padding: 1.5rem 1rem 0.9rem; border: 1.5px solid color-mix(in srgb, var(--lv, #6b7280) 55%, transparent); background: color-mix(in srgb, var(--lv, #6b7280) 9%, transparent); border-radius: 14px; }
-    .pyr-level.base-level { border-width: 3px; background: color-mix(in srgb, var(--lv, #2a9d8f) 15%, transparent); }
-    .pyr-group { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.4rem 0.55rem; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 45%, transparent); background: color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 7%, transparent); }
-    .pyr-level:not(:last-child)::after { content: '↑'; position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); color: var(--rm-muted, #9ca3af); font-size: 1rem; font-weight: 700; }
-    .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
-    .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
-    .pyr-lvl { position: absolute; top: 0.35rem; left: 0.85rem; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lv, #9ca3af); }
-    .pyr-crown { width: 100%; text-align: center; padding: 0.7rem 1rem; border-radius: 12px; border: 2px dashed var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 10%, transparent); font-weight: 800; font-size: 1rem; display: flex; flex-direction: column; gap: 0.15rem; }
-    .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .ord-btn:active { transform: scale(0.94); }
@@ -555,7 +545,6 @@ export class SuperadminPanel extends LitElement {
     this._jdBusy = false;
     this._confirmJd = null;
     /** @type {string} etiqueta del nivel simbólico (usuarios del producto) en la cima. */
-    this._orgCrown = '';
     this._loaded = false;
   }
 
@@ -729,9 +718,9 @@ export class SuperadminPanel extends LitElement {
     this._fwConfirm = null;
   }
 
-  /** Valida el framework antes de guardar. @returns {string|null} mensaje de error o null */
-  _validateFramework() {
-    const fw = this._framework;
+  /** Catálogos simples (tracks/disciplinas/dimensiones): ids y nombres presentes,
+   *  sin duplicados. Extraído de _validateFramework (Sonar S3776). */
+  _validateCatalogs(fw) {
     for (const [kind, label] of /** @type {const} */ ([['tracks', 'track'], ['disciplines', 'disciplina'], ['dimensions', 'dimensión']])) {
       const seen = new Set();
       for (const it of fw[kind]) {
@@ -740,6 +729,11 @@ export class SuperadminPanel extends LitElement {
         seen.add(it.id);
       }
     }
+    return null;
+  }
+
+  /** Niveles: id/título, sin duplicados, track existente y ramificación válida. */
+  _validateLevels(fw) {
     const trackIds = new Set(fw.tracks.map((t) => t.id));
     const levelIds = new Set();
     for (const l of fw.levels) {
@@ -752,6 +746,12 @@ export class SuperadminPanel extends LitElement {
       if (l.branchesFrom && !levelIds.has(l.branchesFrom)) return `El nivel «${l.id}» ramifica desde un nivel inexistente.`;
     }
     return null;
+  }
+
+  /** Valida el framework antes de guardar. @returns {string|null} mensaje de error o null */
+  _validateFramework() {
+    const fw = this._framework;
+    return this._validateCatalogs(fw) ?? this._validateLevels(fw);
   }
 
   async _saveFramework() {
@@ -2190,9 +2190,6 @@ export class SuperadminPanel extends LitElement {
     } catch (err) {
       this._branchError = 'No se pudieron cargar las ramas.';
     }
-    try {
-      this._orgCrown = await getUsersCrownLabel();
-    } catch { this._orgCrown = ''; }
   }
 
   /** Etiqueta visible de una rama por su id (del catálogo, con fallback al id). */
@@ -2553,55 +2550,13 @@ export class SuperadminPanel extends LitElement {
     </span>`;
   }
 
-  /** Vista de organigrama en PIRÁMIDE INVERTIDA (liderazgo afectivo): el rol que a
-   *  nadie sostiene (sin inferior) va en la punta de ABAJO; hacia arriba, ensanchando,
-   *  quienes son sostenidos. Cada franja es un nivel; el color, su rama. */
+  /** Vista de organigrama en pirámide invertida: LA MISMA vista que /organigrama
+   *  (<org-chart>, RMR-BUG-0092). Antes el panel tenía una copia propia dibujada
+   *  por profundidad de cadena: ignoraba las capas canónicas y no se actualizaba
+   *  en vivo — dos dibujos distintos de los mismos datos. Un solo componente,
+   *  una sola fuente (onSnapshot de /orgRoles y /orgBranches). */
   _renderOrgPyramid() {
-    // «Genérico» es el cajón de lo NO identificado, no un estrato de la
-    // organización: fuera de la pirámide (RMR-BUG-0073). En la tabla de Roles
-    // sigue visible para poder gestionarlo.
-    const roles = this._orgRoles.filter((r) => r.branch !== 'generico');
-    if (roles.length === 0) return html`<p class="empty">Aún no hay roles. Créalos en el Editor.</p>`;
-    // Profundidad de cada rol (0 = base/sin inferior). Se agrupa por profundidad.
-    const depthOf = (id) => Math.max(0, roleChain(roles, id).length - 1);
-    const maxDepth = Math.max(...roles.map((r) => depthOf(r.id)));
-    // Filas de ARRIBA (más profundas, ancho máximo) a ABAJO (base, punta estrecha).
-    const levels = [];
-    for (let d = maxDepth; d >= 0; d -= 1) {
-      levels.push(roles.filter((r) => depthOf(r.id) === d));
-    }
-    // Etiqueta del superior de cada rol, precalculada para no anidar un find() dentro
-    // del triple map de la pirámide (S2004: no anidar funciones >4 niveles).
-    const labelById = new Map(roles.map((r) => [r.id, r.label]));
-    const parentLabelOf = (r) => (r.reportsToRoleId ? (labelById.get(r.reportsToRoleId) ?? null) : null);
-    return html`
-      <p class="ro-note">Pirámide invertida: quien tiene <strong>más responsabilidad</strong> (a quien nadie sostiene) está <strong>abajo</strong>, sosteniendo a todos. Las flechas suben: cada nivel sostiene al de encima.</p>
-      <div class="pyramid">
-        ${this._orgCrown ? html`<div class="pyr-crown">👥 ${this._orgCrown}<em>a quienes todo el equipo sostiene</em></div>` : null}
-        ${levels.map((level, i) => {
-          // Invertida: la PRIMERA fila (arriba, más profunda) es la más ancha; la
-          // ÚLTIMA (la base, sin inferior) es la punta estrecha.
-          const width = 100 - i * (60 / Math.max(1, levels.length));
-          // Profundidad real de la banda (0 = base) y su etiqueta de NIVEL, para
-          // leer de un vistazo qué estrato es cada franja (RMR-BUG-0071). levels
-          // va de la banda más profunda (arriba) a la base: depth = restantes.
-          const depth = levels.length - 1 - i;
-          // Roles agrupados por rama dentro de la franja (cada grupo con su color).
-          const groups = Object.groupBy(level, (r) => r.branch);
-          return html`<div class="pyr-level ${depth === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(depth)}">
-            ${depth === 0
-              ? html`<span class="pyr-lvl">Base · sostiene a todos</span>`
-              : html`<span class="pyr-lvl">Nivel ${depth}</span>`}
-            ${Object.entries(groups).map(([branch, roles]) => html`
-              <div class="pyr-group" style="--g:${branchColor(branch)}">
-                ${roles.map((r) => html`<span class="pyr-role" style="border-color:${branchColor(branch)}">
-                  <span class="pyr-dot" style="background:${branchColor(branch)}"></span>${r.label}
-                  <em class="pyr-branch">${this._branchLabel(branch)}${parentLabelOf(r) ? html` · ↑ ${parentLabelOf(r)}` : ''}</em>
-                </span>`)}
-              </div>`)}
-          </div>`;
-        })}
-      </div>`;
+    return html`<org-chart></org-chart>`;
   }
 
   /** Editor de RAMAS: REFLEJO de las ramas que existen (catálogo ∪ las presentes en
