@@ -10,7 +10,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { watchOrgRoles } from '../lib/orgRoles.js';
 import { watchOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { branchColor, coveredRoleLabels, layerColor, pyramidLayers } from '../tools/team/domain/orgRoles.js';
+import { branchColor, layerColor, pyramidLayers } from '../tools/team/domain/orgRoles.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -45,12 +45,6 @@ export class OrgChart extends LitElement {
     .pyr-role { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.3rem 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); max-width: 100%; }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
     .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
-    /* Badge «ejerce también de X» (RMR-TSK-0434): mando que cubre una capa vacía.
-       Fondo ÁMBAR SÓLIDO con texto marrón oscuro: legible sobre claro Y oscuro
-       (mismo par que el badge manual de Carrera); radio moderado y wrap normal
-       para que el texto largo en tarjetas estrechas no se convierta en un óvalo
-       ilegible (visto en «Por ramas» en modo oscuro). */
-    .pyr-acts { font-style: normal; font-size: 0.66rem; font-weight: 700; line-height: 1.35; color: #4a3800; background: #e9c46a; border: 1px solid #b8860b; border-radius: 8px; padding: 0.12rem 0.5rem; cursor: help; text-align: center; max-width: 100%; box-sizing: border-box; }
     /* Etiqueta de capa: solo la pirámide GLOBAL la renderiza; en mini (por ramas),
        si apareciera, fluye en normal-flow (sin solaparse con las fichas). */
     .pyr-lvl { flex: 100%; text-align: center; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lv, #9ca3af); }
@@ -149,17 +143,14 @@ export class OrgChart extends LitElement {
   }
 
   _role(r, color) {
-    // Badge derivado (RMR-TSK-0434): un mando cuyos hijos saltan capa «ejerce
-    // también de» los roles de la capa saltada (Head of Data → EM). Se calcula
-    // contra TODOS los roles visibles para que la capa tenga nombre aunque sea
-    // de otra rama. El «↑ superior» viene de la vista del panel al unificarse
-    // ambas pirámides (RMR-BUG-0092): la dependencia se lee en la propia tarjeta.
-    const covers = coveredRoleLabels(this._visibleRoles, r);
+    // La tarjeta dice SOLO lo que dicen los datos: rol, rama y «↑ superior»
+    // (la dependencia se lee en la propia tarjeta). El antiguo badge derivado
+    // «ejerce también de X» se retiró (RMR-BUG-0092): era una heurística
+    // inventada que afirmaba cosas falsas en catálogos reales.
     const boss = r.reportsToRoleId ? this._roles.find((x) => x.id === r.reportsToRoleId)?.label : null;
     return html`<span class="pyr-role" style="border-color:${color}">
       <span class="pyr-dot" style="background:${color}"></span>${r.label}
       <em class="pyr-branch">${this._branchLabel(r.branch)}${boss ? html` · ↑ ${boss}` : ''}</em>
-      ${covers.length ? html`<em class="pyr-acts" title="Sus reportes directos saltan una capa: cubre ese rol mientras la rama crece">ejerce también de ${covers.join(' / ')}</em>` : null}
     </span>`;
   }
 
