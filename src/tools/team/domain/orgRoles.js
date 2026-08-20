@@ -245,7 +245,7 @@ export function intraLayerDepth(roles, role) {
 /**
  * Filas de la pirámide agrupadas por CAPA (de la cima 0 hacia arriba), no por
  * profundidad de cadena. Capas sin roles no generan fila (el hueco lo cuentan
- * las flechas y el badge de «ejerce también de»). Cada capa trae además sus
+ * las flechas). Cada capa trae además sus
  * SUBFILAS por dependencia intra-capa: quien depende de alguien de su misma
  * capa se pinta encima (dentro de la banda), sosteniéndose igual que la
  * pirámide grande — CEO abajo, coCEO encima, ambos en la capa 0.
@@ -273,29 +273,3 @@ export function pyramidLayers(roles) {
     });
 }
 
-/**
- * Labels de los roles de las capas que un mando SALTA hacia sus hijos (RMR-TSK-0434):
- * un Head con ICs directos (hijo dos capas más arriba) «ejerce también de EM».
- * Solo nombran la capa los roles DE MANDO (con hijos en el catálogo): un IC que
- * viva en esa capa (p. ej. un PM colgado del CPO) no es un rol que nadie
- * «ejerza» — listarlo confunde. Labels únicos, de cualquier rama; vacío si no
- * salta ninguna capa o si las saltadas no tienen mandos que les den nombre.
- * @param {OrgRole[]} roles
- * @param {OrgRole} role
- * @returns {string[]}
- */
-export function coveredRoleLabels(roles, role) {
-  const list = roles ?? [];
-  const own = layerOf(list, role);
-  const skipped = new Set();
-  for (const child of childrenOf(list, role?.id)) {
-    const childLayer = layerOf(list, child);
-    for (let layer = own + 1; layer < childLayer; layer += 1) skipped.add(layer);
-  }
-  const labels = list
-    .filter((r) => skipped.has(layerOf(list, r)))
-    .filter((r) => childrenOf(list, r.id).length > 0)
-    .map((r) => r.label)
-    .filter(Boolean);
-  return [...new Set(labels)];
-}

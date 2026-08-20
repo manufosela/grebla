@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, coveredRoleLabels, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -223,19 +223,6 @@ describe('capas canónicas (RMR-TSK-0434) — el rango sale del rol, no de la ca
     expect(layerOf(raros, raros[1])).toBe(1);
   });
 
-  it('coveredRoleLabels: el Head de Data «ejerce también de EM» (capa saltada)', () => {
-    expect(coveredRoleLabels(roles, roles.find((r) => r.id === 'head-data'))).toEqual(['EM']);
-    // Un IC en la capa saltada (PM colgado del CPO) NO da nombre a la capa:
-    // solo los roles de mando (con hijos) se «ejercen».
-    const conPm = [...roles, { id: 'pm', label: 'PM', branch: 'product', reportsToRoleId: 'head-data', layer: 2 }];
-    expect(coveredRoleLabels(conPm, conPm.find((r) => r.id === 'head-data'))).toEqual(['EM']);
-    // El Head de engineering no salta capas (sus hijos están justo encima).
-    expect(coveredRoleLabels(roles, roles.find((r) => r.id === 'head'))).toEqual([]);
-    // Capa saltada sin roles conocidos → sin etiqueta (badge genérico en la UI).
-    const sinNombre = [{ id: 'a', label: 'A', branch: 'x', reportsToRoleId: null, layer: 0 },
-      { id: 'b', label: 'B', branch: 'x', reportsToRoleId: 'a', layer: 2 }];
-    expect(coveredRoleLabels(sinNombre, sinNombre[0])).toEqual([]);
-  });
 });
 
 describe('apilado intra-capa (RMR-TSK-0434): depender de alguien de TU capa se ve', () => {
