@@ -42,11 +42,15 @@ export class OrgChart extends LitElement {
     .pyr-level.base-level { border-width: 3px; background: color-mix(in srgb, var(--lv, #2a9d8f) 15%, transparent); }
     .pyr-group { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.4rem 0.55rem; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 45%, transparent); background: color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 7%, transparent); }
     .pyr-level:not(:last-child)::after { content: '↑'; position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); color: var(--rm-muted, #9ca3af); font-size: 1rem; font-weight: 700; }
-    .pyr-role { display: inline-flex; align-items: center; gap: 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); }
+    .pyr-role { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.3rem 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); max-width: 100%; }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
     .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
-    /* Badge «ejerce también de X» (RMR-TSK-0434): mando que cubre una capa vacía. */
-    .pyr-acts { font-style: normal; font-size: 0.66rem; font-weight: 700; color: #7a5c00; background: color-mix(in srgb, #e9c46a 35%, transparent); border: 1px solid #b8860b; border-radius: 999px; padding: 0.05rem 0.45rem; cursor: help; }
+    /* Badge «ejerce también de X» (RMR-TSK-0434): mando que cubre una capa vacía.
+       Fondo ÁMBAR SÓLIDO con texto marrón oscuro: legible sobre claro Y oscuro
+       (mismo par que el badge manual de Carrera); radio moderado y wrap normal
+       para que el texto largo en tarjetas estrechas no se convierta en un óvalo
+       ilegible (visto en «Por ramas» en modo oscuro). */
+    .pyr-acts { font-style: normal; font-size: 0.66rem; font-weight: 700; line-height: 1.35; color: #4a3800; background: #e9c46a; border: 1px solid #b8860b; border-radius: 8px; padding: 0.12rem 0.5rem; cursor: help; text-align: center; max-width: 100%; box-sizing: border-box; }
     /* Etiqueta de capa: solo la pirámide GLOBAL la renderiza; en mini (por ramas),
        si apareciera, fluye en normal-flow (sin solaparse con las fichas). */
     .pyr-lvl { flex: 100%; text-align: center; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lv, #9ca3af); }
