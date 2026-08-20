@@ -273,3 +273,51 @@ export function pyramidLayers(roles) {
     });
 }
 
+
+/**
+ * Ramas de MANDOS INTERMEDIOS (vista «Por ramas»): una rama cuyos roles tienen
+ * TODOS superior e hijos, y NINGUNO de esos hijos es de la misma rama, no es un área de la
+ * organización, es una categoría de mando (p. ej. «Engineering Manager»: los
+ * EMs cuelgan del Head of Tech y sostienen ingenieros de «engineering»). Esas
+ * ramas no merecen columna propia.
+ * @param {OrgRole[]} roles
+ * @returns {Set<string>}
+ */
+export function intermediateBranches(roles) {
+  const list = roles ?? [];
+  const byBranch = Object.groupBy(list, (r) => r.branch);
+  const result = new Set();
+  for (const [branch, members] of Object.entries(byBranch)) {
+    const allIntermediate = members.every((m) => {
+      const kids = childrenOf(list, m.id);
+      // Intermedio = tiene superior Y tiene hijos, todos de otra rama. Una cima
+      // (sin superior) nunca hace intermedia a su rama: es la base de un área.
+      return Boolean(m.reportsToRoleId) && kids.length > 0 && kids.every((k) => k.branch !== branch);
+    });
+    if (allIntermediate) result.add(branch);
+  }
+  return result;
+}
+
+/**
+ * ÁREA en la que se dibuja un rol en «Por ramas»: su propia rama, salvo que esa
+ * rama sea de mandos intermedios — entonces hereda el área de su superior
+ * (recursivo, anti-ciclos). Una cima en rama intermedia se queda en la suya (no
+ * hay superior del que heredar). El campo `branch` del rol NO cambia: sigue
+ * siendo su categoría (etiqueta y color de la tarjeta).
+ * @param {OrgRole[]} roles
+ * @param {OrgRole} role
+ * @returns {string}
+ */
+export function areaOf(roles, role) {
+  const list = roles ?? [];
+  const intermediate = intermediateBranches(list);
+  const byId = new Map(list.map((r) => [r.id, r]));
+  const seen = new Set();
+  let current = role;
+  while (current && intermediate.has(current.branch) && current.reportsToRoleId && !seen.has(current.id)) {
+    seen.add(current.id);
+    current = byId.get(current.reportsToRoleId) ?? null;
+  }
+  return (current ?? role)?.branch;
+}

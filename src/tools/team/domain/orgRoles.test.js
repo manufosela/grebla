@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { areaOf, intermediateBranches, rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -252,5 +252,52 @@ describe('apilado intra-capa (RMR-TSK-0434): depender de alguien de TU capa se v
     ];
     const base = pyramidLayers(raros).find((l) => l.layer === 0);
     expect(base.subrows.flat().map((r) => r.id).toSorted()).toEqual(['a', 'b']);
+  });
+});
+
+describe('areaOf — «Por ramas» agrupa por ÁREA, no por la categoría del rol', () => {
+  // Catálogo real: los EMs tienen rama «engineering-manager» (su categoría),
+  // pero cuelgan del Head of Tech y sostienen a ingenieros de «engineering».
+  const roles = [
+    { id: 'ceo', label: 'CEO', branch: 'executive', reportsToRoleId: null },
+    { id: 'cpo', label: 'CPO', branch: 'product', reportsToRoleId: 'ceo' },
+    { id: 'cpeople', label: 'CPeople', branch: 'people', reportsToRoleId: 'ceo' },
+    { id: 'pm', label: 'PM', branch: 'product', reportsToRoleId: 'cpo' },
+    { id: 'head-tech', label: 'Head of Tech', branch: 'engineering', reportsToRoleId: 'cpo' },
+    { id: 'em-back', label: 'EM Back', branch: 'engineering-manager', reportsToRoleId: 'head-tech' },
+    { id: 'back', label: 'Back', branch: 'engineering', reportsToRoleId: 'em-back' },
+    { id: 'qa', label: 'QA', branch: 'engineering', reportsToRoleId: 'head-tech' },
+    { id: 'head-data', label: 'Head of Data', branch: 'data', reportsToRoleId: 'cpo' },
+    { id: 'data-eng', label: 'Data Eng', branch: 'data', reportsToRoleId: 'head-data' },
+  ];
+  const area = (id) => areaOf(roles, roles.find((r) => r.id === id));
+
+  it('una rama formada SOLO por mandos intermedios no es un área: se absorbe en la de su superior', () => {
+    expect(intermediateBranches(roles)).toEqual(new Set(['engineering-manager']));
+    expect(area('em-back')).toBe('engineering');
+  });
+
+  it('las áreas de verdad conservan su columna, tengan hojas o árbol', () => {
+    expect(area('head-tech')).toBe('engineering');
+    expect(area('back')).toBe('engineering');
+    expect(area('head-data')).toBe('data');
+    expect(area('pm')).toBe('product');
+    expect(area('cpeople')).toBe('people'); // hoja sin hijos: área propia
+    expect(area('ceo')).toBe('executive');
+  });
+
+  it('dos ramas intermedias encadenadas se absorben hacia arriba; una cima intermedia se queda en la suya', () => {
+    const raros = [
+      { id: 'top', label: 'Top', branch: 'dir', reportsToRoleId: null },
+      { id: 'mid1', label: 'M1', branch: 'capa-a', reportsToRoleId: 'top' },
+      { id: 'mid2', label: 'M2', branch: 'capa-b', reportsToRoleId: 'mid1' },
+      { id: 'leaf', label: 'L', branch: 'dir', reportsToRoleId: 'mid2' },
+      { id: 'solo', label: 'S', branch: 'sola', reportsToRoleId: null },
+      { id: 'solo-hijo', label: 'SH', branch: 'otra', reportsToRoleId: 'solo' },
+    ];
+    const a = (id) => areaOf(raros, raros.find((r) => r.id === id));
+    expect(a('mid2')).toBe('dir');
+    expect(a('mid1')).toBe('dir');
+    expect(a('solo')).toBe('sola'); // cima: aunque su rama sea intermedia, no hay superior
   });
 });

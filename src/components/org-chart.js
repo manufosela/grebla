@@ -10,7 +10,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { watchOrgRoles } from '../lib/orgRoles.js';
 import { watchOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { branchColor, layerColor, pyramidLayers } from '../tools/team/domain/orgRoles.js';
+import { areaOf, branchColor, layerColor, pyramidLayers } from '../tools/team/domain/orgRoles.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -213,42 +213,50 @@ export class OrgChart extends LitElement {
 
   /** Banda de una mini-pirámide por rama, con sus subfilas intra-capa apiladas
    *  (extraído para no anidar funciones — Sonar S2004). */
-  _miniLevel({ subrows }, i, total, color) {
+  _miniLevel({ subrows }, i, total) {
     const width = 100 - i * (50 / Math.max(1, total));
     return html`<div class="pyr-level stacked" style="width:${Math.max(45, width)}%">
-      ${subrows.map((subrow, j) => this._miniSubrow(subrow, j, color))}
+      ${subrows.map((subrow, j) => this._miniSubrow(subrow, j))}
     </div>`;
   }
 
-  /** Subfila de una banda mini: flechita intra-capa + tarjetas de la subfila. */
-  _miniSubrow(subrow, j, color) {
+  /** Subfila de una banda mini: flechita intra-capa + tarjetas de la subfila.
+   *  Cada tarjeta lleva el color de SU rama (su categoría: un EM sigue siendo
+   *  «Engineering Manager» aunque se dibuje dentro del área Engineering). */
+  _miniSubrow(subrow, j) {
     return html`
       ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
-      <div class="pyr-subrow">${subrow.map((r) => this._role(r, color))}</div>`;
+      <div class="pyr-subrow">${subrow.map((r) => this._role(r, this._branchColor(r.branch)))}</div>`;
   }
 
-  /** Una mini-pirámide invertida POR RAMA: cada rama con su cabeza (sin inferior)
-   *  en la punta de abajo y sus roles hacia arriba, en columnas lado a lado. */
+  /** Una mini-pirámide invertida POR ÁREA: cada área con su cabeza en la punta
+   *  de abajo y su ÁRBOL hacia arriba. El área de un rol es su rama, salvo que
+   *  esa rama sea de mandos intermedios (p. ej. «Engineering Manager»): entonces
+   *  se dibuja dentro del área que sostiene (la de su superior), porque la
+   *  jerarquía manda sobre la categoría — los EMs van con Engineering, donde
+   *  cuelgan y a quienes sostienen. La rama del rol no cambia (su tarjeta sigue
+   *  con su etiqueta y color). */
   _renderByBranch() {
-    // Ramas a mostrar: TODAS las presentes en los roles VISIBLES (aunque falte su
-    // metadato en /orgBranches), para no perder ningún rol en esta vista. Primero
-    // las catalogadas (en su orden), luego las huérfanas; _branchLabel cae al id.
+    // Áreas a mostrar: las presentes entre los roles VISIBLES (aunque falte su
+    // metadato en /orgBranches), para no perder ningún rol. Primero las
+    // catalogadas (en su orden), luego las huérfanas; _branchLabel cae al id.
     const visible = this._visibleRoles;
-    const roleBranchIds = new Set(visible.map((r) => r.branch));
+    const areaById = new Map(visible.map((r) => [r.id, areaOf(visible, r)]));
+    const areaIds = new Set(areaById.values());
     const branchIds = [
-      ...this._branches.filter((b) => roleBranchIds.has(b.id)).map((b) => b.id),
-      ...[...roleBranchIds].filter((id) => !this._branches.some((b) => b.id === id)),
+      ...this._branches.filter((b) => areaIds.has(b.id)).map((b) => b.id),
+      ...[...areaIds].filter((id) => !this._branches.some((b) => b.id === id)),
     ];
     if (branchIds.length === 0) return html`<p class="empty">No hay roles.</p>`;
     return html`
       <div class="branch-grid">
         ${branchIds.map((bid) => {
           const color = this._branchColor(bid);
-          const levels = this._levelsOf(visible.filter((r) => r.branch === bid));
+          const levels = this._levelsOf(visible.filter((r) => areaById.get(r.id) === bid));
           return html`<div class="branch-col">
             <div class="branch-title" style="color:${color}"><span class="pyr-dot" style="background:${color}"></span> ${this._branchLabel(bid)}</div>
             <div class="pyramid mini">
-              ${levels.map((level, i) => this._miniLevel(level, i, levels.length, color))}
+              ${levels.map((level, i) => this._miniLevel(level, i, levels.length))}
             </div>
           </div>`;
         })}
