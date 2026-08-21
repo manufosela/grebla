@@ -20,6 +20,7 @@ export class OrgChart extends LitElement {
     _error: { state: true },
     _ready: { state: true },
     _mode: { state: true },
+    _area: { state: true },
   };
 
   static styles = css`
@@ -63,9 +64,15 @@ export class OrgChart extends LitElement {
     .mode.on { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
     .mode:hover:not(.on) { color: var(--rm-text, #111827); }
     /* Mini-pirámides por rama, en rejilla. */
-    .branch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1.5rem 1rem; padding: 0.5rem 0; align-items: end; }
+    /* Sub-pestañas por ÁREA (RMR-TSK-0437): mismo lenguaje de pestaña subrayada,
+       un escalón más fino; cada área lleva su punto de color. */
+    .areas { display: flex; gap: 0.1rem; flex-wrap: wrap; border-bottom: 1px solid var(--rm-border, #e5e7eb); margin: 0.25rem 0 0.75rem; }
+    .area { display: inline-flex; align-items: center; gap: 0.4rem; border: 0; background: none; color: var(--rm-muted, #6b7280); padding: 0.45rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+    .area.on { color: var(--rm-text, #111827); border-bottom-color: var(--a, var(--rm-accent, #2a9d8f)); }
+    .area:hover:not(.on) { color: var(--rm-text, #111827); }
+    .area:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 6px; }
     .branch-col { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; }
-    .branch-title { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 800; font-size: 0.95rem; }
+    .pyramid.area-pyr .pyr-level { width: min(100%, 60rem); }
     .pyramid.mini { gap: 1.1rem; padding: 0.25rem 0; }
     .pyramid.mini .pyr-level { gap: 0.4rem; }
   `;
@@ -79,6 +86,8 @@ export class OrgChart extends LitElement {
     this._ready = false;
     /** @type {'global'|'ramas'} vista global (toda la organización) o una mini-pirámide por rama. */
     this._mode = 'global';
+    /** @type {string|null} área elegida en «Por ramas» (null = la primera). */
+    this._area = null;
     this._loadedForUser = null;
   }
 
@@ -248,18 +257,24 @@ export class OrgChart extends LitElement {
       ...[...areaIds].filter((id) => !this._branches.some((b) => b.id === id)),
     ];
     if (branchIds.length === 0) return html`<p class="empty">No hay roles.</p>`;
+    // Sub-pestañas por área (RMR-TSK-0437): se pinta SOLO el área elegida, a
+    // ancho completo. Si el área elegida ya no existe (cambio en vivo del
+    // catálogo), cae a la primera sin romper la vista.
+    const current = branchIds.includes(this._area) ? this._area : branchIds[0];
+    const levels = this._levelsOf(visible.filter((r) => areaById.get(r.id) === current));
     return html`
-      <div class="branch-grid">
-        ${branchIds.map((bid) => {
-          const color = this._branchColor(bid);
-          const levels = this._levelsOf(visible.filter((r) => areaById.get(r.id) === bid));
-          return html`<div class="branch-col">
-            <div class="branch-title" style="color:${color}"><span class="pyr-dot" style="background:${color}"></span> ${this._branchLabel(bid)}</div>
-            <div class="pyramid mini">
-              ${levels.map((level, i) => this._miniLevel(level, i, levels.length))}
-            </div>
-          </div>`;
-        })}
+      <div class="areas" role="tablist" aria-label="Áreas de la organización">
+        ${branchIds.map((bid) => html`
+          <button type="button" role="tab" id="area-${bid}" class="area ${bid === current ? 'on' : ''}"
+            aria-selected=${bid === current ? 'true' : 'false'} style="--a:${this._branchColor(bid)}"
+            @click=${() => { this._area = bid; }}>
+            <span class="pyr-dot" style="background:${this._branchColor(bid)}"></span>${this._branchLabel(bid)}
+          </button>`)}
+      </div>
+      <div class="branch-col" role="tabpanel" aria-labelledby="area-${current}">
+        <div class="pyramid mini area-pyr">
+          ${levels.map((level, i) => this._miniLevel(level, i, levels.length))}
+        </div>
       </div>`;
   }
 }
