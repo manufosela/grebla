@@ -95,3 +95,47 @@ describe('treeLayout — sin solapes dentro de la fila', () => {
     expect(b.x - a.x).toBeGreaterThanOrEqual(W);
   });
 });
+
+describe('treeLayout — capas densas, compactado y ramas plegables (RMR-TSK-0441)', () => {
+  // Caso real de la vista Product: capas 1, 2 y 4 (la 3 no existe en la vista).
+  const product = [
+    { id: 'cpo', label: 'CPO', branch: 'p', reportsToRoleId: null, layer: 1 },
+    { id: 'head-tech', label: 'Head of Tech', branch: 'e', reportsToRoleId: 'cpo', layer: 2 },
+    { id: 'head-data', label: 'Head of Data', branch: 'd', reportsToRoleId: 'cpo', layer: 2 },
+    { id: 'pm', label: 'PM', branch: 'p', reportsToRoleId: 'cpo', layer: 4 },
+  ];
+  const at = (out, id) => out.nodes.find((n) => n.role.id === id);
+
+  it('sin capas vacías: tres capas presentes → tres bandas contiguas', () => {
+    const out = treeLayout(product, { rowHeight: 100 });
+    const alturas = [...new Set(out.nodes.map((n) => n.y))].toSorted((a, b) => a - b);
+    expect(alturas).toEqual([0, 100, 200]);
+  });
+
+  it('el hijo lejano se acerca a la vertical de su padre (sin huecos laterales)', () => {
+    const out = treeLayout(product, { nodeWidth: 100, gapX: 20 });
+    // El PM está solo en su banda: se alinea con el CPO.
+    expect(at(out, 'pm').x).toBeCloseTo(at(out, 'cpo').x, 5);
+  });
+
+  it('plegar una rama esconde su subárbol y cuenta lo escondido', () => {
+    const roles = [
+      { id: 'base', label: 'Base', branch: 'x', reportsToRoleId: null, layer: 0 },
+      { id: 'head', label: 'Head', branch: 'x', reportsToRoleId: 'base', layer: 1 },
+      { id: 'em', label: 'EM', branch: 'x', reportsToRoleId: 'head', layer: 2 },
+      { id: 'ic', label: 'IC', branch: 'x', reportsToRoleId: 'em', layer: 3 },
+    ];
+    const out = treeLayout(roles, { collapsed: ['head'] });
+    expect(out.nodes.map((n) => n.role.id).toSorted()).toEqual(['base', 'head']);
+    expect(at(out, 'head').hiddenCount).toBe(2);
+    expect(at(out, 'head').childCount).toBe(1);
+    expect(out.links.map((l) => `${l.from}->${l.to}`)).toEqual(['base->head']);
+  });
+
+  it('cada nodo sabe cuántos hijos directos tiene (para pintar el +/−)', () => {
+    const out = treeLayout(product);
+    expect(at(out, 'cpo').childCount).toBe(3);
+    expect(at(out, 'pm').childCount).toBe(0);
+    expect(at(out, 'cpo').hiddenCount).toBe(0);
+  });
+});

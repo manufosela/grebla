@@ -18,16 +18,35 @@ import { childrenOf, intraLayerDepth, layerOf } from './orgRoles.js';
 
 /**
  * @param {OrgRole[]} roles
- * @param {{ nodeWidth?: number, gapX?: number, rowHeight?: number, subRowHeight?: number }} [opts]
+ * @param {{ nodeWidth?: number, gapX?: number, rowHeight?: number, subRowHeight?: number, collapsed?: Set<string>|string[] }} [opts]
  * @returns {{
- *   nodes: Array<{ role: OrgRole, x: number, y: number }>,
+ *   nodes: Array<{ role: OrgRole, x: number, y: number, childCount: number, hiddenCount: number }>,
  *   links: Array<{ from: string, to: string, x1: number, y1: number, x2: number, y2: number }>,
  *   width: number, height: number,
  * }}
  */
 export function treeLayout(roles, opts = {}) {
-  const { nodeWidth = 210, gapX = 28, rowHeight = 118, subRowHeight = 54 } = opts;
-  const list = roles ?? [];
+  const { nodeWidth = 210, gapX = 28, rowHeight = 118, subRowHeight = 54, collapsed = [] } = opts;
+  const all = roles ?? [];
+  if (all.length === 0) return { nodes: [], links: [], width: 0, height: 0 };
+  // Ramas plegadas (RMR-TSK-0441): los descendientes de un rol colapsado no
+  // entran en el layout; el rol plegado muestra cuántos esconde.
+  const folded = new Set(collapsed);
+  const hiddenBy = new Map();
+  const hidden = new Set();
+  for (const id of folded) {
+    const stack = childrenOf(all, id).map((c) => c.id);
+    let n = 0;
+    while (stack.length > 0) {
+      const cur = stack.pop();
+      if (hidden.has(cur) && hiddenBy.has(id)) continue;
+      hidden.add(cur);
+      n += 1;
+      for (const c of childrenOf(all, cur)) stack.push(c.id);
+    }
+    hiddenBy.set(id, n);
+  }
+  const list = all.filter((r) => !hidden.has(r.id));
   if (list.length === 0) return { nodes: [], links: [], width: 0, height: 0 };
 
   // Cimas: las que no reportan a nadie, más las que apuntan a un rol ausente…
@@ -62,7 +81,12 @@ export function treeLayout(roles, opts = {}) {
     .nodeSize([nodeWidth + gapX, rowHeight])
     .separation((a, b) => (a.parent === b.parent ? 1 : 1.15))(root);
 
-  const maxLayer = Math.max(...list.map((r) => layerOf(list, r)));
+  // Capas DENSAS (RMR-TSK-0441): solo las presentes en ESTA vista generan banda.
+  // Antes se usaba la capa absoluta y, si nadie ocupaba la 3 (vista Product),
+  // quedaba una fila vacía en medio del dibujo.
+  const ranks = [...new Set(list.map((r) => layerOf(list, r)))].toSorted((a, b) => a - b);
+  const rankOf = new Map(ranks.map((l, i) => [l, i]));
+  const maxLayer = ranks.length - 1;
   const placed = root.descendants().filter((n) => !n.data.__virtual);
   const xs = placed.map((n) => n.x);
   const offsetX = placed.length ? Math.min(...xs) : 0;
@@ -72,7 +96,9 @@ export function treeLayout(roles, opts = {}) {
     x: n.x - offsetX,
     // Invertido: capa 0 (la base) abajo del todo; dentro de la banda, quien
     // depende de alguien de su misma capa sube.
-    y: (maxLayer - layerOf(list, n.data)) * rowHeight - intraLayerDepth(list, n.data) * subRowHeight,
+    y: (maxLayer - rankOf.get(layerOf(list, n.data))) * rowHeight - intraLayerDepth(list, n.data) * subRowHeight,
+    childCount: childrenOf(all, n.data.id).length,
+    hiddenCount: hiddenBy.get(n.data.id) ?? 0,
   }));
   const posById = new Map(nodes.map((n) => [n.role.id, n]));
 
@@ -98,7 +124,36 @@ export function treeLayout(roles, opts = {}) {
       if (row[i].x < min) row[i].x = min;
     }
   }
-  // Las aristas siguen a sus nodos tras el empujón.
+  // Compactado horizontal (RMR-TSK-0441): cada nodo se acerca a la vertical de
+  // su familia —la media de sus hijos si los tiene, si no la de su padre—
+  // mientras no choque con sus vecinos de fila. Tres pasadas bastan para cerrar
+  // los huecos laterales sin deshacer el orden ni crear solapes.
+  const parentOf = new Map();
+  for (const n of placed) {
+    const p = n.parent?.data;
+    if (p && !p.__virtual) parentOf.set(n.data.id, p.id);
+  }
+  const kidsOf = new Map();
+  for (const [child, parent] of parentOf) kidsOf.set(parent, [...(kidsOf.get(parent) ?? []), child]);
+  const rowList = [...rows.values()];
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (const row of rowList) {
+      for (let i = 0; i < row.length; i += 1) {
+        const node = row[i];
+        const kids = (kidsOf.get(node.role.id) ?? []).map((id) => posById.get(id)).filter(Boolean);
+        const anchor = kids.length > 0
+          ? kids.reduce((sum, k) => sum + k.x, 0) / kids.length
+          : posById.get(parentOf.get(node.role.id))?.x;
+        if (anchor === undefined) continue;
+        const min = i > 0 ? row[i - 1].x + nodeWidth + gapX : -Infinity;
+        const max = i < row.length - 1 ? row[i + 1].x - nodeWidth - gapX : Infinity;
+        node.x = Math.min(Math.max(anchor, min), max);
+      }
+    }
+  }
+  // Normaliza la X a 0 tras el compactado y actualiza las aristas.
+  const minX = Math.min(...nodes.map((n) => n.x));
+  for (const n of nodes) n.x -= minX;
   for (const l of links) {
     l.x1 = posById.get(l.from).x;
     l.x2 = posById.get(l.to).x;
