@@ -37,7 +37,7 @@ import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
 import { frameworkToMarkdown } from '../tools/career/domain/frameworkMarkdown.js';
 
-import { childrenOf, assertValidReportsTo, layerOf, orgRoleRows, branchColor, superiorCandidatesFor } from '../tools/team/domain/orgRoles.js';
+import { childrenOf, assertValidReportsTo, layerOf, orgRoleRows, branchColor, superiorCandidatesFor, treeGuideKinds, treeGuideBackground } from '../tools/team/domain/orgRoles.js';
 import { listToolPolicies, saveToolPolicy } from '../lib/toolPolicies.js';
 import { TOOLS } from '../tools/team/data/tools.js';
 
@@ -321,16 +321,16 @@ export class SuperadminPanel extends LitElement {
     /* Guías de árbol en la tabla de Roles (RMR-TSK-0439). La celda usa el hack
        height:1px + hijo al 100% para que los segmentos ocupen TODA la altura de
        la fila y las verticales encadenen sin huecos entre filas. */
-    .org-roles td.tree-cell { padding: 0 0.6rem 0 0.35rem; height: 1px; }
+    .org-roles td.tree-cell { padding-block: 0; padding-right: 0.6rem; }
     .org-roles td.tree-cell > * { vertical-align: middle; }
-    .tree-g { position: relative; display: inline-block; width: 1.15rem; height: 100%; min-height: 2.1rem; flex: none; }
-    /* Color propio de las guías: mezcla del texto con el fondo — visible en claro
-       y en oscuro sin competir con el contenido (el --rm-border queda muy tenue). */
-    .tree-g { --guide: color-mix(in srgb, var(--rm-text, #111827) 35%, transparent); }
-    .tree-g::before { content: ''; position: absolute; left: 50%; border-left: 1.5px solid var(--guide); }
-    .tree-g.line::before, .tree-g.tee::before { top: 0; bottom: 0; }
-    .tree-g.corner::before { top: 50%; bottom: 0; border-top-left-radius: 4px; }
-    .tree-g.corner::after, .tree-g.tee::after { content: ''; position: absolute; left: 50%; top: 50%; width: 0.75rem; border-top: 1.5px solid var(--guide); }
+    /* Guías del árbol pintadas como FONDO de la celda, no como cajas dentro de
+       ella: el fondo cubre SIEMPRE el alto exacto del <td>, así que con filas
+       contiguas las verticales se tocan y no queda ni un píxel de hueco, crezca
+       lo que crezca la fila. Antes eran <span> con height:100% + min-height, que
+       no resuelve dentro de un <td> y se quedaban cortos frente a la fila
+       (la fila mide lo que miden sus <select>) — de ahí los trozos sueltos.
+       Color: mezcla del texto con el fondo, legible en claro y en oscuro. */
+    .org-roles td.tree-cell { --guide: color-mix(in srgb, var(--rm-text, #111827) 35%, transparent); }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .ord-btn:active { transform: scale(0.94); }
@@ -2308,12 +2308,17 @@ export class SuperadminPanel extends LitElement {
    * editable, solo se lee como árbol.
    * @param {number} depth @param {boolean} firstChild
    */
-  _renderTreeGuides(depth, firstChild) {
-    if (depth === 0) return null;
-    return html`${Array.from({ length: depth }, (_, i) => {
-      const kind = i === depth - 1 ? (firstChild ? 'corner' : 'tee') : 'line';
-      return html`<span class="tree-g ${kind}" aria-hidden="true"></span>`;
-    })}`;
+  /** Filas del árbol con el tipo de guía ya resuelto por columna. */
+  _orgRoleRowsWithGuides() {
+    const rows = this._orgRoleRows();
+    const kinds = treeGuideKinds(rows);
+    return rows.map((row, i) => ({ ...row, guides: kinds[i] }));
+  }
+
+  /** Estilo de la celda del árbol: guías como fondo (ver `treeGuideBackground`). */
+  _treeGuideStyle(kinds) {
+    const { background, paddingLeft } = treeGuideBackground(kinds);
+    return `background:${background};padding-left:${paddingLeft}`;
   }
 
   /** Reasigna el superior de un rol validando ciclos contra el catálogo actual. */
@@ -2503,8 +2508,8 @@ export class SuperadminPanel extends LitElement {
           : html`<div class="table-wrap"><table class="org-roles">
               <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th><th title="Capa canónica de la pirámide (RMR-TSK-0434)">Capa</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
-                ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfTree, firstChild }) => html`<tr class=${firstOfTree ? 'branch-start' : ''}>
-                  <td class="tree-cell">${this._renderTreeGuides(depth, firstChild)}${this._renderRoleName(role)}</td>
+                ${repeat(this._orgRoleRowsWithGuides(), ({ role }) => role.id, ({ role, firstOfTree, guides }) => html`<tr class=${firstOfTree ? 'branch-start' : ''}>
+                  <td class="tree-cell" style=${this._treeGuideStyle(guides)}>${this._renderRoleName(role)}</td>
                   <td>${this._renderRoleBranchCell(role)}</td>
                   <td>${ro
                     ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)

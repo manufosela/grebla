@@ -358,3 +358,50 @@ export function rolesOfArea(roles, areaId) {
   const list = roles ?? [];
   return list.filter((r) => areaOf(list, r) === areaId || isAreaHeadIn(list, r, areaId));
 }
+
+/**
+ * Tipo de guía por columna para cada fila de la tabla de roles (RMR-BUG-0093).
+ * La tabla va en POST-ORDEN (los hijos encima de su base), así que la columna de
+ * un ancestro se dibuja de arriba abajo hasta llegar a él. Una columna solo
+ * NACE (`corner`, media altura hacia abajo) si la fila anterior no la tenía
+ * activa; si venía de arriba es `line` (entera). Antes toda fila «primer hijo»
+ * reiniciaba su columna a media altura y dejaba trozos sueltos con hueco.
+ * La última columna de cada fila lleva además el trazo horizontal (lo pinta la
+ * vista). Función PURA.
+ * @param {Array<{ depth: number }>} rows
+ * @returns {Array<Array<'line'|'corner'>>}
+ */
+export function treeGuideKinds(rows) {
+  const list = rows ?? [];
+  return list.map((row, i) => {
+    const prevDepth = i > 0 ? list[i - 1].depth : -1;
+    return Array.from({ length: row.depth }, (_, c) => (prevDepth > c ? 'line' : 'corner'));
+  });
+}
+
+/** Ancho en rem de cada columna de guías del árbol de la tabla. */
+export const GUIDE_COL_REM = 1.15;
+
+/**
+ * Capas `background` de la celda del árbol (RMR-BUG-0093). Una capa por columna
+ * (la vertical) más el trazo horizontal que entra al nombre. `line` mide el
+ * 100% del alto del <td>, de modo que enlaza con la de la fila de arriba SIN
+ * hueco por muy alta que sea la fila; `corner` solo pinta la mitad inferior,
+ * que es donde NACE la rama. Función PURA (devuelve CSS, no toca el DOM).
+ * @param {Array<'line'|'corner'>} kinds
+ * @returns {{ background: string, paddingLeft: string }}
+ */
+export function treeGuideBackground(kinds) {
+  const depth = kinds?.length ?? 0;
+  if (depth === 0) return { background: 'none', paddingLeft: '0.35rem' };
+  const at = (c) => `calc(${(c * GUIDE_COL_REM + GUIDE_COL_REM / 2).toFixed(3)}rem - 0.75px)`;
+  const layer = (pos, size) => `linear-gradient(var(--guide),var(--guide)) no-repeat left ${pos} / ${size}`;
+  const layers = kinds.map((kind, c) => (kind === 'corner'
+    ? layer(`${at(c)} bottom`, '1.5px 50%')
+    : layer(`${at(c)} top`, '1.5px 100%')));
+  layers.push(layer(`${at(depth - 1)} center`, '0.7rem 1.5px'));
+  return {
+    background: layers.join(','),
+    paddingLeft: `calc(${(depth * GUIDE_COL_REM).toFixed(3)}rem + 0.2rem)`,
+  };
+}
