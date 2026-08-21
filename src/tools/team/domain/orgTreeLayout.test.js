@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { treeLayout } from './orgTreeLayout.js';
+import { treeLayout, linkPath } from './orgTreeLayout.js';
 
 /** Organigrama de prueba: base (capa 0) → head (1) → dos ICs (2). */
 const roles = [
@@ -137,5 +137,51 @@ describe('treeLayout — capas densas, compactado y ramas plegables (RMR-TSK-044
     expect(at(out, 'cpo').childCount).toBe(3);
     expect(at(out, 'pm').childCount).toBe(0);
     expect(at(out, 'cpo').hiddenCount).toBe(0);
+  });
+});
+
+describe('linkPath — las líneas NO cruzan tarjetas ajenas (RMR-BUG-0093)', () => {
+  const W = 210;
+  const H = 58;
+
+  /** Segmentos (verticales y horizontales) de un path `M .. V .. H .. V ..`. */
+  const segmentsOf = (d) => {
+    const [, x0, y0, y1, x1, y2] = d.match(/M ([\d.-]+) ([\d.-]+) V ([\d.-]+) H ([\d.-]+) V ([\d.-]+)/).map(Number);
+    return [
+      { x0, y0, x1: x0, y1 },
+      { x0, y0: y1, x1, y1 },
+      { x0: x1, y0: y1, x1, y1: y2 },
+    ];
+  };
+
+  /** ¿El segmento entra en el rectángulo de una tarjeta? */
+  const hitsCard = (seg, node) => {
+    const [lx, hx] = [Math.min(seg.x0, seg.x1), Math.max(seg.x0, seg.x1)];
+    const [ly, hy] = [Math.min(seg.y0, seg.y1), Math.max(seg.y0, seg.y1)];
+    return lx < node.x + W && hx > node.x && ly < node.y + H && hy > node.y;
+  };
+
+  it('el tramo largo baja por la columna del hijo y gira pegado a su base', () => {
+    const d = linkPath({ x: 0, y: 400 }, { x: 300, y: 100 }, { nodeWidth: W, nodeHeight: H });
+    expect(d).toBe('M 405 158 V 384 H 105 V 400');
+  });
+
+  it('con el catálogo de Engineering ninguna arista atraviesa otra tarjeta', () => {
+    const roles = [
+      { id: 'head-tech', label: 'Head of Tech', branch: 'engineering', reportsToRoleId: null, layer: 2 },
+      { id: 'em-back', label: 'EM Back', branch: 'em', reportsToRoleId: 'head-tech', layer: 3 },
+      { id: 'em-mobile', label: 'EM Mobile', branch: 'em', reportsToRoleId: 'head-tech', layer: 3 },
+      { id: 'qa', label: 'QA Engineer', branch: 'engineering', reportsToRoleId: 'head-tech', layer: 4 },
+      { id: 'back', label: 'Back Engineer', branch: 'engineering', reportsToRoleId: 'em-back', layer: 4 },
+      { id: 'platform', label: 'Platform Engineer', branch: 'engineering', reportsToRoleId: 'em-back', layer: 4 },
+      { id: 'mobile', label: 'Mobile Engineer', branch: 'engineering', reportsToRoleId: 'em-mobile', layer: 4 },
+    ];
+    const layout = treeLayout(roles, { nodeWidth: W });
+    const byId = new Map(layout.nodes.map((n) => [n.role.id, n]));
+    const crossings = layout.links.flatMap(({ from, to }) =>
+      segmentsOf(linkPath(byId.get(from), byId.get(to), { nodeWidth: W, nodeHeight: H }))
+        .flatMap((seg) => layout.nodes.filter((n) => n.role.id !== from && n.role.id !== to && hitsCard(seg, n))
+          .map((n) => `${to}→${from} pisa ${n.role.id}`)));
+    expect(crossings).toEqual([]);
   });
 });
