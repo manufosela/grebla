@@ -318,6 +318,19 @@ export class SuperadminPanel extends LitElement {
     .access-inline { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; margin-right: 0.5rem; }
     /* Pirámide invertida del organigrama (RMR-PRP-0002) */
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
+    /* Guías de árbol en la tabla de Roles (RMR-TSK-0439). La celda usa el hack
+       height:1px + hijo al 100% para que los segmentos ocupen TODA la altura de
+       la fila y las verticales encadenen sin huecos entre filas. */
+    .org-roles td.tree-cell { padding: 0 0.6rem 0 0.35rem; height: 1px; }
+    .org-roles td.tree-cell > * { vertical-align: middle; }
+    .tree-g { position: relative; display: inline-block; width: 1.15rem; height: 100%; min-height: 2.1rem; flex: none; }
+    /* Color propio de las guías: mezcla del texto con el fondo — visible en claro
+       y en oscuro sin competir con el contenido (el --rm-border queda muy tenue). */
+    .tree-g { --guide: color-mix(in srgb, var(--rm-text, #111827) 35%, transparent); }
+    .tree-g::before { content: ''; position: absolute; left: 50%; border-left: 1.5px solid var(--guide); }
+    .tree-g.line::before, .tree-g.tee::before { top: 0; bottom: 0; }
+    .tree-g.corner::before { top: 50%; bottom: 0; border-top-left-radius: 4px; }
+    .tree-g.corner::after, .tree-g.tee::after { content: ''; position: absolute; left: 50%; top: 50%; width: 0.75rem; border-top: 1.5px solid var(--guide); }
     .ord-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 0.8rem; font-weight: 700; line-height: 1; cursor: pointer; }
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .ord-btn:active { transform: scale(0.94); }
@@ -2286,6 +2299,23 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
+  /**
+   * Líneas de guía del árbol en la tabla de Roles (RMR-TSK-0439): un segmento
+   * por nivel de profundidad — vertical para los ancestros (la cadena sigue más
+   * abajo, porque la tabla va en post-orden: los hijos ENCIMA de su base) y, en
+   * el nivel propio, la esquina si arranca la rama (primer hijo) o el injerto si
+   * es un hermano posterior. CSS puro, sin librería: la tabla sigue siendo
+   * editable, solo se lee como árbol.
+   * @param {number} depth @param {boolean} firstChild
+   */
+  _renderTreeGuides(depth, firstChild) {
+    if (depth === 0) return null;
+    return html`${Array.from({ length: depth }, (_, i) => {
+      const kind = i === depth - 1 ? (firstChild ? 'corner' : 'tee') : 'line';
+      return html`<span class="tree-g ${kind}" aria-hidden="true"></span>`;
+    })}`;
+  }
+
   /** Reasigna el superior de un rol validando ciclos contra el catálogo actual. */
   async _setRoleParent(roleId, parentId) {
     this._orgError = '';
@@ -2473,8 +2503,8 @@ export class SuperadminPanel extends LitElement {
           : html`<div class="table-wrap"><table class="org-roles">
               <thead><tr><th>Rol</th><th>Rama</th><th>Depende de</th><th title="Capa canónica de la pirámide (RMR-TSK-0434)">Capa</th>${ro ? '' : html`<th></th>`}</tr></thead>
               <tbody>
-                ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfTree }) => html`<tr class=${firstOfTree ? 'branch-start' : ''}>
-                  <td style="padding-left:${0.6 + depth * 1.2}rem">${depth > 0 ? html`<span class="muted">┌ </span>` : null}${this._renderRoleName(role)}</td>
+                ${repeat(this._orgRoleRows(), ({ role }) => role.id, ({ role, depth, firstOfTree, firstChild }) => html`<tr class=${firstOfTree ? 'branch-start' : ''}>
+                  <td class="tree-cell">${this._renderTreeGuides(depth, firstChild)}${this._renderRoleName(role)}</td>
                   <td>${this._renderRoleBranchCell(role)}</td>
                   <td>${ro
                     ? (this._orgRoles.find((r) => r.id === role.reportsToRoleId)?.label ?? html`<span class="muted">— sin inferior (base) —</span>`)
