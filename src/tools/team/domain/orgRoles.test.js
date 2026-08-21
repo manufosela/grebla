@@ -369,3 +369,19 @@ describe('rolesOfArea — el área muestra su gente + las cabezas que cuelgan (R
     expect(rolesOfArea(conArea, 'executive').map((r) => r.id).toSorted()).toEqual(['coceo', 'cto']);
   });
 });
+
+describe('orgRoleRows.firstChild — quién arranca la línea de guía (RMR-TSK-0439)', () => {
+  it('el primer hijo de cada padre lo marca; los hermanos siguientes no', () => {
+    const arbol = [
+      { id: 'base', label: 'Base', branch: 'x', reportsToRoleId: null },
+      { id: 'h1', label: 'H1', branch: 'x', reportsToRoleId: 'base' },
+      { id: 'h2', label: 'H2', branch: 'x', reportsToRoleId: 'base' },
+      { id: 'n1', label: 'N1', branch: 'x', reportsToRoleId: 'h1' },
+    ];
+    const byId = Object.fromEntries(orgRoleRows(arbol).map((r) => [r.role.id, r]));
+    expect(byId.n1.firstChild).toBe(true);   // único hijo de h1
+    expect(byId.h1.firstChild).toBe(true);   // primer hijo de base
+    expect(byId.h2.firstChild).toBe(false);  // hermano siguiente
+    expect(byId.base.firstChild).toBe(false); // raíz: no cuelga de nadie
+  });
+});

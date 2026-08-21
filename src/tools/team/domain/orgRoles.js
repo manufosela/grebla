@@ -155,26 +155,28 @@ export function roleDepth(roles, roleId) {
  * dependencias sale CONTIGUO en post-orden: hojas arriba, cada rol encima de su
  * «depende de», y el rol base «sin inferior» al final del bloque (coherente con la
  * pirámide invertida). Cada fila marca `firstOfTree` (primera de su árbol) para la
- * línea separadora SOLO entre árboles. Función PURA.
+ * línea separadora SOLO entre árboles, y `firstChild` (RMR-TSK-0439): es el
+ * primer hijo listado de su padre, el que ARRANCA la línea de guía del árbol
+ * (los siguientes hermanos la continúan). Función PURA.
  * @param {OrgRole[]} roles
- * @returns {{ role: OrgRole, depth: number, firstOfTree: boolean }[]}
+ * @returns {{ role: OrgRole, depth: number, firstOfTree: boolean, firstChild: boolean }[]}
  */
 export function orgRoleRows(roles) {
   const list = roles ?? [];
   const rows = [];
-  const visit = (role, depth, acc) => {
-    for (const child of childrenOf(list, role.id)) visit(child, depth + 1, acc);
-    acc.push({ role, depth });
+  const visit = (role, depth, acc, firstChild) => {
+    childrenOf(list, role.id).forEach((child, i) => visit(child, depth + 1, acc, i === 0));
+    acc.push({ role, depth, firstChild });
   };
   for (const root of rootRoles(list)) {
     const tree = [];
-    visit(root, 0, tree);
-    tree.forEach((r, i) => rows.push({ role: r.role, depth: r.depth, firstOfTree: i === 0 }));
+    visit(root, 0, tree, false);
+    tree.forEach((r, i) => rows.push({ ...r, firstOfTree: i === 0 }));
   }
   // Roles en un ciclo preexistente (no alcanzables desde una cima) igualmente listados.
   const shown = new Set(rows.map((r) => r.role.id));
   const orphans = list.filter((r) => !shown.has(r.id));
-  orphans.forEach((r, i) => rows.push({ role: r, depth: 0, firstOfTree: i === 0 }));
+  orphans.forEach((r, i) => rows.push({ role: r, depth: 0, firstOfTree: i === 0, firstChild: false }));
   return rows;
 }
 
