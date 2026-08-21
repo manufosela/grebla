@@ -11,7 +11,7 @@ import { watchOrgRoles } from '../lib/orgRoles.js';
 import { watchOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
 import { areaOf, branchColor, isAreaHeadIn, rolesOfArea } from '../tools/team/domain/orgRoles.js';
-import { treeLayout } from '../tools/team/domain/orgTreeLayout.js';
+import { treeLayout, linkPath } from '../tools/team/domain/orgTreeLayout.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -290,12 +290,11 @@ export class OrgChart extends LitElement {
               ${layout.links.map((l) => {
                 const from = byId.get(l.from);
                 const to = byId.get(l.to);
-                // El codo gira JUSTO debajo del hijo (no a media altura): así el
-                // tramo horizontal nunca coincide con la fila de otro rol y deja
-                // de parecer que el PM cuelga del Head of Tech (RMR-BUG-0093).
-                const turn = to.y + NODE_H + 18;
+                // Enrutado en «peine» (ver `linkPath`): el hijo baja por su
+                // columna y gira pegado a su base, donde convergen todos sus
+                // hijos. Así se lee de un vistazo quién depende de quién.
                 return svg`<path style="stroke:${this._branchColor(to.role.branch)}"
-                  d="M ${cx(to)} ${to.y + NODE_H} V ${turn} H ${cx(from)} V ${from.y}"></path>`;
+                  d=${linkPath(from, to, { nodeWidth: NODE_W, nodeHeight: NODE_H })}></path>`;
               })}
             </svg>
             ${layout.nodes.map((n) => html`

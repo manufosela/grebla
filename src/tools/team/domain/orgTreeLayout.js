@@ -172,3 +172,22 @@ export function treeLayout(roles, opts = {}) {
     height: Math.max(...nodes.map((n) => n.y), 0) + rowHeight,
   };
 }
+
+/**
+ * Trazado de una arista hijo → base (RMR-BUG-0093). Enrutado en «peine»: el hijo
+ * baja por SU columna —donde no hay otras tarjetas, porque esa columna es la
+ * suya— y solo gira en el carril inmediatamente encima de la base, donde
+ * convergen las líneas de todos sus hijos. Girar bajo el hijo y bajar por la
+ * columna de la BASE cruzaba a sus otros hijos, que es exactamente lo que
+ * ocupa esa columna. Función PURA.
+ * @param {{x:number,y:number}} from base (abajo)
+ * @param {{x:number,y:number}} to hijo (arriba)
+ * @param {{ nodeWidth?: number, nodeHeight?: number, clearance?: number }} [opts]
+ * @returns {string} atributo `d` del path
+ */
+export function linkPath(from, to, opts = {}) {
+  const { nodeWidth = 210, nodeHeight = 58, clearance = 16 } = opts;
+  const cx = (n) => n.x + nodeWidth / 2;
+  const turn = from.y - clearance;
+  return `M ${cx(to)} ${to.y + nodeHeight} V ${turn} H ${cx(from)} V ${from.y}`;
+}
