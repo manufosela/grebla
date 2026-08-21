@@ -22,6 +22,8 @@ export class OrgChart extends LitElement {
     _ready: { state: true },
     _mode: { state: true },
     _area: { state: true },
+    _zoom: { state: true },
+    _pan: { state: true },
   };
 
   static styles = css`
@@ -58,7 +60,7 @@ export class OrgChart extends LitElement {
     .pyramid:not(.mini) .pyr-lvl { position: absolute; top: 0.35rem; left: 0.85rem; flex: none; text-align: left; }
     /* Nivel SIMBÓLICO en la cima: los usuarios del producto (no son fichas). */
     .pyr-crown {
-      width: 100%; text-align: center; padding: 0.7rem 1rem; border-radius: 12px;
+      width: 100%; max-width: 100%; box-sizing: border-box; text-align: center; padding: 0.7rem 1rem; border-radius: 12px;
       border: 2px dashed var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 10%, transparent);
       font-weight: 800; font-size: 1rem; color: var(--rm-text, #111827);
       display: flex; flex-direction: column; gap: 0.15rem;
@@ -66,12 +68,30 @@ export class OrgChart extends LitElement {
     .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
     /* Árbol invertido (RMR-TSK-0440): lienzo con scroll propio; el SVG pinta las
        aristas y las tarjetas van encima en posición absoluta. */
-    .tree-scroll { overflow-x: auto; overflow-y: hidden; padding: 0.5rem 0 1rem; }
-    .tree-canvas { position: relative; margin: 0 auto; }
+    /* Visor del árbol: zoom con rueda y arrastre con el ratón, sin scrollbars. */
+    .tree-view { display: flex; flex-direction: column; gap: 0.4rem; }
+    .tree-tools { display: flex; align-items: center; gap: 0.35rem; }
+    .tree-tools button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; width: 2rem; height: 2rem; font: inherit; font-weight: 700; cursor: pointer; }
+    .tree-tools button.fit { width: auto; padding: 0 0.7rem; font-size: 0.82rem; }
+    .tree-tools button:hover { border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
+    .tree-tools .hint { color: var(--rm-muted, #9ca3af); font-size: 0.75rem; margin-left: 0.35rem; }
+    .tree-port { position: relative; overflow: hidden; height: min(68vh, 620px); border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; background: color-mix(in srgb, var(--rm-text, #111827) 3%, transparent); cursor: grab; touch-action: none; }
+    .tree-port.grabbing { cursor: grabbing; }
+    .tree-canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
     .tree-links { position: absolute; inset: 0; overflow: visible; }
-    .tree-links path { fill: none; stroke: color-mix(in srgb, var(--rm-text, #111827) 32%, transparent); stroke-width: 1.5; }
-    .tree-node { position: absolute; display: flex; justify-content: center; align-items: flex-start; }
-    .tree-node .pyr-role { max-width: 100%; }
+    .tree-links path { fill: none; stroke-width: 1.6; opacity: 0.75; }
+    .tree-node { position: absolute; display: flex; justify-content: center; align-items: center; }
+    /* Tarjeta de altura UNIFORME dentro del árbol: el texto se recorta antes que
+       romper la rejilla (el layout coloca por posiciones fijas). */
+    .tree-node .pyr-role { width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; align-content: center; }
+    .tree-node .pyr-role { flex-wrap: nowrap; flex-direction: column; gap: 0.15rem; padding: 0.4rem 0.6rem; }
+    /* Dentro del árbol la tarjeta mide lo mismo para todos: nombre y rama en una
+       línea cada uno, recortados con elipsis si no caben (RMR-BUG-0093). */
+    .tree-node .pyr-name, .tree-node .pyr-branch { display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+    .tree-node .pyr-dot { position: absolute; top: 0.5rem; left: 0.5rem; }
+    .tree-node .pyr-role { position: relative; }
+    .tree-node .pyr-head { display: none; }
+    .tree-node.frontier-node .pyr-role { border-style: dashed; }
     /* Toggle Global / Por ramas (mismo lenguaje de pestaña subrayada). */
     .modes { display: flex; gap: 0.1rem; border-bottom: 2px solid var(--rm-border, #e5e7eb); margin-bottom: 0.5rem; }
     .mode { border: 0; background: none; color: var(--rm-muted, #6b7280); padding: 0.5rem 0.9rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
@@ -104,6 +124,10 @@ export class OrgChart extends LitElement {
     this._area = null;
     /** Área que se está pintando (para marcar las cabezas frontera). */
     this._areaShown = null;
+    /** Zoom y desplazamiento del lienzo del árbol (RMR-BUG-0093). */
+    this._zoom = 1;
+    this._pan = { x: 0, y: 0 };
+    this._drag = null;
     this._loadedForUser = null;
   }
 
@@ -180,7 +204,7 @@ export class OrgChart extends LitElement {
       && isAreaHeadIn(this._visibleRoles, r, this._areaShown);
     const area = frontier ? areaOf(this._visibleRoles, r) : null;
     return html`<span class="pyr-role ${frontier ? 'frontier' : ''}" style="border-color:${color}">
-      <span class="pyr-dot" style="background:${color}"></span>${r.label}
+      <span class="pyr-dot" style="background:${color}"></span><span class="pyr-name">${r.label}</span>
       <em class="pyr-branch">${this._branchLabel(r.branch)}${boss ? html` · ↑ ${boss}` : ''}</em>
       ${frontier ? html`<em class="pyr-head" style="--h:${this._branchColor(area)}">cabeza de ${this._branchLabel(area)}</em>` : null}
     </span>`;
@@ -222,30 +246,90 @@ export class OrgChart extends LitElement {
    */
   _renderTree(roles) {
     const NODE_W = 200;
-    const NODE_H = 62;
-    const layout = treeLayout(roles, { nodeWidth: NODE_W, gapX: 26, rowHeight: 116, subRowHeight: 52 });
+    // Altura UNIFORME de tarjeta: el layout coloca por rejilla, así que las
+    // tarjetas deben medir lo mismo pase lo que pase con su texto (una cabeza
+    // frontera lleva chip y crecía, y acababa solapando — RMR-BUG-0093).
+    // Métrica de la rejilla: el salto entre bandas (rowHeight) y el de subfila
+    // intra-capa (subRowHeight) han de ser MAYORES que la tarjeta, o el rol
+    // desplazado invade la banda de al lado (solape visto en RMR-BUG-0093).
+    const NODE_H = 58;
+    const layout = treeLayout(roles, { nodeWidth: NODE_W, gapX: 24, rowHeight: 136, subRowHeight: 68 });
     if (layout.nodes.length === 0) return html`<p class="empty">No hay roles.</p>`;
     const w = layout.width;
     const h = layout.height + NODE_H;
     const cx = (n) => n.x + NODE_W / 2;
     const byId = new Map(layout.nodes.map((n) => [n.role.id, n]));
     return html`
-      <div class="tree-scroll">
-        <div class="tree-canvas" style="width:${w}px;height:${h}px">
-          <svg class="tree-links" viewBox="0 0 ${w} ${h}" width=${w} height=${h} aria-hidden="true">
-            ${layout.links.map((l) => {
-              const from = byId.get(l.from);
-              const to = byId.get(l.to);
-              const mid = (from.y + to.y + NODE_H) / 2;
-              return svg`<path d="M ${cx(from)} ${from.y} V ${mid} H ${cx(to)} V ${to.y + NODE_H}"></path>`;
-            })}
-          </svg>
-          ${layout.nodes.map((n) => html`
-            <div class="tree-node" style="left:${n.x}px;top:${n.y}px;width:${NODE_W}px">
-              ${this._role(n.role, this._branchColor(n.role.branch))}
-            </div>`)}
+      <div class="tree-view">
+        <div class="tree-tools">
+          <button type="button" title="Alejar" @click=${() => this._zoomBy(1 / 1.2)}>−</button>
+          <button type="button" title="Acercar" @click=${() => this._zoomBy(1.2)}>+</button>
+          <button type="button" class="fit" title="Ver todo" @click=${() => this._zoomFit()}>Ver todo</button>
+          <span class="hint">arrastra para mover · rueda para zoom</span>
+        </div>
+        <div class="tree-port"
+          @wheel=${this._onWheel} @pointerdown=${this._onPanStart}
+          @pointermove=${this._onPanMove} @pointerup=${this._onPanEnd} @pointercancel=${this._onPanEnd}>
+          <div class="tree-canvas" style="width:${w}px;height:${h}px;transform:translate(${this._pan.x}px,${this._pan.y}px) scale(${this._zoom})">
+            <svg class="tree-links" viewBox="0 0 ${w} ${h}" width=${w} height=${h} aria-hidden="true">
+              ${layout.links.map((l) => {
+                const from = byId.get(l.from);
+                const to = byId.get(l.to);
+                // El codo gira JUSTO debajo del hijo (no a media altura): así el
+                // tramo horizontal nunca coincide con la fila de otro rol y deja
+                // de parecer que el PM cuelga del Head of Tech (RMR-BUG-0093).
+                const turn = to.y + NODE_H + 18;
+                return svg`<path style="stroke:${this._branchColor(to.role.branch)}"
+                  d="M ${cx(to)} ${to.y + NODE_H} V ${turn} H ${cx(from)} V ${from.y}"></path>`;
+              })}
+            </svg>
+            ${layout.nodes.map((n) => html`
+              <div class="tree-node" style="left:${n.x}px;top:${n.y}px;width:${NODE_W}px;height:${NODE_H}px">
+                ${this._role(n.role, this._branchColor(n.role.branch))}
+              </div>`)}
+          </div>
         </div>
       </div>`;
+  }
+
+  /** Zoom relativo, acotado para no perder el dibujo de vista. */
+  _zoomBy(factor) {
+    this._zoom = Math.min(2, Math.max(0.25, this._zoom * factor));
+  }
+
+  /** «Ver todo»: encaja el lienzo en el visor y lo centra. */
+  _zoomFit() {
+    const port = this.renderRoot.querySelector('.tree-port');
+    const canvas = this.renderRoot.querySelector('.tree-canvas');
+    if (!port || !canvas) return;
+    const w = parseFloat(canvas.style.width);
+    const h = parseFloat(canvas.style.height);
+    const scale = Math.min(1, (port.clientWidth - 24) / w, (port.clientHeight - 24) / h);
+    this._zoom = Math.max(0.25, scale);
+    this._pan = { x: (port.clientWidth - w * this._zoom) / 2, y: (port.clientHeight - h * this._zoom) / 2 };
+  }
+
+  /** Rueda = zoom (sin scroll de página). */
+  _onWheel(e) {
+    e.preventDefault();
+    this._zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+  }
+
+  _onPanStart(e) {
+    if (e.button !== 0) return;
+    this._drag = { x: e.clientX - this._pan.x, y: e.clientY - this._pan.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.classList.add('grabbing');
+  }
+
+  _onPanMove(e) {
+    if (!this._drag) return;
+    this._pan = { x: e.clientX - this._drag.x, y: e.clientY - this._drag.y };
+  }
+
+  _onPanEnd(e) {
+    this._drag = null;
+    e.currentTarget.classList.remove('grabbing');
   }
 
   /**
