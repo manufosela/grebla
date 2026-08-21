@@ -5,12 +5,13 @@
  * «sin inferior» —al que nadie sostiene porque sostiene a todos— en la punta de
  * abajo; hacia arriba, ensanchando, los sostenidos). No edita nada.
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, svg, css } from 'lit';
 import { onUserChanged } from '../lib/auth.js';
 import { watchOrgRoles } from '../lib/orgRoles.js';
 import { watchOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { areaOf, branchColor, isAreaHeadIn, layerColor, pyramidLayers, rolesOfArea } from '../tools/team/domain/orgRoles.js';
+import { areaOf, branchColor, isAreaHeadIn, rolesOfArea } from '../tools/team/domain/orgRoles.js';
+import { treeLayout } from '../tools/team/domain/orgTreeLayout.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -63,6 +64,14 @@ export class OrgChart extends LitElement {
       display: flex; flex-direction: column; gap: 0.15rem;
     }
     .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    /* Árbol invertido (RMR-TSK-0440): lienzo con scroll propio; el SVG pinta las
+       aristas y las tarjetas van encima en posición absoluta. */
+    .tree-scroll { overflow-x: auto; overflow-y: hidden; padding: 0.5rem 0 1rem; }
+    .tree-canvas { position: relative; margin: 0 auto; }
+    .tree-links { position: absolute; inset: 0; overflow: visible; }
+    .tree-links path { fill: none; stroke: color-mix(in srgb, var(--rm-text, #111827) 32%, transparent); stroke-width: 1.5; }
+    .tree-node { position: absolute; display: flex; justify-content: center; align-items: flex-start; }
+    .tree-node .pyr-role { max-width: 100%; }
     /* Toggle Global / Por ramas (mismo lenguaje de pestaña subrayada). */
     .modes { display: flex; gap: 0.1rem; border-bottom: 2px solid var(--rm-border, #e5e7eb); margin-bottom: 0.5rem; }
     .mode { border: 0; background: none; color: var(--rm-muted, #6b7280); padding: 0.5rem 0.9rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
@@ -197,11 +206,45 @@ export class OrgChart extends LitElement {
   }
 
   _renderGlobal() {
-    const levels = this._levelsOf(this._visibleRoles);
     return html`
-      <div class="pyramid">
-        ${this._crown ? html`<div class="pyr-crown">👥 ${this._crown}<em>a quienes todo el equipo sostiene</em></div>` : null}
-        ${levels.map((level, i) => this._globalLevel(level, i, levels.length))}
+      ${this._crown ? html`<div class="pyr-crown">👥 ${this._crown}<em>a quienes todo el equipo sostiene</em></div>` : null}
+      ${this._renderTree(this._visibleRoles)}`;
+  }
+
+  /**
+   * ÁRBOL INVERTIDO (RMR-TSK-0440): la base abajo, los sostenidos arriba, cada
+   * rol unido a su superior por una línea real. Las posiciones las calcula el
+   * dominio (d3-hierarchy para el eje X, capa canónica para el Y); aquí solo se
+   * pinta: un SVG de fondo con las aristas y las tarjetas HTML encima, en
+   * posición absoluta — así se reutiliza el estilo de las tarjetas (color de
+   * rama, «↑ superior», cabeza frontera) sin pelearse con el texto en SVG.
+   * @param {import('../tools/team/domain/orgRoles.js').OrgRole[]} roles
+   */
+  _renderTree(roles) {
+    const NODE_W = 200;
+    const NODE_H = 62;
+    const layout = treeLayout(roles, { nodeWidth: NODE_W, gapX: 26, rowHeight: 116, subRowHeight: 52 });
+    if (layout.nodes.length === 0) return html`<p class="empty">No hay roles.</p>`;
+    const w = layout.width;
+    const h = layout.height + NODE_H;
+    const cx = (n) => n.x + NODE_W / 2;
+    const byId = new Map(layout.nodes.map((n) => [n.role.id, n]));
+    return html`
+      <div class="tree-scroll">
+        <div class="tree-canvas" style="width:${w}px;height:${h}px">
+          <svg class="tree-links" viewBox="0 0 ${w} ${h}" width=${w} height=${h} aria-hidden="true">
+            ${layout.links.map((l) => {
+              const from = byId.get(l.from);
+              const to = byId.get(l.to);
+              const mid = (from.y + to.y + NODE_H) / 2;
+              return svg`<path d="M ${cx(from)} ${from.y} V ${mid} H ${cx(to)} V ${to.y + NODE_H}"></path>`;
+            })}
+          </svg>
+          ${layout.nodes.map((n) => html`
+            <div class="tree-node" style="left:${n.x}px;top:${n.y}px;width:${NODE_W}px">
+              ${this._role(n.role, this._branchColor(n.role.branch))}
+            </div>`)}
+        </div>
       </div>`;
   }
 
@@ -278,7 +321,6 @@ export class OrgChart extends LitElement {
     // El área muestra su gente MÁS las cabezas de las áreas que cuelgan de ella
     // (RMR-TSK-0438): Executive ve al CPO y al CPeopleO; Product ve a los Heads.
     this._areaShown = current;
-    const levels = this._levelsOf(rolesOfArea(visible, current));
     return html`
       <div class="areas" role="tablist" aria-label="Áreas de la organización">
         ${branchIds.map((bid) => html`
@@ -288,10 +330,8 @@ export class OrgChart extends LitElement {
             <span class="pyr-dot" style="background:${this._branchColor(bid)}"></span>${this._branchLabel(bid)}
           </button>`)}
       </div>
-      <div class="branch-col" role="tabpanel" aria-labelledby="area-${current}">
-        <div class="pyramid mini area-pyr">
-          ${levels.map((level, i) => this._miniLevel(level, i, levels.length))}
-        </div>
+      <div role="tabpanel" aria-labelledby="area-${current}">
+        ${this._renderTree(rolesOfArea(visible, current))}
       </div>`;
   }
 }

@@ -26,6 +26,9 @@ importers:
       astro:
         specifier: ^6.4.4
         version: 6.4.4(@types/node@25.9.1)(rollup@4.61.1)(yaml@2.9.0)
+      d3-hierarchy:
+        specifier: ^3.1.2
+        version: 3.1.2
       firebase:
         specifier: ^12.14.0
         version: 12.14.0
@@ -1275,6 +1278,10 @@ packages:
   csso@5.0.5:
     resolution: {integrity: sha512-0LrrStPOdJj+SPCCrGhzryycLjwcgUSHBtxNA8aIDxf0GLsRh1cKYhB00Gd1lDOS4yGH69+SNn13+TWbVHETFQ==}
     engines: {node: ^10 || ^12.20.0 || ^14.13.0 || >=15.0.0, npm: '>=7.0.0'}
+
+  d3-hierarchy@3.1.2:
+    resolution: {integrity: sha512-FX/9frcub54beBdugHjDCdikxThEqjnR93Qt7PvQTOHxyiNCAlvMrHhclk3cD5VeAaq9fxmfRp+CnWw9rEMBuA==}
+    engines: {node: '>=12'}
 
   data-uri-to-buffer@4.0.1:
     resolution: {integrity: sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A==}
@@ -4128,6 +4135,8 @@ snapshots:
   csso@5.0.5:
     dependencies:
       css-tree: 2.2.1
+
+  d3-hierarchy@3.1.2: {}
 
   data-uri-to-buffer@4.0.1: {}
 
