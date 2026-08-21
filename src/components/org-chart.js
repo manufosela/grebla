@@ -10,7 +10,7 @@ import { onUserChanged } from '../lib/auth.js';
 import { watchOrgRoles } from '../lib/orgRoles.js';
 import { watchOrgBranches } from '../lib/orgBranches.js';
 import { getUsersCrownLabel } from '../lib/orgConfig.js';
-import { areaOf, branchColor, layerColor, pyramidLayers } from '../tools/team/domain/orgRoles.js';
+import { areaOf, branchColor, isAreaHeadIn, layerColor, pyramidLayers, rolesOfArea } from '../tools/team/domain/orgRoles.js';
 
 export class OrgChart extends LitElement {
   static properties = {
@@ -46,6 +46,11 @@ export class OrgChart extends LitElement {
     .pyr-role { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.3rem 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); max-width: 100%; }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
     .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
+    /* Cabeza de otra área que cuelga de esta (RMR-TSK-0438): borde discontinuo
+       y etiqueta con el color de SU área — es un dato del árbol, no una
+       inferencia: «este rol es la cabeza de X y reporta aquí». */
+    .pyr-role.frontier { border-style: dashed; }
+    .pyr-head { font-style: normal; font-size: 0.66rem; font-weight: 700; color: var(--h, var(--rm-accent, #2a9d8f)); border: 1px solid var(--h, var(--rm-accent, #2a9d8f)); border-radius: 8px; padding: 0.05rem 0.45rem; }
     /* Etiqueta de capa: solo la pirámide GLOBAL la renderiza; en mini (por ramas),
        si apareciera, fluye en normal-flow (sin solaparse con las fichas). */
     .pyr-lvl { flex: 100%; text-align: center; font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lv, #9ca3af); }
@@ -88,6 +93,8 @@ export class OrgChart extends LitElement {
     this._mode = 'global';
     /** @type {string|null} área elegida en «Por ramas» (null = la primera). */
     this._area = null;
+    /** Área que se está pintando (para marcar las cabezas frontera). */
+    this._areaShown = null;
     this._loadedForUser = null;
   }
 
@@ -157,9 +164,16 @@ export class OrgChart extends LitElement {
     // «ejerce también de X» se retiró (RMR-BUG-0092): era una heurística
     // inventada que afirmaba cosas falsas en catálogos reales.
     const boss = r.reportsToRoleId ? this._roles.find((x) => x.id === r.reportsToRoleId)?.label : null;
-    return html`<span class="pyr-role" style="border-color:${color}">
+    // Cabeza FRONTERA (RMR-TSK-0438): en la pestaña de su superior se marca con
+    // borde discontinuo y la etiqueta de su área — se ve que pertenece a otra
+    // área y que cuelga de aquí. En su propia pestaña es una tarjeta normal.
+    const frontier = this._mode === 'ramas' && this._areaShown
+      && isAreaHeadIn(this._visibleRoles, r, this._areaShown);
+    const area = frontier ? areaOf(this._visibleRoles, r) : null;
+    return html`<span class="pyr-role ${frontier ? 'frontier' : ''}" style="border-color:${color}">
       <span class="pyr-dot" style="background:${color}"></span>${r.label}
       <em class="pyr-branch">${this._branchLabel(r.branch)}${boss ? html` · ↑ ${boss}` : ''}</em>
+      ${frontier ? html`<em class="pyr-head" style="--h:${this._branchColor(area)}">cabeza de ${this._branchLabel(area)}</em>` : null}
     </span>`;
   }
 
@@ -261,7 +275,10 @@ export class OrgChart extends LitElement {
     // ancho completo. Si el área elegida ya no existe (cambio en vivo del
     // catálogo), cae a la primera sin romper la vista.
     const current = branchIds.includes(this._area) ? this._area : branchIds[0];
-    const levels = this._levelsOf(visible.filter((r) => areaById.get(r.id) === current));
+    // El área muestra su gente MÁS las cabezas de las áreas que cuelgan de ella
+    // (RMR-TSK-0438): Executive ve al CPO y al CPeopleO; Product ve a los Heads.
+    this._areaShown = current;
+    const levels = this._levelsOf(rolesOfArea(visible, current));
     return html`
       <div class="areas" role="tablist" aria-label="Áreas de la organización">
         ${branchIds.map((bid) => html`

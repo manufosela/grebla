@@ -321,3 +321,38 @@ export function areaOf(roles, role) {
   }
   return (current ?? role)?.branch;
 }
+
+/**
+ * ¿Es `role` una CABEZA FRONTERA en el área `areaId`? (RMR-TSK-0438): lo es
+ * cuando su área es OTRA pero su superior sí pertenece a `areaId` — es decir,
+ * su área cuelga de esa. El CPO (Product) es cabeza frontera en Executive
+ * porque reporta al coCEO; en su propia pestaña no es frontera, es la base.
+ * @param {OrgRole[]} roles
+ * @param {OrgRole} role
+ * @param {string} areaId
+ * @returns {boolean}
+ */
+export function isAreaHeadIn(roles, role, areaId) {
+  const list = roles ?? [];
+  if (!role?.reportsToRoleId) return false;
+  if (areaOf(list, role) === areaId) return false;
+  const boss = list.find((r) => r.id === role.reportsToRoleId);
+  return Boolean(boss) && areaOf(list, boss) === areaId;
+}
+
+/**
+ * Roles que se dibujan en la pestaña de un área (RMR-TSK-0438): los suyos MÁS
+ * las cabezas de las áreas que cuelgan de ella. Regla general —sin niveles ni
+ * nombres cableados—: un rol aparece en su área (siempre) y además en el área
+ * de su superior cuando cruza frontera. Así Executive muestra el comité de
+ * dirección (CPO, CPeopleO) y Product muestra qué áreas sostiene (Engineering,
+ * Data); un futuro CTO verá sus Heads sin tocar nada. Las capas ya salen del
+ * rol (layerOf), así que la cabeza cae sola encima de su superior.
+ * @param {OrgRole[]} roles
+ * @param {string} areaId
+ * @returns {OrgRole[]}
+ */
+export function rolesOfArea(roles, areaId) {
+  const list = roles ?? [];
+  return list.filter((r) => areaOf(list, r) === areaId || isAreaHeadIn(list, r, areaId));
+}
