@@ -16,12 +16,14 @@ test.describe('el Head ve su rama y no lo de fuera', () => {
     await expect(page.getByText('Persona de fuera')).toHaveCount(0);
   });
 
-  test('Carrera: la persona de su rama está en el mapa', async ({ page }) => {
+  test('Carrera: ve el progreso de la persona de su rama, no el de la ajena', async ({ page }) => {
     await signInAs(page, 'head');
-    await page.goto('/tools/career-map');
-    // En Carrera la persona vive en el selector (una <option>), que existe en el
-    // DOM sin estar «visible»: se comprueba presencia, no visibilidad.
-    await expect(page.getByText('Persona del manager').first()).toBeAttached();
+    // El mapa ya NO tiene selector de otras personas: cada uno juega el suyo. El
+    // progreso de la gente que sostienes se consulta (solo lectura) en la
+    // pestaña «Carrera» de la herramienta de Equipo.
+    await page.goto('/tools/team');
+    await page.getByRole('button', { name: 'Carrera' }).click();
+    await expect(page.getByText('Persona del manager')).toBeVisible();
     await expect(page.getByText('Persona de fuera')).toHaveCount(0);
   });
 
