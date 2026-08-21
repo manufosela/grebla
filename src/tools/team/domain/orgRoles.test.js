@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { areaOf, intermediateBranches, isAreaHeadIn, rolesOfArea, rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { areaOf, intermediateBranches, isAreaHeadIn, rolesOfArea, treeGuideKinds, treeGuideBackground, rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -383,5 +383,54 @@ describe('orgRoleRows.firstChild — quién arranca la línea de guía (RMR-TSK-
     expect(byId.h1.firstChild).toBe(true);   // primer hijo de base
     expect(byId.h2.firstChild).toBe(false);  // hermano siguiente
     expect(byId.base.firstChild).toBe(false); // raíz: no cuelga de nadie
+  });
+});
+
+describe('treeGuideKinds — guías CONTINUAS en la tabla (RMR-BUG-0093)', () => {
+  it('una columna solo «nace» (corner) si la fila de encima no la tenía: si no, es línea entera', () => {
+    // Post-orden: hijos encima de su base. La columna del padre ya viene
+    // dibujada desde los hijos, así que la fila del padre NO debe reiniciarla
+    // (eso dejaba el trozo suelto con hueco que se veía en la tabla).
+    const rows = [{ depth: 2 }, { depth: 2 }, { depth: 1 }, { depth: 1 }, { depth: 0 }];
+    expect(treeGuideKinds(rows)).toEqual([
+      ['corner', 'corner'],   // primera fila: ambas columnas nacen aquí
+      ['line', 'line'],       // hermana: las dos columnas vienen de arriba
+      ['line'],               // su base: la columna 0 ya venía dibujada
+      ['line'],
+      [],                     // raíz: sin guías
+    ]);
+  });
+
+  it('al entrar en un subárbol más profundo, las columnas nuevas nacen ahí', () => {
+    const rows = [{ depth: 1 }, { depth: 3 }, { depth: 2 }];
+    expect(treeGuideKinds(rows)).toEqual([
+      ['corner'],
+      ['line', 'corner', 'corner'], // col0 venía; col1 y col2 nacen
+      ['line', 'line'],
+    ]);
+  });
+
+  it('sin filas o filas de profundidad 0 no dibuja nada', () => {
+    expect(treeGuideKinds([])).toEqual([]);
+    expect(treeGuideKinds([{ depth: 0 }])).toEqual([[]]);
+  });
+});
+
+describe('treeGuideBackground — verticales SIN hueco (RMR-BUG-0093)', () => {
+  it('una vertical «line» mide el 100% del alto de la celda, no una altura fija', () => {
+    const { background } = treeGuideBackground(['line', 'line']);
+    const layers = background.split('linear-gradient(').length - 1;
+    expect(layers).toBe(3); // 2 verticales + el trazo horizontal
+    expect(background).toContain('1.5px 100%');
+    expect(background).not.toMatch(/1\.5px \d+(\.\d+)?(px|rem)/); // nada de altos fijos
+  });
+
+  it('«corner» nace a media altura y no repinta la mitad de arriba', () => {
+    expect(treeGuideBackground(['corner']).background).toContain('bottom / 1.5px 50%');
+  });
+
+  it('reserva sitio para las columnas y sin profundidad no pinta nada', () => {
+    expect(treeGuideBackground(['line', 'line', 'line']).paddingLeft).toContain('3.450rem');
+    expect(treeGuideBackground([])).toEqual({ background: 'none', paddingLeft: '0.35rem' });
   });
 });
