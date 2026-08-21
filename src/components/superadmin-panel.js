@@ -2812,7 +2812,8 @@ export class SuperadminPanel extends LitElement {
       ? [...candidates, ...this._peopleList.filter((o) => o.id === current && o.id !== p.id)]
       : candidates;
     return html`
-      <select @change=${(e) => this._setPersonSuperior(p.id, e.target.value)} title=${nameOf(current)}>
+      <select aria-label="Superior de ${p.name ?? 'la persona'}"
+        @change=${(e) => this._setPersonSuperior(p.id, e.target.value)} title=${nameOf(current)}>
         <option value="" ?selected=${!current}>— no reporta a nadie —</option>
         ${superiorRole && candidates.length === 0
           ? html`<option value="" disabled>(aún no hay nadie con rol ${superiorRole.label})</option>`

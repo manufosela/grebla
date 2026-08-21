@@ -301,10 +301,20 @@ export class TeamPeople extends LitElement {
     this._loaded = false;
   }
 
-  updated() {
+  /**
+   * @param {Map<string, unknown>} changed
+   * OJO: UN SOLO `updated` por clase. Declarar un segundo método con este nombre
+   * anula al primero en silencio —sin error ni aviso de lint— y eso es lo que
+   * dejó la pestaña «Personas» sin cargar (RMR-BUG-0094). Todo lo que deba
+   * ocurrir tras un render va AQUÍ. Hay un guard en la suite que lo vigila.
+   */
+  updated(changed) {
     if (this.persistence && !this._loaded) {
       this._loaded = true;
       this._load();
+    }
+    if (changed.has('people') || changed.has('framework') || changed.has('careerStore')) {
+      this._loadSubLevels();
     }
   }
 
@@ -673,13 +683,6 @@ export class TeamPeople extends LitElement {
     const list = items ?? [];
     if (list.length === 0) return html`<span class="muted">—</span>`;
     return html`<span class="chips">${list.map((x) => this._chipEl(x, catalog ? this._catalogColor(x, catalog) : ''))}</span>`;
-  }
-
-  /** @param {Map<string, unknown>} changed */
-  updated(changed) {
-    if (changed.has('people') || changed.has('framework') || changed.has('careerStore')) {
-      this._loadSubLevels();
-    }
   }
 
   /** Badges LX.Y de la tabla (RMR-TSK-0429): derivados del mapa (ruta del

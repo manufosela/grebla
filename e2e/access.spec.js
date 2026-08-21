@@ -11,8 +11,9 @@ test.describe('acceso por rol (sin login de Google)', () => {
     await signInAs(page, 'superadmin');
     await page.goto('/admin');
     await expect(page.locator('body')).not.toContainText(LOGIN_MARKER);
-    // El panel lista a los managers de la organización.
-    await expect(page.getByText(/Managers/i).first()).toBeVisible();
+    // El panel lista a TODAS las personas de la organización (la sección
+    // «Managers» se unificó en «Personas» con el modelo persona-céntrica).
+    await expect(page.getByRole('heading', { name: /^Personas \(/ })).toBeVisible();
   });
 
   test('el Head entra a la herramienta de Equipo y ve su rama', async ({ page }) => {
