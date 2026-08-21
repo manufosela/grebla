@@ -55,7 +55,12 @@ export function treeLayout(roles, opts = {}) {
   };
 
   const root = hierarchy({ __virtual: true }, childrenFn);
-  tree().nodeSize([nodeWidth + gapX, rowHeight])(root);
+  // separation por defecto de d3 = 1 entre hermanos y 2 entre primos: deja el
+  // DOBLE de hueco entre subárboles. Compactado a 1.15 (RMR-BUG-0093: «no
+  // quiero huecos») — sigue distinguiendo grupos sin desperdiciar lienzo.
+  tree()
+    .nodeSize([nodeWidth + gapX, rowHeight])
+    .separation((a, b) => (a.parent === b.parent ? 1 : 1.15))(root);
 
   const maxLayer = Math.max(...list.map((r) => layerOf(list, r)));
   const placed = root.descendants().filter((n) => !n.data.__virtual);
