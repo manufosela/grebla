@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { areaOf, intermediateBranches, rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { areaOf, intermediateBranches, isAreaHeadIn, rolesOfArea, rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -299,5 +299,73 @@ describe('areaOf — «Por ramas» agrupa por ÁREA, no por la categoría del ro
     expect(a('mid2')).toBe('dir');
     expect(a('mid1')).toBe('dir');
     expect(a('solo')).toBe('sola'); // cima: aunque su rama sea intermedia, no hay superior
+  });
+});
+
+describe('rolesOfArea — el área muestra su gente + las cabezas que cuelgan (RMR-TSK-0438)', () => {
+  // Catálogo real de tribbu (simplificado): Executive → CPO (Product) → Heads.
+  const roles = [
+    { id: 'ceo', label: 'CEO', branch: 'executive', reportsToRoleId: null },
+    { id: 'coceo', label: 'coCEO', branch: 'executive', reportsToRoleId: 'ceo' },
+    { id: 'cfo', label: 'CFO', branch: 'executive', reportsToRoleId: 'coceo' },
+    { id: 'cpeople', label: 'CPeopleO', branch: 'people', reportsToRoleId: 'coceo' },
+    { id: 'cpo', label: 'CPO', branch: 'product', reportsToRoleId: 'coceo' },
+    { id: 'pm', label: 'PM', branch: 'product', reportsToRoleId: 'cpo' },
+    { id: 'head-tech', label: 'Head of Tech', branch: 'engineering', reportsToRoleId: 'cpo' },
+    { id: 'em', label: 'EM', branch: 'engineering-manager', reportsToRoleId: 'head-tech' },
+    { id: 'back', label: 'Back', branch: 'engineering', reportsToRoleId: 'em' },
+    { id: 'head-data', label: 'Head of Data', branch: 'data', reportsToRoleId: 'cpo' },
+    { id: 'data-eng', label: 'Data Eng', branch: 'data', reportsToRoleId: 'head-data' },
+  ];
+  const ids = (area) => rolesOfArea(roles, area).map((r) => r.id).toSorted();
+
+  it('Executive suma las cabezas de las áreas que cuelgan de ella (CPO y CPeopleO)', () => {
+    expect(ids('executive')).toEqual(['ceo', 'cfo', 'coceo', 'cpeople', 'cpo']);
+  });
+
+  it('Product mantiene su árbol y suma las cabezas de Engineering y Data', () => {
+    expect(ids('product')).toEqual(['cpo', 'head-data', 'head-tech', 'pm']);
+  });
+
+  it('las áreas hoja no cambian: su gente y nada más (los EMs siguen dentro de Engineering)', () => {
+    expect(ids('engineering')).toEqual(['back', 'em', 'head-tech']);
+    expect(ids('data')).toEqual(['data-eng', 'head-data']);
+    expect(ids('people')).toEqual(['cpeople']);
+  });
+
+  it('isAreaHeadIn: solo la cabeza frontera se marca como tal, y solo en el área de su superior', () => {
+    const cpo = roles.find((r) => r.id === 'cpo');
+    expect(isAreaHeadIn(roles, cpo, 'executive')).toBe(true);
+    expect(isAreaHeadIn(roles, cpo, 'product')).toBe(false); // en la suya es la base, no frontera
+    expect(isAreaHeadIn(roles, roles.find((r) => r.id === 'pm'), 'product')).toBe(false);
+  });
+
+  it('un CTO SOLO en su rama se absorbe arriba: aparece en Executive y sus Heads cuelgan de él allí', () => {
+    // Su rama «tech» solo tiene mandos intermedios (él), así que no es un área:
+    // el CTO se dibuja en Executive (es C-level) y los Heads que sostiene entran
+    // como cabezas frontera en esa misma pestaña. Nada cableado: sale del árbol.
+    const conCto = [
+      { id: 'coceo', label: 'coCEO', branch: 'executive', reportsToRoleId: null },
+      { id: 'cto', label: 'CTO', branch: 'tech', reportsToRoleId: 'coceo' },
+      { id: 'head-tech', label: 'Head of Tech', branch: 'engineering', reportsToRoleId: 'cto' },
+      { id: 'head-data', label: 'Head of Data', branch: 'data', reportsToRoleId: 'cto' },
+      { id: 'head-ia', label: 'Head of IA', branch: 'ia', reportsToRoleId: 'cto' },
+    ];
+    expect(rolesOfArea(conCto, 'tech')).toEqual([]);
+    expect(rolesOfArea(conCto, 'executive').map((r) => r.id).toSorted())
+      .toEqual(['coceo', 'cto', 'head-data', 'head-ia', 'head-tech']);
+  });
+
+  it('si la rama del CTO tiene gente propia SÍ es un área: pestaña Tech con sus Heads', () => {
+    const conArea = [
+      { id: 'coceo', label: 'coCEO', branch: 'executive', reportsToRoleId: null },
+      { id: 'cto', label: 'CTO', branch: 'tech', reportsToRoleId: 'coceo' },
+      { id: 'architect', label: 'Principal Architect', branch: 'tech', reportsToRoleId: 'cto' },
+      { id: 'head-tech', label: 'Head of Tech', branch: 'engineering', reportsToRoleId: 'cto' },
+      { id: 'head-ia', label: 'Head of IA', branch: 'ia', reportsToRoleId: 'cto' },
+    ];
+    expect(rolesOfArea(conArea, 'tech').map((r) => r.id).toSorted())
+      .toEqual(['architect', 'cto', 'head-ia', 'head-tech']);
+    expect(rolesOfArea(conArea, 'executive').map((r) => r.id).toSorted()).toEqual(['coceo', 'cto']);
   });
 });
