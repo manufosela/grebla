@@ -24,6 +24,7 @@ export class OrgChart extends LitElement {
     _area: { state: true },
     _zoom: { state: true },
     _pan: { state: true },
+    _folded: { state: true },
   };
 
   static styles = css`
@@ -91,6 +92,18 @@ export class OrgChart extends LitElement {
     .tree-node .pyr-dot { position: absolute; top: 0.5rem; left: 0.5rem; }
     .tree-node .pyr-role { position: relative; }
     .tree-node .pyr-head { display: none; }
+    /* Botón de plegar/desplegar la rama: cuelga del borde inferior de la tarjeta
+       (por donde salen sus hijos, que en invertido están ARRIBA… así que va
+       arriba: el subárbol sube). */
+    .tree-node .fold {
+      position: absolute; top: -0.6rem; right: -0.5rem; z-index: 2;
+      min-width: 1.35rem; height: 1.35rem; padding: 0 0.3rem; border-radius: 999px;
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
+      color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.68rem; font-weight: 800;
+      line-height: 1; cursor: pointer;
+    }
+    .tree-node .fold:hover { border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
+    .tree-node .fold.on { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .tree-node.frontier-node .pyr-role { border-style: dashed; }
     /* Toggle Global / Por ramas (mismo lenguaje de pestaña subrayada). */
     .modes { display: flex; gap: 0.1rem; border-bottom: 2px solid var(--rm-border, #e5e7eb); margin-bottom: 0.5rem; }
@@ -128,6 +141,8 @@ export class OrgChart extends LitElement {
     this._zoom = 1;
     this._pan = { x: 0, y: 0 };
     this._drag = null;
+    /** Ramas plegadas por el usuario (ids de rol). */
+    this._folded = new Set();
     this._loadedForUser = null;
   }
 
@@ -253,7 +268,7 @@ export class OrgChart extends LitElement {
     // intra-capa (subRowHeight) han de ser MAYORES que la tarjeta, o el rol
     // desplazado invade la banda de al lado (solape visto en RMR-BUG-0093).
     const NODE_H = 58;
-    const layout = treeLayout(roles, { nodeWidth: NODE_W, gapX: 24, rowHeight: 136, subRowHeight: 68 });
+    const layout = treeLayout(roles, { nodeWidth: NODE_W, gapX: 24, rowHeight: 136, subRowHeight: 68, collapsed: this._folded });
     if (layout.nodes.length === 0) return html`<p class="empty">No hay roles.</p>`;
     const w = layout.width;
     const h = layout.height + NODE_H;
@@ -286,10 +301,34 @@ export class OrgChart extends LitElement {
             ${layout.nodes.map((n) => html`
               <div class="tree-node" style="left:${n.x}px;top:${n.y}px;width:${NODE_W}px;height:${NODE_H}px">
                 ${this._role(n.role, this._branchColor(n.role.branch))}
+                ${n.childCount > 0 ? this._foldButton(n) : null}
               </div>`)}
           </div>
         </div>
       </div>`;
+  }
+
+  /**
+   * Botón de plegar/desplegar de un nodo con descendencia (RMR-TSK-0441):
+   * «−» pliega su rama y «+N» dice cuántos roles esconde. El pointerdown se
+   * detiene para que pulsarlo no arrastre el lienzo.
+   */
+  _foldButton(node) {
+    const folded = node.hiddenCount > 0;
+    const label = folded ? `+${node.hiddenCount}` : '−';
+    const title = folded ? `Desplegar ${node.hiddenCount} rol(es)` : 'Plegar esta rama';
+    return html`<button type="button" class="fold ${folded ? 'on' : ''}" title=${title}
+      aria-expanded=${folded ? 'false' : 'true'}
+      @pointerdown=${(e) => e.stopPropagation()}
+      @click=${() => this._toggleFold(node.role.id)}>${label}</button>`;
+  }
+
+  /** Pliega o despliega la rama de un rol (RMR-TSK-0441). */
+  _toggleFold(id) {
+    const next = new Set(this._folded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    this._folded = next;
   }
 
   /** Zoom relativo, acotado para no perder el dibujo de vista. */
