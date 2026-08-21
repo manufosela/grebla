@@ -38,6 +38,7 @@
     "@manufosela/multi-select": "^2.1.0",
     "@webcomponents/template-shadowroot": "^0.2.1",
     "astro": "^6.4.4",
+    "d3-hierarchy": "^3.1.2",
     "firebase": "^12.14.0",
     "lit": "^3.3.3",
     "three": "^0.185.1"
