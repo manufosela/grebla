@@ -55,3 +55,4 @@ pnpm-debug.log*
 coverage/
 .scannerwork/
 .karajan/policy-decisions.jsonl
+.karajan/audit-history.db
