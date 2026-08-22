@@ -121,13 +121,7 @@ export class SuperadminPanel extends LitElement {
     _careerSub: { state: true },
     leaders: { state: true },
     _supermanagers: { state: true },
-    selected: { state: true },
-    team: { state: true },
-    teamLoading: { state: true },
-    _email: { state: true },
     _error: { state: true },
-    _editLeaderUid: { state: true },
-    _editLeaderName: { state: true },
     _editUserUid: { state: true },
     _editUserName: { state: true },
     _framework: { state: true },
@@ -453,16 +447,7 @@ export class SuperadminPanel extends LitElement {
     this.leaders = [];
     /** @type {Array<{uid:string,displayName:string|null,email:string|null}>} Heads para el selector de «reporta a» */
     this._supermanagers = [];
-    /** @type {import('../lib/leaders.js').Leader|null} */
-    this.selected = null;
-    /** @type {Array<Object>} */
-    this.team = [];
-    this.teamLoading = false;
-    this._email = '';
     this._error = '';
-    /** @type {string|null} uid del manager cuyo nombre se está editando (RMR-BUG-0032), o null */
-    this._editLeaderUid = null;
-    this._editLeaderName = '';
     /** @type {string|null} uid del usuario cuyo nombre se está editando en la pestaña Usuarios, o null */
     this._editUserUid = null;
     this._editUserName = '';
@@ -843,69 +828,11 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
-  /**
-   * Asigna o retira el Head al que reporta un manager. Define su rama: las
-   * herramientas resuelven el alcance del Head con el cierre transitivo de
-   * `reportsTo`, así que el cambio se nota en Equipo, Carrera y Retros.
-   * @param {string} uid @param {string} headUid  '' para quitar la asignación
-   */
-  async _setReportsTo(uid, headUid) {
-    this._error = '';
-    try {
-      await setLeaderReportsTo(uid, headUid || null);
-      await this._loadLeaders();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo asignar el Head.';
-    }
-  }
 
-  async _addLeader() {
-    const email = this._email.trim();
-    if (!email) return;
-    this._error = '';
-    try {
-      await addLeaderByEmail(email);
-      this._email = '';
-      await this._loadLeaders();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo añadir el manager.';
-    }
-  }
 
-  /** @param {import('../lib/leaders.js').Leader} leader */
-  _startEditLeaderName(leader) {
-    this._editLeaderUid = leader.uid;
-    this._editLeaderName = leader.displayName ?? '';
-  }
 
-  _cancelEditLeaderName() {
-    this._editLeaderUid = null;
-    this._editLeaderName = '';
-  }
 
-  /** @param {KeyboardEvent} e */
-  _onEditLeaderNameKey(e) {
-    if (e.key === 'Enter') {
-      this._saveLeaderName();
-    } else if (e.key === 'Escape') {
-      this._cancelEditLeaderName();
-    }
-  }
 
-  /** Guarda el nombre corregido (RMR-BUG-0032) — p. ej. cuando cae al email por no haber iniciado sesión aún. */
-  async _saveLeaderName() {
-    const uid = this._editLeaderUid;
-    if (!uid) return;
-    this._error = '';
-    try {
-      await renameLeader(uid, this._editLeaderName);
-      this._editLeaderUid = null;
-      this._editLeaderName = '';
-      await this._loadLeaders();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo renombrar el manager.';
-    }
-  }
 
   /** @param {import('../lib/accessRoles.js').AccessUser} user */
   _startEditUserName(user) {
@@ -941,17 +868,6 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
-  /** @param {string} uid */
-  async _removeLeader(uid) {
-    this._error = '';
-    try {
-      await removeLeader(uid);
-      if (this.selected?.uid === uid) this.selected = null;
-      await this._loadLeaders();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo quitar el manager.';
-    }
-  }
 
   // ── Usuarios (accesos: superadmin / viewer / manager) ─────────────────────────
 
@@ -1330,24 +1246,6 @@ export class SuperadminPanel extends LitElement {
     return role === 'none' ? 'Quitar acceso' : ROLE_LABEL[role];
   }
 
-  /** @param {import('../lib/leaders.js').Leader} leader */
-  async _openTeam(leader) {
-    this.selected = leader;
-    this.team = [];
-    this.teamLoading = true;
-    this._error = '';
-    try {
-      const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: leader.uid });
-      const people = await listActivePeople(persistence);
-      this.team = await Promise.all(
-        people.map(async (p) => ({ ...p, profile: await getPersonProfile(p.id) })),
-      );
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo cargar el equipo.';
-    } finally {
-      this.teamLoading = false;
-    }
-  }
 
   _useAsLeader() {
     sessionStorage.setItem(VIEW_FLAG, 'leader');
@@ -2099,95 +1997,10 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
-  _renderLeaders() {
-    return html`
-      <section>
-        <h2>Managers (${this.leaders.length})</h2>
-        <p class="ro-note">Da de alta a los managers por su email, aunque nunca hayan iniciado sesión: la cuenta queda preparada para su primer login. Pincha un manager para ver su equipo.</p>
-        ${this.readOnly
-          ? null
-          : html`<div class="toolbar">
-              <input
-                type="email"
-                placeholder="email@dominio.com"
-                .value=${this._email}
-                @input=${(e) => { this._email = e.target.value; }}
-              />
-              <button class="primary" ?disabled=${!this._email.trim()} @click=${() => this._addLeader()}>Añadir manager</button>
-            </div>`}
-        ${this.leaders.length === 0
-          ? html`<p class="empty">Aún no hay managers dados de alta.</p>`
-          : html`<table>
-              <thead><tr><th>Nombre</th><th>Email</th><th>Reporta a</th><th></th></tr></thead>
-              <tbody>
-                ${this.leaders.map((l) => this._renderLeaderRow(l))}
-              </tbody>
-            </table>`}
-      </section>
-    `;
-  }
 
   /** Nombrar superadmin por email desde la pestaña Usuarios (RMR-TSK-0230). */
-  /** @param {import('../lib/leaders.js').Leader} l */
-  _renderLeaderRow(l) {
-    const editing = this._editLeaderUid === l.uid;
-    if (editing) {
-      return html`<tr>
-        <td @click=${(e) => e.stopPropagation()}>
-          <input type="text" .value=${this._editLeaderName} placeholder="Nombre"
-            @input=${(e) => { this._editLeaderName = e.target.value; }}
-            @keydown=${(e) => this._onEditLeaderNameKey(e)} />
-        </td>
-        <td class="muted">${l.email ?? '—'}</td>
-        <td class="muted">${this._headName(l.reportsTo) ?? '—'}</td>
-        <td @click=${(e) => e.stopPropagation()}>
-          <button class="act" @click=${() => this._saveLeaderName()}>Guardar</button>
-          <button @click=${() => this._cancelEditLeaderName()}>Cancelar</button>
-        </td>
-      </tr>`;
-    }
-    return html`
-      <tr class="clickable ${this.selected?.uid === l.uid ? 'sel' : ''}" @click=${() => this._openTeam(l)}>
-        <td>${l.displayName ?? '—'}</td>
-        <td class="muted">${l.email ?? '—'}</td>
-        <td @click=${(e) => e.stopPropagation()}>${this._renderReportsTo(l)}</td>
-        <td @click=${(e) => e.stopPropagation()}>
-          ${this.readOnly
-            ? null
-            : html`<button class="act" @click=${() => this._startEditLeaderName(l)}>Renombrar</button>
-                <button class="del-btn" @click=${() => this._removeLeader(l.uid)}>Quitar</button>`}
-        </td>
-      </tr>
-    `;
-  }
 
-  /** Nombre visible de un Head por su uid. @param {string|null} uid */
-  _headName(uid) {
-    if (!uid) return null;
-    const head = (this._supermanagers ?? []).find((h) => h.uid === uid);
-    return head ? (head.displayName ?? head.email ?? head.uid) : uid;
-  }
 
-  /**
-   * Selector del Head al que reporta un manager (RMR-TSK-0295). Es lo que define
-   * la rama del Head, así que al cambiarlo se mueve su alcance en Equipo,
-   * Carrera y Retros. No se ofrece a sí mismo: nadie se reporta a sí mismo.
-   * @param {import('../lib/leaders.js').Leader} l
-   */
-  _renderReportsTo(l) {
-    const heads = (this._supermanagers ?? []).filter((h) => h.uid !== l.uid);
-    if (this.readOnly) return html`<span class="muted">${this._headName(l.reportsTo) ?? '—'}</span>`;
-    if (heads.length === 0) {
-      return html`<span class="muted">Ningún Head aún — dale el rol a alguien en Usuarios</span>`;
-    }
-    return html`
-      <select aria-label="Head al que reporta ${l.displayName ?? l.email ?? 'el manager'}"
-        @change=${(e) => this._setReportsTo(l.uid, e.target.value)}>
-        <option value="" ?selected=${!l.reportsTo}>— Ninguno —</option>
-        ${heads.map((h) => html`
-          <option value=${h.uid} ?selected=${l.reportsTo === h.uid}>${h.displayName ?? h.email ?? h.uid}</option>`)}
-      </select>`;
-  }
 
   // ── Organigrama: catálogo de roles configurable (RMR-PCS-0027 · F2) ─────────
 
@@ -2741,34 +2554,6 @@ export class SuperadminPanel extends LitElement {
       </section>`;
   }
 
-  _renderTeam() {
-    const name = this.selected.displayName ?? this.selected.email ?? this.selected.uid;
-    return html`
-      <section>
-        <h2>Equipo de ${name}</h2>
-        <p class="ro-note">Vista de solo lectura. La gestión de cada persona la hace su manager.</p>
-        ${this.teamLoading
-          ? html`<p class="empty">Cargando equipo…</p>`
-          : this.team.length === 0
-            ? html`<p class="empty">Este manager aún no tiene personas en su equipo.</p>`
-            : html`<table>
-                <thead><tr><th>Persona</th><th>Gremios</th><th>Rol dominante</th><th>Completitud</th></tr></thead>
-                <tbody>
-                  ${this.team.map(
-                    (p) => html`
-                      <tr>
-                        <td>${p.name}</td>
-                        <td class="muted">${(p.guilds ?? []).join(', ') || '—'}</td>
-                        <td>${p.profile?.dominantRole ?? html`<span class="muted">—</span>`}</td>
-                        <td>${p.profile?.completion != null ? `${p.profile.completion}%` : '—'}</td>
-                      </tr>
-                    `,
-                  )}
-                </tbody>
-              </table>`}
-      </section>
-    `;
-  }
 
   _renderUsers() {
     // Defensa en profundidad: un viewer nunca gestiona usuarios.
