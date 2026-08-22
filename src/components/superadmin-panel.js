@@ -17,16 +17,10 @@ import './common/busy-overlay.js';
 import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
-import {
-  listLeaders, addLeaderByEmail, removeLeader, renameLeader,
-  listSupermanagers, setLeaderReportsTo,
-} from '../lib/leaders.js';
-import { addViewerByEmail } from '../lib/viewers.js';
-import { addSurveyAdminByEmail } from '../lib/survey.js';
+import { listLeaders, listSupermanagers } from '../lib/leaders.js';
 import './catalog-manager.js';
 import './org-chart.js';
-import '@manufosela/loading-layer';
-import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, setUserDisplayName, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
+import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -122,8 +116,6 @@ export class SuperadminPanel extends LitElement {
     leaders: { state: true },
     _supermanagers: { state: true },
     _error: { state: true },
-    _editUserUid: { state: true },
-    _editUserName: { state: true },
     _framework: { state: true },
     _fwNew: { state: true },
     _fwExpLevel: { state: true },
@@ -134,11 +126,6 @@ export class SuperadminPanel extends LitElement {
     _fwSaving: { state: true },
     _fwSubtab: { state: true },
     _users: { state: true },
-    _newUserEmail: { state: true },
-    _newUserRole: { state: true },
-    _addingUser: { state: true },
-    _confirmRoleChange: { state: true },
-    _confirmDelete: { state: true },
     _usersError: { state: true },
     _usersNotice: { state: true },
     _linkedUids: { state: true },
@@ -448,9 +435,6 @@ export class SuperadminPanel extends LitElement {
     /** @type {Array<{uid:string,displayName:string|null,email:string|null}>} Heads para el selector de «reporta a» */
     this._supermanagers = [];
     this._error = '';
-    /** @type {string|null} uid del usuario cuyo nombre se está editando en la pestaña Usuarios, o null */
-    this._editUserUid = null;
-    this._editUserName = '';
     /** @type {import('../tools/team/domain/ports.js').PersistencePort|null} persistencia del superadmin (viewAll) para los catálogos */
     this.persistence = null;
     /** @type {string|null} uid del superadmin (para <catalog-manager>) */
@@ -471,14 +455,6 @@ export class SuperadminPanel extends LitElement {
     this._fwSubtab = 'tracks';
     /** @type {import('../lib/accessRoles.js').AccessUser[]} */
     this._users = [];
-    this._newUserEmail = '';
-    /** @type {'viewer'|'leader'} rol inicial para el alta por email */
-    this._newUserRole = 'viewer';
-    this._addingUser = false;
-    /** @type {{ uid: string, role: import('../lib/accessRoles.js').AccessRole|'none' }|null} */
-    this._confirmRoleChange = null;
-    /** @type {string|null} uid del usuario pendiente de confirmar borrado. */
-    this._confirmDelete = null;
     this._usersError = '';
     this._usersNotice = '';
     /** @type {string[]} uids ya vinculados a una persona (para no ofrecer "Asignar") */
@@ -834,39 +810,9 @@ export class SuperadminPanel extends LitElement {
 
 
 
-  /** @param {import('../lib/accessRoles.js').AccessUser} user */
-  _startEditUserName(user) {
-    this._editUserUid = user.uid;
-    this._editUserName = user.displayName ?? '';
-    this._usersError = '';
-    this._usersNotice = '';
-  }
 
-  _cancelEditUserName() {
-    this._editUserUid = null;
-    this._editUserName = '';
-  }
 
-  /** @param {KeyboardEvent} e */
-  _onEditUserNameKey(e) {
-    if (e.key === 'Enter') this._saveUserName();
-    else if (e.key === 'Escape') this._cancelEditUserName();
-  }
 
-  /** Persiste el nombre editado en /users/{uid}.displayName y recarga la lista. */
-  async _saveUserName() {
-    const uid = this._editUserUid;
-    if (!uid) return;
-    this._usersError = '';
-    try {
-      await setUserDisplayName(uid, this._editUserName);
-      this._editUserUid = null;
-      this._editUserName = '';
-      await this._loadUsers();
-    } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo guardar el nombre.';
-    }
-  }
 
 
   // ── Usuarios (accesos: superadmin / viewer / manager) ─────────────────────────
@@ -1157,23 +1103,7 @@ export class SuperadminPanel extends LitElement {
       </select>`;
   }
 
-  /**
-   * ¿Está la cuenta ya vinculada a una persona? Si lo está, no se ofrece
-   * "Asignar a equipo" (se muestra un chip informativo).
-   * @param {import('../lib/accessRoles.js').AccessUser} user
-   * @returns {boolean}
-   */
-  _isLinked(user) {
-    return this._linkedUids.includes(user.uid);
-  }
 
-  /** @param {import('../lib/accessRoles.js').AccessUser} user */
-  _openAssign(user) {
-    this._assignFor = user;
-    this._assignLeader = '';
-    this._usersError = '';
-    this._usersNotice = '';
-  }
 
   _closeAssign() {
     this._assignFor = null;
@@ -1200,51 +1130,8 @@ export class SuperadminPanel extends LitElement {
     }
   }
 
-  async _addUser() {
-    const email = this._newUserEmail.trim();
-    if (!email || this._addingUser) return;
-    this._usersError = '';
-    this._usersNotice = '';
-    this._addingUser = true; // overlay de carga: bloquea clics mientras provisiona
-    try {
-      if (this._newUserRole === 'leader') {
-        await addLeaderByEmail(email);
-      } else if (this._newUserRole === 'surveyAdmin') {
-        await addSurveyAdminByEmail(email);
-      } else {
-        await addViewerByEmail(email);
-      }
-      this._newUserEmail = '';
-      this._usersNotice = 'Usuario añadido.';
-      await Promise.all([this._loadUsers(), this._loadLeaders()]);
-    } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo añadir el usuario.';
-    } finally {
-      this._addingUser = false;
-    }
-  }
 
-  /**
-   * @param {import('../lib/accessRoles.js').AccessUser} user
-   * @param {import('../lib/accessRoles.js').AccessRole|'none'} role
-   */
-  async _changeUserRole(user, role) {
-    this._usersError = '';
-    this._usersNotice = '';
-    try {
-      await setUserRole(user.uid, role, { displayName: user.displayName, email: user.email });
-      this._confirmRoleChange = null;
-      this._usersNotice = 'Rol actualizado.';
-      await Promise.all([this._loadUsers(), this._loadLeaders()]);
-    } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el rol.';
-    }
-  }
 
-  /** @param {import('../lib/accessRoles.js').AccessRole|'none'} role */
-  _roleChangeLabel(role) {
-    return role === 'none' ? 'Quitar acceso' : ROLE_LABEL[role];
-  }
 
 
   _useAsLeader() {
@@ -1297,7 +1184,6 @@ export class SuperadminPanel extends LitElement {
 
   render() {
     return html`
-      <loading-layer ?visible=${this._addingUser} message="Añadiendo usuario…"></loading-layer>
       <div class="bar">
         <h1>Gestión de la organización</h1>
         ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #6b7280)">Modo solo lectura (viewer)</span>` : null}
@@ -2658,195 +2544,14 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
-  /** @param {import('../lib/accessRoles.js').AccessUser} user */
-  _renderUserRow(user) {
-    if (this._editUserUid === user.uid) return this._renderUserEditRow(user);
-    const linked = this._isLinked(user);
-    return html`
-      <tr>
-        <td>${user.displayName ?? '—'}</td>
-        <td class="muted">${user.email ?? '—'}</td>
-        ${this._renderUserRoleCell(user, linked)}
-        ${this._renderAccessCell(user)}
-        <td class="muted">${formatLogin(user.lastLogin)}</td>
-        <td>${this._renderUserActions(user, linked)}</td>
-      </tr>
-    `;
-  }
 
-  /** Fila en modo edición del nombre (RMR-TSK-0230). @param {import('../lib/accessRoles.js').AccessUser} user */
-  _renderUserEditRow(user) {
-    return html`
-      <tr>
-        <td>
-          <input type="text" .value=${this._editUserName} placeholder="Nombre"
-            @input=${(e) => { this._editUserName = e.target.value; }}
-            @keydown=${(e) => this._onEditUserNameKey(e)} />
-        </td>
-        <td class="muted">${user.email ?? '—'}</td>
-        ${this._renderUserRoleCell(user, this._isLinked(user))}
-        ${this._renderAccessCell(user)}
-        <td class="muted">${formatLogin(user.lastLogin)}</td>
-        <td>
-          <button class="act" @click=${() => this._saveUserName()}>Guardar</button>
-          <button @click=${() => this._cancelEditUserName()}>Cancelar</button>
-        </td>
-      </tr>
-    `;
-  }
 
-  /** Celda de rol: badge del rol de equipo (teamRole) + badge «Superadmin» si gobierna + «Vinculado». @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
-  _renderUserRoleCell(user, linked) {
-    // Los dos ejes se ven como dos badges: el ROL DE EQUIPO y, si lo tiene, el
-    // gobierno (Superadmin). El checkbox para cambiarlo vive en su propia columna.
-    return html`
-      <td>
-        <span class="badge" style=${`background:${ROLE_COLOR[user.teamRole]}`}>${ROLE_LABEL[user.teamRole]}</span>
-        ${user.isAdmin ? html`<span class="badge" style=${`background:${ROLE_COLOR.superadmin}`}>Superadmin</span>` : null}
-        ${user.isSurveyAdmin ? html`<span class="badge" style=${`background:${ROLE_COLOR.surveyAdmin}`}>People account</span>` : null}
-        ${linked ? html`<span class="badge linked" title="Vinculado a una persona">Vinculado</span>` : null}
-      </td>
-    `;
-  }
 
-  /**
-   * Celda «Accesos»: un desplegable con las concesiones de instancia (superadmin
-   * y People account), ortogonales al rol de equipo. Como un superadmin ya puede
-   * gestionar encuestas, People account sale marcado y DESHABILITADO (heredado)
-   * cuando es superadmin — no se escribe /surveyAdmins.
-   * @param {import('../lib/accessRoles.js').AccessUser} user
-   */
-  _renderAccessCell(user) {
-    if (this.readOnly) return null;
-    const who = user.displayName ?? user.email ?? user.uid;
-    const summary = user.isAdmin ? 'Superadmin' : (user.isSurveyAdmin ? 'People account' : '—');
-    return html`
-      <td>
-        <details class="access" @toggle=${this._positionAccessPopover}>
-          <summary aria-label=${`Accesos de ${who}`}>${summary}</summary>
-          <div class="access-opts">
-            <label><input type="checkbox" .checked=${user.isAdmin}
-              @change=${(e) => this._toggleAdmin(user, e.target.checked)} /> Superadmin</label>
-            <label class=${user.isAdmin ? 'implied' : ''}
-              title=${user.isAdmin ? 'Heredado: un superadmin ya puede gestionar encuestas.' : ''}>
-              <input type="checkbox" ?disabled=${user.isAdmin} .checked=${user.isAdmin || user.isSurveyAdmin}
-                @change=${(e) => this._toggleSurveyAdmin(user, e.target.checked)} /> People account</label>
-          </div>
-        </details>
-      </td>
-    `;
-  }
 
-  /**
-   * Concede o retira el superadmin (eje de gobierno, ortogonal al rol de equipo)
-   * con el checkbox de la fila. Salvaguarda: nadie puede quitarse a sí mismo el
-   * superadmin (se quedaría sin gobierno y sin poder revertirlo).
-   * @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} isAdmin
-   */
-  async _toggleAdmin(user, isAdmin) {
-    this._usersError = '';
-    this._usersNotice = '';
-    if (!isAdmin && user.uid === this.currentUid) {
-      this._usersError = 'No puedes quitarte a ti mismo el superadmin.';
-      await this._loadUsers(); // revierte el checkbox visualmente
-      return;
-    }
-    try {
-      await setUserAdmin(user.uid, isAdmin, { displayName: user.displayName, email: user.email });
-      this._usersNotice = isAdmin ? 'Superadmin concedido.' : 'Superadmin retirado.';
-      await Promise.all([this._loadUsers(), this._loadLeaders()]);
-    } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el superadmin.';
-      await this._loadUsers();
-    }
-  }
 
-  /** Posiciona el desplegable de Accesos como FLOTANTE (position:fixed) al abrirlo,
-   * para que no empuje la tabla ni lo recorte el scroll horizontal del contenedor. */
-  _positionAccessPopover(e) {
-    const details = e.currentTarget;
-    if (!details.open) return;
-    const summary = details.querySelector('summary');
-    const opts = details.querySelector('.access-opts');
-    if (!summary || !opts) return;
-    const rect = summary.getBoundingClientRect();
-    opts.style.top = `${rect.bottom + 4}px`;
-    opts.style.left = `${rect.left}px`;
-  }
 
-  /** Concede o retira el rol «gestor de encuestas» con el checkbox de la fila. @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} isSurveyAdmin */
-  async _toggleSurveyAdmin(user, isSurveyAdmin) {
-    this._usersError = '';
-    this._usersNotice = '';
-    try {
-      await setSurveyAdmin(user.uid, isSurveyAdmin, { displayName: user.displayName, email: user.email });
-      this._usersNotice = isSurveyAdmin ? 'People account concedido.' : 'People account retirado.';
-      await this._loadUsers();
-    } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo cambiar el People account.';
-      await this._loadUsers();
-    }
-  }
 
-  /** Acciones de la fila de usuario. @param {import('../lib/accessRoles.js').AccessUser} user @param {boolean} linked */
-  _renderUserActions(user, linked) {
-    const pending = this._confirmRoleChange?.uid === user.uid ? this._confirmRoleChange : null;
-    if (pending) {
-      return html`<span class="confirm">¿Aplicar «${this._roleChangeLabel(pending.role)}»?
-        <button class="yes" @click=${() => this._changeUserRole(user, pending.role)}>Sí</button>
-        <button @click=${() => { this._confirmRoleChange = null; }}>No</button>
-      </span>`;
-    }
-    if (this._confirmDelete === user.uid) {
-      const warn = user.lastLogin ? ' Se eliminan sus datos y acceso; si tuviera cuenta de inicio de sesión, se recrearía vacía al volver a entrar.' : '';
-      return html`<span class="confirm">¿Borrar a ${user.displayName ?? user.email ?? 'este usuario'}?${warn}
-        <button class="yes danger" @click=${() => this._deleteUser(user)}>Borrar</button>
-        <button @click=${() => { this._confirmDelete = null; }}>No</button>
-      </span>`;
-    }
-    // «Borrar» (superadmin): limpio para quien nunca inició sesión; para el resto
-    // borra datos y accesos (útil p. ej. con usuarios migrados que no deben estar).
-    // `deleteUnusedUser` revalida que no tenga equipo antes de borrar.
-    const neverLoggedIn = !user.lastLogin;
-    return html`<div class="row-actions">
-      <button class="act" @click=${() => this._startEditUserName(user)}>Renombrar</button>
-      <select @change=${(e) => { this._confirmRoleChange = { uid: user.uid, role: e.target.value }; }}>
-        <option value="" disabled selected>Rol de equipo…</option>
-        <option value="supermanager">Head (manager de managers)</option>
-        <option value="viewer">Viewer</option>
-        <option value="leader">Manager</option>
-        <option value="none">Quitar acceso</option>
-      </select>
-      ${user.role === 'none' && !linked
-        ? html`<button class="act" type="button" @click=${() => this._openAssign(user)}>Asignar a equipo</button>`
-        : null}
-      ${user.uid !== this.currentUid
-        ? html`<button class="del-btn" type="button"
-            title=${neverLoggedIn ? 'Nunca inició sesión: borrado limpio' : 'Borra sus datos y accesos del sistema'}
-            @click=${() => { this._confirmDelete = user.uid; }}>Borrar</button>`
-        : null}
-    </div>`;
-  }
 
-  /**
-   * Borra a un usuario del sistema (solo superadmin, no a sí mismo). Limpio para
-   * quien nunca inició sesión; para el resto elimina datos y accesos.
-   * `deleteUnusedUser` revalida las dependencias (no deja personas huérfanas) y
-   * falla si las hay.
-   * @param {import('../lib/accessRoles.js').AccessUser} user
-   */
-  async _deleteUser(user) {
-    this._usersError = '';
-    this._usersNotice = '';
-    this._confirmDelete = null;
-    try {
-      await deleteUnusedUser(user.uid);
-      this._usersNotice = 'Usuario borrado.';
-      await Promise.all([this._loadUsers(), this._loadLeaders()]);
-    } catch (err) {
-      this._usersError = err instanceof Error ? err.message : 'No se pudo borrar el usuario.';
-    }
-  }
 
   _renderAssignModal() {
     const user = this._assignFor;
