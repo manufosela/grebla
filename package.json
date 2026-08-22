@@ -13,6 +13,7 @@
     "publish:version": "node scripts/publish-version.mjs",
     "publish:version:tribbu": "node scripts/publish-version.mjs tribbu",
     "deploy:all": "node scripts/deploy-all.mjs",
+    "merge:green": "node scripts/merge-when-green.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "test": "vitest run --no-file-parallelism",
