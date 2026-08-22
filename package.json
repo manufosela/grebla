@@ -38,7 +38,7 @@
     "@manufosela/loading-layer": "^2.0.1",
     "@manufosela/multi-select": "^2.1.0",
     "@webcomponents/template-shadowroot": "^0.2.1",
-    "astro": "^6.4.4",
+    "astro": "^6.4.8",
     "d3-hierarchy": "^3.1.2",
     "firebase": "^12.14.0",
     "lit": "^3.3.3",
@@ -48,11 +48,11 @@
     "@astrojs/check": "^0.9.9",
     "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.61.1",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.11",
     "firebase-admin": "^13.10.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -60,6 +60,20 @@
       "sharp",
       "@firebase/util",
       "protobufjs"
-    ]
+    ],
+    "overrides": {
+      "websocket-driver": "^0.7.5",
+      "form-data": "^2.5.6",
+      "js-yaml": "^4.3.1",
+      "fast-uri": "^3.1.5",
+      "nanoid": "^3.3.18",
+      "postcss": "^8.5.18",
+      "svgo": "^4.0.2",
+      "sharp": "^0.35.0",
+      "protobufjs": "^7.6.5",
+      "uuid": "^11.1.1",
+      "yaml": "^2.8.3",
+      "esbuild": "^0.28.1"
+    }
   }
 }
