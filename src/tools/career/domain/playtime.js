@@ -174,6 +174,9 @@ export function staleDayKeys(byDay, opts = {}) {
   if (!Number.isInteger(maxDays) || maxDays <= 0 || !Number.isInteger(threshold) || threshold < maxDays) {
     throw new Error(`Parámetros de poda inválidos: maxDays="${maxDays}", threshold="${threshold}"`);
   }
+  // NO localizar este orden (Sonar S2871 lo marca, y se ignora a propósito): son
+  // claves de día en ISO (YYYY-MM-DD), donde el orden por código ES el
+  // cronológico. Un comparador de idioma no lo mejora y puede alterarlo.
   const keys = Object.keys(byDay ?? {}).toSorted();
   if (keys.length <= threshold) return [];
   return keys.slice(0, keys.length - maxDays);

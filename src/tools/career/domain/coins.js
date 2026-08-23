@@ -136,6 +136,10 @@ export function canonicalJson(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(',')}]`;
   const obj = /** @type {Record<string, unknown>} */ (value);
+  // NO localizar este orden (Sonar S2871 lo marca, y se ignora a propósito): es
+  // el orden de las claves del JSON CANÓNICO que se firma. Tiene que ser estable
+  // e idéntico en cualquier máquina e idioma; con `localeCompare` la firma
+  // cambiaría según el locale y dejaría de validar.
   const keys = Object.keys(obj)
     .filter((k) => obj[k] !== undefined)
     .sort();
