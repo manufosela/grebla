@@ -18,6 +18,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
 import { listLeaders, listSupermanagers } from '../lib/leaders.js';
+import './common/busy-overlay.js';
 import './catalog-manager.js';
 import './org-chart.js';
 import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader } from '../lib/users.js';
@@ -149,6 +150,7 @@ export class SuperadminPanel extends LitElement {
     _peopleError: { state: true },
     _peopleNotice: { state: true },
     _confirmDeletePerson: { state: true },
+    _busy: { state: true },
     _newPersonName: { state: true },
     _newPersonEmail: { state: true },
     _newPersonRole: { state: true },
@@ -490,6 +492,8 @@ export class SuperadminPanel extends LitElement {
     this._peopleNotice = '';
     /** @type {string|null} id de persona pendiente de confirmar baja. */
     this._confirmDeletePerson = null;
+    /** Mensaje del overlay mientras hay una escritura en curso, o null. */
+    this._busy = null;
     this._newPersonName = '';
     this._newPersonEmail = '';
     this._newPersonRole = 'generico';
@@ -853,6 +857,10 @@ export class SuperadminPanel extends LitElement {
 
   /** Cambia el rol organizativo de una persona (deriva la rama del catálogo). */
   async _setPersonRole(personId, roleId) {
+    return this._withBusy('Actualizando el rol…', () => this._setPersonRoleImpl(personId, roleId));
+  }
+
+  async _setPersonRoleImpl(personId, roleId) {
     this._peopleError = '';
     this._peopleNotice = '';
     const branch = this._orgRoles.find((r) => r.id === roleId)?.branch ?? 'engineering';
@@ -873,6 +881,10 @@ export class SuperadminPanel extends LitElement {
 
   /** Cambia el superior (reportsToPersonId) de una persona. */
   async _setPersonSuperior(personId, superiorId) {
+    return this._withBusy('Actualizando el superior…', () => this._setPersonSuperiorImpl(personId, superiorId));
+  }
+
+  async _setPersonSuperiorImpl(personId, superiorId) {
     this._peopleError = '';
     this._peopleNotice = '';
     const val = superiorId || null;
@@ -891,6 +903,10 @@ export class SuperadminPanel extends LitElement {
   /** Cambia la RAMA de una persona (independiente de la del rol: p.ej. un Engineer
    *  que trabaja en Data). Optimista con rollback quirúrgico. */
   async _setPersonBranch(personId, branchId) {
+    return this._withBusy('Actualizando la rama…', () => this._setPersonBranchImpl(personId, branchId));
+  }
+
+  async _setPersonBranchImpl(personId, branchId) {
     this._peopleError = '';
     this._peopleNotice = '';
     const val = branchId || null;
@@ -908,6 +924,10 @@ export class SuperadminPanel extends LitElement {
 
   /** Da de baja a una persona (active:false, conserva el histórico). */
   async _removePerson(personId) {
+    return this._withBusy('Dando de baja…', () => this._removePersonImpl(personId));
+  }
+
+  async _removePersonImpl(personId) {
     this._peopleError = '';
     this._peopleNotice = '';
     try {
@@ -922,7 +942,28 @@ export class SuperadminPanel extends LitElement {
 
   /** Alta de persona desde el panel: crea la ficha con su rol; si hay email,
    *  la pre-invita (pendingEmail: se vincula al primer login con ese email). */
+  /**
+   * Ejecuta una ESCRITURA con el DOM bloqueado (RMR-BUG-0100). Toda escritura
+   * lleva overlay: mientras dura no se puede pulsar dos veces ni tocar otra
+   * cosa. No captura errores —cada acción sigue gestionando los suyos—, solo
+   * garantiza que el overlay se retira pase lo que pase.
+   * @param {string} message lo que se está haciendo, en primera persona del plural
+   * @param {() => Promise<unknown>} action
+   */
+  async _withBusy(message, action) {
+    this._busy = message;
+    try {
+      return await action();
+    } finally {
+      this._busy = null;
+    }
+  }
+
   async _addPersonPanel() {
+    return this._withBusy('Añadiendo la persona…', () => this._addPersonPanelImpl());
+  }
+
+  async _addPersonPanelImpl() {
     const name = this._newPersonName.trim();
     if (!name) { this._peopleError = 'El nombre es obligatorio.'; return; }
     this._peopleError = '';
@@ -1037,6 +1078,10 @@ export class SuperadminPanel extends LitElement {
 
   /** Conmuta el superadmin de la cuenta vinculada a una persona (eje de gobierno). */
   async _togglePersonAdmin(p, isAdmin) {
+    return this._withBusy('Actualizando el superadmin…', () => this._togglePersonAdminImpl(p, isAdmin));
+  }
+
+  async _togglePersonAdminImpl(p, isAdmin) {
     this._peopleError = '';
     this._peopleNotice = '';
     try {
@@ -1050,6 +1095,10 @@ export class SuperadminPanel extends LitElement {
 
   /** Acceso especial NO jerárquico de la cuenta: viewer (solo lectura) o People (encuestas). */
   async _setPersonAccess(p, access) {
+    return this._withBusy('Actualizando el acceso…', () => this._setPersonAccessImpl(p, access));
+  }
+
+  async _setPersonAccessImpl(p, access) {
     this._peopleError = '';
     this._peopleNotice = '';
     const profile = { displayName: p.name, email: this._personEmail(p) };
@@ -1069,6 +1118,10 @@ export class SuperadminPanel extends LitElement {
   /** Crea la ficha de una cuenta logada que aún no tiene persona (caso residual:
    *  se logueó pero no se le creó ficha). Nace como 'generico', ya vinculada. */
   async _createPersonForAccount(u) {
+    return this._withBusy('Creando la ficha…', () => this._createPersonForAccountImpl(u));
+  }
+
+  async _createPersonForAccountImpl(u) {
     this._peopleError = '';
     this._peopleNotice = '';
     try {
@@ -1184,6 +1237,7 @@ export class SuperadminPanel extends LitElement {
 
   render() {
     return html`
+      ${this._busy ? html`<busy-overlay message=${this._busy}></busy-overlay>` : null}
       <div class="bar">
         <h1>Gestión de la organización</h1>
         ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #6b7280)">Modo solo lectura (viewer)</span>` : null}
