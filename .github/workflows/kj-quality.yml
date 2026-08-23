@@ -7,8 +7,14 @@
 # Se saca a propósito de la gestión de kj (sin los marcadores kj:managed) para
 # que un `kj harden` posterior no vuelva a pisarlo con npm. Reportado en
 # karajan-code para que la plantilla detecte el gestor de paquetes del repo.
+# También en push a main: sin esto la rama principal no tiene estado propio y
+# solo se veía el rojo DENTRO de cada PR, heredado de un main ya roto — quien la
+# abría lo leía como «no es mío», y acertaba. Así pasaron 21 días de E2E rojos
+# que taparon 17 días de un bug en producción (RMR-TSK-0448).
 name: Quality
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 jobs:
