@@ -50,7 +50,11 @@ function duplicateMembers(file) {
 }
 
 describe('miembros de clase duplicados', () => {
-  it('ninguna clase de src/ declara dos veces el mismo miembro', () => {
+  // Parsea el AST de todo `src/` (300+ ficheros), así que es intrínsecamente
+  // lento: ~0,5 s normalmente y ~7 s bajo la instrumentación de cobertura. Con
+  // el timeout por defecto de 5 s caía SOLO al medir cobertura — un rojo que no
+  // señala ningún defecto y que acaba con el guard desactivado por «flaky».
+  it('ninguna clase de src/ declara dos veces el mismo miembro', { timeout: 60_000 }, () => {
     const offenders = sourceFiles(SRC).flatMap(duplicateMembers);
     expect(offenders).toEqual([]);
   });
