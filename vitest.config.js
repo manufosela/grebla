@@ -32,6 +32,20 @@ export default defineConfig({
       reporter: ['text-summary', 'lcov'],
       include: ['src/**/*.js'],
       exclude: ['**/*.test.js', 'src/pages/**'],
+      // Los umbrales GLOBALES van al valor REAL de hoy, un punto por debajo, no
+      // al deseable: un suelo inalcanzable bloquea a todo el mundo el primer día
+      // y acaba desactivado. Sirven de trinquete — solo pueden subir.
+      // Los módulos que deciden QUIÉN VE QUÉ llevan suelo propio y alto: son los
+      // que fallan sin que nada se vea (RMR-TSK-0444).
+      thresholds: {
+        lines: 27,
+        branches: 28,
+        functions: 26,
+        statements: 28,
+        'src/lib/access.js': { lines: 100, branches: 85, functions: 100, statements: 100 },
+        'src/lib/accessRoles.js': { lines: 95, branches: 90, functions: 100, statements: 95 },
+        'src/lib/toolPolicies.js': { lines: 100, branches: 90, functions: 100, statements: 92 },
+      },
     },
   },
 });

@@ -18,7 +18,7 @@
     "check": "astro check",
     "test": "vitest run --no-file-parallelism",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --no-file-parallelism --coverage",
     "e2e": "firebase emulators:exec --only auth,firestore,functions --project demo-grebla \"playwright test\"",
     "sonar": "npx @sonar/scan",
     "assets": "node scripts/gen-assets.mjs",

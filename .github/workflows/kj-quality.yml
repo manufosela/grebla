@@ -35,4 +35,7 @@ jobs:
       # nombre del script, así que ese paso fallaba en vez de saltarse. La calidad
       # la dan el chequeo de tipos y los tests; si algún día hay linter, se añade.
       - run: pnpm run check
-      - run: pnpm test
+      # Con cobertura, para que los umbrales de vitest.config.js actúen de
+      # trinquete: si baja, el pipeline cae. Corre los mismos tests que `pnpm
+      # test`, así que no los duplica.
+      - run: pnpm run test:coverage
