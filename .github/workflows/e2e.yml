@@ -2,8 +2,14 @@
 # mucho más pesada: arranca los emuladores de Firebase (auth+firestore+functions,
 # que necesitan Java) y un navegador de Playwright. El de calidad (unit + tipos)
 # no debe ralentizarse por esto.
+# También en push a main: sin esto la rama principal no tiene estado propio y
+# solo se veía el rojo DENTRO de cada PR, heredado de un main ya roto — quien la
+# abría lo leía como «no es mío», y acertaba. Así pasaron 21 días de E2E rojos
+# que taparon 17 días de un bug en producción (RMR-TSK-0448).
 name: E2E
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
