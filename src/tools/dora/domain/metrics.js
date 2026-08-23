@@ -6,6 +6,8 @@
  *
  * @typedef {{ createdAt: string, mergedAt: string, author?: string }} MergedPR
  */
+
+import { sortedEs } from './sortEs.js';
 const HOUR = 3_600_000;
 const ms = (d) => new Date(d).getTime();
 const round1 = (n) => Math.round(n * 10) / 10;
@@ -31,7 +33,7 @@ export function computeRepoMetrics(mergedPrs, period) {
   // Personas que participan = autores únicos de los PR en la ventana. Se guardan
   // los logins para poder contar personas únicas al agregar por equipo/gremio;
   // la UI solo muestra el recuento, nunca la lista (nivel equipo, no por persona).
-  const contributorLogins = [...new Set(list.map((p) => (p.author ?? '').trim()).filter(Boolean))].sort();
+  const contributorLogins = sortedEs([...new Set(list.map((p) => (p.author ?? '').trim()).filter(Boolean))]);
 
   return {
     deployments,

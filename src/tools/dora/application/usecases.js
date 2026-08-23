@@ -5,6 +5,7 @@
  * @typedef {import('../domain/ports.js').DoraPersistence} DoraPersistence
  * @typedef {import('../domain/types.js').DoraRepo} DoraRepo
  */
+import { sortedEs } from '../domain/sortEs.js';
 import { isValidFullName } from '../domain/types.js';
 import { aggregateMetrics, aggregateByKey, teamKeyOf, guildKeyOf } from '../domain/aggregate.js';
 
@@ -183,13 +184,13 @@ export function removeRepo(persistence, id) {
 /** Equipos distintos derivados de los repos (catálogo vivo). */
 export async function listTeams(persistence) {
   const repos = await persistence.repos.list();
-  return [...new Set(repos.map((r) => r.team).filter(Boolean))].sort();
+  return sortedEs([...new Set(repos.map((r) => r.team).filter(Boolean))]);
 }
 
 /** Gremios distintos derivados de los repos (catálogo vivo). */
 export async function listGuilds(persistence) {
   const repos = await persistence.repos.list();
-  return [...new Set(repos.flatMap((r) => r.guilds ?? []).filter(Boolean))].sort();
+  return sortedEs([...new Set(repos.flatMap((r) => r.guilds ?? []).filter(Boolean))]);
 }
 
 /** Estados válidos de un evento de despliegue. */
