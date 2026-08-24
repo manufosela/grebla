@@ -743,8 +743,9 @@ export class SurveyAdmin extends LitElement {
           🧪 ${this._showTestAnswers ? 'Ocultar' : 'Ver'} respuestas de prueba${this._testAnswers ? ` (${this._testAnswers.length})` : ''}
         </button>
       </div>
-      ${this._showTestAnswers && this._testAnswers
-        ? this._testAnswers.length === 0
+      ${!this._showTestAnswers || !this._testAnswers
+        ? null
+        : this._testAnswers.length === 0
           ? html`<p class="muted">No hay respuestas de prueba todavía.</p>`
           : this._testAnswers.map(
               (a) => html`<div class="test-answer">
@@ -755,8 +756,7 @@ export class SurveyAdmin extends LitElement {
                   )}
                 </ul>
               </div>`,
-            )
-        : null}`;
+            )}`;
   }
 
   _askBulk() { this._confirmBulk = true; this._error = ''; this._sendNotice = ''; }

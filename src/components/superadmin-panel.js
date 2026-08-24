@@ -18,7 +18,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
 import { listLeaders, listSupermanagers } from '../lib/leaders.js';
-import './common/busy-overlay.js';
 import './catalog-manager.js';
 import './org-chart.js';
 import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader } from '../lib/users.js';
@@ -2551,11 +2550,17 @@ export class SuperadminPanel extends LitElement {
   /** Tabla de personas: rol, superior, acceso (si tiene cuenta) y baja. */
   _renderUsersPeople() {
     const nameOf = (id) => this._peopleList.find((x) => x.id === id)?.name ?? '—';
+    // Si la lista está vacía POR UN ERROR, el aviso de arriba ya lo cuenta: no se
+    // repite con el «aún no hay personas». Sale a una constante para no colgar
+    // un segundo ternario de la rama «?» (RMR-TSK-0450).
+    const sinPersonas = this._peopleError
+      ? null
+      : html`<p class="empty">Aún no hay personas dadas de alta.</p>`;
     return html`
       ${this._peopleError ? html`<p class="error">${this._peopleError}</p>` : null}
       ${this._peopleNotice ? html`<p class="notice">${this._peopleNotice}</p>` : null}
       ${this._peopleList.length === 0
-        ? (this._peopleError ? null : html`<p class="empty">Aún no hay personas dadas de alta.</p>`)
+        ? sinPersonas
         : html`<div class="table-wrap"><table>
             <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Rama</th><th>Reporta a</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
             <tbody>
