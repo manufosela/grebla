@@ -8,6 +8,7 @@
  * Props: uid (lo inyecta el glue de cliente tras resolver la sesión).
  */
 import { LitElement, html, css } from 'lit';
+import '../app-modal.js';
 import '../common/busy-overlay.js';
 import { saveMyPulse, getMyCurrentWeekPulse } from '../../lib/pulse.js';
 import { pulseReading, dayKey, isoWeekKey, parseWeekIso } from '../../tools/pulse/domain/pulse.js';
@@ -23,6 +24,7 @@ const ANCHORS = [
 
 export class MareaFill extends LitElement {
   static properties = {
+    _guideOpen: { state: true },
     uid: { attribute: false },
     _energia: { state: true },
     _animo: { state: true },
@@ -54,7 +56,26 @@ export class MareaFill extends LitElement {
     .axis { font-size: 0.62rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); font-weight: 700; }
     .axis.dim { opacity: 0.72; }
     .gridrow { display: flex; align-items: stretch; gap: 0.45rem; }
-    .axis-side { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 0.6rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); font-weight: 700; text-align: center; }
+    /* El eje de ánimo iba en vertical al costado izquierdo, con los dos extremos
+       juntos: no se leía cuál era cada lado (RMR-TSK-0452). Ahora va debajo, en
+       horizontal, con cada extremo en su sitio — como el de energía. */
+    .axis-x { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+    .axis-x .end { font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); font-weight: 700; }
+    .axis-x .mid { font-size: 0.58rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); opacity: 0.7; font-weight: 700; }
+    .info-btn {
+      display: inline-flex; align-items: center; justify-content: center; vertical-align: -0.28em;
+      margin-left: 0.35rem; width: 1.35rem; height: 1.35rem; border-radius: 50%;
+      border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff);
+      color: var(--rm-accent, #2a9d8f); font-weight: 800; font-size: 0.85rem; line-height: 1;
+      cursor: pointer;
+    }
+    .info-btn:hover { border-color: var(--rm-accent, #2a9d8f); }
+    .info-btn:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .guide h4 { margin: 1rem 0 0.35rem; font-size: 0.9rem; color: var(--rm-text, #111827); }
+    .guide p { margin: 0.2rem 0; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); line-height: 1.5; }
+    .guide dl { margin: 0.4rem 0 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.7rem; align-items: baseline; }
+    .guide dt { font-weight: 700; color: var(--rm-text, #111827); font-size: 0.9rem; white-space: nowrap; }
+    .guide dd { margin: 0; font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); }
     .grid {
       position: relative; flex: 1; aspect-ratio: 1 / 1; border-radius: 16px; border: 1px solid var(--rm-border, #dde7ec);
       background:
@@ -108,6 +129,8 @@ export class MareaFill extends LitElement {
     super();
     this.uid = null;
     this._energia = 50;
+    /** Panel de ayuda de la rejilla abierto (RMR-TSK-0452). */
+    this._guideOpen = false;
     this._animo = 50;
     this._carga = 50;
     this._rumbo = 50;
@@ -220,6 +243,42 @@ export class MareaFill extends LitElement {
     return null;
   }
 
+  /**
+   * Ayuda de la rejilla (RMR-TSK-0452). Describe DÓNDE cae cada lectura y qué
+   * dice de la semana, sin diagnosticar a nadie: la marea es un autorretrato de
+   * unos días, no una etiqueta sobre la persona.
+   */
+  _renderGuide() {
+    /** [nombre, dónde cae, qué describe] */
+    const lecturas = [
+      ['Viento a favor', 'arriba a la derecha', 'con energía y a gusto: la semana empuja'],
+      ['Mar de fondo', 'arriba a la izquierda', 'con marcha, pero a la contra: hay fuerza y también roce'],
+      ['Fondeado', 'abajo a la derecha', 'en calma y a gusto, con poca marcha'],
+      ['Calma chicha', 'abajo a la izquierda', 'sin viento y cuesta arriba'],
+      ['Aguas medias', 'en el centro', 'ni fu ni fa: una semana sin mucho relieve'],
+    ];
+    return html`
+      <app-modal .open=${this._guideOpen} heading="Cómo se lee la rejilla"
+        @close=${() => { this._guideOpen = false; }}>
+        <div class="guide">
+          <h4>Los dos ejes</h4>
+          <p><b>De arriba abajo, la energía</b>: arriba, con fuerza; abajo, con poca.</p>
+          <p><b>De izquierda a derecha, el ánimo</b>: a la derecha, a gusto y en calma; a la izquierda, a la contra o incómodo.</p>
+          <p>Son cosas distintas y por eso van en ejes distintos: se puede tener mucha energía y estar a disgusto, o estar tranquilo con poca marcha.</p>
+
+          <h4>Las cinco lecturas</h4>
+          <dl>
+            ${lecturas.map(([name, donde, que]) => html`
+              <dt>${name}</dt>
+              <dd>${donde} — ${que}</dd>`)}
+          </dl>
+
+          <h4>Qué se hace con esto</h4>
+          <p>Tu marea es <b>privada</b>: los resultados del equipo se ven siempre en agregado y anónimos. No hay posición buena ni mala, y no describe cómo eres: describe cómo te ha ido <b>esta semana</b>.</p>
+        </div>
+      </app-modal>`;
+  }
+
   render() {
     const read = pulseReading(this._energia, this._animo);
     let dragging = false;
@@ -232,13 +291,16 @@ export class MareaFill extends LitElement {
     return html`
       ${this._saving ? html`<busy-overlay message="Guardando tu marea…"></busy-overlay>` : null}
       ${week ? html`<h2 class="wk-head"><span class="wk-title">Semana ${week.week}</span><span class="wk-sub">${rangeChip}${week.year} · tu marea de esta semana</span></h2>` : null}
-      <p class="lead">Coloca tu boya según tu <b>energía</b> y tu <b>ánimo</b>, y ajusta las cuatro anclas. No hay respuesta correcta: una marea sube y baja.</p>
+      <p class="lead">Coloca tu boya según tu <b>energía</b> y tu <b>ánimo</b>, y ajusta las cuatro anclas. No hay respuesta correcta: una marea sube y baja.
+        <button class="info-btn" type="button" title="Cómo se lee la rejilla"
+          aria-label="Cómo se lee la rejilla" @click=${() => { this._guideOpen = true; }}>i</button>
+      </p>
       ${this._renderStatus()}
+      ${this._renderGuide()}
       <div class="fill">
         <div class="gridwrap">
           <div class="axis">▲ Más energía</div>
           <div class="gridrow">
-            <div class="axis-side">A la contra · Ánimo · Apacible</div>
             <div class="grid" role="slider" tabindex="0" aria-label="Energía y ánimo"
               aria-valuetext=${read.name}
               @pointerdown=${(e) => { dragging = true; e.currentTarget.setPointerCapture(e.pointerId); this._placeFromPointer(e); }}
@@ -255,6 +317,11 @@ export class MareaFill extends LitElement {
             </div>
           </div>
           <div class="axis dim">▼ Menos energía</div>
+          <div class="axis-x">
+            <span class="end">◀ A la contra</span>
+            <span class="mid">Ánimo</span>
+            <span class="end">Apacible ▶</span>
+          </div>
           <div class="reading"><span class="r-name">${read.name}</span><span class="r-sub">${read.sub}</span></div>
         </div>
 

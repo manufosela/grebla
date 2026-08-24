@@ -63,3 +63,24 @@ test.describe('marea: la 3ª respuesta cruza el umbral de anonimato', () => {
     expect(typeof agg.general.means.energia).toBe('number');
   });
 });
+
+test('la rejilla dice qué es cada eje y explica las cinco lecturas', async ({ page }) => {
+  await signInAs(page, 'engineer');
+  await page.goto('/marea');
+
+  // El eje de energía ya estaba rotulado arriba y abajo; el de ánimo tenía una
+  // sola etiqueta en vertical al costado y no se sabía qué era cada lado.
+  // Los extremos llevan flecha: así se distinguen del mismo texto usado en la
+  // ayuda y en la lectura de la boya.
+  await expect(page.getByText('◀ A la contra')).toBeVisible();
+  await expect(page.getByText('Apacible ▶')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Cómo se lee la rejilla' }).click();
+  // Las CINCO lecturas, incluida «Aguas medias», que no tiene rótulo en la
+  // rejilla porque es la zona central.
+  for (const lectura of ['Viento a favor', 'Mar de fondo', 'Fondeado', 'Calma chicha', 'Aguas medias']) {
+    await expect(page.locator('app-modal').getByText(lectura, { exact: true })).toBeVisible();
+  }
+  // Y qué mide cada eje, que es lo que se preguntaba.
+  await expect(page.locator('app-modal').getByText(/De izquierda a derecha, el ánimo/)).toBeVisible();
+});
