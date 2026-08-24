@@ -113,7 +113,7 @@ export function unlinkedUsers(users, linkedUids) {
   });
 }
 
-/** @typedef {'gestion'|'manager'|'engineer'} ViewKey */
+/** @typedef {'gestion'|'manager'|'engineer'|'empleado'} ViewKey */
 /** @typedef {{ functionalRole?: import('./access.js').FunctionalRole, instanceAccess?: import('./access.js').InstanceAccess }} AccessAxes */
 
 /** ¿Ve toda la organización? Tanto admin (gobierna) como viewer (C-level) la ven.
@@ -138,7 +138,11 @@ export function canGovern(access) {
  *    su equipo o su rama) o es admin (ve toda la organización).
  *  - «engineer» (su espacio): si tiene cualquier rol funcional (su ficha, o
  *    preview siendo manager/head) o es admin.
- * El orden es fijo: gestion, manager, engineer.
+ *  - «empleado» (hub sin rol): previsualización de lo que ve quien NO está en
+ *    ningún equipo — solo las herramientas de audiencia `everyone`. Se ofrece a
+ *    quien tiene gente a la que asignar: admin y leader/supermanager. Un
+ *    ingeniero no la tiene, porque no previsualiza a nadie.
+ * El orden es fijo: gestion, manager, engineer, empleado.
  * @param {AccessAxes} access
  * @returns {ViewKey[]}
  */
@@ -150,6 +154,7 @@ export function viewsFor(access) {
   if (viewAll(access)) views.push('gestion');
   if (functionalRole === 'leader' || functionalRole === 'supermanager' || isAdmin) views.push('manager');
   if (functionalRole !== null || isAdmin) views.push('engineer');
+  if (functionalRole === 'leader' || functionalRole === 'supermanager' || isAdmin) views.push('empleado');
   return views;
 }
 

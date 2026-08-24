@@ -2,12 +2,25 @@ import { describe, it, expect } from 'vitest';
 import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor } from './accessRoles.js';
 
 describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
-  it('un admin que además es líder conserva las tres vistas', () => {
-    expect(viewsFor({ instanceAccess: 'admin', functionalRole: 'leader' })).toEqual(['gestion', 'manager', 'engineer']);
+  it('un admin que además es líder conserva todas las vistas', () => {
+    expect(viewsFor({ instanceAccess: 'admin', functionalRole: 'leader' }))
+      .toEqual(['gestion', 'manager', 'engineer', 'empleado']);
   });
 
-  it('un admin puro (sin rol funcional) también tiene las tres', () => {
-    expect(viewsFor({ instanceAccess: 'admin', functionalRole: null })).toEqual(['gestion', 'manager', 'engineer']);
+  it('el superadmin puede previsualizar también a quien no está en ningún equipo', () => {
+    expect(viewsFor({ instanceAccess: 'admin', functionalRole: null }))
+      .toEqual(['gestion', 'manager', 'engineer', 'empleado']);
+  });
+
+  it('un manager también previsualiza al empleado: gestiona a quien aún no ha asignado', () => {
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'leader' }))
+      .toEqual(['manager', 'engineer', 'empleado']);
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'supermanager' }))
+      .toEqual(['manager', 'engineer', 'empleado']);
+  });
+
+  it('un ingeniero NO previsualiza nada: no tiene a quién', () => {
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'engineer' })).toEqual(['engineer']);
   });
 
   it('un viewer puro solo ve el panel', () => {
@@ -19,9 +32,9 @@ describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
     expect(viewsFor(accessAxes({ viewer: true, leader: true }))).toEqual(['gestion']);
   });
 
-  it('un líder o head: herramientas + su espacio, sin gestión', () => {
-    expect(viewsFor({ instanceAccess: null, functionalRole: 'leader' })).toEqual(['manager', 'engineer']);
-    expect(viewsFor({ instanceAccess: null, functionalRole: 'supermanager' })).toEqual(['manager', 'engineer']);
+  it('un líder o head: herramientas y su espacio, sin gestión de instancia', () => {
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'leader' })).not.toContain('gestion');
+    expect(viewsFor({ instanceAccess: null, functionalRole: 'supermanager' })).not.toContain('gestion');
   });
 
   it('un ingeniero: solo su espacio; sin nada: ninguna', () => {
