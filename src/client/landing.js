@@ -52,6 +52,28 @@ onUserChanged(async (user) => {
       location.replace('/mi-espacio');
       return;
     }
+    // Vista «Empleado» (RMR-TSK-0451): un superadmin o un manager previsualiza el
+    // hub como lo ve quien NO está en ningún equipo — solo las herramientas de
+    // audiencia «everyone». Es solo pintado: los permisos reales no cambian, y
+    // cada herramienta sigue validando su acceso por su cuenta.
+    //
+    // Si las políticas no se pueden cargar, NO se previsualiza: se deja seguir el
+    // flujo normal. Un hub sin filtrar diría que el empleado ve todas las
+    // herramientas y uno vacío que no ve ninguna; las dos cosas son mentira, y
+    // una previsualización que miente es peor que no tenerla.
+    if (sessionStorage.getItem(VIEW_FLAG) === 'empleado' && (canGovern(access) || leadsTeam(access))) {
+      try {
+        const genericPolicies = await listToolPolicies();
+        showTools({
+          personRef: buildPersonRef(null),
+          policies: genericPolicies,
+          isSuperadmin: false,
+          isLeaderish: false,
+          canManageSurveys: false,
+        });
+        return;
+      } catch { /* sin políticas no hay previsualización fiable: sigue el flujo normal */ }
+    }
     // El ingeniero (persona vinculada) tiene su propio espacio personal: ni
     // landing pública ni herramientas de manager.
     if (access.functionalRole === 'engineer' && !access.instanceAccess) {

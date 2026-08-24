@@ -5,6 +5,8 @@
  *  - Admin (superadmin) → /admin  (panel de superadmin/viewer; sin flag)
  *  - Manager  → /             (herramientas de manager; flag 'leader')
  *  - Ingeniero → /mi-espacio  (su propio «Mi espacio»; flag 'engineer')
+ *  - Empleado  → /             (el hub como lo ve quien no está en ningún
+ *                              equipo: solo herramientas «everyone»; flag 'empleado')
  * El flag de vista vive en sessionStorage ('grebla-view'); lo leen landing.js
  * (enrutado de la home) y layout.js (oculta el halo de superadmin fuera de
  * gestión). La vista activa se resalta según el flag y la ruta actual.
@@ -20,12 +22,14 @@ const VIEW_META = {
   gestion: { label: 'Admin (superadmin)', title: 'Panel de administración (superadmin)', path: '/admin', flag: null },
   manager: { label: 'Manager', title: 'Herramientas de manager', path: '/', flag: 'leader' },
   engineer: { label: 'Ingeniero', title: 'Mi espacio, como lo ve un ingeniero', path: '/mi-espacio', flag: 'engineer' },
+  empleado: { label: 'Empleado', title: 'El hub como lo ve quien no está en ningún equipo', path: '/', flag: 'empleado' },
 };
 
 /** Vista activa ahora mismo, derivada del flag de sesión y la ruta actual. */
 function currentView() {
   const flag = sessionStorage.getItem(VIEW_FLAG);
   if (flag === 'engineer') return 'engineer';
+  if (flag === 'empleado') return 'empleado';
   if (flag === 'leader') return 'manager';
   const path = location.pathname;
   if (path.startsWith('/admin')) return 'gestion';
@@ -96,7 +100,11 @@ export class ViewSwitcher extends LitElement {
     if (!meta) return;
     if (meta.flag) sessionStorage.setItem(VIEW_FLAG, meta.flag);
     else sessionStorage.removeItem(VIEW_FLAG);
-    location.assign(meta.path);
+    // El flag se lee al cargar la página, así que cambiar a una vista que apunta
+    // a la ruta en la que YA estás (Manager y Empleado comparten «/») exige
+    // recargar: `assign` a la misma URL no repinta nada y la vista no cambiaría.
+    if (location.pathname === meta.path) location.reload();
+    else location.assign(meta.path);
   }
 
   render() {

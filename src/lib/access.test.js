@@ -125,12 +125,12 @@ describe('resolveViews', () => {
     // «manager» conviven en el conmutador de vistas.
     membership = new Set(['admins', 'leaders']);
     const { views } = await resolveViews(user);
-    expect(views).toEqual(['gestion', 'manager', 'engineer']);
+    expect(views).toEqual(['gestion', 'manager', 'engineer', 'empleado']);
   });
 
   it('un líder sin gobierno no ve la vista de gestión', async () => {
     membership = new Set(['leaders']);
-    expect((await resolveViews(user)).views).toEqual(['manager', 'engineer']);
+    expect((await resolveViews(user)).views).toEqual(['manager', 'engineer', 'empleado']);
   });
 
   it('sin usuario no ofrece ninguna vista', async () => {
