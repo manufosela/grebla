@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { accessFieldsForNewRetro, canSeeRetro, tokenOpens, withMember, withoutMember } from './membership.js';
+import { accessFieldsForNewRetro, canSeeRetro, tokenOpens, watchersOf, withMember, withoutMember } from './membership.js';
 
 describe('accessFieldsForNewRetro', () => {
   it('quien convoca entra siempre: nadie crea una retro para no estar en ella', () => {
@@ -104,5 +104,38 @@ describe('tokenOpens', () => {
     expect(tokenOpens({}, '')).toBe(false);
     expect(tokenOpens({}, undefined)).toBe(false);
     expect(tokenOpens({ joinToken: '' }, '')).toBe(false);
+  });
+});
+
+describe('watchersOf — a quién se anuncia en la pantalla', () => {
+  const roles = [{ id: 'chro', label: 'CHRO' }, { id: 'cto', label: 'CTO' }];
+
+  it('la administración siempre, porque siempre es verdad', () => {
+    expect(watchersOf([], roles)).toEqual(['la administración']);
+  });
+
+  it('añade los roles que gestionan la herramienta, con su etiqueta', () => {
+    const policies = [{ toolId: 'retros', managedBy: { roleIds: ['chro'] } }];
+    expect(watchersOf(policies, roles)).toEqual(['la administración', 'CHRO']);
+  });
+
+  it('no inventa roles que no están en el catálogo', () => {
+    // Un roleId huérfano no debe salir como texto crudo en la pantalla.
+    const policies = [{ toolId: 'retros', managedBy: { roleIds: ['rol-borrado'] } }];
+    expect(watchersOf(policies, roles)).toEqual(['la administración']);
+  });
+
+  it('si la política está abierta a todos, lo dice', () => {
+    const policies = [{ toolId: 'retros', managedBy: { everyone: true } }];
+    expect(watchersOf(policies, roles)).toContain('toda la organización');
+  });
+
+  it('ignora la política de otra herramienta', () => {
+    const policies = [{ toolId: 'marea', managedBy: { roleIds: ['cto'] } }];
+    expect(watchersOf(policies, roles)).toEqual(['la administración']);
+  });
+
+  it('aguanta que no haya política ni catálogo', () => {
+    expect(watchersOf(undefined, undefined)).toEqual(['la administración']);
   });
 });

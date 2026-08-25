@@ -22,6 +22,8 @@ export class RetroApp extends LitElement {
     uid: { attribute: false },
     leaderUid: { attribute: false },
     leaderUids: { attribute: false },
+    alsoVisibleTo: { attribute: false },
+    chain: { attribute: false },
     squadIds: { attribute: false },
     members: { attribute: false },
     authorName: { attribute: false },
@@ -33,6 +35,12 @@ export class RetroApp extends LitElement {
   };
 
   static styles = css`
+    .visibility {
+      margin: 0 0 0.9rem; padding: 0.5rem 0.75rem; border-radius: 8px;
+      background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, var(--rm-surface, #fff));
+      border: 1px solid color-mix(in srgb, var(--rm-accent, #2a9d8f) 22%, transparent);
+      color: var(--rm-text, #111827); font-size: 0.85rem; line-height: 1.45;
+    }
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); --navy: var(--gr-navy, #1e3a5f); }
     .detail { display: flex; flex-direction: column; gap: 1.4rem; }
     .back { align-self: flex-start; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
@@ -58,6 +66,10 @@ export class RetroApp extends LitElement {
      * @type {string[]|null}
      */
     this.leaderUids = null;
+    /** @type {string[]} roles que también pueden ver estas retros (RMR-TSK-0455) */
+    this.alsoVisibleTo = [];
+    /** @type {string[]} cadena de managers de quien convoca */
+    this.chain = [];
     /** @type {string[]} squads a los que pertenece (una persona puede estar en varios) */
     this.squadIds = [];
     /** Nombre con el que firmar sus tarjetas: el de su ficha de GREBLA. */
@@ -158,12 +170,29 @@ export class RetroApp extends LitElement {
       </table>`;
   }
 
+  /**
+   * Quién más puede ver estas retros (RMR-TSK-0455). Se dice en la pantalla, por
+   * ROL: prometer intimidad y que la lea alguien más sin avisar es lo que hace
+   * que la promesa no valga.
+   */
+  _renderVisibility() {
+    const roles = this.alsoVisibleTo ?? [];
+    if (roles.length === 0) return null;
+    return html`<p class="visibility">
+      Una retro la ven quienes entran por su enlace y la línea de mando de quien la convoca.
+      También puede verla ${roles.join(' y ')}.
+    </p>`;
+  }
+
   render() {
     if (this._selected) return this._renderDetail();
     if (this.canManage) {
-      return html`<retro-manager .uid=${this.leaderUid} .scopeUids=${this.leaderUids} @retro-select=${(e) => this._select(e.detail.retro)}></retro-manager>`;
+      return html`
+        ${this._renderVisibility()}
+        <retro-manager .uid=${this.leaderUid} .chain=${this.chain} .scopeUids=${this.leaderUids}
+          @retro-select=${(e) => this._select(e.detail.retro)}></retro-manager>`;
     }
-    return this._renderEngineerList();
+    return html`${this._renderVisibility()}${this._renderEngineerList()}`;
   }
 }
 

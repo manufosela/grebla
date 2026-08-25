@@ -98,3 +98,31 @@ export function tokenOpens(retro, token) {
   return typeof esperado === 'string' && esperado !== ''
     && typeof token === 'string' && token === esperado;
 }
+
+/**
+ * Quién más puede ver las retros, para decirlo EN PANTALLA (RMR-TSK-0455).
+ *
+ * Se deriva de la política real de la herramienta —quién la gestiona— y no de
+ * una lista escrita a mano: prometer intimidad y que la lea alguien más sin
+ * avisar es lo que hace que la promesa no valga; pero decir «lo ve People» sin
+ * que sea verdad tampoco vale.
+ *
+ * Devuelve ETIQUETAS DE ROL, nunca nombres de personas: el rol es más estable y
+ * no señala a nadie en concreto.
+ *
+ * @param {ReadonlyArray<{ toolId?: string, managedBy?: { roleIds?: string[], everyone?: boolean } }>} policies
+ * @param {ReadonlyArray<{ id?: string, label?: string }>} orgRoles
+ * @returns {string[]}
+ */
+export function watchersOf(policies, orgRoles) {
+  const política = (policies ?? []).find((p) => p?.toolId === 'retros');
+  const etiquetas = ['la administración']; // el superadmin siempre puede: es verdad siempre
+  const managedBy = política?.managedBy ?? {};
+  if (managedBy.everyone) return [...etiquetas, 'toda la organización'];
+  const porId = new Map((orgRoles ?? []).map((r) => [r.id, r.label ?? r.id]));
+  for (const roleId of managedBy.roleIds ?? []) {
+    const label = porId.get(roleId);
+    if (label) etiquetas.push(label);
+  }
+  return etiquetas;
+}

@@ -716,7 +716,11 @@ service cloud.firestore {
       allow read: if canReadRetro(resource.data);
       // Quien convoca entra siempre dentro: si no, crearía una retro que no
       // podría leer ni ella misma.
-      allow create: if (isLeader() || managesToolByPolicy('retros'))
+      // Convocar puede CUALQUIERA con sesión (ADR): con el listado por membresía
+      // ya no hay un tablón global que se llene. Lo que sí se impone es que
+      // quien convoca entre dentro; si no, crearía una retro que no podría leer
+      // ni ella misma.
+      allow create: if isSignedIn()
         && request.resource.data.ownerLeaderUid == request.auth.uid
         && request.auth.uid in request.resource.data.memberUids;
       allow update, delete: if isSuperAdmin()
