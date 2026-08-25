@@ -1,18 +1,21 @@
 /**
  * Glue de la retro compartida por enlace (RMR-TSK-0279): `/retro?id=<retroId>`.
  *
- * Quién puede entrar lo decide Firestore (RMR-TSK-0274): miembros de la
- * instancia o correos @tribbuapp.com. Aquí solo se traduce el resultado a algo
- * legible — un `permission-denied` no debe salir como error crudo, sino como
- * «no tienes acceso a esta retro».
+ * Quién puede entrar lo decide Firestore (ADR «Retros por membresía»): quien
+ * está dentro o quien la tiene en su rama. Si el enlace trae `join`, primero se
+ * canjea: abrirlo es lo que te mete dentro, y a partir de ahí la retro te sale
+ * en tu listado. Aquí solo se traduce el resultado a algo legible — un
+ * `permission-denied` no debe salir como error crudo.
  */
 import { onUserChanged, signInWithGoogle } from '../lib/auth.js';
-import { getRetro } from '../lib/retros.js';
+import { getRetro, joinRetroByLink } from '../lib/retros.js';
 import '../components/retro/retro-board.js';
 
 const statusEl = document.getElementById('retro-status');
 const hostEl = document.getElementById('retro-host');
-const retroId = new URLSearchParams(location.search).get('id');
+const params = new URLSearchParams(location.search);
+const retroId = params.get('id');
+const joinToken = params.get('join');
 
 /** @param {string} message @param {boolean} [isError] */
 function showStatus(message, isError = false) {
@@ -44,6 +47,14 @@ if (retroId) {
       return;
     }
     try {
+      // Canjear el enlace ANTES de leer: si no, quien entra por primera vez se
+      // encontraría un «no tienes acceso» aun teniendo el enlace bueno. Un
+      // token que no vale no rompe la página: se sigue e intenta leer, por si
+      // ya era miembro o le alcanza por su rama.
+      if (joinToken) {
+        showStatus('Entrando en la retro…');
+        try { await joinRetroByLink(retroId, joinToken); } catch { /* el enlace no vale; puede que ya tenga acceso */ }
+      }
       // Si las reglas no le dejan, esto lanza permission-denied.
       const retro = await getRetro(retroId);
       if (!retro) {

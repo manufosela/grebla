@@ -84,3 +84,17 @@ export function withMember(memberUids, uid) {
 export function withoutMember(memberUids, uid) {
   return clean(memberUids).filter((member) => member !== uid);
 }
+
+/**
+ * ¿Sirve este token para entrar en la retro? Comparación estricta y sin
+ * atajos: un token vacío o ausente NO abre nada, aunque el documento tampoco
+ * tenga uno guardado.
+ * @param {{ joinToken?: unknown }} retro
+ * @param {unknown} token
+ * @returns {boolean}
+ */
+export function tokenOpens(retro, token) {
+  const esperado = retro?.joinToken;
+  return typeof esperado === 'string' && esperado !== ''
+    && typeof token === 'string' && token === esperado;
+}

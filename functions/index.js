@@ -172,6 +172,40 @@ export const sealInvite = onCall({ region: 'europe-west1' }, async (request) => 
 });
 
 /**
+ * Entrar en una retro por su enlace (RMR-TSK-0454, ADR «Retros por membresía»).
+ *
+ * Se hace con Admin SDK y no con reglas por un círculo: para comprobar el token
+ * habría que leer el documento de la retro, y quien todavía no es miembro no
+ * puede leerlo. La función rompe ese círculo sin abrir la lectura a nadie.
+ *
+ * Idempotente: abrir el enlace dos veces no duplica ni reordena nada. Y sigue
+ * funcionando con la retro cerrada, porque el mismo enlace tiene que servir para
+ * consultar después el resumen y las acciones.
+ */
+export const joinRetro = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión para entrar en una retro.');
+  const retroId = typeof request.data?.retroId === 'string' ? request.data.retroId.trim() : '';
+  const token = typeof request.data?.token === 'string' ? request.data.token.trim() : '';
+  if (!retroId || !token) throw new HttpsError('invalid-argument', 'El enlace de la retro no está completo.');
+
+  const ref = getFirestore().collection('retros').doc(retroId);
+  const snap = await ref.get();
+  // Mismo mensaje para «no existe» y «token que no vale»: si fueran distintos,
+  // se podría averiguar qué retros existen probando ids.
+  const noVale = () => new HttpsError('permission-denied', 'Este enlace no da acceso a la retro.');
+  if (!snap.exists) throw noVale();
+  const retro = snap.data() ?? {};
+  const esperado = typeof retro.joinToken === 'string' ? retro.joinToken : '';
+  if (esperado === '' || token !== esperado) throw noVale();
+
+  const dentro = Array.isArray(retro.memberUids) ? retro.memberUids : [];
+  if (dentro.includes(caller.uid)) return { joined: true, already: true };
+  await ref.update({ memberUids: FieldValue.arrayUnion(caller.uid) });
+  return { joined: true, already: false };
+});
+
+/**
  * Corroboración de empleado (RMR-PCS-0027 · F7): al loguearse alguien del dominio
  * de la instancia (/config/org.employeeDomain), garantiza que existe su ficha
  * /people. Idempotente y tolerante:
