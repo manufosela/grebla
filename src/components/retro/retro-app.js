@@ -88,15 +88,14 @@ export class RetroApp extends LitElement {
   get _sourcesKey() {
     // Ordenados para que reordenar los mismos squads no cuente como cambio.
     const squads = [...(this.squadIds ?? [])].toSorted((a, b) => String(a).localeCompare(String(b))).join(',');
-    const owners = this.leaderUids?.length ? this.leaderUids.join(',') : (this.leaderUid ?? '');
-    if (!owners && !squads) return '';
-    return `${owners}|${squads}`;
+    if (!this.uid && !squads) return '';
+    return `${this.uid ?? ''}|${squads}`;
   }
 
   updated(changed) {
     // El ingeniero necesita la lista (el manager la trae dentro de retro-manager).
     if (this.canManage) return;
-    if (!changed.has('leaderUid') && !changed.has('leaderUids')
+    if (!changed.has('uid') && !changed.has('leaderUid') && !changed.has('leaderUids')
       && !changed.has('squadIds') && !changed.has('canManage')) return;
     const key = this._sourcesKey;
     if (!key || key === this._loadedFor) return;
@@ -112,7 +111,9 @@ export class RetroApp extends LitElement {
       // salen por ownerLeaderUid: se unen ambas fuentes y se deduplica por id
       // (una retro de mi squad creada por mi manager saldría dos veces).
       const [mine, ofSquads] = await Promise.all([
-        this._ownerScope ? listRetros(this._ownerScope) : Promise.resolve([]),
+        // El listado va por QUIEN MIRA (ADR «Retros por membresía»): las que
+        // tiene dentro más las de su rama. Ya no se pide «las del manager X».
+        this.uid ? listRetros(this.uid) : Promise.resolve([]),
         listRetrosBySquads(this.squadIds ?? []).catch(() => []),
       ]);
       const byId = new Map([...mine, ...ofSquads].map((r) => [r.id, r]));

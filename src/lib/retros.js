@@ -14,6 +14,7 @@ import {
   query, where, orderBy, serverTimestamp, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
+import { accessFieldsForNewRetro } from '../tools/retro/domain/membership.js';
 
 // ── Alcance por dueño (uid suelto o rama de un supermanager) ─────────────────
 
@@ -84,11 +85,18 @@ async function listByOwner(path, ownerLeaderUid, ...constraints) {
 export async function createRetro(data) {
   if (!data?.ownerLeaderUid) throw new Error('createRetro requiere ownerLeaderUid');
   if (!data?.format) throw new Error('createRetro requiere un formato');
+  // Quién puede ver la retro (ADR «Retros por membresía»): quien la convoca
+  // entra dentro, y su cadena de managers la ve sin necesidad de invitación.
+  // `ownerLeaderUid` se conserva —dice quién facilita— pero ya no decide por sí
+  // solo quién la lee.
+  const access = accessFieldsForNewRetro({ creatorUid: data.ownerLeaderUid, chain: data.chain });
   const ref = await addDoc(collection(db, 'retros'), {
     format: data.format,
     name: data.name ?? '',
     sprint: data.sprint ?? null,
     ownerLeaderUid: data.ownerLeaderUid,
+    memberUids: access.memberUids,
+    branchUids: access.branchUids,
     // `squadId` referencia el catálogo /squads (RMR-TSK-0278); `label` se
     // conserva por las retros/acciones antiguas, con el squad como texto libre.
     scope: {
@@ -122,9 +130,20 @@ export function setRetroReveal(retroId, patch) {
  * primero. La fusión de varios lotes se reordena en cliente.
  * @param {string|ReadonlyArray<string>} ownerLeaderUid
  */
-export async function listRetros(ownerLeaderUid) {
-  const retros = await listByOwner('retros', ownerLeaderUid, orderBy('createdAt', 'desc'));
-  return retros.sort(byCreatedAtDesc);
+export async function listRetros(uid) {
+  const uids = chunkIds(Array.isArray(uid) ? uid : [uid]).flat();
+  if (uids.length === 0) return [];
+  const me = uids[0];
+  // DOS consultas y no una: Firestore no permite un OR entre dos
+  // `array-contains`. Se piden en paralelo y se deduplica por id.
+  //  - donde estoy dentro (entré por el enlace o la convoqué yo)
+  //  - las de mi rama (las convocó alguien de mi gente)
+  const byMember = query(collection(db, 'retros'), where('memberUids', 'array-contains', me), orderBy('createdAt', 'desc'));
+  const byBranch = query(collection(db, 'retros'), where('branchUids', 'array-contains', me), orderBy('createdAt', 'desc'));
+  const snaps = await Promise.all([getDocs(byMember), getDocs(byBranch)]);
+  const byId = new Map();
+  for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...d.data() });
+  return [...byId.values()].sort(byCreatedAtDesc);
 }
 
 /** @param {string} retroId */

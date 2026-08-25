@@ -11,7 +11,7 @@ import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
 import { listTeamMembers } from '../lib/retros.js';
 import { listLeaders } from '../lib/leaders.js';
-import { branchScopeFor, canGovern, leadsTeam } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern, leadsTeam, leaderChainsFrom } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
 
 const app = document.querySelector('retro-app');
@@ -33,8 +33,12 @@ onUserChanged(async (user) => {
       // de los líderes que le reportan a cualquier profundidad, además de los
       // suyos. Crear una retro sigue siendo a su nombre (ownerLeaderUid = su uid).
       // Rama transitiva (RMR-TSK-0421): generalizada a todo líder con subárbol.
-      const leaderUids = branchScopeFor(access, await listLeaders(), user.uid);
+      const leaders = await listLeaders();
+      const leaderUids = branchScopeFor(access, leaders, user.uid);
       app.leaderUids = leaderUids;
+      // Cadena de managers de quien convoca: viaja a la retro al crearla para
+      // que su rama la vea sin invitación (ADR «Retros por membresía»).
+      app.chain = leaderChainsFrom(leaders).get(user.uid) ?? [];
       app.members = await listTeamMembers(leaderUids ?? user.uid);
     } else if (access.functionalRole === 'engineer') {
       const person = await getMyPerson(user.uid);

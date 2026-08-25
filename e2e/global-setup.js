@@ -82,12 +82,17 @@ export default async function globalSetup() {
     name: 'Persona del admin-manager', uid: null, ownerLeaderUid: ROLES.adminmgr, active: true,
   });
   // Retros: una del manager de la rama (el Head debe verla) y otra del ajeno (no).
+  // Retros con el modelo de membresía (ADR): quien la convoca está dentro y su
+  // cadena de managers en la rama. La del MANAGER la ve el Head porque le
+  // reporta; la del ajeno no, porque su cadena está vacía.
   await db.doc('retros/e2e-retro-branch').set({
     name: 'Retro de la rama', ownerLeaderUid: MANAGER, status: 'open',
+    memberUids: [MANAGER], branchUids: [ROLES.head],
     scope: { type: 'team', squadId: null, label: null }, createdAt: new Date(),
   });
   await db.doc('retros/e2e-retro-out').set({
     name: 'Retro ajena', ownerLeaderUid: OUTSIDER, status: 'open',
+    memberUids: [OUTSIDER], branchUids: [],
     scope: { type: 'team', squadId: null, label: null }, createdAt: new Date(),
   });
 

@@ -65,11 +65,37 @@ service cloud.firestore {
     // Quién puede leer/participar en una retro (RMR-TSK-0274): roles de la
     // instancia, miembros asociados a un manager (aunque su correo sea externo)
     // y cualquiera de tribbuapp.com con el enlace. Un gmail suelto, no.
-    function canAccessRetro() {
-      // El supermanager entra por derecho propio (RMR-TSK-0294): un Head puede no
-      // ser líder de un equipo ni miembro con ficha, y sin esto no vería ni una
-      // retro de su rama.
+    // Acceso a la ORGANIZACIÓN: roles de instancia, miembros con ficha o correo
+    // del dominio. Se llamaba `canAccessRetro`, pero eso nunca fue: es la puerta
+    // general que sigue usando Scrum Poker. Las retros ya no entran por aquí.
+    function canAccessOrg() {
       return isSuperAdmin() || isViewer() || isSuperManager() || isLeader() || isMember() || isOrgEmail();
+    }
+
+    // Quién puede LEER una retro concreta (ADR «Retros por membresía»): quien
+    // está dentro, quien la tiene en su rama, o quien tiene el permiso de verlas
+    // todas. Se ancla a los MISMOS campos por los que consulta el listado — en
+    // Firestore las reglas no filtran, así que si consulta y regla no miran lo
+    // mismo, o no se ve nada o se ve de más.
+    //
+    // Antes esto era una lista de roles que terminaba en `isOrgEmail()`: bastaba
+    // tener correo del dominio y el id de la retro para leerla entera. Una retro
+    // es una conversación de un grupo, no un tablón de la organización.
+    function seesAllRetros() {
+      return isSuperAdmin() || managesToolByPolicy('retros');
+    }
+    function canReadRetro(retro) {
+      // Ojo con los campos que pueden NO existir: en una consulta (`list`) la
+      // regla se evalúa documento a documento, y tocar un campo ausente aborta
+      // la evaluación entera — la consulta falla, no devuelve menos. Una retro
+      // anterior a la migración no tiene estos campos.
+      // `retro.get('campo', [])` y no `retro.campo`: en las reglas, tocar un
+      // campo que no existe ABORTA la evaluación —incluso dentro de un
+      // `is list`— y en una consulta eso tumba el listado entero, no solo ese
+      // documento. Una retro anterior a la migración no tiene estos campos.
+      return seesAllRetros()
+        || (isSignedIn() && request.auth.uid in retro.get('memberUids', []))
+        || (isSignedIn() && request.auth.uid in retro.get('branchUids', []));
     }
 
     // Espejo de miembros por uid: lo escribe SOLO el trigger (Admin SDK, que se
@@ -687,9 +713,12 @@ service cloud.firestore {
     // acciones (/retroActions) son de equipo y persisten entre retros: las crea el
     // líder y su owner (o el líder) marca hecha/pendiente.
     match /retros/{retroId} {
-      allow read: if canAccessRetro();
+      allow read: if canReadRetro(resource.data);
+      // Quien convoca entra siempre dentro: si no, crearía una retro que no
+      // podría leer ni ella misma.
       allow create: if (isLeader() || managesToolByPolicy('retros'))
-        && request.resource.data.ownerLeaderUid == request.auth.uid;
+        && request.resource.data.ownerLeaderUid == request.auth.uid
+        && request.auth.uid in request.resource.data.memberUids;
       allow update, delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
 
@@ -708,10 +737,16 @@ service cloud.firestore {
           return isSignedIn()
             && get(/databases/$(database)/documents/retros/$(retroId)).data.ownerLeaderUid == request.auth.uid;
         }
-        allow read: if canAccessRetro();
-        allow create: if canAccessRetro() && request.resource.data.authorUid == request.auth.uid;
+        // Las notas heredan el acceso de SU retro: quien no puede leer la retro
+        // tampoco lee lo que se dijo dentro. Cuesta un `get` del documento padre,
+        // que es el precio de que la intimidad esté en las reglas y no en la UI.
+        function canAccessThisRetro() {
+          return canReadRetro(get(/databases/$(database)/documents/retros/$(retroId)).data);
+        }
+        allow read: if canAccessThisRetro();
+        allow create: if canAccessThisRetro() && request.resource.data.authorUid == request.auth.uid;
         // El autor edita su nota; cualquiera con acceso a la retro vota (solo `voters`).
-        allow update: if (canAccessRetro()
+        allow update: if (canAccessThisRetro()
             && (resource.data.authorUid == request.auth.uid || onlyVotersChanged()))
           || ((isRetroOwner() || isSuperAdmin()) && onlyGroupChanged());
         // Borra el autor de la nota o el líder dueño de la retro (o superadmin).
@@ -728,11 +763,18 @@ service cloud.firestore {
       function onlyStatusChanged() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneAt']);
       }
-      allow read: if canAccessRetro();
+      // Una acción la lee su dueño (el manager), quien la tiene asignada, y
+      // quien ve todas las retros. Ya no basta con tener correo del dominio.
+      function canAccessAction() {
+        return seesAllRetros()
+          || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
+          || (isSignedIn() && resource.data.owners is list && request.auth.uid in resource.data.owners);
+      }
+      allow read: if canAccessAction();
       allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
       allow update: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
-        || (canAccessRetro() && request.auth.uid in resource.data.owners && onlyStatusChanged());
+        || (canAccessAction() && request.auth.uid in resource.data.owners && onlyStatusChanged());
       allow delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
     }
@@ -765,21 +807,21 @@ service cloud.firestore {
         return isSignedIn()
           && get(/databases/$(database)/documents/pokerSessions/$(sessionId)).data.ownerLeaderUid == request.auth.uid;
       }
-      allow read: if canAccessRetro();
+      allow read: if canAccessOrg();
       allow create: if (isLeader() || managesToolByPolicy('poker'))
         && request.resource.data.ownerLeaderUid == request.auth.uid;
       // El dueño gestiona todo (tema, ronda, cerrar); cualquiera con acceso solo revela (false→true).
       allow update: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
-        || (canAccessRetro() && revealsOnly());
+        || (canAccessOrg() && revealsOnly());
       allow delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
 
       // Presencia PÚBLICA: cada uno gestiona la suya (nombre + votedRound). No
       // lleva el valor, así que verla no filtra ningún voto.
       match /players/{uid} {
-        allow read: if canAccessRetro();
-        allow create, update: if canAccessRetro() && request.auth.uid == uid;
+        allow read: if canAccessOrg();
+        allow create, update: if canAccessOrg() && request.auth.uid == uid;
         // Cada uno se sale; el dueño (o superadmin) limpia al borrar la sesión.
         allow delete: if isSuperAdmin() || isPokerOwner() || (isSignedIn() && request.auth.uid == uid);
       }
@@ -789,8 +831,8 @@ service cloud.firestore {
       // queda congelado: nadie puede cambiarlo ni borrarlo (integridad del
       // resultado); reabrir es pasar de tema, cosa del dueño.
       match /votes/{uid} {
-        allow read: if canAccessRetro() && (sessionRevealed() || request.auth.uid == uid);
-        allow create, update: if canAccessRetro() && request.auth.uid == uid && !sessionRevealed();
+        allow read: if canAccessOrg() && (sessionRevealed() || request.auth.uid == uid);
+        allow create, update: if canAccessOrg() && request.auth.uid == uid && !sessionRevealed();
         // El propio solo antes de revelar; el dueño/superadmin limpia al borrar la sesión.
         allow delete: if isSuperAdmin() || isPokerOwner()
           || (isSignedIn() && request.auth.uid == uid && !sessionRevealed());

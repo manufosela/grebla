@@ -16,6 +16,7 @@ import { listSquadsCatalog } from '../../lib/squads.js';
 export class RetroManager extends LitElement {
   static properties = {
     uid: { attribute: false },
+    chain: { attribute: false },
     scopeUids: { attribute: false },
     _retros: { state: true },
     _squads: { state: true },
@@ -65,6 +66,8 @@ export class RetroManager extends LitElement {
   constructor() {
     super();
     this.uid = null;
+    /** @type {string[]} cadena de managers de quien convoca, del espejo /leaders */
+    this.chain = [];
     /**
      * Rama de un supermanager (RMR-TSK-0294): uids cuyos retros LISTA además de
      * los suyos. null = solo los suyos. Crear sigue siendo a nombre de `uid`.
@@ -105,7 +108,8 @@ export class RetroManager extends LitElement {
     this._error = '';
     try {
       const [retros, squads] = await Promise.all([
-        listRetros(this.scopeUids?.length ? this.scopeUids : this.uid),
+        // Por quien mira: las suyas y las de su rama (ADR «Retros por membresía»).
+        listRetros(this.uid),
         listSquadsCatalog().catch(() => []),
       ]);
       this._retros = retros;
@@ -128,6 +132,11 @@ export class RetroManager extends LitElement {
         name: n.name.trim(),
         sprint: n.sprint.trim() || null,
         ownerLeaderUid: this.uid,
+        // Cadena de managers de quien convoca (ADR «Retros por membresía»): es
+        // lo que hace que su rama vea la retro sin necesidad de invitación. Se
+        // copia AL CREAR: si luego cambia de manager, la retro conserva la que
+        // tenía, porque una retro es de su momento.
+        chain: this.chain ?? [],
         scope: {
           type: n.scopeType,
           squadId: n.scopeType === 'squad' ? (n.squadId || null) : null,
