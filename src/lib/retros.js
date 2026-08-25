@@ -193,6 +193,16 @@ export function watchNotes(retroId, onData, onError) {
 }
 
 /** Cierra una retro: deja de admitir aportaciones. @param {string} retroId */
+/**
+ * Salir de una retro (RMR-TSK-0456): deja de estar en `memberUids`, así que
+ * desaparece de su listado y pierde el acceso. Sus notas se quedan: son del
+ * grupo, no suyas.
+ * @param {string} retroId @param {string} uid
+ */
+export function leaveRetro(retroId, uid) {
+  return updateDoc(doc(db, 'retros', retroId), { memberUids: arrayRemove(uid) });
+}
+
 export function closeRetro(retroId) {
   return updateDoc(doc(db, 'retros', retroId), { status: 'closed', closedAt: serverTimestamp() });
 }

@@ -15,7 +15,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { test, expect } from '@playwright/test';
 
 const PROJECT = 'demo-grebla-rules';
@@ -103,6 +103,19 @@ test.describe('reglas de /retros', () => {
     await assertFails(getDoc(doc(comoEmpleado(env, 'luis').firestore(), 'retros', 'retro-vieja')));
     // Y la que sí está migrada se sigue leyendo con normalidad.
     await assertSucceeds(getDoc(doc(comoEmpleado(env, 'luis').firestore(), 'retros', RETRO)));
+  });
+
+  test('cada cual puede salirse, y solo a sí mismo', async () => {
+    const luis = comoEmpleado(env, 'luis').firestore();
+    // Echar a otra persona aprovechando el mismo permiso: no.
+    await assertFails(updateDoc(doc(luis, 'retros', RETRO), { memberUids: ['luis'] }));
+    // Salirse: sí.
+    await assertSucceeds(updateDoc(doc(luis, 'retros', RETRO), { memberUids: ['ana'] }));
+  });
+
+  test('quien no está dentro no puede tocar la lista de miembros', async () => {
+    const ajena = comoEmpleado(env, 'ajena').firestore();
+    await assertFails(updateDoc(doc(ajena, 'retros', RETRO), { memberUids: ['ana', 'luis', 'ajena'] }));
   });
 
   test('un superadmin las ve todas', async () => {
