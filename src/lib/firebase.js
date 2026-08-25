@@ -44,6 +44,28 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
+/**
+ * Instancia de Cloud Functions de la región, conectada al emulador cuando toca.
+ *
+ * Los callables se pedían con `getFunctions(app, 'europe-west1')` en cada sitio,
+ * y ahí faltaba lo que sí se hacía con auth y Firestore: apuntar al emulador.
+ * En los tests eso significa que la llamada sale hacia el proyecto real y no
+ * llega nunca — sin error visible si quien llama se traga la excepción.
+ * @returns {Promise<import('firebase/functions').Functions>}
+ */
+let regionalFunctions = null;
+export async function getRegionalFunctions() {
+  if (regionalFunctions) return regionalFunctions;
+  const { getFunctions, connectFunctionsEmulator } = await import('firebase/functions');
+  const fns = getFunctions(app, 'europe-west1');
+  if (useEmulators && typeof window !== 'undefined') {
+    const host = import.meta.env.PUBLIC_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1';
+    connectFunctionsEmulator(fns, host, 5001);
+  }
+  regionalFunctions = fns;
+  return fns;
+}
+
 // E2E (RMR-TSK-0299): apuntar a los emuladores y exponer un login por custom
 // token para que Playwright entre como cualquier rol sin pasar por el OAuth de
 // Google (que no se puede automatizar). Todo esto queda MUERTO en producción:
