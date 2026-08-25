@@ -10,7 +10,10 @@ import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { test, expect, signInAs } from './fixtures.js';
 
-const TOKEN = 'token-de-prueba-1234';
+// Se genera en cada corrida en vez de dejar una constante con pinta de secreto:
+// un literal así lo marca el escáner de credenciales, y con razón — un secreto
+// de verdad escrito en el repo sería indistinguible de este.
+const TOKEN = `e2e-${crypto.randomUUID()}`;
 const RETRO = 'e2e-retro-link';
 
 function db() {
