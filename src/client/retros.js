@@ -9,6 +9,9 @@ import '../components/retro/retro-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { getMyPerson } from '../lib/engineer.js';
+import { listToolPolicies } from '../lib/toolPolicies.js';
+import { listOrgRoles } from '../lib/orgRoles.js';
+import { watchersOf } from '../tools/retro/domain/membership.js';
 import { listTeamMembers } from '../lib/retros.js';
 import { listLeaders } from '../lib/leaders.js';
 import { branchScopeFor, canGovern, leadsTeam, leaderChainsFrom } from '../lib/accessRoles.js';
@@ -25,29 +28,33 @@ onUserChanged(async (user) => {
     if (!gate) return;
 
     app.uid = user.uid;
-    // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy.
+    // Convocar una retro puede CUALQUIERA (ADR «Retros por membresía»): con el
+    // listado por membresía, que mucha gente convoque no molesta a nadie —solo
+    // ves las tuyas y aquellas en las que entras— y convocar una retro no es
+    // cosa de un perfil técnico ni de un manager.
+    app.canManage = true;
+    app.leaderUid = user.uid;
+    // La cadena de managers de quien convoca viaja a la retro al crearla, para
+    // que su rama la vea sin invitación.
+    const leaders = await listLeaders().catch(() => []);
+    app.chain = leaderChainsFrom(leaders).get(user.uid) ?? [];
     if (leadsTeam(access) || canGovern(access) || gate.manage) {
-      app.leaderUid = user.uid;
-      app.canManage = true;
-      // Alcance de rama (RMR-TSK-0294): el supermanager ve las retros y el roster
-      // de los líderes que le reportan a cualquier profundidad, además de los
-      // suyos. Crear una retro sigue siendo a su nombre (ownerLeaderUid = su uid).
-      // Rama transitiva (RMR-TSK-0421): generalizada a todo líder con subárbol.
-      const leaders = await listLeaders();
+      // Quien lidera un equipo trae además su roster, para poder asignar las
+      // acciones de la retro a su gente. El alcance de rama (RMR-TSK-0294) sigue
+      // sirviendo para eso, no para decidir qué retros ve: eso ya lo resuelve el
+      // propio listado con branchUids.
       const leaderUids = branchScopeFor(access, leaders, user.uid);
       app.leaderUids = leaderUids;
-      // Cadena de managers de quien convoca: viaja a la retro al crearla para
-      // que su rama la vea sin invitación (ADR «Retros por membresía»).
-      app.chain = leaderChainsFrom(leaders).get(user.uid) ?? [];
-      app.members = await listTeamMembers(leaderUids ?? user.uid);
-    } else if (access.functionalRole === 'engineer') {
-      const person = await getMyPerson(user.uid);
-      app.leaderUid = person?.ownerLeaderUid ?? null;
-      app.canManage = false;
-      app.members = [];
+      app.members = await listTeamMembers(leaderUids ?? user.uid).catch(() => []);
     } else {
-      app.canManage = false;
+      // Quien no lidera puede convocar igual; simplemente no tiene roster al que
+      // asignar acciones.
+      app.members = [];
     }
+    // Quién más puede ver estas retros, para decirlo en pantalla POR ROL. Se
+    // deriva de la política real de la herramienta, no de una lista escrita a
+    // mano: decir «lo ve People» sin que sea verdad es peor que no decir nada.
+    app.alsoVisibleTo = watchersOf(await listToolPolicies().catch(() => []), await listOrgRoles().catch(() => []));
   } catch (err) {
     console.error('[retros] no se pudo inicializar', err);
   }
