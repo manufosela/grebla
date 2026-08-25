@@ -4,6 +4,10 @@
  * El fallo original: solo se cargaba si la persona tenía manager, así que quien
  * pertenecía a un squad pero no tenía `ownerLeaderUid` no veía ni una retro. Se
  * ejercita el prototipo sobre un `this` mínimo, sin montar el componente Lit.
+ *
+ * Desde el ADR «Retros por membresía» la lista va por QUIEN MIRA (`uid`) y no
+ * por el manager: son las retros en las que está dentro más las de su rama. Por
+ * eso el disparador es ahora `uid`, no `leaderUid`.
  */
 import { describe, it, expect, vi } from 'vitest';
 
@@ -18,7 +22,7 @@ const sourcesKey = Object.getOwnPropertyDescriptor(RetroApp.prototype, '_sources
 
 function makeCtx(over = {}) {
   return {
-    leaderUid: null, squadIds: [], canManage: false, _loadedFor: null,
+    uid: null, leaderUid: null, squadIds: [], canManage: false, _loadedFor: null,
     _loadList: vi.fn(), get _sourcesKey() { return sourcesKey.call(this); },
     ...over,
   };
@@ -27,9 +31,9 @@ function makeCtx(over = {}) {
 const changed = (...keys) => new Map(keys.map((k) => [k, undefined]));
 
 describe('fuentes de retros del ingeniero', () => {
-  it('carga con manager y sin squads', () => {
-    const ctx = makeCtx({ leaderUid: 'lead1' });
-    updated.call(ctx, changed('leaderUid'));
+  it('carga en cuanto se sabe quién mira, sin squads', () => {
+    const ctx = makeCtx({ uid: 'ana' });
+    updated.call(ctx, changed('uid'));
     expect(ctx._loadList).toHaveBeenCalledTimes(1);
   });
 
@@ -39,17 +43,17 @@ describe('fuentes de retros del ingeniero', () => {
     expect(ctx._loadList).toHaveBeenCalledTimes(1);
   });
 
-  it('recalcula si los squads llegan después que el manager', () => {
-    const ctx = makeCtx({ leaderUid: 'lead1' });
-    updated.call(ctx, changed('leaderUid'));
+  it('recalcula si los squads llegan después que el uid', () => {
+    const ctx = makeCtx({ uid: 'ana' });
+    updated.call(ctx, changed('uid'));
     ctx.squadIds = ['sq1'];
     updated.call(ctx, changed('squadIds'));
     expect(ctx._loadList).toHaveBeenCalledTimes(2);
   });
 
   it('no recarga si no ha cambiado ninguna fuente', () => {
-    const ctx = makeCtx({ leaderUid: 'lead1', squadIds: ['sq1'] });
-    updated.call(ctx, changed('leaderUid'));
+    const ctx = makeCtx({ uid: 'ana', squadIds: ['sq1'] });
+    updated.call(ctx, changed('uid'));
     updated.call(ctx, changed('squadIds'));
     expect(ctx._loadList).toHaveBeenCalledTimes(1);
   });
