@@ -97,6 +97,9 @@ export async function createRetro(data) {
     ownerLeaderUid: data.ownerLeaderUid,
     memberUids: access.memberUids,
     branchUids: access.branchUids,
+    // Secreto del enlace para compartir (ADR): conocer el id NO basta para
+    // entrar. Se puede regenerar si el enlace se va de las manos.
+    joinToken: crypto.randomUUID(),
     // `squadId` referencia el catálogo /squads (RMR-TSK-0278); `label` se
     // conserva por las retros/acciones antiguas, con el squad como texto libre.
     scope: {
@@ -356,4 +359,31 @@ export async function listRetrosBySquads(squadIds) {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }));
   return results.flat();
+}
+
+/**
+ * Regenera el secreto del enlace de una retro (ADR «Retros por membresía»): el
+ * enlace anterior deja de dar acceso y quienes ya estaban dentro siguen dentro.
+ * Solo quien facilita la retro puede hacerlo — lo imponen las reglas.
+ * @param {string} retroId
+ * @returns {Promise<string>} el token nuevo, para rehacer el enlace
+ */
+export async function regenerateJoinToken(retroId) {
+  const joinToken = crypto.randomUUID();
+  await updateDoc(doc(db, 'retros', retroId), { joinToken });
+  return joinToken;
+}
+
+/**
+ * Canjea el enlace de una retro: entra a quien lo abre (ADR «Retros por
+ * membresía»). Lo resuelve la Cloud Function `joinRetro`, porque para validar
+ * el token hay que leer la retro y quien aún no es miembro no puede.
+ * @param {string} retroId @param {string} token
+ * @returns {Promise<{ joined: boolean, already: boolean }>}
+ */
+export async function joinRetroByLink(retroId, token) {
+  const { getRegionalFunctions } = await import('./firebase.js');
+  const { httpsCallable } = await import('firebase/functions');
+  const res = await httpsCallable(await getRegionalFunctions(), 'joinRetro')({ retroId, token });
+  return /** @type {{ joined: boolean, already: boolean }} */ (res.data);
 }

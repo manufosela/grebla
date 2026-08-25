@@ -194,7 +194,11 @@ export class RetroManager extends LitElement {
   }
 
   async _copyLink(retroId) {
-    const url = `${location.origin}/retro?id=${encodeURIComponent(retroId)}`;
+    // El enlace lleva el token: conocer el id no basta para entrar (ADR).
+    const retro = this._retros?.find((r) => r.id === retroId);
+    const token = retro?.joinToken ?? '';
+    const url = `${location.origin}/retro?id=${encodeURIComponent(retroId)}`
+      + (token ? `&join=${encodeURIComponent(token)}` : '');
     try {
       await navigator.clipboard.writeText(url);
       this._copiedId = retroId;

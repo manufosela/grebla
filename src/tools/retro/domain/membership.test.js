@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { accessFieldsForNewRetro, canSeeRetro, withMember, withoutMember } from './membership.js';
+import { accessFieldsForNewRetro, canSeeRetro, tokenOpens, withMember, withoutMember } from './membership.js';
 
 describe('accessFieldsForNewRetro', () => {
   it('quien convoca entra siempre: nadie crea una retro para no estar en ella', () => {
@@ -79,5 +79,30 @@ describe('withMember / withoutMember', () => {
   it('salir quita solo a quien sale', () => {
     expect(withoutMember(['ana', 'luis'], 'luis')).toEqual(['ana']);
     expect(withoutMember(['ana'], 'quien-no-estaba')).toEqual(['ana']);
+  });
+});
+
+describe('tokenOpens', () => {
+  it('abre con el token exacto de la retro', () => {
+    expect(tokenOpens({ joinToken: 'abc123' }, 'abc123')).toBe(true);
+  });
+
+  it('no abre con otro token, ni con uno parecido', () => {
+    expect(tokenOpens({ joinToken: 'abc123' }, 'abc124')).toBe(false);
+    expect(tokenOpens({ joinToken: 'abc123' }, 'abc')).toBe(false);
+  });
+
+  it('un token vacío o ausente no abre nada', () => {
+    expect(tokenOpens({ joinToken: 'abc123' }, '')).toBe(false);
+    expect(tokenOpens({ joinToken: 'abc123' }, null)).toBe(false);
+    expect(tokenOpens({ joinToken: 'abc123' }, undefined)).toBe(false);
+  });
+
+  it('una retro SIN token no se abre por pasar algo vacío', () => {
+    // Si no, una retro antigua sin token quedaría abierta a cualquiera que
+    // llamara sin parámetros.
+    expect(tokenOpens({}, '')).toBe(false);
+    expect(tokenOpens({}, undefined)).toBe(false);
+    expect(tokenOpens({ joinToken: '' }, '')).toBe(false);
   });
 });
