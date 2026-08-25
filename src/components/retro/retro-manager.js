@@ -10,7 +10,7 @@ import { LitElement, html, css } from 'lit';
 import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';
-import { createRetro, listRetros, closeRetro, deleteRetro } from '../../lib/retros.js';
+import { createRetro, leaveRetro, listRetros, closeRetro, deleteRetro } from '../../lib/retros.js';
 import { listSquadsCatalog } from '../../lib/squads.js';
 
 export class RetroManager extends LitElement {
@@ -21,6 +21,7 @@ export class RetroManager extends LitElement {
     _retros: { state: true },
     _squads: { state: true },
     _copiedId: { state: true },
+    _confirmLeaveId: { state: true },
     _confirmDeleteId: { state: true },
     _new: { state: true },
     _loading: { state: true },
@@ -80,6 +81,8 @@ export class RetroManager extends LitElement {
     this._squads = [];
     /** id de la retro cuyo enlace se acaba de copiar (feedback efímero) */
     this._copiedId = null;
+    /** @type {string|null} retro cuya salida se está confirmando */
+    this._confirmLeaveId = null;
     /** id de la retro pendiente de confirmar borrado */
     this._confirmDeleteId = null;
     this._loading = false;
@@ -193,6 +196,18 @@ export class RetroManager extends LitElement {
     }
   }
 
+  /** Salir de una retro: deja de estar dentro y desaparece de su listado. */
+  async _leave(retroId) {
+    this._error = '';
+    try {
+      await leaveRetro(retroId, this.uid);
+      this._confirmLeaveId = null;
+      await this._load();
+    } catch {
+      this._error = 'No se pudo salir de la retro.';
+    }
+  }
+
   async _copyLink(retroId) {
     // El enlace lleva el token: conocer el id no basta para entrar (ADR).
     const retro = this._retros?.find((r) => r.id === retroId);
@@ -232,6 +247,13 @@ export class RetroManager extends LitElement {
           <button class="act" title="Copiar el enlace para compartir la retro"
             @click=${() => this._copyLink(retro.id)}>${this._copiedId === retro.id ? '✓ Copiado' : 'Copiar enlace'}</button>
           ${open ? html`<button class="act" @click=${() => this._close(retro.id)}>Cerrar</button>` : null}
+          ${retro.ownerLeaderUid === this.uid ? null : (this._confirmLeaveId === retro.id
+            ? html`<span class="confirm">¿Salir? Dejarás de verla.
+                <button class="yes" @click=${() => this._leave(retro.id)}>Sí</button>
+                <button @click=${() => { this._confirmLeaveId = null; }}>No</button>
+              </span>`
+            : html`<button class="act" title="Salir de esta retro"
+                @click=${() => { this._confirmLeaveId = retro.id; this._error = ''; }}>Salir</button>`)}
           ${this._confirmDeleteId === retro.id
             ? html`<span class="confirm">¿Borrar la retro y sus notas?
                 <button class="yes" @click=${() => this._delete(retro.id)}>Sí</button>

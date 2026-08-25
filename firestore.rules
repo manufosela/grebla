@@ -723,8 +723,17 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.ownerLeaderUid == request.auth.uid
         && request.auth.uid in request.resource.data.memberUids;
+      // Salir de una retro (RMR-TSK-0456): quitarse a SÍ MISMO de memberUids y
+      // nada más. La comparación con `removeAll` impide aprovechar el mismo
+      // permiso para echar a otra persona de paso.
+      function onlyLeaving() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+          && request.auth.uid in resource.data.memberUids
+          && request.resource.data.memberUids == resource.data.memberUids.removeAll([request.auth.uid]);
+      }
       allow update, delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
+      allow update: if isSignedIn() && onlyLeaving();
 
       match /notes/{noteId} {
         // Votar solo puede cambiar el array `voters` (nada más de la nota).
