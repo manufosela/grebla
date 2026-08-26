@@ -9,6 +9,7 @@
  * canManage (true para el manager dueño).
  */
 import { LitElement, html, css } from 'lit';
+import { noteStyles } from '../common/note-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import './retro-manager.js';
 import './retro-carryover.js';
@@ -34,13 +35,7 @@ export class RetroApp extends LitElement {
     _error: { state: true },
   };
 
-  static styles = css`
-    .visibility {
-      margin: 0 0 0.9rem; padding: 0.5rem 0.75rem; border-radius: 8px;
-      background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, var(--rm-surface, #fff));
-      border: 1px solid color-mix(in srgb, var(--rm-accent, #2a9d8f) 22%, transparent);
-      color: var(--rm-text, #111827); font-size: 0.85rem; line-height: 1.45;
-    }
+  static styles = [noteStyles, css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); --navy: var(--gr-navy, #1e3a5f); }
     .detail { display: flex; flex-direction: column; gap: 1.4rem; }
     .back { align-self: flex-start; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
@@ -54,7 +49,7 @@ export class RetroApp extends LitElement {
     .chip.closed { background: var(--rm-surface-hover, #eef3f5); color: var(--rm-muted, #5b6b7d); }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.7rem; font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -178,7 +173,7 @@ export class RetroApp extends LitElement {
   _renderVisibility() {
     const roles = this.alsoVisibleTo ?? [];
     if (roles.length === 0) return null;
-    return html`<p class="visibility">
+    return html`<p class="info-note strong">
       Una retro la ven quienes entran por su enlace y la línea de mando de quien la convoca.
       También puede verla ${roles.join(' y ')}.
     </p>`;

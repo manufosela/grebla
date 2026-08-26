@@ -146,6 +146,14 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         --rm-warning: var(--gr-coral);
         --rm-danger: #dc2626;
         --rm-success: #16a34a;
+        /* INFORMACIÓN (RMR-TSK-0457): un aviso no es texto secundario. En gris
+           se lee como mobiliario y no se ve. Azul de la familia del navy de
+           marca: destaca sin alarmar, y se distingue del teal (acción) y del
+           coral (advertencia). */
+        --rm-info: #2563eb;
+        --rm-info-soft: #eff5ff;
+        --rm-info-border: #bfd6fb;
+        --rm-info-text: #1e3a8a;
         --rm-radius: 14px;
         --rm-max: 1100px;
 
@@ -183,6 +191,12 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         --rm-chip: #232b38;
         --rm-danger: #f47c74;
         --rm-success: #57c877;
+        /* En oscuro el mismo papel con contraste propio: fondo apagado y texto
+           claro, para no deslumbrar ni desaparecer. */
+        --rm-info: #7aa7f5;
+        --rm-info-soft: #1a2436;
+        --rm-info-border: #2f4368;
+        --rm-info-text: #cfe0fb;
 
         /* Tokens consumidos vía fallback en los componentes */
         --rm-navy: var(--gr-navy);

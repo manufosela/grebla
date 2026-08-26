@@ -9,6 +9,7 @@
  * Props: retroId, uid (usuario logado).
  */
 import { LitElement, html, css } from 'lit';
+import { noteStyles } from '../common/note-styles.js';
 import '../common/busy-overlay.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getFormat } from '../../tools/retro/domain/formats.js';
@@ -47,7 +48,7 @@ export class RetroBoard extends LitElement {
     _composerText: { state: true },
   };
 
-  static styles = css`
+  static styles = [noteStyles, css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); --coral: var(--gr-coral, #f2887a); --navy: var(--gr-navy, #1e3a5f); --amber: #d1902f; }
     .head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .head h2 { margin: 0; font-size: 1.15rem; }
@@ -55,7 +56,6 @@ export class RetroBoard extends LitElement {
     .chip.fmt { background: color-mix(in srgb, var(--navy) 14%, transparent); color: var(--navy); }
     .chip.open { background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--rm-accent-700, var(--teal)); }
     .chip.closed { background: var(--rm-surface-hover, #eef3f5); color: var(--rm-muted, #5b6b7d); }
-    .ro-note { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
 
     .board { display: grid; gap: 1rem; grid-template-columns: repeat(var(--cols, 3), 1fr); }
@@ -184,7 +184,7 @@ export class RetroBoard extends LitElement {
     .edit input { flex: 1; min-width: 0; font: inherit; font-size: 0.82rem; padding: 0.35rem 0.5rem; border: 1px solid var(--teal); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); }
     .edit .ghost { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec); color: var(--rm-text, #1e3a5f); }
     .empty { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); }
-  `;
+  `];
 
   constructor() {
     super();

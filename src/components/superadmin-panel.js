@@ -13,6 +13,7 @@
  *  - readOnly: boolean  (viewer: mismo panel, sin controles mutables ni pestaña Usuarios)
  */
 import { LitElement, html, css } from 'lit';
+import { noteStyles } from './common/note-styles.js';
 import './common/busy-overlay.js';
 import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
@@ -171,7 +172,7 @@ export class SuperadminPanel extends LitElement {
     _confirmJd: { state: true },
   };
 
-  static styles = css`
+  static styles = [noteStyles, css`
     :host {
       display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827);
       /* Fondo sutil de los campos (RMR-TSK-0266): los diferencia de la tarjeta
@@ -320,7 +321,6 @@ export class SuperadminPanel extends LitElement {
     .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .notice { color: var(--rm-accent, #2a9d8f); font-size: 0.85rem; font-weight: 600; }
-    .ro-note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
     .sub { font-size: 0.95rem; margin: 1.25rem 0 0.6rem; color: var(--rm-text, #111827); cursor: pointer; }
     details { margin-bottom: 0.5rem; }
     details.city .city-head { cursor: pointer; }
@@ -414,7 +414,7 @@ export class SuperadminPanel extends LitElement {
     .matrix-dim { padding-top: 0.4rem; font-size: 0.8rem; font-weight: 600; color: var(--rm-text, #111827); }
     .matrix-pick { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
     @media (max-width: 640px) { .matrix-row { grid-template-columns: 1fr; } }
-  `;
+  `];
 
   constructor() {
     super();
