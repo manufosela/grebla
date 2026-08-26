@@ -11,6 +11,7 @@
  *  - person: Person
  */
 import { LitElement, html, css } from 'lit';
+import { noteStyles } from '../common/note-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import './team-level-input.js';
 import {
@@ -206,7 +207,7 @@ export class TeamPersonDetail extends LitElement {
     _permSaved: { state: true },
   };
 
-  static styles = css`
+  static styles = [noteStyles, css`
     :host { display: block; }
     .head { margin-bottom: 1rem; }
     .head h2 { margin: 0; font-size: 1.3rem; }
@@ -438,7 +439,7 @@ export class TeamPersonDetail extends LitElement {
       font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
     }
     .link-inline:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
-  `;
+  `];
 
   constructor() {
     super();

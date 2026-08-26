@@ -126,7 +126,19 @@ export class RetroManager extends LitElement {
 
   async _create() {
     const n = this._new;
-    if (!n.name.trim() || !this.uid) return;
+    // Antes el botón se quedaba deshabilitado sin decir por qué, y eso se lee
+    // como «no tienes permiso» cuando lo único que falta es el nombre. Mejor
+    // botón vivo y un aviso que diga qué falta.
+    if (!n.name.trim()) {
+      this._error = 'Ponle un nombre a la retro para poder crearla.';
+      this.renderRoot?.querySelector('input[type="text"]')?.focus();
+      return;
+    }
+    if (n.scopeType === 'squad' && !n.squadId) {
+      this._error = 'Elige el squad de la retro.';
+      return;
+    }
+    if (!this.uid) return;
     this._saving = true;
     this._error = '';
     try {
@@ -293,7 +305,7 @@ export class RetroManager extends LitElement {
           ${this._new.scopeType === 'squad' ? this._renderSquadPicker() : null}
         </div>
         <div class="bar">
-          <button class="btn" ?disabled=${this._saving || !this._new.name.trim() || !this.uid || (this._new.scopeType === 'squad' && !this._new.squadId)} @click=${() => this._create()}>
+          <button class="btn" ?disabled=${this._saving} @click=${() => this._create()}>
             ${this._saving ? 'Creando…' : 'Crear retro'}
           </button>
           ${this._error ? html`<span class="error">${this._error}</span>` : null}
