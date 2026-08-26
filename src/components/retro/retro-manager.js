@@ -21,6 +21,7 @@ export class RetroManager extends LitElement {
     _retros: { state: true },
     _squads: { state: true },
     _copiedId: { state: true },
+    _tab: { state: true },
     _confirmLeaveId: { state: true },
     _confirmDeleteId: { state: true },
     _new: { state: true },
@@ -30,6 +31,11 @@ export class RetroManager extends LitElement {
   };
 
   static styles = css`
+    .seg { display: inline-flex; background: var(--rm-surface-hover, #eef3f5); border: 1px solid var(--rm-border, #dde7ec); border-radius: 999px; padding: 0.25rem; gap: 0.2rem; margin-bottom: 1.3rem; }
+    .seg button { border: 0; background: transparent; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); padding: 0.45rem 1.05rem; border-radius: 999px; cursor: pointer; }
+    .seg button[aria-selected="true"] { background: var(--gr-teal, #2a9d8f); color: #0c1420; }
+    .seg button:focus-visible { outline: 2px solid var(--gr-navy, #1e3a5f); outline-offset: 2px; }
+    [hidden] { display: none; }
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); --navy: var(--gr-navy, #1e3a5f); }
     .lead { margin: 0 0 1rem; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .create { border: 1px solid var(--rm-border, #dde7ec); border-radius: 14px; padding: 1rem 1.1rem; margin-bottom: 1.5rem; background: var(--rm-surface, #fff); }
@@ -81,6 +87,8 @@ export class RetroManager extends LitElement {
     this._squads = [];
     /** id de la retro cuyo enlace se acaba de copiar (feedback efímero) */
     this._copiedId = null;
+    /** Sub-pestaña activa: se entra por la lista, no por el formulario. */
+    this._tab = 'list';
     /** @type {string|null} retro cuya salida se está confirmando */
     this._confirmLeaveId = null;
     /** id de la retro pendiente de confirmar borrado */
@@ -248,6 +256,10 @@ export class RetroManager extends LitElement {
 
   _renderRow(retro) {
     const open = retro.status === 'open';
+    // Gestionar la retro (cerrarla, borrarla) es de quien la convocó: las reglas
+    // lo imponen, así que ofrecer el botón a los demás solo sirve para que les
+    // falle al pulsarlo. Quien entra por el enlace participa, no gestiona.
+    const esMia = retro.ownerLeaderUid === this.uid;
     return html`
       <tr>
         <td>${retro.name}</td>
@@ -258,20 +270,20 @@ export class RetroManager extends LitElement {
           <button class="act" @click=${() => this._open(retro)}>Abrir</button>
           <button class="act" title="Copiar el enlace para compartir la retro"
             @click=${() => this._copyLink(retro.id)}>${this._copiedId === retro.id ? '✓ Copiado' : 'Copiar enlace'}</button>
-          ${open ? html`<button class="act" @click=${() => this._close(retro.id)}>Cerrar</button>` : null}
-          ${retro.ownerLeaderUid === this.uid ? null : (this._confirmLeaveId === retro.id
+          ${open && esMia ? html`<button class="act" @click=${() => this._close(retro.id)}>Cerrar</button>` : null}
+          ${esMia ? null : (this._confirmLeaveId === retro.id
             ? html`<span class="confirm">¿Salir? Dejarás de verla.
                 <button class="yes" @click=${() => this._leave(retro.id)}>Sí</button>
                 <button @click=${() => { this._confirmLeaveId = null; }}>No</button>
               </span>`
             : html`<button class="act" title="Salir de esta retro"
                 @click=${() => { this._confirmLeaveId = retro.id; this._error = ''; }}>Salir</button>`)}
-          ${this._confirmDeleteId === retro.id
+          ${!esMia ? null : (this._confirmDeleteId === retro.id
             ? html`<span class="confirm">¿Borrar la retro y sus notas?
                 <button class="yes" @click=${() => this._delete(retro.id)}>Sí</button>
                 <button @click=${() => { this._confirmDeleteId = null; }}>No</button>
               </span>`
-            : html`<button class="act danger" @click=${() => { this._confirmDeleteId = retro.id; this._error = ''; }}>Borrar</button>`}
+            : html`<button class="act danger" @click=${() => { this._confirmDeleteId = retro.id; this._error = ''; }}>Borrar</button>`)}
         </td>
       </tr>
     `;
@@ -282,8 +294,14 @@ export class RetroManager extends LitElement {
       ${this._saving ? html`<busy-overlay message="Guardando la retro…"></busy-overlay>` : null}
       <p class="lead">Crea una retrospectiva y gestiónala. El equipo aporta desde su espacio (en anónimo hasta que reveles cada zona); de la retro salen acciones con owner que se arrastran a la siguiente.</p>
 
-      <div class="create">
-        <h3>Nueva retro</h3>
+      <div class="seg" role="tablist" aria-label="Retros">
+        <button role="tab" aria-selected=${this._tab === 'list'}
+          @click=${() => { this._tab = 'list'; }}>Mis retros (${this._retros.length})</button>
+        <button role="tab" aria-selected=${this._tab === 'new'}
+          @click=${() => { this._tab = 'new'; }}>Nueva retro</button>
+      </div>
+
+      <div class="create" ?hidden=${this._tab !== 'new'}>
         <div class="grid">
           <label>Formato
             <select .value=${this._new.format} @change=${(e) => this._patch('format', e.target.value)}>
@@ -312,8 +330,7 @@ export class RetroManager extends LitElement {
         </div>
       </div>
 
-      <h3 style="font-size:1rem;margin:0 0 0.6rem">Mis retros (${this._retros.length})</h3>
-      ${this._renderList()}
+      <div ?hidden=${this._tab !== 'list'}>${this._renderList()}</div>
     `;
   }
 

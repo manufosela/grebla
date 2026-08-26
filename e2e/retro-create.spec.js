@@ -26,6 +26,8 @@ test('un ingeniero convoca su retro y queda dentro', async ({ page }) => {
   await signInAs(page, 'engineer');
   await page.goto('/retros');
 
+  // El formulario vive en su propia pestaña desde RMR-TSK-0458.
+  await page.getByRole('tab', { name: 'Nueva retro' }).click();
   await page.getByPlaceholder('p. ej. Retro Sprint 29').fill(NOMBRE);
   await page.getByRole('button', { name: 'Crear retro' }).click();
 
