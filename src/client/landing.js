@@ -74,12 +74,9 @@ onUserChanged(async (user) => {
         return;
       } catch { /* sin políticas no hay previsualización fiable: sigue el flujo normal */ }
     }
-    // El ingeniero (persona vinculada) tiene su propio espacio personal: ni
-    // landing pública ni herramientas de manager.
-    if (access.functionalRole === 'engineer' && !access.instanceAccess) {
-      location.replace('/mi-espacio');
-      return;
-    }
+    // El ingeniero ya NO se desvía a su espacio personal (RMR-TSK-0459): entra
+    // al hub como todo el mundo, y lo suyo es la card «Mi espacio». Dos puertas
+    // distintas hacían parecer que era otra aplicación.
     // El viewer siempre entra al panel de gestión en modo solo lectura: no
     // gestiona personas propias, así que no hay "usar como manager" para él.
     // «Un viewer es viewer»: observador puro, sin faceta funcional (accessAxes
@@ -138,10 +135,17 @@ function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish
   for (const card of tools?.querySelectorAll('[data-survey-tool]') ?? []) {
     card.toggleAttribute('hidden', !canManageSurveys);
   }
+  // Lo personal (RMR-TSK-0459): se ve siempre que haya ficha, sin pasar por la
+  // política de audiencia. La política gobierna la herramienta de equipo —llevar
+  // los O2O de tu gente—, no el derecho a mirar tus propios datos. Sin ficha no
+  // hay nada que enseñar, así que se oculta.
+  for (const card of tools?.querySelectorAll('[data-personal]') ?? []) {
+    card.toggleAttribute('hidden', !personRef?.personId);
+  }
   // Resto de herramientas: visibles según la política de acceso de cada una
   // (RMR-PCS-0027 · F6). «team» es gestión (no tiene política): la ve quien lidera
   // o gobierna. Las demás, por canUseTool; el superadmin siempre las ve.
-  for (const card of tools?.querySelectorAll('[data-tool-id]:not([data-survey-tool]):not([data-admin-only])') ?? []) {
+  for (const card of tools?.querySelectorAll('[data-tool-id]:not([data-survey-tool]):not([data-admin-only]):not([data-personal])') ?? []) {
     const id = card.dataset.toolId;
     // Fallback de disponibilidad: si no se pudieron cargar persona/políticas, no
     // se filtra (se muestran, como antes de F6); cada herramienta valida su acceso.

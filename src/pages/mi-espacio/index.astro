@@ -12,8 +12,11 @@ import Base from '../../layouts/Base.astro';
 ---
 
 <Base title="GREBLA — Mi espacio">
+  <!-- Como cualquier otra herramienta del hub (RMR-TSK-0459): su barra con el
+       «Volver», para entrar y salir igual que se entra y se sale de Marea o de
+       Retros. Antes era una pantalla aparte, sin vuelta. -->
+  <tool-nav href="/" name="Mi espacio" icon="🎒"></tool-nav>
   <section class="me-header">
-    <h1 class="page-title">Mi espacio</h1>
 
     <!-- Cabecera de identidad: la rellena engineer.js en solo lectura. -->
     <div id="engineer-identity" class="identity" hidden>
@@ -56,6 +59,7 @@ import Base from '../../layouts/Base.astro';
   <engineer-space hidden></engineer-space>
 
   <script>
+    import '../../components/common/tool-nav.js';
     import '../../components/app-skeleton.js';
     import '../../client/engineer.js';
   </script>
