@@ -23,11 +23,13 @@ setTimeout(() => {
   if (hubLoading && !hubLoading.hidden) showLanding();
 }, 10_000);
 const tools = document.getElementById('tenant-tools');
-const backToAdmin = document.getElementById('back-to-admin');
-
-backToAdmin?.querySelector('button')?.addEventListener('click', () => {
-  sessionStorage.removeItem(VIEW_FLAG);
-  location.assign('/admin');
+// Entrar al panel desde su card SALE de la vista en curso (RMR-TSK-0460): si no,
+// se volvería a la home todavía «como manager» o «como empleado». Es lo que hacía
+// el botón suelto de «Volver a gestión», que la card sustituye.
+document.getElementById('tenant-tools')?.addEventListener('click', (event) => {
+  if (event.target instanceof Element && event.target.closest('[data-admin-only]')) {
+    sessionStorage.removeItem(VIEW_FLAG);
+  }
 });
 
 onUserChanged(async (user) => {
@@ -108,7 +110,6 @@ onUserChanged(async (user) => {
     const personRef = buildPersonRef(person);
     const isLeaderish = canGovern(access) || leadsTeam(access);
     showTools({ personRef, policies, isSuperadmin: canGovern(access), isLeaderish, canManageSurveys, filterFailed });
-    if (canGovern(access)) backToAdmin?.removeAttribute('hidden');
   } catch {
     showLanding();
   }
@@ -116,7 +117,6 @@ onUserChanged(async (user) => {
 
 function showLanding() {
   hubLoading?.setAttribute('hidden', '');
-  backToAdmin?.setAttribute('hidden', '');
   tools?.setAttribute('hidden', '');
   landing?.removeAttribute('hidden');
 }
