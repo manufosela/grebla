@@ -80,3 +80,39 @@ test('entrar al panel por su card sale de la vista en curso', async ({ page }) =
   // Si el flag se quedara puesto, al volver a la home seguiría «como empleado».
   expect(await page.evaluate(() => sessionStorage.getItem('grebla-view'))).toBeNull();
 });
+
+test('el panel tiene su «Volver» al hub', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin');
+  await expect(page.getByRole('link', { name: '← Volver' })).toBeVisible();
+});
+
+test('los permisos por persona se gestionan desde su propia sección del panel', async ({ page }) => {
+  await db().doc('toolPolicies/dora').set({ label: 'DORA', audience: { branches: ['engineering'] }, managedBy: {} });
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin');
+
+  await page.getByRole('button', { name: 'Permisos' }).click();
+  await expect(page.getByRole('heading', { name: 'Permisos por persona' })).toBeVisible();
+
+  // Se elige a alguien y se ve qué le toca por su rol antes de decidir.
+  await page.getByLabel('Persona').selectOption({ label: 'Persona del manager' });
+  const fila = page.locator('tr', { hasText: 'DORA' });
+  await expect(fila).toContainText('no la ve');
+
+  // Dársela sin tocar su rol: queda como excepción en su ficha.
+  await fila.getByRole('combobox').selectOption('yes');
+  await expect.poll(async () => {
+    const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
+    return snap.docs[0]?.data()?.toolOverrides?.dora?.use ?? null;
+  }, { timeout: 15_000 }).toBe(true);
+
+  // Y «heredar» la retira, en vez de dejar un «no» escrito que nadie entiende.
+  await fila.getByRole('combobox').selectOption('inherit');
+  await expect.poll(async () => {
+    const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
+    return snap.docs[0]?.data()?.toolOverrides?.dora ?? null;
+  }, { timeout: 15_000 }).toBeNull();
+
+  await db().doc('toolPolicies/dora').delete();
+});

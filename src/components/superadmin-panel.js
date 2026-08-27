@@ -19,6 +19,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
 import { listLeaders, listSupermanagers } from '../lib/leaders.js';
+import { buildPersonRef } from '../lib/toolGate.js';
+import { canUseTool } from '../tools/team/domain/toolAccess.js';
 import './catalog-manager.js';
 import './org-chart.js';
 import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader } from '../lib/users.js';
@@ -85,7 +87,7 @@ function formatLogin(ts) {
 const VIEW_FLAG = 'grebla-view';
 // «Managers» se retiró (RMR-PCS-0027 · F8e): dar el rol de mando se hace editando
 // la persona en «Usuarios», sin una pestaña aparte que duplicaba el alta.
-const TABS = ['organigrama', 'herramientas', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
+const TABS = ['organigrama', 'herramientas', 'permisos', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
  *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
 const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
@@ -144,6 +146,8 @@ export class SuperadminPanel extends LitElement {
     _editPersonNameId: { state: true },
     _editPersonNameValue: { state: true },
     _toolPolicies: { state: true },
+    _permPersonId: { state: true },
+    _permError: { state: true },
     _toolError: { state: true },
     _toolNotice: { state: true },
     _peopleList: { state: true },
@@ -483,6 +487,9 @@ export class SuperadminPanel extends LitElement {
     this._editPersonNameValue = '';
     /** @type {import('../tools/team/domain/toolAccess.js').ToolPolicy[]} políticas de herramientas */
     this._toolPolicies = [];
+    /** Persona cuyas excepciones de permisos se están viendo (RMR-TSK-0461). */
+    this._permPersonId = '';
+    this._permError = '';
     this._toolError = '';
     this._toolNotice = '';
     /** @type {Array<Object>} personas /people (para verlas TODAS en Usuarios, F8c). */
@@ -1227,6 +1234,8 @@ export class SuperadminPanel extends LitElement {
         return this._renderCatalogTab('labels', 'Labels (organización)');
       case 'career':
         return this._renderCareer();
+      case 'permisos':
+        return this._renderPermisos();
       case 'users':
         return this._renderUsers();
       default:
@@ -1247,6 +1256,7 @@ export class SuperadminPanel extends LitElement {
       <nav class="tabs" aria-label="Secciones de gestión">
         <button class="tab ${this._tab === 'organigrama' ? 'active' : ''}" @click=${() => this._setTab('organigrama')}>Organigrama</button>
         <button class="tab ${this._tab === 'herramientas' ? 'active' : ''}" @click=${() => this._setTab('herramientas')}>Herramientas</button>
+        <button class="tab ${this._tab === 'permisos' ? 'active' : ''}" @click=${() => this._setTab('permisos')}>Permisos</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'squads' ? 'active' : ''}" @click=${() => this._setTab('squads')}>Squads</button>
@@ -2465,6 +2475,83 @@ export class SuperadminPanel extends LitElement {
           </div>
         </div>
       </div>`;
+  }
+
+  // ── Permisos por persona (RMR-TSK-0461) ────────────────────────────────────
+
+  /** Excepción actual de una persona para una herramienta: sí / no / heredado. */
+  _permMode(person, toolId) {
+    const ov = person?.toolOverrides?.[toolId]?.use;
+    return ov === true ? 'yes' : ov === false ? 'no' : 'inherit';
+  }
+
+  /**
+   * Fija (o retira) la excepción de una persona para una herramienta. «Heredar»
+   * borra la excepción y devuelve el mando a la política de su rol y rama, en
+   * vez de dejar un «no» escrito que luego nadie entiende de dónde sale.
+   */
+  async _setPersonPerm(person, toolId, mode) {
+    this._permError = '';
+    const overrides = structuredClone(person.toolOverrides ?? {});
+    const entry = { ...(overrides[toolId] ?? {}) };
+    if (mode === 'yes') entry.use = true;
+    else if (mode === 'no') entry.use = false;
+    else delete entry.use;
+    if (Object.keys(entry).length === 0) delete overrides[toolId];
+    else overrides[toolId] = entry;
+    const antes = this._peopleList;
+    this._peopleList = this._peopleList.map((p) => (p.id === person.id ? { ...p, toolOverrides: overrides } : p));
+    try {
+      await this.persistence.people.update(person.id, { toolOverrides: overrides });
+    } catch {
+      this._peopleList = antes;
+      this._permError = 'No se pudo guardar el permiso.';
+    }
+  }
+
+  _renderPermisos() {
+    const persona = this._peopleList.find((p) => p.id === this._permPersonId) ?? null;
+    const activas = this._peopleList.filter((p) => p.active !== false);
+    return html`
+      <section>
+        <h2>Permisos por persona</h2>
+        <p class="ro-note strong">
+          Aquí se le da (o se le quita) una herramienta a <strong>alguien concreto</strong>, sin
+          tocar su rol. Sirve para quien necesita ver algo de otra área sin figurar en ella:
+          su excepción manda sobre lo que diga la política de su rol y su rama.
+        </p>
+        ${this._permError ? html`<p class="error">${this._permError}</p>` : null}
+        <div class="toolbar">
+          <label>Persona
+            <select @change=${(e) => { this._permPersonId = e.target.value; }}>
+              <option value="">— elige a quién —</option>
+              ${activas.map((p) => html`<option value=${p.id} ?selected=${p.id === this._permPersonId}>${p.name}</option>`)}
+            </select>
+          </label>
+        </div>
+        ${!persona ? html`<p class="empty">Elige a una persona para ver y cambiar sus permisos.</p>` : html`
+          <div class="table-wrap"><table>
+            <thead><tr><th>Herramienta</th><th>Por su rol y rama</th><th>Para esta persona</th></tr></thead>
+            <tbody>
+              ${this._toolPolicies.map((policy) => {
+                const porDefecto = canUseTool(buildPersonRef({ ...persona, toolOverrides: {} }), policy);
+                const mode = this._permMode(persona, policy.toolId);
+                return html`<tr>
+                  <td>${policy.label ?? policy.toolId}</td>
+                  <td><span class="muted">${porDefecto ? 'la ve' : 'no la ve'}</span></td>
+                  <td>
+                    <select ?disabled=${this.readOnly}
+                      @change=${(e) => this._setPersonPerm(persona, policy.toolId, e.target.value)}>
+                      <option value="inherit" ?selected=${mode === 'inherit'}>Heredar (${porDefecto ? 'la ve' : 'no la ve'})</option>
+                      <option value="yes" ?selected=${mode === 'yes'}>Sí, dársela</option>
+                      <option value="no" ?selected=${mode === 'no'}>No, quitársela</option>
+                    </select>
+                  </td>
+                </tr>`;
+              })}
+            </tbody>
+          </table></div>`}
+      </section>`;
   }
 
   _renderToolPolicies() {

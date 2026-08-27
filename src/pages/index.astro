@@ -233,6 +233,11 @@ const TOOL_ID: Record<string, string> = {
     width: 0.4rem; height: 0.4rem; margin-left: 0.45rem; vertical-align: middle;
     border-radius: 50%; background: var(--rm-accent);
   }
+  /* La de gobierno, en coral: distinta del verde de las herramientas. */
+  .tool-card[data-admin-only] { border-top-color: var(--rm-admin); }
+  .tool-card[data-admin-only] h2::after { background: var(--rm-admin); }
+  .tool-card[data-admin-only]:hover { border-color: var(--rm-admin); }
+  .tool-card[data-admin-only] .cta { color: var(--rm-admin); }
   .tool-card h2 { margin: 0; font-size: 1.15rem; }
   .tool-card p { margin: 0; color: var(--rm-muted); font-size: 0.9rem; }
   .tool-card .cta { margin-top: auto; color: var(--rm-accent); font-weight: 700; font-size: 0.9rem; }

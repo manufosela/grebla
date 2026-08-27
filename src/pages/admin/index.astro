@@ -9,9 +9,13 @@ import Base from '../../layouts/Base.astro';
 ---
 
 <Base title="GREBLA — Gestión" requireAuth={true}>
+  <!-- Se entra por su card del hub, así que también se sale por donde se sale
+       de las demás (RMR-TSK-0461). -->
+  <tool-nav href="/" name="Administración" icon="🛠️"></tool-nav>
   <superadmin-panel></superadmin-panel>
 
   <script>
+    import '../../components/common/tool-nav.js';
     import '../../client/superadmin.js';
   </script>
 </Base>
