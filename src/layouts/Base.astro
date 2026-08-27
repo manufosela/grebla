@@ -150,6 +150,12 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
            se lee como mobiliario y no se ve. Azul de la familia del navy de
            marca: destaca sin alarmar, y se distingue del teal (acción) y del
            coral (advertencia). */
+        /* La administración lleva el coral de marca y no el teal: es la puerta
+           de gobierno y tiene que distinguirse del resto de un vistazo
+           (RMR-TSK-0461). Aquí NO se usa `--gr-coral` tal cual: sobre blanco da
+           2,45 de contraste y no llega ni al mínimo de elementos gráficos. Este
+           tono de la misma familia da 5,44 — legible también como texto. */
+        --rm-admin: #c0392b;
         --rm-info: #2563eb;
         --rm-info-soft: #eff5ff;
         --rm-info-border: #bfd6fb;
@@ -193,6 +199,9 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         --rm-success: #57c877;
         /* En oscuro el mismo papel con contraste propio: fondo apagado y texto
            claro, para no deslumbrar ni desaparecer. */
+        /* En oscuro el coral de marca da 6,68 sobre la superficie: cumple y
+           mantiene la identidad. */
+        --rm-admin: var(--gr-coral);
         --rm-info: #7aa7f5;
         --rm-info-soft: #1a2436;
         --rm-info-border: #2f4368;
