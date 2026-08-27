@@ -96,6 +96,7 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
   await page.goto('/admin');
 
   await page.getByRole('button', { name: 'Permisos' }).click();
+  await page.getByRole('tab', { name: 'Por persona' }).click();
   await expect(page.getByRole('heading', { name: 'Permisos por persona' })).toBeVisible();
 
   // Se elige a alguien y se ve qué le toca por su rol antes de decidir.
