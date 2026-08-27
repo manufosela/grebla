@@ -116,3 +116,45 @@ export function effectiveToolAccess(person, policy, { isSuperadmin = false } = {
 export function visibleToolIds(person, policies, ctx = {}) {
   return (policies ?? []).filter((p) => canUseTool(person, p, ctx)).map((p) => p.toolId);
 }
+
+/**
+ * Aplica una excepción de permiso sobre el mapa de overrides de una persona.
+ *
+ * «Heredar» BORRA la entrada en vez de escribir un `false`: si se dejara escrito
+ * un «no», la persona seguiría con la puerta cerrada aunque su rol le diera
+ * acceso más adelante, y nadie sabría de dónde salía ese «no». Y una herramienta
+ * sin ninguna dimensión forzada desaparece del mapa, para que `toolOverrides`
+ * liste solo lo que de verdad es una excepción.
+ *
+ * Es pura: devuelve un mapa nuevo y no toca el que recibe.
+ *
+ * @param {Record<string, ToolOverride>} overrides mapa actual (puede ser null/undefined)
+ * @param {string} toolId
+ * @param {'use'|'manage'} dim
+ * @param {'yes'|'no'|'inherit'} mode
+ * @returns {Record<string, ToolOverride>} mapa nuevo
+ */
+export function applyOverride(overrides, toolId, dim, mode) {
+  const next = structuredClone(overrides ?? {});
+  const entry = { ...(next[toolId] ?? {}) };
+  if (mode === 'yes') entry[dim] = true;
+  else if (mode === 'no') entry[dim] = false;
+  else delete entry[dim];
+  if (Object.keys(entry).length === 0) delete next[toolId];
+  else next[toolId] = entry;
+  return next;
+}
+
+/**
+ * Modo (yes/no/inherit) que muestra el selector para una dimensión.
+ * @param {Record<string, ToolOverride>} overrides
+ * @param {string} toolId
+ * @param {'use'|'manage'} dim
+ * @returns {'yes'|'no'|'inherit'}
+ */
+export function overrideMode(overrides, toolId, dim) {
+  const v = overrides?.[toolId]?.[dim];
+  if (v === true) return 'yes';
+  if (v === false) return 'no';
+  return 'inherit';
+}

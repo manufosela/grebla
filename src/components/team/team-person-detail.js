@@ -32,7 +32,7 @@ import {
 import { listUsers } from '../../lib/users.js';
 import { listToolPolicies } from '../../lib/toolPolicies.js';
 import { listLeaders } from '../../lib/leaders.js';
-import { effectiveToolAccess } from '../../tools/team/domain/toolAccess.js';
+import '../common/person-permissions.js';
 import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
 import { appendLevelChange, normalizeLevelHistory, levelHistoryView } from '../../tools/team/domain/levelHistory.js';
 import { progressionSeries } from '../../tools/career/domain/progression.js';
@@ -202,9 +202,6 @@ export class TeamPersonDetail extends LitElement {
     _assessmentError: { state: true },
     _assessmentSaved: { state: true },
     _toolPolicies: { state: true },
-    _permDraft: { state: true },
-    _permError: { state: true },
-    _permSaved: { state: true },
   };
 
   static styles = [noteStyles, css`
@@ -320,11 +317,6 @@ export class TeamPersonDetail extends LitElement {
     .org-checks .orphan-tag { font-style: normal; font-size: 0.72rem; color: var(--rm-danger, #dc2626); }
 
     /* Matriz de permisos por persona (RMR-PCS-0027 · F8b) */
-    .perms .ro-note { font-size: 0.85rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.9rem; }
-    .perm-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    .perm-table th, .perm-table td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    .perm-table th { color: var(--rm-muted, #6b7280); font-weight: 600; }
-    .perm-table select { padding: 0.3rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
 
     /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
     .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
@@ -501,10 +493,6 @@ export class TeamPersonDetail extends LitElement {
     this._datosSaved = false;
     /** Políticas de herramientas (defaults por rol) para la matriz de permisos. */
     this._toolPolicies = [];
-    /** Borrador de overrides de la persona (RMR-PCS-0027 · F8b). */
-    this._permDraft = {};
-    this._permError = '';
-    this._permSaved = false;
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
@@ -548,16 +536,8 @@ export class TeamPersonDetail extends LitElement {
       }
       this._seedCareer();
       this._seedDatos();
-      this._seedPerm();
       this._load();
     }
-  }
-
-  /** Siembra el borrador de overrides de permisos desde la persona (F8b). */
-  _seedPerm() {
-    this._permDraft = structuredClone(this.person?.toolOverrides ?? {});
-    this._permError = '';
-    this._permSaved = false;
   }
 
   /**
@@ -2213,71 +2193,25 @@ export class TeamPersonDetail extends LitElement {
    */
   // ── Permisos de herramientas por persona (RMR-PCS-0027 · F8b) ──────────────
 
-  /** Modo actual de un override (yes/no/inherit) desde el borrador. */
-  _permMode(toolId, dim) {
-    const ov = this._permDraft?.[toolId]?.[dim];
-    return ov === true ? 'yes' : ov === false ? 'no' : 'inherit';
-  }
-
-  /** Celda tri-estado: heredar del rol / forzar sí / forzar no. */
-  _permCell(toolId, dim, roleDefault, mode, disabled) {
-    return html`<select ?disabled=${disabled} @change=${(e) => this._setPerm(toolId, dim, e.target.value)}>
-      <option value="inherit" ?selected=${mode === 'inherit'}>Heredar (${roleDefault ? 'sí' : 'no'})</option>
-      <option value="yes" ?selected=${mode === 'yes'}>Sí</option>
-      <option value="no" ?selected=${mode === 'no'}>No</option>
-    </select>`;
-  }
-
-  /** Aplica una excepción de permiso y la persiste (con rollback ante fallo). */
-  async _setPerm(toolId, dim, mode) {
-    this._permError = '';
-    this._permSaved = false;
-    const draft = structuredClone(this._permDraft ?? {});
-    const entry = { ...(draft[toolId] ?? {}) };
-    if (mode === 'yes') entry[dim] = true;
-    else if (mode === 'no') entry[dim] = false;
-    else delete entry[dim];
-    if (Object.keys(entry).length === 0) delete draft[toolId];
-    else draft[toolId] = entry;
-    const prev = this._permDraft;
-    this._permDraft = draft;
-    try {
-      await updatePerson(this.persistence, this.person.id, { toolOverrides: draft });
-      this.person = { ...this.person, toolOverrides: draft };
-      this._permSaved = true;
-    } catch (err) {
-      this._permDraft = prev;
-      this._permError = err instanceof Error ? err.message : 'No se pudo guardar el permiso.';
-    }
-  }
-
+  /**
+   * La matriz vive en <person-permissions>, compartida con Administración ›
+   * Permisos: son la misma cosa vista desde dos puertas, y tenerla dos veces ya
+   * hizo que divergieran (RMR-TSK-0460).
+   */
   _renderPermisos() {
-    const p = this.person;
-    const policies = this._toolPolicies ?? [];
-    if (policies.length === 0) {
-      return html`<section class="perms"><p class="empty">No hay herramientas configuradas todavía.</p></section>`;
-    }
-    // Referencia SIN overrides → el default que hereda del rol (para la etiqueta).
-    const roleRef = { personId: p?.id, branch: p?.orgBranch ?? 'generico', roleId: p?.orgRole ?? null };
-    return html`
-      <section class="perms">
-        <p class="ro-note">Qué VE y qué GESTIONA esta persona. Por defecto hereda de su rol${p?.orgRole ? html` (<strong>${p.orgRole}</strong>)` : ''}; aquí fuerzas una excepción solo para ella (p. ej. desactivarle Marea el primer mes).</p>
-        ${this._permError ? html`<p class="error">${this._permError}</p>` : null}
-        ${this._permSaved ? html`<p class="notice">Guardado.</p>` : null}
-        <div class="table-wrap"><table class="perm-table">
-          <thead><tr><th>Herramienta</th><th>Ve / usa</th><th>Gestiona</th></tr></thead>
-          <tbody>
-            ${policies.map((pol) => {
-              const def = effectiveToolAccess(roleRef, pol);
-              return html`<tr>
-                <td>${pol.label ?? pol.toolId} <span class="muted">(${pol.toolId})</span></td>
-                <td>${this._permCell(pol.toolId, 'use', def.use.value, this._permMode(pol.toolId, 'use'), false)}</td>
-                <td>${this._permCell(pol.toolId, 'manage', def.manage.value, this._permMode(pol.toolId, 'manage'), false)}</td>
-              </tr>`;
-            })}
-          </tbody>
-        </table></div>
-      </section>`;
+    return html`<section class="perms">
+      <person-permissions
+        .person=${this.person}
+        .policies=${this._toolPolicies ?? []}
+        .save=${(personId, toolOverrides) => this._savePerms(personId, toolOverrides)}
+      ></person-permissions>
+    </section>`;
+  }
+
+  /** Persiste las excepciones y deja la persona en memoria al día. */
+  async _savePerms(personId, toolOverrides) {
+    await updatePerson(this.persistence, personId, { toolOverrides });
+    this.person = { ...this.person, toolOverrides };
   }
 
   _renderActivePanel() {

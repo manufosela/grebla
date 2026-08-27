@@ -19,10 +19,9 @@ import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
 import { listLeaders, listSupermanagers } from '../lib/leaders.js';
-import { buildPersonRef } from '../lib/toolGate.js';
-import { canUseTool } from '../tools/team/domain/toolAccess.js';
 import './catalog-manager.js';
 import './org-chart.js';
+import './common/person-permissions.js';
 import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader } from '../lib/users.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
@@ -147,7 +146,6 @@ export class SuperadminPanel extends LitElement {
     _editPersonNameValue: { state: true },
     _toolPolicies: { state: true },
     _permPersonId: { state: true },
-    _permError: { state: true },
     _toolError: { state: true },
     _toolNotice: { state: true },
     _peopleList: { state: true },
@@ -489,7 +487,6 @@ export class SuperadminPanel extends LitElement {
     this._toolPolicies = [];
     /** Persona cuyas excepciones de permisos se están viendo (RMR-TSK-0461). */
     this._permPersonId = '';
-    this._permError = '';
     this._toolError = '';
     this._toolNotice = '';
     /** @type {Array<Object>} personas /people (para verlas TODAS en Usuarios, F8c). */
@@ -1235,7 +1232,7 @@ export class SuperadminPanel extends LitElement {
       case 'career':
         return this._renderCareer();
       case 'permisos':
-        return this._renderPermisos();
+        return this._renderPermisosPersona();
       case 'users':
         return this._renderUsers();
       default:
@@ -2479,37 +2476,13 @@ export class SuperadminPanel extends LitElement {
 
   // ── Permisos por persona (RMR-TSK-0461) ────────────────────────────────────
 
-  /** Excepción actual de una persona para una herramienta: sí / no / heredado. */
-  _permMode(person, toolId) {
-    const ov = person?.toolOverrides?.[toolId]?.use;
-    return ov === true ? 'yes' : ov === false ? 'no' : 'inherit';
-  }
-
   /**
-   * Fija (o retira) la excepción de una persona para una herramienta. «Heredar»
-   * borra la excepción y devuelve el mando a la política de su rol y rama, en
-   * vez de dejar un «no» escrito que luego nadie entiende de dónde sale.
+   * Aquí se elige a quién, y la matriz la pinta <person-permissions> — el mismo
+   * componente que sale en la ficha de la persona. Dos puertas al mismo sitio:
+   * quien administra busca «Permisos», y quien está viendo a alguien los quiere
+   * ahí mismo (RMR-TSK-0460).
    */
-  async _setPersonPerm(person, toolId, mode) {
-    this._permError = '';
-    const overrides = structuredClone(person.toolOverrides ?? {});
-    const entry = { ...(overrides[toolId] ?? {}) };
-    if (mode === 'yes') entry.use = true;
-    else if (mode === 'no') entry.use = false;
-    else delete entry.use;
-    if (Object.keys(entry).length === 0) delete overrides[toolId];
-    else overrides[toolId] = entry;
-    const antes = this._peopleList;
-    this._peopleList = this._peopleList.map((p) => (p.id === person.id ? { ...p, toolOverrides: overrides } : p));
-    try {
-      await this.persistence.people.update(person.id, { toolOverrides: overrides });
-    } catch {
-      this._peopleList = antes;
-      this._permError = 'No se pudo guardar el permiso.';
-    }
-  }
-
-  _renderPermisos() {
+  _renderPermisosPersona() {
     const persona = this._peopleList.find((p) => p.id === this._permPersonId) ?? null;
     const activas = this._peopleList.filter((p) => p.active !== false);
     return html`
@@ -2520,7 +2493,6 @@ export class SuperadminPanel extends LitElement {
           tocar su rol. Sirve para quien necesita ver algo de otra área sin figurar en ella:
           su excepción manda sobre lo que diga la política de su rol y su rama.
         </p>
-        ${this._permError ? html`<p class="error">${this._permError}</p>` : null}
         <div class="toolbar">
           <label>Persona
             <select @change=${(e) => { this._permPersonId = e.target.value; }}>
@@ -2529,29 +2501,19 @@ export class SuperadminPanel extends LitElement {
             </select>
           </label>
         </div>
-        ${!persona ? html`<p class="empty">Elige a una persona para ver y cambiar sus permisos.</p>` : html`
-          <div class="table-wrap"><table>
-            <thead><tr><th>Herramienta</th><th>Por su rol y rama</th><th>Para esta persona</th></tr></thead>
-            <tbody>
-              ${this._toolPolicies.map((policy) => {
-                const porDefecto = canUseTool(buildPersonRef({ ...persona, toolOverrides: {} }), policy);
-                const mode = this._permMode(persona, policy.toolId);
-                return html`<tr>
-                  <td>${policy.label ?? policy.toolId}</td>
-                  <td><span class="muted">${porDefecto ? 'la ve' : 'no la ve'}</span></td>
-                  <td>
-                    <select ?disabled=${this.readOnly}
-                      @change=${(e) => this._setPersonPerm(persona, policy.toolId, e.target.value)}>
-                      <option value="inherit" ?selected=${mode === 'inherit'}>Heredar (${porDefecto ? 'la ve' : 'no la ve'})</option>
-                      <option value="yes" ?selected=${mode === 'yes'}>Sí, dársela</option>
-                      <option value="no" ?selected=${mode === 'no'}>No, quitársela</option>
-                    </select>
-                  </td>
-                </tr>`;
-              })}
-            </tbody>
-          </table></div>`}
+        <person-permissions
+          .person=${persona}
+          .policies=${this._toolPolicies}
+          ?read-only=${this.readOnly}
+          .save=${(personId, toolOverrides) => this._savePersonPerms(personId, toolOverrides)}
+        ></person-permissions>
       </section>`;
+  }
+
+  /** Persiste las excepciones y deja al día la lista que ya tiene el panel. */
+  async _savePersonPerms(personId, toolOverrides) {
+    await this.persistence.people.update(personId, { toolOverrides });
+    this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, toolOverrides } : p));
   }
 
   _renderToolPolicies() {

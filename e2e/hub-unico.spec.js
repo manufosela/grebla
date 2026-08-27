@@ -89,6 +89,9 @@ test('el panel tiene su «Volver» al hub', async ({ page }) => {
 
 test('los permisos por persona se gestionan desde su propia sección del panel', async ({ page }) => {
   await db().doc('toolPolicies/dora').set({ label: 'DORA', audience: { branches: ['engineering'] }, managedBy: {} });
+  // Si el test muere a medias, esta política se queda puesta y desordena el hub
+  // de los demás specs: por eso se retira pase lo que pase.
+  try {
   await signInAs(page, 'superadmin');
   await page.goto('/admin');
 
@@ -97,22 +100,28 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
 
   // Se elige a alguien y se ve qué le toca por su rol antes de decidir.
   await page.getByLabel('Persona').selectOption({ label: 'Persona del manager' });
-  const fila = page.locator('tr', { hasText: 'DORA' });
-  await expect(fila).toContainText('no la ve');
+  const fila = page.locator('person-permissions tr', { hasText: 'DORA' });
+  const ve = fila.getByLabel('Ve o usa');
+  // La etiqueta de «heredar» dice qué pasa si no tocas nada.
+  await expect(ve).toContainText('Heredar (no)');
+  // Y la misma matriz que la ficha: también se decide quién la GESTIONA.
+  await expect(fila.getByLabel('Gestiona')).toBeVisible();
 
   // Dársela sin tocar su rol: queda como excepción en su ficha.
-  await fila.getByRole('combobox').selectOption('yes');
+  await ve.selectOption('yes');
   await expect.poll(async () => {
     const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
     return snap.docs[0]?.data()?.toolOverrides?.dora?.use ?? null;
   }, { timeout: 15_000 }).toBe(true);
 
   // Y «heredar» la retira, en vez de dejar un «no» escrito que nadie entiende.
-  await fila.getByRole('combobox').selectOption('inherit');
+  await ve.selectOption('inherit');
   await expect.poll(async () => {
     const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
     return snap.docs[0]?.data()?.toolOverrides?.dora ?? null;
   }, { timeout: 15_000 }).toBeNull();
 
-  await db().doc('toolPolicies/dora').delete();
+  } finally {
+    await db().doc('toolPolicies/dora').delete();
+  }
 });
