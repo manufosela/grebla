@@ -49,3 +49,34 @@ test('en Mi espacio solo está lo personal, sin duplicar las cards del hub', asy
     await expect(page.getByRole('tab', { name: duplicada })).toHaveCount(0);
   }
 });
+
+test('la administración es una card del hub, la primera y solo para quien gobierna', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/');
+  const admin = page.locator('[data-admin-only]');
+  await expect(admin).toBeVisible();
+  await expect(admin).toContainText('Administración');
+  // La primera de la rejilla: es la puerta de quien gobierna.
+  const primera = page.locator('#tenant-tools a.tool-card:not([hidden])').first();
+  await expect(primera).toHaveAttribute('data-admin-only', 'true');
+});
+
+test('un ingeniero no ve la card de administración por ninguna parte', async ({ page }) => {
+  await signInAs(page, 'engineer');
+  await page.goto('/');
+  await expect(page.locator('[data-admin-only]')).toBeHidden();
+});
+
+test('entrar al panel por su card sale de la vista en curso', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/');
+  // Viniendo de mirar la app «como manager». (En la vista «Empleado» la card ni
+  // se pinta —el hub se muestra tal cual lo vería un empleado— y de ahí se sale
+  // por el conmutador de la cabecera.)
+  await page.evaluate(() => sessionStorage.setItem('grebla-view', 'leader'));
+  await page.reload();
+  await page.locator('[data-admin-only]').click();
+  await expect(page).toHaveURL(/\/admin/);
+  // Si el flag se quedara puesto, al volver a la home seguiría «como empleado».
+  expect(await page.evaluate(() => sessionStorage.getItem('grebla-view'))).toBeNull();
+});
