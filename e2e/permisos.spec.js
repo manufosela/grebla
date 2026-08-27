@@ -13,6 +13,14 @@ function db() {
   return getFirestore();
 }
 
+/** Abre Administración › Permisos › Por persona, y elige a alguien. */
+async function abrirPermisosDelPanel(page, nombre) {
+  await page.goto('/admin');
+  await page.getByRole('button', { name: 'Permisos' }).click();
+  await page.getByRole('tab', { name: 'Por persona' }).click();
+  await page.getByLabel('Persona').selectOption({ label: nombre });
+}
+
 /** Abre la sub-pestaña «Permisos» de una persona en la herramienta Equipo. */
 async function abrirPermisosDeLaFicha(page, nombre) {
   await page.goto('/tools/team');
@@ -38,9 +46,7 @@ test('la ficha y el panel enseñan la misma matriz de permisos', async ({ page }
     }, { timeout: 15_000 }).toBe(false);
 
     // …y en el panel se ve esa misma excepción, no otra cosa.
-    await page.goto('/admin');
-    await page.getByRole('button', { name: 'Permisos' }).click();
-    await page.getByLabel('Persona').selectOption({ label: 'Persona del manager' });
+    await abrirPermisosDelPanel(page, 'Persona del manager');
     const enElPanel = page.locator('person-permissions tr', { hasText: 'Marea' });
     await expect(enElPanel.getByLabel('Ve o usa')).toHaveValue('no');
   } finally {
@@ -67,4 +73,32 @@ test('«heredar» borra la excepción en vez de dejar escrito un «no»', async 
     await db().doc('toolPolicies/marea').delete();
     await db().doc('people/e2e-person-mgr').update({ toolOverrides: {} });
   }
+});
+
+test('Permisos vive junto a Usuarios y agrupa sus dos ámbitos', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin');
+
+  const secciones = page.getByRole('navigation', { name: 'Secciones de gestión' });
+  // «Herramientas» ya no es una pestaña suelta: era la política por rol y rama,
+  // y había que saberse que los permisos se tocaban en dos sitios lejanos.
+  await expect(secciones.getByRole('button', { name: 'Herramientas' })).toHaveCount(0);
+  const nombres = await secciones.getByRole('button').allInnerTexts();
+  expect(nombres.at(-1)).toBe('Permisos');
+  expect(nombres.at(-2)).toBe('Usuarios');
+
+  await secciones.getByRole('button', { name: 'Permisos' }).click();
+  const ambitos = page.getByRole('tablist', { name: 'Ámbito de los permisos' });
+  await expect(ambitos.getByRole('tab', { name: 'Por rol y rama' })).toHaveAttribute('aria-selected', 'true');
+  await ambitos.getByRole('tab', { name: 'Por persona' }).click();
+  await expect(page.getByRole('heading', { name: 'Permisos por persona' })).toBeVisible();
+});
+
+test('un enlace guardado con #herramientas sigue aterrizando donde vive eso ahora', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin#herramientas');
+
+  await expect(page.getByRole('button', { name: 'Permisos' })).toHaveClass(/active/);
+  await expect(page.getByRole('tab', { name: 'Por rol y rama' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', { name: /quién las ve y quién las gestiona/ })).toBeVisible();
 });

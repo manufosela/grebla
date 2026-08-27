@@ -86,13 +86,17 @@ function formatLogin(ts) {
 const VIEW_FLAG = 'grebla-view';
 // «Managers» se retiró (RMR-PCS-0027 · F8e): dar el rol de mando se hace editando
 // la persona en «Usuarios», sin una pestaña aparte que duplicaba el alta.
-const TABS = ['organigrama', 'herramientas', 'permisos', 'areas', 'guilds', 'squads', 'labels', 'career', 'users'];
+const TABS = ['organigrama', 'areas', 'guilds', 'squads', 'labels', 'career', 'users', 'permisos'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
  *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
 const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
-/** Traduce un hash a { tab, sub? }: los hashes legados de carrera van a «career». */
+/** «Herramientas» era una pestaña de primer nivel y ahora es el ámbito «por rol
+ *  y rama» de Permisos (RMR-TSK-0460): los enlaces guardados siguen valiendo. */
+const LEGACY_TAB_HASH = { herramientas: { tab: 'permisos', sub: 'rol' } };
+/** Traduce un hash a { tab, sub? }: los hashes legados van a donde vive hoy eso. */
 function resolveHash(raw) {
   if (raw in LEGACY_CAREER_HASH) return { tab: 'career', sub: LEGACY_CAREER_HASH[raw] };
+  if (raw in LEGACY_TAB_HASH) return { ...LEGACY_TAB_HASH[raw] };
   if (TABS.includes(raw)) return { tab: raw };
   return { tab: 'users' };
 }
@@ -115,6 +119,7 @@ export class SuperadminPanel extends LitElement {
     currentUid: { attribute: false },
     _tab: { state: true },
     _careerSub: { state: true },
+    _permSub: { state: true },
     leaders: { state: true },
     _supermanagers: { state: true },
     _error: { state: true },
@@ -428,10 +433,13 @@ export class SuperadminPanel extends LitElement {
     this._tab = initial.tab;
     /** @type {'framework'|'map'} sub-pestaña de «Carrera» (RMR-TSK-0262). */
     this._careerSub = initial.sub ?? 'framework';
+    /** @type {'rol'|'persona'} ámbito de «Permisos» (RMR-TSK-0460). */
+    this._permSub = initial.tab === 'permisos' ? (initial.sub ?? 'rol') : 'rol';
     this._onHashChange = () => {
       const r = resolveHash(location.hash.slice(1));
       this._tab = r.tab;
-      if (r.sub) this._careerSub = r.sub;
+      if (r.sub && r.tab === 'career') this._careerSub = r.sub;
+      if (r.sub && r.tab === 'permisos') this._permSub = r.sub;
     };
     /** @type {import('../lib/leaders.js').Leader[]} */
     this.leaders = [];
@@ -1219,8 +1227,6 @@ export class SuperadminPanel extends LitElement {
     switch (this._tab) {
       case 'organigrama':
         return this._renderOrgRoles();
-      case 'herramientas':
-        return this._renderToolPolicies();
       case 'areas':
         return this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)');
       case 'guilds':
@@ -1232,7 +1238,7 @@ export class SuperadminPanel extends LitElement {
       case 'career':
         return this._renderCareer();
       case 'permisos':
-        return this._renderPermisosPersona();
+        return this._renderPermisos();
       case 'users':
         return this._renderUsers();
       default:
@@ -1252,8 +1258,6 @@ export class SuperadminPanel extends LitElement {
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
         <button class="tab ${this._tab === 'organigrama' ? 'active' : ''}" @click=${() => this._setTab('organigrama')}>Organigrama</button>
-        <button class="tab ${this._tab === 'herramientas' ? 'active' : ''}" @click=${() => this._setTab('herramientas')}>Herramientas</button>
-        <button class="tab ${this._tab === 'permisos' ? 'active' : ''}" @click=${() => this._setTab('permisos')}>Permisos</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'squads' ? 'active' : ''}" @click=${() => this._setTab('squads')}>Squads</button>
@@ -1262,6 +1266,7 @@ export class SuperadminPanel extends LitElement {
         ${this.readOnly
           ? null
           : html`<button class="tab ${this._tab === 'users' ? 'active' : ''}" @click=${() => this._setTab('users')}>Usuarios</button>`}
+        <button class="tab ${this._tab === 'permisos' ? 'active' : ''}" @click=${() => this._setTab('permisos')}>Permisos</button>
       </nav>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderTabContent()}
@@ -2482,17 +2487,35 @@ export class SuperadminPanel extends LitElement {
    * quien administra busca «Permisos», y quien está viendo a alguien los quiere
    * ahí mismo (RMR-TSK-0460).
    */
+  /**
+   * Permisos, con los dos ámbitos por los que se puede llegar: la política de
+   * una herramienta (por rol y rama) y la excepción de una persona. Antes eran
+   * dos pestañas lejanas —«Herramientas» y «Permisos»— y había que saberse cuál
+   * era cuál; quien busca permisos entra por «Permisos» y elige el ámbito.
+   */
+  _renderPermisos() {
+    const sub = this._permSub === 'persona' ? 'persona' : 'rol';
+    const subs = [['rol', 'Por rol y rama'], ['persona', 'Por persona']];
+    return html`
+      <div class="csubtabs" role="tablist" aria-label="Ámbito de los permisos">
+        ${subs.map(([id, label]) => html`<button
+          role="tab"
+          aria-selected=${sub === id}
+          class="csubtab ${sub === id ? 'on' : ''}"
+          @click=${() => { this._permSub = id; }}
+        >${label}</button>`)}
+      </div>
+      <div role="tabpanel">
+        ${sub === 'persona' ? this._renderPermisosPersona() : this._renderToolPolicies()}
+      </div>`;
+  }
+
   _renderPermisosPersona() {
     const persona = this._peopleList.find((p) => p.id === this._permPersonId) ?? null;
     const activas = this._peopleList.filter((p) => p.active !== false);
     return html`
       <section>
         <h2>Permisos por persona</h2>
-        <p class="ro-note strong">
-          Aquí se le da (o se le quita) una herramienta a <strong>alguien concreto</strong>, sin
-          tocar su rol. Sirve para quien necesita ver algo de otra área sin figurar en ella:
-          su excepción manda sobre lo que diga la política de su rol y su rama.
-        </p>
         <div class="toolbar">
           <label>Persona
             <select @change=${(e) => { this._permPersonId = e.target.value; }}>
