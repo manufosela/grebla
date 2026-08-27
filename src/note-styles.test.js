@@ -30,9 +30,11 @@ function ficheros(dir) {
 
 /** Clases que pinta el sistema de avisos. */
 const USA_AVISO = /class="(?:[^"]*\s)?(?:ro-note|info-note)(?:\s[^"]*)?"/;
-/** Una regla propia para esas clases pisaría el estilo compartido. Ojo: `.note`
- *  a secas NO entra — en el tablero de retro es el post-it, no un aviso. */
-const REGLA_PROPIA = /^\s*\.(?:ro-note|info-note)\s*\{/m;
+/** Una regla propia para esas clases pisaría el estilo compartido, y da igual
+ *  que el selector lleve delante un ancestro (`.perms .ro-note {…}` colaba y
+ *  devolvía el aviso al gris). Ojo: `.note` a secas NO entra — en el tablero de
+ *  retro es el post-it, no un aviso. */
+const REGLA_PROPIA = /^[^\n{}]*\.(?:ro-note|info-note)\b[^\n{}]*\{/m;
 
 describe('avisos con el estilo compartido', () => {
   const conAviso = ficheros(COMPONENTES)
