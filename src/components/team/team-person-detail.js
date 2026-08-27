@@ -316,7 +316,6 @@ export class TeamPersonDetail extends LitElement {
     .org-checks .chk input { width: 1.15rem; height: 1.15rem; accent-color: var(--rm-accent, #2a9d8f); flex: none; }
     .org-checks .orphan-tag { font-style: normal; font-size: 0.72rem; color: var(--rm-danger, #dc2626); }
 
-    /* Matriz de permisos por persona (RMR-PCS-0027 · F8b) */
 
     /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
     .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
