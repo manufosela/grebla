@@ -320,7 +320,6 @@ export class TeamPersonDetail extends LitElement {
     .org-checks .orphan-tag { font-style: normal; font-size: 0.72rem; color: var(--rm-danger, #dc2626); }
 
     /* Matriz de permisos por persona (RMR-PCS-0027 · F8b) */
-    .perms .ro-note { font-size: 0.85rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.9rem; }
     .perm-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     .perm-table th, .perm-table td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     .perm-table th { color: var(--rm-muted, #6b7280); font-weight: 600; }

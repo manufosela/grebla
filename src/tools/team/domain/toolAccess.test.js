@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesGrant, canUseTool, canManageTool, visibleToolIds, effectiveToolAccess } from './toolAccess.js';
+import { matchesGrant, canUseTool, canManageTool, visibleToolIds, effectiveToolAccess, applyOverride, overrideMode } from './toolAccess.js';
 
 const engineer = { personId: 'p1', branch: 'engineering', roleId: 'engineer' };
 const pm = { personId: 'p2', branch: 'product', roleId: 'pm' };
@@ -110,5 +110,55 @@ describe('effectiveToolAccess (origen de cada decisión)', () => {
   it('marca «superadmin» cuando manda el gobierno', () => {
     const eff = effectiveToolAccess(pm, policies[1], { isSuperadmin: true });
     expect(eff.use).toEqual({ value: true, source: 'superadmin' });
+  });
+});
+
+describe('applyOverride: la excepción de una persona (RMR-TSK-0460)', () => {
+  it('«heredar» BORRA la excepción, no escribe un «no»', () => {
+    // Un `false` escrito dejaría la puerta cerrada aunque su rol se la abriera
+    // más adelante, y nadie sabría de dónde salió ese «no».
+    const antes = { marea: { use: false } };
+    expect(applyOverride(antes, 'marea', 'use', 'inherit')).toEqual({});
+  });
+
+  it('una herramienta sin ninguna dimensión forzada desaparece del mapa', () => {
+    const antes = { dora: { use: true, manage: true } };
+    const soloUse = applyOverride(antes, 'dora', 'manage', 'inherit');
+    expect(soloUse).toEqual({ dora: { use: true } });
+    expect(applyOverride(soloUse, 'dora', 'use', 'inherit')).toEqual({});
+  });
+
+  it('forzar una dimensión no toca la otra', () => {
+    const antes = { dora: { manage: true } };
+    expect(applyOverride(antes, 'dora', 'use', 'no')).toEqual({ dora: { manage: true, use: false } });
+  });
+
+  it('no muta el mapa que recibe', () => {
+    const antes = { dora: { use: true } };
+    applyOverride(antes, 'dora', 'use', 'no');
+    applyOverride(antes, 'marea', 'manage', 'yes');
+    expect(antes).toEqual({ dora: { use: true } });
+  });
+
+  it('aguanta que la persona no tenga overrides todavía', () => {
+    expect(applyOverride(null, 'kudos', 'use', 'yes')).toEqual({ kudos: { use: true } });
+    expect(applyOverride(undefined, 'kudos', 'use', 'inherit')).toEqual({});
+  });
+});
+
+describe('overrideMode: lo que enseña el selector', () => {
+  it('traduce el override a los tres modos', () => {
+    const ov = { dora: { use: true, manage: false } };
+    expect(overrideMode(ov, 'dora', 'use')).toBe('yes');
+    expect(overrideMode(ov, 'dora', 'manage')).toBe('no');
+    expect(overrideMode(ov, 'marea', 'use')).toBe('inherit');
+    expect(overrideMode(null, 'marea', 'use')).toBe('inherit');
+  });
+
+  it('lo que escribe applyOverride es lo que lee overrideMode', () => {
+    for (const mode of ['yes', 'no', 'inherit']) {
+      const ov = applyOverride({}, 'dora', 'use', mode);
+      expect(overrideMode(ov, 'dora', 'use')).toBe(mode);
+    }
   });
 });
