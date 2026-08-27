@@ -7,6 +7,17 @@ import Base from '../layouts/Base.astro';
  */
 const tools = [
   {
+    // Lo personal es una herramienta más, no otra aplicación (RMR-TSK-0459).
+    // Va marcada como `personal`: se ve siempre que tengas ficha, sin depender
+    // de la política de audiencia — una cosa es la herramienta O2O para llevar
+    // los del equipo y otra ver los tuyos.
+    name: 'Mi espacio',
+    href: '/mi-espacio',
+    description: 'Lo tuyo: tu ficha, tu plan de carrera, tu Role Mirror, tus O2O y tus datos. Lo que tu manager y tú miráis juntos.',
+    available: true,
+    personal: true,
+  },
+  {
     name: 'Organigrama',
     href: '/organigrama',
     description: 'Consulta cómo se organiza la casa, en pirámide invertida (liderazgo afectivo): quien más responsabilidad tiene sostiene desde abajo.',
@@ -157,7 +168,7 @@ const TOOL_ID: Record<string, string> = {
   <section id="tenant-tools" class="tools" hidden>
     {
       tools.map((tool) => (
-        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-survey-tool={tool.surveyTool ? 'true' : undefined} hidden={tool.surveyTool}>
+        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-personal={tool.personal ? 'true' : undefined} data-survey-tool={tool.surveyTool ? 'true' : undefined} hidden={tool.surveyTool}>
           <h2>{tool.name}</h2>
           <p>{tool.description}</p>
           <span class="cta">Abrir →</span>
