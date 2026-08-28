@@ -242,6 +242,10 @@ export class SuperadminPanel extends LitElement {
       padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
       font: inherit; font-size: 0.9rem; min-width: 16rem; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
+    /* Una casilla no es un campo de texto: el min-width de arriba la estiraba a
+       16rem y empujaba su etiqueta fuera de la celda, que es por lo que la de
+       «Superadmin» no se veía (RMR-BUG-0105). */
+    input[type="checkbox"], input[type="radio"] { width: auto; min-width: 0; padding: 0; }
     input:focus, select:focus, textarea:focus { background: var(--rm-surface, #fff); }
     button {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
@@ -261,6 +265,29 @@ export class SuperadminPanel extends LitElement {
     .table-wrap thead th { position: sticky; top: 0; background: var(--rm-surface, #fff); z-index: 2; }
     .table-wrap th:first-child, .table-wrap td:first-child { position: sticky; left: 0; background: var(--rm-surface, #fff); z-index: 1; }
     .table-wrap thead th:first-child { z-index: 3; }
+    /* Personas: ocho columnas de selects se salían de la pantalla y la casilla
+       «Superadmin» quedaba fuera, con la barra de scroll al final de la tabla
+       (RMR-BUG-0105). Con el ancho repartido cabe entera y no hay que arrastrar
+       nada para llegar a lo que se venía a hacer. */
+    table.people { table-layout: fixed; min-width: 0; }
+    table.people col.c-name { width: 14%; }
+    table.people col.c-mail { width: 15%; }
+    table.people col.c-role { width: 12%; }
+    table.people col.c-branch { width: 12%; }
+    table.people col.c-boss { width: 15%; }
+    table.people col.c-access { width: 23%; }
+    table.people col.c-actions { width: 9%; }
+    /* Solo los campos de texto y los selects se estiran. Una casilla estirada
+       al ancho de la celda empuja su etiqueta fuera y la parte letra a letra. */
+    table.people select,
+    table.people input[type="text"],
+    table.people input[type="email"] { width: 100%; max-width: 100%; box-sizing: border-box; }
+    table.people td { word-break: break-word; overflow: hidden; }
+    table.people .access-inline { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.35rem; white-space: nowrap; }
+    table.people .del-btn { white-space: nowrap; }
+    /* El email lleva debajo el estado de la cuenta: es lo mismo —la cuenta
+       vinculada o la invitación—, y en columna aparte solo gastaba ancho. */
+    table.people .acct { display: block; font-size: 0.78rem; margin-top: 0.15rem; }
     /* Resumen de ancho FIJO para que todas las celdas (— / Superadmin / People
        account) tengan el mismo ancho y la columna no baile. */
     .access summary { cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--rm-text, #111827); list-style: none; padding: 0.25rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; display: inline-flex; justify-content: space-between; align-items: center; gap: 0.5rem; min-width: 8.5rem; box-sizing: border-box; white-space: nowrap; }
@@ -399,7 +426,6 @@ export class SuperadminPanel extends LitElement {
     .fields label.check { flex-direction: row; align-items: center; gap: 0.4rem; }
     .fields label.full { grid-column: 1 / -1; }
     .fields input, .fields select { min-width: 0; font-size: 0.85rem; }
-    .fields input[type="checkbox"] { width: auto; min-width: 0; }
     .recs-edit { margin-top: 0.75rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.6rem; }
     .recs-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
     .recs-head button { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
@@ -2633,17 +2659,21 @@ export class SuperadminPanel extends LitElement {
       ${this._peopleNotice ? html`<p class="notice">${this._peopleNotice}</p>` : null}
       ${this._peopleList.length === 0
         ? sinPersonas
-        : html`<div class="table-wrap"><table>
-            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Rama</th><th>Reporta a</th><th>Cuenta</th><th>Acceso</th><th></th></tr></thead>
+        : html`<div class="table-wrap"><table class="people">
+            <colgroup>
+              <col class="c-name" /><col class="c-mail" /><col class="c-role" /><col class="c-branch" />
+              <col class="c-boss" /><col class="c-access" /><col class="c-actions" />
+            </colgroup>
+            <thead><tr><th>Nombre</th><th>Email y cuenta</th><th>Rol</th><th>Rama</th><th>Reporta a</th><th>Acceso</th><th></th></tr></thead>
             <tbody>
               ${this._peopleList.map((p) => {
                 let account;
-                if (p.uid) account = html`<span class="badge" style="background:var(--rm-accent,#2a9d8f)">Vinculada</span>`;
-                else if (p.pendingEmail) account = html`<span class="muted">Pendiente</span>`;
-                else account = html`<span class="muted">Sin cuenta</span>`;
+                if (p.uid) account = html`<span class="acct" style="color:var(--rm-accent,#2a9d8f)">✓ Cuenta vinculada</span>`;
+                else if (p.pendingEmail) account = html`<span class="acct muted">Invitación pendiente</span>`;
+                else account = html`<span class="acct muted">Sin cuenta</span>`;
                 return html`<tr>
                   <td>${this._renderPersonNameCell(p)}</td>
-                  <td>${this._renderPersonEmailCell(p)}</td>
+                  <td>${this._renderPersonEmailCell(p)}${account}</td>
                   <td>
                     <select @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
                       <option value="" disabled ?selected=${!this._orgRoles.some((r) => r.id === p.orgRole)}>— sin rol —</option>
@@ -2657,7 +2687,6 @@ export class SuperadminPanel extends LitElement {
                     </select>
                   </td>
                   <td>${this._renderSuperiorSelect(p, nameOf)}</td>
-                  <td>${account}</td>
                   <td>${this._renderPersonAccess(p)}</td>
                   <td>${this._confirmDeletePerson === p.id
                     ? html`<span class="confirm">¿Dar de baja? <button class="yes" @click=${() => this._removePerson(p.id)}>Sí</button> <button @click=${() => { this._confirmDeletePerson = null; }}>No</button></span>`
@@ -2667,7 +2696,7 @@ export class SuperadminPanel extends LitElement {
               ${this._orphanAccounts().map((u) => html`<tr>
                 <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
                 <td>${u.email ?? html`<span class="muted">—</span>`}</td>
-                <td colspan="5"><span class="muted">Se ha logado pero no tiene ficha de persona.</span></td>
+                <td colspan="4"><span class="muted">Se ha logado pero no tiene ficha de persona.</span></td>
                 <td><button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button></td>
               </tr>`)}
             </tbody>
