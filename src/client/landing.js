@@ -5,7 +5,7 @@
  */
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern, hasAccess, leadsTeam } from '../lib/accessRoles.js';
+import { canGovern, hasAccess, hubAsView, leadsTeam } from '../lib/accessRoles.js';
 import { isSurveyAdmin } from '../lib/survey.js';
 import { getMyPerson, ensureEmployeePerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
@@ -14,6 +14,8 @@ import { buildPersonRef } from '../lib/toolGate.js';
 import { getEmployeeDomain } from '../lib/orgConfig.js';
 
 const VIEW_FLAG = 'grebla-view';
+/** ¿Se está previsualizando el hub como otro rol? */
+const esSimulada = () => ['leader', 'engineer', 'empleado'].includes(sessionStorage.getItem(VIEW_FLAG));
 const landing = document.getElementById('platform-landing');
 const hubLoading = document.getElementById('hub-loading');
 // Cortafuegos (RMR-BUG-0090): si el arranque no resuelve en 10 s (auth colgada,
@@ -25,10 +27,12 @@ setTimeout(() => {
 const tools = document.getElementById('tenant-tools');
 // Entrar al panel desde su card SALE de la vista en curso (RMR-TSK-0460): si no,
 // se volvería a la home todavía «como manager» o «como empleado». Es lo que hacía
-// el botón suelto de «Volver a gestión», que la card sustituye.
+// el botón suelto de «Volver a gestión», que la card sustituye. La vista queda en
+// «admin», no en ninguna: al volver al hub el conmutador tiene que saber en cuál
+// estás, y deducirla de la ruta marcaba «Manager» (RMR-BUG-0104).
 document.getElementById('tenant-tools')?.addEventListener('click', (event) => {
   if (event.target instanceof Element && event.target.closest('[data-admin-only]')) {
-    sessionStorage.removeItem(VIEW_FLAG);
+    sessionStorage.setItem(VIEW_FLAG, 'admin');
   }
 });
 
@@ -48,34 +52,6 @@ onUserChanged(async (user) => {
     // Sin rol, sin gobierno, sin gestión de encuestas y sin ser empleado del
     // dominio: landing pública (comportamiento anterior, intacto en la demo).
     if (!hasAccess(access) && !canManageSurveys && !isEmployee) return showLanding();
-    // Conmutador de vistas (RMR-TSK-0250): un manager/superadmin que ha elegido
-    // «vista de ingeniero» va a su propio «Mi espacio», no a las herramientas.
-    if (sessionStorage.getItem(VIEW_FLAG) === 'engineer' && (canGovern(access) || leadsTeam(access))) {
-      location.replace('/mi-espacio');
-      return;
-    }
-    // Vista «Empleado» (RMR-TSK-0451): un superadmin o un manager previsualiza el
-    // hub como lo ve quien NO está en ningún equipo — solo las herramientas de
-    // audiencia «everyone». Es solo pintado: los permisos reales no cambian, y
-    // cada herramienta sigue validando su acceso por su cuenta.
-    //
-    // Si las políticas no se pueden cargar, NO se previsualiza: se deja seguir el
-    // flujo normal. Un hub sin filtrar diría que el empleado ve todas las
-    // herramientas y uno vacío que no ve ninguna; las dos cosas son mentira, y
-    // una previsualización que miente es peor que no tenerla.
-    if (sessionStorage.getItem(VIEW_FLAG) === 'empleado' && (canGovern(access) || leadsTeam(access))) {
-      try {
-        const genericPolicies = await listToolPolicies();
-        showTools({
-          personRef: buildPersonRef(null),
-          policies: genericPolicies,
-          isSuperadmin: false,
-          isLeaderish: false,
-          canManageSurveys: false,
-        });
-        return;
-      } catch { /* sin políticas no hay previsualización fiable: sigue el flujo normal */ }
-    }
     // El ingeniero ya NO se desvía a su espacio personal (RMR-TSK-0459): entra
     // al hub como todo el mundo, y lo suyo es la card «Mi espacio». Dos puertas
     // distintas hacían parecer que era otra aplicación.
@@ -107,9 +83,22 @@ onUserChanged(async (user) => {
     }
     // buildPersonRef incluye los toolOverrides: las excepciones por persona
     // cuentan también en la visibilidad de la landing (RMR-TSK-0387).
-    const personRef = buildPersonRef(person);
-    const isLeaderish = canGovern(access) || leadsTeam(access);
-    showTools({ personRef, policies, isSuperadmin: canGovern(access), isLeaderish, canManageSurveys, filterFailed });
+    // Vista elegida en el conmutador (RMR-BUG-0104): las cuatro se quedan en el
+    // hub y cambian QUÉ se ve, nunca a dónde se va. Es solo pintado: los permisos
+    // reales no cambian, y cada herramienta valida su acceso por su cuenta.
+    const vista = hubAsView(sessionStorage.getItem(VIEW_FLAG), {
+      isSuperadmin: canGovern(access),
+      isLeaderish: canGovern(access) || leadsTeam(access),
+    });
+    showTools({
+      personRef: vista.generic ? buildPersonRef(null) : buildPersonRef(person),
+      policies,
+      isSuperadmin: vista.isSuperadmin,
+      isLeaderish: vista.isLeaderish,
+      // Gestionar encuestas es un permiso, no una vista: al simular se apaga.
+      canManageSurveys: vista.isSuperadmin ? canManageSurveys : canManageSurveys && !esSimulada(),
+      filterFailed,
+    });
   } catch {
     showLanding();
   }

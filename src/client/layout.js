@@ -40,7 +40,9 @@ onUserChanged(async (user) => {
   }
   try {
     const access = await resolveAccess(user);
-    const actingAsOther = ['leader', 'engineer'].includes(sessionStorage.getItem(VIEW_FLAG));
+    // «empleado» también es simular: previsualizar el hub sin rol con el halo de
+    // superadmin puesto delataba que no era la vista de nadie (RMR-BUG-0104).
+    const actingAsOther = ['leader', 'engineer', 'empleado'].includes(sessionStorage.getItem(VIEW_FLAG));
     document.documentElement.classList.toggle('is-superadmin', canGovern(access) && !actingAsOther);
   } catch {
     document.documentElement.classList.remove('is-superadmin');

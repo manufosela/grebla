@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, hubAsView } from './accessRoles.js';
 
 describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
   it('un admin que además es líder conserva todas las vistas', () => {
@@ -388,5 +388,38 @@ describe('predicados de ejes (RMR-TSK-0310) — adiós al role derivado', () => 
     expect(accessLabel({ instanceAccess: null, functionalRole: 'leader' })).toBe('Manager');
     expect(accessLabel({ instanceAccess: null, functionalRole: 'engineer' })).toBe('Ingeniero/a');
     expect(accessLabel({ instanceAccess: null, functionalRole: null })).toBe(null);
+  });
+});
+
+describe('hubAsView: el hub bajo la vista elegida (RMR-BUG-0104)', () => {
+  const superadmin = { isSuperadmin: true, isLeaderish: true };
+
+  it('sin vista elegida, el hub es el tuyo de verdad', () => {
+    expect(hubAsView(null, superadmin)).toEqual({ isSuperadmin: true, isLeaderish: true, generic: false });
+    expect(hubAsView('admin', superadmin)).toEqual({ isSuperadmin: true, isLeaderish: true, generic: false });
+  });
+
+  it('simular SIEMPRE resta: ninguna vista da lo que no tienes', () => {
+    const nadie = { isSuperadmin: false, isLeaderish: false };
+    for (const flag of ['engineer', 'empleado', 'leader', 'admin', null]) {
+      const v = hubAsView(flag, nadie);
+      expect(v.isSuperadmin, `«${flag}» no puede dar gobierno`).toBe(false);
+    }
+  });
+
+  it('como ingeniero: ni gobierno ni equipo, pero con tu ficha', () => {
+    expect(hubAsView('engineer', superadmin)).toEqual({ isSuperadmin: false, isLeaderish: false, generic: false });
+  });
+
+  it('como empleado: además, sin ficha — solo lo que ve cualquiera', () => {
+    expect(hubAsView('empleado', superadmin)).toEqual({ isSuperadmin: false, isLeaderish: false, generic: true });
+  });
+
+  it('como manager: conserva el alcance de equipo, no el gobierno', () => {
+    expect(hubAsView('leader', superadmin)).toEqual({ isSuperadmin: false, isLeaderish: true, generic: false });
+  });
+
+  it('un flag que no reconoce no rebaja ni amplía nada', () => {
+    expect(hubAsView('lo-que-sea', superadmin)).toEqual({ isSuperadmin: true, isLeaderish: true, generic: false });
   });
 });
