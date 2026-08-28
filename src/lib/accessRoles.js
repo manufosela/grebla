@@ -159,6 +159,30 @@ export function viewsFor(access) {
 }
 
 /**
+ * Cómo se pinta el hub bajo la vista elegida en el conmutador (RMR-BUG-0104).
+ *
+ * Las cuatro vistas aterrizan en el MISMO hub: lo que cambia es qué cards se
+ * ven, no a qué página se va. Simular es rebajarse, nunca ampliarse — de ahí
+ * que solo se apaguen privilegios: quien previsualiza «como un ingeniero» debe
+ * ver lo que ve un ingeniero, no su propio hub con otro nombre.
+ *
+ * Puro a propósito: así se puede comprobar cada vista sin montar la página.
+ *
+ * @param {string|null} flag  valor de sessionStorage 'grebla-view'
+ * @param {{ isSuperadmin: boolean, isLeaderish: boolean }} real  acceso de verdad
+ * @returns {{ isSuperadmin: boolean, isLeaderish: boolean, generic: boolean }}
+ *   `generic`: pintar como una persona SIN ficha (vista Empleado).
+ */
+export function hubAsView(flag, real) {
+  const yo = { isSuperadmin: real?.isSuperadmin === true, isLeaderish: real?.isLeaderish === true };
+  if (flag === 'engineer') return { isSuperadmin: false, isLeaderish: false, generic: false };
+  if (flag === 'empleado') return { isSuperadmin: false, isLeaderish: false, generic: true };
+  // «Manager» conserva el alcance de equipo, sin el gobierno de la instancia.
+  if (flag === 'leader') return { isSuperadmin: false, isLeaderish: true, generic: false };
+  return { ...yo, generic: false };
+}
+
+/**
  * @typedef {'engineer'|'leader'|'supermanager'|null} FunctionalRole
  * @typedef {'admin'|'viewer'|null} InstanceAccess
  */

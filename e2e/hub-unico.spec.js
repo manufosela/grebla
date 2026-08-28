@@ -67,18 +67,18 @@ test('un ingeniero no ve la card de administración por ninguna parte', async ({
   await expect(page.locator('[data-admin-only]')).toBeHidden();
 });
 
-test('entrar al panel por su card sale de la vista en curso', async ({ page }) => {
+test('entrar al panel por su card deja la vista en «Admin»', async ({ page }) => {
   await signInAs(page, 'superadmin');
   await page.goto('/');
-  // Viniendo de mirar la app «como manager». (En la vista «Empleado» la card ni
-  // se pinta —el hub se muestra tal cual lo vería un empleado— y de ahí se sale
-  // por el conmutador de la cabecera.)
-  await page.evaluate(() => sessionStorage.setItem('grebla-view', 'leader'));
-  await page.reload();
+  // La card de administración solo se ofrece en la vista de admin: desde
+  // «Manager», «Ingeniero» o «Empleado» el hub se pinta como lo vería ese rol,
+  // y se sale por el conmutador de la cabecera (RMR-BUG-0104).
   await page.locator('[data-admin-only]').click();
   await expect(page).toHaveURL(/\/admin/);
-  // Si el flag se quedara puesto, al volver a la home seguiría «como empleado».
-  expect(await page.evaluate(() => sessionStorage.getItem('grebla-view'))).toBeNull();
+
+  // Queda anotada la vista: al volver al hub el conmutador marca «Admin». Antes
+  // no se anotaba ninguna y, deducida de la ruta, marcaba «Manager».
+  expect(await page.evaluate(() => sessionStorage.getItem('grebla-view'))).toBe('admin');
 });
 
 test('el panel tiene su «Volver» al hub', async ({ page }) => {

@@ -1,15 +1,19 @@
 /**
  * Conmutador de vistas (RMR-TSK-0250): un superadmin o un manager (líder) puede
  * cambiar entre sus vistas para ver la app como la ve cada rol. Vive en la nav
- * (Base.astro) y solo se pinta cuando hay 2+ vistas disponibles (resolveViews):
- *  - Admin (superadmin) → /admin  (panel de superadmin/viewer; sin flag)
- *  - Manager  → /             (herramientas de manager; flag 'leader')
- *  - Ingeniero → /mi-espacio  (su propio «Mi espacio»; flag 'engineer')
- *  - Empleado  → /             (el hub como lo ve quien no está en ningún
- *                              equipo: solo herramientas «everyone»; flag 'empleado')
- * El flag de vista vive en sessionStorage ('grebla-view'); lo leen landing.js
- * (enrutado de la home) y layout.js (oculta el halo de superadmin fuera de
- * gestión). La vista activa se resalta según el flag y la ruta actual.
+ * (Base.astro) y solo se pinta cuando hay 2+ vistas disponibles (resolveViews).
+ *
+ * Las CUATRO vistas aterrizan en el hub (RMR-BUG-0104). Desde RMR-TSK-0459 todos
+ * comparten el mismo hub de cards y lo personal y la administración son cards,
+ * no páginas propias: lo que cambia de una vista a otra es CÓMO SE VE el hub,
+ * no a qué página te lleva. Cuando cada vista tenía su página, «Ingeniero»
+ * dejaba encerrado en /mi-espacio —la home redirigía allí mientras el flag
+ * siguiera puesto— y volver de /admin marcaba «Manager», porque esa vista no
+ * dejaba flag y se deducía de la ruta.
+ *
+ * El flag vive en sessionStorage ('grebla-view') y SIEMPRE es explícito, para
+ * que la vista activa no dependa de en qué página estés: lo leen landing.js
+ * (cómo pinta el hub) y layout.js (oculta el halo de superadmin al simular).
  */
 import { LitElement, html, css } from 'lit';
 import { onUserChanged } from '../lib/auth.js';
@@ -19,22 +23,23 @@ const VIEW_FLAG = 'grebla-view';
 
 /** Metadatos de cada vista: etiqueta, destino y flag de sesión que la activa. */
 const VIEW_META = {
-  gestion: { label: 'Admin (superadmin)', title: 'Panel de administración (superadmin)', path: '/admin', flag: null },
-  manager: { label: 'Manager', title: 'Herramientas de manager', path: '/', flag: 'leader' },
-  engineer: { label: 'Ingeniero', title: 'Mi espacio, como lo ve un ingeniero', path: '/mi-espacio', flag: 'engineer' },
+  gestion: { label: 'Admin (superadmin)', title: 'El hub con todo, incluida la administración', path: '/', flag: 'admin' },
+  manager: { label: 'Manager', title: 'El hub como lo ve quien lleva un equipo', path: '/', flag: 'leader' },
+  engineer: { label: 'Ingeniero', title: 'El hub como lo ve un ingeniero', path: '/', flag: 'engineer' },
   empleado: { label: 'Empleado', title: 'El hub como lo ve quien no está en ningún equipo', path: '/', flag: 'empleado' },
 };
 
-/** Vista activa ahora mismo, derivada del flag de sesión y la ruta actual. */
+/** Vista de cada flag. Fuente única: la usan el conmutador y el hub. */
+export const VIEW_BY_FLAG = { admin: 'gestion', leader: 'manager', engineer: 'engineer', empleado: 'empleado' };
+
+/**
+ * Vista activa ahora mismo. Manda el flag; la ruta solo decide en la primera
+ * visita, cuando aún no se ha elegido vista.
+ */
 function currentView() {
-  const flag = sessionStorage.getItem(VIEW_FLAG);
-  if (flag === 'engineer') return 'engineer';
-  if (flag === 'empleado') return 'empleado';
-  if (flag === 'leader') return 'manager';
-  const path = location.pathname;
-  if (path.startsWith('/admin')) return 'gestion';
-  if (path.startsWith('/mi-espacio')) return 'engineer';
-  return 'manager';
+  const porFlag = VIEW_BY_FLAG[sessionStorage.getItem(VIEW_FLAG)];
+  if (porFlag) return porFlag;
+  return location.pathname.startsWith('/admin') ? 'gestion' : 'manager';
 }
 
 export class ViewSwitcher extends LitElement {
@@ -94,15 +99,13 @@ export class ViewSwitcher extends LitElement {
     this._unsub?.();
   }
 
-  /** Cambia de vista: fija el flag de sesión y navega al destino de la vista. */
+  /** Cambia de vista: fija el flag y lleva al hub, que es lo que se repinta. */
   _select(view) {
     const meta = VIEW_META[view];
     if (!meta) return;
-    if (meta.flag) sessionStorage.setItem(VIEW_FLAG, meta.flag);
-    else sessionStorage.removeItem(VIEW_FLAG);
-    // El flag se lee al cargar la página, así que cambiar a una vista que apunta
-    // a la ruta en la que YA estás (Manager y Empleado comparten «/») exige
-    // recargar: `assign` a la misma URL no repinta nada y la vista no cambiaría.
+    sessionStorage.setItem(VIEW_FLAG, meta.flag);
+    // El flag se lee al cargar la página: estando ya en el hub hay que recargar,
+    // porque `assign` a la misma URL no repinta nada y la vista no cambiaría.
     if (location.pathname === meta.path) location.reload();
     else location.assign(meta.path);
   }
