@@ -28,12 +28,12 @@ export class LeanOldIssues extends LeanView {
        leer el atasco en contexto sin competir con el título. */
     .col {
       font-size: 0.72rem; font-weight: 700; white-space: nowrap;
-      background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280);
+      background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #5b6b7d);
       border-radius: 999px; padding: 0.05rem 0.5rem;
     }
-    .empty { color: var(--rm-muted, #6b7280); font-size: 0.9rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-    .note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.75rem 0 0; }
+    .note { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0.75rem 0 0; }
   `];
 
   get _loadError() {

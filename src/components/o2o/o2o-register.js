@@ -41,7 +41,7 @@ export class O2ORegister extends LitElement {
   static styles = css`
     :host { display: block; }
     .row { display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap; margin-bottom: 1rem; }
-    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     select, input[type='date'], textarea, input[type='text'] {
       font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db);
       border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); width: 100%;
@@ -60,7 +60,7 @@ export class O2ORegister extends LitElement {
       border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem;
     }
     .item .meta { font-size: 0.9rem; }
-    .item .sub { font-size: 0.78rem; color: var(--rm-muted, #6b7280); }
+    .item .sub { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
     .tag { font-size: 0.72rem; border-radius: 999px; padding: 0.1rem 0.5rem; background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f); }
     .actions { display: flex; gap: 0.4rem; }
     .form { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 1rem 1.15rem; margin-top: 1rem; }
@@ -70,10 +70,10 @@ export class O2ORegister extends LitElement {
     .q { margin: 0 0 0.5rem; }
     .q .qt { font-size: 0.82rem; margin: 0 0 0.2rem; }
     .form-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; flex-wrap: wrap; }
-    .ai-hint { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); align-self: center; margin-right: auto; }
+    .ai-hint { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); align-self: center; margin-right: auto; }
     .check { flex-direction: row; align-items: center; gap: 0.5rem; color: var(--rm-text, #111827); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .ext-note { font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); background: var(--rm-chip, #eef2f7); border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0 0 0.85rem; }
     .rm-context { font-size: 0.85rem; color: var(--rm-text, #111827); background: var(--rm-surface-hover, #eef3f5); border-left: 4px solid var(--rm-accent, #2a9d8f); border-radius: 8px; padding: 0.55rem 0.85rem; margin: 0 0 1rem; line-height: 1.5; }
   `;

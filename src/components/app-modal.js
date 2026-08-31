@@ -69,7 +69,7 @@ export class AppModal extends LitElement {
     .close {
       border: 0;
       background: none;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       font-size: 1.5rem;
       line-height: 1;
       cursor: pointer;

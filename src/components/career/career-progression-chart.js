@@ -28,7 +28,7 @@ export class CareerProgressionChart extends LitElement {
     .dot { fill: var(--rm-accent, #2a9d8f); }
     .milestone { stroke: var(--rm-navy, #1e3a5f); stroke-width: 1.5; stroke-dasharray: 5 3; }
     .mlabel { fill: var(--rm-navy, #1e3a5f); font-size: 11px; font-weight: 700; }
-    .tick { fill: var(--rm-muted, #6b7280); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .tick { fill: var(--rm-muted, #5b6b7d); font-size: 10px; font-variant-numeric: tabular-nums; }
     @media (prefers-color-scheme: dark) {
       .milestone { stroke: var(--rm-navy, #93b4d6); }
       .mlabel { fill: var(--rm-navy, #93b4d6); }

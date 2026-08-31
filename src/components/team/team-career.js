@@ -30,13 +30,13 @@ export class TeamCareer extends LitElement {
 
   static styles = css`
     :host { display: block; color: var(--rm-text, #111827); }
-    .lead { color: var(--rm-muted, #6b7280); font-size: 0.9rem; margin: 0 0 1rem; }
+    .lead { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; margin: 0 0 1rem; }
     .error { color: var(--rm-danger, #dc2626); }
-    .empty { color: var(--rm-muted, #9ca3af); padding: 1.5rem 0; }
+    .empty { color: var(--rm-muted, #5b6b7d); padding: 1.5rem 0; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 40rem; }
     th, td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     td.num { font-variant-numeric: tabular-nums; }
     .lvl.sub.manual { background: #e9c46a; border-color: #b8860b; color: #4a3800; }
     .pencil { border: 0; background: none; cursor: pointer; font-size: 0.75rem; opacity: 0.5; padding: 0 0.15rem; }
@@ -47,7 +47,7 @@ export class TeamCareer extends LitElement {
     .mini { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); border-radius: 6px; font: inherit; font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.45rem; cursor: pointer; color: var(--rm-text, #111827); }
     .lvl.sub { background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 16%, var(--rm-surface, #fff)); border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 999px; padding: 0.05rem 0.5rem; cursor: help; }
     .lvl { display: inline-block; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
-    .muted { color: var(--rm-muted, #9ca3af); }
+    .muted { color: var(--rm-muted, #5b6b7d); }
     .pill { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 14%, transparent); color: var(--rm-accent, #2a9d8f); }
   `;
 

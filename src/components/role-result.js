@@ -34,7 +34,7 @@ export class RoleResult extends LitElement {
     .empty {
       padding: 2rem;
       text-align: center;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       border: 1px dashed var(--rm-border, #d1d5db);
       border-radius: var(--rm-radius, 12px);
     }
@@ -53,7 +53,7 @@ export class RoleResult extends LitElement {
     }
     .dominant .tagline {
       margin: 0.4rem 0 0;
-      color: var(--rm-muted, #4b5563);
+      color: var(--rm-muted, #5b6b7d);
     }
     .dominant .pct {
       font-variant-numeric: tabular-nums;
@@ -63,14 +63,14 @@ export class RoleResult extends LitElement {
     .dominant .runners {
       margin: 0.5rem 0 0;
       font-size: 0.82rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .dominant .runner { font-weight: 600; font-variant-numeric: tabular-nums; }
     h3 {
       font-size: 1rem;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       margin: 1.75rem 0 0.75rem;
     }
     .bars {
@@ -105,7 +105,7 @@ export class RoleResult extends LitElement {
       font-size: 0.8rem;
       font-variant-numeric: tabular-nums;
       text-align: right;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .grid {
       display: grid;
@@ -121,8 +121,8 @@ export class RoleResult extends LitElement {
     .radar-axis { stroke: var(--rm-border, #e5e7eb); }
     .radar-user { fill: color-mix(in srgb, var(--rm-accent, #3b82f6) 22%, transparent); stroke: var(--rm-accent, #3b82f6); stroke-width: 2; }
     .radar-ideal { fill: color-mix(in srgb, var(--rm-warning, #f59e0b) 14%, transparent); stroke: var(--rm-warning, #f59e0b); stroke-width: 1.5; stroke-dasharray: 4 3; }
-    .radar-label { font-size: 7px; fill: var(--rm-muted, #6b7280); }
-    .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin-top: 0.5rem; }
+    .radar-label { font-size: 7px; fill: var(--rm-muted, #5b6b7d); }
+    .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin-top: 0.5rem; }
     .legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 0.35rem; }
     .target {
       display: flex;
@@ -141,7 +141,7 @@ export class RoleResult extends LitElement {
     }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .gap-pos { color: var(--rm-danger, #dc2626); font-weight: 600; }
     .gap-neg { color: var(--rm-success, #16a34a); font-weight: 600; }

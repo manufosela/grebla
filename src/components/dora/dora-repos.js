@@ -115,19 +115,19 @@ export class DoraRepos extends LitElement {
     form { display: flex; flex-direction: column; gap: 1rem; }
     .row { display: grid; grid-template-columns: 2fr 1.2fr auto; gap: 0.75rem; align-items: end; }
     @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
-    label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     input { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font-size: 0.9rem; }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     code { font-size: 0.88rem; }
-    .muted { color: var(--rm-muted, #9ca3af); }
-    .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
+    .muted { color: var(--rm-muted, #5b6b7d); }
+    .empty { color: var(--rm-muted, #5b6b7d); padding: 1rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; margin: 0.5rem 0 0; }
     .del-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
-    .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .confirm { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
     .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
@@ -142,15 +142,15 @@ export class DoraRepos extends LitElement {
     .del-btn.edit { color: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); margin-right: 0.4rem; }
     .assign-row { display: flex; gap: 1.5rem; flex-wrap: wrap; }
     .assign-row label { min-width: 16rem; flex: 1; max-width: 24rem; }
-    .tag { display: inline-block; background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.76rem; margin: 0 0.2rem 0.2rem 0; }
+    .tag { display: inline-block; background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #5b6b7d); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.76rem; margin: 0 0.2rem 0.2rem 0; }
     .deploy-toggle { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.25rem; border: 0; background: none; padding: 0; color: var(--rm-accent, #2a9d8f); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
     tr.detail > td { background: var(--rm-track, #f7fafb); padding: 1rem 1.1rem; }
     .deploy-panel { display: flex; flex-direction: column; gap: 0.9rem; }
     .deploy-freq { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; font-size: 0.85rem; }
     .deploy-freq .real { font-weight: 700; color: var(--rm-text, #111827); }
     .deploy-freq .real .value { font-size: 1.15rem; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
-    .deploy-freq .kind { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #6b7280); font-weight: 600; }
-    .deploy-freq .proxy { color: var(--rm-muted, #6b7280); }
+    .deploy-freq .kind { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
+    .deploy-freq .proxy { color: var(--rm-muted, #5b6b7d); }
     .deploy-form { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 0.6rem; align-items: end; }
     @media (max-width: 720px) { .deploy-form { grid-template-columns: 1fr; } }
     .deploy-form label { font-size: 0.72rem; }
@@ -158,13 +158,13 @@ export class DoraRepos extends LitElement {
     .deploy-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
     .deploy-list li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; padding: 0.35rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     .deploy-list .when { font-variant-numeric: tabular-nums; }
-    .deploy-list .by { color: var(--rm-muted, #6b7280); }
+    .deploy-list .by { color: var(--rm-muted, #5b6b7d); }
     .deploy-list code { font-size: 0.8rem; }
     .pill { display: inline-block; border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 0.72rem; font-weight: 700; }
     .pill.success { background: var(--rm-success-soft, #dcfce7); color: var(--rm-success-strong, #15803d); }
     .pill.failed { background: var(--rm-danger-soft, #fee2e2); color: var(--rm-danger-strong, #b91c1c); }
     .spacer { flex: 1; }
-    .deploy-empty { color: var(--rm-muted, #9ca3af); font-size: 0.82rem; }
+    .deploy-empty { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; }
   `, levelStyles];
 
   constructor() {

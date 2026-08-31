@@ -39,18 +39,18 @@ export class LeanMetrics extends LeanView {
     :host { display: block; }
     h3 { font-size: 1.05rem; margin: 1.25rem 0 0.75rem; color: var(--rm-navy, #1e3a5f); }
     h3:first-of-type { margin-top: 0; }
-    h4 { font-size: 0.85rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.4rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    h4 { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.4rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 0 0 1rem; }
     .card { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.15rem; }
     .card .value { font-size: 1.5rem; font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
-    .card .label { font-size: 0.74rem; color: var(--rm-muted, #6b7280); }
+    .card .label { font-size: 0.74rem; color: var(--rm-muted, #5b6b7d); }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 0 0 0.5rem; }
     th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .label-cell { font-weight: 700; }
-    .note { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.5rem 0 1.25rem; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
+    .note { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0.5rem 0 1.25rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .val-line { display: inline-flex; align-items: center; gap: 0.35rem; }
     /* «?» de ayuda: fondo oscuro FIJO + símbolo blanco → contraste AA garantizado

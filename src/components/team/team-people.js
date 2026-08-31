@@ -109,18 +109,18 @@ export class TeamPeople extends LitElement {
     form { display: flex; flex-direction: column; gap: 1rem; }
     .row { display: grid; grid-template-columns: 2fr 1.3fr auto; gap: 0.75rem; align-items: end; }
     @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
-    label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     label.chk-inline { flex-direction: row; align-items: center; gap: 0.4rem; }
     label.chk-inline input { width: auto; }
     fieldset.roles { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.75rem 0.9rem; margin: 0; }
-    fieldset.roles legend { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; padding: 0 0.4rem; }
+    fieldset.roles legend { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; padding: 0 0.4rem; }
     .role-checks { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.75rem; }
     .role-check { flex-direction: row; align-items: center; gap: 0.4rem; font-weight: 500; color: var(--rm-text, #111827); cursor: pointer; }
     .role-add { display: flex; gap: 0.5rem; align-items: center; }
     .role-add input { flex: 1; }
     .role-hint { font-size: 0.78rem; margin: 0; }
     /* Micro-aclaración por eje (Disciplinas/Gremios/Labels) dentro del alta/edición. */
-    .eje-hint { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0 0 0.6rem; }
+    .eje-hint { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.6rem; }
     .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
     .chip { background: var(--rm-track, #e9f0f2); color: var(--rm-text, #111827); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
     /* Invitación pendiente (persona pre-invitada por email, aún sin vincular). */
@@ -128,7 +128,7 @@ export class TeamPeople extends LitElement {
     .invite-field input:disabled { opacity: 0.55; }
     .title { font-weight: 600; color: var(--rm-text, #111827); }
     .leader { font-size: 0.85rem; color: var(--rm-text, #111827); }
-    .muted { color: var(--rm-muted, #9ca3af); }
+    .muted { color: var(--rm-muted, #5b6b7d); }
     th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
     th.sortable:hover { color: var(--rm-accent, #2a9d8f); }
     .ext-badge { display: inline-block; margin-left: 0.4rem; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-navy, #1e3a5f); background: var(--rm-chip, #eef2f7); border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; padding: 0.05rem 0.45rem; vertical-align: middle; }
@@ -151,7 +151,7 @@ export class TeamPeople extends LitElement {
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     td.actions { text-align: right; }
     tr.rowlink { cursor: pointer; }
     tr.rowlink:hover td { background: var(--rm-surface-hover, #f9fafb); }
@@ -160,10 +160,10 @@ export class TeamPeople extends LitElement {
       color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.25rem 0.6rem;
       font-size: 0.78rem; font-weight: 600; cursor: pointer;
     }
-    .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .confirm { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
-    .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
+    .empty { color: var(--rm-muted, #5b6b7d); padding: 1rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; margin: 0.5rem 0 0; }
 
     /* Bloques colapsables: alta vs lista. */
@@ -188,12 +188,12 @@ export class TeamPeople extends LitElement {
     details > summary::-webkit-details-marker { display: none; }
     details > summary::before {
       content: '▸';
-      color: var(--rm-muted, #9ca3af);
+      color: var(--rm-muted, #5b6b7d);
       font-size: 0.9rem;
       transition: transform 0.15s ease;
     }
     details[open] > summary::before { transform: rotate(90deg); }
-    details > summary .count { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    details > summary .count { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     details .body { padding-bottom: 1.25rem; }
     /* La tarjeta de alta se distingue visualmente de la lista. */
     details.add-card {
@@ -216,14 +216,14 @@ export class TeamPeople extends LitElement {
 
     /* Contenido de los modales. */
     .modal-body { display: flex; flex-direction: column; gap: 1rem; }
-    .modal-body p { margin: 0; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .modal-body p { margin: 0; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     .modal-body .fields { display: flex; flex-direction: column; gap: 0.75rem; }
     .modal-body select { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font-size: 0.9rem; }
     .modal-body .actions-row { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
     .shared-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
     .shared-list li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.4rem; }
     .shared-list .who { font-weight: 600; }
-    .shared-list .perm { color: var(--rm-muted, #6b7280); }
+    .shared-list .perm { color: var(--rm-muted, #5b6b7d); }
     .shared-list .rm { margin-left: auto; border: 0; background: none; color: var(--rm-danger, #dc2626); font-weight: 700; font-size: 0.8rem; cursor: pointer; padding: 0 0.25rem; }
     .confirm-text { font-size: 0.8rem; color: var(--rm-danger, #dc2626); white-space: normal; }
     .edit-checks { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }

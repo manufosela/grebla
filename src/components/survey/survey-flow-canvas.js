@@ -31,7 +31,7 @@ export class SurveyFlowCanvas extends LitElement {
       radial-gradient(var(--rm-border, #e3ebef) 1px, transparent 1px) 0 0 / 22px 22px;
       border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; overflow: hidden; touch-action: none; }
     svg.edges { position: absolute; inset: 0; pointer-events: none; }
-    .edge { fill: none; stroke: var(--rm-muted, #90a4b0); stroke-width: 2; }
+    .edge { fill: none; stroke: var(--rm-muted, #5b6b7d); stroke-width: 2; }
     .edge.cond { stroke: var(--teal); stroke-dasharray: 5 4; }
     .elabel-bg { fill: var(--rm-surface, #fff); stroke: var(--teal); stroke-width: 1.5px; }
     .elabel { fill: var(--rm-accent-700, #1f7a6e); font-size: 11px; font-weight: 700; }
@@ -43,7 +43,7 @@ export class SurveyFlowCanvas extends LitElement {
     .node.sel { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal), 0 3px 8px rgba(20,50,80,0.16); }
     .node.choice { border-left: 3px solid var(--teal); }
     .node.scale { border-left: 3px solid #4c86c6; }
-    .node.text { border-left: 3px solid var(--rm-muted, #90a4b0); }
+    .node.text { border-left: 3px solid var(--rm-muted, #5b6b7d); }
     .node.end { background: var(--rm-surface-hover, #eef3f5); align-items: center; justify-content: center;
       width: 120px; min-height: 40px; border-radius: 999px; font-weight: 700; color: var(--rm-muted, #5b6b7d); }
     .ntype { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
@@ -128,7 +128,7 @@ export class SurveyFlowCanvas extends LitElement {
         <svg class="edges" width=${width} height=${height}>
           <defs>
             <marker id="fc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--rm-muted, #90a4b0)"></path>
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--rm-muted, #5b6b7d)"></path>
             </marker>
             <marker id="fc-arrow-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)"></path>

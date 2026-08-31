@@ -36,15 +36,15 @@ export class PersonPermissions extends LitElement {
     :host { display: block; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     select {
       padding: 0.3rem 0.5rem; border-radius: 8px; font: inherit; font-size: 0.85rem;
       border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
     .table-wrap { overflow-x: auto; }
-    .muted { color: var(--rm-muted, #6b7280); }
-    .empty { color: var(--rm-muted, #6b7280); font-size: 0.9rem; }
+    .muted { color: var(--rm-muted, #5b6b7d); }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #b91c1c); font-size: 0.85rem; margin: 0 0 0.6rem; }
     .saved { color: var(--rm-ok, #15803d); font-size: 0.85rem; margin: 0 0 0.6rem; }
   `];

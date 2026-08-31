@@ -59,21 +59,21 @@ export class CatalogManager extends LitElement {
     .btn.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
     .btn.danger { color: var(--rm-danger, #dc2626); border-color: var(--rm-danger, #dc2626); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .sub { font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #6b7280); margin: 0.9rem 0 0.3rem; }
+    .sub { font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); margin: 0.9rem 0 0.3rem; }
     ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
     li { display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.4rem 0.7rem; }
     .swatch { width: 0.85rem; height: 0.85rem; border-radius: 999px; border: 1px solid rgba(0, 0, 0, 0.15); flex: none; }
     .label-col { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
     .name { font-size: 0.92rem; }
-    .sublabel { font-size: 0.72rem; color: var(--rm-muted, #6b7280); }
+    .sublabel { font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); }
     .color-in { width: 2.2rem; height: 2rem; padding: 0.1rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); cursor: pointer; }
     .toolbar .sub-in { min-width: 12rem; }
     .badge { font-size: 0.68rem; border-radius: 999px; padding: 0.05rem 0.45rem; background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f); }
-    .owner { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
+    .owner { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .spacer { flex: 1; }
     .actions { display: flex; gap: 0.35rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; }
   `;
 
   constructor() {

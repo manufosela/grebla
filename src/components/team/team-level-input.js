@@ -29,7 +29,7 @@ export class TeamLevelInput extends LitElement {
     }
     .lvl .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c, #999); border: 1px solid var(--rm-dot-border, rgba(0,0,0,0.1)); }
     .lvl.sel { border-color: var(--c, #2a9d8f); box-shadow: inset 0 0 0 1px var(--c, #2a9d8f); }
-    .tonext { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.6rem; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    .tonext { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.6rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
     .tonext.disabled { opacity: 0.5; }
   `;
 

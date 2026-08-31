@@ -26,7 +26,7 @@ export class MotivatorsMyResults extends LitElement {
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }
     .session { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 0.85rem 1rem; margin: 0 0 1rem; }
     .session h3 { margin: 0 0 0.15rem; font-size: 1rem; color: var(--rm-text, #111827); }
-    .when { color: var(--rm-muted, #6b7280); font-size: 0.8rem; margin: 0 0 0.6rem; }
+    .when { color: var(--rm-muted, #5b6b7d); font-size: 0.8rem; margin: 0 0 0.6rem; }
     ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.25rem; }
     li { display: flex; align-items: baseline; gap: 0.6rem; font-size: 0.9rem; }
     .rank { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);

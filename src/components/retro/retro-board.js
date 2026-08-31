@@ -183,7 +183,7 @@ export class RetroBoard extends LitElement {
     .edit { display: flex; gap: 0.35rem; }
     .edit input { flex: 1; min-width: 0; font: inherit; font-size: 0.82rem; padding: 0.35rem 0.5rem; border: 1px solid var(--teal); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #1e3a5f); }
     .edit .ghost { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec); color: var(--rm-text, #1e3a5f); }
-    .empty { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); }
+    .empty { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
   `];
 
   constructor() {

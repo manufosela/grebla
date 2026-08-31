@@ -145,11 +145,11 @@ export class SurveyAdmin extends LitElement {
     .add-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.6rem 0 1.4rem; }
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
-    .muted { color: var(--rm-muted, #6b7280); font-size: 0.85rem; align-self: center; }
+    .muted { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; align-self: center; }
     .csv-details { border: 1px dashed var(--rm-border, #cbd5e1); border-radius: 10px; padding: 0.5rem 0.9rem; margin: 0.75rem 0 1rem; }
     .csv-details summary { cursor: pointer; font-weight: 700; font-size: 0.95rem; padding: 0.25rem 0; }
     .pb-toggle { width: 100%; border: 0; background: none; font: inherit; text-align: left; display: flex; align-items: center; gap: 0.55rem; cursor: pointer; padding: 0.1rem 0; color: inherit; }
-    .pb-caret { color: var(--rm-muted, #6b7280); font-size: 0.8rem; width: 0.9rem; }
+    .pb-caret { color: var(--rm-muted, #5b6b7d); font-size: 0.8rem; width: 0.9rem; }
     .test-answer { border: 1px dashed var(--rm-border, #cbd5e1); border-radius: 8px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
     .test-answer ul { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.86rem; }
     .test-answer li { margin: 0.15rem 0; }
@@ -209,7 +209,7 @@ export class SurveyAdmin extends LitElement {
     .q-details { padding: 0; display: block; overflow: hidden; box-shadow: 0 1px 3px rgba(20,50,80,0.06); }
     .q-summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.55rem; padding: 0.55rem 0.75rem; }
     .q-summary::-webkit-details-marker { display: none; }
-    .q-summary::before { content: '▸'; color: var(--rm-muted, #90a4b0); transition: transform 0.15s; }
+    .q-summary::before { content: '▸'; color: var(--rm-muted, #5b6b7d); transition: transform 0.15s; }
     .q-details[open] > .q-summary::before { transform: rotate(90deg); }
     .q-details[open] > .q-summary { border-bottom: 1px solid var(--rm-border, #eef0f2); }
     .q-details > .q-top, .q-details > .q-opts, .q-details > .opts-field, .q-details > .flow { margin: 0.5rem 0.75rem; }

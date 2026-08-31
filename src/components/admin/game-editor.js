@@ -253,7 +253,7 @@ export class GameEditor extends LitElement {
     .island-title-wrap { display: inline-flex; align-items: center; gap: 0.4rem; }
     .island-title { margin: 0; font-size: 1.2rem; color: var(--rm-brand, #1e3a5f); }
     .area-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-bottom: 1rem; }
-    .atab { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+    .atab { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 999px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
     .atab:hover { color: var(--rm-text, #111827); border-color: var(--rm-accent, #3b82f6); }
     .atab.active { background: var(--rm-accent, #3b82f6); border-color: var(--rm-accent, #3b82f6); color: var(--rm-on-accent, #fff); }
     .atab .cnt { font-variant-numeric: tabular-nums; opacity: 0.75; margin-left: 0.2rem; }
@@ -263,7 +263,7 @@ export class GameEditor extends LitElement {
     .comarca-actions, .comarca-edit { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: 0.4rem; }
     .comarca-edit input { padding: 0.28rem 0.5rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; font: inherit; font-size: 0.82rem; }
     .house-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
-    .house-card { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-muted, #9ca3af); border-radius: 10px; background: var(--rm-surface, #fff); padding: 0.7rem 0.8rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.35rem; transition: box-shadow 0.12s, transform 0.12s, border-color 0.12s; }
+    .house-card { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-muted, #5b6b7d); border-radius: 10px; background: var(--rm-surface, #fff); padding: 0.7rem 0.8rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.35rem; transition: box-shadow 0.12s, transform 0.12s, border-color 0.12s; }
     .house-card:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); transform: translateY(-2px); border-color: var(--rm-accent, #3b82f6); }
     .house-card:focus-visible { outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 2px; }
     .house-card.tech { border-left-color: #3b82f6; }
@@ -275,8 +275,8 @@ export class GameEditor extends LitElement {
     .hc-kind.tech { background: #3b82f6; }
     .hc-kind.skill { background: #16a34a; }
     .hc-kind.milestone { background: #d97706; }
-    .hc-id { font-size: 0.72rem; color: var(--rm-muted, #6b7280); font-family: ui-monospace, SFMono-Regular, monospace; word-break: break-all; }
-    .hc-meta { display: flex; align-items: center; gap: 0.7rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin-top: auto; }
+    .hc-id { font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); font-family: ui-monospace, SFMono-Regular, monospace; word-break: break-all; }
+    .hc-meta { display: flex; align-items: center; gap: 0.7rem; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin-top: auto; }
     .hc-meta .mini { margin-left: auto; }
     .island-form { display: grid; gap: 0.8rem; }
     .island-form label { display: grid; gap: 0.25rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-text, #111827); }
@@ -300,7 +300,7 @@ export class GameEditor extends LitElement {
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     select, input[type='text'], input[type='url'], input[type='number'], textarea {
       padding: 0.45rem 0.6rem;
       border-radius: 8px;
@@ -312,7 +312,7 @@ export class GameEditor extends LitElement {
       box-sizing: border-box;
     }
     select:focus, input:focus, textarea:focus { background: var(--rm-surface, #fff); outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 1px; border-color: var(--rm-accent, #3b82f6); }
-    select:disabled, input:disabled, textarea:disabled { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #6b7280); cursor: not-allowed; }
+    select:disabled, input:disabled, textarea:disabled { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #5b6b7d); cursor: not-allowed; }
     textarea { width: 100%; min-height: 4.5rem; resize: vertical; }
     /* Las opciones del multiselect no heredan el fondo del select en Chrome:
        sin esto quedan blancas en tema oscuro. El gradiente en :checked es el
@@ -323,14 +323,14 @@ export class GameEditor extends LitElement {
       color: var(--rm-on-accent, #fff);
       font-weight: 700;
     }
-    label { font-size: 0.8rem; font-weight: 600; color: var(--rm-muted, #6b7280); display: block; margin-bottom: 0.25rem; }
+    label { font-size: 0.8rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); display: block; margin-bottom: 0.25rem; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem 1rem; margin-bottom: 0.75rem; }
     .field-wide { grid-column: 1 / -1; }
     .field input, .field select { width: 100%; }
     .field.check { display: flex; align-items: center; gap: 0.5rem; }
     .field.check label { margin-bottom: 0; }
     .field.check input[type='checkbox'] { width: auto; }
-    .muted { color: var(--rm-muted, #9ca3af); }
+    .muted { color: var(--rm-muted, #5b6b7d); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .notice { color: var(--rm-success, #16a34a); font-size: 0.85rem; font-weight: 600; }
     .warn {
@@ -343,7 +343,7 @@ export class GameEditor extends LitElement {
     }
     ul.plain { list-style: none; margin: 0.5rem 0; padding: 0; }
     .badge { display: inline-block; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
-    .badge.off { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #6b7280); }
+    .badge.off { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #5b6b7d); }
     .badge.dep { background: var(--rm-danger, #dc2626); color: #fff; }
     .stops { list-style: none; margin: 0.5rem 0; padding: 0; counter-reset: stop; }
     .stops li {
@@ -366,13 +366,13 @@ export class GameEditor extends LitElement {
       --multi-select-min-width: 100%;
       --multi-select-bg: var(--rm-field, #eef2f6);
       --multi-select-dropdown-bg: var(--rm-surface, #fff);
-      --multi-select-arrow-color: var(--rm-muted, #6b7280);
+      --multi-select-arrow-color: var(--rm-muted, #5b6b7d);
       --multi-select-border-color: var(--rm-border, #d1d5db);
       --multi-select-border-hover: var(--rm-accent, #3b82f6);
       --multi-select-border-focus: var(--rm-accent, #3b82f6);
       --multi-select-radius: 8px;
       --multi-select-text-color: var(--rm-text, #111827);
-      --multi-select-placeholder-color: var(--rm-muted, #6b7280);
+      --multi-select-placeholder-color: var(--rm-muted, #5b6b7d);
       --multi-select-checkbox-color: var(--rm-accent, #3b82f6);
       --multi-select-option-hover-bg: var(--rm-surface-hover, #eef3f5);
       --multi-select-option-selected-bg: var(--rm-track, #e9f0f2);
@@ -383,13 +383,13 @@ export class GameEditor extends LitElement {
     .route-group { margin-bottom: 1.25rem; }
     .route-group h3 { margin-top: 0; }
     .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem; }
-    .empty { color: var(--rm-muted, #9ca3af); padding: 0.75rem 0; }
+    .empty { color: var(--rm-muted, #5b6b7d); padding: 0.75rem 0; }
     /* Huevos de pascua (RMR-PCS-0030 · F2) */
-    .hint { color: var(--rm-muted, #6b7280); font-size: 0.85rem; max-width: 70ch; }
+    .hint { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; max-width: 70ch; }
     .egg-row { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
     .egg-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; }
-    .egg-head .muted { color: var(--rm-muted, #6b7280); font-size: 0.82rem; }
-    .egg-head .confirm { font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .egg-head .muted { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; }
+    .egg-head .confirm { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     .ord-btn { font-size: 0.8rem; }
     .egg-form { border: 1.5px solid var(--rm-accent, #3b82f6); border-radius: 12px; padding: 0.9rem 1rem; margin-top: 0.75rem; display: grid; gap: 0.6rem; }
     .egg-form label { display: grid; gap: 0.25rem; font-size: 0.85rem; font-weight: 600; }
@@ -402,15 +402,15 @@ export class GameEditor extends LitElement {
     .add-stop .field { min-width: 10rem; }
     /* ── Editor de ruta rediseñado (RMR-TSK-0265): pestañas + datos aireados ── */
     .rtabs { display: flex; gap: 1.1rem; margin: 0 0 1.1rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); flex-wrap: wrap; }
-    .rtab { border: 0; background: none; color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.92rem; font-weight: 700; padding: 0.45rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer; }
+    .rtab { border: 0; background: none; color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.92rem; font-weight: 700; padding: 0.45rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer; }
     .rtab.on { color: var(--rm-accent, #3b82f6); border-bottom-color: var(--rm-accent, #3b82f6); }
     .rtab:hover:not(.on) { color: var(--rm-text, #111827); }
     .rdatos { display: flex; flex-direction: column; gap: 0.5rem; }
     .rrow { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
     .rcell { display: flex; flex-direction: column; gap: 0.3rem; min-width: 12rem; flex: 1; }
-    .rlabel { font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.5rem; }
+    .rlabel { font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.5rem; }
     .robadge { align-self: flex-start; background: var(--rm-track, #eef2f4); border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; padding: 0.3rem 0.85rem; font-weight: 700; font-size: 0.9rem; }
-    .rhint { font-size: 0.78rem; color: var(--rm-muted, #6b7280); margin: 0.1rem 0 0; }
+    .rhint { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0.1rem 0 0; }
     .rhint code { background: var(--rm-track, #eef2f4); padding: 0.05rem 0.35rem; border-radius: 5px; font-size: 0.9em; }
     .rdatos input[type='text'], .rdatos textarea { width: 100%; box-sizing: border-box; }
     .rdatos textarea { min-height: 5rem; resize: vertical; }
@@ -422,7 +422,7 @@ export class GameEditor extends LitElement {
     .stopgroup { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; overflow: hidden; }
     .sghead { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; background: var(--rm-track, #f3f6f7); border-bottom: 1px solid var(--rm-border, #e5e7eb); }
     .sgbadge { font-weight: 800; font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
-    .sgcount { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    .sgcount { font-size: 0.76rem; color: var(--rm-muted, #5b6b7d); }
     .sgmove { margin-left: auto; display: flex; gap: 0.25rem; }
     .stopgroup .stops { margin: 0; padding: 0.25rem 0.5rem; }
     .stopgroup .stops li:last-child { border-bottom: 0; }

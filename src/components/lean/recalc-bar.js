@@ -15,7 +15,7 @@ export const recalcBarStyles = css`
   }
   .rebtn:disabled { opacity: 0.6; cursor: progress; }
   .rebtn:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
-  .updated { font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+  .updated { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
 `;
 
 /** Fecha del último cálculo (la más reciente entre todas las unidades), o null. */

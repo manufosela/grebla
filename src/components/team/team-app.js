@@ -54,7 +54,7 @@ export class TeamApp extends LitElement {
     .tab {
       border: 0;
       background: none;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       padding: 0.6rem 1rem;
       font-size: 0.9rem;
       font-weight: 600;
@@ -70,13 +70,13 @@ export class TeamApp extends LitElement {
       font-size: 0.88rem; font-weight: 600; cursor: pointer; padding: 0; margin-bottom: 1rem;
     }
     .loading, .placeholder {
-      padding: 2rem; text-align: center; color: var(--rm-muted, #6b7280);
+      padding: 2rem; text-align: center; color: var(--rm-muted, #5b6b7d);
       border: 1px dashed var(--rm-border, #d1d5db); border-radius: var(--rm-radius, 12px);
     }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; margin: 0.5rem 0; }
-    .scope { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .scope { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     .scope .seg { display: inline-flex; border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; overflow: hidden; }
-    .scope button { border: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.82rem; font-weight: 600; padding: 0.3rem 0.9rem; cursor: pointer; }
+    .scope button { border: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.82rem; font-weight: 600; padding: 0.3rem 0.9rem; cursor: pointer; }
     .scope button[aria-pressed="true"] { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .scope button:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
   `;

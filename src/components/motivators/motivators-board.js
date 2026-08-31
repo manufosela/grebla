@@ -36,9 +36,9 @@ export class MotivatorsBoard extends LitElement {
     .progress { font-weight: 800; color: var(--accent); }
     .grid { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
     @media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
-    h4 { margin: 0 0 0.6rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
+    h4 { margin: 0 0 0.6rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); }
     .tray, .slots { display: grid; gap: 0.5rem; }
-    .tray-empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; padding: 0.5rem; }
+    .tray-empty { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; padding: 0.5rem; }
     .slot {
       display: flex; align-items: center; gap: 0.5rem; min-height: 58px;
       border: 2px dashed var(--rm-border, #d1d5db); border-radius: 12px; padding: 0.3rem;
@@ -52,7 +52,7 @@ export class MotivatorsBoard extends LitElement {
       background: var(--accent-soft); color: var(--accent-ink); font-weight: 800; font-size: 0.9rem;
       display: grid; place-items: center;
     }
-    .slot-hint { color: var(--rm-muted, #9ca3af); font-size: 0.82rem; }
+    .slot-hint { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; }
     .slot motivators-card { flex: 1 1 auto; }
     .actions { display: flex; align-items: center; gap: 1rem; margin-top: 1.25rem; flex-wrap: wrap; }
     .finish {
@@ -62,7 +62,7 @@ export class MotivatorsBoard extends LitElement {
     .finish:disabled { opacity: 0.45; cursor: not-allowed; }
     .finish:focus-visible { outline: 3px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
     .count { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
-    .draft-note { color: var(--rm-muted, #6b7280); font-size: 0.78rem; margin: 0.6rem 0 0; }
+    .draft-note { color: var(--rm-muted, #5b6b7d); font-size: 0.78rem; margin: 0.6rem 0 0; }
     .ghost {
       position: fixed; z-index: 1200; pointer-events: none; transform: translate(-50%, -50%);
       background: var(--accent); color: var(--accent-on); border-radius: 10px; padding: 0.4rem 0.8rem;

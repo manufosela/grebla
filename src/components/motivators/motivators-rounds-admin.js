@@ -41,7 +41,7 @@ export class MotivatorsRoundsAdmin extends LitElement {
     .form { display: grid; gap: 0.6rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 1rem; margin: 0 0 1.25rem; }
     .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; }
     .field { display: grid; gap: 0.25rem; }
-    label { font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    label { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     input { font: inherit; padding: 0.4rem 0.55rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     input[type="text"] { min-width: 220px; }
@@ -55,18 +55,18 @@ export class MotivatorsRoundsAdmin extends LitElement {
     .item { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; border: 1px solid var(--rm-border, #e5e7eb);
       border-radius: 10px; padding: 0.6rem 0.85rem; }
     .item .name { font-weight: 700; color: var(--rm-text, #111827); }
-    .item .dates { color: var(--rm-muted, #6b7280); font-size: 0.85rem; }
+    .item .dates { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; }
     .badge { font-size: 0.72rem; font-weight: 800; border-radius: 999px; padding: 0.1rem 0.55rem; }
     .badge.open { background: var(--rm-success, #16a34a); color: #fff; }
     .badge.upcoming { background: var(--accent-soft); color: var(--accent-ink); }
-    .badge.closed { background: var(--rm-chip, #eef2f7); color: var(--rm-muted, #6b7280); }
+    .badge.closed { background: var(--rm-chip, #eef2f7); color: var(--rm-muted, #5b6b7d); }
     .spacer { flex: 1 1 auto; }
     .toggle { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
     .toggle:hover { border-color: var(--accent); color: var(--accent-ink); }
     .toggle.danger { color: var(--rm-danger, #dc2626); }
     .toggle.danger:hover { border-color: var(--rm-danger, #dc2626); color: var(--rm-danger, #dc2626); }
-    .empty { color: var(--rm-muted, #6b7280); font-size: 0.9rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .confirm-text { color: var(--rm-text, #111827); line-height: 1.5; margin: 0 0 1rem; }
     .confirm-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
     .danger-btn { background: var(--rm-danger, #dc2626); }

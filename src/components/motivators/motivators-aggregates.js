@@ -26,12 +26,12 @@ export class MotivatorsAggregates extends LitElement {
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.95rem; padding: 0.5rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }
     .bar-top { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0 0 1rem; }
-    .respondents { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
-    .legend { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; line-height: 1.45; }
-    label { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .respondents { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
+    .legend { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.75rem; line-height: 1.45; }
+    label { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     select { font: inherit; padding: 0.3rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
-    h4 { margin: 1.25rem 0 0.6rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
+    h4 { margin: 1.25rem 0 0.6rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); }
     .row { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 0.6rem; padding: 0.35rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     .rank { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);
       font-weight: 800; font-size: 0.78rem; display: grid; place-items: center; }
@@ -41,11 +41,11 @@ export class MotivatorsAggregates extends LitElement {
     .fill { height: 100%; background: var(--accent); border-radius: 999px; }
     .metric { text-align: right; font-variant-numeric: tabular-nums; }
     .metric .avg { font-weight: 800; color: var(--accent-ink); font-size: 0.95rem; }
-    .metric .sub { display: block; font-size: 0.72rem; color: var(--rm-muted, #6b7280); }
+    .metric .sub { display: block; font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); }
     table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.4rem; }
     th, td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); text-align: center; }
     th.mot, td.mot { text-align: left; font-weight: 700; color: var(--rm-text, #111827); }
-    caption { caption-side: top; text-align: left; color: var(--rm-muted, #6b7280); font-size: 0.78rem; margin-bottom: 0.3rem; }
+    caption { caption-side: top; text-align: left; color: var(--rm-muted, #5b6b7d); font-size: 0.78rem; margin-bottom: 0.3rem; }
   `;
 
   constructor() {

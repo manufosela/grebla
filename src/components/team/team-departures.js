@@ -47,17 +47,17 @@ export class TeamDepartures extends LitElement {
     .stats { display: flex; flex-wrap: wrap; gap: 1.5rem; }
     .stat { display: flex; flex-direction: column; gap: 0.2rem; }
     .stat .value { font-size: 1.6rem; font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
-    .stat .label { font-size: 0.78rem; color: var(--rm-muted, #6b7280); }
-    .period { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin-top: 0.75rem; }
+    .stat .label { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
+    .period { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin-top: 0.75rem; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
     .chip { background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
-    .muted { color: var(--rm-muted, #9ca3af); }
-    .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
+    .muted { color: var(--rm-muted, #5b6b7d); }
+    .empty { color: var(--rm-muted, #5b6b7d); padding: 1rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-    .hint { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
+    .hint { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.75rem; }
     .act-cell { text-align: right; white-space: nowrap; display: flex; gap: 0.4rem; justify-content: flex-end; }
     button.restore { border: 1px solid var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); background: var(--rm-surface, #fff); border-radius: 999px; padding: 0.3rem 0.7rem; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
     button.restore:hover { background: var(--rm-accent, #2a9d8f); color: #fff; }
@@ -68,7 +68,7 @@ export class TeamDepartures extends LitElement {
     .del-dialog { width: min(460px, calc(100% - 2rem)); background: var(--rm-surface, #fff); border-radius: 12px; padding: 1.2rem 1.4rem; box-shadow: 0 16px 44px rgba(17, 24, 39, 0.35); }
     .del-dialog h3 { margin: 0 0 0.6rem; color: var(--rm-danger, #dc2626); }
     .del-dialog p { font-size: 0.88rem; margin: 0 0 0.6rem; }
-    .del-hint { color: var(--rm-muted, #6b7280); }
+    .del-hint { color: var(--rm-muted, #5b6b7d); }
     .del-dialog input { width: 100%; box-sizing: border-box; font: inherit; padding: 0.5rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
     .del-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
     .del-actions .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer; }
