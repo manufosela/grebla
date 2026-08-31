@@ -4,7 +4,7 @@
  * superadmin. Viven en /leaders/{uid} con displayName/email para los selectores.
  */
 import { doc, collection, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { db, getRegionalFunctions } from './firebase.js';
 
 /** @typedef {{ uid: string, displayName: string|null, email: string|null, reportsTo: string|null }} Leader */
 
@@ -99,9 +99,8 @@ export function renameLeader(uid, displayName) {
  * @returns {Promise<{ ok: boolean, uid: string }>}
  */
 export async function addLeaderByEmail(email) {
-  const { app } = await import('./firebase.js');
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fns = getFunctions(app, 'europe-west1');
+  const { httpsCallable } = await import('firebase/functions');
+  const fns = await getRegionalFunctions();
   const res = await httpsCallable(fns, 'manageAccess')({ action: 'add', role: 'leader', email: String(email).trim() });
   return /** @type {any} */ (res.data);
 }
@@ -114,9 +113,8 @@ export async function addLeaderByEmail(email) {
  * @returns {Promise<{ ok: boolean, uid: string }>}
  */
 export async function grantAdminByEmail(email) {
-  const { app } = await import('./firebase.js');
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fns = getFunctions(app, 'europe-west1');
+  const { httpsCallable } = await import('firebase/functions');
+  const fns = await getRegionalFunctions();
   const res = await httpsCallable(fns, 'grantAdmin')({ email: String(email).trim() });
   return /** @type {any} */ (res.data);
 }

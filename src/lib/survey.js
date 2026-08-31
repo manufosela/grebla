@@ -4,13 +4,13 @@
  * lo impiden— sino que habla solo con las Cloud Functions, que son las únicas que
  * escriben (Admin SDK). El token del enlace es la credencial.
  */
-import { app, db } from './firebase.js';
+import { db, getRegionalFunctions } from './firebase.js';
 import { collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
 /** Instancia httpsCallable de una función en la región del proyecto. */
 async function callable(name) {
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  return httpsCallable(getFunctions(app, 'europe-west1'), name);
+  const { httpsCallable } = await import('firebase/functions');
+  return httpsCallable(await getRegionalFunctions(), name);
 }
 
 // ── Admin de encuestas (solo superadmin; las reglas escriben /surveys directo) ──

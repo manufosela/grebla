@@ -34,9 +34,9 @@ export async function createLeanContainer(options = {}) {
       database = firebase.db;
     }
     const callFn = async (name) => {
-      const { app } = await import('../../../lib/firebase.js');
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const fns = getFunctions(app, 'europe-west1');
+      const { getRegionalFunctions } = await import('../../../lib/firebase.js');
+      const { httpsCallable } = await import('firebase/functions');
+      const fns = await getRegionalFunctions();
       // El timeout del CLIENTE es 70s por defecto y estas funciones tienen 300s
       // en servidor: sin esto, un recálculo largo daba «deadline-exceeded» en la
       // UI aunque la función terminaba bien (RMR-BUG-0046).

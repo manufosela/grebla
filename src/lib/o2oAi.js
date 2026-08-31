@@ -13,9 +13,9 @@ import { sanitizePrep } from '../tools/o2o/application/aiProposal.js';
  * @returns {Promise<PrepProposal>}  Guía + formulario saneados, listos para los editores.
  */
 export async function proposePrep({ focus, previousPeriods }) {
-  const { app } = await import('./firebase.js');
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fns = getFunctions(app, 'europe-west1');
+  const { getRegionalFunctions } = await import('./firebase.js');
+  const { httpsCallable } = await import('firebase/functions');
+  const fns = await getRegionalFunctions();
   const res = await httpsCallable(fns, 'o2oProposeQuestions')({ focus, previousPeriods });
   const data = /** @type {{ proposal: unknown }} */ (res.data);
   return sanitizePrep(data?.proposal);

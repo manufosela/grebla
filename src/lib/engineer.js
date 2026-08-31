@@ -9,7 +9,7 @@
  * @typedef {import('../tools/team/domain/types.js').Person} Person
  */
 import { collection, query, where, limit, getDocs, addDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { db, getRegionalFunctions } from './firebase.js';
 import { getPersonProfile, getSession, getOrgConfig } from './firestore.js';
 import { getCareerMap, getArchipelago } from './careerMap.js';
 import { computeProfile } from './scoring.js';
@@ -111,9 +111,8 @@ export async function deleteMyPerson(personId) {
  */
 export async function sealInvite() {
   try {
-    const { app } = await import('./firebase.js');
-    const { getFunctions, httpsCallable } = await import('firebase/functions');
-    const fns = getFunctions(app, 'europe-west1');
+    const { httpsCallable } = await import('firebase/functions');
+    const fns = await getRegionalFunctions();
     const res = await httpsCallable(fns, 'sealInvite')();
     return Boolean(/** @type {any} */ (res.data)?.sealed);
   } catch {
@@ -130,9 +129,8 @@ export async function sealInvite() {
  */
 export async function ensureEmployeePerson() {
   try {
-    const { app } = await import('./firebase.js');
-    const { getFunctions, httpsCallable } = await import('firebase/functions');
-    const fns = getFunctions(app, 'europe-west1');
+    const { httpsCallable } = await import('firebase/functions');
+    const fns = await getRegionalFunctions();
     const res = await httpsCallable(fns, 'ensureEmployeePerson')();
     const data = /** @type {any} */ (res.data) ?? {};
     return Boolean(data.created) || data.reason === 'linked';
