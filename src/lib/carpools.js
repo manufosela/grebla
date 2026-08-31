@@ -29,7 +29,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { db, app } from './firebase.js';
+import { db, getRegionalFunctions } from './firebase.js';
 import {
   DEFAULT_CARPOOL_SEATS,
   MIN_CARPOOL_SEATS,
@@ -238,8 +238,8 @@ export async function closeCarpool(carpool) {
  * @returns {Promise<{ ok: boolean }>}
  */
 export async function inviteToCarpoolByEmail(carpoolId, email) {
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fns = getFunctions(app, 'europe-west1');
+  const { httpsCallable } = await import('firebase/functions');
+  const fns = await getRegionalFunctions();
   const res = await httpsCallable(fns, 'inviteToCarpool')({ carpoolId, email: String(email ?? '').trim() });
   return res.data;
 }
@@ -251,8 +251,8 @@ export async function inviteToCarpoolByEmail(carpoolId, email) {
  * @returns {Promise<{ ok: boolean, joined: boolean }>}
  */
 export async function respondCarpoolInvitation(carpoolId, accept) {
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fns = getFunctions(app, 'europe-west1');
+  const { httpsCallable } = await import('firebase/functions');
+  const fns = await getRegionalFunctions();
   const res = await httpsCallable(fns, 'respondCarpoolInvitation')({ carpoolId, accept: accept === true });
   return res.data;
 }

@@ -16,7 +16,7 @@ import {
   doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment,
 } from 'firebase/firestore';
-import { db, app } from './firebase.js';
+import { db, getRegionalFunctions } from './firebase.js';
 import { isValidCard } from '../tools/poker/domain/deck.js';
 
 const SESSIONS = 'pokerSessions';
@@ -74,8 +74,8 @@ export async function listSquads() {
 
 /** Backlog de un squad (issues de Linear con ese label), vía Cloud Function. */
 export async function listSquadBacklog(linearLabel) {
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'listSquadBacklog');
+  const { httpsCallable } = await import('firebase/functions');
+  const fn = httpsCallable(await getRegionalFunctions(), 'listSquadBacklog');
   const res = await fn({ linearLabel });
   return res.data?.tasks ?? [];
 }

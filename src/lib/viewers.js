@@ -5,7 +5,7 @@
  * /viewers/{uid} con displayName/email, mismo patrón que /leaders/{uid}.
  */
 import { doc, collection, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { db, getRegionalFunctions } from './firebase.js';
 
 /** @typedef {{ uid: string, displayName: string|null, email: string|null }} Viewer */
 
@@ -56,9 +56,8 @@ export function removeViewer(uid) {
  * @returns {Promise<{ ok: boolean, uid: string }>}
  */
 export async function addViewerByEmail(email) {
-  const { app } = await import('./firebase.js');
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fns = getFunctions(app, 'europe-west1');
+  const { httpsCallable } = await import('firebase/functions');
+  const fns = await getRegionalFunctions();
   const res = await httpsCallable(fns, 'manageAccess')({ action: 'add', role: 'viewer', email: String(email).trim() });
   return /** @type {any} */ (res.data);
 }

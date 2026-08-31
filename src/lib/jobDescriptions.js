@@ -16,8 +16,8 @@
  * @property {Date|null} publishedAt
  */
 import { doc, collection, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db, app } from './firebase.js';
+import { httpsCallable } from 'firebase/functions';
+import { db, getRegionalFunctions } from './firebase.js';
 
 /**
  * Pulido IA de los ítems deterministas (RMR-TSK-0418): Haiku corrige SOLO
@@ -28,7 +28,7 @@ import { db, app } from './firebase.js';
  * @returns {Promise<{ responsibilities: string[], niceToHave: string[], month3: string, changed: number }>}
  */
 export async function polishJdRequirements(input) {
-  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'polishJdRequirements');
+  const fn = httpsCallable(await getRegionalFunctions(), 'polishJdRequirements');
   const { data } = await fn(input);
   return data;
 }

@@ -18,8 +18,8 @@
  * @property {boolean} hasSecret    Si el reto exige palabra clave (el valor vive en private).
  */
 import { doc, collection, getDocs, getDoc, setDoc, deleteDoc, query, where, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db, app } from './firebase.js';
+import { httpsCallable } from 'firebase/functions';
+import { db, getRegionalFunctions } from './firebase.js';
 
 /** @param {import('firebase/firestore').DocumentData} d @param {string} id @returns {EasterEgg} */
 const toEgg = (d, id) => ({
@@ -112,7 +112,7 @@ export async function listEggFinds(id) {
  * @returns {Promise<{ok: boolean, already: boolean, solved: boolean, wordError: boolean, foundAt: string|null}>}
  */
 export async function registerEggFind(eggId, secretWord) {
-  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'registerEggFind');
+  const fn = httpsCallable(await getRegionalFunctions(), 'registerEggFind');
   const res = await fn(secretWord ? { eggId, secretWord } : { eggId });
   return res.data;
 }

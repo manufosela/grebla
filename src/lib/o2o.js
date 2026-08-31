@@ -11,9 +11,9 @@
  * @returns {Promise<MyO2O>}
  */
 export async function getMyO2O() {
-  const { app } = await import('./firebase.js');
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const fns = getFunctions(app, 'europe-west1');
+  const { getRegionalFunctions } = await import('./firebase.js');
+  const { httpsCallable } = await import('firebase/functions');
+  const fns = await getRegionalFunctions();
   const res = await httpsCallable(fns, 'getMyO2O')();
   return /** @type {MyO2O} */ (res.data);
 }

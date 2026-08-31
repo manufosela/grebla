@@ -13,8 +13,8 @@
  * @property {Date|null} createdAt
  */
 import { doc, collection, getDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db, app } from './firebase.js';
+import { httpsCallable } from 'firebase/functions';
+import { db, getRegionalFunctions } from './firebase.js';
 
 /** @param {import('firebase/firestore').DocumentData} d @param {string} id @returns {WallKudo} */
 const toKudo = (d, id) => ({
@@ -32,7 +32,7 @@ const toKudo = (d, id) => ({
  * @returns {Promise<{ personId: string, name: string }[]>}
  */
 export async function listKudosRecipients() {
-  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'listKudosRecipients');
+  const fn = httpsCallable(await getRegionalFunctions(), 'listKudosRecipients');
   const { data } = await fn();
   return data.people ?? [];
 }
@@ -45,7 +45,7 @@ export async function listKudosRecipients() {
  * @returns {Promise<{ personId: string, name: string, created: boolean }>}
  */
 export async function ensureKudosRecipient(email, name) {
-  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'ensureKudosRecipient');
+  const fn = httpsCallable(await getRegionalFunctions(), 'ensureKudosRecipient');
   const { data } = await fn({ email, name });
   return data;
 }
@@ -56,7 +56,7 @@ export async function ensureKudosRecipient(email, name) {
  * @returns {Promise<{ ok: boolean, kudoId: string }>}
  */
 export async function submitKudo(input) {
-  const fn = httpsCallable(getFunctions(app, 'europe-west1'), 'submitKudo');
+  const fn = httpsCallable(await getRegionalFunctions(), 'submitKudo');
   const { data } = await fn(input);
   return data;
 }
