@@ -22,7 +22,8 @@ import { listLeaders, listSupermanagers } from '../lib/leaders.js';
 import './catalog-manager.js';
 import './org-chart.js';
 import './common/person-permissions.js';
-import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader } from '../lib/users.js';
+import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
+import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getPersonProfile } from '../lib/firestore.js';
@@ -157,6 +158,7 @@ export class SuperadminPanel extends LitElement {
     _peopleError: { state: true },
     _peopleNotice: { state: true },
     _confirmDeletePerson: { state: true },
+    _confirmRemoveAccount: { state: true },
     _busy: { state: true },
     _newPersonName: { state: true },
     _newPersonEmail: { state: true },
@@ -529,6 +531,7 @@ export class SuperadminPanel extends LitElement {
     this._peopleNotice = '';
     /** @type {string|null} id de persona pendiente de confirmar baja. */
     this._confirmDeletePerson = null;
+    this._confirmRemoveAccount = null;
     /** Mensaje del overlay mientras hay una escritura en curso, o null. */
     this._busy = null;
     this._newPersonName = '';
@@ -1111,6 +1114,55 @@ export class SuperadminPanel extends LitElement {
   _orphanAccounts() {
     const linked = new Set(this._peopleList.map((p) => p.uid).filter(Boolean));
     return this._users.filter((u) => !linked.has(u.uid));
+  }
+
+  /**
+   * Fila de una cuenta sin ficha. No todas son lo mismo: a un viewer se le dio
+   * acceso de solo lectura a propósito y no necesita ficha, mientras que una
+   * cuenta sin rol que no entra desde hace meses sí es residuo (RMR-TSK-0446).
+   * Pintarlas igual convertía lo esperable en un problema y escondía el residuo
+   * de verdad entre el ruido.
+   */
+  _renderOrphanRow(u) {
+    const tipo = classifyAccountWithoutPerson(u, { ahora: Date.now() });
+    const detalle = {
+      // El rol derivado ya incluye el gobierno: repetirlo daba «Superadmin y superadmin».
+      acceso: html`Tiene <strong>${ROLE_LABEL[u.role] ?? u.role}</strong>${u.isAdmin && u.role !== 'superadmin' ? ' y superadmin' : ''}: acceso concedido, sin ficha de persona.`,
+      reciente: html`Ha entrado hace poco y todavía no tiene ficha de persona.`,
+      residuo: html`Sin ningún acceso y sin actividad: se puede retirar.`,
+    }[tipo];
+    const retirando = this._confirmRemoveAccount === u.uid;
+    return html`<tr>
+      <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
+      <td>${u.email ?? html`<span class="muted">—</span>`}</td>
+      <td colspan="4"><span class="muted">${detalle}</span></td>
+      <td>
+        ${retirando
+          ? html`<span class="confirm">¿Retirar acceso? <button class="yes" @click=${() => this._removeAccount(u)}>Sí</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
+          : html`<button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button>
+            ${tipo === 'residuo'
+              ? html`<button class="del-btn" @click=${() => { this._confirmRemoveAccount = u.uid; }}>Retirar</button>`
+              : null}`}
+      </td>
+    </tr>`;
+  }
+
+  /** Retira los roles y el registro de una cuenta residual. */
+  async _removeAccount(u) {
+    this._confirmRemoveAccount = null;
+    return this._withBusy('Retirando la cuenta…', async () => {
+      this._peopleError = '';
+      this._peopleNotice = '';
+      try {
+        await deleteUnusedUser(u.uid);
+        this._peopleNotice = 'Cuenta retirada.';
+        await this._loadUsers();
+      } catch (err) {
+        // El mensaje de deleteUnusedUser explica qué reasignar antes: se enseña
+        // tal cual, en vez de un «no se pudo» que no ayuda a nadie.
+        this._peopleError = err instanceof Error ? err.message : 'No se pudo retirar la cuenta.';
+      }
+    });
   }
 
   /** Conmuta el superadmin de la cuenta vinculada a una persona (eje de gobierno). */
@@ -2693,12 +2745,7 @@ export class SuperadminPanel extends LitElement {
                     : html`<button class="del-btn" @click=${() => { this._confirmDeletePerson = p.id; }}>Baja</button>`}</td>
                 </tr>`;
               })}
-              ${this._orphanAccounts().map((u) => html`<tr>
-                <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
-                <td>${u.email ?? html`<span class="muted">—</span>`}</td>
-                <td colspan="4"><span class="muted">Se ha logado pero no tiene ficha de persona.</span></td>
-                <td><button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button></td>
-              </tr>`)}
+              ${this._orphanAccounts().map((u) => this._renderOrphanRow(u))}
             </tbody>
           </table></div>`}
     `;
