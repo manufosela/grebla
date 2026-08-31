@@ -183,6 +183,56 @@ export function hubAsView(flag, real) {
 }
 
 /**
+ * Qué es realmente una cuenta que aparece sin ficha de persona (RMR-TSK-0446).
+ *
+ * El panel las pintaba todas igual, como si fueran una anomalía —«se ha logado
+ * pero no tiene ficha»—, y eso es falso en el caso más común: a un viewer se le
+ * da acceso de solo lectura **a propósito** y no necesita ficha. Además el login
+ * no restringe dominio y cada entrada escribe en `/users`, así que cualquiera
+ * que abra la app deja una fila: sin distinguir, el aviso convierte lo esperable
+ * en un problema y esconde el residuo de verdad entre el ruido.
+ *
+ *  - `acceso`   tiene rol o gobierno: está así queriendo. No es una anomalía.
+ *  - `reciente` sin rol, pero ha entrado hace poco: alguien nuevo a quien aún no
+ *               se le ha hecho la ficha.
+ *  - `residuo`  sin rol y sin rastro de actividad: candidata a retirar.
+ *
+ * @param {{ role?: string, isAdmin?: boolean, isSurveyAdmin?: boolean, lastLogin?: unknown }} user
+ * @param {{ ahora?: number, diasInactiva?: number }} [opts] `ahora` en ms; por
+ *   defecto 90 días sin entrar para considerarla residuo.
+ * @returns {'acceso'|'reciente'|'residuo'}
+ */
+export function classifyAccountWithoutPerson(user, { ahora = 0, diasInactiva = 90 } = {}) {
+  const tieneAcceso = (user?.role && user.role !== 'none') || user?.isAdmin === true || user?.isSurveyAdmin === true;
+  if (tieneAcceso) return 'acceso';
+  const ultimo = toMillis(user?.lastLogin);
+  if (ultimo === null) return 'residuo';
+  // Sin `ahora` no se puede juzgar la antigüedad: ante la duda, no se marca
+  // como residuo (proponer retirar a alguien que sí entra es peor que callar).
+  if (!ahora) return 'reciente';
+  return ahora - ultimo > diasInactiva * 24 * 60 * 60 * 1000 ? 'residuo' : 'reciente';
+}
+
+/**
+ * Milisegundos de un lastLogin, venga como Timestamp de Firestore, Date o ISO.
+ * @param {unknown} valor
+ * @returns {number|null}
+ */
+function toMillis(valor) {
+  if (!valor) return null;
+  if (typeof valor === 'object' && typeof (/** @type {any} */ (valor).toMillis) === 'function') {
+    return /** @type {any} */ (valor).toMillis();
+  }
+  if (valor instanceof Date) return valor.getTime();
+  if (typeof valor === 'number') return valor;
+  if (typeof valor === 'string') {
+    const t = Date.parse(valor);
+    return Number.isNaN(t) ? null : t;
+  }
+  return null;
+}
+
+/**
  * @typedef {'engineer'|'leader'|'supermanager'|null} FunctionalRole
  * @typedef {'admin'|'viewer'|null} InstanceAccess
  */

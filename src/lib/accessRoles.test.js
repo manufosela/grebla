@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, hubAsView } from './accessRoles.js';
+import { ROLE_COLLECTION, accessAxes, accessLabel, branchScopeFor, canGovern, hasAccess, leaderChainsFrom, leadsTeam, leadersReportingTo, mergeAccessUsers, unlinkedUsers, viewAll, viewsFor, hubAsView, classifyAccountWithoutPerson } from './accessRoles.js';
 
 describe('viewsFor (RMR-TSK-0304: vistas desde los dos ejes)', () => {
   it('un admin que además es líder conserva todas las vistas', () => {
@@ -421,5 +421,63 @@ describe('hubAsView: el hub bajo la vista elegida (RMR-BUG-0104)', () => {
 
   it('un flag que no reconoce no rebaja ni amplía nada', () => {
     expect(hubAsView('lo-que-sea', superadmin)).toEqual({ isSuperadmin: true, isLeaderish: true, generic: false });
+  });
+});
+
+describe('classifyAccountWithoutPerson: qué es una cuenta sin ficha (RMR-TSK-0446)', () => {
+  const HOY = Date.parse('2026-08-31T12:00:00Z');
+  const haceDias = (n) => new Date(HOY - n * 24 * 60 * 60 * 1000).toISOString();
+
+  it('con rol o gobierno está así queriendo: no es una anomalía', () => {
+    // El caso real de producción: un viewer al que se le dio acceso de solo
+    // lectura a propósito. Borrarlo le habría quitado el acceso.
+    for (const quien of [
+      { role: 'viewer', lastLogin: haceDias(400) },
+      { role: 'leader', lastLogin: null },
+      { role: 'none', isAdmin: true, lastLogin: null },
+      { role: 'none', isSurveyAdmin: true, lastLogin: haceDias(999) },
+    ]) {
+      expect(classifyAccountWithoutPerson(quien, { ahora: HOY })).toBe('acceso');
+    }
+  });
+
+  it('sin rol y recién entrada: alguien nuevo sin ficha todavía', () => {
+    expect(classifyAccountWithoutPerson({ role: 'none', lastLogin: haceDias(3) }, { ahora: HOY })).toBe('reciente');
+  });
+
+  it('sin rol y sin entrar en mucho tiempo: residuo', () => {
+    expect(classifyAccountWithoutPerson({ role: 'none', lastLogin: haceDias(200) }, { ahora: HOY })).toBe('residuo');
+  });
+
+  it('sin rol y sin rastro de haber entrado nunca: residuo', () => {
+    // Los docs creados a mano, con solo displayName.
+    expect(classifyAccountWithoutPerson({ displayName: 'Alguien' }, { ahora: HOY })).toBe('residuo');
+  });
+
+  it('el umbral se puede ajustar, y el límite no marca residuo', () => {
+    const justo = { role: 'none', lastLogin: haceDias(90) };
+    expect(classifyAccountWithoutPerson(justo, { ahora: HOY })).toBe('reciente');
+    expect(classifyAccountWithoutPerson(justo, { ahora: HOY, diasInactiva: 30 })).toBe('residuo');
+  });
+
+  it('sin saber qué día es hoy, no se acusa a nadie de residuo', () => {
+    // Proponer retirar a quien sí entra es peor que no decir nada.
+    expect(classifyAccountWithoutPerson({ role: 'none', lastLogin: haceDias(500) })).toBe('reciente');
+  });
+
+  it('da igual cómo venga la fecha: Timestamp, Date, ISO o milisegundos', () => {
+    const hace10 = HOY - 10 * 24 * 60 * 60 * 1000;
+    for (const lastLogin of [
+      { toMillis: () => hace10 },
+      new Date(hace10),
+      new Date(hace10).toISOString(),
+      hace10,
+    ]) {
+      expect(classifyAccountWithoutPerson({ role: 'none', lastLogin }, { ahora: HOY })).toBe('reciente');
+    }
+  });
+
+  it('una fecha ilegible no cuela como actividad', () => {
+    expect(classifyAccountWithoutPerson({ role: 'none', lastLogin: 'ayer por la tarde' }, { ahora: HOY })).toBe('residuo');
   });
 });
