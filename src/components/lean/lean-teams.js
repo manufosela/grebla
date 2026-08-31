@@ -38,20 +38,20 @@ export class LeanTeams extends LitElement {
     .btn.danger { color: var(--rm-danger, #dc2626); border-color: var(--rm-danger, #dc2626); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .spacer { flex: 1; }
-    .info { font-size: 0.82rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
+    .info { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     details.manual { margin: 0 0 1rem; }
-    details.manual summary { cursor: pointer; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    details.manual summary { cursor: pointer; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
     .manual .row { display: flex; gap: 0.6rem; align-items: end; flex-wrap: wrap; margin: 0.6rem 0 0; }
-    label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.76rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.76rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     input, select { font: inherit; padding: 0.4rem 0.55rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     h4 { font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); margin: 1.1rem 0 0.4rem; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     .label-cell { font-weight: 700; }
-    .muted { color: var(--rm-muted, #9ca3af); }
+    .muted { color: var(--rm-muted, #5b6b7d); }
     .err { color: var(--rm-danger, #dc2626); font-size: 0.8rem; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .actions { display: flex; gap: 0.35rem; justify-content: flex-end; }
   `;

@@ -33,7 +33,7 @@ export class O2OActions extends LitElement {
   static styles = css`
     :host { display: block; }
     .row { display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap; margin-bottom: 1rem; }
-    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     select, input[type='text'] {
       font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db);
       border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
@@ -51,12 +51,12 @@ export class O2OActions extends LitElement {
       display: flex; align-items: center; gap: 0.75rem;
       border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.55rem 0.85rem;
     }
-    .item.done .desc { text-decoration: line-through; color: var(--rm-muted, #9ca3af); }
+    .item.done .desc { text-decoration: line-through; color: var(--rm-muted, #5b6b7d); }
     .item .desc { flex: 1; font-size: 0.92rem; }
     .who { font-size: 0.72rem; border-radius: 999px; padding: 0.1rem 0.5rem; background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f); }
     .actions { display: flex; gap: 0.4rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
   `;
 
   constructor() {

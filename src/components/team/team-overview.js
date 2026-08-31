@@ -41,21 +41,21 @@ export class TeamOverview extends LitElement {
     .radar-grid { fill: none; stroke: var(--rm-border, #e5e7eb); }
     .radar-axis { stroke: var(--rm-border, #e5e7eb); }
     .radar-area { fill: color-mix(in srgb, var(--rm-accent, #2a9d8f) 22%, transparent); stroke: var(--rm-accent, #2a9d8f); stroke-width: 2; }
-    .radar-label { font-size: 7px; fill: var(--rm-muted, #6b7280); }
+    .radar-label { font-size: 7px; fill: var(--rm-muted, #5b6b7d); }
     .bar-row { display: grid; grid-template-columns: 16ch 1fr 4ch; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; font-size: 0.85rem; }
     .track { height: 12px; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; }
     .fill { height: 100%; border-radius: 999px; background: var(--rm-accent, #2a9d8f); }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     .badge { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
     .badge.risk { background: var(--rm-coral-soft, #fdecea); color: var(--rm-coral-600, #e26d5e); }
     .badge.ok { background: var(--rm-teal-soft, #e6f4f1); color: var(--rm-teal-600, #23867a); }
     .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
     .chip { background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
-    .muted { color: var(--rm-muted, #9ca3af); }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; }
+    .muted { color: var(--rm-muted, #5b6b7d); }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .link-inline {
       border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
@@ -66,10 +66,10 @@ export class TeamOverview extends LitElement {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
     }
-    .note { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0.5rem 0 0; }
+    .note { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0.5rem 0 0; }
     .diag .score { display: flex; align-items: baseline; gap: 0.15rem; }
     .diag .score-num { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .diag .score-max { font-size: 0.9rem; color: var(--rm-muted, #9ca3af); }
+    .diag .score-max { font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); }
     .score-bar { height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; margin-bottom: 0.75rem; }
     .score-bar span { display: block; height: 100%; border-radius: 999px; }
     ul.gaps { list-style: none; margin: 0; padding: 0; }
@@ -77,7 +77,7 @@ export class TeamOverview extends LitElement {
     .sev { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
     .sev.crit { background: var(--rm-coral-soft, #fdecea); color: var(--rm-danger, #dc2626); }
     .sev.med { background: var(--rm-warning-soft, #fff4e5); color: var(--rm-warning-strong, #b25e09); }
-    .sev.low { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    .sev.low { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #5b6b7d); }
     .gap-text { flex: 1; min-width: 12ch; }
     .lever { color: var(--rm-accent, #2a9d8f); font-weight: 600; }
   `;

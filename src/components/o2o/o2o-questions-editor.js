@@ -34,7 +34,7 @@ export class O2OQuestionsEditor extends LitElement {
   static styles = css`
     :host { display: block; }
     .bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin: 0 0 1rem; }
-    .lead { font-size: 0.85rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; }
+    .lead { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.75rem; }
     .btn {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
@@ -51,7 +51,7 @@ export class O2OQuestionsEditor extends LitElement {
     .group-head input { font-weight: 700; }
     .q { display: flex; gap: 0.4rem; align-items: center; margin: 0 0 0.4rem; }
     .q .rm { flex: none; }
-    .muted { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
+    .muted { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .file { display: none; }
     /* Vista previa: cómo lo verá la persona (dentro del modal). */
@@ -61,7 +61,7 @@ export class O2OQuestionsEditor extends LitElement {
     .pv-q { margin: 0 0 0.9rem; }
     .pv-q p { margin: 0 0 0.3rem; font-size: 0.9rem; color: var(--rm-text, #111827); }
     .pv-q .ans { width: 100%; min-height: 2.4rem; border: 1px dashed var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-field, #eef2f6); }
-    .pv-empty { color: var(--rm-muted, #6b7280); font-size: 0.9rem; }
+    .pv-empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
   `;
 
   constructor() {

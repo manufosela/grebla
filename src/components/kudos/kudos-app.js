@@ -46,7 +46,7 @@ export class KudosApp extends LitElement {
     .seg button:focus-visible { outline: 2px solid var(--gr-navy, #1e3a5f); outline-offset: 2px; }
     .linkish { border: 0; background: none; padding: 0; font: inherit; color: var(--gr-teal, #2a9d8f); font-weight: 700; text-decoration: underline; cursor: pointer; }
     .error { background: color-mix(in srgb, #e76f51 12%, var(--rm-surface, #fff)); border: 1px solid #e76f51; border-radius: 8px; padding: 0.6rem 0.85rem; color: var(--rm-text, #111827); font-size: 0.88rem; }
-    .empty { color: var(--rm-muted, #6b7280); }
+    .empty { color: var(--rm-muted, #5b6b7d); }
 
     /* Muro */
     .weeknav { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 1rem; }
@@ -56,7 +56,7 @@ export class KudosApp extends LitElement {
     .wall { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.8rem; }
     .card { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--gr-teal, #2a9d8f); border-radius: var(--rm-radius, 12px); background: var(--rm-surface, #fff); padding: 0.85rem 1.1rem; }
     .card h3 { margin: 0; font-size: 0.98rem; color: var(--rm-navy, #1e3a5f); }
-    .card h3 .thanks { font-weight: 500; color: var(--rm-muted, #6b7280); }
+    .card h3 .thanks { font-weight: 500; color: var(--rm-muted, #5b6b7d); }
     .card ul { margin: 0.5rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.4rem; }
     .card li { font-size: 0.88rem; color: var(--rm-text, #111827); font-style: italic; }
     .card li::before { content: '“'; color: var(--gr-teal, #2a9d8f); }
@@ -68,8 +68,8 @@ export class KudosApp extends LitElement {
     input[type='text'], textarea { font: inherit; font-size: 0.9rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; padding: 0.55rem 0.7rem; background: var(--rm-field, color-mix(in srgb, var(--rm-text, #111827) 4%, var(--rm-surface, #fff))); color: var(--rm-text, #111827); }
     input[type='text']:focus, textarea:focus { background: var(--rm-surface, #fff); }
     textarea { min-height: 4.6rem; resize: vertical; }
-    .hint { font-weight: 400; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
-    .count { font-weight: 400; font-size: 0.78rem; color: var(--rm-muted, #6b7280); align-self: flex-end; font-variant-numeric: tabular-nums; }
+    .hint { font-weight: 400; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
+    .count { font-weight: 400; font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); align-self: flex-end; font-variant-numeric: tabular-nums; }
     .count.over { color: #e76f51; font-weight: 700; }
     .anon { background: color-mix(in srgb, var(--gr-teal, #2a9d8f) 10%, var(--rm-surface, #fff)); border-left: 3px solid var(--gr-teal, #2a9d8f); border-radius: 0 8px 8px 0; padding: 0.55rem 0.8rem; font-size: 0.84rem; color: var(--rm-text, #111827); }
     .send { align-self: flex-start; border: 0; border-radius: 999px; background: var(--gr-teal, #2a9d8f); color: #0c1420; font: inherit; font-weight: 700; font-size: 0.92rem; padding: 0.6rem 1.4rem; cursor: pointer; }

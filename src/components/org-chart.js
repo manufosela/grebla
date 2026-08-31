@@ -29,8 +29,8 @@ export class OrgChart extends LitElement {
 
   static styles = css`
     :host { display: block; color: var(--rm-text, #111827); }
-    .lead { color: var(--rm-muted, #6b7280); font-size: 0.95rem; margin: 0 0 1.25rem; }
-    .empty, .error { color: var(--rm-muted, #9ca3af); }
+    .lead { color: var(--rm-muted, #5b6b7d); font-size: 0.95rem; margin: 0 0 1.25rem; }
+    .empty, .error { color: var(--rm-muted, #5b6b7d); }
     .error { color: var(--rm-danger, #dc2626); }
     .pyramid {
       display: flex; flex-direction: column; align-items: center; gap: 1.3rem; padding: 1rem 0 0.5rem;
@@ -42,14 +42,14 @@ export class OrgChart extends LitElement {
        depende de alguien de su misma capa se pinta encima, con su flechita. */
     .pyr-level.stacked { flex-direction: column; gap: 0.35rem; }
     .pyr-subrow { display: flex; flex-wrap: wrap; gap: 0.6rem 1.2rem; justify-content: center; align-items: center; max-width: 100%; }
-    .pyr-suparrow { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; font-weight: 700; line-height: 1; cursor: help; }
+    .pyr-suparrow { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; font-weight: 700; line-height: 1; cursor: help; }
     .pyramid:not(.mini) .pyr-level { padding: 1.5rem 1rem 0.9rem; border: 1.5px solid color-mix(in srgb, var(--lv, #6b7280) 55%, transparent); background: color-mix(in srgb, var(--lv, #6b7280) 9%, transparent); border-radius: 14px; }
     .pyr-level.base-level { border-width: 3px; background: color-mix(in srgb, var(--lv, #2a9d8f) 15%, transparent); }
     .pyr-group { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.4rem 0.55rem; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 45%, transparent); background: color-mix(in srgb, var(--g, var(--rm-accent, #2a9d8f)) 7%, transparent); }
-    .pyr-level:not(:last-child)::after { content: '↑'; position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); color: var(--rm-muted, #9ca3af); font-size: 1rem; font-weight: 700; }
+    .pyr-level:not(:last-child)::after { content: '↑'; position: absolute; bottom: -1.05rem; left: 50%; transform: translateX(-50%); color: var(--rm-muted, #5b6b7d); font-size: 1rem; font-weight: 700; }
     .pyr-role { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.3rem 0.45rem; border: 2px solid; border-radius: 10px; padding: 0.45rem 0.75rem; font-size: 0.85rem; font-weight: 700; background: var(--rm-surface, #fff); max-width: 100%; }
     .pyr-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
-    .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #9ca3af); text-transform: uppercase; letter-spacing: 0.03em; }
+    .pyr-branch { font-style: normal; font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em; }
     /* Cabeza de otra área que cuelga de esta (RMR-TSK-0438): borde discontinuo
        y etiqueta con el color de SU área — es un dato del árbol, no una
        inferencia: «este rol es la cabeza de X y reporta aquí». */
@@ -66,7 +66,7 @@ export class OrgChart extends LitElement {
       font-weight: 800; font-size: 1rem; color: var(--rm-text, #111827);
       display: flex; flex-direction: column; gap: 0.15rem;
     }
-    .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    .pyr-crown em { font-style: normal; font-weight: 500; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     /* Árbol invertido (RMR-TSK-0440): lienzo con scroll propio; el SVG pinta las
        aristas y las tarjetas van encima en posición absoluta. */
     /* Visor del árbol: zoom con rueda y arrastre con el ratón, sin scrollbars. */
@@ -75,7 +75,7 @@ export class OrgChart extends LitElement {
     .tree-tools button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; width: 2rem; height: 2rem; font: inherit; font-weight: 700; cursor: pointer; }
     .tree-tools button.fit { width: auto; padding: 0 0.7rem; font-size: 0.82rem; }
     .tree-tools button:hover { border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
-    .tree-tools .hint { color: var(--rm-muted, #9ca3af); font-size: 0.75rem; margin-left: 0.35rem; }
+    .tree-tools .hint { color: var(--rm-muted, #5b6b7d); font-size: 0.75rem; margin-left: 0.35rem; }
     .tree-port { position: relative; overflow: hidden; height: min(68vh, 620px); border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; background: color-mix(in srgb, var(--rm-text, #111827) 3%, transparent); cursor: grab; touch-action: none; }
     .tree-port.grabbing { cursor: grabbing; }
     .tree-canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
@@ -99,7 +99,7 @@ export class OrgChart extends LitElement {
       position: absolute; top: -0.6rem; right: -0.5rem; z-index: 2;
       min-width: 1.35rem; height: 1.35rem; padding: 0 0.3rem; border-radius: 999px;
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
-      color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.68rem; font-weight: 800;
+      color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.68rem; font-weight: 800;
       line-height: 1; cursor: pointer;
     }
     .tree-node .fold:hover { border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
@@ -107,14 +107,14 @@ export class OrgChart extends LitElement {
     .tree-node.frontier-node .pyr-role { border-style: dashed; }
     /* Toggle Global / Por ramas (mismo lenguaje de pestaña subrayada). */
     .modes { display: flex; gap: 0.1rem; border-bottom: 2px solid var(--rm-border, #e5e7eb); margin-bottom: 0.5rem; }
-    .mode { border: 0; background: none; color: var(--rm-muted, #6b7280); padding: 0.5rem 0.9rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+    .mode { border: 0; background: none; color: var(--rm-muted, #5b6b7d); padding: 0.5rem 0.9rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
     .mode.on { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
     .mode:hover:not(.on) { color: var(--rm-text, #111827); }
     /* Mini-pirámides por rama, en rejilla. */
     /* Sub-pestañas por ÁREA (RMR-TSK-0437): mismo lenguaje de pestaña subrayada,
        un escalón más fino; cada área lleva su punto de color. */
     .areas { display: flex; gap: 0.1rem; flex-wrap: wrap; border-bottom: 1px solid var(--rm-border, #e5e7eb); margin: 0.25rem 0 0.75rem; }
-    .area { display: inline-flex; align-items: center; gap: 0.4rem; border: 0; background: none; color: var(--rm-muted, #6b7280); padding: 0.45rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+    .area { display: inline-flex; align-items: center; gap: 0.4rem; border: 0; background: none; color: var(--rm-muted, #5b6b7d); padding: 0.45rem 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
     .area.on { color: var(--rm-text, #111827); border-bottom-color: var(--a, var(--rm-accent, #2a9d8f)); }
     .area:hover:not(.on) { color: var(--rm-text, #111827); }
     .area:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 6px; }

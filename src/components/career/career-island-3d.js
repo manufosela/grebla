@@ -849,7 +849,7 @@ export class CareerIsland3D extends LitElement {
       place-items: center;
       text-align: center;
       padding: 1rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       font-weight: 600;
       background: rgba(220, 239, 245, 0.75);
     }

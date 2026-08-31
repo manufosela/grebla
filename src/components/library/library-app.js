@@ -62,14 +62,14 @@ export class LibraryApp extends LitElement {
     .seg button[aria-selected='true'] { background: var(--gr-teal, #2a9d8f); color: #0c1420; }
     .seg button:focus-visible { outline: 2px solid var(--gr-navy, #1e3a5f); outline-offset: 2px; }
     .error { background: color-mix(in srgb, #e76f51 12%, var(--rm-surface, #fff)); border: 1px solid #e76f51; border-radius: 8px; padding: 0.6rem 0.85rem; color: var(--rm-text, #111827); font-size: 0.88rem; }
-    .empty { color: var(--rm-muted, #6b7280); }
+    .empty { color: var(--rm-muted, #5b6b7d); }
 
     .shelf { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.8rem; }
     .book { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--gr-navy, #1e3a5f); border-radius: var(--rm-radius, 12px); background: var(--rm-surface, #fff); padding: 0.85rem 1.1rem; }
     .book.inactive { opacity: 0.55; }
     .book header { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
     .book h3 { margin: 0; font-size: 0.98rem; color: var(--rm-navy, #1e3a5f); }
-    .book .author { color: var(--rm-muted, #6b7280); font-size: 0.85rem; }
+    .book .author { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; }
     .badge { font-size: 0.72rem; font-weight: 700; border-radius: 999px; padding: 0.12rem 0.55rem; }
     .badge.format { background: var(--rm-track, #e9f0f2); color: var(--rm-navy, #1e3a5f); }
     /* Colores FIJOS (legibles en claro y oscuro): chip sólido, no mezcla. */
@@ -101,7 +101,7 @@ export class LibraryApp extends LitElement {
     .reqs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
     .req { border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); background: var(--rm-surface, #fff); padding: 0.7rem 1rem; display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
     .req .title { font-weight: 600; color: var(--rm-text, #111827); }
-    .req .meta { color: var(--rm-muted, #6b7280); font-size: 0.82rem; }
+    .req .meta { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; }
     .req.resuelta { opacity: 0.55; }
     .req .spacer { flex: 1; }
     [hidden] { display: none; }

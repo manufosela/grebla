@@ -41,10 +41,10 @@ export class CareerListView extends LitElement {
     .island { margin-bottom: 0.9rem; }
     .island > h4 { margin: 0.6rem 0 0.3rem; font-size: 0.95rem; color: var(--rm-text, #1a1a1a); }
     .area > h5 {
-      margin: 0.55rem 0 0.25rem; font-size: 0.72rem; font-weight: 700; color: var(--rm-muted, #667085);
+      margin: 0.55rem 0 0.25rem; font-size: 0.72rem; font-weight: 700; color: var(--rm-muted, #5b6b7d);
       text-transform: uppercase; letter-spacing: 0.04em;
     }
-    .hint { color: var(--rm-muted, #667085); font-size: 0.85rem; margin: 0; }
+    .hint { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; margin: 0; }
     .hint.small { font-size: 0.78rem; }
 
     .topic {
@@ -74,10 +74,10 @@ export class CareerListView extends LitElement {
     .badge.done { background: var(--rm-accent, #2a9d8f); color: #fff; }
     .badge.available { background: var(--rm-coral, #f2887a); color: #fff; }
     .badge.current { background: var(--rm-coral-600, #e26d5e); color: #fff; }
-    .badge.blocked { background: var(--rm-track, #d7dee2); color: var(--rm-muted, #667085); }
+    .badge.blocked { background: var(--rm-track, #d7dee2); color: var(--rm-muted, #5b6b7d); }
     .badge.route { background: transparent; border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
     .badge.endorsed { background: var(--rm-navy, #1e3a5f); color: #fff; }
-    .badge.dep { background: transparent; color: var(--rm-muted, #667085); border-color: var(--rm-border, #d7dee2); }
+    .badge.dep { background: transparent; color: var(--rm-muted, #5b6b7d); border-color: var(--rm-border, #d7dee2); }
   `;
 
   /** Badge principal (excluyente) según el estado del tema. Lógica en JS, no en la plantilla. */

@@ -50,7 +50,7 @@ function buildNoAccessSection(toolId) {
   const label = TOOL_LABELS[toolId];
   const body = document.createElement('p');
   body.textContent = `El acceso a ${label ? `«${label}»` : 'esta herramienta'} lo gestiona tu organización. Si crees que deberías tenerlo, pídeselo a un superadmin.`;
-  body.style.cssText = 'color:var(--rm-muted,#6b7280);margin:0 0 1.4rem;line-height:1.5;';
+  body.style.cssText = 'color:var(--rm-muted, #5b6b7d);margin:0 0 1.4rem;line-height:1.5;';
   const back = document.createElement('a');
   back.href = '/';
   back.textContent = '← Volver al inicio';

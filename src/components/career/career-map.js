@@ -115,7 +115,7 @@ export class CareerMapView extends LitElement {
     }
     .zoombar button:hover { border-color: var(--rm-accent, #2a9d8f); }
     .zoombar strong { color: var(--rm-text, #111827); font-size: 0.9rem; }
-    .zoombar .esc { color: var(--rm-muted, #9ca3af); font-size: 0.75rem; }
+    .zoombar .esc { color: var(--rm-muted, #5b6b7d); font-size: 0.75rem; }
 
     .island .land {
       fill: var(--rm-surface, #fff);
@@ -129,10 +129,10 @@ export class CareerMapView extends LitElement {
     .iname {
       font-size: 3px;
       font-weight: 700;
-      fill: var(--rm-muted, #6b7280);
+      fill: var(--rm-muted, #5b6b7d);
       pointer-events: none;
     }
-    .count { font-size: 2.4px; fill: var(--rm-muted, #9ca3af); pointer-events: none; }
+    .count { font-size: 2.4px; fill: var(--rm-muted, #5b6b7d); pointer-events: none; }
 
     .node .dot { stroke: var(--rm-dot-border, rgba(0, 0, 0, 0.15)); stroke-width: 0.15; cursor: pointer; }
     .node:focus-visible { outline: none; }
@@ -182,7 +182,7 @@ export class CareerMapView extends LitElement {
       gap: 0.35rem 0.9rem;
       margin-top: 0.45rem;
       font-size: 0.75rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
     .legend i { width: 0.65rem; height: 0.65rem; border-radius: 50%; display: inline-block; }
@@ -196,7 +196,7 @@ export class CareerMapView extends LitElement {
       border-radius: 2px;
       width: 1rem;
     }
-    .empty { color: var(--rm-muted, #6b7280); margin: 0.4rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); margin: 0.4rem; }
   `;
 
   constructor() {

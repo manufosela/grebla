@@ -50,13 +50,13 @@ export class RmProposalReview extends LitElement {
       color: var(--rm-text, #111827);
     }
     h3 { margin: 0 0 0.25rem; font-size: 1rem; }
-    .who { margin: 0 0 0.9rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .who { margin: 0 0 0.9rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     ul { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 0.55rem; }
     li { display: grid; grid-template-columns: auto 1fr; gap: 0.6rem; align-items: start; }
     li input { margin-top: 0.2rem; width: 1.05rem; height: 1.05rem; accent-color: var(--rm-accent, #2a9d8f); }
     .q { font-size: 0.88rem; font-weight: 600; margin: 0; }
     .vals { font-size: 0.85rem; margin: 0.1rem 0 0; }
-    .old { color: var(--rm-muted, #6b7280); text-decoration: line-through; }
+    .old { color: var(--rm-muted, #5b6b7d); text-decoration: line-through; }
     .new { font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
     button {

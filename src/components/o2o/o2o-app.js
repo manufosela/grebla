@@ -50,7 +50,7 @@ export class O2OApp extends LitElement {
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); }
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .tab {
-      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d);
       border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
     }
     .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
@@ -61,7 +61,7 @@ export class O2OApp extends LitElement {
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem;
     }
     h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
-    .lead { font-size: 0.88rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
+    .lead { font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     .btn {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.4rem 0.85rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
@@ -75,9 +75,9 @@ export class O2OApp extends LitElement {
     ul.periods li { display: flex; align-items: center; gap: 0.6rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.55rem 0.85rem; }
     ul.periods .name { flex: 1; font-weight: 600; }
     .head { display: flex; align-items: center; gap: 0.75rem; margin: 0 0 1rem; }
-    .placeholder { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; padding: 1.5rem 0; text-align: center; }
+    .placeholder { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; padding: 1.5rem 0; text-align: center; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; }
-    .empty { color: var(--rm-muted, #9ca3af); }
+    .empty { color: var(--rm-muted, #5b6b7d); }
   `;
 
   constructor() {

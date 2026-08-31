@@ -164,7 +164,7 @@ function mountVersionBadge() {
   badge.textContent = `v ${APP_VERSION}`;
   Object.assign(badge.style, {
     position: 'fixed', right: '8px', bottom: '8px', zIndex: '2147483000',
-    font: '11px/1.4 system-ui, sans-serif', color: 'var(--rm-muted, #6b7280)',
+    font: '11px/1.4 system-ui, sans-serif', color: 'var(--rm-muted, #5b6b7d)',
     background: 'var(--rm-surface, #fff)', border: '1px solid var(--rm-border, #e5e7eb)',
     borderRadius: '999px', padding: '2px 8px', cursor: 'default', opacity: '0.7',
   });

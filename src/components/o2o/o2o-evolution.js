@@ -22,15 +22,15 @@ export class O2OEvolution extends LitElement {
 
   static styles = css`
     :host { display: block; }
-    .lead { font-size: 0.88rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
+    .lead { font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); font-size: 0.88rem; }
-    th { font-size: 0.75rem; color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.03em; }
+    th { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .barcell { display: flex; align-items: center; gap: 0.5rem; }
     .bar { flex: 1; height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; min-width: 5rem; }
     .bar span { display: block; height: 100%; background: var(--rm-accent, #2a9d8f); }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
   `;
 

@@ -80,7 +80,7 @@ export class RoleQuestionnaire extends LitElement {
       gap: 0.75rem;
       margin-bottom: 1rem;
       font-size: 0.85rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .progress-track {
       flex: 1;
@@ -99,7 +99,7 @@ export class RoleQuestionnaire extends LitElement {
       font-size: 0.78rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       margin: 0 0 0.5rem;
       padding-bottom: 0.25rem;
       border-bottom: 1px solid var(--rm-border, #eef0f2);
@@ -114,7 +114,7 @@ export class RoleQuestionnaire extends LitElement {
     .yesno-btn {
       border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-surface, #fff);
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       border-radius: 999px;
       padding: 0.35rem 1.25rem;
       font-size: 0.85rem;
@@ -130,7 +130,7 @@ export class RoleQuestionnaire extends LitElement {
     }
     .yesno-btn:focus-visible { outline: 2px solid var(--rm-accent, #4f46e5); outline-offset: 2px; }
     .scale { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
-    .scale-ends { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
+    .scale-ends { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .scale fieldset { border: 0; padding: 0; margin: 0; display: inline-flex; gap: 0.25rem; }
     .scale label {
       display: inline-flex;
@@ -138,7 +138,7 @@ export class RoleQuestionnaire extends LitElement {
       align-items: center;
       cursor: pointer;
       font-size: 0.7rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .scale .dot {
       width: 28px;
@@ -159,7 +159,7 @@ export class RoleQuestionnaire extends LitElement {
     .scale input:focus-visible + .dot { outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 2px; }
     .multi { display: grid; gap: 0.35rem; }
     .multi label { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; }
-    .save-state { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); }
+    .save-state { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
     .template {
       display: flex;
       align-items: center;
@@ -167,7 +167,7 @@ export class RoleQuestionnaire extends LitElement {
       flex-wrap: wrap;
       margin-bottom: 0.75rem;
       font-size: 0.85rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .template select {
       padding: 0.35rem 0.6rem;
@@ -177,7 +177,7 @@ export class RoleQuestionnaire extends LitElement {
       color: var(--rm-text, #111827);
       font-size: 0.85rem;
     }
-    .template-hint { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
+    .template-hint { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .measurement {
       display: flex;
       align-items: center;
@@ -186,7 +186,7 @@ export class RoleQuestionnaire extends LitElement {
       flex-wrap: wrap;
       margin-bottom: 1rem;
       font-size: 0.8rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .measurement-new {
       border: 1px solid var(--rm-accent, #2a9d8f);
@@ -214,7 +214,7 @@ export class RoleQuestionnaire extends LitElement {
       border-radius: 8px;
       padding: 0.6rem 0.9rem;
       font-size: 0.85rem;
-      color: var(--rm-muted, #4b5563);
+      color: var(--rm-muted, #5b6b7d);
       margin-bottom: 1rem;
     }
     .default-hint {

@@ -29,24 +29,24 @@ export class TeamMap extends LitElement {
       border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
     }
     h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
-    .lead { font-size: 0.82rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
+    .lead { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     .wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 640px; }
     th, td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); vertical-align: top; }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; white-space: nowrap; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; white-space: nowrap; }
     td.person { font-weight: 600; white-space: nowrap; }
-    .roles { display: block; font-weight: 400; font-size: 0.75rem; color: var(--rm-muted, #9ca3af); }
+    .roles { display: block; font-weight: 400; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .lvl { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
     .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--rm-dot-border, rgba(0,0,0,0.12)); flex: none; }
-    .muted { color: var(--rm-muted, #9ca3af); }
+    .muted { color: var(--rm-muted, #5b6b7d); }
     .profile { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--rm-track, #e9f0f2); font-weight: 700; font-size: 0.78rem; }
     .areas { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
     .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
     .chip { background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.75rem; font-weight: 600; }
     .chip.p { background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 22%, transparent); }
-    .legend { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .legend .lvl { gap: 0.3rem; }
-    .empty { color: var(--rm-muted, #9ca3af); }
+    .empty { color: var(--rm-muted, #5b6b7d); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     tbody tr:hover td { background: var(--rm-surface-hover, #f9fafb); }
     /* Nombre de persona como enlace: abre su ficha (sub-pestaña por defecto). */

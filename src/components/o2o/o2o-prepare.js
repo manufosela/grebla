@@ -26,34 +26,34 @@ export class O2OPrepare extends LitElement {
 
   static styles = css`
     :host { display: block; }
-    .lead { font-size: 0.88rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
+    .lead { font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     .ai { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f);
       border-radius: 12px; padding: 1rem; margin: 0 0 1.5rem; background: var(--rm-surface-hover, #eef3f5); }
     .ai h3 { margin: 0 0 0.5rem; font-size: 0.98rem; color: var(--rm-text, #111827); }
-    .ai label { display: block; font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; margin: 0 0 0.3rem; }
+    .ai label { display: block; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; margin: 0 0 0.3rem; }
     textarea { font: inherit; width: 100%; padding: 0.5rem 0.65rem; border: 1px solid var(--rm-border, #d1d5db);
       border-radius: 8px; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); resize: vertical; }
     .actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.6rem; flex-wrap: wrap; }
     .btn { border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: #fff;
       border-radius: 8px; padding: 0.5rem 1.1rem; font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
     .btn:disabled { opacity: 0.5; cursor: progress; }
-    .hint { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); }
+    .hint { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; margin: 0.4rem 0 0; }
     section { margin: 0; }
     section > h3 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em;
-      color: var(--rm-muted, #6b7280); margin: 0 0 0.5rem; }
+      color: var(--rm-muted, #5b6b7d); margin: 0 0 0.5rem; }
     /* El bloque de IA, colapsable: no ocupa espacio una vez ya has generado. */
     details.ai { padding: 0; }
     details.ai > summary { cursor: pointer; list-style: none; padding: 0.8rem 1rem; font-size: 0.98rem;
       font-weight: 700; color: var(--rm-text, #111827); }
     details.ai > summary::-webkit-details-marker { display: none; }
-    details.ai > summary::after { content: '▸'; float: right; color: var(--rm-muted, #6b7280); }
+    details.ai > summary::after { content: '▸'; float: right; color: var(--rm-muted, #5b6b7d); }
     details.ai[open] > summary::after { content: '▾'; }
     details.ai > .ai-body { padding: 0 1rem 1rem; }
     /* Pestañas de las dos baterías. */
     .tabs { display: flex; gap: 0.5rem; margin: 0 0 1rem; flex-wrap: wrap; }
     .tabs button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
-      color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.4rem 1rem; font: inherit;
+      color: var(--rm-muted, #5b6b7d); border-radius: 999px; padding: 0.4rem 1rem; font: inherit;
       font-size: 0.86rem; font-weight: 600; cursor: pointer; }
     .tabs button[aria-selected="true"] { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
     .tabs button:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }

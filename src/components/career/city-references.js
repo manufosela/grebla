@@ -35,16 +35,16 @@ export class CityReferences extends LitElement {
       padding: 0.75rem 0.85rem;
     }
     h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--rm-text, #1e3a5f); font-family: var(--parch-title, inherit); }
-    .empty { margin: 0; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    .empty { margin: 0; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
     ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
     li { display: flex; gap: 0.5rem; align-items: flex-start; }
     .ref { flex: 1 1 auto; min-width: 0; }
     .ref a { color: var(--rm-accent, #2a9d8f); font-weight: 600; font-size: 0.88rem; text-decoration: none; word-break: break-word; }
     .ref a:hover { text-decoration: underline; }
-    .ref .note { margin: 0.15rem 0 0.25rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .ref .note { margin: 0.15rem 0 0.25rem; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     .badge {
       display: inline-flex; align-items: center; gap: 0.25rem;
-      font-size: 0.68rem; color: var(--rm-muted, #6b7280);
+      font-size: 0.68rem; color: var(--rm-muted, #5b6b7d);
       background: var(--rm-track, #eef2f7); border-radius: 999px; padding: 0.05rem 0.5rem;
     }
     .del {
@@ -69,7 +69,7 @@ export class CityReferences extends LitElement {
     .actions { display: flex; gap: 0.5rem; align-items: center; }
     .save { border: 0; background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); border-radius: 999px; padding: 0.4rem 0.9rem; font: inherit; font-weight: 700; cursor: pointer; }
     .save:disabled { opacity: 0.6; cursor: not-allowed; }
-    .cancel { border: 1px solid var(--rm-border, #e5e7eb); background: transparent; color: var(--rm-muted, #6b7280); border-radius: 999px; padding: 0.4rem 0.8rem; font: inherit; font-weight: 600; cursor: pointer; }
+    .cancel { border: 1px solid var(--rm-border, #e5e7eb); background: transparent; color: var(--rm-muted, #5b6b7d); border-radius: 999px; padding: 0.4rem 0.8rem; font: inherit; font-weight: 600; cursor: pointer; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.8rem; margin: 0; }
   `;
 

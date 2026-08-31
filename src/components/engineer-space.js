@@ -119,7 +119,7 @@ export class EngineerSpace extends LitElement {
     /* ── Barra de pestañas (patrón ARIA tablist) ── */
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .tab {
-      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d);
       border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
     }
     .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
@@ -130,7 +130,7 @@ export class EngineerSpace extends LitElement {
        de primer nivel — subrayado en la activa, sin píldora. */
     .subtabs { display: flex; gap: 1.1rem; margin: 0 0 1.1rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); flex-wrap: wrap; }
     .subtab {
-      border: 0; background: none; color: var(--rm-muted, #6b7280); font: inherit; font-size: 0.9rem; font-weight: 700;
+      border: 0; background: none; color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.9rem; font-weight: 700;
       padding: 0.4rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer;
     }
     .subtab.on { color: var(--rm-accent, #2a9d8f); border-bottom-color: var(--rm-accent, #2a9d8f); }
@@ -147,7 +147,7 @@ export class EngineerSpace extends LitElement {
     section > h2 { margin: 0 0 0.75rem; font-size: 1.2rem; }
     section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.rolemirror { border-left: 4px solid var(--rm-accent, #2a9d8f); }
-    .rm-intro { font-size: 0.88rem; color: var(--rm-muted, #6b7280); line-height: 1.5; margin: 0 0 1rem;
+    .rm-intro { font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); line-height: 1.5; margin: 0 0 1rem;
       background: var(--rm-surface-hover, #eef3f5); border-radius: 8px; padding: 0.7rem 0.9rem; }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
     section.o2o { border-left: 4px solid var(--rm-navy, #1e3a5f); }
@@ -159,19 +159,19 @@ export class EngineerSpace extends LitElement {
     .o2o-card .date { font-weight: 700; font-size: 0.88rem; }
     .o2o-card .body { font-size: 0.88rem; margin: 0.35rem 0 0; white-space: pre-wrap; }
     .o2o-act { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; padding: 0.15rem 0; }
-    .o2o-act.done { color: var(--rm-muted, #9ca3af); text-decoration: line-through; }
-    .o2o-note { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0.25rem 0 1rem; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.9rem; margin: 0; }
+    .o2o-act.done { color: var(--rm-muted, #5b6b7d); text-decoration: line-through; }
+    .o2o-note { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0.25rem 0 1rem; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; margin: 0; }
 
     /* ── Sección Mis datos (externos) ── */
     section.datos { border-left: 4px solid var(--rm-navy, #1e3a5f); }
-    .datos-note { font-size: 0.9rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; }
+    .datos-note { font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     .datos-dl { margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
     .datos-row { display: flex; gap: 0.75rem; border-bottom: 1px solid var(--rm-border, #eef0f2); padding: 0 0 0.5rem; }
     .datos-row dt { flex: 0 0 7rem; font-weight: 700; font-size: 0.85rem; color: var(--rm-navy, #1e3a5f); margin: 0; }
     .datos-row dd { margin: 0; font-size: 0.9rem; color: var(--rm-text, #111827); }
     /* Motivadores integrados como pestaña (RMR-TSK-0260). */
-    .mot-lead { font-size: 0.9rem; color: var(--rm-muted, #6b7280); margin: 0 0 1rem; max-width: 60ch; }
+    .mot-lead { font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; max-width: 60ch; }
     .mot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; }
     .mot-card { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1rem; border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f); border-radius: var(--rm-radius, 14px); background: var(--rm-surface, #fff); text-decoration: none; transition: background 0.12s, transform 0.12s; }
     .mot-card.affective { border-left-color: var(--gr-coral, #e26d5e); }
@@ -180,7 +180,7 @@ export class EngineerSpace extends LitElement {
     .mot-emoji { font-size: 1.6rem; }
     .mot-text { display: flex; flex-direction: column; }
     .mot-text strong { color: var(--rm-text, #111827); font-size: 1rem; }
-    .mot-text small { color: var(--rm-muted, #6b7280); font-size: 0.82rem; }
+    .mot-text small { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; }
     .playlink { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; margin-left: 0.35rem; }
     .playlink:hover { text-decoration: underline; }
     .map-cta { margin: 0.4rem 0 1.1rem; font-size: 0.88rem; }
@@ -192,15 +192,15 @@ export class EngineerSpace extends LitElement {
     ul.lvl-history { list-style: none; margin: 0.35rem 0 0; padding: 0; display: grid; gap: 0.3rem; }
     ul.lvl-history li { font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: baseline; }
     .lvl-change { font-weight: 700; font-variant-numeric: tabular-nums; }
-    .lvl-when { color: var(--rm-muted, #6b7280); font-size: 0.8rem; }
-    .lvl-note { color: var(--rm-muted, #6b7280); font-style: italic; }
+    .lvl-when { color: var(--rm-muted, #5b6b7d); font-size: 0.8rem; }
+    .lvl-note { color: var(--rm-muted, #5b6b7d); font-style: italic; }
     .now .desc { font-size: 0.85rem; color: var(--rm-text, #111827); margin: 0.2rem 0 0; }
-    .now .profile { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0.2rem 0 0; }
+    .now .profile { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0.2rem 0 0; }
     .expect { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
     .expect li { padding: 0.4rem 0; border-top: 1px solid var(--rm-border, #eef0f2); }
     .expect .dim { font-weight: 700; }
     .expect .txt { color: var(--rm-text, #111827); }
-    .expect .todo { color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .expect .todo { color: var(--rm-muted, #5b6b7d); font-style: italic; }
     .addn { margin: 0.3rem 0 0; }
     .addn .disc { font-weight: 700; font-size: 0.85rem; margin: 0.6rem 0 0.2rem; }
     .addn ul { list-style: none; margin: 0; padding: 0; font-size: 0.83rem; }
@@ -211,12 +211,12 @@ export class EngineerSpace extends LitElement {
     /* ── Ítems plegables (expectativas y addendums) ── */
     .fold { border-top: 1px solid var(--rm-border, #eef0f2); }
     .fold summary { cursor: pointer; padding: 0.45rem 0; font-size: 0.85rem; }
-    .fold summary::-webkit-details-marker { color: var(--rm-muted, #9ca3af); }
+    .fold summary::-webkit-details-marker { color: var(--rm-muted, #5b6b7d); }
     .fold summary:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
     .fold .dim { font-weight: 700; }
     .fold-body { font-size: 0.83rem; color: var(--rm-text, #111827); margin: 0.1rem 0 0.5rem; padding-left: 1.1rem; }
     .fold-empty { display: flex; gap: 0.4rem; align-items: baseline; padding: 0.45rem 0; font-size: 0.85rem; }
-    .fold-empty .todo { color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .fold-empty .todo { color: var(--rm-muted, #5b6b7d); font-style: italic; }
     @media (prefers-reduced-motion: no-preference) {
       .fold[open] .fold-body { animation: fold-in 0.16s ease-out; }
       @keyframes fold-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
@@ -225,24 +225,24 @@ export class EngineerSpace extends LitElement {
     .aspire { list-style: none; margin: 0; padding: 0; }
     .aspire > li { border-top: 1px solid var(--rm-border, #eef0f2); }
     .aspire summary { cursor: pointer; padding: 0.45rem 0; font-size: 0.88rem; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-    .aspire summary::-webkit-details-marker { color: var(--rm-muted, #9ca3af); }
+    .aspire summary::-webkit-details-marker { color: var(--rm-muted, #5b6b7d); }
     .aspire .code { font-weight: 700; }
-    .aspire .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; }
-    .aspire .desc { font-size: 0.82rem; color: var(--rm-muted, #4b5563); margin: 0 0 0.5rem; padding-left: 1.1rem; }
+    .aspire .track { color: var(--rm-muted, #5b6b7d); font-size: 0.78rem; }
+    .aspire .desc { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.5rem; padding-left: 1.1rem; }
 
     /* ── Evolución / Próximos pasos (única escritura del ingeniero) ── */
     .next-single { border-top: 1px solid var(--rm-border, #eef0f2); padding: 0.5rem 0 0.2rem; }
     .next-single .lvl { margin: 0; font-size: 0.9rem; }
     .next-single .code { font-weight: 700; }
-    .next-single .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; margin-left: 0.4rem; }
-    .next-single .desc { font-size: 0.82rem; color: var(--rm-muted, #4b5563); margin: 0.2rem 0 0.5rem; }
+    .next-single .track { color: var(--rm-muted, #5b6b7d); font-size: 0.78rem; margin-left: 0.4rem; }
+    .next-single .desc { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin: 0.2rem 0 0.5rem; }
     .target-picker { border: 0; margin: 0; padding: 0; }
     .target-legend { font-size: 0.85rem; font-weight: 700; color: var(--rm-text, #111827); padding: 0; margin: 0 0 0.3rem; }
     .target-opt { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.4rem 0; border-top: 1px solid var(--rm-border, #eef0f2); font-size: 0.88rem; cursor: pointer; }
     .target-opt input { margin: 0; accent-color: var(--rm-accent, #2a9d8f); cursor: pointer; }
     .target-opt input:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     .target-opt .code { font-weight: 700; }
-    .target-opt .track { color: var(--rm-muted, #6b7280); font-size: 0.78rem; }
+    .target-opt .track { color: var(--rm-muted, #5b6b7d); font-size: 0.78rem; }
     .target-btn {
       font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff);
@@ -259,7 +259,7 @@ export class EngineerSpace extends LitElement {
     /* ── Sección Mapa de carrera (resumen read-only) ── */
     .map-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.4rem; }
     .map-head .lvl { font-weight: 800; color: var(--rm-accent, #2a9d8f); }
-    .map-head .pts { font-size: 0.85rem; color: var(--rm-muted, #6b7280); font-variant-numeric: tabular-nums; }
+    .map-head .pts { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); font-variant-numeric: tabular-nums; }
     .progress { height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; margin-bottom: 1rem; }
     .progress span { display: block; height: 100%; background: var(--rm-accent, #2a9d8f); border-radius: 999px; }
     .now-city { margin: 0; font-weight: 700; }

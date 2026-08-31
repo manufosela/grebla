@@ -197,7 +197,7 @@ export class SuperadminPanel extends LitElement {
        contenido que va justo debajo. */
     .tabs { display: flex; gap: 0.1rem; margin-bottom: 1.25rem; flex-wrap: wrap; border-bottom: 2px solid var(--rm-border, #e5e7eb); }
     .tab {
-      border: 0; background: none; color: var(--rm-muted, #6b7280);
+      border: 0; background: none; color: var(--rm-muted, #5b6b7d);
       padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
       border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
     }
@@ -207,7 +207,7 @@ export class SuperadminPanel extends LitElement {
     /* Segundo nivel: mismo lenguaje de pestaña subrayada, un punto más pequeño. */
     .subtabs { display: flex; gap: 0.1rem; margin-bottom: 1.25rem; flex-wrap: wrap; border-bottom: 2px solid var(--rm-border, #e5e7eb); }
     .subtab {
-      border: 0; background: none; color: var(--rm-muted, #6b7280);
+      border: 0; background: none; color: var(--rm-muted, #5b6b7d);
       padding: 0.5rem 0.85rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
       border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
     }
@@ -219,7 +219,7 @@ export class SuperadminPanel extends LitElement {
        idénticas cuando el framework pinta sus propias sub-pestañas dentro. */
     .csubtabs { display: flex; gap: 1.1rem; margin: 0 0 1.25rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); flex-wrap: wrap; }
     .csubtab {
-      border: 0; background: none; color: var(--rm-muted, #6b7280); font-size: 0.92rem; font-weight: 700;
+      border: 0; background: none; color: var(--rm-muted, #5b6b7d); font-size: 0.92rem; font-weight: 700;
       padding: 0.45rem 0.1rem; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer;
     }
     .csubtab.on { color: var(--rm-accent, #3b82f6); border-bottom-color: var(--rm-accent, #3b82f6); }
@@ -294,15 +294,15 @@ export class SuperadminPanel extends LitElement {
        account) tengan el mismo ancho y la columna no baile. */
     .access summary { cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--rm-text, #111827); list-style: none; padding: 0.25rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 6px; display: inline-flex; justify-content: space-between; align-items: center; gap: 0.5rem; min-width: 8.5rem; box-sizing: border-box; white-space: nowrap; }
     .access summary::-webkit-details-marker { display: none; }
-    .access summary::after { content: '▾'; color: var(--rm-muted, #6b7280); }
+    .access summary::after { content: '▾'; color: var(--rm-muted, #5b6b7d); }
     .access[open] summary { border-color: var(--rm-accent, #3b82f6); color: var(--rm-accent, #3b82f6); }
     /* Opciones FLOTANTES (position:fixed, posicionadas en JS): no empujan la tabla
        ni las recorta el scroll horizontal del contenedor. */
     .access-opts { position: fixed; z-index: 10000; display: flex; flex-direction: column; gap: 0.4rem; padding: 0.5rem 0.65rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); font-size: 0.82rem; white-space: nowrap; }
     .access-opts label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
-    .access-opts label.implied { color: var(--rm-muted, #6b7280); cursor: default; }
+    .access-opts label.implied { color: var(--rm-muted, #5b6b7d); cursor: default; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     /* Editor de roles agrupado por rama (RMR-TSK-0375): sin línea entre filas de
        la misma rama; línea separadora SOLO al inicio de cada bloque de rama
        (menos el primero, que es el borde superior de la tabla). */
@@ -314,7 +314,7 @@ export class SuperadminPanel extends LitElement {
     /* Job Descriptions (RMR-PCS-0031 · F3): filas y formulario. */
     .egg-row { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
     .egg-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; }
-    .egg-head .muted { color: var(--rm-muted, #6b7280); font-size: 0.82rem; }
+    .egg-head .muted { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; }
     .egg-head a { color: var(--rm-accent, #2a9d8f); font-size: 0.82rem; word-break: break-all; }
     .egg-form { border: 1.5px solid var(--rm-accent, #2a9d8f); border-radius: 12px; padding: 0.9rem 1rem; margin-top: 0.75rem; display: grid; gap: 0.6rem; }
     .egg-form label { display: grid; gap: 0.25rem; font-size: 0.85rem; font-weight: 600; }
@@ -325,13 +325,13 @@ export class SuperadminPanel extends LitElement {
        de la línea más larga del JSON estira TODO el grid (RMR-BUG-0086). */
     .jd-preview { min-width: 0; max-width: 100%; }
     .jd-preview pre { max-height: 22rem; overflow: auto; background: var(--rm-track, #f3f4f6); border-radius: 8px; padding: 0.7rem; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; }
-    .rename-btn { border: 0; background: none; color: var(--rm-muted, #9ca3af); cursor: pointer; font: inherit; padding: 0 0.25rem; opacity: 0.55; }
+    .rename-btn { border: 0; background: none; color: var(--rm-muted, #5b6b7d); cursor: pointer; font: inherit; padding: 0 0.25rem; opacity: 0.55; }
     .rename-btn:hover, .rename-btn:focus-visible { color: var(--rm-accent, #2a9d8f); opacity: 1; outline: none; }
     input.role-rename { min-width: 11rem; }
     tbody tr.clickable { cursor: pointer; }
     tbody tr.clickable:hover { background: var(--rm-surface-hover, #f9fafb); }
     tr.sel { background: var(--rm-surface-hover, #eef2ff); }
-    .muted { color: var(--rm-muted, #9ca3af); }
+    .muted { color: var(--rm-muted, #5b6b7d); }
     .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff; }
     .del-btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-danger, #dc2626); border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
     .access-inline { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; margin-right: 0.5rem; }
@@ -354,7 +354,7 @@ export class SuperadminPanel extends LitElement {
     .ord-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .ord-btn:active { transform: scale(0.94); }
     .ord-btn.copied { border-color: var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 16%, var(--rm-surface, #fff)); color: var(--rm-text, #111827); transition: background 0.15s; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.88rem; padding: 0.5rem 0; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .notice { color: var(--rm-accent, #2a9d8f); font-size: 0.85rem; font-weight: 600; }
     .sub { font-size: 0.95rem; margin: 1.25rem 0 0.6rem; color: var(--rm-text, #111827); cursor: pointer; }
@@ -371,9 +371,9 @@ export class SuperadminPanel extends LitElement {
     .grant-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0.75rem 1.25rem; }
     .grant-cols > div { min-width: 0; }
     .grant-cols.dim { opacity: 0.45; pointer-events: none; }
-    .grant-h { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #9ca3af); margin-bottom: 0.3rem; }
+    .grant-h { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #5b6b7d); margin-bottom: 0.3rem; }
     .grant .chk { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.2rem 0; }
-    .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .confirm { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
     .row-actions { display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
@@ -386,7 +386,7 @@ export class SuperadminPanel extends LitElement {
     .admin-cell { text-align: center; }
     .admin-cell input { cursor: pointer; width: 1.1rem; height: 1.1rem; }
     .assign-body { display: flex; flex-direction: column; gap: 0.9rem; }
-    .assign-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #6b7280); }
+    .assign-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
     .assign-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
     select { padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); font: inherit; font-size: 0.85rem; }
     .cities { display: grid; gap: 0.9rem; }
@@ -423,13 +423,13 @@ export class SuperadminPanel extends LitElement {
     .fields input:focus-visible, .fields select:focus-visible, .fields textarea:focus-visible {
       outline: 2px solid var(--rm-accent, #3b82f6); outline-offset: 1px; border-color: var(--rm-accent, #3b82f6);
     }
-    .fields input:disabled, .fields select:disabled { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #6b7280); cursor: not-allowed; }
-    .fields label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    .fields input:disabled, .fields select:disabled { background: var(--rm-track, #f3f4f6); color: var(--rm-muted, #5b6b7d); cursor: not-allowed; }
+    .fields label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     .fields label.check { flex-direction: row; align-items: center; gap: 0.4rem; }
     .fields label.full { grid-column: 1 / -1; }
     .fields input, .fields select { min-width: 0; font-size: 0.85rem; }
     .recs-edit { margin-top: 0.75rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.6rem; }
-    .recs-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
+    .recs-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
     .recs-head button { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
     .rec-row { display: grid; grid-template-columns: 7rem 1fr 1fr auto; gap: 0.4rem; margin-bottom: 0.4rem; align-items: center; }
     .rec-row input { min-width: 0; }
@@ -447,7 +447,7 @@ export class SuperadminPanel extends LitElement {
     .matrix { display: grid; gap: 0.7rem; }
     .matrix-row { display: grid; grid-template-columns: 12rem 1fr; gap: 0.7rem; align-items: start; }
     .matrix-dim { padding-top: 0.4rem; font-size: 0.8rem; font-weight: 600; color: var(--rm-text, #111827); }
-    .matrix-pick { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    .matrix-pick { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     @media (max-width: 640px) { .matrix-row { grid-template-columns: 1fr; } }
   `];
 
@@ -1329,7 +1329,7 @@ export class SuperadminPanel extends LitElement {
       ${this._busy ? html`<busy-overlay message=${this._busy}></busy-overlay>` : null}
       <div class="bar">
         <h1>Gestión de la organización</h1>
-        ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #6b7280)">Modo solo lectura (viewer)</span>` : null}
+        ${this.readOnly ? html`<span class="badge" style="background:var(--rm-muted, #5b6b7d)">Modo solo lectura (viewer)</span>` : null}
         ${this.isLeader && !this.readOnly
           ? html`<button class="primary" @click=${this._useAsLeader}>Usar como manager →</button>`
           : null}

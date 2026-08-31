@@ -743,7 +743,7 @@ export class CareerApp extends LitElement {
     }
     .citypanel .seal:hover { filter: brightness(1.1); }
     .citypanel .seal:focus-visible { outline: 2px solid #f4d9a0; outline-offset: 2px; }
-    .close { border: none; background: transparent; font-size: 1.05rem; line-height: 1; padding: 0.25rem 0.45rem; color: var(--rm-muted, #6b7280); }
+    .close { border: none; background: transparent; font-size: 1.05rem; line-height: 1; padding: 0.25rem 0.45rem; color: var(--rm-muted, #5b6b7d); }
     .close:hover { color: var(--rm-text, #111827); background: var(--rm-track, #e9f0f2); }
     .badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0 0.75rem; }
     .badge { font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 999px; border: 1px solid transparent; }
@@ -772,7 +772,7 @@ export class CareerApp extends LitElement {
     .endorse .endorse-btn:hover:not(:disabled) { background: var(--rm-accent, #2a9d8f); color: #fff; }
     .endorse .unendorse {
       border: none; background: transparent; padding: 0.15rem 0.35rem;
-      font-size: 0.72rem; font-weight: 600; color: var(--rm-muted, #6b7280);
+      font-size: 0.72rem; font-weight: 600; color: var(--rm-muted, #5b6b7d);
       text-decoration: underline; border-radius: 6px;
     }
     .endorse .unendorse:hover:not(:disabled) { color: var(--rm-danger, #dc2626); }
@@ -788,7 +788,7 @@ export class CareerApp extends LitElement {
     .evprompt p { margin: 0; flex: 1 1 12rem; font-size: 0.82rem; color: var(--rm-text, #111827); font-weight: 600; }
     .evprompt .evlater {
       flex: 0 0 auto; border: none; background: transparent; padding: 0.2rem 0.4rem;
-      font-size: 0.75rem; font-weight: 600; color: var(--rm-muted, #6b7280);
+      font-size: 0.75rem; font-weight: 600; color: var(--rm-muted, #5b6b7d);
       text-decoration: underline; border-radius: 6px;
     }
     .evprompt .evlater:hover { color: var(--rm-navy, #1e3a5f); }
@@ -902,7 +902,7 @@ export class CareerApp extends LitElement {
       /* El botón-cofre (JG-13) no engorda la fila-scroll de la consola. */
       .coinsbtn .chesticon { width: 17px; height: 14px; }
     }
-    label { font-size: 0.8rem; color: var(--rm-muted, #6b7280); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
+    label { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; display: inline-flex; gap: 0.4rem; align-items: center; }
     select { padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); font-size: 0.9rem; }
     .viewswitch {
       display: inline-flex;
@@ -1017,7 +1017,7 @@ export class CareerApp extends LitElement {
     .listgrid { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     .panel { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); padding: 1rem 1.25rem; }
     .panel h3 { margin: 0 0 0.2rem; }
-    .kind { font-size: 0.8rem; color: var(--rm-muted, #6b7280); margin: 0 0 0.75rem; text-transform: capitalize; }
+    .kind { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.75rem; text-transform: capitalize; }
     .actions { display: flex; flex-direction: column; gap: 0.5rem; }
     /* Selector «¿Dónde en tu ruta?» (JG-9): plegado inline bajo «Añadir a la
        ruta…», con el acento ámbar de la ruta libre. */
@@ -1033,15 +1033,15 @@ export class CareerApp extends LitElement {
     }
     .routepick-lead { margin: 0; font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .routepick button { text-align: left; }
-    .routepick .routepick-cancel { color: var(--rm-muted, #6b7280); }
+    .routepick .routepick-cancel { color: var(--rm-muted, #5b6b7d); }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.5rem 0.8rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
     .nextstep { display: block; width: 100%; margin-top: 0.6rem; background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; font-weight: 800; text-align: center; }
     .nextstep:hover { filter: brightness(1.06); }
     .nextstep:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
-    .pre { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0.75rem 0 0; }
-    .hint { font-size: 0.85rem; color: var(--rm-muted, #9ca3af); }
-    .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin-top: 1rem; font-size: 0.72rem; color: var(--rm-muted, #6b7280); }
+    .pre { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0.75rem 0 0; }
+    .hint { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin-top: 1rem; font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); }
     .legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
     .legend .d { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     .legend .d.visited { background: var(--rm-accent, #2a9d8f); }
@@ -1057,15 +1057,15 @@ export class CareerApp extends LitElement {
     .error { color: #ff9d94; }
     .sea .error, .ficha .error, .onboard .error, .citypanel .error, .panel .error { color: var(--rm-danger, #dc2626); }
     .ev { margin-top: 1rem; border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.75rem; }
-    .ev summary { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
-    .ev label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    .ev summary { margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); cursor: pointer; font-weight: 700; }
+    .ev label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .ev input { width: 100%; box-sizing: border-box; margin-top: 0.2rem; padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid var(--rm-border, #d1d5db); font-size: 0.85rem; color: var(--rm-text, #111827); background: var(--rm-surface, #fff); }
     /* Listas de evidencias como chips (MC-8): ✕ para quitar, «+» para añadir. */
     .evlist { margin-bottom: 0.6rem; }
-    .evtitle { display: block; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #6b7280); margin-bottom: 0.25rem; }
+    .evtitle { display: block; font-weight: 600; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); margin-bottom: 0.25rem; }
     .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.35rem; padding: 0; }
     .chip { display: inline-flex; align-items: center; gap: 0.25rem; background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.15rem 0.3rem 0.15rem 0.6rem; font-size: 0.78rem; color: var(--rm-text, #111827); }
-    .chip-x { border: none; background: transparent; cursor: pointer; padding: 0.05rem 0.3rem; font-size: 0.7rem; line-height: 1; color: var(--rm-muted, #6b7280); border-radius: 999px; }
+    .chip-x { border: none; background: transparent; cursor: pointer; padding: 0.05rem 0.3rem; font-size: 0.7rem; line-height: 1; color: var(--rm-muted, #5b6b7d); border-radius: 999px; }
     .chip-x:hover { color: var(--rm-danger, #dc2626); background: rgba(220, 38, 38, 0.1); }
     .evadd { display: flex; gap: 0.35rem; }
     .evadd input { width: auto; flex: 1 1 auto; min-width: 0; margin-top: 0; }
@@ -1087,7 +1087,7 @@ export class CareerApp extends LitElement {
     }
     .matepop header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
     .matepop strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
-    .matepop p { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .matepop p { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     .matepop .pct { font-weight: 700; color: var(--rm-accent, #2a9d8f); }
     /* Cartel de bienvenida / onboarding (MC-13): overlay centrado sobre el
        mapa, por encima del panel de ciudadanía y del mini-popover. */
@@ -1115,7 +1115,7 @@ export class CareerApp extends LitElement {
       outline: none;
     }
     .onboard h3 { margin: 0 0 0.35rem; font-size: 1.15rem; color: var(--rm-navy, #1e3a5f); }
-    .onboard .lead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
+    .onboard .lead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); }
     .onboard ul { margin: 0 0 1rem; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
     .onboard li { font-size: 0.85rem; color: var(--rm-text, #111827); }
     .onboard li strong { color: var(--rm-navy, #1e3a5f); }
@@ -1216,10 +1216,10 @@ export class CareerApp extends LitElement {
       outline: none;
     }
     .retos .error { color: var(--rm-danger, #dc2626); }
-    .reto-lead { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .reto-lead { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     /* Enlace a la Biblioteca de la bodega (RMR-PCS-0033): en el plan de rutas
        y al pie de los recursos de cada casa. */
-    .bodega-link { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .bodega-link { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     .bodega-link a { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; }
     .bodega-link a:hover { text-decoration: underline; }
     /* En el papel del pergamino el accent no se re-tiñe (RMR-261): navy. */
@@ -1249,7 +1249,7 @@ export class CareerApp extends LitElement {
     .reto.active { border-color: var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); }
     .reto-info { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
     .reto-info strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
-    .reto-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    .reto-meta { font-size: 0.76rem; color: var(--rm-muted, #5b6b7d); }
     .reto-tag {
       flex: 0 0 auto;
       font-size: 0.72rem;
@@ -1305,7 +1305,7 @@ export class CareerApp extends LitElement {
     .tier-range {
       font-size: 0.7rem;
       font-weight: 600;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       margin-right: 0.35rem;
       white-space: nowrap;
     }
@@ -1337,7 +1337,7 @@ export class CareerApp extends LitElement {
       outline: none;
     }
     .ruta .error { color: var(--rm-danger, #dc2626); }
-    .ruta-lead { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .ruta-lead { margin: 0 0 0.85rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     /* Panel de logro «🏆 ¡Ruta completada!» (RMR-BUG-0017). */
     .route-done {
       position: relative;
@@ -1362,14 +1362,14 @@ export class CareerApp extends LitElement {
     .route-done-next .primary:hover { filter: brightness(0.96); }
     .route-done-ok { margin-top: 0.9rem; background: transparent; border: 1px solid rgba(255, 255, 255, 0.5); color: #fff; border-radius: 999px; padding: 0.4rem 1.1rem; font-weight: 700; cursor: pointer; }
     .ruta-done { text-align: left; }
-    .ruta-hint { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #9ca3af); }
+    .ruta-hint { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     /* Historial «🏆 Mis rutas» (RMR-TSK-0170). */
     .mis-rutas { margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--rm-border, #e5e7eb); }
     .mis-rutas h4 { margin: 0 0 0.6rem; font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
     .mis-rutas-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
     .mis-rutas-item { display: flex; flex-direction: column; gap: 0.05rem; padding: 0.4rem 0.55rem; border-radius: 8px; background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); }
     .mis-rutas-item .mr-name { font-weight: 700; font-size: 0.85rem; color: var(--rm-text, #111827); }
-    .mis-rutas-item .mr-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    .mis-rutas-item .mr-meta { font-size: 0.76rem; color: var(--rm-muted, #5b6b7d); }
     .mis-rutas-next { margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; }
     .mis-rutas-next .mr-next-lead { font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .mis-rutas-next .primary { align-self: flex-start; }
@@ -1399,7 +1399,7 @@ export class CareerApp extends LitElement {
     .ruta-stop.done .ruta-n { background: #f8e3b0; }
     .ruta-info { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; flex: 1; }
     .ruta-info strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
-    .ruta-meta { font-size: 0.76rem; color: var(--rm-muted, #6b7280); }
+    .ruta-meta { font-size: 0.76rem; color: var(--rm-muted, #5b6b7d); }
     .ruta-actions { display: flex; gap: 0.3rem; flex: 0 0 auto; }
     /* ── Tiempo de juego (MC-23): bloque de la ficha y tabla del manager. ── */
     .playblock {
@@ -1408,7 +1408,7 @@ export class CareerApp extends LitElement {
       border-radius: 10px;
       background: var(--rm-track, #e9f0f2);
       font-size: 0.85rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
     }
     .playblock strong { color: var(--rm-navy, #1e3a5f); }
     .timesheet table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
@@ -1417,15 +1417,15 @@ export class CareerApp extends LitElement {
       font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       padding: 0.35rem 0.5rem;
       border-bottom: 2px solid var(--rm-border, #e5e7eb);
     }
     .timesheet td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
     .timesheet th.num, .timesheet td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .timesheet td.who { font-weight: 600; color: var(--rm-navy, #1e3a5f); }
-    .timesheet .zero { color: var(--rm-muted, #9ca3af); }
-    .playlead { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .timesheet .zero { color: var(--rm-muted, #5b6b7d); }
+    .playlead { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     /* ── El brujo (MC-22): panel del jugador y cola del manager (hermanos de la
        ficha: mismo backdrop/section, contenido de consultas). ── */
     /* La escena de conversación (JG-8) vive sobre el pergamino del panel. */
@@ -1437,13 +1437,13 @@ export class CareerApp extends LitElement {
       padding: 0;
       font: inherit;
       font-size: 0.78rem;
-      color: var(--rm-muted, #6b7280);
+      color: var(--rm-muted, #5b6b7d);
       text-decoration: underline;
       cursor: pointer;
     }
     .wizlog-link .linky:hover { color: var(--rm-text, #111827); }
-    .wizempty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; margin: 0.4rem 0 0; }
-    .sub { margin: 1.1rem 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 700; }
+    .wizempty { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; margin: 0.4rem 0 0; }
+    .sub { margin: 1.1rem 0 0.35rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); font-weight: 700; }
     .wizform { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.5rem 0 0.25rem; }
     .wizform label { font-size: 0.75rem; }
     .wizform textarea,
@@ -1464,14 +1464,14 @@ export class CareerApp extends LitElement {
     .wizq { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.8rem; }
     .wmeta { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
     .wmeta strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
-    .wmeta .when { font-size: 0.75rem; color: var(--rm-muted, #6b7280); }
+    .wmeta .when { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .wisle { font-size: 0.78rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .wstatus { font-size: 0.7rem; font-weight: 800; padding: 0.14rem 0.55rem; border-radius: 999px; white-space: nowrap; }
     .wstatus.pending { background: #fdebc8; color: #8a5a00; }
     /* «Respuesta lista» viste de VIOLETA místico (JG-8): el color de la luz
        del brujo, coherente con el farol de la cabaña y el halo del mar. */
     .wstatus.answered { background: #7b2cbf; color: #fff; }
-    .wstatus.seen { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    .wstatus.seen { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #5b6b7d); }
     .wtext { margin: 0.4rem 0 0; font-size: 0.88rem; color: var(--rm-text, #111827); white-space: pre-wrap; }
     .wizanswer {
       margin-top: 0.55rem;
@@ -1481,7 +1481,7 @@ export class CareerApp extends LitElement {
       padding: 0.5rem 0.7rem;
     }
     .wizanswer .wtext { margin: 0; }
-    .wby { margin: 0.35rem 0 0; font-size: 0.76rem; font-style: italic; color: var(--rm-muted, #6b7280); }
+    .wby { margin: 0.35rem 0 0; font-size: 0.76rem; font-style: italic; color: var(--rm-muted, #5b6b7d); }
     .wseen { margin-top: 0.55rem; }
     .sea-map {
       position: relative;
@@ -1660,7 +1660,7 @@ export class CareerApp extends LitElement {
       font-weight: 700;
       color: var(--rm-navy, #1e3a5f);
     }
-    .sea-hint { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--rm-muted, #6b7280); }
+    .sea-hint { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
     /* Acceso al LECHO (RMR-BUG-0057): control bioluminiscente en el mapa del mar. */
     .dive-sea {
       display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.9rem auto 0;
@@ -1701,13 +1701,13 @@ export class CareerApp extends LitElement {
       50% { transform: translateY(-7px) rotate(1.5deg); }
     }
     .legend-wrap { margin-top: 1rem; }
-    .legend-wrap summary { font-size: 0.78rem; color: var(--rm-muted, #6b7280); cursor: pointer; font-weight: 700; }
+    .legend-wrap summary { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); cursor: pointer; font-weight: 700; }
     .dep { font-size: 0.78rem; color: var(--rm-danger, #dc2626); font-weight: 600; margin: 0 0 0.5rem; }
     /* ── Tarjeta de la casa en pestañas (MC-15): tablist ARIA como en
        <engineer-space>, versión compacta para el panel. ── */
     .ctabs { display: flex; gap: 0.35rem; margin: 0.6rem 0 0.75rem; flex-wrap: wrap; }
     .ctab {
-      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d);
       border-radius: 999px; padding: 0.3rem 0.75rem; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
     }
     .ctab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
@@ -1715,13 +1715,13 @@ export class CareerApp extends LitElement {
     .ctab:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
     .ctabpanel { outline: none; }
     .ctabpanel:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 8px; }
-    .placeholder { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; margin: 0.4rem 0 0; }
+    .placeholder { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; margin: 0.4rem 0 0; }
     /* ── Tarjeta de casa DIDÁCTICA (JG-18): secciones apiladas en orden de
        lectura (¿qué es? → aprender → IA → recursos → certificado), con
        separadores sutiles. h4 = título de sección, h5 = subgrupo. ── */
     .cardsec { margin: 0.9rem 0 0; padding-top: 0.9rem; border-top: 1px solid var(--rm-border, #e5e7eb); }
     .cardsec:first-of-type { margin-top: 0.6rem; border-top: none; padding-top: 0; }
-    .cardsec > h4 { margin: 0 0 0.4rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 800; }
+    .cardsec > h4 { margin: 0 0 0.4rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); font-weight: 800; }
     .summary { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--rm-text, #111827); }
     /* Huevo escondido en «¿Qué es?» (RMR-TSK-0394): sutil hasta pasar por encima. */
     .egg-hidden { border: 0; background: none; cursor: pointer; font-size: 0.8rem; opacity: 0.25; padding: 0 0.15rem; filter: grayscale(0.6); transition: opacity 0.2s, filter 0.2s; }
@@ -1739,10 +1739,10 @@ export class CareerApp extends LitElement {
     }
     .headbadge.visited { color: var(--rm-accent, #2a9d8f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 16%, transparent); }
     .headbadge.available { color: #b26a00; background: color-mix(in srgb, #f2887a 22%, transparent); }
-    .headbadge.blocked { color: var(--rm-muted, #6b7280); background: color-mix(in srgb, var(--rm-muted, #6b7280) 14%, transparent); }
+    .headbadge.blocked { color: var(--rm-muted, #5b6b7d); background: color-mix(in srgb, var(--rm-muted, #5b6b7d) 14%, transparent); }
     .headbadge.deprecated { color: var(--rm-danger, #dc2626); text-decoration: line-through; }
     /* Sección final del certificado: el flujo explicado antes del botón. */
-    .certflow { margin: 0 0 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--rm-muted, #6b7280); }
+    .certflow { margin: 0 0 0.6rem; font-size: 0.85rem; line-height: 1.5; color: var(--rm-muted, #5b6b7d); }
     .ressec .resgroup { margin-top: 0.55rem; }
     .ressec h5 { margin: 0 0 0.25rem; font-size: 0.8rem; color: var(--rm-navy, #1e3a5f); }
     /* Pestaña «Qué aprender»: puntos con check visual y bloque destacado IA. */
@@ -1760,7 +1760,7 @@ export class CareerApp extends LitElement {
     .aifocus p { margin: 0; font-size: 0.83rem; color: var(--rm-text, #111827); }
     /* ── Carpools (CP-1): overlay hermano de la ficha (tablón / los míos /
        crear). Tarjetas por grupo, tabla compacta de avance y formulario. ── */
-    .cplead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #6b7280); }
+    .cplead { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); }
     /* Invitaciones a grupos (F3): badge del botón + sección + form de invitar. */
     .cpbadge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.15rem; height: 1.15rem; margin-left: 0.35rem; padding: 0 0.3rem; border-radius: 999px; background: var(--rm-danger, #dc2626); color: #fff; font-size: 0.72rem; font-weight: 800; }
     .cpinvites { border: 1.5px solid color-mix(in srgb, var(--rm-accent, #2a9d8f) 45%, transparent); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); border-radius: 10px; padding: 0.6rem 0.8rem; margin: 0 0 0.9rem; }
@@ -1769,43 +1769,43 @@ export class CareerApp extends LitElement {
     .cpinvites li { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
     .cpinv-actions { display: inline-flex; gap: 0.4rem; }
     .cpinvite { display: flex; align-items: end; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
-    .cpinvite label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .cpinvite label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     .cpinvite input { padding: 0.35rem 0.5rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 6px; font: inherit; min-width: 14rem; }
-    .cpinv-pending { font-size: 0.78rem; color: var(--rm-muted, #6b7280); }
+    .cpinv-pending { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
     .cpinv-ok { font-size: 0.8rem; color: var(--rm-accent, #2a9d8f); font-weight: 600; }
     .cplist { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
     .cpcard { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.8rem; }
     .cphead { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
     .cphead h4 { margin: 0; font-size: 0.95rem; color: var(--rm-navy, #1e3a5f); }
     .cphead .spacer { margin-left: auto; }
-    .cpmeta { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .cpmeta { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     .cpseats { font-weight: 700; color: var(--rm-navy, #1e3a5f); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .cpstatus { font-size: 0.66rem; font-weight: 800; padding: 0.12rem 0.5rem; border-radius: 999px; white-space: nowrap; }
     .cpstatus.open { background: var(--rm-accent, #2a9d8f); color: #fff; }
     .cpstatus.full { background: var(--rm-navy, #1e3a5f); color: #fff; }
     .cpstatus.completed { background: linear-gradient(135deg, #f6d365 0%, #e8b931 100%); color: #5b4300; }
-    .cpstatus.closed { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); }
+    .cpstatus.closed { background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #5b6b7d); }
     /* Tabla compacta de avance: una fila por parada, una columna por miembro. */
     .cptable { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.5rem; }
     .cptable th {
       text-align: left; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em;
-      color: var(--rm-muted, #6b7280); padding: 0.25rem 0.4rem;
+      color: var(--rm-muted, #5b6b7d); padding: 0.25rem 0.4rem;
       border-bottom: 2px solid var(--rm-border, #e5e7eb); white-space: nowrap;
     }
     .cptable td { padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     .cptable th.mate, .cptable td.mate { text-align: center; }
     .cptable .stopname { font-weight: 600; color: var(--rm-navy, #1e3a5f); }
-    .cptable .stopisle { color: var(--rm-muted, #6b7280); }
-    .cptable .stopdate { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--rm-muted, #6b7280); }
+    .cptable .stopisle { color: var(--rm-muted, #5b6b7d); }
+    .cptable .stopdate { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--rm-muted, #5b6b7d); }
     .cptable .stopdate.delayed { color: var(--rm-coral-600, #e26d5e); font-weight: 700; }
     .cpmark { font-weight: 700; }
     .cpmark.done { color: var(--rm-accent, #2a9d8f); }
-    .cpmark.pending { color: var(--rm-muted, #9ca3af); }
+    .cpmark.pending { color: var(--rm-muted, #5b6b7d); }
     .cpmark.delayed { color: var(--rm-coral-600, #e26d5e); }
     /* Avance por miembro bajo la tabla. */
     .cpprogress { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; gap: 0.5rem 1rem; flex-wrap: wrap; font-size: 0.8rem; }
     .cpprogress .pct { font-weight: 700; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
-    .cpprogress .nodata { color: var(--rm-muted, #9ca3af); font-style: italic; }
+    .cpprogress .nodata { color: var(--rm-muted, #5b6b7d); font-style: italic; }
     .cpactions { display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
     /* Formulario de creación: filas del constructor de ruta y lista de paradas. */
     .cpformrow { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; margin: 0.4rem 0 0; }
@@ -1817,9 +1817,9 @@ export class CareerApp extends LitElement {
       border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; padding: 0.3rem 0.5rem; font-size: 0.82rem;
     }
     .cpstop .ord { font-weight: 800; color: var(--rm-navy, #1e3a5f); font-variant-numeric: tabular-nums; }
-    .cpstop .when { margin-left: auto; color: var(--rm-muted, #6b7280); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .cpstop .when { margin-left: auto; color: var(--rm-muted, #5b6b7d); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .cpstop button { padding: 0.15rem 0.45rem; font-size: 0.75rem; line-height: 1; }
-    .cpnotice { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #6b7280); }
+    .cpnotice { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     /* ── Tribbu-coins (CP-2): overlay del libro mayor (saldo, verificación,
        historial) y alerta roja del HUD si la verificación detecta trampa. ── */
     .hudbadge.coinsalert { background: var(--rm-danger, #dc2626); color: #fff; animation: coinspulse 1.2s ease-in-out infinite; }
@@ -1989,16 +1989,16 @@ export class CareerApp extends LitElement {
     .vcheck.pass .vicon { color: var(--rm-accent, #2a9d8f); }
     .vcheck.fail { color: var(--rm-danger, #dc2626); }
     .vcheck.fail .vicon { color: var(--rm-danger, #dc2626); }
-    .vcheck.skip { color: var(--rm-muted, #9ca3af); }
+    .vcheck.skip { color: var(--rm-muted, #5b6b7d); }
     .vwarnings { list-style: none; margin: 0.4rem 0 0; padding: 0; font-size: 0.78rem; color: #8a5a00; }
-    .sub-coins { margin: 1rem 0 0.25rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); font-weight: 700; }
+    .sub-coins { margin: 1rem 0 0.25rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); font-weight: 700; }
     .coinslist { list-style: none; margin: 0; padding: 0; }
     .coinslist li {
       display: grid; grid-template-columns: 1fr auto auto; gap: 0.35rem 0.75rem;
       align-items: baseline; padding: 0.35rem 0;
       border-top: 1px solid var(--rm-border, #eef0f2); font-size: 0.85rem;
     }
-    .coinslist .when { font-size: 0.72rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .coinslist .when { font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
     .coinslist .delta { font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .coinslist .unsigned {
       font-size: 0.62rem; font-weight: 800; padding: 0.08rem 0.4rem; border-radius: 999px;
@@ -2006,7 +2006,7 @@ export class CareerApp extends LitElement {
     }
     /* Pestaña «Recursos»: grupos por tipo con icono; enlaces cuando hay url. */
     .resgroup { margin: 0.7rem 0 0; }
-    .resgroup h4 { margin: 0 0 0.25rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #6b7280); }
+    .resgroup h4 { margin: 0 0 0.25rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); }
     .res { list-style: none; margin: 0; padding: 0; font-size: 0.83rem; }
     .res li { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.22rem 0; color: var(--rm-text, #111827); }
     /* El check «hecho» del recurso (RMR-TSK-0261): no se estira con el texto. */
@@ -2021,7 +2021,7 @@ export class CareerApp extends LitElement {
     .res li.resdone .resmain > a, .res li.resdone .resmain > span:first-child { opacity: 0.62; }
     .res .fmt {
       font-size: 0.66rem; font-weight: 700; padding: 0.08rem 0.45rem; border-radius: 999px;
-      background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.03em;
+      background: var(--rm-track, #e9f0f2); color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em;
     }
     /* ═══ UI PERGAMINO (JG-7) — va al FINAL a propósito: mismas selecciones,
        última palabra en la cascada. Los overlays del juego pasan a papel
@@ -2916,7 +2916,7 @@ export class CareerApp extends LitElement {
         .egg-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(10, 14, 18, 0.55); display: flex; align-items: center; justify-content: center; padding: 1rem; }
         .egg-panel { box-sizing: border-box; width: min(94%, 34rem); max-height: 90vh; overflow-y: auto; background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border: 2px solid #e9c46a; border-radius: 14px; padding: 1.2rem 1.4rem; box-shadow: 0 12px 42px rgba(0, 0, 0, 0.4); }
         .egg-panel h3 { margin: 0 0 0.6rem; }
-        .egg-panel .close { float: right; border: 0; background: none; font-size: 1.3rem; cursor: pointer; color: var(--rm-muted, #6b7280); }
+        .egg-panel .close { float: right; border: 0; background: none; font-size: 1.3rem; cursor: pointer; color: var(--rm-muted, #5b6b7d); }
         .egg-panel .instructions { white-space: pre-wrap; line-height: 1.5; }
         .egg-state { font-weight: 600; }
         .egg-state.ok { color: var(--rm-accent, #2a9d8f); }
@@ -3772,7 +3772,7 @@ export class CareerApp extends LitElement {
    * @param {string|null} suggestedId */
   _renderRouteTier(route, suggestedId) {
     const active = this._challenge?.routeId === route.routeId;
-    const chipStyle = `--tier-color:${CareerApp.TIER_COLORS[route.levelKey] ?? 'var(--rm-muted, #6b7280)'}`;
+    const chipStyle = `--tier-color:${CareerApp.TIER_COLORS[route.levelKey] ?? 'var(--rm-muted, #5b6b7d)'}`;
     const islandsCount = new Set(route.stops.map((s) => s.split('/').at(0))).size;
     const rank = ROUTE_TIER_LABELS[route.levelKey] ?? route.levelKey;
     const range = tierLevelRangeLabel(route.levelKey, this._frameworkLevels ?? []);

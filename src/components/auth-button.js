@@ -71,7 +71,7 @@ export class AuthButton extends LitElement {
       padding: 0.1rem 0.5rem;
       border-radius: 999px;
       background: var(--rm-track, #e9f0f2);
-      color: var(--rm-muted, #4b5563);
+      color: var(--rm-muted, #5b6b7d);
     }
     .error {
       color: var(--rm-danger, #dc2626);

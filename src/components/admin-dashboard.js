@@ -67,11 +67,11 @@ export class AdminDashboard extends LitElement {
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     tbody tr { cursor: pointer; }
     tbody tr:hover { background: var(--rm-surface-hover, #f9fafb); }
     .badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff; }
-    .muted { color: var(--rm-muted, #9ca3af); }
+    .muted { color: var(--rm-muted, #5b6b7d); }
     .completion { font-variant-numeric: tabular-nums; }
     .dist-row { display: grid; grid-template-columns: 11ch 1fr 4ch; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
     .dist-track { height: 16px; background: var(--rm-track, #f3f4f6); border-radius: 6px; overflow: hidden; }
@@ -86,7 +86,7 @@ export class AdminDashboard extends LitElement {
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .detail { border-left: 4px solid var(--rm-accent, #3b82f6); }
     .check { width: 16px; height: 16px; }
-    .empty { color: var(--rm-muted, #9ca3af); padding: 1rem 0; }
+    .empty { color: var(--rm-muted, #5b6b7d); padding: 1rem 0; }
     .del-btn {
       border: 1px solid var(--rm-border, #d1d5db);
       background: var(--rm-surface, #fff);
@@ -98,13 +98,13 @@ export class AdminDashboard extends LitElement {
       cursor: pointer;
     }
     .del-btn:hover { border-color: var(--rm-danger, #dc2626); }
-    .confirm { font-size: 0.78rem; color: var(--rm-muted, #6b7280); white-space: nowrap; }
+    .confirm { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
     .confirm .link-danger, .confirm .link {
       border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem;
     }
     .confirm .link-danger { color: var(--rm-danger, #dc2626); }
-    .confirm .link { color: var(--rm-muted, #6b7280); }
-    .phase-desc { font-size: 0.82rem; color: var(--rm-muted, #6b7280); margin-top: 0.5rem; }
+    .confirm .link { color: var(--rm-muted, #5b6b7d); }
+    .phase-desc { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin-top: 0.5rem; }
     section.intro { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     details.help { margin: 0 0 1rem; }
     details.help summary {

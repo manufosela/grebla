@@ -56,14 +56,14 @@ export class DoraMetrics extends LitElement {
     .cards { display: flex; flex-wrap: wrap; gap: 1.5rem; }
     .card { display: flex; flex-direction: column; gap: 0.2rem; }
     .card .value { font-size: 1.7rem; font-weight: 800; color: var(--rm-accent, #2a9d8f); font-variant-numeric: tabular-nums; }
-    .card .label { font-size: 0.78rem; color: var(--rm-muted, #6b7280); }
+    .card .label { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border, #eef0f2); }
-    th { color: var(--rm-muted, #6b7280); font-weight: 600; }
+    th { color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .empty { color: var(--rm-muted, #9ca3af); }
+    .empty { color: var(--rm-muted, #5b6b7d); }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-    .note { font-size: 0.75rem; color: var(--rm-muted, #9ca3af); margin-top: 0.5rem; }
+    .note { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); margin-top: 0.5rem; }
   `, levelStyles];
 
   constructor() {

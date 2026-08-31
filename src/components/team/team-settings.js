@@ -50,26 +50,26 @@ export class TeamSettings extends LitElement {
       border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; padding: 0.5rem 0.6rem;
       font: inherit; font-size: 0.9rem; background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827);
     }
-    label.fld { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #6b7280); font-weight: 600; }
+    label.fld { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
     button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     button.primary { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     ul.areas { list-style: none; margin: 0 0 1rem; padding: 0; }
     ul.areas li { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; border-bottom: 1px solid var(--rm-border, #eef0f2); }
     ul.areas .name { flex: 1; }
     ul.areas .edit-inline { flex: 1; }
-    .link { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.8rem; color: var(--rm-muted, #6b7280); padding: 0 0.2rem; }
+    .link { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); padding: 0 0.2rem; }
     .link.yes { color: var(--rm-danger, #dc2626); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-    .hint { font-size: 0.78rem; color: var(--rm-muted, #9ca3af); margin: 0.5rem 0 0; }
-    .empty { color: var(--rm-muted, #9ca3af); font-size: 0.85rem; }
+    .hint { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0.5rem 0 0; }
+    .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-    .feat { font-size: 0.85rem; color: var(--rm-muted, #6b7280); }
+    .feat { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     .badge { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: var(--rm-track, #e9f0f2); }
 
     /* ── Barra de sub-pestañas (patrón ARIA tablist, coherente con otros tools) ── */
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .tab {
-      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #6b7280);
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d);
       border-radius: 999px; padding: 0.4rem 1rem; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
     }
     .tab.active { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
