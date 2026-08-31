@@ -8,6 +8,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
+import { noteStyles } from '../common/note-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { listDepartedPeople, getTurnover, reactivatePerson } from '../../tools/team/application/usecases/index.js';
 import { deletePerson } from '../../lib/people.js';
@@ -34,7 +35,7 @@ export class TeamDepartures extends LitElement {
     _deleting: { state: true },
   };
 
-  static styles = css`
+  static styles = [noteStyles, css`
     :host { display: block; }
     section {
       background: var(--rm-surface, #fff);
@@ -73,7 +74,7 @@ export class TeamDepartures extends LitElement {
     .del-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
     .del-actions .act { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer; }
     .del-actions .danger { border-radius: 8px; padding: 0.45rem 0.9rem; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -180,7 +181,7 @@ export class TeamDepartures extends LitElement {
       <section>
         <h2>Personas dadas de baja (${this.departed.length})</h2>
         ${this.error ? html`<p class="error">${this.error}</p>` : null}
-        <p class="hint">La baja conserva el histórico (fuera de las estadísticas activas). <strong>Borrar definitivamente</strong> elimina a la persona y TODOS sus datos (plan de carrera, valoraciones, lecturas…): irreversible.</p>
+        <p class="info-note strong">La baja conserva el histórico (fuera de las estadísticas activas). <strong>Borrar definitivamente</strong> elimina a la persona y TODOS sus datos (plan de carrera, valoraciones, lecturas…): irreversible.</p>
         ${this.departed.length === 0
           ? html`<p class="empty">No hay bajas registradas.</p>`
           : html`
