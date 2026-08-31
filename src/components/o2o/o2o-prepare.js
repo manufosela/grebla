@@ -7,6 +7,7 @@
  * Props: persistence, periodId, guide, form, aiPropose (proposePrep), previousPeriods.
  */
 import { LitElement, html, css } from 'lit';
+import { noteStyles } from '../common/note-styles.js';
 import './o2o-questions-editor.js';
 import { periodPrep } from '../../tools/o2o/application/aiProposal.js';
 
@@ -24,7 +25,7 @@ export class O2OPrepare extends LitElement {
     _error: { state: true },
   };
 
-  static styles = css`
+  static styles = [noteStyles, css`
     :host { display: block; }
     .lead { font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     .ai { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f);
@@ -57,7 +58,7 @@ export class O2OPrepare extends LitElement {
       font-size: 0.86rem; font-weight: 600; cursor: pointer; }
     .tabs button[aria-selected="true"] { background: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); color: #fff; }
     .tabs button:focus-visible { outline: 2px solid var(--rm-navy, #1e3a5f); outline-offset: 2px; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -106,7 +107,7 @@ export class O2OPrepare extends LitElement {
       return html`<details class="ai">
         <summary>✨ Preparar con IA</summary>
         <div class="ai-body">
-          <p class="hint">La IA aún no está configurada en esta instancia. Puedes preparar la guía y el formulario a mano o importando un <code>.md</code>.</p>
+          <p class="info-note">La IA aún no está configurada en esta instancia. Puedes preparar la guía y el formulario a mano o importando un <code>.md</code>.</p>
         </div>
       </details>`;
     }
