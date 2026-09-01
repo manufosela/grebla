@@ -197,15 +197,6 @@ export class OrgChart extends LitElement {
 
   _branchColor(b) { return branchColor(b); }
 
-  /** Filas de la pirámide por CAPA CANÓNICA (RMR-TSK-0434), de las hojas
-   *  (arriba) a la base (abajo): la capa declarada del rol manda y, sin declarar,
-   *  cae a la profundidad de su cadena. Así una rama joven (Head con ICs
-   *  directos) mantiene a sus ingenieros en la capa de ICs. Capas vacías no
-   *  generan fila. */
-  _levelsOf(roles) {
-    return pyramidLayers(roles).toReversed();
-  }
-
   _role(r, color) {
     // La tarjeta dice SOLO lo que dicen los datos: rol, rama y «↑ superior»
     // (la dependencia se lee en la propia tarjeta). El antiguo badge derivado
@@ -368,53 +359,6 @@ export class OrgChart extends LitElement {
   _onPanEnd(e) {
     this._drag = null;
     e.currentTarget.classList.remove('grabbing');
-  }
-
-  /**
-   * Banda de la pirámide GLOBAL: etiqueta de capa + subfilas por dependencia
-   * intra-capa (RMR-TSK-0434, el coCEO depende del CEO y ambos viven en la 0:
-   * se apilan, no se aplanan; la subfila de abajo sostiene a la de arriba).
-   * Extraído para no anidar funciones (Sonar S2004).
-   */
-  _globalLevel({ layer, subrows }, i, total) {
-    const width = 100 - i * (60 / Math.max(1, total));
-    return html`<div class="pyr-level stacked ${layer === 0 ? 'base-level' : ''}" style="width:${Math.max(28, width)}%;--lv:${layerColor(layer)}">
-      ${layer === 0
-        ? html`<span class="pyr-lvl">Base · sostiene a todos</span>`
-        : html`<span class="pyr-lvl">Nivel ${layer}</span>`}
-      ${subrows.map((subrow, j) => this._globalSubrow(subrow, j))}
-    </div>`;
-  }
-
-  /** Subfila de una banda global: flechita intra-capa + grupos por rama. */
-  _globalSubrow(subrow, j) {
-    const groups = Object.entries(Object.groupBy(subrow, (r) => r.branch));
-    return html`
-      ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
-      <div class="pyr-subrow">
-        ${groups.map(([branch, roles]) => html`
-          <div class="pyr-group" style="--g:${this._branchColor(branch)}">
-            ${roles.map((r) => this._role(r, this._branchColor(branch)))}
-          </div>`)}
-      </div>`;
-  }
-
-  /** Banda de una mini-pirámide por rama, con sus subfilas intra-capa apiladas
-   *  (extraído para no anidar funciones — Sonar S2004). */
-  _miniLevel({ subrows }, i, total) {
-    const width = 100 - i * (50 / Math.max(1, total));
-    return html`<div class="pyr-level stacked" style="width:${Math.max(45, width)}%">
-      ${subrows.map((subrow, j) => this._miniSubrow(subrow, j))}
-    </div>`;
-  }
-
-  /** Subfila de una banda mini: flechita intra-capa + tarjetas de la subfila.
-   *  Cada tarjeta lleva el color de SU rama (su categoría: un EM sigue siendo
-   *  «Engineering Manager» aunque se dibuje dentro del área Engineering). */
-  _miniSubrow(subrow, j) {
-    return html`
-      ${j > 0 ? html`<span class="pyr-suparrow" title="Depende de alguien de su misma capa">↑</span>` : null}
-      <div class="pyr-subrow">${subrow.map((r) => this._role(r, this._branchColor(r.branch)))}</div>`;
   }
 
   /** Una mini-pirámide invertida POR ÁREA: cada área con su cabeza en la punta
