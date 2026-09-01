@@ -87,11 +87,6 @@ export class RetroApp extends LitElement {
    * ver ni una retro. Y como la clave incluye los squads, si estos llegan
    * después que el manager la lista se recalcula en vez de quedarse corta.
    */
-  /** Fuente de retros por dueño: la rama del supermanager, o su manager. */
-  get _ownerScope() {
-    return this.leaderUids?.length ? this.leaderUids : this.leaderUid;
-  }
-
   get _sourcesKey() {
     // Ordenados para que reordenar los mismos squads no cuente como cambio.
     const squads = [...(this.squadIds ?? [])].toSorted((a, b) => String(a).localeCompare(String(b))).join(',');

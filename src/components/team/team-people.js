@@ -542,11 +542,6 @@ export class TeamPeople extends LitElement {
     );
   }
 
-  /** Colecciones de rol (leaders/heads) para resolver el superior (RMR-TSK-0367). */
-  _roleSets() {
-    return { leaders: this.members ?? [], heads: this.heads ?? [] };
-  }
-
   /**
    * Identidad persona-céntrica (RMR-PCS-0027) adaptada al descriptor que ya usan
    * la celda «Superior», el sort y el modal Transferir. Lee la organización de la
