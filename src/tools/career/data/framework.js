@@ -415,3 +415,41 @@ export function aspirationalLevels(framework, levelId) {
     typicalProfile: l.typicalProfile,
   }));
 }
+
+/**
+ * La ESCALERA completa: cada track con sus niveles en orden y las expectativas
+ * de cada uno ya resueltas por dimensión (RMR-TSK-0471).
+ *
+ * Hasta ahora esta información solo se veía en el editor del panel (superadmin)
+ * o, en «Mi carrera», el nivel propio y el objetivo declarado. Para decidir a
+ * qué aspirar hace falta ver el recorrido entero, no solo el peldaño de al lado.
+ *
+ * Un track sin niveles NO se lista: una columna vacía no informa de nada, y el
+ * framework se configura por partes. Función PURA.
+ *
+ * @param {CareerFramework|null|undefined} framework
+ * @returns {Array<{ track: { id: string, name: string, description: string },
+ *   levels: Array<{ id: string, code: string, title: string, description: string,
+ *     typicalProfile: string, expectations: LevelExpectation[] }> }>}
+ */
+export function careerLadder(framework) {
+  const levels = (framework?.levels ?? []).toSorted(byOrder);
+  return (framework?.tracks ?? [])
+    .toSorted(byOrder)
+    .map((track) => ({
+      track: { id: track.id, name: track.name, description: track.description ?? '' },
+      levels: levels
+        .filter((l) => l.trackId === track.id)
+        .map((l) => ({
+          id: l.id,
+          code: l.code,
+          title: l.title,
+          description: l.description ?? '',
+          typicalProfile: l.typicalProfile ?? '',
+          // Solo las dimensiones con texto: una expectativa vacía es una fila
+          // que ocupa sitio y no dice nada.
+          expectations: expectationsForLevel(framework, l.id).filter((e) => e.text),
+        })),
+    }))
+    .filter((row) => row.levels.length > 0);
+}

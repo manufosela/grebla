@@ -1,15 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  ENGINEERING_FRAMEWORK,
-  seedFramework,
-  normalizeFramework,
-  serializeFramework,
-  composeTitle,
-  getLevel,
-  expectationsForLevel,
-  addendumsForDisciplines,
-  aspirationalLevels,
-} from './framework.js';
+import { ENGINEERING_FRAMEWORK, seedFramework, normalizeFramework, serializeFramework, composeTitle, getLevel, expectationsForLevel, addendumsForDisciplines, aspirationalLevels, careerLadder } from './framework.js';
 
 describe('career — framework de carrera (helpers puros)', () => {
   it('seedFramework devuelve una copia profunda del framework (fallback)', () => {
@@ -338,5 +328,63 @@ describe('career — framework de carrera (helpers puros)', () => {
       const solo = { ...seedFramework(), levels: [{ id: 'x', code: 'X', title: 'X', trackId: 't', order: 1, description: '', typicalProfile: '', branchesFrom: null }] };
       expect(aspirationalLevels(solo, 'x')).toEqual([]);
     });
+  });
+});
+
+describe('careerLadder: la escalera completa (RMR-TSK-0471)', () => {
+  const fw = {
+    tracks: [
+      { id: 'em', name: 'Engineering Manager', order: 3, description: 'Cuida personas.' },
+      { id: 'ic', name: 'Individual Contributor', order: 1, description: 'Output técnico.' },
+      { id: 'vacio', name: 'Track sin niveles', order: 2 },
+    ],
+    levels: [
+      { id: 'l2', code: 'L2', title: 'Senior', trackId: 'ic', order: 2, description: 'Dueño de features.', typicalProfile: '5+ años' },
+      { id: 'l1', code: 'L1', title: 'Engineer', trackId: 'ic', order: 1, description: 'Trabaja independiente.', typicalProfile: '2-5 años' },
+      { id: 'm1', code: 'M1', title: 'EM', trackId: 'em', order: 1, description: 'Lleva un equipo.', typicalProfile: '' },
+    ],
+    dimensions: [
+      { id: 'impacto', name: 'Impacto', order: 1 },
+      { id: 'alcance', name: 'Alcance', order: 2 },
+    ],
+    expectations: [
+      { levelId: 'l1', dimensionId: 'impacto', text: 'Su equipo.' },
+      { levelId: 'l2', dimensionId: 'impacto', text: 'Su área.' },
+      { levelId: 'l2', dimensionId: 'alcance', text: '  ' },
+    ],
+  };
+
+  it('agrupa por track y ordena tracks y niveles', () => {
+    const escalera = careerLadder(fw);
+    expect(escalera.map((r) => r.track.id)).toEqual(['ic', 'em']);
+    expect(escalera[0].levels.map((l) => l.code)).toEqual(['L1', 'L2']);
+  });
+
+  it('un track sin niveles no se lista: una columna vacía no informa de nada', () => {
+    expect(careerLadder(fw).some((r) => r.track.id === 'vacio')).toBe(false);
+  });
+
+  it('trae de cada nivel lo que hace falta para decidir a qué aspirar', () => {
+    const l1 = careerLadder(fw)[0].levels[0];
+    expect(l1).toMatchObject({ code: 'L1', title: 'Engineer', description: 'Trabaja independiente.', typicalProfile: '2-5 años' });
+    expect(l1.expectations).toEqual([{ dimension: { id: 'impacto', name: 'Impacto', order: 1 }, text: 'Su equipo.' }]);
+  });
+
+  it('las expectativas en blanco no ocupan una fila', () => {
+    // «alcance» de L2 existe en la matriz pero solo tiene espacios.
+    const l2 = careerLadder(fw)[0].levels[1];
+    expect(l2.expectations.map((e) => e.dimension.id)).toEqual(['impacto']);
+  });
+
+  it('aguanta un framework a medio configurar o inexistente', () => {
+    expect(careerLadder(null)).toEqual([]);
+    expect(careerLadder({})).toEqual([]);
+    expect(careerLadder({ tracks: [{ id: 't', name: 'T', order: 1 }] })).toEqual([]);
+  });
+
+  it('un nivel sin descripción ni perfil no inventa texto', () => {
+    const m1 = careerLadder(fw).find((r) => r.track.id === 'em').levels[0];
+    expect(m1.typicalProfile).toBe('');
+    expect(m1.expectations).toEqual([]);
   });
 });
