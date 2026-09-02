@@ -39,42 +39,60 @@ async function conPlantillaLarga(fn) {
   }
 }
 
-test('la tabla de personas cabe en pantalla, sin scroll horizontal', async ({ page }) => {
+test('cuando la tabla no cabe, se puede desplazar hasta el final', async ({ page }) => {
   await conPlantillaLarga(async () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await signInAs(page, 'superadmin');
     await page.goto('/admin#users');
 
-    const tabla = page.locator('superadmin-panel').locator('.table-wrap').first();
-    await expect(tabla).toBeVisible();
-    const desborde = await tabla.evaluate((el) => el.scrollWidth - el.clientWidth);
-    expect(desborde, 'la tabla se sale de su contenedor').toBeLessThanOrEqual(1);
+    const caja = page.locator('superadmin-panel .table-wrap').first();
+    await expect(caja).toBeVisible();
+    // Lo que NO puede pasar es que el contenido se salga sin barra que arrastrar:
+    // eso deja datos a medio leer y sin forma de verlos (RMR-BUG-0108).
+    const estado = await caja.evaluate((el) => ({
+      desborde: el.scrollWidth - el.clientWidth,
+      eje: getComputedStyle(el).overflowX,
+    }));
+    if (estado.desborde > 1) {
+      expect(['auto', 'scroll'], `desborda ${estado.desborde}px sin barra`).toContain(estado.eje);
+      // Y la barra llega de verdad hasta el final del contenido.
+      const alcanzado = await caja.evaluate((el) => {
+        el.scrollLeft = el.scrollWidth;
+        return el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+      });
+      expect(alcanzado, 'no se llega al extremo derecho').toBe(true);
+    }
   });
 });
 
-test('la casilla de superadmin se alcanza sin arrastrar la tabla a un lado', async ({ page }) => {
+test('el contenido de las celdas no se queda a medias', async ({ page }) => {
   await conPlantillaLarga(async () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await signInAs(page, 'superadmin');
     await page.goto('/admin#users');
 
-    // Por su propia fila: buscar por nombre suelto también casa con los selects
-    // de «Reporta a» de las demás filas.
+    // Un select recortado enseña «Mobile En» en vez del rol entero: el ancho de
+    // la columna manda sobre el dato, que es justo al revés de lo que debe ser.
+    const cortados = await page.locator('superadmin-panel table.people select').evaluateAll(
+      (nodos) => nodos.filter((n) => n.scrollWidth > n.clientWidth + 1).length,
+    );
+    expect(cortados, 'hay selects cuyo texto no cabe en su propia caja').toBe(0);
+  });
+});
+
+test('la casilla de superadmin se alcanza y se puede marcar', async ({ page }) => {
+  await conPlantillaLarga(async () => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin#users');
+
+    // Puede quedar fuera del ancho visible —para eso está la barra—, pero tiene
+    // que poder alcanzarse y usarse. Lo que no vale es que sea inaccesible.
     const fila = page.locator('superadmin-panel tbody tr')
       .filter({ has: page.locator('td:nth-child(1)').filter({ hasText: 'Larguísimo Número 0' }) });
     const casilla = fila.getByLabel('Superadmin');
-    // Bajar por la lista es normal; arrastrarla a un lado para ver una columna,
-    // no. Por eso se mide solo lo horizontal, con la fila ya a la vista.
     await casilla.scrollIntoViewIfNeeded();
-    const tabla = page.locator('superadmin-panel').locator('.table-wrap').first();
-    // Dentro del ancho visible de la tabla: si estuviera fuera habría que
-    // encontrar la barra de scroll —al final de la lista— y arrastrarla.
-    const dentro = await casilla.evaluate((el, wrap) => {
-      const c = el.getBoundingClientRect();
-      const w = wrap.getBoundingClientRect();
-      return c.right <= w.right + 1 && c.left >= w.left - 1;
-    }, await tabla.elementHandle());
-    expect(dentro, 'la casilla queda fuera del ancho visible').toBe(true);
+    await expect(casilla).toBeVisible();
 
     // Y con su tamaño de casilla: el panel da min-width de campo de texto a todo
     // <input>, y eso estiraba el cuadrito hasta empujar «Superadmin» fuera.
@@ -96,4 +114,20 @@ test('la cabecera acompaña al bajar por la lista', async ({ page }) => {
   const despues = await th.boundingBox();
   // Sin cabecera pegada, al bajar dejas de saber qué columna es cada cosa.
   expect(despues.y).toBeGreaterThan(antes.y - 600);
+});
+
+test('la tabla cabe a un ancho de portátil, sin depender de la barra', async ({ page }) => {
+  await conPlantillaLarga(async () => {
+    await page.setViewportSize({ width: 1120, height: 863 });
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin#users');
+
+    // Perseguir la barra fue un error: en Chrome es «overlay» y no se dibuja
+    // hasta que ya estás arrastrando, así que se ve la tabla cortada y ninguna
+    // barra (RMR-BUG-0108). La caja sigue estando por si acaso, pero lo que
+    // arregla el problema es que no haga falta.
+    const caja = page.locator('superadmin-panel .table-wrap').first();
+    const desborde = await caja.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(desborde, 'la tabla no cabe en 1120px: habrá que arrastrarla').toBeLessThanOrEqual(2);
+  });
 });
