@@ -181,14 +181,24 @@ export function orgRoleRows(roles) {
 }
 
 /**
- * Candidatos a «superior» de una persona, derivados del organigrama de ROLES
- * (RMR-TSK-0361): el superior de alguien con rol X son las personas cuyo rol es
- * el `reportsToRoleId` de X — un manager reporta a heads, no a otros managers;
- * un head al CTO; y varios heads/CTO caben sin cablear nada. Casos límite
- * honestos: rol cima → sin candidatos (solo «no reporta a nadie»); persona sin
- * rol (o rol fuera del catálogo) → todas las demás (no derivable: no se bloquea
- * la gestión); rol superior sin personas → lista vacía CON el rol, para que la
- * UI avise («aún no hay nadie con rol Head»). Nunca se ofrece a sí misma.
+ * Candidatos a «superior» de una persona, por CAPA de responsabilidad
+ * (RMR-TSK-0473; antes RMR-TSK-0361).
+ *
+ * Puede serlo cualquiera cuyo rol tenga tanta o más responsabilidad —capa
+ * canónica igual o menor, que en la pirámide invertida es más abajo—. Antes solo
+ * se ofrecía el rol INMEDIATAMENTE superior, y eso no aguanta una organización
+ * real: si no hay Head of QA, los QA no podían reportar a nadie; y un EM que
+ * reporta directo a dirección era imposible de registrar aunque sea la cadena de
+ * verdad. La plantilla del organigrama describe lo normal, no lo único.
+ *
+ * La misma capa sigue valiendo: el coCEO reporta al CEO y ambos son cima — el
+ * organigrama ya dibuja subfilas dentro de una capa para eso.
+ *
+ * `superiorRole` se mantiene: es el rol que la plantilla esperaría, y la UI lo
+ * usa para avisar de que aún no hay nadie con ese rol. Ya no vacía la lista.
+ *
+ * Casos límite honestos: persona sin rol (o rol fuera del catálogo) → todas las
+ * demás (no derivable: no se bloquea la gestión). Nunca se ofrece a sí misma.
  * @param {{ id: string, orgRole?: string|null }} person
  * @param {ReadonlyArray<{ id: string, orgRole?: string|null }>} people
  * @param {OrgRole[]} roles
@@ -196,11 +206,17 @@ export function orgRoleRows(roles) {
  */
 export function superiorCandidatesFor(person, people, roles) {
   const others = (people ?? []).filter((p) => p.id !== person?.id);
-  const role = (roles ?? []).find((r) => r.id === person?.orgRole) ?? null;
+  const list = roles ?? [];
+  const role = list.find((r) => r.id === person?.orgRole) ?? null;
   if (!role) return { candidates: others, superiorRole: null };
-  const superiorRole = (roles ?? []).find((r) => r.id === role.reportsToRoleId) ?? null;
-  if (!superiorRole) return { candidates: [], superiorRole: null };
-  return { candidates: others.filter((p) => p.orgRole === superiorRole.id), superiorRole };
+  const superiorRole = list.find((r) => r.id === role.reportsToRoleId) ?? null;
+  const miCapa = layerOf(list, role);
+  const capaDe = new Map(list.map((r) => [r.id, layerOf(list, r)]));
+  const candidates = others.filter((p) => {
+    const capa = capaDe.get(p.orgRole);
+    return capa !== undefined && capa <= miCapa;
+  });
+  return { candidates, superiorRole };
 }
 
 /**
