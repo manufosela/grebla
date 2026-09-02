@@ -110,7 +110,6 @@ const tools = [
     href: '/tools/encuestas',
     description: 'Encuestas de clima anónimas (eNPS + Q12): crea la encuesta, comparte los enlaces personales y consulta participación y resultados por segmento. Gestión de People.',
     available: true,
-    surveyTool: true,
   },
 ];
 
@@ -174,7 +173,7 @@ const TOOL_ID: Record<string, string> = {
   <section id="tenant-tools" class="tools" hidden>
     {
       tools.map((tool) => (
-        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-personal={tool.personal ? 'true' : undefined} data-admin-only={tool.adminOnly ? 'true' : undefined} data-own={tool.personal || tool.adminOnly ? 'true' : undefined} data-survey-tool={tool.surveyTool ? 'true' : undefined} hidden={tool.surveyTool}>
+        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-personal={tool.personal ? 'true' : undefined} data-admin-only={tool.adminOnly ? 'true' : undefined} data-own={tool.personal || tool.adminOnly ? 'true' : undefined}>
           <h2>{tool.name}</h2>
           <p>{tool.description}</p>
           <span class="cta">Abrir →</span>

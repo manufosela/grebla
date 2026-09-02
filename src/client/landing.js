@@ -90,13 +90,20 @@ onUserChanged(async (user) => {
       isSuperadmin: canGovern(access),
       isLeaderish: canGovern(access) || leadsTeam(access),
     });
+    // Encuestas ya no lleva marcador propio (RMR-TSK-0477): se rige por su
+    // política, como las demás. `canManageSurveys` sigue haciendo falta arriba,
+    // para que un gestor de encuestas SIN otro rol llegue al hub.
+    //
+    // Con esto desaparece su excepción de simulación, y es lo correcto: la
+    // excepción existía porque la card NO seguía la política. Ahora la sigue,
+    // con la ficha de quien mira — y como simular apaga el gobierno, un
+    // superadmin cuya persona no esté en la audiencia deja de verla al simular,
+    // igual que le pasa con Marea o con DORA. Hay E2E que lo fija.
     showTools({
       personRef: vista.generic ? buildPersonRef(null) : buildPersonRef(person),
       policies,
       isSuperadmin: vista.isSuperadmin,
       isLeaderish: vista.isLeaderish,
-      // Gestionar encuestas es un permiso, no una vista: al simular se apaga.
-      canManageSurveys: vista.isSuperadmin ? canManageSurveys : canManageSurveys && !esSimulada(),
       filterFailed,
     });
   } catch {
@@ -110,7 +117,7 @@ function showLanding() {
   landing?.removeAttribute('hidden');
 }
 
-function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish = false, canManageSurveys = false, filterFailed = false }) {
+function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish = false, filterFailed = false }) {
   hubLoading?.setAttribute('hidden', '');
   landing?.setAttribute('hidden', '');
   tools?.removeAttribute('hidden');
@@ -118,11 +125,6 @@ function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish
   // Tarjetas de gobierno de instancia: solo superadmin.
   for (const card of tools?.querySelectorAll('[data-admin-only]') ?? []) {
     card.toggleAttribute('hidden', !isSuperadmin);
-  }
-  // Tarjeta de Encuestas: superadmin O gestor de encuestas (People). Marcador
-  // propio para NO ensanchar el resto de tarjetas de gobierno.
-  for (const card of tools?.querySelectorAll('[data-survey-tool]') ?? []) {
-    card.toggleAttribute('hidden', !canManageSurveys);
   }
   // Lo personal (RMR-TSK-0459): se ve siempre que haya ficha, sin pasar por la
   // política de audiencia. La política gobierna la herramienta de equipo —llevar
@@ -134,7 +136,7 @@ function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish
   // Resto de herramientas: visibles según la política de acceso de cada una
   // (RMR-PCS-0027 · F6). «team» es gestión (no tiene política): la ve quien lidera
   // o gobierna. Las demás, por canUseTool; el superadmin siempre las ve.
-  for (const card of tools?.querySelectorAll('[data-tool-id]:not([data-survey-tool]):not([data-admin-only]):not([data-personal])') ?? []) {
+  for (const card of tools?.querySelectorAll('[data-tool-id]:not([data-admin-only]):not([data-personal])') ?? []) {
     const id = card.dataset.toolId;
     // Fallback de disponibilidad: si no se pudieron cargar persona/políticas, no
     // se filtra (se muestran, como antes de F6); cada herramienta valida su acceso.
