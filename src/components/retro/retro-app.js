@@ -9,6 +9,7 @@
  * canManage (true para el manager dueño).
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { noteStyles } from '../common/note-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import './retro-manager.js';
@@ -35,7 +36,7 @@ export class RetroApp extends LitElement {
     _error: { state: true },
   };
 
-  static styles = [noteStyles, css`
+  static styles = [tableStyles, noteStyles, css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); --navy: var(--gr-navy, #1e3a5f); }
     .detail { display: flex; flex-direction: column; gap: 1.4rem; }
     .back { align-self: flex-start; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
@@ -149,7 +150,7 @@ export class RetroApp extends LitElement {
     if (!this._retros.length) return html`<p class="empty">Tu equipo aún no tiene retros.</p>`;
     return html`
       <p class="lead">Retros de tu equipo. Ábrela para aportar tus notas, votar y ver las acciones.</p>
-      <table>
+      <div class="table-wrap"><table>
         <thead><tr><th>Nombre</th><th>Formato</th><th>Estado</th><th></th></tr></thead>
         <tbody>${this._retros.map((r) => html`<tr>
           <td>${r.name}</td>
@@ -157,7 +158,7 @@ export class RetroApp extends LitElement {
           <td><span class="chip ${r.status === 'open' ? 'open' : 'closed'}">${r.status === 'open' ? 'Abierta' : 'Cerrada'}</span></td>
           <td><button class="act" @click=${() => this._select(r)}>Abrir</button></td>
         </tr>`)}</tbody>
-      </table>`;
+      </table></div>`;
   }
 
   /**

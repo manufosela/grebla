@@ -8,6 +8,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { noteStyles } from '../common/note-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { listDepartedPeople, getTurnover, reactivatePerson } from '../../tools/team/application/usecases/index.js';
@@ -35,7 +36,7 @@ export class TeamDepartures extends LitElement {
     _deleting: { state: true },
   };
 
-  static styles = [noteStyles, css`
+  static styles = [tableStyles, noteStyles, css`
     :host { display: block; }
     section {
       background: var(--rm-surface, #fff);
@@ -185,7 +186,7 @@ export class TeamDepartures extends LitElement {
         ${this.departed.length === 0
           ? html`<p class="empty">No hay bajas registradas.</p>`
           : html`
-              <table>
+              <div class="table-wrap"><table>
                 <thead>
                   <tr><th>Nombre</th><th>Gremios</th><th>Alta</th><th>Baja</th><th></th></tr>
                 </thead>
@@ -209,7 +210,7 @@ export class TeamDepartures extends LitElement {
                     `,
                   )}
                 </tbody>
-              </table>
+              </table></div>
             `}
       </section>
       ${this._renderConfirm()}

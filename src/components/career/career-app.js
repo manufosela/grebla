@@ -182,6 +182,7 @@
  *  - currentUser: { uid: string, name: string }|null   login (autoría de consultas/respuestas)
  */
 import { LitElement, html, css, nothing } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import './career-map.js';
 import './career-list.js';
 import './seabed-view.js';
@@ -521,7 +522,7 @@ export class CareerApp extends LitElement {
     closed: 'Cerrado',
   });
 
-  static styles = css`
+  static styles = [tableStyles, css`
     /* ── CONSOLA DE JUEGO (JG-4): todo el juego vive dentro de este marco
        oscuro con look propio, claramente distinto de la página clara (que
        queda fuera como passe-partout). Tokens locales del marco: ── */
@@ -2144,7 +2145,7 @@ export class CareerApp extends LitElement {
       color: var(--parch-muted, #6b5433);
     }
     .ficha .playblock strong { color: var(--parch-ink, #33240f); }
-  `;
+  `];
 
   constructor() {
     super();
@@ -4671,7 +4672,7 @@ export class CareerApp extends LitElement {
           ? html`<p class="wizempty">Cargando el tiempo de juego…</p>`
           : this.playtimeRows.length === 0
             ? html`<p class="wizempty">No hay personas visibles en tu equipo.</p>`
-            : html`<table>
+            : html`<div class="table-wrap"><table>
                 <thead>
                   <tr>
                     <th scope="col">Persona</th>
@@ -4688,7 +4689,7 @@ export class CareerApp extends LitElement {
                     </tr>`,
                   )}
                 </tbody>
-              </table>`}
+              </table></div>`}
       </section>
     </div>`;
   }

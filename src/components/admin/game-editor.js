@@ -21,6 +21,7 @@
  *  - ready: boolean  (lo activa el glue cuando hay sesión de superadmin)
  */
 import { LitElement, html, css, svg } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import '../common/busy-overlay.js';
 import '../app-modal.js';
 import '@manufosela/multi-select';
@@ -208,7 +209,7 @@ export class GameEditor extends LitElement {
     _notice: { state: true },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     :host {
       display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827);
       /* Fondo sutil de los campos (RMR-TSK-0267): los diferencia de la tarjeta
@@ -426,7 +427,7 @@ export class GameEditor extends LitElement {
     .sgmove { margin-left: auto; display: flex; gap: 0.25rem; }
     .stopgroup .stops { margin: 0; padding: 0.25rem 0.5rem; }
     .stopgroup .stops li:last-child { border-bottom: 0; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -1565,10 +1566,10 @@ export class GameEditor extends LitElement {
         return html`
           <div class="route-group">
             <h3>${roleName}</h3>
-            <table>
+            <div class="table-wrap"><table>
               <thead><tr><th>Ruta</th><th>Hito</th><th>Paradas</th><th>Estado</th><th></th></tr></thead>
               <tbody>${ordered.map((route) => this._renderRouteRow(route))}</tbody>
-            </table>
+            </table></div>
           </div>
         `;
       })}

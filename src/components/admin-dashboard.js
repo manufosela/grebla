@@ -8,6 +8,7 @@
  *  - roles: import('../data/roles.js').Role[]
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from './common/table-styles.js';
 import { getPersonProfile, getUserAccount, listSessions, deleteSession, deleteUserData } from '../lib/firestore.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
@@ -42,7 +43,7 @@ export class AdminDashboard extends LitElement {
     error: { state: true },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     :host { display: block; font-family: var(--rm-font, system-ui, sans-serif); color: var(--rm-text, #111827); }
     section {
       background: var(--rm-surface, #fff);
@@ -118,7 +119,7 @@ export class AdminDashboard extends LitElement {
     details.help .help-body p { margin: 0 0 0.5rem; }
     details.help .help-body ol { margin: 0.25rem 0 0.5rem; padding-left: 1.2rem; }
     details.help .help-body li { margin: 0 0 0.3rem; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -355,7 +356,7 @@ export class AdminDashboard extends LitElement {
         ${this.users.length === 0
           ? html`<p class="empty">Aún no hay perfiles.</p>`
           : html`
-              <table>
+              <div class="table-wrap"><table>
                 <thead>
                   <tr>
                     <th></th>
@@ -393,7 +394,7 @@ export class AdminDashboard extends LitElement {
                     `,
                   )}
                 </tbody>
-              </table>
+              </table></div>
             `}
       </section>
     `;
@@ -410,7 +411,7 @@ export class AdminDashboard extends LitElement {
         ${sessions.length === 0
           ? html`<p class="empty">Sin sesiones registradas.</p>`
           : html`
-              <table>
+              <div class="table-wrap"><table>
                 <thead>
                   <tr><th>Fecha</th><th>Rol dominante</th><th>Completitud</th><th>Objetivo</th><th>Editado por</th><th></th></tr>
                 </thead>
@@ -432,7 +433,7 @@ export class AdminDashboard extends LitElement {
                     `,
                   )}
                 </tbody>
-              </table>
+              </table></div>
             `}
       </section>
     `;
