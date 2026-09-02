@@ -48,21 +48,14 @@ test('el gobierno se elige entre tres opciones excluyentes', async ({ page }) =>
   }
 });
 
-test('People es una casilla aparte: no es gobierno, es un permiso', async ({ page }) => {
+test('gestionar encuestas ya no se concede aquí: es un permiso', async ({ page }) => {
   await signInAs(page, 'superadmin');
   await page.goto('/admin#users');
 
-  const suya = fila(page, 'Ingeniero E2E');
-  // No está entre las opciones de gobierno…
-  await expect(suya.getByRole('radiogroup')).not.toContainText('People');
-  try {
-    // …sino en su propia casilla, y convive con el gobierno que sea.
-    await suya.getByLabel('People (encuestas)').check();
-    await expect.poll(async () => (await db().doc('surveyAdmins/e2e-engineer').get()).exists,
-      { timeout: 15_000 }).toBe(true);
-  } finally {
-    await db().doc('surveyAdmins/e2e-engineer').delete();
-  }
+  // Dejó de ser un rol suelto (RMR-TSK-0476): se da en Permisos, como el de
+  // cualquier otra herramienta, así que no tiene control propio en la tabla.
+  await expect(page.locator('superadmin-panel tbody')).not.toContainText('People (encuestas)');
+  await expect(fila(page, 'Ingeniero E2E').getByRole('radiogroup')).not.toContainText('People');
 });
 
 test('se puede reportar a alguien con más responsabilidad aunque falte el rol de en medio', async ({ page }) => {
