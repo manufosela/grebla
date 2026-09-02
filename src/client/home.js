@@ -10,8 +10,9 @@ import { ROLES } from '../data/roles.js';
 import { onUserChanged } from '../lib/auth.js';
 import { getOrgConfig } from '../lib/firestore.js';
 import { resolveAccess } from '../lib/access.js';
-import { canGovern, hasAccess } from '../lib/accessRoles.js';
+import { branchScopeFor, canGovern, hasAccess } from '../lib/accessRoles.js';
 import { guardToolPage } from '../lib/toolGate.js';
+import { listLeaders } from '../lib/leaders.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 
@@ -81,8 +82,19 @@ if (el) {
         review.editorUid = user.uid;
         review.editorName = user.displayName ?? null;
       }
-      // Personas del equipo del manager (reusa la tool Equipo).
-      const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: user.uid });
+      // Alcance REAL de quien abre, igual que en la herramienta Equipo
+      // (RMR-BUG-0107): antes se pedía solo `leaderUid`, así que la lista se
+      // quedaba en quien te reporta directamente. Un superadmin no veía a toda
+      // la organización, y un CTO o un Head no llegaba a la gente que cuelga de
+      // sus managers — parecía que hacía falta gobierno de instancia para
+      // consultar a alguien de tu propia rama, y no es así.
+      const viewAll = canGovern(access);
+      // Rama transitiva: todo líder con managers debajo ve su subárbol. Sin
+      // nadie debajo, null → el ámbito simple de siempre.
+      const leaderUids = viewAll ? null : branchScopeFor(access, await listLeaders(), user.uid);
+      const { persistence } = await createTeamContainer({
+        mode: 'firestore', leaderUid: user.uid, viewAll, leaderUids,
+      });
       const people = await listActivePeople(persistence);
       if (select) {
         select.replaceChildren(new Option('— Elige una persona —', ''));

@@ -77,25 +77,27 @@ test('la cuenta sin acceso ni actividad se puede retirar desde el panel', async 
 });
 
 test('no se retira a quien tiene gente a su cargo: dice qué reasignar antes', async ({ page }) => {
-  // «Persona del manager» cuelga de e2e-manager, que no tiene ficha propia. Se
-  // le quita el rol un momento para que aparezca como residuo y se pueda probar
-  // que la salvaguarda salta.
-  const guardado = (await db().doc('leaders/e2e-manager').get()).data();
-  await db().doc('users/e2e-manager').set({ displayName: 'Manager E2E', email: 'manager@e2e.test', lastLogin: haceDias(300) });
-  await db().doc('leaders/e2e-manager').delete();
+  // Con cuenta y gente debajo, pero SIN rol, para que salga como residuo. Se
+  // monta una rama propia en vez de desmontar la del manager compartido: si
+  // otro spec corre a la vez, quitarle el rol a `e2e-manager` le rompe la
+  // cadena de mando a quien esté midiendo visibilidad.
+  await db().doc('users/e2e-cuenta-jefa').set({ displayName: 'Jefa Sin Rol', email: 'jefa@e2e.test', lastLogin: haceDias(300) });
+  await db().doc('people/e2e-persona-suya').set({
+    name: 'Persona de la jefa', uid: null, ownerLeaderUid: 'e2e-cuenta-jefa', active: true,
+  });
   try {
     await signInAs(page, 'superadmin');
     await page.goto('/admin#users');
 
-    const manager = fila(page, 'Manager E2E');
-    await manager.getByRole('button', { name: 'Retirar' }).click();
-    await manager.getByRole('button', { name: 'Sí' }).click();
+    const jefa = fila(page, 'Jefa Sin Rol');
+    await jefa.getByRole('button', { name: 'Retirar' }).click();
+    await jefa.getByRole('button', { name: 'Sí' }).click();
 
     // El mensaje dice cuántas personas hay que reasignar, no un «no se pudo».
     await expect(page.locator('superadmin-panel .error')).toContainText('en su equipo');
-    expect((await db().doc('users/e2e-manager').get()).exists).toBe(true);
+    expect((await db().doc('users/e2e-cuenta-jefa').get()).exists).toBe(true);
   } finally {
-    await db().doc('users/e2e-manager').delete();
-    if (guardado) await db().doc('leaders/e2e-manager').set(guardado);
+    await db().doc('people/e2e-persona-suya').delete();
+    await db().doc('users/e2e-cuenta-jefa').delete();
   }
 });
