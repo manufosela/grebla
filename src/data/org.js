@@ -21,25 +21,25 @@ export const ORG_PHASES = [
     key: 'seed',
     label: 'Startup (Seed)',
     description: 'Equipo pequeño, roles poco diferenciados, mucho hands-on.',
-    roleMultipliers: { engineer: 1, techLead: 1.1, staff: 1, em: 0.9, hoe: 0.9, vp: 0.8, cto: 1.1 },
+    roleMultipliers: { engineer: 1, techLead: 1.1, em: 0.9, hoe: 0.9, vp: 0.8, cto: 1.1 },
   },
   {
     key: 'seriesAB',
     label: 'Series A/B',
     description: 'Empieza la especialización de roles y los primeros managers.',
-    roleMultipliers: { engineer: 1, techLead: 1, staff: 1, em: 1, hoe: 1, vp: 0.95, cto: 1 },
+    roleMultipliers: { engineer: 1, techLead: 1, em: 1, hoe: 1, vp: 0.95, cto: 1 },
   },
   {
     key: 'scaleup',
     label: 'Scale-up',
     description: 'Crecimiento rápido: managers, staff y procesos cobran peso.',
-    roleMultipliers: { engineer: 1, techLead: 1, staff: 1.05, em: 1.1, hoe: 1.1, vp: 1.05, cto: 1 },
+    roleMultipliers: { engineer: 1, techLead: 1, em: 1.1, hoe: 1.1, vp: 1.05, cto: 1 },
   },
   {
     key: 'enterprise',
     label: 'Enterprise',
     description: 'Organización madura: liderazgo y estructura muy diferenciados.',
-    roleMultipliers: { engineer: 0.95, techLead: 1, staff: 1.05, em: 1, hoe: 1.15, vp: 1.2, cto: 1.1 },
+    roleMultipliers: { engineer: 0.95, techLead: 1, em: 1, hoe: 1.15, vp: 1.2, cto: 1.1 },
   },
 ];
 

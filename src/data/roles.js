@@ -1,11 +1,16 @@
 /**
- * Modelo de roles de ingeniería.
+ * Modelo de roles de ingeniería: ARQUETIPOS de comportamiento, no niveles ni
+ * tecnologías. El cuestionario reparte peso entre ocho dimensiones y de ahí sale
+ * el rol dominante: dice CÓMO trabajas, no cuánto alcance tienes ni en qué
+ * dominio. «Staff» se retiró por eso (RMR-TSK-0472) — es un NIVEL del framework
+ * de carrera, y tenerlo aquí duplicaba el eje: obligaba a elegir entre decir el
+ * nivel o decir el arquetipo, perdiendo el otro.
  *
  * Cada rol es un objeto de datos. Añadir un rol nuevo a este array NO requiere
  * cambios en los componentes: la UI y el scoring iteran sobre `ROLES` y usan
  * `role.key` como clave dentro del objeto de pesos de cada ítem (ver items.js).
  *
- * @typedef {'engineer'|'em'|'hoe'|'techLead'|'staff'|'cto'|'vp'} RoleKey
+ * @typedef {'engineer'|'em'|'hoe'|'techLead'|'cto'|'vp'} RoleKey
  *
  * @typedef {Object} Role
  * @property {RoleKey} key        Clave usada en `item.weights[key]`. Única.
@@ -35,15 +40,6 @@ export const ROLES = [
     description:
       'Referente técnico de un equipo. Equilibra contribución hands-on con coordinación técnica, calidad y delivery del squad.',
     color: '#4fb3a6',
-  },
-  {
-    key: 'staff',
-    label: 'Staff Engineer',
-    short: 'STF',
-    tagline: 'Tu impacto cruza equipos: resuelves los problemas técnicos que nadie más toca.',
-    description:
-      'IC senior con impacto multi-equipo. Lidera arquitectura transversal, mentoring horizontal y decisiones técnicas de alto alcance sin gestionar personas.',
-    color: '#3e7cb1',
   },
   {
     key: 'em',
@@ -93,3 +89,19 @@ export const ROLE_BY_KEY = Object.freeze(
 
 /** @type {ReadonlyArray<RoleKey>} */
 export const ROLE_KEYS = ROLES.map((role) => role.key);
+
+/**
+ * Etiqueta de un rol por su clave, tolerando los RETIRADOS (RMR-TSK-0472).
+ *
+ * Las mediciones guardadas conservan la clave del rol dominante que salió en su
+ * momento, y el catálogo cambia: «Staff» se fue de aquí porque es un nivel, no
+ * un arquetipo. Pintar «—» en esos casos diría que no hubo rol dominante, que es
+ * falso; el historial se respeta diciendo que ese rol ya no está en el catálogo.
+ *
+ * @param {string|null|undefined} key
+ * @returns {string} etiqueta, «Rol retirado» si la clave no está, «—» si no hay clave
+ */
+export function roleLabelOf(key) {
+  if (!key) return '—';
+  return ROLES.find((r) => r.key === key)?.label ?? 'Rol retirado';
+}
