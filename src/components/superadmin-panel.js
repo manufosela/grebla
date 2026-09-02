@@ -1145,8 +1145,16 @@ export class SuperadminPanel extends LitElement {
 
   /** Cuentas logadas que aún NO tienen ficha /people — para crearla desde aquí. */
   _orphanAccounts() {
-    const linked = new Set(this._peopleList.map((p) => p.uid).filter(Boolean));
-    return this._users.filter((u) => !linked.has(u.uid));
+    // Se compara con TODAS las personas, no solo las activas (RMR-BUG-0109):
+    // `_peopleList` son las activas, así que dar de baja a alguien convertía su
+    // cuenta en «sin ficha» y ofrecía crearle otra — dejándole dos fichas y el
+    // historial partido. `_linkedUids` ya trae los uids de todas, de baja
+    // incluidas; solo faltaba usarlo.
+    const conFicha = new Set([
+      ...(this._linkedUids ?? []),
+      ...this._peopleList.map((p) => p.uid),
+    ].filter(Boolean));
+    return this._users.filter((u) => !conFicha.has(u.uid));
   }
 
   /**

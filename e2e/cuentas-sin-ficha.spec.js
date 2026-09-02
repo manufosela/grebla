@@ -101,3 +101,24 @@ test('no se retira a quien tiene gente a su cargo: dice qué reasignar antes', a
     await db().doc('users/e2e-cuenta-jefa').delete();
   }
 });
+
+test('quien está de baja NO es una cuenta sin ficha: su ficha existe', async ({ page }) => {
+  // Al dar de baja, la persona sale de la lista de activas. Si eso bastara para
+  // considerarla «sin ficha», el panel ofrecería crearle otra y acabaría con dos
+  // y el historial partido (RMR-BUG-0109).
+  await db().doc('users/e2e-cuenta-baja').set({ displayName: 'Persona Dada de Baja', email: 'baja@e2e.test', lastLogin: haceDias(30) });
+  await db().doc('people/e2e-persona-baja').set({
+    name: 'Persona Dada de Baja', uid: 'e2e-cuenta-baja', ownerLeaderUid: 'e2e-manager', active: false,
+  });
+  try {
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin#users');
+    await expect(page.locator('superadmin-panel table.people')).toBeVisible();
+
+    await expect(page.locator('superadmin-panel tbody')).not.toContainText('Persona Dada de Baja (cuenta sin ficha)');
+    await expect(fila(page, 'Persona Dada de Baja').getByRole('button', { name: 'Crear ficha' })).toHaveCount(0);
+  } finally {
+    await db().doc('people/e2e-persona-baja').delete();
+    await db().doc('users/e2e-cuenta-baja').delete();
+  }
+});
