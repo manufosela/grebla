@@ -8,6 +8,7 @@
  *  - roles: import('../data/roles.js').Role[]
  */
 import { LitElement, html, css } from 'lit';
+import { roleLabelOf } from '../data/roles.js';
 import { tableStyles } from './common/table-styles.js';
 import { getPersonProfile, getUserAccount, listSessions, deleteSession, deleteUserData } from '../lib/firestore.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -184,7 +185,9 @@ export class AdminDashboard extends LitElement {
   }
 
   _roleLabel(key) {
-    return this._roleByKey.get(key)?.label ?? '—';
+    // Una medición vieja puede tener un rol que ya no está en el catálogo: se
+    // dice, en vez de pintar «—» y aparentar que no hubo rol dominante.
+    return this._roleByKey.get(key)?.label ?? roleLabelOf(key);
   }
 
   _roleColor(key) {

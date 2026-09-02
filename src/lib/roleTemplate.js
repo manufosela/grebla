@@ -28,7 +28,6 @@ const MULTI_ROLE_OPTION = {
   architecture_scope: {
     engineer: 'component',
     techLead: 'service',
-    staff: 'cross',
     em: 'service',
     hoe: 'cross',
     vp: 'platform',
@@ -37,7 +36,6 @@ const MULTI_ROLE_OPTION = {
   growth_aspiration: {
     engineer: 'depth',
     techLead: 'breadth',
-    staff: 'breadth',
     em: 'people',
     hoe: 'strategy',
     vp: 'strategy',
