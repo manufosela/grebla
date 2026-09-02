@@ -38,7 +38,7 @@ test.describe('reglas de /surveys', () => {
       // Con el permiso nuevo (lo materializa la CF desde la política).
       await setDoc(doc(db, 'toolManagers', 'surveys--conPermiso'), { toolId: 'surveys', uid: 'conPermiso' });
       // Con el rol antiguo, aún sin migrar.
-      await setDoc(doc(db, 'surveyAdmins', 'conRolViejo'), { email: 'viejo@tribbuapp.com' });
+      await setDoc(doc(db, 'surveyAdmins', 'conRolViejo'), { addedAt: 'legacy' });
     });
   });
 
