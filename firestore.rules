@@ -18,10 +18,15 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     // Gestor de encuestas (People): puede gestionar /surveys sin ser superadmin.
-    // Lo concede un superadmin en el panel (RMR-TSK-0328).
+    // Desde RMR-TSK-0476 es un PERMISO DE HERRAMIENTA como cualquier otro — se
+    // concede en Permisos, no con un rol aparte—, y se comprueba por el espejo
+    // /toolManagers. La colección /surveyAdmins se mantiene mientras dure la
+    // migración: quitarla antes dejaría sin acceso a quien aún no se haya
+    // movido. Es aditivo, así que nadie pierde nada.
     function isSurveyAdmin() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/surveyAdmins/$(request.auth.uid));
+      return managesToolByPolicy('surveys')
+        || (isSignedIn()
+          && exists(/databases/$(database)/documents/surveyAdmins/$(request.auth.uid)));
     }
     // Gestor de una HERRAMIENTA por su política (RMR-TSK-0389, ADR /toolManagers):
     // el grant managedBy de /toolPolicies se MATERIALIZA en /toolManagers

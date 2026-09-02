@@ -1237,10 +1237,7 @@ export class SuperadminPanel extends LitElement {
               @change=${() => this._setGovernance(p, value)} />${label}
           </label>`)}
       </div>
-      <label class="access-inline" title="Puede gestionar las encuestas de clima, tenga el rol que tenga">
-        <input type="checkbox" .checked=${Boolean(acc?.isSurveyAdmin)}
-          @change=${(e) => this._setSurveyAdmin(p, e.target.checked)} /> People (encuestas)
-      </label>`;
+`;
   }
 
   /** Gobierno actual de una cuenta: los dos valores son excluyentes por modelo. */
@@ -1277,27 +1274,6 @@ export class SuperadminPanel extends LitElement {
       }
     }
   }
-
-  /** Gestión de encuestas: es un permiso de herramienta, no gobierno. */
-  async _setSurveyAdmin(p, on) {
-    return this._withBusy('Actualizando el acceso a encuestas…', () => this._setSurveyAdminImpl(p, on));
-  }
-
-  async _setSurveyAdminImpl(p, on) {
-    {
-      this._peopleError = '';
-      this._peopleNotice = '';
-      try {
-        await setSurveyAdmin(p.uid, on, { displayName: p.name, email: this._personEmail(p) });
-        await this._loadUsers();
-        this._peopleNotice = 'Acceso actualizado.';
-      } catch {
-        this._peopleError = 'No se pudo cambiar el acceso a encuestas.';
-      }
-    }
-  }
-
-
 
   _closeAssign() {
     this._assignFor = null;

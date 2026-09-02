@@ -168,8 +168,15 @@ export async function listAnswers(surveyId) {
 /** ¿Es `uid` gestor de encuestas (People)? Para abrir la tool sin ser superadmin. */
 export async function isSurveyAdmin(uid) {
   if (!uid) return false;
-  const snap = await getDoc(doc(db, 'surveyAdmins', uid));
-  return snap.exists();
+  // Gestionar encuestas es un permiso de herramienta como cualquier otro
+  // (RMR-TSK-0476): se mira el espejo /toolManagers, el mismo que consultan las
+  // reglas. Se sigue aceptando la colección antigua mientras dure la migración,
+  // para no dejar sin acceso a quien aún no se haya movido.
+  const [porPermiso, legacy] = await Promise.all([
+    getDoc(doc(db, 'toolManagers', `surveys--${uid}`)),
+    getDoc(doc(db, 'surveyAdmins', uid)),
+  ]);
+  return porPermiso.exists() || legacy.exists();
 }
 
 /**
