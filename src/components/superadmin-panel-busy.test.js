@@ -45,8 +45,8 @@ describe('las escrituras de la tabla de Personas pasan por el overlay', () => {
     ['_setPersonSuperior', ['person-1', 'person-2']],
     ['_setPersonRole', ['person-1', 'role-1']],
     ['_setPersonBranch', ['person-1', 'branch-1']],
-    ['_setPersonAccess', [{ id: 'person-1' }, 'viewer']],
-    ['_togglePersonAdmin', [{ id: 'person-1' }, true]],
+    ['_setGovernance', [{ id: 'person-1', uid: 'uid-1' }, 'viewer']],
+    ['_setSurveyAdmin', [{ id: 'person-1', uid: 'uid-1' }, true]],
     ['_createPersonForAccount', [{ uid: 'uid-1' }]],
   ];
 

@@ -72,6 +72,13 @@ function nextOrder(items) {
 }
 
 /** @type {Record<import('../lib/accessRoles.js').AccessRole, string>} */
+/** Gobierno de instancia (ADR «Acceso en dos ejes»): excluyentes entre sí. */
+const GOVERNANCE = /** @type {const} */ ([
+  ['none', '—', 'Sin gobierno de instancia: solo ve su propio alcance'],
+  ['admin', 'Superadmin', 'Gobierna la instancia y ve toda la organización'],
+  ['viewer', 'Viewer', 'Ve toda la organización en solo lectura; no lidera equipo'],
+]);
+
 const ROLE_LABEL = { superadmin: 'Superadmin', supermanager: 'Head', viewer: 'Viewer', leader: 'Manager', none: 'Sin rol' };
 // El violeta del Head contrasta AA sobre el texto blanco del badge, igual que los demás.
 const ROLE_COLOR = { superadmin: '#dc2626', supermanager: '#6d28d9', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af', surveyAdmin: '#0d9488' };
@@ -307,7 +314,12 @@ export class SuperadminPanel extends LitElement {
        fuera de la caja. */
     table.people td.stack .access-inline + select { max-width: 10rem; }
     table.people th, table.people td { padding: 0.45rem 0.35rem; }
-    table.people .access-inline { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.35rem; }
+    table.people .access-inline { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.35rem; font-size: 0.78rem; }
+    /* Gobierno: tres opciones excluyentes en una línea. Ocupa menos que un
+       desplegable y se lee de un vistazo cuál está puesta. */
+    .gov { display: flex; flex-wrap: wrap; gap: 0.1rem 0.6rem; margin-bottom: 0.3rem; }
+    .gov-opt { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.78rem; cursor: pointer; }
+    .gov-opt input { cursor: pointer; }
     /* El email lleva debajo el estado de la cuenta: es lo mismo —la cuenta
        vinculada o la invitación—, y en columna aparte solo gastaba ancho. */
     table.people .acct { display: block; font-size: 0.78rem; margin-top: 0.15rem; }
@@ -1186,45 +1198,6 @@ export class SuperadminPanel extends LitElement {
     });
   }
 
-  /** Conmuta el superadmin de la cuenta vinculada a una persona (eje de gobierno). */
-  async _togglePersonAdmin(p, isAdmin) {
-    return this._withBusy('Actualizando el superadmin…', () => this._togglePersonAdminImpl(p, isAdmin));
-  }
-
-  async _togglePersonAdminImpl(p, isAdmin) {
-    this._peopleError = '';
-    this._peopleNotice = '';
-    try {
-      await setUserAdmin(p.uid, isAdmin, { displayName: p.name, email: this._personEmail(p) });
-      await this._loadUsers();
-      this._peopleNotice = 'Acceso actualizado.';
-    } catch (err) {
-      this._peopleError = 'No se pudo cambiar el superadmin.';
-    }
-  }
-
-  /** Acceso especial NO jerárquico de la cuenta: viewer (solo lectura) o People (encuestas). */
-  async _setPersonAccess(p, access) {
-    return this._withBusy('Actualizando el acceso…', () => this._setPersonAccessImpl(p, access));
-  }
-
-  async _setPersonAccessImpl(p, access) {
-    this._peopleError = '';
-    this._peopleNotice = '';
-    const profile = { displayName: p.name, email: this._personEmail(p) };
-    try {
-      // People-account (surveyAdmin) es un eje propio; el rol de equipo se fija
-      // SIEMPRE para que viewer / People / ninguno sean mutuamente exclusivos
-      // (un viewer previo se limpia al pasar a People).
-      await setSurveyAdmin(p.uid, access === 'people', profile);
-      await setUserRole(p.uid, access === 'viewer' ? 'viewer' : 'none', profile);
-      await this._loadUsers();
-      this._peopleNotice = 'Acceso actualizado.';
-    } catch (err) {
-      this._peopleError = 'No se pudo cambiar el acceso.';
-    }
-  }
-
   /** Crea la ficha de una cuenta logada que aún no tiene persona (caso residual:
    *  se logueó pero no se le creó ficha). Nace como 'generico', ya vinculada. */
   async _createPersonForAccount(u) {
@@ -1254,16 +1227,74 @@ export class SuperadminPanel extends LitElement {
   _renderPersonAccess(p) {
     if (!p.uid) return html`<span class="muted">requiere cuenta</span>`;
     const acc = this._accessOf(p.uid);
-    const isAdmin = Boolean(acc?.isAdmin);
-    const special = acc?.isSurveyAdmin ? 'people' : (acc?.role === 'viewer' ? 'viewer' : 'none');
+    const gobierno = this._governanceOf(acc);
+    const grupo = `gov-${p.uid}`;
     return html`
-      <label class="access-inline"><input type="checkbox" .checked=${isAdmin}
-        @change=${(e) => this._togglePersonAdmin(p, e.target.checked)} /> Superadmin</label>
-      <select @change=${(e) => this._setPersonAccess(p, e.target.value)}>
-        <option value="none" ?selected=${special === 'none'}>— sin acceso extra —</option>
-        <option value="viewer" ?selected=${special === 'viewer'}>Viewer (solo lectura)</option>
-        <option value="people" ?selected=${special === 'people'}>People (encuestas)</option>
-      </select>`;
+      <div class="gov" role="radiogroup" aria-label="Gobierno de ${p.name ?? 'la persona'}">
+        ${GOVERNANCE.map(([value, label, ayuda]) => html`
+          <label class="gov-opt" title=${ayuda}>
+            <input type="radio" name=${grupo} value=${value} .checked=${gobierno === value}
+              @change=${() => this._setGovernance(p, value)} />${label}
+          </label>`)}
+      </div>
+      <label class="access-inline" title="Puede gestionar las encuestas de clima, tenga el rol que tenga">
+        <input type="checkbox" .checked=${Boolean(acc?.isSurveyAdmin)}
+          @change=${(e) => this._setSurveyAdmin(p, e.target.checked)} /> People (encuestas)
+      </label>`;
+  }
+
+  /** Gobierno actual de una cuenta: los dos valores son excluyentes por modelo. */
+  _governanceOf(acc) {
+    if (acc?.isAdmin) return 'admin';
+    return acc?.role === 'viewer' ? 'viewer' : 'none';
+  }
+
+  /**
+   * Fija el gobierno de instancia de una cuenta (ADR «Acceso en dos ejes»).
+   * `admin` y `viewer` son mutuamente excluyentes —de ahí el radio y no dos
+   * casillas: dos casillas dejarían marcar las dos y afirmar algo imposible—.
+   * Solo se toca el rol de equipo si la cuenta ERA viewer o pasa a serlo: quitar
+   * el gobierno no puede llevarse por delante su rol funcional.
+   */
+  async _setGovernance(p, value) {
+    return this._withBusy('Actualizando el gobierno…', () => this._setGovernanceImpl(p, value));
+  }
+
+  async _setGovernanceImpl(p, value) {
+    {
+      this._peopleError = '';
+      this._peopleNotice = '';
+      const profile = { displayName: p.name, email: this._personEmail(p) };
+      const antes = this._governanceOf(this._accessOf(p.uid));
+      try {
+        await setUserAdmin(p.uid, value === 'admin', profile);
+        if (value === 'viewer') await setUserRole(p.uid, 'viewer', profile);
+        else if (antes === 'viewer') await setUserRole(p.uid, 'none', profile);
+        await this._loadUsers();
+        this._peopleNotice = 'Gobierno actualizado.';
+      } catch {
+        this._peopleError = 'No se pudo cambiar el gobierno.';
+      }
+    }
+  }
+
+  /** Gestión de encuestas: es un permiso de herramienta, no gobierno. */
+  async _setSurveyAdmin(p, on) {
+    return this._withBusy('Actualizando el acceso a encuestas…', () => this._setSurveyAdminImpl(p, on));
+  }
+
+  async _setSurveyAdminImpl(p, on) {
+    {
+      this._peopleError = '';
+      this._peopleNotice = '';
+      try {
+        await setSurveyAdmin(p.uid, on, { displayName: p.name, email: this._personEmail(p) });
+        await this._loadUsers();
+        this._peopleNotice = 'Acceso actualizado.';
+      } catch {
+        this._peopleError = 'No se pudo cambiar el acceso a encuestas.';
+      }
+    }
   }
 
 
