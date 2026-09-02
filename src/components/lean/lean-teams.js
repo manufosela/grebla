@@ -5,6 +5,7 @@
  * refresh, discover.
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { addUnit, listUnits, removeUnit } from '../../tools/lean/application/usecases.js';
 
@@ -30,7 +31,7 @@ export class LeanTeams extends LitElement {
     _info: { state: true },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     :host { display: block; }
     .bar { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0 0 1rem; }
     .btn { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.45rem 0.85rem; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
@@ -54,7 +55,7 @@ export class LeanTeams extends LitElement {
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     .actions { display: flex; gap: 0.35rem; justify-content: flex-end; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -208,10 +209,10 @@ export class LeanTeams extends LitElement {
     if (units.length === 0) return null;
     return html`
       <h4>${KIND_LABEL[kind]} (${units.length})</h4>
-      <table>
+      <div class="table-wrap"><table>
         <thead><tr><th>Label</th><th>Nombre</th><th>Últimas métricas</th>${this.canEdit ? html`<th></th>` : null}</tr></thead>
         <tbody>${units.map((u) => this._renderRow(u))}</tbody>
-      </table>
+      </table></div>
     `;
   }
 

@@ -6,6 +6,7 @@
  * Props: persistence, people.
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { listPeriods } from '../../tools/o2o/application/usecases/periods.js';
 import { listAllSessions } from '../../tools/o2o/application/usecases/sessions.js';
@@ -20,7 +21,7 @@ export class O2OEvolution extends LitElement {
     _error: { state: true },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     :host { display: block; }
     .lead { font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 1rem; }
     table { width: 100%; border-collapse: collapse; }
@@ -32,7 +33,7 @@ export class O2OEvolution extends LitElement {
     .bar span { display: block; height: 100%; background: var(--rm-accent, #2a9d8f); }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -73,10 +74,10 @@ export class O2OEvolution extends LitElement {
     if (!this._rows.length) return html`<p class="empty">Aún no hay periodos que comparar.</p>`;
     return html`
       <p class="lead">Cobertura del equipo por periodo (cuántas personas tuvieron su O2O). Sirve para ver si el ciclo se mantiene.</p>
-      <table>
+      <div class="table-wrap"><table>
         <thead><tr><th>Periodo</th><th>Cobertura</th><th class="num">%</th><th class="num">Sesiones</th></tr></thead>
         <tbody>${this._rows.map((r) => this._renderRow(r))}</tbody>
-      </table>
+      </table></div>
     `;
   }
 

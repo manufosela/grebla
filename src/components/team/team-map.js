@@ -10,6 +10,7 @@
  *  - persistence: PersistencePort (inyectado por <team-app>)
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getTeamMap, listAreas } from '../../tools/team/application/usecases/index.js';
 import { LEVELS, LEVEL_BY_ORDER, levelLabel } from '../../tools/team/domain/levels.js';
@@ -22,7 +23,7 @@ export class TeamMap extends LitElement {
     error: { state: true },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     :host { display: block; }
     section {
       background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb);
@@ -65,7 +66,7 @@ export class TeamMap extends LitElement {
       font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
     }
     .link-inline:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -194,7 +195,7 @@ export class TeamMap extends LitElement {
               para elegir a quién registrarle la primera lectura.</p>`
           : html`
               <div class="wrap">
-                <table>
+                <div class="table-wrap"><table>
                   <thead>
                     <tr>
                       <th>Persona</th><th>Seniority</th><th>Emocional</th><th>Conocimiento</th><th>Contribución</th>
@@ -216,7 +217,7 @@ export class TeamMap extends LitElement {
                       `,
                     )}
                   </tbody>
-                </table>
+                </table></div>
               </div>
               <div class="legend">
                 ${LEVELS.map((l) => html`<span class="lvl"><span class="dot" style=${`background:${l.color}`}></span>${l.order}. ${l.name}</span>`)}

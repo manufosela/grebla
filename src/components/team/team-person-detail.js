@@ -11,6 +11,7 @@
  *  - person: Person
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { noteStyles } from '../common/note-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import './team-level-input.js';
@@ -204,7 +205,7 @@ export class TeamPersonDetail extends LitElement {
     _toolPolicies: { state: true },
   };
 
-  static styles = [noteStyles, css`
+  static styles = [tableStyles, noteStyles, css`
     :host { display: block; }
     .head { margin-bottom: 1rem; }
     .head h2 { margin: 0; font-size: 1.3rem; }
@@ -1280,7 +1281,7 @@ export class TeamPersonDetail extends LitElement {
                     <div class="evo">
                       <div class="evo-chart">${this._renderKnowledgeBars(currentByArea, areaName)}</div>
                       <div class="evo-table">
-                        <table class="htable">
+                        <div class="table-wrap"><table class="htable">
                           <caption>Histórico por área</caption>
                           <thead>
                             <tr>
@@ -1300,7 +1301,7 @@ export class TeamPersonDetail extends LitElement {
                               </tr>`,
                             )}
                           </tbody>
-                        </table>
+                        </table></div>
                       </div>
                     </div>
                   `}

@@ -11,6 +11,7 @@
  *  - canEdit: boolean  (superadmin o manager pueden añadir/editar/borrar sus repos)
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
 import {
   addRepo,
@@ -108,7 +109,7 @@ export class DoraRepos extends LitElement {
     _incResolveAt: { state: true },
   };
 
-  static styles = [css`
+  static styles = [tableStyles, css`
     :host { display: block; }
     section { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
     h2 { font-size: 1.05rem; margin: 0 0 1rem; }
@@ -878,7 +879,7 @@ export class DoraRepos extends LitElement {
           : this.repos.length === 0
             ? html`<p class="empty">Aún no hay repositorios configurados.</p>`
             : html`
-                <table>
+                <div class="table-wrap"><table>
                   <thead>
                     <tr><th>Repositorio</th><th>Equipo</th><th>Gremios</th><th>Despliegue</th><th>Desde</th><th>Lead time</th><th>Deploy/sem</th><th>Personas</th>${this.canEdit ? html`<th></th>` : null}</tr>
                   </thead>
@@ -912,7 +913,7 @@ export class DoraRepos extends LitElement {
                       `,
                     )}
                   </tbody>
-                </table>
+                </table></div>
                 <p class="muted note">Equipo y gremios se eligen del catálogo de <strong>Flujo (LEAN)</strong> (squads y chapters) para que DORA agregue por las mismas unidades. La rama base (señal de despliegue, por defecto <code>main</code>) también se configura aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Para el <strong>MTTR</strong> abre «Incidentes» y registra las caídas (inicio → restauración). Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>

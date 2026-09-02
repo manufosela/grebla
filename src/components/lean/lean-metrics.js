@@ -4,6 +4,7 @@
  * (p50/p85), WIP, aging y flow efficiency. Solo lectura. Reutiliza `formatHours` de DORA.
  */
 import { html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { flowEfficiencyLevel, agingLevel } from '../../tools/lean/domain/levels.js';
 import { formatHours } from '../dora/format.js';
@@ -35,7 +36,7 @@ export class LeanMetrics extends LeanView {
     canInterpret: { attribute: false },
   };
 
-  static styles = [css`
+  static styles = [tableStyles, css`
     :host { display: block; }
     h3 { font-size: 1.05rem; margin: 1.25rem 0 0.75rem; color: var(--rm-navy, #1e3a5f); }
     h3:first-of-type { margin-top: 0; }
@@ -147,7 +148,7 @@ export class LeanMetrics extends LeanView {
   }
 
   _renderTable(units, unitWord) {
-    return html`<table>
+    return html`<div class="table-wrap"><table>
       <thead><tr>
         <th>${unitWord}</th>
         <th class="num">Throughput/sem ${this._help('throughput')}</th>
@@ -158,7 +159,7 @@ export class LeanMetrics extends LeanView {
         <th class="num">Flow eff. ${this._help('flowEff')}</th>
       </tr></thead>
       <tbody>${units.map((u) => this._renderRow(u))}</tbody>
-    </table>`;
+    </table></div>`;
   }
 
   _renderRow(u) {

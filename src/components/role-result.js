@@ -14,6 +14,7 @@
  *                         ingeniero). Por defecto false: comportamiento original.
  */
 import { LitElement, html, css, svg } from 'lit';
+import { tableStyles } from './common/table-styles.js';
 
 export class RoleResult extends LitElement {
   static properties = {
@@ -25,7 +26,7 @@ export class RoleResult extends LitElement {
     managerView: { attribute: false },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     :host {
       display: block;
       font-family: var(--rm-font, system-ui, sans-serif);
@@ -145,7 +146,7 @@ export class RoleResult extends LitElement {
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     .gap-pos { color: var(--rm-danger, #dc2626); font-weight: 600; }
     .gap-neg { color: var(--rm-success, #16a34a); font-weight: 600; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -306,7 +307,7 @@ export class RoleResult extends LitElement {
   _renderGapTable() {
     const gap = this.gap ?? [];
     return html`
-      <table>
+      <div class="table-wrap"><table>
         <thead>
           <tr>
             <th>Dimensión</th>
@@ -329,7 +330,7 @@ export class RoleResult extends LitElement {
             `,
           )}
         </tbody>
-      </table>
+      </table></div>
     `;
   }
 }

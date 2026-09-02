@@ -11,6 +11,7 @@
  *  - isAdmin: boolean
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { listCareerRoutes } from '../../lib/careerMap.js';
 import { getJourney } from '../../tools/career/application/usecases.js';
 import { subLevelForPerson, effectiveSubLevel } from '../../tools/career/domain/subLevel.js';
@@ -94,7 +95,7 @@ export class TeamPeople extends LitElement {
     _confirmTransfer: { state: true },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     .lvl-sub { display: inline-block; font-weight: 700; font-size: 0.78rem; color: var(--rm-navy, #1e3a5f); background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 16%, var(--rm-surface, #fff)); border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 999px; padding: 0.05rem 0.5rem; cursor: help; white-space: nowrap; }
     .lvl-sub.manual { background: #e9c46a; border-color: #b8860b; color: #4a3800; }
     :host { display: block; }
@@ -227,7 +228,7 @@ export class TeamPeople extends LitElement {
     .shared-list .rm { margin-left: auto; border: 0; background: none; color: var(--rm-danger, #dc2626); font-weight: 700; font-size: 0.8rem; cursor: pointer; padding: 0 0.25rem; }
     .confirm-text { font-size: 0.8rem; color: var(--rm-danger, #dc2626); white-space: normal; }
     .edit-checks { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
-  `;
+  `];
 
   constructor() {
     super();
@@ -609,7 +610,7 @@ export class TeamPeople extends LitElement {
       return html`<p class="empty">Aún no has añadido a nadie. Despliega «Añadir persona» para empezar.</p>`;
     }
     return html`
-      <table>
+      <div class="table-wrap"><table>
         <thead>
           <tr>
             ${this._sortableTh('name', 'Nombre')}
@@ -620,7 +621,7 @@ export class TeamPeople extends LitElement {
           </tr>
         </thead>
         <tbody>${this._sortedPeople().map((p) => this._renderPersonRow(p))}</tbody>
-      </table>`;
+      </table></div>`;
   }
 
   /** Cabecera de columna ordenable, con indicador de sentido. */

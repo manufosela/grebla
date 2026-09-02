@@ -6,6 +6,7 @@
  * tokens y las respuestas siguen siendo exclusivos de las Cloud Functions.
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import './survey-padron.js';
@@ -98,7 +99,7 @@ export class SurveyAdmin extends LitElement {
     _error: { state: true },
   };
 
-  static styles = css`
+  static styles = [tableStyles, css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); color: var(--rm-text, #1e3a5f); }
     h2 { font-size: 1.15rem; margin: 0 0 1rem; }
     .lead { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; margin: 0 0 1rem; }
@@ -246,7 +247,7 @@ export class SurveyAdmin extends LitElement {
     .fp-close { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 6px; padding: 0.1rem 0.45rem; font-size: 0.85rem; cursor: pointer; }
     .fp-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--rm-border, #e3ebef); }
     .flow-label { margin: 0 0 0.15rem; font-size: 0.78rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); }
-  `;
+  `];
 
   constructor() {
     super();
@@ -961,7 +962,7 @@ export class SurveyAdmin extends LitElement {
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
       ${this._surveys.length ? html`
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>Encuesta</th><th>Estado</th><th>Preguntas</th><th></th></tr></thead>
           <tbody>${this._surveys.map((s) => html`<tr>
             <td>${this._renamingId === s.id
@@ -987,7 +988,7 @@ export class SurveyAdmin extends LitElement {
               ${this.canDelete ? this._renderDeleteAction(s) : null}
             </div></td>
           </tr>`)}</tbody>
-        </table>`
+        </table></div>`
         : html`<p class="empty">Aún no hay encuestas. Crea la primera.</p>`}`;
   }
 

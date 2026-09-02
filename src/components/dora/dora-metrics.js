@@ -7,6 +7,7 @@
  *  - persistence: DoraPersistence
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getDoraSummary } from '../../tools/dora/application/usecases.js';
 import { leadTimeLevel, deployFrequencyLevel, changeFailureRateLevel, mttrLevel } from '../../tools/dora/domain/levels.js';
@@ -49,7 +50,7 @@ export class DoraMetrics extends LitElement {
     error: { state: true },
   };
 
-  static styles = [css`
+  static styles = [tableStyles, css`
     :host { display: block; }
     section { background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #e5e7eb); border-radius: var(--rm-radius, 12px); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
     h2 { font-size: 1.05rem; margin: 0 0 1rem; }
@@ -104,7 +105,7 @@ export class DoraMetrics extends LitElement {
         ${rows.length === 0
           ? html`<p class="empty">Sin datos.</p>`
           : html`
-              <table>
+              <div class="table-wrap"><table>
                 <thead>
                   <tr><th>${title.includes('equipo') ? 'Equipo' : 'Gremio'}</th><th class="num">Repos</th><th class="num">Despliegues</th><th class="num">Deploy/sem</th><th class="num">Lead time</th><th class="num">CFR</th><th class="num">MTTR</th><th class="num">Personas</th></tr>
                 </thead>
@@ -122,7 +123,7 @@ export class DoraMetrics extends LitElement {
                     </tr>`,
                   )}
                 </tbody>
-              </table>
+              </table></div>
             `}
       </section>
     `;

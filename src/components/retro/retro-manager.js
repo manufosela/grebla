@@ -7,6 +7,7 @@
  * Props: uid (del manager, lo inyecta el glue de cliente).
  */
 import { LitElement, html, css } from 'lit';
+import { tableStyles } from '../common/table-styles.js';
 import { noteStyles } from '../common/note-styles.js';
 import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
@@ -31,7 +32,7 @@ export class RetroManager extends LitElement {
     _error: { state: true },
   };
 
-  static styles = [noteStyles, css`
+  static styles = [tableStyles, noteStyles, css`
     .seg { display: inline-flex; background: var(--rm-surface-hover, #eef3f5); border: 1px solid var(--rm-border, #dde7ec); border-radius: 999px; padding: 0.25rem; gap: 0.2rem; margin-bottom: 1.3rem; }
     .seg button { border: 0; background: transparent; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); padding: 0.45rem 1.05rem; border-radius: 999px; cursor: pointer; }
     .seg button[aria-selected="true"] { background: var(--gr-teal, #2a9d8f); color: #0c1420; }
@@ -338,10 +339,10 @@ export class RetroManager extends LitElement {
   _renderList() {
     if (this._loading) return skeletonLines(4);
     if (this._retros.length === 0) return html`<p class="empty">Aún no has creado ninguna retro.</p>`;
-    return html`<table>
+    return html`<div class="table-wrap"><table>
         <thead><tr><th>Nombre</th><th>Formato</th><th>Ámbito</th><th>Estado</th><th></th></tr></thead>
         <tbody>${this._retros.map((r) => this._renderRow(r))}</tbody>
-      </table>`;
+      </table></div>`;
   }
 }
 
