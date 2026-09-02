@@ -262,7 +262,17 @@ export class SuperadminPanel extends LitElement {
        PROPIA tabla — así la barra horizontal siempre está a la vista sin llegar
        al fondo de la página. Cabecera pegajosa y PRIMERA COLUMNA FIJA para no
        perder de vista a la persona/rol al desplazarse en horizontal. */
-    .table-wrap { overflow: auto; max-height: 70vh; }
+    /* La barra horizontal vive en el borde INFERIOR de esta caja: si la caja es
+       más alta que lo que queda de ventana, la barra cae fuera de la vista y hay
+       que bajar toda la lista para encontrarla — que es justo lo que hacía
+       inservible el desplazamiento (RMR-BUG-0108). Con una caja más baja, la
+       barra entra en pantalla junto a la tabla; la cabecera es sticky, así que
+       se sigue sabiendo qué columna es cada una.
+       Se usa scroll y no auto: la barra se dibuja siempre, en vez de aparecer
+       solo cuando ya estás desplazando. */
+    .table-wrap { overflow-y: auto; overflow-x: auto; max-height: 60vh; }
+    /* Un borde a la derecha recuerda que la tabla sigue más allá. */
+    .table-wrap { border-right: 1px solid var(--rm-border, #e5e7eb); }
     .table-wrap table { min-width: 46rem; }
     .table-wrap thead th { position: sticky; top: 0; background: var(--rm-surface, #fff); z-index: 2; }
     .table-wrap th:first-child, .table-wrap td:first-child { position: sticky; left: 0; background: var(--rm-surface, #fff); z-index: 1; }
@@ -271,22 +281,33 @@ export class SuperadminPanel extends LitElement {
        «Superadmin» quedaba fuera, con la barra de scroll al final de la tabla
        (RMR-BUG-0105). Con el ancho repartido cabe entera y no hay que arrastrar
        nada para llegar a lo que se venía a hacer. */
-    table.people { table-layout: fixed; min-width: 0; }
-    table.people col.c-name { width: 14%; }
-    table.people col.c-mail { width: 15%; }
-    table.people col.c-role { width: 12%; }
-    table.people col.c-branch { width: 12%; }
-    table.people col.c-boss { width: 15%; }
-    table.people col.c-access { width: 23%; }
-    table.people col.c-actions { width: 9%; }
-    /* Solo los campos de texto y los selects se estiran. Una casilla estirada
-       al ancho de la celda empuja su etiqueta fuera y la parte letra a letra. */
-    table.people select,
-    table.people input[type="text"],
-    table.people input[type="email"] { width: 100%; max-width: 100%; box-sizing: border-box; }
-    table.people td { word-break: break-word; overflow: hidden; }
-    table.people .access-inline { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.35rem; white-space: nowrap; }
-    table.people .del-btn { white-space: nowrap; }
+    /* Personas: la tabla toma el ancho que necesita su contenido y la caja da
+       scroll cuando no quepa (RMR-BUG-0108). Antes se hizo al revés —anchos
+       fijos por columna para que «cupiera»— y salió peor: la tabla nunca era
+       más ancha que su caja, así que no había barra que arrastrar, y el
+       contenido se recortaba dentro de cada celda («Mobile En», «Engineerin»).
+       Un dato a medio leer sin forma de verlo entero es peor que un scroll. */
+    table.people { min-width: 0; }
+    /* Dos controles apilados en una celda: rol y rama van juntos porque se
+       eligen juntos, y así la tabla CABE. Perseguir la barra de scroll fue un
+       error: en Chrome es «overlay» y no se dibuja hasta que ya estás
+       arrastrando, así que el usuario ve la tabla cortada y ninguna barra. */
+    /* La celda apilada envuelve: «requiere cuenta» en dos líneas ocupa menos
+       ancho que en una, y el ancho es lo escaso aquí. */
+    table.people td.stack { display: table-cell; white-space: normal; }
+    table.people td.stack > * { display: block; }
+    table.people td.stack > * + * { margin-top: 0.35rem; }
+    table.people td, table.people th { white-space: nowrap; }
+    /* El nombre y el email sí envuelven: son lo más largo y no hace falta
+       verlos en una línea para entenderlos. */
+    table.people td.wrap { white-space: normal; word-break: break-word; min-width: 8rem; }
+    table.people select { max-width: 10.5rem; width: 100%; }
+    /* Los dos controles de acceso (excepción y acceso extra) caben en menos:
+       el texto de sus opciones es corto y el ancho sobrante empujaba la tabla
+       fuera de la caja. */
+    table.people td.stack .access-inline + select { max-width: 10rem; }
+    table.people th, table.people td { padding: 0.45rem 0.35rem; }
+    table.people .access-inline { display: flex; align-items: center; gap: 0.35rem; margin: 0 0 0.35rem; }
     /* El email lleva debajo el estado de la cuenta: es lo mismo —la cuenta
        vinculada o la invitación—, y en columna aparte solo gastaba ancho. */
     table.people .acct { display: block; font-size: 0.78rem; margin-top: 0.15rem; }
@@ -1135,7 +1156,7 @@ export class SuperadminPanel extends LitElement {
     return html`<tr>
       <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
       <td>${u.email ?? html`<span class="muted">—</span>`}</td>
-      <td colspan="4"><span class="muted">${detalle}</span></td>
+      <td colspan="2"><span class="muted">${detalle}</span></td>
       <td>
         ${retirando
           ? html`<span class="confirm">¿Retirar acceso? <button class="yes" @click=${() => this._removeAccount(u)}>Sí</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
@@ -2712,11 +2733,7 @@ export class SuperadminPanel extends LitElement {
       ${this._peopleList.length === 0
         ? sinPersonas
         : html`<div class="table-wrap"><table class="people">
-            <colgroup>
-              <col class="c-name" /><col class="c-mail" /><col class="c-role" /><col class="c-branch" />
-              <col class="c-boss" /><col class="c-access" /><col class="c-actions" />
-            </colgroup>
-            <thead><tr><th>Nombre</th><th>Email y cuenta</th><th>Rol</th><th>Rama</th><th>Reporta a</th><th>Acceso</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Email y cuenta</th><th>Rol y rama</th><th>Reporta a</th><th>Acceso</th></tr></thead>
             <tbody>
               ${this._peopleList.map((p) => {
                 let account;
@@ -2724,25 +2741,25 @@ export class SuperadminPanel extends LitElement {
                 else if (p.pendingEmail) account = html`<span class="acct muted">Invitación pendiente</span>`;
                 else account = html`<span class="acct muted">Sin cuenta</span>`;
                 return html`<tr>
-                  <td>${this._renderPersonNameCell(p)}</td>
-                  <td>${this._renderPersonEmailCell(p)}${account}</td>
-                  <td>
-                    <select @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
+                  <td class="wrap">${this._renderPersonNameCell(p)}</td>
+                  <td class="wrap">${this._renderPersonEmailCell(p)}${account}</td>
+                  <td class="stack">
+                    <select aria-label="Rol de ${p.name ?? 'la persona'}" @change=${(e) => this._setPersonRole(p.id, e.target.value)}>
                       <option value="" disabled ?selected=${!this._orgRoles.some((r) => r.id === p.orgRole)}>— sin rol —</option>
                       ${this._orgRoles.map((r) => html`<option value=${r.id} ?selected=${p.orgRole === r.id}>${r.label}</option>`)}
                     </select>
-                  </td>
-                  <td>
-                    <select @change=${(e) => this._setPersonBranch(p.id, e.target.value)}>
+                    <select aria-label="Rama de ${p.name ?? 'la persona'}" @change=${(e) => this._setPersonBranch(p.id, e.target.value)}>
                       <option value="" ?selected=${!this._orgBranches.some((b) => b.id === p.orgBranch)}>— sin rama —</option>
                       ${this._orgBranches.map((b) => html`<option value=${b.id} ?selected=${p.orgBranch === b.id}>${b.label}</option>`)}
                     </select>
                   </td>
                   <td>${this._renderSuperiorSelect(p, nameOf)}</td>
-                  <td>${this._renderPersonAccess(p)}</td>
-                  <td>${this._confirmDeletePerson === p.id
-                    ? html`<span class="confirm">¿Dar de baja? <button class="yes" @click=${() => this._removePerson(p.id)}>Sí</button> <button @click=${() => { this._confirmDeletePerson = null; }}>No</button></span>`
-                    : html`<button class="del-btn" @click=${() => { this._confirmDeletePerson = p.id; }}>Baja</button>`}</td>
+                  <td class="stack">
+                    ${this._renderPersonAccess(p)}
+                    ${this._confirmDeletePerson === p.id
+                      ? html`<span class="confirm">¿Dar de baja? <button class="yes" @click=${() => this._removePerson(p.id)}>Sí</button> <button @click=${() => { this._confirmDeletePerson = null; }}>No</button></span>`
+                      : html`<button class="del-btn" @click=${() => { this._confirmDeletePerson = p.id; }}>Baja</button>`}
+                  </td>
                 </tr>`;
               })}
               ${this._orphanAccounts().map((u) => this._renderOrphanRow(u))}
