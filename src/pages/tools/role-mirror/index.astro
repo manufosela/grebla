@@ -5,14 +5,23 @@ import RoleMirror from '../../../layouts/RoleMirror.astro';
 <RoleMirror title="Role Mirror — Perfiles del equipo">
   <h1 class="page-title">Perfil de ingeniería del equipo</h1>
   <p class="page-lead">
-    Define el rol de cada persona de tu equipo. Ella podrá <strong>proponer ajustes</strong>
+    Define el rol de cada persona de tu equipo. Ella podrá <strong>proponer ajustes</strong>{' '}
     desde «Mi espacio», que tú revisas y apruebas (por ejemplo, viéndolos juntos en un O2O):
     prevalece siempre lo que fije el manager.
   </p>
 
-  <label class="rm-person">Persona del equipo
+  <label class="rm-person" id="rm-person-picker" hidden>Persona del equipo
     <select id="rm-person"><option value="">— Elige una persona —</option></select>
   </label>
+
+  <!-- Sin nadie a quien evaluar, esta pantalla no tiene nada que ofrecer: se
+       dice y se envía a donde sí hay algo (RMR-BUG-0110). Antes se quedaba un
+       desplegable vacío, que parece una app rota. -->
+  <p class="rm-empty" id="rm-empty" hidden>
+    Aquí se define el perfil de <strong>las personas de tu equipo</strong>, y ahora mismo no tienes
+    ninguna asignada. Tu propio Role Mirror está en{' '}
+    <a href="/mi-espacio#rolemirror">Mi espacio › Mi Role Mirror</a>.
+  </p>
 
   <!-- Los web components se definen y reciben sus datos desde el script de cliente.
        La revisión de propuesta (RM-v2) aparece solo si la persona elegida tiene
@@ -24,6 +33,14 @@ import RoleMirror from '../../../layouts/RoleMirror.astro';
 <style>
   .rm-person { display: inline-flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-muted); margin-bottom: 1.25rem; }
   .rm-person select { padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border); font-size: 0.95rem; min-width: 16rem; }
+  .rm-empty {
+    max-width: 46rem; margin: 0 0 1.25rem; padding: 0.75rem 0.95rem;
+    border-radius: 10px; border: 1px solid var(--rm-info-border, #bfd6fb);
+    border-left: 4px solid var(--rm-info, #2563eb);
+    background: var(--rm-info-soft, #eff5ff); color: var(--rm-info-text, #1e3a8a);
+    font-size: 0.9rem; line-height: 1.5;
+  }
+  .rm-empty a { color: inherit; text-decoration: underline; }
 </style>
 
 <script>

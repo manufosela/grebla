@@ -19,6 +19,9 @@ import { listActivePeople } from '../tools/team/application/usecases/index.js';
 const el = document.querySelector('role-questionnaire');
 const review = document.querySelector('rm-proposal-review');
 const select = document.querySelector('#rm-person');
+const picker = document.querySelector('#rm-person-picker');
+const empty = document.querySelector('#rm-empty');
+const questionnaire = document.querySelector('role-questionnaire');
 
 if (el) {
   el.items = ITEMS;
@@ -96,6 +99,14 @@ if (el) {
         mode: 'firestore', leaderUid: user.uid, viewAll, leaderUids,
       });
       const people = await listActivePeople(persistence);
+      // Sin nadie a quien evaluar no se enseña un desplegable vacío, que parece
+      // una app rota: se explica y se envía a «Mi Role Mirror», que es lo que esa
+      // persona buscaba (RMR-BUG-0110). Le pasa a cualquier ingeniero, porque la
+      // audiencia de la herramienta es toda su rama pero la pantalla es de quien
+      // tiene equipo.
+      picker?.toggleAttribute('hidden', people.length === 0);
+      empty?.toggleAttribute('hidden', people.length > 0);
+      questionnaire?.toggleAttribute('hidden', people.length === 0);
       if (select) {
         select.replaceChildren(new Option('— Elige una persona —', ''));
         for (const p of people) select.appendChild(new Option(p.name, p.id));
