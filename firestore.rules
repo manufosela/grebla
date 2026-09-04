@@ -451,6 +451,35 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Dominios y subdominios (ADR «De squads a dominios y subdominios»): el
+    // ámbito donde ocurre el trabajo, en dos niveles. Sustituyen al squad, que
+    // mezclaba «dónde se trabaja» con «quién pertenece»; con equipos fluidos lo
+    // segundo deja de tener sentido.
+    //
+    // La `key` se exige aquí y no solo en el cliente porque es la clave del
+    // CONTRATO con el portal: un documento sin ella no se puede publicar ni
+    // agregar, así que no debe poder existir. El nombre, en cambio, es un rótulo
+    // editable y no se valida.
+    function hasScopeKey() {
+      return request.resource.data.key is string
+        && request.resource.data.key.size() > 0
+        && request.resource.data.name is string;
+    }
+    match /domains/{domainId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSuperAdmin() && hasScopeKey();
+      allow delete: if isSuperAdmin();
+    }
+    match /subdomains/{subdomainId} {
+      allow read: if isSignedIn();
+      // Además de su clave, un subdominio SIEMPRE dice de qué dominio cuelga:
+      // sin eso el portal no puede agregar y el dato nace huérfano.
+      allow create, update: if isSuperAdmin() && hasScopeKey()
+        && request.resource.data.domainKey is string
+        && request.resource.data.domainKey.size() > 0;
+      allow delete: if isSuperAdmin();
+    }
+
     // Catálogo de roles del organigrama (RMR-PCS-0027): niveles por etiqueta con
     // su jerarquía (reportsToRoleId). Lo lee cualquiera con acceso (para pintar
     // títulos/organigrama) y solo lo gestiona el superadmin.
