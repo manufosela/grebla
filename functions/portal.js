@@ -147,13 +147,16 @@ export function accumulateSeries(prevSeries, point, cap = SERIES_CAP) {
 }
 
 /** Ensambla el documento del portal respetando el esquema campo a campo. */
-export function buildSnapshot({ subdomain, domain, updatedAt, periodStart, current, prevSeries, period = 'weekly' }) {
+export function buildSnapshot({ subdomain, domain, name, updatedAt, periodStart, current, prevSeries, period = 'weekly' }) {
   return {
     // `squad` se mantiene con el mismo valor que `subdomain` mientras dure la
     // transición: el portal ya lo lee y quitárselo de golpe le rompe el informe.
     squad: subdomain,
     subdomain,
     domain,
+    // El rótulo humano viaja con el dato: así el portal escribe «CAEs» en el
+    // mensaje sin buscarlo en una config indexada por nombre.
+    name: name ?? subdomain,
     updatedAt,
     period,
     current,
@@ -192,6 +195,34 @@ export function weekStart(dateIso) {
 }
 
 /**
+ * IDs ANTIGUOS que hay que seguir alimentando mientras el portal migra.
+ *
+ * Su informe de Slack encuentra cada entidad por el id con el que se publicó
+ * siempre (el slug del nombre). Dos entidades cambian de clave con el contrato
+ * nuevo, y si dejaran de escribirse el mensaje semanal se quedaría sin ellas.
+ * Así que durante la transición se publica en los DOS sitios.
+ *
+ * Es una lista corta, explícita y con fecha de caducidad: se borra —y con ella
+ * los documentos antiguos— cuando la sesión del portal confirme que lee por key.
+ * No se calcula con slugify a propósito: recalcularla desde el nombre es la
+ * derivación que este ADR viene a quitar.
+ */
+export const LEGACY_IDS = {
+  'internal-products-core': 'internal-products',
+  'tribbu-app-core': 'the-mario-netas',
+};
+
+/**
+ * Documento espejo para el id antiguo: el mismo contenido, marcado para que el
+ * portal sepa que está duplicado y no cuente dos veces lo mismo.
+ * @param {object} snapshot  el documento ya ensamblado con la clave nueva
+ * @returns {object}
+ */
+export function legacyMirror(snapshot) {
+  return { ...snapshot, squad: LEGACY_IDS[snapshot.subdomain], legacy: true, supersededBy: snapshot.subdomain };
+}
+
+/**
  * Publica el snapshot de cada SUBDOMINIO al portal. Lee de GREBLA lo YA calculado
  * (DORA por repo → agregado por equipo; LEAN por equipo en `leanTeams`), lo mapea
  * al esquema del portal y hace SET idempotente en `metrics_dora`/`metrics_lean`,
@@ -224,8 +255,19 @@ export async function publishSquadMetrics({ greblaDb, portalDb, nowIso }) {
     try {
       const ref = portalDb.collection(collection).doc(scope.subdomain);
       const prev = (await ref.get()).data();
-      await ref.set(buildSnapshot({ ...scope, updatedAt: nowIso, periodStart, current, prevSeries: prev?.series }));
+      const snapshot = buildSnapshot({ ...scope, name: quien, updatedAt: nowIso, periodStart, current, prevSeries: prev?.series });
+      await ref.set(snapshot);
       results[collection === 'metrics_dora' ? 'dora' : 'lean'] += 1;
+
+      // Mientras el portal migra, el id antiguo se sigue alimentando: su informe
+      // de Slack lo busca por ahí y sin esto el mensaje se quedaría sin esa
+      // entidad. El espejo va marcado para que no se cuente dos veces.
+      const legacyId = LEGACY_IDS[scope.subdomain];
+      if (legacyId) {
+        const legacyRef = portalDb.collection(collection).doc(legacyId);
+        const prevLegacy = (await legacyRef.get()).data();
+        await legacyRef.set(legacyMirror({ ...snapshot, series: accumulateSeries(prevLegacy?.series, { periodStart, ...current }) }));
+      }
     } catch (err) {
       results.failed += 1;
       logger.error('portal push failed', { collection, subdomain: scope.subdomain, message: err?.message ?? 'unknown' });

@@ -12,12 +12,14 @@
  *   internal-products → se MUEVE a internal-products-core
  *   the-mario-netas   → se MUEVE a tribbu-app-core
  *
- * Mover es copiar y borrar, en ese orden y comprobando por medio: se copia la
- * serie, se verifica que llegó completa y solo entonces se borra el origen. Un
- * borrado antes de la comprobación es una serie perdida.
+ * COPIA, no mueve: el id antiguo se queda vivo mientras el portal migra, porque
+ * su informe de Slack lo busca por ahí y borrarlo dejaría el mensaje semanal sin
+ * esa entidad. La copia se verifica por contenido, y el origen queda marcado con
+ * `legacy: true` y `supersededBy` para que el portal pueda filtrarlo y no contar
+ * dos veces lo mismo.
  *
- * Los superados SE BORRAN: si se quedan, el portal ve documentos huérfanos sin
- * campo `domain` (lo pidió expresamente la sesión del portal).
+ * El borrado de los antiguos es una tarea APARTE y explícita, cuando la sesión
+ * del portal confirme que lee por key.
  *
  * NO SE TOCA nada que no esté en el plan. En `metrics_dora` hay documentos
  * sembrados por el propio portal (llevan campo `source`): no son nuestros.
@@ -68,7 +70,7 @@ console.log(`\nplan (${acciones.length} documento(s) de /${COLLECTION}):`);
 for (const a of acciones) {
   const serie = (a.datos.series ?? []).length;
   console.log(a.mueve
-    ? `  ${a.from} → ${a.to} · MUEVE ${serie} punto(s) · domain=${a.domain}`
+    ? `  ${a.from} → ${a.to} · COPIA ${serie} punto(s) · domain=${a.domain} · el origen queda marcado legacy`
     : `  ${a.from} · se queda · ${serie} punto(s) · añade subdomain/domain=${a.domain}`);
 }
 
@@ -78,21 +80,24 @@ if (!apply) {
 }
 
 for (const a of acciones) {
-  const campos = { ...a.datos, squad: a.to, subdomain: a.to, domain: a.domain };
-  await col.doc(a.to).set(campos);
+  const nombre = a.datos.name ?? a.datos.squad ?? a.to;
+  await col.doc(a.to).set({ ...a.datos, squad: a.to, subdomain: a.to, domain: a.domain, name: nombre });
 
   if (!a.mueve) { console.log(`  ✓ ${a.to}: campos nuevos`); continue; }
 
-  // Copiado: se comprueba POR CONTENIDO antes de borrar el origen. Que el set no
-  // lanzara no dice nada sobre lo que hay realmente en el destino.
+  // Se comprueba POR CONTENIDO que la copia llegó entera. Que el set no lanzara
+  // no dice nada sobre lo que hay realmente en el destino.
   const copiado = (await col.doc(a.to).get()).data();
   const puntos = (copiado?.series ?? []).map((p) => p.periodStart).join(',');
   const esperados = (a.datos.series ?? []).map((p) => p.periodStart).join(',');
   if (puntos !== esperados || copiado?.domain !== a.domain) {
-    console.error(`  ✗ ${a.from} → ${a.to}: la copia NO coincide. Se deja el origen intacto.`);
+    console.error(`  ✗ ${a.from} → ${a.to}: la copia NO coincide. El origen se deja como estaba.`);
     continue;
   }
-  await col.doc(a.from).delete();
-  console.log(`  ✓ ${a.from} → ${a.to}: serie completa (${(a.datos.series ?? []).length} puntos) y origen retirado`);
+
+  // El origen NO se borra: el informe de Slack del portal lo busca por su id.
+  // Se marca para que sepan que está duplicado y cuál es su clave nueva.
+  await col.doc(a.from).set({ ...a.datos, legacy: true, supersededBy: a.to, name: nombre }, { merge: true });
+  console.log(`  ✓ ${a.from} → ${a.to}: serie completa (${(a.datos.series ?? []).length} puntos); origen marcado legacy`);
 }
-console.log('\n✓ Migración aplicada. Verifica el resultado leyendo el portal.');
+console.log('\n✓ Migración aplicada. Los ids antiguos siguen vivos y marcados: bórralos cuando el portal confirme que lee por key.');
