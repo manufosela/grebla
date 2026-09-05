@@ -12,6 +12,8 @@
  * @property {LeanUnitKind} kind       'squad' (equipo) o 'chapter' (gremio).
  * @property {string} name            Nombre visible (por defecto = linearLabel).
  * @property {string} [ownerLeaderUid]   Líder dueño (permisología multi-leader).
+ * @property {string} [subdomainKey]  Clave del subdominio del catálogo al que mide (ADR de dominios).
+ *   Se guarda la CLAVE y no el nombre: renombrar el subdominio no rompe el enganche.
  * @property {string} createdAt       ISO de alta.
  * @property {FlowMetrics} [metrics]   Última métrica calculada por la Cloud Function.
  *
