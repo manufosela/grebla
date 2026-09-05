@@ -31,6 +31,23 @@ export function listUnits(persistence) {
 }
 
 /**
+ * Clasifica una unidad como equipo o gremio. Existen unidades sin `kind` —restos
+ * de altas antiguas— que no se miden ni se publican: se arreglan clasificándolas,
+ * no escondiéndolas.
+ * @param {LeanPersistence} persistence
+ * @param {string} id
+ * @param {LeanUnitKind} kind
+ * @returns {Promise<void>}
+ */
+export async function classifyUnit(persistence, id, kind) {
+  // `async` a propósito: el error llega SIEMPRE como promesa rechazada, así
+  // quien la llama no tiene que protegerse de dos formas distintas de fallar.
+  if (!id) throw new Error('La unidad es obligatoria');
+  if (!KINDS.has(kind)) throw new Error(`Tipo de unidad desconocido: ${kind}`);
+  await persistence.units.update(id, { kind });
+}
+
+/**
  * Engancha una unidad de flujo a un subdominio del catálogo, o la desengancha
  * con la cadena vacía. Se guarda la CLAVE, no el nombre: renombrar el
  * subdominio no puede romper el enganche — ese es el punto del modelo.
