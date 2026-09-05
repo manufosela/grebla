@@ -24,6 +24,12 @@ const EMULATOR_ENV = {
   PUBLIC_FIREBASE_APP_ID: 'demo-app-id',
   PUBLIC_AUTH_EMULATOR_URL: 'http://127.0.0.1:9099',
   PUBLIC_FIRESTORE_EMULATOR_HOST: '127.0.0.1',
+  // Astro 7 detecta que se le llama desde un agente de IA y arranca el servidor
+  // COMO DEMONIO: el proceso que lanza Playwright termina de inmediato y la
+  // suite entera muere con «Process from config.webServer exited early». Con
+  // esta variable puesta, la autodetección se desactiva y el servidor se queda
+  // en primer plano, que es lo que Playwright necesita para gobernar su vida.
+  ASTRO_DEV_BACKGROUND: '1',
 };
 
 export default defineConfig({
