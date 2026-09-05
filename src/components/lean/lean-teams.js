@@ -7,7 +7,10 @@
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
-import { addUnit, listUnits, removeUnit } from '../../tools/lean/application/usecases.js';
+import { addUnit, listUnits, removeUnit, linkUnitToSubdomain } from '../../tools/lean/application/usecases.js';
+import { classifyUnits } from '../../tools/lean/domain/scope.js';
+import { subdomainChoices } from '../../tools/team/domain/domains.js';
+import { listDomains, listSubdomains } from '../../lib/domains.js';
 
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 const fmtWhen = (iso) => (iso ? dateFmt.format(new Date(iso)) : '—');
@@ -20,6 +23,8 @@ export class LeanTeams extends LitElement {
     refresh: { attribute: false },
     discover: { attribute: false },
     _units: { state: true },
+    _subdomains: { state: true },
+    _choices: { state: true },
     _label: { state: true },
     _kind: { state: true },
     _name: { state: true },
@@ -54,6 +59,7 @@ export class LeanTeams extends LitElement {
     .err { color: var(--rm-danger, #dc2626); font-size: 0.8rem; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
+    .warn { color: var(--rm-text, #111827); background: color-mix(in srgb, var(--rm-warn, #b45309) 12%, transparent); border-left: 3px solid var(--rm-warn, #b45309); border-radius: 6px; padding: 0.45rem 0.7rem; font-size: 0.82rem; margin: 0 0 0.6rem; }
     .actions { display: flex; gap: 0.35rem; justify-content: flex-end; }
   `];
 
@@ -64,6 +70,8 @@ export class LeanTeams extends LitElement {
     this.refresh = null;
     this.discover = null;
     this._units = [];
+    this._subdomains = [];
+    this._choices = [];
     this._label = '';
     this._kind = 'squad';
     this._name = '';
@@ -81,13 +89,25 @@ export class LeanTeams extends LitElement {
       this._loaded = true;
       this._load();
     }
+    // Un <select> que pinta sus <option> en la misma plantilla NO refleja su
+    // valor: hay que ponérselo después de pintar, o todas las filas enseñarían
+    // la primera opción y el enganche parecería otro del que es.
+    for (const select of this.renderRoot.querySelectorAll('select[data-unit]')) {
+      const unit = this._units.find((u) => u.id === select.dataset.unit);
+      select.value = unit?.subdomainKey ?? '';
+    }
   }
 
   async _load() {
     this._loading = true;
     this._error = '';
     try {
-      this._units = await listUnits(this.persistence);
+      const [units, domains, subdomains] = await Promise.all([
+        listUnits(this.persistence), listDomains(), listSubdomains(),
+      ]);
+      this._units = units;
+      this._subdomains = subdomains;
+      this._choices = subdomainChoices(subdomains, domains);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las unidades.';
     } finally {
@@ -137,6 +157,17 @@ export class LeanTeams extends LitElement {
       await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo añadir.';
+    }
+  }
+
+  /** Engancha (o desengancha, con la opción vacía) un equipo a su subdominio. */
+  async _link(id, subdomainKey) {
+    this._error = '';
+    try {
+      await linkUnitToSubdomain(this.persistence, id, subdomainKey);
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo enganchar al subdominio.';
     }
   }
 
@@ -207,22 +238,63 @@ export class LeanTeams extends LitElement {
   _renderKind(kind) {
     const units = this._units.filter((u) => u.kind === kind);
     if (units.length === 0) return null;
+    // Solo los equipos miden un subdominio: un gremio cruza varios, y publicarlo
+    // como si fuera uno sumaría el mismo trabajo dos veces.
+    const conSubdominio = kind === 'squad';
     return html`
       <h4>${KIND_LABEL[kind]} (${units.length})</h4>
+      ${conSubdominio ? this._renderUnlinkedWarning(units) : null}
       <div class="table-wrap"><table>
-        <thead><tr><th>Label</th><th>Nombre</th><th>Últimas métricas</th>${this.canEdit ? html`<th></th>` : null}</tr></thead>
-        <tbody>${units.map((u) => this._renderRow(u))}</tbody>
+        <thead><tr>
+          <th>Label</th><th>Nombre</th>
+          ${conSubdominio ? html`<th>Mide</th>` : null}
+          <th>Últimas métricas</th>${this.canEdit ? html`<th></th>` : null}
+        </tr></thead>
+        <tbody>${units.map((u) => this._renderRow(u, conSubdominio))}</tbody>
       </table></div>
     `;
   }
 
-  _renderRow(u) {
+  /** Lo que no está enganchado no se publica: se dice aquí, no al echar de menos las métricas. */
+  _renderUnlinkedWarning(units) {
+    const sueltos = classifyUnits(units, this._subdomains).skipped;
+    if (sueltos.length === 0) return null;
+    return html`<p class="warn">
+      ${sueltos.length === 1 ? 'Un equipo no mide ningún subdominio' : `${sueltos.length} equipos no miden ningún subdominio`}:
+      sus métricas no se publican, porque no se sabría a qué sumarlas.
+    </p>`;
+  }
+
+  _renderRow(u, conSubdominio) {
     return html`<tr>
       <td class="label-cell">${u.linearLabel}</td>
       <td>${u.name}</td>
+      ${conSubdominio ? html`<td>${this._renderSubdomain(u)}</td>` : null}
       <td>${this._renderStatus(u.metrics)}</td>
       ${this.canEdit ? html`<td><div class="actions">${this._renderRowActions(u)}</div></td>` : null}
     </tr>`;
+  }
+
+  /**
+   * A qué subdominio mide este equipo. Se guarda la CLAVE, así que renombrar el
+   * subdominio no rompe nada; si la clave ya no está en el catálogo se dice,
+   * en vez de enseñar un hueco que parece «sin enganchar».
+   */
+  _renderSubdomain(u) {
+    const elegido = this._choices.find((c) => c.key === u.subdomainKey);
+    if (!this.canEdit) {
+      if (elegido) return html`<span>${elegido.label}</span>`;
+      return html`<span class="err">${u.subdomainKey ? `«${u.subdomainKey}» ya no está en el catálogo` : 'Sin enganchar'}</span>`;
+    }
+    return html`
+      <select data-unit=${u.id} aria-label="Subdominio de ${u.name}"
+        @change=${(e) => this._link(u.id, e.target.value)}>
+        <option value="">— Sin enganchar —</option>
+        ${this._choices.map((c) => html`<option value=${c.key}>${c.label}</option>`)}
+      </select>
+      ${u.subdomainKey && !elegido
+        ? html`<span class="err">«${u.subdomainKey}» ya no está en el catálogo</span>`
+        : null}`;
   }
 
   _renderStatus(m) {
