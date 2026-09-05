@@ -36,8 +36,13 @@ async function conUnidades(fn) {
     linearLabel: 'E2E Mario Netas', name: 'E2E Mario Netas', kind: 'squad',
     ownerLeaderUid: SUPERADMIN_UID, createdAt: new Date().toISOString(),
   });
+  // Una unidad sin `kind`, como la que quedó viva en producción: ni equipo ni
+  // gremio, con el id por nombre.
+  await db().doc('leanTeams/e2e-unit-huerfana').set({
+    name: 'e2e-unit-huerfana', ownerLeaderUid: SUPERADMIN_UID, createdAt: new Date().toISOString(),
+  });
   try { await fn(); } finally {
-    for (const id of ['e2e-unit-caes', 'e2e-unit-suelta']) await db().doc(`leanTeams/${id}`).delete();
+    for (const id of ['e2e-unit-caes', 'e2e-unit-suelta', 'e2e-unit-huerfana']) await db().doc(`leanTeams/${id}`).delete();
     for (const [coleccion, claves] of Object.entries(CLAVES)) {
       const snap = await db().collection(coleccion).where('key', 'in', claves).get();
       for (const d of snap.docs) await d.ref.delete();
@@ -67,7 +72,7 @@ test('cada equipo enseña a qué subdominio mide, con su dominio delante', async
 test('un equipo sin enganchar avisa de que sus métricas no se publican', async ({ page }) => {
   await conUnidades(async () => {
     await abrirUnidades(page);
-    await expect(unidades(page).locator('.warn')).toContainText('no se publican');
+    await expect(unidades(page).locator('.warn.unlinked')).toContainText('no se publican');
     await expect(unidades(page).getByLabel('Subdominio de E2E Mario Netas')).toHaveValue('');
   });
 });
@@ -83,6 +88,24 @@ test('enganchar guarda la CLAVE del subdominio, no su nombre', async ({ page }) 
     }, { timeout: 15_000 }).toEqual({ key: 'e2e-tribbu-core', name: 'E2E Mario Netas' });
 
     // Y el aviso desaparece en cuanto no queda ningún equipo suelto.
-    await expect(unidades(page).locator('.warn')).toHaveCount(0);
+    await expect(unidades(page).locator('.warn.unlinked')).toHaveCount(0);
+  });
+});
+
+test('una unidad sin clasificar se ve, y se arregla desde la propia tabla', async ({ page }) => {
+  await conUnidades(async () => {
+    await abrirUnidades(page);
+    // Aparece en su bloque, en vez de desaparecer del listado por no tener tipo.
+    await expect(unidades(page).getByRole('heading', { name: /Sin clasificar/ })).toBeVisible();
+
+    await unidades(page).getByLabel('Tipo de e2e-unit-huerfana').selectOption('chapter');
+
+    await expect.poll(async () => {
+      const unit = (await db().doc('leanTeams/e2e-unit-huerfana').get()).data();
+      return unit?.kind;
+    }, { timeout: 15_000 }).toBe('chapter');
+
+    // Y deja de estar suelta: ya es un gremio como los demás.
+    await expect(unidades(page).getByRole('heading', { name: /Sin clasificar/ })).toHaveCount(0);
   });
 });

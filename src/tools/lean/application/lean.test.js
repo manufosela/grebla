@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryLeanPersistence } from '../infrastructure/memory/index.js';
-import { addUnit, listUnits, removeUnit, getFlowSummary, linkUnitToSubdomain } from './usecases.js';
+import { addUnit, listUnits, removeUnit, getFlowSummary, linkUnitToSubdomain, classifyUnit } from './usecases.js';
 
 describe('LEAN usecases (unidades = labels de Linear)', () => {
   let p;
@@ -56,5 +56,18 @@ describe('LEAN usecases (unidades = labels de Linear)', () => {
     await linkUnitToSubdomain(p, id, 'trust');
     await linkUnitToSubdomain(p, id, '  ');
     expect((await listUnits(p))[0].subdomainKey).toBe('');
+  });
+
+  it('classifyUnit convierte una unidad sin tipo en equipo o gremio', async () => {
+    const pp = createMemoryLeanPersistence([{ id: 'huerfana', name: 'tMWx2F7QK2cqoCiqDqi1' }]);
+    await classifyUnit(pp, 'huerfana', 'chapter');
+    expect((await listUnits(pp))[0].kind).toBe('chapter');
+  });
+
+  it('classifyUnit rechaza un tipo que no existe, en vez de guardarlo', async () => {
+    // Guardar un kind inventado deja la unidad igual de rota que sin kind, pero
+    // con pinta de arreglada.
+    const pp = createMemoryLeanPersistence([{ id: 'huerfana', name: 'x' }]);
+    await expect(classifyUnit(pp, 'huerfana', 'tribu')).rejects.toThrow('Tipo de unidad desconocido');
   });
 });

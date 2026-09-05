@@ -7,7 +7,7 @@
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
-import { addUnit, listUnits, removeUnit, linkUnitToSubdomain } from '../../tools/lean/application/usecases.js';
+import { addUnit, listUnits, removeUnit, linkUnitToSubdomain, classifyUnit } from '../../tools/lean/application/usecases.js';
 import { classifyUnits } from '../../tools/lean/domain/scope.js';
 import { subdomainChoices } from '../../tools/team/domain/domains.js';
 import { listDomains, listSubdomains } from '../../lib/domains.js';
@@ -232,6 +232,7 @@ export class LeanTeams extends LitElement {
     return html`
       ${this._renderKind('squad')}
       ${this._renderKind('chapter')}
+      ${this._renderUnclassified()}
     `;
   }
 
@@ -255,11 +256,66 @@ export class LeanTeams extends LitElement {
     `;
   }
 
+  /**
+   * Unidades que no son ni equipo ni gremio: restos de altas antiguas, a veces
+   * con el id por nombre. No se miden ni se publican, así que se enseñan y se
+   * arreglan aquí mismo — esconderlas es como no tenerlas, y así es como una
+   * unidad rota sobrevive meses sin que nadie sepa qué era.
+   */
+  _renderUnclassified() {
+    const sueltas = this._units.filter((u) => u.kind !== 'squad' && u.kind !== 'chapter');
+    if (sueltas.length === 0) return null;
+    return html`
+      <h4>Sin clasificar (${sueltas.length})</h4>
+      <p class="warn unclassified">
+        Estas unidades no son ni equipo ni gremio: no se miden ni se publican.
+        Dales su tipo o quítalas.
+      </p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Label</th><th>Nombre</th><th>Tipo</th>${this.canEdit ? html`<th></th>` : null}</tr></thead>
+        <tbody>${sueltas.map((u) => this._renderUnclassifiedRow(u))}</tbody>
+      </table></div>
+    `;
+  }
+
+  _renderUnclassifiedRow(u) {
+    return html`<tr>
+      <td class="label-cell">${u.linearLabel || '—'}</td>
+      <td>${u.name || '—'}</td>
+      <td>${this._renderKindPicker(u)}</td>
+      ${this.canEdit ? html`<td><div class="actions">${this._renderRowActions(u)}</div></td>` : null}
+    </tr>`;
+  }
+
+  /** Darle su tipo es lo que la devuelve al redil: a partir de ahí se mide como el resto. */
+  _renderKindPicker(u) {
+    if (!this.canEdit) return html`<span class="err">Sin clasificar</span>`;
+    return html`
+      <select data-classify=${u.id} aria-label="Tipo de ${u.name || u.id}"
+        @change=${(e) => this._classify(u.id, e.target.value)}>
+        <option value="">— Sin clasificar —</option>
+        <option value="squad">Equipo</option>
+        <option value="chapter">Gremio</option>
+      </select>`;
+  }
+
+  /** Le da su tipo a una unidad suelta: a partir de ahí ya se mide como el resto. */
+  async _classify(id, kind) {
+    if (!kind) return;
+    this._error = '';
+    try {
+      await classifyUnit(this.persistence, id, kind);
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo clasificar la unidad.';
+    }
+  }
+
   /** Lo que no está enganchado no se publica: se dice aquí, no al echar de menos las métricas. */
   _renderUnlinkedWarning(units) {
     const sueltos = classifyUnits(units, this._subdomains).skipped;
     if (sueltos.length === 0) return null;
-    return html`<p class="warn">
+    return html`<p class="warn unlinked">
       ${sueltos.length === 1 ? 'Un equipo no mide ningún subdominio' : `${sueltos.length} equipos no miden ningún subdominio`}:
       sus métricas no se publican, porque no se sabría a qué sumarlas.
     </p>`;
