@@ -22,11 +22,11 @@ import { listLeaders, listSupermanagers } from '../lib/leaders.js';
 import './catalog-manager.js';
 import './org-chart.js';
 import './common/person-permissions.js';
-import { listAllUsers, setUserRole, setUserAdmin, setSurveyAdmin, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
+import './admin/domains-manager.js';
+import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
 import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
-import { getPersonProfile } from '../lib/firestore.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
@@ -94,13 +94,13 @@ function formatLogin(ts) {
 const VIEW_FLAG = 'grebla-view';
 // «Managers» se retiró (RMR-PCS-0027 · F8e): dar el rol de mando se hace editando
 // la persona en «Usuarios», sin una pestaña aparte que duplicaba el alta.
-const TABS = ['organigrama', 'areas', 'guilds', 'squads', 'labels', 'career', 'users', 'permisos'];
+const TABS = ['organigrama', 'areas', 'guilds', 'dominios', 'labels', 'career', 'users', 'permisos'];
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
  *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
 const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
 /** «Herramientas» era una pestaña de primer nivel y ahora es el ámbito «por rol
  *  y rama» de Permisos (RMR-TSK-0460): los enlaces guardados siguen valiendo. */
-const LEGACY_TAB_HASH = { herramientas: { tab: 'permisos', sub: 'rol' } };
+const LEGACY_TAB_HASH = { herramientas: { tab: 'permisos', sub: 'rol' }, squads: { tab: 'dominios' } };
 /** Traduce un hash a { tab, sub? }: los hashes legados van a donde vive hoy eso. */
 function resolveHash(raw) {
   if (raw in LEGACY_CAREER_HASH) return { tab: 'career', sub: LEGACY_CAREER_HASH[raw] };
@@ -1345,8 +1345,11 @@ export class SuperadminPanel extends LitElement {
         return this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)');
       case 'guilds':
         return this._renderCatalogTab('guilds', 'Gremios (organización)');
-      case 'squads':
-        return this._renderCatalogTab('squads', 'Squads (organización)');
+      case 'dominios':
+        // El catálogo de squads se sustituye por dominios y subdominios (ADR «De
+        // squads a dominios y subdominios»). /squads sigue en los datos durante
+        // la transición, pero ya no se gestiona desde aquí.
+        return html`<domains-manager .ready=${this.ready} ?read-only=${this.readOnly}></domains-manager>`;
       case 'labels':
         return this._renderCatalogTab('labels', 'Labels (organización)');
       case 'career':
@@ -1374,7 +1377,7 @@ export class SuperadminPanel extends LitElement {
         <button class="tab ${this._tab === 'organigrama' ? 'active' : ''}" @click=${() => this._setTab('organigrama')}>Organigrama</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
-        <button class="tab ${this._tab === 'squads' ? 'active' : ''}" @click=${() => this._setTab('squads')}>Squads</button>
+        <button class="tab ${this._tab === 'dominios' ? 'active' : ''}" @click=${() => this._setTab('dominios')}>Dominios</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
         <button class="tab ${this._tab === 'career' ? 'active' : ''}" @click=${() => this._setTab('career')}>Carrera</button>
         ${this.readOnly
