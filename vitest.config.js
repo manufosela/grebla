@@ -15,6 +15,10 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**', '**/.claude/**'],
     // Shim de customElements para el smoke test de módulos (RMR-BUG-0015 guard).
     setupFiles: ['./test/smoke-setup.js'],
+    // `functions/` tiene sus propios node_modules y en CI no se instalan: sin
+    // este alias, importar el publicador del portal tumba la suite entera por
+    // una dependencia que el test ni siquiera usa.
+    alias: { 'firebase-functions/v2': new URL('./test/firebase-functions-logger-stub.js', import.meta.url).pathname },
     // Config Firebase FALSA para que `src/lib/firebase.js` evalúe sin lanzar al
     // importar componentes (initializeApp es perezoso: no hace red al arrancar).
     // Sin esto, importar cualquier componente que toque Firebase truena por la

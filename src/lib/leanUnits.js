@@ -3,8 +3,9 @@
  * contextos que NO tienen la persistencia del tool LEAN — en concreto la
  * configuración de repos DORA (RMR-TSK-0362), que necesita ofrecer los squads
  * (equipos) y chapters (gremios) YA definidos en lugar de texto libre. Así DORA
- * agrega por las MISMAS unidades que LEAN y el push al portal: mismos nombres →
- * mismos slugs (ver functions/portal.js: slugifySquad(unit.name || linearLabel)).
+ * agrega por las MISMAS unidades que LEAN, y el push al portal puede resolver el
+ * equipo de un repo contra la unidad que lo mide, que es quien guarda la clave
+ * del subdominio (ver functions/portal.js: subdomainKeyForTeam).
  *
  * Las reglas permiten leer /leanTeams a cualquier usuario autenticado, así que
  * cada editor puede elegir de todo el catálogo de la organización.

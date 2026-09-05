@@ -1,9 +1,15 @@
 /**
- * Push de métricas DORA/LEAN por squad al Firestore del portal de management
- * (RMR-TSK-0352). Escribe EXCLUSIVAMENTE `metrics_dora/{slug}` y
- * `metrics_lean/{slug}` en OTRO proyecto (el portal), vía una segunda app de
- * Firebase Admin NOMBRADA (no la de GREBLA). Solo agregados por squad: nunca
- * datos ni identificadores de persona.
+ * Push de métricas DORA/LEAN por SUBDOMINIO al Firestore del portal de management
+ * (RMR-TSK-0352, contrato revisado en RMR-TSK-0478). Escribe EXCLUSIVAMENTE
+ * `metrics_dora/{key}` y `metrics_lean/{key}` en OTRO proyecto (el portal), vía
+ * una segunda app de Firebase Admin NOMBRADA (no la de GREBLA). Solo agregados:
+ * nunca datos ni identificadores de persona.
+ *
+ * La clave es el `key` ALMACENADO del subdominio, y cada documento lleva
+ * `subdomain` y `domain` explícitos. Antes se fabricaba con `slugify(nombre)`, y
+ * por eso renombrar una entidad partía su serie histórica en dos: un rótulo es
+ * editable por definición y no puede ser clave primaria (ADR «De squads a
+ * dominios y subdominios»).
  *
  * Dominio espejo de src/tools/portal/domain/snapshot.js y de la agregación DORA
  * de src/tools/dora/domain/aggregate.js (functions es un bundle aislado).
@@ -70,14 +76,31 @@ export function aggregateByTeam(repos) {
 
 // ── Dominio del snapshot (espejo de src/tools/portal/domain/snapshot.js) ──
 
-/** Slug estable de un squad. */
-export function slugifySquad(name) {
-  return String(name ?? '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
+/**
+ * Ámbito publicado de un subdominio: su clave y la de su dominio, o `null` si no
+ * está en el catálogo — y entonces NO se publica. Aquí no se fabrica ninguna
+ * clave: solo se lee la que ya está almacenada.
+ */
+export function scopeOf(subdomainKey, subdomains = [], domains = []) {
+  const key = String(subdomainKey ?? '').trim();
+  if (!key) return null;
+  const sub = subdomains.find((s) => s.key === key);
+  if (!sub) return null;
+  const domain = domains.find((d) => d.key === sub.domainKey);
+  if (!domain) return null;
+  return { subdomain: sub.key, domain: domain.key };
+}
+
+/**
+ * Clave del subdominio que mide un equipo DORA, buscando la unidad LEAN que
+ * lleva ese nombre. Es una BÚSQUEDA en lo ya almacenado, no una derivación.
+ * Temporal: cuando los repos DORA tengan su propio enganche, esto sobra.
+ */
+export function subdomainKeyForTeam(team, units = []) {
+  const wanted = String(team ?? '').trim().toLowerCase();
+  if (!wanted) return null;
+  const unit = units.find((u) => String(u?.name || u?.linearLabel || '').trim().toLowerCase() === wanted);
+  return String(unit?.subdomainKey ?? '').trim() || null;
 }
 
 const numOrNull = (v) => (Number.isFinite(v) ? v : null);
@@ -124,9 +147,13 @@ export function accumulateSeries(prevSeries, point, cap = SERIES_CAP) {
 }
 
 /** Ensambla el documento del portal respetando el esquema campo a campo. */
-export function buildSnapshot({ squad, updatedAt, periodStart, current, prevSeries, period = 'weekly' }) {
+export function buildSnapshot({ subdomain, domain, updatedAt, periodStart, current, prevSeries, period = 'weekly' }) {
   return {
-    squad,
+    // `squad` se mantiene con el mismo valor que `subdomain` mientras dure la
+    // transición: el portal ya lo lee y quitárselo de golpe le rompe el informe.
+    squad: subdomain,
+    subdomain,
+    domain,
     updatedAt,
     period,
     current,
@@ -165,43 +192,63 @@ export function weekStart(dateIso) {
 }
 
 /**
- * Publica el snapshot de cada squad al portal. Lee de GREBLA lo YA calculado
- * (DORA por repo → agregado por equipo; LEAN por squad en `leanTeams`), lo mapea
+ * Publica el snapshot de cada SUBDOMINIO al portal. Lee de GREBLA lo YA calculado
+ * (DORA por repo → agregado por equipo; LEAN por equipo en `leanTeams`), lo mapea
  * al esquema del portal y hace SET idempotente en `metrics_dora`/`metrics_lean`,
- * acumulando la serie. Aislado por squad: un fallo no tumba el resto. Nunca
+ * acumulando la serie. Aislado por entidad: un fallo no tumba el resto. Nunca
  * escribe otras colecciones ni vuelca la credencial en los logs.
+ *
+ * Lo que no está enganchado a un subdominio del catálogo NO se publica y se
+ * registra: publicar algo que el catálogo no conoce es el desajuste que este
+ * contrato corrige, y en silencio nadie lo vería.
  */
 export async function publishSquadMetrics({ greblaDb, portalDb, nowIso }) {
   const periodStart = weekStart(nowIso);
   const results = { dora: 0, lean: 0, skipped: 0, failed: 0 };
 
-  const publish = async (collection, slug, current) => {
+  const [subsSnap, domainsSnap] = await Promise.all([
+    greblaDb.collection('subdomains').get(),
+    greblaDb.collection('domains').get(),
+  ]);
+  const subdomains = subsSnap.docs.map((d) => d.data());
+  const domains = domainsSnap.docs.map((d) => d.data());
+
+  const publish = async (collection, subdomainKey, current, quien) => {
+    const scope = scopeOf(subdomainKey, subdomains, domains);
+    if (!scope) {
+      results.skipped += 1;
+      logger.info('portal push skipped: sin subdominio en el catálogo', { collection, quien, subdomainKey: subdomainKey ?? null });
+      return;
+    }
     if (!hasAnyNumber(current)) { results.skipped += 1; return; }
     try {
-      const ref = portalDb.collection(collection).doc(slug);
+      const ref = portalDb.collection(collection).doc(scope.subdomain);
       const prev = (await ref.get()).data();
-      await ref.set(buildSnapshot({ squad: slug, updatedAt: nowIso, periodStart, current, prevSeries: prev?.series }));
+      await ref.set(buildSnapshot({ ...scope, updatedAt: nowIso, periodStart, current, prevSeries: prev?.series }));
       results[collection === 'metrics_dora' ? 'dora' : 'lean'] += 1;
     } catch (err) {
       results.failed += 1;
-      logger.error('portal push failed', { collection, squad: slug, message: err?.message ?? 'unknown' });
+      logger.error('portal push failed', { collection, subdomain: scope.subdomain, message: err?.message ?? 'unknown' });
     }
   };
 
-  // DORA: repos con métricas persistidas → agregado por equipo.
+  // LEAN: equipos en leanTeams (kind 'squad') con métricas persistidas. Su
+  // `subdomainKey` es lo que dice a qué subdominio miden.
+  const unitsSnap = await greblaDb.collection('leanTeams').where('kind', '==', 'squad').get();
+  const units = unitsSnap.docs.map((d) => d.data());
+  for (const unit of units) {
+    if (calcFailed(unit.metrics)) { results.skipped += 1; continue; }
+    await publish('metrics_lean', unit.subdomainKey, leanCurrent(unit.metrics), unit.name || unit.linearLabel);
+  }
+
+  // DORA: repos con métricas persistidas → agregado por equipo. El equipo del
+  // repo se resuelve contra la unidad LEAN que lo mide, que es quien guarda la
+  // clave; el día que el repo tenga su propio enganche, esto se simplifica.
   const reposSnap = await greblaDb.collection('dora').get();
   const repos = reposSnap.docs.map((d) => d.data());
   for (const agg of aggregateByTeam(repos)) {
     if (agg.key === '(sin equipo)' || agg.measured === 0) { results.skipped += 1; continue; }
-    await publish('metrics_dora', slugifySquad(agg.key), doraCurrent(agg));
-  }
-
-  // LEAN: squads en leanTeams (kind 'squad') con métricas persistidas.
-  const unitsSnap = await greblaDb.collection('leanTeams').where('kind', '==', 'squad').get();
-  for (const doc of unitsSnap.docs) {
-    const unit = doc.data();
-    if (calcFailed(unit.metrics)) { results.skipped += 1; continue; }
-    await publish('metrics_lean', slugifySquad(unit.name || unit.linearLabel || doc.id), leanCurrent(unit.metrics));
+    await publish('metrics_dora', subdomainKeyForTeam(agg.key, units), doraCurrent(agg), agg.key);
   }
 
   return results;

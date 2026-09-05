@@ -1,13 +1,58 @@
 import { describe, it, expect } from 'vitest';
 import {
-  slugifySquad, doraCurrent, leanCurrent, calcFailed, hasAnyNumber, accumulateSeries, buildSnapshot,
+  scopeOf, subdomainKeyForTeam, doraCurrent, leanCurrent, calcFailed, hasAnyNumber,
+  accumulateSeries, buildSnapshot,
 } from './snapshot.js';
 
-describe('slugifySquad', () => {
-  it('normaliza a un slug estable', () => {
-    expect(slugifySquad('The Mario-netas')).toBe('the-mario-netas');
-    expect(slugifySquad('Diseño & Producto')).toBe('diseno-producto');
-    expect(slugifySquad('  Plataforma  ')).toBe('plataforma');
+const SUBDOMAINS = [
+  { key: 'caes', domainKey: 'tribbu-app' },
+  { key: 'internal-products-core', domainKey: 'internal-products' },
+];
+const DOMAINS = [{ key: 'tribbu-app' }, { key: 'internal-products' }];
+
+describe('scopeOf: el ámbito sale del catálogo, no del nombre', () => {
+  it('devuelve el subdominio y su dominio', () => {
+    expect(scopeOf('caes', SUBDOMAINS, DOMAINS)).toEqual({ subdomain: 'caes', domain: 'tribbu-app' });
+  });
+
+  it('también en los degenerados: el Core lleva su dominio', () => {
+    expect(scopeOf('internal-products-core', SUBDOMAINS, DOMAINS))
+      .toEqual({ subdomain: 'internal-products-core', domain: 'internal-products' });
+  });
+
+  it('una clave fuera del catálogo no se publica', () => {
+    // Antes se fabricaba la clave con slugify(nombre) y cualquier cosa entraba;
+    // publicar algo que el catálogo no conoce es el desajuste de partida.
+    expect(scopeOf('the-mario-netas', SUBDOMAINS, DOMAINS)).toBeNull();
+    expect(scopeOf('', SUBDOMAINS, DOMAINS)).toBeNull();
+  });
+
+  it('un subdominio cuyo dominio no existe tampoco se publica', () => {
+    const huerfano = [{ key: 'suelto', domainKey: 'no-existe' }];
+    expect(scopeOf('suelto', huerfano, DOMAINS)).toBeNull();
+  });
+});
+
+describe('subdomainKeyForTeam: busca la unidad, no fabrica la clave', () => {
+  const units = [
+    { name: 'CAEs', subdomainKey: 'caes' },
+    { linearLabel: 'Internal Products', subdomainKey: 'internal-products-core' },
+    { name: 'Sin enganchar' },
+  ];
+
+  it('encuentra la unidad que mide ese equipo y devuelve SU clave', () => {
+    expect(subdomainKeyForTeam('CAEs', units)).toBe('caes');
+    expect(subdomainKeyForTeam('Internal Products', units)).toBe('internal-products-core');
+  });
+
+  it('«CAEs» y «CAES» son la misma entidad escrita de dos formas', () => {
+    expect(subdomainKeyForTeam('CAES', units)).toBe('caes');
+  });
+
+  it('sin unidad, o con la unidad sin enganchar, no hay clave que valga', () => {
+    expect(subdomainKeyForTeam('Matcher', units)).toBeNull();
+    expect(subdomainKeyForTeam('Sin enganchar', units)).toBeNull();
+    expect(subdomainKeyForTeam('', units)).toBeNull();
   });
 });
 
@@ -59,14 +104,27 @@ describe('accumulateSeries', () => {
 describe('buildSnapshot', () => {
   it('ensambla el doc con el esquema del portal y la serie acumulada', () => {
     const snap = buildSnapshot({
-      squad: 'the-mario-netas', updatedAt: '2026-07-28T06:00:00Z', periodStart: '2026-07-27',
+      subdomain: 'tribbu-app-core', domain: 'tribbu-app',
+      updatedAt: '2026-07-28T06:00:00Z', periodStart: '2026-07-27',
       current: { deploymentFrequency: 4.3, leadTimeForChanges: 18, changeFailureRate: 0.08, timeToRestore: 3.1 },
       prevSeries: [{ periodStart: '2026-06-16', deploymentFrequency: 3.2 }],
     });
-    expect(snap.squad).toBe('the-mario-netas');
     expect(snap.period).toBe('weekly');
     expect(snap.current.deploymentFrequency).toBe(4.3);
     expect(snap.series).toHaveLength(2);
     expect(snap.series.at(-1)).toMatchObject({ periodStart: '2026-07-27', deploymentFrequency: 4.3 });
+  });
+
+  it('lleva el subdominio y el dominio explícitos: el portal agrega sin parsear ids', () => {
+    const snap = buildSnapshot({
+      subdomain: 'internal-products-core', domain: 'internal-products',
+      updatedAt: '2026-09-07T06:00:00Z', periodStart: '2026-09-07',
+      current: { cycleTime: 147.2, throughput: 9.5, wip: 41, flowEfficiency: null },
+    });
+    expect(snap.subdomain).toBe('internal-products-core');
+    expect(snap.domain).toBe('internal-products');
+    // `squad` se mantiene con el mismo valor mientras dure la transición: el
+    // portal ya lo lee y quitárselo de golpe le rompería el informe.
+    expect(snap.squad).toBe('internal-products-core');
   });
 });
