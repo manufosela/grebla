@@ -17,7 +17,7 @@
  * La lógica pura —validar claves, agrupar, rotular— vive en
  * src/tools/team/domain/domains.js; aquí solo está la IO.
  */
-import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
 
 const DOMAINS = 'domains';
@@ -46,29 +46,37 @@ export async function listSubdomains() {
 }
 
 /**
- * Crea un dominio. El `key` se pasa explícito —nunca se deriva aquí del nombre—
- * porque es la clave del contrato: derivarla es lo que hoy parte las series
- * históricas al renombrar.
- * @param {{ key: string, name: string, channel?: string }} data
- * @returns {Promise<string>} id del documento
+ * Crea un dominio JUNTO A su «Core», en una sola escritura atómica.
+ *
+ * Van juntos a propósito: la regla del modelo es que todo dominio tiene al menos
+ * un subdominio, porque lo que se mide es el subdominio. En dos escrituras
+ * sueltas, un fallo en la segunda dejaría un dominio sin Core —inmedible— y
+ * nadie se enteraría hasta que faltasen sus métricas.
+ *
+ * El `key` se pasa explícito y nunca se deriva aquí del nombre: es la clave del
+ * contrato, y derivarla es lo que hoy parte las series históricas al renombrar.
+ *
+ * @param {{ key: string, name: string, coreKey: string, coreName: string }} data
+ * @returns {Promise<string>} id del dominio
  */
-export async function createDomain({ key, name, channel = '' }) {
-  const payload = { key, name, createdAt: serverTimestamp() };
-  if (channel) payload.channel = channel;
-  const created = await addDoc(collection(db, DOMAINS), payload);
-  return created.id;
+export async function createDomainWithCore({ key, name, coreKey, coreName }) {
+  const batch = writeBatch(db);
+  const domainRef = doc(collection(db, DOMAINS));
+  batch.set(domainRef, { key, name, createdAt: serverTimestamp() });
+  batch.set(doc(collection(db, SUBDOMAINS)),
+    { key: coreKey, name: coreName, domainKey: key, createdAt: serverTimestamp() });
+  await batch.commit();
+  return domainRef.id;
 }
 
 /**
- * Crea un subdominio dentro de un dominio.
- * @param {{ key: string, name: string, domainKey: string, linearProject?: string, githubTeam?: string }} data
+ * Crea un subdominio dentro de un dominio ya existente.
+ * @param {{ key: string, name: string, domainKey: string }} data
  * @returns {Promise<string>}
  */
-export async function createSubdomain({ key, name, domainKey, linearProject = '', githubTeam = '' }) {
-  const payload = { key, name, domainKey, createdAt: serverTimestamp() };
-  if (linearProject) payload.linearProject = linearProject;
-  if (githubTeam) payload.githubTeam = githubTeam;
-  const created = await addDoc(collection(db, SUBDOMAINS), payload);
+export async function createSubdomain({ key, name, domainKey }) {
+  const created = await addDoc(collection(db, SUBDOMAINS),
+    { key, name, domainKey, createdAt: serverTimestamp() });
   return created.id;
 }
 
@@ -83,29 +91,6 @@ export async function createSubdomain({ key, name, domainKey, linearProject = ''
  */
 export function renameScope(kind, id, name) {
   return updateDoc(doc(db, kind === 'domain' ? DOMAINS : SUBDOMAINS, id), { name });
-}
-
-/**
- * Fija la identidad externa de un subdominio (proyecto de Linear, team de
- * GitHub): la de MEDICIÓN vive aquí, no en el dominio, porque es de donde salen
- * las métricas.
- * @param {string} id
- * @param {{ linearProject?: string, githubTeam?: string }} identity
- * @returns {Promise<void>}
- */
-export function setSubdomainIdentity(id, { linearProject = '', githubTeam = '' }) {
-  return updateDoc(doc(db, SUBDOMAINS, id), { linearProject, githubTeam });
-}
-
-/**
- * Fija el canal de Slack de un dominio: la identidad de COMUNICACIÓN vive en el
- * dominio, que es donde está la gente.
- * @param {string} id
- * @param {string} channel
- * @returns {Promise<void>}
- */
-export function setDomainChannel(id, channel) {
-  return updateDoc(doc(db, DOMAINS, id), { channel });
 }
 
 /**
