@@ -30,6 +30,25 @@ export function listUnits(persistence) {
   return persistence.units.list();
 }
 
+/**
+ * Engancha una unidad de flujo a un subdominio del catálogo, o la desengancha
+ * con la cadena vacía. Se guarda la CLAVE, no el nombre: renombrar el
+ * subdominio no puede romper el enganche — ese es el punto del modelo.
+ *
+ * No se valida aquí que la clave exista: quien la valida es el dominio
+ * (`classifyUnits`) al publicar, y así una clave que se queda huérfana porque
+ * borraron su subdominio se ve como lo que es, en vez de desaparecer sin ruido.
+ *
+ * @param {LeanPersistence} persistence
+ * @param {string} id
+ * @param {string} subdomainKey  clave del subdominio, o '' para desenganchar
+ * @returns {Promise<void>}
+ */
+export function linkUnitToSubdomain(persistence, id, subdomainKey) {
+  if (!id) throw new Error('La unidad es obligatoria');
+  return persistence.units.update(id, { subdomainKey: String(subdomainKey ?? '').trim() });
+}
+
 /** @param {LeanPersistence} persistence @param {string} id */
 export function removeUnit(persistence, id) {
   return persistence.units.remove(id);

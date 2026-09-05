@@ -127,3 +127,18 @@ export function domainsWithoutSubdomain(domains = [], subdomains = []) {
   const conHijos = new Set(subdomains.map((s) => s.domainKey));
   return domains.filter((d) => !conHijos.has(d.key));
 }
+
+/**
+ * Opciones para elegir un subdominio en un desplegable: su clave y el rótulo con
+ * el dominio delante, ordenadas por ese rótulo. Habrá un «Core» por dominio: sin
+ * el prefijo, el desplegable tendría opciones idénticas y elegir sería una
+ * lotería.
+ * @param {ReadonlyArray<Subdomain>} subdomains
+ * @param {ReadonlyArray<Domain>} domains
+ * @returns {Array<{ key: string, label: string }>}
+ */
+export function subdomainChoices(subdomains = [], domains = []) {
+  return subdomains
+    .map((s) => ({ key: s.key, label: subdomainLabel(s, domains) }))
+    .toSorted((a, b) => a.label.localeCompare(b.label, 'es'));
+}

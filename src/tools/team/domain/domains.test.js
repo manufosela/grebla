@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   suggestKey, coreKeyFor, validateKey, subdomainLabel, groupByDomain,
-  domainsWithoutSubdomain, CORE_NAME,
+  domainsWithoutSubdomain, subdomainChoices, CORE_NAME,
 } from './domains.js';
 
 describe('suggestKey: propone, no impone', () => {
@@ -135,5 +135,30 @@ describe('domainsWithoutSubdomain: quién necesita su Core', () => {
     const domains = [{ id: '1', key: 'plataforma', name: 'Plataforma' }];
     const subdomains = [{ id: 'a', key: 'plataforma-core', name: CORE_NAME, domainKey: 'plataforma' }];
     expect(domainsWithoutSubdomain(domains, subdomains)).toEqual([]);
+  });
+});
+
+describe('subdomainChoices: lo que se ofrece al elegir subdominio', () => {
+  const domains = [
+    { id: 'd1', key: 'tribbu-app', name: 'TRIBBU-APP' },
+    { id: 'd2', key: 'plataforma', name: 'Plataforma' },
+  ];
+  const subdomains = [
+    { id: 's1', key: 'tribbu-app-core', name: CORE_NAME, domainKey: 'tribbu-app' },
+    { id: 's2', key: 'caes', name: 'CAES', domainKey: 'tribbu-app' },
+    { id: 's3', key: 'plataforma-core', name: CORE_NAME, domainKey: 'plataforma' },
+  ];
+
+  it('cada subdominio con su dominio delante, ordenado por el rótulo', () => {
+    expect(subdomainChoices(subdomains, domains)).toEqual([
+      { key: 'plataforma-core', label: 'Plataforma › Core' },
+      { key: 'caes', label: 'TRIBBU-APP › CAES' },
+      { key: 'tribbu-app-core', label: 'TRIBBU-APP › Core' },
+    ]);
+  });
+
+  it('un subdominio huérfano se ofrece igual, sin inventarle dominio', () => {
+    const suelto = [{ id: 'x', key: 'suelto', name: 'Suelto', domainKey: 'no-existe' }];
+    expect(subdomainChoices(suelto, domains)).toEqual([{ key: 'suelto', label: 'Suelto' }]);
   });
 });

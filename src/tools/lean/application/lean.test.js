@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryLeanPersistence } from '../infrastructure/memory/index.js';
-import { addUnit, listUnits, removeUnit, getFlowSummary } from './usecases.js';
+import { addUnit, listUnits, removeUnit, getFlowSummary, linkUnitToSubdomain } from './usecases.js';
 
 describe('LEAN usecases (unidades = labels de Linear)', () => {
   let p;
@@ -40,5 +40,21 @@ describe('LEAN usecases (unidades = labels de Linear)', () => {
     expect(chapters.units).toHaveLength(1);
     expect(squads.global.completed).toBe(10);
     expect(chapters.global.completed).toBe(6);
+  });
+
+  it('linkUnitToSubdomain guarda la CLAVE del subdominio, no su nombre', async () => {
+    const id = await addUnit(p, { linearLabel: 'The Mario Netas', kind: 'squad' });
+    await linkUnitToSubdomain(p, id, 'tribbu-app-core');
+    const [unit] = await listUnits(p);
+    expect(unit.subdomainKey).toBe('tribbu-app-core');
+    // El rótulo de Linear se queda como está: no es la identidad.
+    expect(unit.name).toBe('The Mario Netas');
+  });
+
+  it('linkUnitToSubdomain con cadena vacía desengancha', async () => {
+    const id = await addUnit(p, { linearLabel: 'Trust', kind: 'squad' });
+    await linkUnitToSubdomain(p, id, 'trust');
+    await linkUnitToSubdomain(p, id, '  ');
+    expect((await listUnits(p))[0].subdomainKey).toBe('');
   });
 });
