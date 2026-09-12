@@ -141,7 +141,7 @@ test('quien no está en la audiencia de Encuestas no ve su card', async ({ page 
     await signInAs(page, 'engineer');
     await page.goto('/');
     // El hub ha cargado (se ve alguna card), pero la de encuestas no está.
-    await expect(page.locator('[data-personal]')).toBeVisible();
+    await expect(page.locator('[data-personal]:not([data-tool-id])')).toBeVisible();
     await expect(page.locator('[data-tool-id="surveys"]:not([hidden])')).toHaveCount(0);
   });
 });

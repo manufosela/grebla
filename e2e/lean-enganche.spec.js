@@ -123,8 +123,10 @@ test('la tabla dice qué mide cada unidad en Linear: label o equipo', async ({ p
     await abrirUnidades(page);
     // La primera columna dice de dónde salen las issues. Sin esto, una unidad
     // que mide un equipo aparecía con la celda vacía y parecía no medir nada.
-    const fuentes = await unidades(page).locator('td.label-cell').allTextContents();
-    expect(fuentes).toContain('Equipo E2EMAT');
-    expect(fuentes).toContain('Label «E2E CAEs»');
+    //
+    // Con poll: leer la tabla sin esperar a que se pinte pasa en local y falla
+    // en CI, que va más lento — y entonces parece un fallo del código.
+    await expect.poll(async () => unidades(page).locator('td.label-cell').allTextContents(),
+      { timeout: 15_000 }).toEqual(expect.arrayContaining(['Equipo E2EMAT', 'Label «E2E CAEs»']));
   });
 });
