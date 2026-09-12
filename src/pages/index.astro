@@ -83,10 +83,26 @@ const tools = [
     layer: 'ingenieria',
   },
   {
-    name: 'O2O',
+    // Mis O2O: consultar los míos, tenga equipo o no. Vive en «Mi espacio» y se
+    // abre directo por su pestaña — no se duplica la vista, se le pone puerta
+    // (RMR-TSK-0489). Marcada como personal: se ve con ficha, sin pasar por la
+    // política de audiencia, que gobierna la herramienta de gestión.
+    name: 'Mis O2O',
+    href: '/mi-espacio#o2o',
+    description: 'Los tuyos: los temas que hablasteis, los acuerdos y las acciones que salieron de tus one-to-ones.',
+    available: true,
+    layer: 'tribbu',
+    personal: true,
+  },
+  {
+    // La GESTIÓN: preparar, conducir y seguir los del equipo. Solo la ve quien
+    // lidera: la herramienta ya rechazaba a quien no, y ofrecerla a todo el que
+    // pasara la política era mandar a la gente a una puerta cerrada.
+    name: 'O2O de mi equipo',
     href: '/tools/o2o',
     layer: 'tribbu',
-    description: 'Gestión de One-to-Ones: guía de temas, formulario previo y (próximamente) registro con IA, acciones y evolución.',
+    manages: true,
+    description: 'Prepara, conduce y da seguimiento a los one-to-ones de tu gente: guía de temas, formulario previo, acciones y evolución.',
     available: true,
   },
   {
@@ -154,6 +170,7 @@ const TOOL_ID: Record<string, string> = {
   '/tools/career-map': 'career',
   '/tools/career-path': 'careerpath',
   '/tools/o2o': 'o2o',
+  '/mi-espacio#o2o': 'o2o',
   '/tools/motivators/moving': 'motivators',
   '/tools/motivators/affective': 'motivators',
   '/marea': 'marea',
@@ -218,7 +235,7 @@ const TOOL_ID: Record<string, string> = {
   <section id="tenant-tools" class="tools" hidden>
     {
       tools.map((tool) => (
-        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-layer={tool.layer} data-personal={tool.personal ? 'true' : undefined} data-own={tool.personal ? 'true' : undefined}>
+        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-layer={tool.layer} data-personal={tool.personal ? 'true' : undefined} data-manages={tool.manages ? 'true' : undefined} data-own={tool.personal ? 'true' : undefined}>
           <h2>{tool.name}</h2>
           <p>{tool.description}</p>
           <span class="cta">Abrir →</span>

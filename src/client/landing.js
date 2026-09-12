@@ -170,17 +170,24 @@ function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish
   // Resto de herramientas: visibles según la política de acceso de cada una
   // (RMR-PCS-0027 · F6). «team» es gestión (no tiene política): la ve quien lidera
   // o gobierna. Las demás, por canUseTool; el superadmin siempre las ve.
-  for (const card of tools?.querySelectorAll('[data-tool-id]:not([data-personal])') ?? []) {
+  for (const card of tools?.querySelectorAll('[data-tool-id]') ?? []) {
+    // Las personales ya quedaron decididas arriba, por ficha: «Mis O2O» es tuyo
+    // y no lo gobierna la política de la herramienta de equipo. Se salta aquí,
+    // y no con un selector lejano, para que se vea al leer la decisión.
+    if (card.dataset.personal === 'true') continue;
     const id = card.dataset.toolId;
     // Fallback de disponibilidad: si no se pudieron cargar persona/políticas, no
     // se filtra (se muestran, como antes de F6); cada herramienta valida su acceso.
     if (filterFailed) { card.toggleAttribute('hidden', false); continue; }
+    const policy = policyById.get(id);
+    const permitido = isSuperadmin || (policy != null && canUseTool(personRef, policy));
     let visible;
+    // «team» es gestión pura y no tiene política: se rige por el rol.
     if (id === 'team') visible = isSuperadmin || isLeaderish;
-    else {
-      const policy = policyById.get(id);
-      visible = isSuperadmin || (policy != null && canUseTool(personRef, policy));
-    }
+    // Las de GESTIÓN de equipo piden además liderar: quien no lidera no tiene a
+    // quién gestionar, y ofrecérselas es mandarlo a una puerta que le rechaza.
+    else if (card.dataset.manages === 'true') visible = permitido && (isSuperadmin || isLeaderish);
+    else visible = permitido;
     card.toggleAttribute('hidden', !visible);
   }
   // Las capas van DESPUÉS del filtrado: se derivan de lo que ha quedado visible.

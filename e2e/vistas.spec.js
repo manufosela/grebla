@@ -30,8 +30,10 @@ test('la vista de ingeniero enseña el hub, no desvía a Mi espacio', async ({ p
     await vista(page, 'Ingeniero').click();
 
     await expect(page).toHaveURL(/\/$/);
-    // Lo personal sigue estando: como card del hub, igual que para todos.
-    await expect(page.locator('[data-personal]')).toBeVisible();
+    // Lo personal sigue estando: como card del hub, igual que para todos. El
+    // `:not([data-tool-id])` distingue «Mi espacio» de «Mis O2O», que también es
+    // personal pero lleva herramienta detrás (RMR-TSK-0489).
+    await expect(page.locator('[data-personal]:not([data-tool-id])')).toBeVisible();
     // La administración no, porque un ingeniero no la ve.
     await expect(page.locator('#admin-link:not([hidden])')).toHaveCount(0);
   });
@@ -42,7 +44,7 @@ test('«Volver» desde Mi espacio devuelve al hub, no a Mi espacio', async ({ pa
     await signInAs(page, 'superadmin');
     await page.goto('/');
     await vista(page, 'Ingeniero').click();
-    await page.locator('[data-personal]').click();
+    await page.locator('[data-personal]:not([data-tool-id])').click();
     await expect(page).toHaveURL(/\/mi-espacio/);
 
     await page.getByRole('link', { name: '← Volver' }).click();
@@ -50,7 +52,7 @@ test('«Volver» desde Mi espacio devuelve al hub, no a Mi espacio', async ({ pa
     // El bug: la home redirigía a /mi-espacio mientras el flag estuviera puesto,
     // así que «Volver» no llevaba a ninguna parte.
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.locator('[data-personal]')).toBeVisible();
+    await expect(page.locator('[data-personal]:not([data-tool-id])')).toBeVisible();
   });
 });
 
