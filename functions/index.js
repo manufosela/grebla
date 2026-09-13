@@ -18,7 +18,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import * as coins from './coins.js';
 import { JD_POLISH_MODEL, JD_POLISH_TOOL, buildPolishPrompt, sanitizePolishedItems } from './jdPolish.js';
 import { sign, coinsKmsKeyName } from './signer.js';
-import { computePulseAggregate, departmentOf } from './pulseAggregate.js';
+import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pulseAggregate.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -2344,52 +2344,94 @@ export const aggregatePulse = onDocumentWritten(
       console.warn('[marea] entrada sin weekIso, se ignora');
       return;
     }
+    await recomputePulseWeek(weekIso);
+  },
+);
+
+/**
+ * Recalcula el agregado de UNA semana. Extraído del trigger (RMR-TSK-0496)
+ * porque ahora hay dos motivos para recalcular: que alguien registre su marea,
+ * y que quien administra la herramienta cambie el umbral de anonimato.
+ *
+ * El umbral se aplica AQUÍ, al calcular, nunca al leer: un agregado ya escrito
+ * con grupos por debajo del mínimo es legible desde la consola por cualquiera
+ * que tenga acceso, y filtrarlo en la vista solo taparía el dato, no lo quitaría.
+ * @param {string} weekIso
+ */
+async function recomputePulseWeek(weekIso) {
+  const db = getFirestore();
+  // collectionGroup('entries') roza el ledger de coins, pero esas entradas no
+  // tienen weekIso, así que el filtro las excluye (y el índice solo indexa las
+  // que sí lo tienen). El mapa uid→persona da los gremios/labels (nombres).
+  const [entriesSnap, peopleSnap, leadersSnap, headsSnap] = await Promise.all([
+    db.collectionGroup('entries').where('weekIso', '==', weekIso).get(),
+    db.collection('people').get(),
+    db.collection('leaders').get(),
+    db.collection('supermanagers').get(),
+  ]);
+  const entries = entriesSnap.docs.map((d) => d.data());
+  // Jerarquía para el corte por departamento (RMR-TSK-0296): de cada manager,
+  // a quién reporta; y qué uids son Head, con su nombre visible. El eje se
+  // guarda por NOMBRE, igual que gremios y squads, para que la vista no tenga
+  // que resolver uids.
+  /** @type {Record<string, string|null>} */
+  const reportsToByUid = {};
+  for (const doc of leadersSnap.docs) reportsToByUid[doc.id] = doc.data().reportsTo ?? null;
+  /** @type {Map<string, string>} */
+  const headNames = new Map();
+  for (const doc of headsSnap.docs) {
+    const h = doc.data();
+    headNames.set(doc.id, h.displayName || h.email || doc.id);
+  }
+  const headUids = new Set(headNames.keys());
+  /** @type {Record<string, { guilds: string[], labels: string[], department: string|null }>} */
+  const peopleByUid = {};
+  let totalPeople = 0;
+  for (const doc of peopleSnap.docs) {
+    const p = doc.data();
+    if (p.active !== false) totalPeople += 1;
+    if (!p.uid) continue;
+    // Se agrupa por UID del Head (clave estable), no por su nombre.
+    peopleByUid[p.uid] = {
+      guilds: p.guilds || [],
+      labels: p.labels || [],
+      department: departmentOf(p.ownerLeaderUid ?? null, reportsToByUid, headUids),
+    };
+  }
+  const aggregate = computePulseAggregate(weekIso, entries, peopleByUid, {
+    minCount: await pulseMinCount(db),
+    totalPeople,
+    departmentNames: Object.fromEntries(headNames),
+  });
+  await db.doc(`pulseAggregates/${weekIso}`).set({ ...aggregate, updatedAt: FieldValue.serverTimestamp() });
+  console.log(`[marea] agregado ${weekIso} recalculado (${aggregate.respondents} personas).`);
+}
+
+/** Umbral de anonimato configurado, saneado: lo guardado no manda sobre el suelo. */
+async function pulseMinCount(db) {
+  const snap = await db.doc('toolSettings/marea').get();
+  return sanitizePulseMinCount(snap.exists ? snap.data()?.minCount : undefined);
+}
+
+/**
+ * Marea (RMR-TSK-0496): al cambiar el umbral de anonimato se recalculan TODAS
+ * las semanas ya agregadas.
+ *
+ * Subir el umbral sin recalcular dejaría los agregados viejos enseñando grupos
+ * más pequeños de lo que la herramienta acaba de prometer, y esos documentos son
+ * justo los que la gente consulta. Recalcular es caro una vez; no hacerlo es una
+ * fuga permanente.
+ */
+export const onPulseSettingsChanged = onDocumentWritten(
+  { region: 'europe-west1', document: 'toolSettings/marea' },
+  async (event) => {
+    const antes = sanitizePulseMinCount(event.data?.before?.data()?.minCount);
+    const ahora = sanitizePulseMinCount(event.data?.after?.data()?.minCount);
+    if (antes === ahora) return;
     const db = getFirestore();
-    // collectionGroup('entries') roza el ledger de coins, pero esas entradas no
-    // tienen weekIso, así que el filtro las excluye (y el índice solo indexa las
-    // que sí lo tienen). El mapa uid→persona da los gremios/labels (nombres).
-    const [entriesSnap, peopleSnap, leadersSnap, headsSnap] = await Promise.all([
-      db.collectionGroup('entries').where('weekIso', '==', weekIso).get(),
-      db.collection('people').get(),
-      db.collection('leaders').get(),
-      db.collection('supermanagers').get(),
-    ]);
-    const entries = entriesSnap.docs.map((d) => d.data());
-    // Jerarquía para el corte por departamento (RMR-TSK-0296): de cada manager,
-    // a quién reporta; y qué uids son Head, con su nombre visible. El eje se
-    // guarda por NOMBRE, igual que gremios y squads, para que la vista no tenga
-    // que resolver uids.
-    /** @type {Record<string, string|null>} */
-    const reportsToByUid = {};
-    for (const doc of leadersSnap.docs) reportsToByUid[doc.id] = doc.data().reportsTo ?? null;
-    /** @type {Map<string, string>} */
-    const headNames = new Map();
-    for (const doc of headsSnap.docs) {
-      const h = doc.data();
-      headNames.set(doc.id, h.displayName || h.email || doc.id);
-    }
-    const headUids = new Set(headNames.keys());
-    /** @type {Record<string, { guilds: string[], labels: string[], department: string|null }>} */
-    const peopleByUid = {};
-    let totalPeople = 0;
-    for (const doc of peopleSnap.docs) {
-      const p = doc.data();
-      if (p.active !== false) totalPeople += 1;
-      if (!p.uid) continue;
-      // Se agrupa por UID del Head (clave estable), no por su nombre.
-      peopleByUid[p.uid] = {
-        guilds: p.guilds || [],
-        labels: p.labels || [],
-        department: departmentOf(p.ownerLeaderUid ?? null, reportsToByUid, headUids),
-      };
-    }
-    const aggregate = computePulseAggregate(weekIso, entries, peopleByUid, {
-      minCount: 3,
-      totalPeople,
-      departmentNames: Object.fromEntries(headNames),
-    });
-    await db.doc(`pulseAggregates/${weekIso}`).set({ ...aggregate, updatedAt: FieldValue.serverTimestamp() });
-    console.log(`[marea] agregado ${weekIso} recalculado (${aggregate.respondents} personas).`);
+    const semanas = await db.collection('pulseAggregates').listDocuments();
+    for (const ref of semanas) await recomputePulseWeek(ref.id);
+    console.log(`[marea] umbral ${antes} → ${ahora}: ${semanas.length} semanas recalculadas.`);
   },
 );
 

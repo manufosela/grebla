@@ -3,7 +3,8 @@
  * de privacidad y «una marea por persona (la última)». Puro, sin firebase.
  */
 import { describe, it, expect } from 'vitest';
-import { computePulseAggregate, departmentOf, normalizeWord } from './pulseAggregate.js';
+import { computePulseAggregate, departmentOf, normalizeWord, sanitizePulseMinCount, PULSE_MIN_ANON, PULSE_MAX_ANON } from './pulseAggregate.js';
+import { sanitizeMinCount, MIN_ANON, MAX_ANON } from '../src/tools/pulse/domain/settings.js';
 
 const P = (uid, day, vals) => ({ uid, day, ...vals });
 const full = { energia: 60, animo: 60, carga: 50, rumbo: 50, tripulacion: 50, reconocimiento: 50 };
@@ -193,5 +194,46 @@ describe('computePulseAggregate — departamento por uid, nombre aparte', () => 
       P('u1', '2026-07-13', full), P('u2', '2026-07-13', full), P('u3', '2026-07-13', full),
     ], byUid, { minCount: 3 });
     expect(agg.departments[0].name).toBe('h1');
+  });
+});
+
+/**
+ * Test de EQUIVALENCIA (RMR-TSK-0496): el umbral de anonimato se sanea en dos
+ * copias físicas —el dominio del cliente y este módulo— porque functions/ se
+ * despliega solo y no puede importar de ../src. La copia es inevitable; la
+ * divergencia no, y aquí divergir significa que el formulario promete un suelo
+ * y el servidor aplica otro.
+ */
+describe('el saneado del umbral no diverge entre cliente y Cloud Function', () => {
+  it('mismos límites', () => {
+    expect(PULSE_MIN_ANON).toBe(MIN_ANON);
+    expect(PULSE_MAX_ANON).toBe(MAX_ANON);
+  });
+
+  it('mismo resultado ante lo mismo, incluida la basura', () => {
+    for (const v of [3, 5, 25, 2, 0, -1, 999, 3.7, '4', '2', null, undefined, NaN, 'cinco', {}]) {
+      expect(sanitizePulseMinCount(v)).toBe(sanitizeMinCount(v));
+    }
+  });
+});
+
+describe('el umbral guardado no puede aflojar la privacidad', () => {
+  it('un 2 guardado a mano en la configuración se aplica como 3', () => {
+    // La única defensa real: lo que se guardó puede no haber pasado por el
+    // formulario (consola, script, un bug de ayer).
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full), P('u2', '2026-07-13', full),
+    ], people, { minCount: 2 });
+    expect(agg.minCount).toBe(3);
+    expect(agg.general.means).toBeNull();
+  });
+
+  it('un umbral más alto sí se respeta: tres respuestas ya no bastan', () => {
+    const agg = computePulseAggregate('2026-W29', [
+      P('u1', '2026-07-13', full), P('u2', '2026-07-13', full), P('u3', '2026-07-13', full),
+    ], people, { minCount: 5 });
+    expect(agg.minCount).toBe(5);
+    expect(agg.general.means).toBeNull();
+    expect(agg.guilds).toEqual([]);
   });
 });
