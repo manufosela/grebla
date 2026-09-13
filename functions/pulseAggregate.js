@@ -15,6 +15,32 @@ export const PULSE_DIMS = ['energia', 'animo', 'carga', 'rumbo', 'tripulacion', 
 /** Máximo de palabras distintas por nube (las más frecuentes). */
 const MAX_WORDS = 40;
 
+/**
+ * Umbral de anonimato: suelo, techo y defecto. ESPEJO de
+ * src/tools/pulse/domain/settings.js, que no se puede importar porque
+ * functions/ se despliega solo. La copia física es inevitable; que diverja, no:
+ * pulseAggregate.test.js ejecuta ambas sobre los mismos valores.
+ *
+ * Quien administra Marea puede SUBIRLO, nunca bajarlo. El 3 no es una
+ * preferencia de configuración: es lo que se le prometió a quien rellena su
+ * marea, y un formulario del cliente no protege nada — por eso se vuelve a
+ * sanear aquí, con lo que venga guardado.
+ */
+export const PULSE_MIN_ANON = 3;
+export const PULSE_MAX_ANON = 25;
+
+/**
+ * Umbral utilizable a partir de lo guardado.
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function sanitizePulseMinCount(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return PULSE_MIN_ANON;
+  if (n < PULSE_MIN_ANON) return PULSE_MIN_ANON;
+  return n > PULSE_MAX_ANON ? PULSE_MAX_ANON : n;
+}
+
 const emptyAcc = () => ({ count: 0, sums: Object.fromEntries(PULSE_DIMS.map((d) => [d, 0])), words: new Map() });
 
 /** Normaliza una palabra para la nube: minúsculas, sin espacios sobrantes. */
@@ -86,7 +112,7 @@ export function departmentOf(leaderUid, reportsToByUid, headUids) {
  * @returns {object} documento de agregado
  */
 export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts = {}) {
-  const minCount = opts.minCount ?? 3;
+  const minCount = sanitizePulseMinCount(opts.minCount ?? PULSE_MIN_ANON);
   const people = latestPerPerson(entries);
 
   const general = emptyAcc();

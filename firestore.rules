@@ -504,6 +504,21 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Ajustes de cada herramienta (RMR-TSK-0496): valores que quien la gestiona
+    // cambia sin desplegar. Hoy solo el umbral de anonimato de Marea.
+    //
+    // El suelo de 3 se repite aquí a propósito. El formulario lo comprueba, la
+    // Cloud Function lo vuelve a sanear al calcular… y aun así un documento se
+    // puede escribir desde la consola o desde un script: una promesa de
+    // privacidad que solo vive en el cliente no es una promesa.
+    match /toolSettings/{toolId} {
+      allow read: if isSignedIn();
+      allow write: if (isSuperAdmin() || managesToolByPolicy(toolId))
+        && request.resource.data.minCount is int
+        && request.resource.data.minCount >= 3
+        && request.resource.data.minCount <= 25;
+    }
+
     match /labels/{labelId} {
       allow read: if isSignedIn();
       allow create: if isSuperAdmin()
