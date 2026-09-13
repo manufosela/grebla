@@ -12,6 +12,7 @@ import { resolveAccess } from '../lib/access.js';
 import { canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { proposePrep } from '../lib/o2oAi.js';
 import { guardToolPage } from '../lib/toolGate.js';
+import { isAdminOnly } from '../tools/o2o/domain/views.js';
 import { ROLES } from '../data/roles.js';
 
 const app = document.querySelector('o2o-app');
@@ -31,18 +32,27 @@ onUserChanged(async (user) => {
   try {
     const access = await resolveAccess(user);
     // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de crear nada.
-    if (!(await guardToolPage('o2o', user, { isSuperadmin: canGovern(access), appEl: app }))) return;
+    const gate = await guardToolPage('o2o', user, { isSuperadmin: canGovern(access), appEl: app });
+    if (!gate) return;
 
-    const { role, uid } = access;
-    if (!canGovern(access) && !leadsTeam(access)) {
+    const { uid } = access;
+    // Tres papeles distintos (RMR-TSK-0497): quien gobierna y quien lleva equipo
+    // USAN la herramienta; quien solo la gestiona entra a cambiar las preguntas.
+    const quien = { governs: canGovern(access), leads: leadsTeam(access), managesTool: gate.manage };
+    if (!quien.governs && !quien.leads && !quien.managesTool) {
       app.error = 'Esta herramienta es para managers. Tu espacio de O2O está en «Mi espacio».';
       return;
     }
+    app.access = quien;
+    const soloAdmin = isAdminOnly(quien);
+    // En modo administración no se cargan personas: lo que se habló en un O2O es
+    // de dos, y aquí solo se vienen a cambiar las preguntas. Lo que no se pide,
+    // no llega al navegador.
     const [{ persistence }, people] = await Promise.all([
       createO2OContainer({ mode: 'firestore', leaderUid: uid }),
-      loadPeople(uid, canGovern(access)),
+      soloAdmin ? [] : loadPeople(uid, quien.governs),
     ]);
-    app.canEdit = true; // manager/superadmin
+    app.canEdit = true;
     app.people = people;
     app.roles = ROLES; // para mostrar el rol Role Mirror en «Registrar O2O» (RMR-TSK-0226)
     app.aiPropose = proposePrep; // activa «Generar con IA» en «Preparar O2O»

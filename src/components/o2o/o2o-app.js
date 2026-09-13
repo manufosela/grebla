@@ -6,7 +6,10 @@
  * el periodo; crear un periodo lo genera EN BLANCO (se rellena a mano, con .md o,
  * en el futuro, con IA).
  *
- * Recibe `persistence` (inyectada por src/client/o2o.js), `people` y `canEdit`.
+ * Recibe `persistence` (inyectada por src/client/o2o.js), `people`, `canEdit` y
+ * `access`. De `access` salen las secciones visibles: quien solo GESTIONA la
+ * herramienta entra a cambiar las preguntas y no ve nada de lo que se habló en
+ * un O2O (RMR-TSK-0497).
  */
 import { LitElement, html, css } from 'lit';
 import '../common/busy-overlay.js';
@@ -19,15 +22,7 @@ import './o2o-prepare.js';
 import {
   listPeriods, getPeriod, createPeriod, removePeriod, defaultPeriodName,
 } from '../../tools/o2o/application/usecases/periods.js';
-
-/** @type {ReadonlyArray<{ id: string, label: string, ready?: boolean }>} */
-const VIEWS = [
-  { id: 'preparar', label: 'Preparar O2O', ready: true },
-  { id: 'registrar', label: 'Registrar O2O', ready: true },
-  { id: 'resumen', label: 'Resumen', ready: true },
-  { id: 'acciones', label: 'Acciones', ready: true },
-  { id: 'evolucion', label: 'Evolución', ready: true },
-];
+import { o2oViews } from '../../tools/o2o/domain/views.js';
 
 export class O2OApp extends LitElement {
   static properties = {
@@ -35,6 +30,11 @@ export class O2OApp extends LitElement {
     people: { attribute: false },
     roles: { attribute: false },
     canEdit: { attribute: false },
+    /**
+     * Qué es quien mira: gobierna / lleva equipo / solo gestiona la herramienta
+     * (RMR-TSK-0497). De aquí salen las secciones visibles.
+     */
+    access: { attribute: false },
     aiPropose: { attribute: false },
     error: { state: true },
     loading: { state: true },
@@ -86,6 +86,8 @@ export class O2OApp extends LitElement {
     this.people = [];
     this.roles = [];
     this.canEdit = false;
+    /** @type {import('../../tools/o2o/domain/views.js').O2OAccess} */
+    this.access = {};
     /** @type {import('../../lib/o2oAi.js').proposeQuestions|null} */
     this.aiPropose = null;
     this.error = '';
@@ -217,7 +219,7 @@ export class O2OApp extends LitElement {
         <h2 style="margin:0">${this._period.name}</h2>
       </div>
       <div class="tabs" role="tablist" aria-label="Secciones del periodo de O2O">
-        ${VIEWS.map((v) => this._renderTab(v))}
+        ${o2oViews(this.access).map((v) => this._renderTab(v))}
       </div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
       <section class="panel">${this._renderView()}</section>
@@ -235,6 +237,9 @@ export class O2OApp extends LitElement {
   }
 
   _renderView() {
+    // Se comprueba aquí también: la pestaña oculta no basta si alguien llega a
+    // fijar la vista por otro camino.
+    if (!o2oViews(this.access).some((v) => v.id === this._view)) return this._renderPlaceholder();
     if (this._view === 'preparar') return this._renderPrepare();
     if (this._view === 'registrar') return this._renderRegister();
     if (this._view === 'acciones') return this._renderActions();
