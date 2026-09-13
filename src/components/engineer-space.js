@@ -52,6 +52,7 @@ import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
 import { setCareerTarget, getPersonLogbook } from '../lib/engineer.js';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 import { squadNames } from '../tools/team/application/usecases/squads.js';
+import { membershipLabel } from '../tools/team/domain/membership.js';
 
 /**
  * Pestañas de «Mi espacio». El id (clave) sincroniza con `location.hash`
@@ -114,6 +115,8 @@ export class EngineerSpace extends LitElement {
     // editar sus datos básicos (nombre/nivel/disciplinas) desde aquí.
     selfOwned: { attribute: false },
     squads: { attribute: false },
+    /** Catálogo de dominios: a lo que pertenece de verdad (ADR de dominios). */
+    domains: { attribute: false },
     _tab: { state: true },
     _careerSub: { state: true },
     _targetError: { state: true },
@@ -315,6 +318,7 @@ export class EngineerSpace extends LitElement {
     this.selfOwned = false;
     /** @type {Array<{id:string,name:string}>} catálogo de squads (RMR-TSK-0277) */
     this.squads = [];
+    this.domains = [];
     /** @type {string|null} aviso in-place si falla la escritura del objetivo */
     this._targetError = null;
     /** @type {boolean} true mientras se persiste el objetivo (deshabilita controles) */
@@ -1032,6 +1036,9 @@ export class EngineerSpace extends LitElement {
       ['Disciplinas', discNames.join(', ') || null],
       ['Fecha de alta', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${p.startDate}T00:00:00`)) : null],
       ['Gremios', (p.guilds ?? []).join(', ') || null],
+      // A qué pertenece: el DOMINIO (su producto). El squad se queda debajo
+      // mientras dure la transición, y desaparecerá con él (ADR de dominios).
+      ['Dominio', membershipLabel(p, this.domains)],
       ['Squads', squadNames(p.squadIds, this.squads).join(', ') || null],
     ].filter(([, v]) => v);
     return html`
@@ -1074,6 +1081,9 @@ export class EngineerSpace extends LitElement {
       ['Desde', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(p.startDate)) : null],
       ['Ubicación', p.location],
       ['Gremios', (p.guilds ?? []).join(', ') || null],
+      // A qué pertenece: el DOMINIO (su producto). El squad se queda debajo
+      // mientras dure la transición, y desaparecerá con él (ADR de dominios).
+      ['Dominio', membershipLabel(p, this.domains)],
       ['Squads', squadNames(p.squadIds, this.squads).join(', ') || null],
     ].filter(([, v]) => v);
     return html`
