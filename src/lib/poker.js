@@ -17,7 +17,7 @@ import {
   writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment,
 } from 'firebase/firestore';
 import { db, getRegionalFunctions } from './firebase.js';
-import { isValidCardFor } from '../tools/poker/domain/deck.js';
+import { isValidCardFor, buildDeck, scaleById } from '../tools/poker/domain/deck.js';
 
 const SESSIONS = 'pokerSessions';
 
@@ -34,7 +34,9 @@ function createdAtMs(value) {
  * Crea una sesión de poker. Modo `simple` = juego de voto directo (se vota desde
  * el principio). Modo `linear` = refinamiento del backlog de un squad (se elige la
  * tarea y se «activa la votación» por tarea).
- * @param {{ name: string, ownerLeaderUid: string, mode?: 'simple'|'linear', squad?: {linearLabel: string, name: string}|null }} data
+ * El MAZO se fija al convocar y viaja con la sesión (RMR-TSK-0481): así una
+ * estimación en curso no cambia de cartas porque alguien toque un catálogo.
+ * @param {{ name: string, ownerLeaderUid: string, mode?: 'simple'|'linear', squad?: {linearLabel: string, name: string}|null, scale?: string, cards?: ReadonlyArray<string> }} data
  * @returns {Promise<string>} id de la sesión
  */
 export async function createSession(data) {
@@ -47,6 +49,8 @@ export async function createSession(data) {
     squad: mode === 'linear' && data.squad
       ? { linearLabel: data.squad.linearLabel, name: data.squad.name ?? data.squad.linearLabel }
       : null,
+    scale: scaleById(data.scale).id,
+    deck: buildDeck(data.scale, data.cards),
     tasks: [],
     currentTaskId: null,
     // En simple se vota desde el principio; en linear, tras «activar votación».

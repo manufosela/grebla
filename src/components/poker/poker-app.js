@@ -10,6 +10,7 @@ import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './poker-table.js';
 import { listSessions, createSession, deleteSession, listSquads, getSession } from '../../lib/poker.js';
+import { POKER_SCALES, scaleById } from '../../tools/poker/domain/deck.js';
 
 export class PokerApp extends LitElement {
   static properties = {
@@ -23,6 +24,8 @@ export class PokerApp extends LitElement {
     _newName: { state: true },
     _newMode: { state: true },
     _newSquad: { state: true },
+    _newScale: { state: true },
+    _newCards: { state: true },
     _squads: { state: true },
     openSessionId: { attribute: false },
     _copied: { state: true },
@@ -42,6 +45,11 @@ export class PokerApp extends LitElement {
     .create input:focus, .create select:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
     .modes { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
     .modes label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    /* Escala y cartas de la sesión que se convoca (RMR-TSK-0481). */
+    .scale { display: flex; flex-direction: column; gap: 0.5rem; }
+    .cards { display: flex; flex-wrap: wrap; gap: 0.3rem 0.75rem; }
+    .cardchk { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; font-variant-numeric: tabular-nums; cursor: pointer; color: var(--rm-text, #1e3a5f); }
+    .scale .hint { margin: 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     button { font: inherit; cursor: pointer; border-radius: 8px; font-weight: 600; }
     .create button { align-self: flex-start; border: 1px solid var(--teal); background: var(--teal); color: var(--rm-on-accent, #fff); padding: 0.55rem 1.2rem; }
     .create button:disabled { opacity: 0.5; cursor: default; }
@@ -70,6 +78,10 @@ export class PokerApp extends LitElement {
     this._newName = '';
     this._newMode = 'simple';
     this._newSquad = '';
+    this._newScale = POKER_SCALES[0].id;
+    // Vacío = la escala entera. Marcar cartas es para AFINAR, no un trámite
+    // obligatorio antes de poder convocar.
+    this._newCards = [];
     this._squads = [];
     this.openSessionId = null;
     this._copied = false;
@@ -140,6 +152,40 @@ export class PokerApp extends LitElement {
     }
   }
 
+  /** Marca o desmarca una carta del mazo que se va a convocar. */
+  _toggleCard(card, checked) {
+    this._newCards = checked
+      ? [...new Set([...this._newCards, card])]
+      : this._newCards.filter((c) => c !== card);
+  }
+
+  /**
+   * Escala y cartas de la sesión que se va a convocar (RMR-TSK-0481).
+   *
+   * Sin marcar nada va la escala entera: marcar es para AFINAR —quitar de en
+   * medio las cartas que ese equipo no usa—, no un trámite obligatorio antes de
+   * poder convocar. «No sé» y «pausa» no salen aquí porque no se pueden quitar.
+   */
+  _renderScalePicker() {
+    const escala = scaleById(this._newScale);
+    return html`
+      <div class="scale">
+        <div class="modes">
+          ${POKER_SCALES.map((s) => html`
+            <label title=${s.hint}><input type="radio" name="scale" .checked=${this._newScale === s.id}
+              @change=${() => { this._newScale = s.id; this._newCards = []; }} /> ${s.label}</label>`)}
+        </div>
+        <div class="cards">
+          ${escala.cards.map((card) => html`
+            <label class="cardchk"><input type="checkbox" .checked=${this._newCards.includes(card)}
+              @change=${(e) => this._toggleCard(card, e.target.checked)} /> ${card}</label>`)}
+        </div>
+        <p class="hint">${this._newCards.length === 0
+          ? 'Se votará la escala entera. Marca cartas solo si quieres dejar fuera alguna.'
+          : `Se votarán ${this._newCards.length} cartas, más «?» y «☕».`}</p>
+      </div>`;
+  }
+
   async _create() {
     const name = this._newName.trim();
     if (!name || !this.leaderUid) return;
@@ -151,7 +197,10 @@ export class PokerApp extends LitElement {
       const squad = this._newMode === 'linear'
         ? this._squads.find((s) => s.linearLabel === this._newSquad) ?? null
         : null;
-      const id = await createSession({ name, ownerLeaderUid: this.leaderUid, mode: this._newMode, squad });
+      const id = await createSession({
+        name, ownerLeaderUid: this.leaderUid, mode: this._newMode, squad,
+        scale: this._newScale, cards: this._newCards,
+      });
       this._newName = '';
       this._error = '';
       await this._loadList();
@@ -206,6 +255,7 @@ export class PokerApp extends LitElement {
               <option value="">Elige un squad…</option>
               ${this._squads.map((s) => html`<option value=${s.linearLabel} .selected=${this._newSquad === s.linearLabel}>${s.name}</option>`)}
             </select>` : null}
+          ${this._renderScalePicker()}
           <button @click=${() => this._create()} ?disabled=${!this._newName.trim()}>Crear sesión</button>
         </div>` : null}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
