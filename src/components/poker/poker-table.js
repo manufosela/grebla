@@ -11,7 +11,7 @@
  * Props: sessionId, uid, authorName (nombre para la presencia), canManage (dueño).
  */
 import { LitElement, html, css } from 'lit';
-import { POKER_DECK } from '../../tools/poker/domain/deck.js';
+import { deckOf } from '../../tools/poker/domain/deck.js';
 import {
   countActiveVoted, hasVotedThisRound, revealedVotes, summarizeVotes,
   isSpectator, hasSkippedRound, activeVoters,
@@ -213,7 +213,7 @@ export class PokerTable extends LitElement {
   async _vote(card) {
     if (!this._canIVote) return; // ni revelado, ni observador, ni fuera de ámbito, ni en discusión
     try {
-      await castVote(this.sessionId, this.uid, this._round, card);
+      await castVote(this.sessionId, this.uid, this._round, card, this._session);
       this._myVote = { value: card, round: this._round };
     } catch (err) { this._onError(err); }
   }
@@ -279,7 +279,7 @@ export class PokerTable extends LitElement {
     return html`
       <p class="lead">Elige tu carta. Nadie ve tu voto hasta que se revele.</p>
       <div class="deck">
-        ${POKER_DECK.map((card) => html`
+        ${deckOf(this._session).map((card) => html`
           <button class="card ${card === picked ? 'picked' : ''}" @click=${() => this._vote(card)}>${card}</button>`)}
       </div>`;
   }
