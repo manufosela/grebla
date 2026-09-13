@@ -34,7 +34,7 @@ export default async function globalSetup() {
   if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
     throw new Error(
       'Los E2E deben correr dentro de los emuladores. Usa:\n' +
-      '  firebase emulators:exec --only auth,firestore,functions --project demo-grebla "npx playwright test"',
+      '  firebase emulators:exec --only auth,firestore,functions,storage --project demo-grebla "npx playwright test"',
     );
   }
 

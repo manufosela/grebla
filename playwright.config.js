@@ -2,7 +2,7 @@
  * Configuración E2E (RMR-TSK-0299). Todo corre contra los emuladores de Firebase
  * — nunca producción — así que el arranque real es:
  *
- *   firebase emulators:exec --only auth,firestore,functions --project demo-grebla \
+ *   firebase emulators:exec --only auth,firestore,functions,storage --project demo-grebla \
  *     "npx playwright test"
  *
  * `emulators:exec` deja en el entorno FIRESTORE_EMULATOR_HOST y

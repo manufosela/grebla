@@ -10,7 +10,11 @@
     {
       "source": "functions",
       "codebase": "default",
-      "ignore": ["node_modules", ".git", "*.local"]
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.local"
+      ]
     }
   ],
   "emulators": {
@@ -25,27 +29,47 @@
     },
     "ui": {
       "enabled": false
+    },
+    "storage": {
+      "port": 9199
     }
   },
   "hosting": {
     "public": "dist",
     "cleanUrls": true,
     "trailingSlash": false,
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
       {
         "source": "/jd/**",
-        "function": { "functionId": "jd", "region": "europe-west1" }
+        "function": {
+          "functionId": "jd",
+          "region": "europe-west1"
+        }
       }
     ],
     "headers": [
       {
         "source": "/sw.js",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
       },
       {
         "source": "/manifest.webmanifest",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ]
   }

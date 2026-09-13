@@ -16,13 +16,25 @@ import { storagePathOf } from '../tools/docs/domain/paths.js';
 
 const COL = 'docs';
 
-/** Storage bajo demanda: no lo carga quien solo pasa por el hub. */
+/**
+ * Storage bajo demanda: no lo carga quien solo pasa por el hub.
+ *
+ * En los E2E apunta al emulador, igual que auth y Firestore. Sin esto la subida
+ * saldría hacia el bucket real desde un test — o no llegaría a ninguna parte.
+ */
+let storageRef = null;
 async function storage() {
-  const [{ getStorage }, { app }] = await Promise.all([
+  if (storageRef) return storageRef;
+  const [{ getStorage, connectStorageEmulator }, { app }] = await Promise.all([
     import('firebase/storage'),
     import('./firebase.js'),
   ]);
-  return getStorage(app);
+  storageRef = getStorage(app);
+  if (import.meta.env.PUBLIC_USE_EMULATORS === 'true' && typeof window !== 'undefined') {
+    const host = import.meta.env.PUBLIC_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1';
+    connectStorageEmulator(storageRef, host, 9199);
+  }
+  return storageRef;
 }
 
 /**
