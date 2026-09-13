@@ -66,6 +66,19 @@ test('quien no tiene dominio lo ve DICHO, no en blanco', async ({ page }) => {
   }, { domainKeys: [] });
 });
 
+test('la tabla de equipo lista el DOMINIO de cada persona, no su squad', async ({ page }) => {
+  // La columna decía «Squads» y tiraba del catálogo viejo: quien mira el equipo
+  // veía una agrupación que ya no es a la que pertenece la gente.
+  await conDominios(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/tools/team');
+
+    const tabla = page.locator('team-people');
+    await expect(tabla.locator('th', { hasText: 'Dominios' })).toBeVisible();
+    await expect(tabla.locator('th', { hasText: 'Squads' })).toHaveCount(0);
+  });
+});
+
 test('en la ficha se elige DOMINIO, y se guarda por su clave', async ({ page }) => {
   // La prueba SIEMBRA su propia persona en vez de editar una de las fixtures:
   // qué gente ve el head depende de lo que hayan dejado otros specs, y antes
