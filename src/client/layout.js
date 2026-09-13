@@ -33,9 +33,37 @@ if (requireAuth || requireAdmin) {
 // viendo la app deliberadamente como ese otro rol.
 const VIEW_FLAG = 'grebla-view';
 
+/** Cómo se llama cada vista simulada en el aviso. */
+const SIM_LABEL = { leader: 'Manager', engineer: 'Ingeniero', empleado: 'Empleado' };
+
+/**
+ * Aviso de simulación (RMR-BUG-0113). La vista elegida dura toda la pestaña, y
+ * quien la olvidaba se quedaba sin el enlace de Administración sin saber por
+ * qué: no ver algo no le dice a nadie el motivo. Mientras no seas tú, se dice.
+ */
+function pintarAvisoSimulacion() {
+  const banner = document.getElementById('sim-banner');
+  if (!banner) return;
+  const label = SIM_LABEL[sessionStorage.getItem(VIEW_FLAG)];
+  banner.toggleAttribute('hidden', !label);
+  if (label) {
+    const rol = document.getElementById('sim-role');
+    if (rol) rol.textContent = label;
+  }
+}
+
+document.getElementById('sim-exit')?.addEventListener('click', () => {
+  // Salir es quitar el flag y recargar: el hub, el conmutador y el halo se
+  // recalculan todos con la vista real, sin depender de quién escuche qué.
+  sessionStorage.removeItem(VIEW_FLAG);
+  globalThis.location.reload();
+});
+pintarAvisoSimulacion();
+
 onUserChanged(async (user) => {
   if (!user) {
     document.documentElement.classList.remove('is-superadmin');
+    document.getElementById('sim-banner')?.setAttribute('hidden', '');
     return;
   }
   try {
@@ -44,6 +72,7 @@ onUserChanged(async (user) => {
     // superadmin puesto delataba que no era la vista de nadie (RMR-BUG-0104).
     const actingAsOther = ['leader', 'engineer', 'empleado'].includes(sessionStorage.getItem(VIEW_FLAG));
     document.documentElement.classList.toggle('is-superadmin', canGovern(access) && !actingAsOther);
+    pintarAvisoSimulacion();
   } catch {
     document.documentElement.classList.remove('is-superadmin');
   }

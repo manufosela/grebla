@@ -103,6 +103,15 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         <auth-button></auth-button>
       </nav>
     </header>
+    <!-- Aviso de SIMULACIÓN (RMR-BUG-0113). La vista elegida en el conmutador
+         dura toda la pestaña, y quien la olvidaba se quedaba sin el enlace de
+         Administración sin saber por qué: la única pista era cuál de los cuatro
+         botones estaba resaltado, que no se lee como «no estás siendo tú».
+         Oculto por defecto; layout.js lo enciende cuando toca. -->
+    <div id="sim-banner" class="sim-banner" role="status" hidden>
+      <span class="sim-text">Estás viendo GREBLA como <strong id="sim-role"></strong>. No es tu vista.</span>
+      <button type="button" id="sim-exit" class="sim-exit">Volver a mi vista</button>
+    </div>
     <main class="site-main">
       <slot />
     </main>
@@ -332,7 +341,34 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         margin: 0 auto;
         padding: 1rem 1.5rem 3rem;
       }
-      .site-footer {
+      .sim-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    background: var(--rm-warn-bg, #fdf1dc);
+    border-bottom: 2px solid var(--rm-warn, #b45309);
+    color: var(--rm-warn-text, #6b3f05);
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+  .sim-exit {
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    border-radius: 999px;
+    padding: 0.2rem 0.75rem;
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .sim-exit:hover { background: var(--rm-warn, #b45309); color: #fff; border-color: transparent; }
+  .sim-exit:focus-visible { outline: 2px solid var(--rm-warn, #b45309); outline-offset: 2px; }
+  :root[data-theme='dark'] .sim-banner { background: #3a2a0d; color: #f3d6a4; }
+
+  .site-footer {
         max-width: var(--rm-max);
         margin: 0 auto;
         padding: 1.5rem;
