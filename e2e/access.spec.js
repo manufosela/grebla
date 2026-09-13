@@ -9,7 +9,7 @@ import { test, expect, signInAs, LOGIN_MARKER } from './fixtures.js';
 test.describe('acceso por rol (sin login de Google)', () => {
   test('el superadmin entra al panel de administración', async ({ page }) => {
     await signInAs(page, 'superadmin');
-    await page.goto('/admin');
+    await page.goto('/admin/organizacion');
     await expect(page.locator('body')).not.toContainText(LOGIN_MARKER);
     // El panel lista a TODAS las personas de la organización (la sección
     // «Managers» se unificó en «Personas» con el modelo persona-céntrica).

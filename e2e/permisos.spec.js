@@ -15,7 +15,7 @@ function db() {
 
 /** Abre Administración › Permisos › Por persona, y elige a alguien. */
 async function abrirPermisosDelPanel(page, nombre) {
-  await page.goto('/admin');
+  await page.goto('/admin/organizacion');
   await page.getByRole('button', { name: 'Permisos' }).click();
   await page.getByRole('tab', { name: 'Por persona' }).click();
   await page.getByLabel('Persona').selectOption({ label: nombre });
@@ -77,7 +77,7 @@ test('«heredar» borra la excepción en vez de dejar escrito un «no»', async 
 
 test('Permisos vive junto a Usuarios y agrupa sus dos ámbitos', async ({ page }) => {
   await signInAs(page, 'superadmin');
-  await page.goto('/admin');
+  await page.goto('/admin/organizacion');
 
   const secciones = page.getByRole('navigation', { name: 'Secciones de gestión' });
   // «Herramientas» ya no es una pestaña suelta: era la política por rol y rama,

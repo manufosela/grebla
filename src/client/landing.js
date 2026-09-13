@@ -64,7 +64,10 @@ onUserChanged(async (user) => {
 
     const destino = hubDestination({ access, isEmployee, canManageSurveys });
     if (destino === 'landing') return showLanding();
-    if (destino === 'admin') { location.replace('/admin'); return; }
+    // El viewer va DIRECTO a la organización, no al hub de administración: es
+    // observador puro y ahí no administra herramientas, así que el hub le
+    // saldría vacío (RMR-TSK-0495).
+    if (destino === 'admin') { location.replace('/admin/organizacion'); return; }
 
     let person = personRes.status === 'fulfilled' ? personRes.value : null;
     const filterFailed = personRes.status !== 'fulfilled' || policiesRes.status !== 'fulfilled';

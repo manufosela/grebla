@@ -18,7 +18,7 @@ test('el superadmin asigna el superior de una persona desde el panel', async ({ 
   const db = admin();
 
   await signInAs(page, 'superadmin');
-  await page.goto('/admin');
+  await page.goto('/admin/organizacion');
 
   // «Persona del manager» arranca sin superior; se lo asignamos por la columna
   // «Reporta a» de su fila.
