@@ -17,7 +17,7 @@ import {
   writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment,
 } from 'firebase/firestore';
 import { db, getRegionalFunctions } from './firebase.js';
-import { isValidCard } from '../tools/poker/domain/deck.js';
+import { isValidCardFor } from '../tools/poker/domain/deck.js';
 
 const SESSIONS = 'pokerSessions';
 
@@ -223,11 +223,13 @@ export async function joinSession(sessionId, uid, name) {
 /**
  * Emite (o cambia) el voto de la ronda actual, de forma atómica: escribe el
  * valor en /votes y marca `votedRound` en la presencia. Valida la carta en el
- * boundary (sin fallbacks silenciosos).
+ * boundary (sin fallbacks silenciosos) contra el mazo DE ESA SESIÓN: una sesión
+ * de tallas no acepta un 13 solo porque exista en el otro mazo (RMR-TSK-0481).
  * @param {string} sessionId @param {string} uid @param {number} round @param {string} value
+ * @param {{ deck?: ReadonlyArray<string>|null }} [session]  la sesión en curso
  */
-export function castVote(sessionId, uid, round, value) {
-  if (!isValidCard(value)) throw new Error(`Carta no válida: ${value}`);
+export function castVote(sessionId, uid, round, value, session) {
+  if (!isValidCardFor(session, value)) throw new Error(`Carta no válida: ${value}`);
   if (!Number.isInteger(round)) throw new Error('castVote requiere la ronda actual');
   const batch = writeBatch(db);
   batch.set(doc(db, SESSIONS, sessionId, 'votes', uid), { value, round });
