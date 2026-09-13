@@ -17,7 +17,6 @@ import { getOrgConfig } from '../lib/firestore.js';
 import { composeTitle } from '../tools/career/data/framework.js';
 import { ROLES } from '../data/roles.js';
 import { ITEMS, DIMENSIONS } from '../data/items.js';
-import { listSquadsCatalog } from '../lib/squads.js';
 import { listDomains } from '../lib/domains.js';
 
 const identity = document.getElementById('engineer-identity');
@@ -56,20 +55,19 @@ onUserChanged(async (user) => {
     // Carga en paralelo del contenido de las secciones (de solo lectura). El
     // O2O va por Cloud Function y es NO crítico: si falla, la vista sigue con el
     // resto y «Mis O2O» queda vacío (no tumba «Mi espacio»).
-    const [framework, profile, career, o2o, orgConfig, squads, domains] = await Promise.all([
+    const [framework, profile, career, o2o, orgConfig, domains] = await Promise.all([
       getFramework(),
       getMyRoleMirrorProfile(person.id),
       getMyCareerMap(person.id),
       getMyO2O().catch(() => null),
       getOrgConfig().catch(() => null),
-      // Catálogo de squads: para que el ingeniero vea su squad en su ficha.
-      listSquadsCatalog().catch(() => []),
-      // Y el de dominios, que es a lo que pertenece de verdad desde el ADR de
-      // dominios: el squad se queda mientras dure la transición.
+      // Catálogo de dominios: a lo que pertenece de verdad desde el ADR de
+      // dominios. El catálogo de squads ya no se pide — dejó de enseñarse, y
+      // una lectura que nadie mira es una lectura de más (F5).
       listDomains().catch(() => []),
     ]);
     renderIdentity(person, framework);
-    renderSpace(person, framework, profile, career, o2o, orgConfig, { squads, domains });
+    renderSpace(person, framework, profile, career, o2o, orgConfig, { domains });
     if (space) space.selfOwned = selfOwned;
     // Con los datos ya cargados se revela de una vez (cabecera + espacio) y se
     // quita el skeleton — sin salto de layout (RMR-TSK-0263).
@@ -104,7 +102,6 @@ function renderSpace(person, framework, profile, career, o2o, orgConfig, catalog
   space.items = ITEMS;
   space.dimensions = DIMENSIONS;
   space.orgConfig = orgConfig;
-  space.squads = catalogos.squads;
   space.domains = catalogos.domains;
   space.island = career.island;
   space.journey = career.journey;

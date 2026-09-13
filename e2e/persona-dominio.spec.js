@@ -43,6 +43,19 @@ test('«Mi espacio» sigue diciendo a qué perteneces: ahora tu dominio', async 
   });
 });
 
+test('y ya no habla de squads: la transición terminó (F5)', async ({ page }) => {
+  // Mientras convivieron, la ficha enseñaba las dos cosas y el squad tiraba del
+  // catálogo viejo. Dejar el rótulo sería seguir invitando a pensar en equipos
+  // fijos justo después de haber cambiado el modelo para lo contrario.
+  await conDominios(async () => {
+    await signInAs(page, 'engineer');
+    await page.goto('/mi-espacio#datos');
+
+    await expect(page.locator('engineer-space')).toContainText('Dominio');
+    await expect(page.locator('engineer-space')).not.toContainText('Squad');
+  });
+});
+
 test('quien no tiene dominio lo ve DICHO, no en blanco', async ({ page }) => {
   // Un hueco parece un olvido de la aplicación; «Sin dominio» es información y
   // se puede actuar sobre ella.

@@ -1,5 +1,5 @@
 /**
- * <lean-metrics> — dashboard de flujo (LEAN) separado por Equipos (Squad) y Gremios
+ * <lean-metrics> — dashboard de flujo (LEAN) separado por Equipos y Gremios
  * (Chapter): tarjetas globales + tabla por unidad, con throughput, cycle time
  * (p50/p85), WIP, aging y flow efficiency. Solo lectura. Reutiliza `formatHours` de DORA.
  */

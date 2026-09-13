@@ -914,7 +914,7 @@ export class DoraRepos extends LitElement {
                     )}
                   </tbody>
                 </table></div>
-                <p class="muted note">Equipo y gremios se eligen del catálogo de <strong>Flujo (LEAN)</strong> (squads y chapters) para que DORA agregue por las mismas unidades. La rama base (señal de despliegue, por defecto <code>main</code>) también se configura aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Para el <strong>MTTR</strong> abre «Incidentes» y registra las caídas (inicio → restauración). Siempre a nivel de equipo, nunca por persona.</p>
+                <p class="muted note">Equipo y gremios se eligen del catálogo de <strong>Flujo (LEAN)</strong> (equipos y gremios) para que DORA agregue por las mismas unidades. La rama base (señal de despliegue, por defecto <code>main</code>) también se configura aquí, a posteriori. La columna <strong>Deploy/sem</strong> es un <strong>proxy</strong> (merges/releases desde la API pública de GitHub). Para la <strong>frecuencia real</strong> abre «Despliegues reales» en cada repo y registra los despliegues a producción. Para el <strong>MTTR</strong> abre «Incidentes» y registra las caídas (inicio → restauración). Siempre a nivel de equipo, nunca por persona.</p>
               `}
       </section>
 
