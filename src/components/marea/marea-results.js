@@ -16,7 +16,7 @@ const SCOPES = [
   ['general', 'Toda ingeniería'],
   ['departments', 'Por departamento'],
   ['guilds', 'Por gremio'],
-  ['squads', 'Por squad'],
+  ['squads', 'Por label'],
   ['trends', 'Tendencias'],
 ];
 
@@ -267,7 +267,7 @@ export class MareaResults extends LitElement {
     // que los demás cortes: si no llega al mínimo, no aparece (RMR-TSK-0296).
     if (this._scope === 'departments') return this._renderGroups(this._agg?.departments, 'Aún no hay departamentos con 3 o más respuestas esta semana.');
     if (this._scope === 'guilds') return this._renderGroups(this._agg?.guilds, 'Aún no hay gremios con 3 o más respuestas esta semana.');
-    if (this._scope === 'squads') return this._renderGroups(this._agg?.labels, 'Aún no hay squads con 3 o más respuestas esta semana.');
+    if (this._scope === 'squads') return this._renderGroups(this._agg?.labels, 'Aún no hay labels con suficientes respuestas esta semana.');
     if (this._scope === 'trends') return this._renderTrends();
     return this._renderGeneral();
   }

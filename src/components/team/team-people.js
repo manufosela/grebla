@@ -28,14 +28,14 @@ import {
   transferOwnership,
   releaseOwnership,
   listLabels,
-  listSquads,
-  squadNames,
   addLabel,
   listGuilds,
   addGuild,
 } from '../../tools/team/application/usecases/index.js';
 import { composeTitle } from '../../tools/career/data/framework.js';
 import { listUsers, unlinkedUsers } from '../../lib/users.js';
+import { listDomains } from '../../lib/domains.js';
+import { domainsOf } from '../../tools/team/domain/membership.js';
 import { setLeaderReportsTo } from '../../lib/leaders.js';
 import { resolvePerson } from '../../tools/team/domain/identity.js';
 import { appendLevelChange } from '../../tools/team/domain/levelHistory.js';
@@ -65,7 +65,7 @@ export class TeamPeople extends LitElement {
     framework: { attribute: false },
     people: { state: true },
     labels: { state: true },
-    squads: { state: true },
+    domains: { state: true },
     guilds: { state: true },
     users: { state: true },
     loading: { state: true },
@@ -248,8 +248,8 @@ export class TeamPeople extends LitElement {
     this.people = [];
     /** @type {import('../../tools/team/domain/types.js').Label[]} */
     this.labels = [];
-    /** @type {{id:string,name:string}[]} catálogo de squads (RMR-TSK-0276) */
-    this.squads = [];
+    /** @type {{key:string,name:string}[]} catálogo de dominios (ADR de dominios) */
+    this.domains = [];
     /** @type {import('../../tools/team/domain/types.js').Guild[]} */
     this.guilds = [];
     /** @type {Array<{ uid: string, displayName: string|null, email: string|null }>} directorio /users (para vincular cuenta) */
@@ -323,19 +323,19 @@ export class TeamPeople extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [people, labels, guilds, users, squads, orgRoles] = await Promise.all([
+      const [people, labels, guilds, users, domains, orgRoles] = await Promise.all([
         listActivePeople(this.persistence),
         listLabels(this.persistence),
         listGuilds(this.persistence),
         listUsers(),
-        listSquads(this.persistence).catch(() => []),
+        listDomains().catch(() => []),
         // El fallo se marca (no se traga) para que el alta admin no cree con un
         // rol por defecto incorrecto sin avisar (RMR-PCS-0027 · F8a).
         listOrgRoles().then((r) => { this._orgRolesError = false; return r; }).catch(() => { this._orgRolesError = true; return []; }),
       ]);
       this.people = people;
       this.labels = labels;
-      this.squads = squads;
+      this.domains = domains;
       this.guilds = guilds;
       this.users = users;
       this._orgRolesCat = orgRoles;
@@ -615,7 +615,7 @@ export class TeamPeople extends LitElement {
           <tr>
             ${this._sortableTh('name', 'Nombre')}
             ${this.isAdmin ? this._sortableTh('leader', 'Manager') : null}
-            <th>Carrera</th><th>Gremios</th><th>Squads</th>
+            <th>Carrera</th><th>Gremios</th><th>Dominios</th>
             ${this._sortableTh('startDate', 'Desde')}
             <th>Acciones</th>
           </tr>
@@ -667,8 +667,8 @@ export class TeamPeople extends LitElement {
     return html`<span class="chip" style=${style}>${text}</span>`;
   }
 
-  /** Color de una entrada del catálogo por nombre (o '' si no tiene). Vale para
-   *  labels y para squads (RMR-TSK-0277): ambos guardan `color`. */
+  /** Color de una entrada del catálogo por nombre (o '' si no tiene): los
+   *  catálogos con color lo guardan en ese campo (RMR-TSK-0277). */
   _catalogColor(name, catalog) {
     return (catalog ?? []).find((c) => c.name === name)?.color || '';
   }
@@ -737,7 +737,7 @@ export class TeamPeople extends LitElement {
         ${this.isAdmin ? html`<td>${this._renderSuperiorCell(p)}</td>` : null}
         <td>${title ? html`<span class="title">${title}</span>` : html`<span class="muted">—</span>`} ${this._renderSubLevelChip(p)}</td>
         <td>${this._renderChips(p.guilds)}</td>
-        <td>${this._renderChips(squadNames(p.squadIds, this.squads), this.squads)}</td>
+        <td>${this._renderChips(domainsOf(p, this.domains).map((d) => d.name))}</td>
         <td>${formatDate(p.startDate)}</td>
         <td class="actions" @click=${(e) => e.stopPropagation()}>${this._renderActions(p)}</td>
       </tr>`;
@@ -1211,7 +1211,7 @@ export class TeamPeople extends LitElement {
           </fieldset>
           <fieldset class="roles">
             <legend>Labels</legend>
-            <p class="eje-hint">Agrupación libre por equipo, squad o guardia.</p>
+            <p class="eje-hint">Agrupación libre: una guardia, un comité, un grupo de trabajo.</p>
             <div class="role-checks">
               ${this.labels.length === 0
                 ? html`<span class="muted">Aún no hay labels. Añade el primero abajo.</span>`

@@ -1,6 +1,6 @@
 /**
  * E2E de la TABLA DE EQUIPO (RMR-BUG-0106). Se pintaba como una `<table>` suelta
- * sin contenedor de desplazamiento: con nombres, gremios o squads largos el
+ * sin contenedor de desplazamiento: con nombres, gremios o dominios largos el
  * contenido se salía del panel y no había forma de llegar a él — ni cabía, ni se
  * podía arrastrar. Distinto del caso de Administración (RMR-BUG-0105), que al
  * menos ofrecía scroll.
@@ -24,7 +24,6 @@ async function conPlantillaAncha(fn) {
       name: `Persona de Nombre Larguísimo Número ${i}`,
       uid: null, ownerLeaderUid: 'e2e-manager', active: true,
       guilds: ['Plataforma y Observabilidad', 'Arquitectura de Datos'],
-      squads: ['Squad de Onboarding y Activación'],
       startDate: '2024-03-15',
     });
   }
