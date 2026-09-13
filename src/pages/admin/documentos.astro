@@ -1,0 +1,27 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * Gestión de DOCUMENTOS (RMR-PCS-0041): subir las presentaciones de la
+ * organización, organizarlas en carpetas y retirarlas.
+ *
+ * Vive en Administración porque publicar algo para toda la organización es
+ * gobierno, no uso. Quien entra a LEERLAS va a /documentacion.
+ */
+---
+
+<Base title="GREBLA — Documentos" requireAuth={true}>
+  <tool-nav href="/admin" name="Documentos" icon="📖"></tool-nav>
+  <h1 class="page-title">Documentos de la organización</h1>
+  <p class="page-lead">
+    Las páginas que explican cómo trabajamos. Las lee cualquiera con cuenta en
+    GREBLA; fuera de aquí no son accesibles.
+  </p>
+
+  <docs-manager id="docs"></docs-manager>
+
+  <script>
+    import '../../components/common/tool-nav.js';
+    import '../../client/adminDocs.js';
+  </script>
+</Base>
