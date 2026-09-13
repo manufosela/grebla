@@ -116,13 +116,65 @@ describe('summarizeVotes', () => {
 
   it('sin cartas no hay consenso ni medias', () => {
     const s = summarizeVotes([]);
-    expect(s).toEqual({ total: 0, distribution: [], numericCount: 0, min: null, max: null, average: null, consensus: false });
+    expect(s).toEqual({ total: 0, distribution: [], numericCount: 0, min: null, max: null, average: null, consensus: false, agreed: null });
   });
 
-  it('solo especiales: sin medias pero con consenso si son la misma', () => {
+  it('solo especiales: ni medias ni consenso, aunque sean la misma', () => {
+    // Este test decía lo contrario hasta RMR-TSK-0482: bastaba con que las
+    // cartas coincidieran. Coincidir en «paremos» no es haber estimado nada, y
+    // cantarlo como consenso hacía dar por cerrada una votación vacía.
     const s = summarizeVotes(['☕', '☕']);
     expect(s.numericCount).toBe(0);
     expect(s.average).toBeNull();
+    expect(s.consensus).toBe(false);
+  });
+});
+
+/**
+ * Qué cuenta como ACUERDO (RMR-TSK-0482).
+ *
+ * Hasta ahora bastaba con que las cartas coincidieran, así que un equipo entero
+ * votando «?» —nadie lo sabe— veía «¡Consenso! Todas las cartas coinciden». Una
+ * carta especial dice «no lo sé» o «paremos»: coincidir en no saber no es estar
+ * de acuerdo en nada.
+ */
+describe('acuerdo: qué se puede dar por estimado', () => {
+  it('todas iguales y con significado: hay acuerdo, y se sabe en cuánto', () => {
+    const s = summarizeVotes(['5', '5', '5']);
     expect(s.consensus).toBe(true);
+    expect(s.agreed).toBe('5');
+  });
+
+  it('una talla también es un acuerdo: no todo se mide en números', () => {
+    // La distinción es especial vs. no especial, no numérica vs. no numérica:
+    // «todos decimos M» es tan acuerdo como «todos decimos 5».
+    const s = summarizeVotes(['M', 'M']);
+    expect(s.consensus).toBe(true);
+    expect(s.agreed).toBe('M');
+  });
+
+  it('coincidir en «no lo sé» NO es un acuerdo', () => {
+    for (const especial of ['?', '☕']) {
+      const s = summarizeVotes([especial, especial, especial]);
+      expect(s.consensus).toBe(false);
+      expect(s.agreed).toBeNull();
+    }
+  });
+
+  it('una sola carta especial rompe el acuerdo de los demás', () => {
+    // Si alguien no lo sabe, el equipo todavía no ha estimado.
+    const s = summarizeVotes(['5', '5', '?']);
+    expect(s.consensus).toBe(false);
+    expect(s.agreed).toBeNull();
+  });
+
+  it('sin unanimidad no hay nada que guardar, por cerca que se quede', () => {
+    expect(summarizeVotes(['3', '5']).agreed).toBeNull();
+    expect(summarizeVotes(['M', 'L']).agreed).toBeNull();
+  });
+
+  it('sin cartas no hay acuerdo que inventar', () => {
+    expect(summarizeVotes([]).agreed).toBeNull();
+    expect(summarizeVotes(null).agreed).toBeNull();
   });
 });

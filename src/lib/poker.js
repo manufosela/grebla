@@ -14,7 +14,7 @@
  */
 import {
   doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment,
+  writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion,
 } from 'firebase/firestore';
 import { db, getRegionalFunctions } from './firebase.js';
 import { isValidCardFor, buildDeck, scaleById } from '../tools/poker/domain/deck.js';
@@ -109,6 +109,35 @@ export function activateVoting(sessionId) {
 /** Guarda la estimación acordada de una tarea, asociada a su id de Linear. */
 export function saveEstimate(sessionId, taskId, value) {
   return updateDoc(doc(db, SESSIONS, sessionId), { [`results.${taskId}`]: { value, at: serverTimestamp() } });
+}
+
+/** Título de la votación en curso: qué se está estimando (RMR-TSK-0482). */
+export function setVoteTitle(sessionId, title) {
+  return updateDoc(doc(db, SESSIONS, sessionId), { voteTitle: String(title ?? '').trim().slice(0, 120) });
+}
+
+/**
+ * Cierra una votación con el valor ACORDADO y la deja en el historial de la
+ * sesión (RMR-TSK-0482): qué se estimó, en cuánto y en qué ronda se llegó.
+ *
+ * El recorrido importa —de un 3 y un 8 a un 5 unánime dice más que el 5 suelto—,
+ * así que se añade al historial en vez de sobrescribir nada, y la ronda queda
+ * guardada con él.
+ *
+ * @param {string} sessionId
+ * @param {{ title?: string, value: string, round: number }} acuerdo
+ */
+export function recordAgreement(sessionId, acuerdo) {
+  if (!acuerdo?.value) throw new Error('recordAgreement requiere el valor acordado');
+  return updateDoc(doc(db, SESSIONS, sessionId), {
+    agreements: arrayUnion({
+      title: String(acuerdo.title ?? '').trim() || null,
+      value: acuerdo.value,
+      round: acuerdo.round ?? null,
+      at: new Date().toISOString(),
+    }),
+    voteTitle: '',
+  });
 }
 
 /**

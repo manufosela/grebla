@@ -9,7 +9,7 @@
  * solos, sin que nadie tenga que borrar los documentos de los demás (lo que las
  * reglas no permitirían). Los valores solo se leen tras `revealed`.
  */
-import { cardNumber } from './deck.js';
+import { cardNumber, SPECIAL_CARDS } from './deck.js';
 
 /** Voto de una carta que se lee de un objeto o de un Map indexado por uid. */
 function voteFor(votesByUid, uid) {
@@ -77,7 +77,13 @@ export function revealedVotes(players, votesByUid, round) {
 /**
  * Resumen de las cartas reveladas de la ronda: distribución (para ver el reparto
  * de un vistazo), min/max/media de las NUMÉRICAS (las especiales `?`/`☕` se
- * cuentan pero no promedian) y si hubo consenso (todas iguales).
+ * cuentan pero no promedian) y si hubo ACUERDO.
+ *
+ * Acuerdo es que todas las cartas coincidan Y digan algo (RMR-TSK-0482). Hasta
+ * ahora bastaba con que coincidieran, así que un equipo entero votando «?»
+ * —nadie lo sabe— veía «¡Consenso! Todas las cartas coinciden». Una carta
+ * especial dice «no lo sé» o «paremos», y eso no es estar de acuerdo en nada.
+ *
  * @param {Array<string|null>} values
  */
 export function summarizeVotes(values) {
@@ -90,6 +96,12 @@ export function summarizeVotes(values) {
 
   const numbers = cards.map(cardNumber).filter((n) => n !== null);
   const hasNumbers = numbers.length > 0;
+  // Acuerdo: todas las cartas iguales y con significado. Una talla vale —«todos
+  // decimos M» es un acuerdo—; «?» y «☕» no, porque dicen «no lo sé» y
+  // «paremos». La distinción es especial vs. no especial, no numérica.
+  const acuerdo = cards.length > 0 && counts.size === 1 && !SPECIAL_CARDS.includes(cards[0])
+    ? cards[0]
+    : null;
   return {
     total: cards.length,
     distribution,
@@ -97,6 +109,9 @@ export function summarizeVotes(values) {
     min: hasNumbers ? Math.min(...numbers) : null,
     max: hasNumbers ? Math.max(...numbers) : null,
     average: hasNumbers ? numbers.reduce((sum, n) => sum + n, 0) / numbers.length : null,
-    consensus: cards.length > 0 && counts.size === 1,
+    consensus: acuerdo !== null,
+    // El valor acordado, para poder guardarlo sin volver a deducirlo: solo
+    // existe cuando de verdad hay acuerdo.
+    agreed: acuerdo,
   };
 }

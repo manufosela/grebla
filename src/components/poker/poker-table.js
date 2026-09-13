@@ -17,7 +17,7 @@ import {
   isSpectator, hasSkippedRound, activeVoters,
 } from '../../tools/poker/domain/tally.js';
 import {
-  joinSession, castVote, reveal, revote, getMyVote,
+  joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
   watchSession, watchPlayers, watchVotes,
   listSquadBacklog, setSessionTasks, setCurrentTask, activateVoting, saveEstimate,
   setSpectator, skipRound, unskipRound,
@@ -37,6 +37,7 @@ export class PokerTable extends LitElement {
     _backlogLoading: { state: true },
     _selectedTaskIds: { state: true },
     _estimateDraft: { state: true },
+    _titleDraft: { state: true },
     _error: { state: true },
   };
 
@@ -73,11 +74,18 @@ export class PokerTable extends LitElement {
     .queue li.current { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 8%, transparent); }
     .queue .qtitle { flex: 1; color: var(--rm-text, #1e3a5f); font-size: 0.9rem; }
     .est { font-weight: 800; color: var(--rm-accent-700, var(--teal)); }
+    /* Lo ya estimado en esta sesión: el recorrido, no solo el último número. */
+    .agreements { margin-top: 1.1rem; border-top: 1px solid var(--rm-border, #dde7ec); padding-top: 0.8rem; }
+    .agreements h3 { margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
+    .agreements ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .agreements li { display: flex; align-items: baseline; gap: 0.6rem; font-size: 0.88rem; }
     .task { margin: 0.4rem 0 1rem; }
     .task h3 { margin: 0 0 0.35rem; font-size: 1.1rem; color: var(--rm-text, #1e3a5f); }
     .linear-link { font-size: 0.82rem; font-weight: 600; color: var(--rm-accent-700, var(--teal)); text-decoration: none; }
     .linear-link:hover { text-decoration: underline; }
     .est-input { width: 5rem; padding: 0.4rem 0.6rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
+    /* El título es texto, no un número: necesita sitio para leerse entero. */
+    #vt.est-input { width: min(28rem, 100%); }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 0 0 0.9rem; font-size: 0.86rem; color: var(--rm-text, #1e3a5f); }
@@ -101,6 +109,7 @@ export class PokerTable extends LitElement {
     this._backlogLoading = false;
     this._selectedTaskIds = new Set();
     this._estimateDraft = '';
+    this._titleDraft = '';
     this._error = '';
     this._subs = [];
     this._votesSub = null;
@@ -329,26 +338,98 @@ export class PokerTable extends LitElement {
     if (!this._revealed) return null;
     const cards = revealedVotes(this._players, Object.fromEntries(this._votes.map((v) => [v.uid, v])), this._round);
     const s = summarizeVotes(cards.map((c) => c.value));
-    const headline = s.consensus
-      ? '¡Consenso! Todas las cartas coinciden.'
-      : s.average !== null
-        ? `Media ${Number.isInteger(s.average) ? s.average : s.average.toFixed(1)} · rango ${s.min}–${s.max}`
-        : 'Sin cartas numéricas que promediar.';
     return html`<div class="summary">
-      <p class="headline">${headline}</p>
+      <p class="headline">${this._headline(s)}</p>
       <div class="dist">
         ${s.distribution.map((d) => html`<span class="chip">${d.value} × ${d.count}</span>`)}
       </div>
+      ${this._renderAgreement(s)}
+    </div>`;
+  }
+
+  /** Qué se dice del reparto de cartas, sin dar por cerrado lo que no lo está. */
+  _headline(s) {
+    if (s.consensus) return `¡Acuerdo! Todas las cartas dicen ${s.agreed}.`;
+    if (s.average !== null) return `Media ${Number.isInteger(s.average) ? s.average : s.average.toFixed(1)} · rango ${s.min}–${s.max}`;
+    return 'Nadie ha puesto un número todavía.';
+  }
+
+  /**
+   * Cerrar la votación con el valor acordado (RMR-TSK-0482).
+   *
+   * Solo aparece si TODAS las cartas coinciden y dicen algo. Sin unanimidad no
+   * se ofrece cerrar por mayoría ni por la media: el acuerdo se demuestra
+   * votando, y darlo por bueno con un botón es justo lo que hace que nadie
+   * vuelva a discutir la diferencia entre un 3 y un 8.
+   */
+  _renderAgreement(s) {
+    if (!this.canManage) return null;
+    if (!s.consensus) {
+      return html`<p class="lead">Todavía no hay acuerdo: hablad la diferencia y volved a votar.</p>`;
+    }
+    return html`<div class="bar">
+      <button class="primary" @click=${() => this._recordAgreement(s.agreed)}>
+        Guardar ${s.agreed}${this._voteTitle ? ` para «${this._voteTitle}»` : ''}
+      </button>
+    </div>`;
+  }
+
+  get _voteTitle() { return this._session?.voteTitle ?? ''; }
+
+  async _recordAgreement(value) {
+    try {
+      await recordAgreement(this.sessionId, { title: this._voteTitle, value, round: this._round });
+      this._titleDraft = '';
+      await revote(this.sessionId);
+    } catch (err) { this._onError(err); }
+  }
+
+  /** Qué se está estimando ahora mismo: lo escribe quien coordina. */
+  _renderVoteTitle() {
+    if (!this.canManage) {
+      return this._voteTitle ? html`<p class="lead">Estimando: <strong>${this._voteTitle}</strong></p>` : null;
+    }
+    return html`<div class="bar">
+      <label class="lead" for="vt">Qué se estima:</label>
+      <input id="vt" class="est-input" type="text" maxlength="120"
+        placeholder="p. ej. «Migrar el login a OAuth»"
+        .value=${this._titleDraft || this._voteTitle}
+        @input=${(e) => { this._titleDraft = e.target.value; }}
+        @change=${() => this._saveTitle()} />
+    </div>`;
+  }
+
+  async _saveTitle() {
+    const title = this._titleDraft.trim();
+    if (title === this._voteTitle) return;
+    try { await setVoteTitle(this.sessionId, title); } catch (err) { this._onError(err); }
+  }
+
+  /** Lo ya acordado en esta sesión: el recorrido, no solo el último número. */
+  _renderAgreements() {
+    const hechos = this._session?.agreements ?? [];
+    if (hechos.length === 0) return null;
+    return html`<div class="agreements">
+      <h3>Estimado en esta sesión</h3>
+      <ul>
+        ${hechos.map((a) => html`<li>
+          <span class="est">${a.value}</span>
+          <span class="qtitle">${a.title ?? 'Sin título'}</span>
+          ${a.round ? html`<span class="lead">ronda ${a.round}</span>` : null}
+        </li>`)}
+      </ul>
     </div>`;
   }
 
   _renderSimple() {
     return html`
+      ${this._renderVoteTitle()}
       ${this._renderControls()}
       ${this._renderDeck()}
       ${this._renderBar()}
       ${this._renderPlayers()}
-      ${this._renderSummary()}`;
+      ${this._renderSummary()}
+      ${this._renderAgreements()}`;
   }
 
   _renderBacklogPicker() {
