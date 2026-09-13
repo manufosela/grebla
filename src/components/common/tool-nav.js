@@ -3,10 +3,17 @@
  * + nombre (con icono opcional). Reemplaza el `<nav class="tool-nav">` duplicado
  * en cada layout de tool; se puede reusar en cualquier página.
  *
+ * El destino de «Volver» depende de POR DÓNDE se entró (RMR-BUG-0115): quien
+ * llega desde una tarjeta de Administración vuelve allí, no al hub de
+ * herramientas. La procedencia viaja en el enlace (`?from=admin`), así que
+ * sobrevive a una recarga; `href` sigue siendo el destino de siempre para quien
+ * entra por el camino normal.
+ *
  * Atributos: href (destino de Volver, por defecto "/"), name, icon (emoji opcional).
  * Ej.: <tool-nav href="/" name="Marea" icon="🌊"></tool-nav>
  */
 import { LitElement, html, css } from 'lit';
+import { backTarget } from './backTarget.js';
 
 export class ToolNav extends LitElement {
   static properties = {
@@ -37,9 +44,10 @@ export class ToolNav extends LitElement {
 
   render() {
     const label = this.icon ? `${this.icon} ${this.name}` : this.name;
+    const volver = backTarget(globalThis.location?.search, this.href);
     return html`
       <nav class="bar" aria-label=${this.name || 'Herramienta'}>
-        <a class="back" href=${this.href || '/'}>← Volver</a>
+        <a class="back" href=${volver.href}>← ${volver.label}</a>
         ${this.name ? html`<span class="name">${label}</span>` : null}
       </nav>
     `;

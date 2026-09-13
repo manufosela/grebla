@@ -22,6 +22,17 @@ import Base from '../../layouts/Base.astro';
  * orienta, no da permiso — cada herramienta la valida contra lo que esa persona
  * puede ver.
  */
+/**
+ * Marca en el enlace de dónde viene quien lo pulsa (RMR-BUG-0115), para que el
+ * «← Volver» de la herramienta devuelva AQUÍ y no al hub de herramientas.
+ * El parámetro va antes del ancla, que es lo que exige una URL válida.
+ */
+function withOrigin(href) {
+  const [ruta, ancla] = href.split('#');
+  const sep = ruta.includes('?') ? '&' : '?';
+  return `${ruta}${sep}from=admin${ancla ? `#${ancla}` : ''}`;
+}
+
 const cards = [
   {
     id: 'organizacion',
@@ -89,7 +100,7 @@ const cards = [
   <section id="admin-cards" class="admin-cards" hidden>
     {
       cards.map((card) => (
-        <a class="admin-card" href={card.href} data-admin-id={card.id} data-govern={card.govern ? 'true' : undefined} hidden>
+        <a class="admin-card" href={withOrigin(card.href)} data-admin-id={card.id} data-govern={card.govern ? 'true' : undefined} hidden>
           <span class="ac-icon" aria-hidden="true">{card.icon}</span>
           <h2>{card.name}</h2>
           <p>{card.description}</p>

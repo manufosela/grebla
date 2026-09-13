@@ -52,6 +52,30 @@ test('sin ancla se entra como siempre', async ({ page }) => {
   await expect.poll(() => activa(page, 'dora-app')).toContain('Repos');
 });
 
+test('y desde la herramienta se vuelve a Administración, no al hub de herramientas', async ({ page }) => {
+  // Administrar suele ser varias herramientas seguidas: volver al hub de
+  // herramientas obligaba a rehacer el camino a mano cada vez (RMR-BUG-0115).
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin');
+  await page.locator('[data-admin-id="surveys"]').click();
+
+  const volver = page.locator('tool-nav').first();
+  await expect(volver).toBeVisible();
+  const destino = await volver.evaluate((el) => el.shadowRoot?.querySelector('a.back')?.getAttribute('href'));
+  expect(destino).toBe('/admin');
+  const texto = await volver.evaluate((el) => el.shadowRoot?.querySelector('a.back')?.textContent?.trim());
+  expect(texto).toContain('Administración');
+});
+
+test('quien entra por el hub de herramientas sigue volviendo al hub', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/tools/encuestas');
+
+  const destino = await page.locator('tool-nav').first()
+    .evaluate((el) => el.shadowRoot?.querySelector('a.back')?.getAttribute('href'));
+  expect(destino).toBe('/');
+});
+
 test('el ancla NO da permiso: una pestaña que no te toca no se abre', async ({ page }) => {
   const previa = (await db().doc('toolPolicies/motivators').get()).data() ?? null;
   await db().doc('toolPolicies/motivators').set({
