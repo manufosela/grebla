@@ -58,6 +58,8 @@ import { getCareerAssessment, saveCareerAssessment } from '../../lib/careerAsses
 import { getPersonLogbook } from '../../lib/engineer.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
+import { toggleDomain } from '../../tools/team/domain/membership.js';
+import { listDomains } from '../../lib/domains.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -148,7 +150,7 @@ const DIM_SUBTABS = [
 const ORG_SUBTABS = [
   { id: 'gremios', label: 'Gremios' },
   { id: 'labels', label: 'Labels' },
-  { id: 'squads', label: 'Squads' },
+  { id: 'dominios', label: 'Dominios' },
 ];
 
 /** Sub-sub-pestañas de «Carrera»: parten el contenido para evitar un scroll largo. */
@@ -191,6 +193,8 @@ export class TeamPersonDetail extends LitElement {
     _guildsCat: { state: true },
     _labelsCat: { state: true },
     _squadsCat: { state: true },
+    /** Catálogo de DOMINIOS: a lo que pertenece la persona (ADR de dominios). */
+    _domainsCat: { state: true },
     _usersCat: { state: true },
     _datosSaving: { state: true },
     _datosError: { state: true },
@@ -481,12 +485,13 @@ export class TeamPersonDetail extends LitElement {
     this._logbook = null;
     /** Borrador editable de la pestaña «Datos» (RMR-TSK-0173). Se siembra desde
      * la persona al abrirla. @type {{ name: string, githubLogin: string, startDate: string, guilds: string[], labels: string[], uid: string }} */
-    this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], labels: [], squadIds: [], uid: '' };
+    this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], labels: [], squadIds: [], domainKeys: [], uid: '' };
     /** Catálogos para los selectores de Datos (gremios, labels, cuentas). */
     this._guildsCat = [];
     this._labelsCat = [];
     /** Catálogo de squads de la organización (RMR-TSK-0275). */
     this._squadsCat = [];
+    this._domainsCat = [];
     this._usersCat = [];
     this._datosSaving = false;
     this._datosError = '';
@@ -585,6 +590,7 @@ export class TeamPersonDetail extends LitElement {
       guilds: [...(p?.guilds ?? [])],
       labels: [...(p?.labels ?? [])],
       squadIds: [...(p?.squadIds ?? [])],
+      domainKeys: [...(p?.domainKeys ?? [])],
       uid: p?.uid ?? '',
       pendingEmail: p?.pendingEmail ?? '',
       location: p?.location ?? '',
@@ -916,7 +922,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat, toolPolicies, leaderUids, routes] =
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat, toolPolicies, leaderUids, routes, domainsCat] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -942,6 +948,8 @@ export class TeamPersonDetail extends LitElement {
           // Rutas publicadas para la curva de progresión (F2): best-effort — sin
           // rutas la gráfica simplemente no sale.
           listCareerRoutes().catch(() => []),
+          // Catálogo de dominios: a qué pertenece la persona (ADR de dominios).
+          listDomains().catch(() => []),
         ]);
       this.timeline = timeline;
       this.areas = areas;
@@ -953,6 +961,7 @@ export class TeamPersonDetail extends LitElement {
       this._guildsCat = guildsCat;
       this._usersCat = usersCat;
       this._squadsCat = squadsCat;
+      this._domainsCat = domainsCat;
       this._toolPolicies = toolPolicies;
       this._leaderUids = leaderUids;
       this._routes = routes;
@@ -1947,6 +1956,33 @@ export class TeamPersonDetail extends LitElement {
     this._datos = { ...this._datos, squadIds };
   }
 
+  /**
+   * A qué DOMINIO pertenece (ADR de dominios, F4). Se elige el producto, no el
+   * subdominio: la gente fluye entre los subdominios de su producto, y fijarla a
+   * uno es justo lo que se abandona.
+   *
+   * Se guarda la CLAVE del dominio, no su id ni su nombre: así renombrarlo no
+   * obliga a tocar la ficha de nadie.
+   */
+  _renderDatosDomains(selected) {
+    const cat = this._domainsCat ?? [];
+    if (cat.length === 0) {
+      return html`<p class="empty">Aún no hay dominios (los crea el superadmin en Administración › Dominios).</p>`;
+    }
+    return html`<div class="org-checks">
+      ${cat.map((d) => html`<label class="chk">
+        <input type="checkbox" .checked=${selected.includes(d.key)}
+          @change=${(e) => this._toggleDatosDomain(d.key, e.target.checked)} />
+        <span>${d.name}</span>
+      </label>`)}
+    </div>`;
+  }
+
+  /** @param {string} key @param {boolean} checked */
+  _toggleDatosDomain(key, checked) {
+    this._datos = { ...this._datos, domainKeys: toggleDomain(this._datos.domainKeys, key, checked) };
+  }
+
   /** Checkboxes de squads: etiqueta por nombre, valor por id. */
   _renderDatosSquads(selectedIds) {
     const cat = this._squadsCat ?? [];
@@ -1988,6 +2024,7 @@ export class TeamPersonDetail extends LitElement {
         guilds: [...this._datos.guilds],
         labels: [...this._datos.labels],
         squadIds: [...this._datos.squadIds],
+        domainKeys: [...this._datos.domainKeys],
         location: this._datos.location.trim() || null,
         external: !!this._datos.external,
       };
@@ -2137,7 +2174,7 @@ export class TeamPersonDetail extends LitElement {
     const panel = {
       gremios: () => this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c)),
       labels: () => this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c)),
-      squads: () => this._renderDatosSquads(d.squadIds ?? []),
+      dominios: () => this._renderDatosDomains(d.domainKeys ?? []),
     }[active] ?? (() => this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c)));
     return html`
       <section class="org-section">
