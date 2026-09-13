@@ -2,20 +2,149 @@
 import Base from '../../layouts/Base.astro';
 
 /**
- * Panel de gestión del superadmin (modelo multi-leader): gestión de managers y
- * vista en lectura de sus equipos. El glue verifica el rol; un manager puro o un
- * usuario sin acceso es redirigido fuera.
+ * HUB DE ADMINISTRACIÓN (RMR-TSK-0495).
+ *
+ * Antes «/admin» era solo la gestión de la organización, con sus ocho pestañas,
+ * y por eso quien entraba a administrar no encontraba dónde se gestionan las
+ * encuestas, los O2O o los motivadores: parecía que no se pudieran administrar.
+ * Cada herramienta YA tiene su gestión dentro; lo que faltaba era la puerta.
+ *
+ * Se ve distinto del hub de herramientas a propósito: administrar no es usar, y
+ * confundir en qué lado estás es lo que hace tocar lo que no tocaba.
+ *
+ * Cada tarjeta lleva a la gestión que ya existe; no se duplica ninguna.
  */
+const cards = [
+  {
+    id: 'organizacion',
+    name: 'Organización',
+    icon: '🏛️',
+    href: '/admin/organizacion',
+    description: 'Organigrama y roles, áreas, gremios, dominios, labels, el framework de carrera, usuarios y permisos.',
+    govern: true,
+  },
+  {
+    id: 'surveys',
+    name: 'Encuestas',
+    icon: '📋',
+    href: '/tools/encuestas',
+    description: 'Plantillas y preguntas, padrón de participantes, ejes de segmentación y resultados.',
+  },
+  {
+    id: 'o2o',
+    name: 'O2O',
+    icon: '💬',
+    href: '/tools/o2o',
+    description: 'La guía de temas y el formulario previo de cada periodo, y el seguimiento de acciones.',
+  },
+  {
+    id: 'motivators',
+    name: 'Motivadores',
+    icon: '🃏',
+    href: '/tools/motivators/moving',
+    description: 'Rondas de Moving y Affective Motivators: abrir, cerrar y ver los resultados del equipo.',
+  },
+  {
+    id: 'retros',
+    name: 'Retros',
+    icon: '🔁',
+    href: '/retros',
+    description: 'Retrospectivas del equipo y el bucle de acciones que se arrastra de una a la siguiente.',
+  },
+  {
+    id: 'poker',
+    name: 'Scrum Poker',
+    icon: '🂠',
+    href: '/poker',
+    description: 'Sesiones de estimación: crearlas, conducirlas y consultar lo estimado.',
+  },
+  {
+    id: 'lean',
+    name: 'Flujo (LEAN)',
+    icon: '🔀',
+    href: '/tools/lean',
+    description: 'Qué unidades se miden y a qué subdominio pertenece cada una.',
+  },
+  {
+    id: 'dora',
+    name: 'DORA',
+    icon: '🚀',
+    href: '/tools/dora',
+    description: 'Repos medidos, su equipo y el recálculo de las métricas de entrega.',
+  },
+];
 ---
 
-<Base title="GREBLA — Gestión" requireAuth={true}>
-  <!-- Se entra por su card del hub, así que también se sale por donde se sale
-       de las demás (RMR-TSK-0461). -->
+<Base title="GREBLA — Administración" requireAuth={true}>
   <tool-nav href="/" name="Administración" icon="🛠️"></tool-nav>
-  <superadmin-panel></superadmin-panel>
+
+  <p class="page-lead">
+    Aquí se configura y se consulta lo que hay detrás de cada herramienta. Para
+    usarlas, vuelve al inicio.
+  </p>
+
+  <!-- Oculto hasta saber qué puede administrar quien mira: pintarlo antes haría
+       aparecer y desaparecer tarjetas delante de sus ojos. -->
+  <section id="admin-cards" class="admin-cards" hidden>
+    {
+      cards.map((card) => (
+        <a class="admin-card" href={card.href} data-admin-id={card.id} data-govern={card.govern ? 'true' : undefined} hidden>
+          <span class="ac-icon" aria-hidden="true">{card.icon}</span>
+          <h2>{card.name}</h2>
+          <p>{card.description}</p>
+          <span class="ac-cta">Administrar →</span>
+        </a>
+      ))
+    }
+  </section>
+
+  <p id="admin-empty" class="empty-note" hidden>
+    No administras ninguna herramienta todavía. Si crees que deberías, pídeselo a
+    un superadmin.
+  </p>
 
   <script>
     import '../../components/common/tool-nav.js';
-    import '../../client/superadmin.js';
+    import '../../client/adminHub.js';
   </script>
 </Base>
+
+<style>
+  /* Administrar no es usar: el hub de administración se distingue del de
+     herramientas por el fondo sobrio y el filo del acento a la izquierda. */
+  .page-lead { max-width: 60ch; color: var(--rm-muted, #5b6b7d); }
+
+  .admin-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0 2rem;
+  }
+  .admin-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1rem 1.1rem 1.2rem;
+    border: 1px solid var(--rm-border, #d7dee2);
+    border-left: 4px solid var(--rm-navy, #1e3a5f);
+    border-radius: 10px;
+    background: var(--rm-surface-2, #eef2f5);
+    color: inherit;
+    text-decoration: none;
+  }
+  .admin-card:hover {
+    border-left-color: var(--rm-accent, #2a9d8f);
+    background: var(--rm-surface, #fff);
+  }
+  .admin-card:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+  .ac-icon { font-size: 1.4rem; line-height: 1; }
+  .admin-card h2 { font-size: 1rem; margin: 0; color: var(--rm-navy, #1e3a5f); }
+  .admin-card p { font-size: 0.85rem; margin: 0; color: var(--rm-muted, #5b6b7d); line-height: 1.45; }
+  .ac-cta { margin-top: auto; padding-top: 0.6rem; font-size: 0.85rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); }
+  .empty-note { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
+
+  /* Sin color de reserva: este selector solo aplica bajo el layout, que es
+     justamente quien define el token en modo oscuro. */
+  :root[data-theme='dark'] .admin-card { background: #182028; }
+  :root[data-theme='dark'] .admin-card h2 { color: var(--rm-text); }
+</style>

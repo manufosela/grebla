@@ -71,7 +71,7 @@ test('un ingeniero no ve la administración por ninguna parte', async ({ page })
 
 test('el panel tiene su «Volver» al hub', async ({ page }) => {
   await signInAs(page, 'superadmin');
-  await page.goto('/admin');
+  await page.goto('/admin/organizacion');
   await expect(page.getByRole('link', { name: '← Volver' })).toBeVisible();
 });
 
@@ -81,7 +81,7 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
   // de los demás specs: por eso se retira pase lo que pase.
   try {
   await signInAs(page, 'superadmin');
-  await page.goto('/admin');
+  await page.goto('/admin/organizacion');
 
   await page.getByRole('button', { name: 'Permisos' }).click();
   await page.getByRole('tab', { name: 'Por persona' }).click();

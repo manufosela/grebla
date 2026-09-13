@@ -1,0 +1,24 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * GESTIÓN DE LA ORGANIZACIÓN: organigrama y roles, áreas, gremios, dominios,
+ * labels, framework de carrera, usuarios y permisos.
+ *
+ * Antes esto era «/admin» entero, y por eso parecía que administrar fuese solo
+ * esto: quien entraba a administrar no encontraba dónde se gestionan las
+ * encuestas o los O2O (RMR-TSK-0495). Ahora es UNA tarjeta del hub de
+ * administración, que vive en /admin.
+ */
+---
+
+<Base title="GREBLA — Organización" requireAuth={true}>
+  <!-- Se vuelve al hub de administración, que es de donde se viene. -->
+  <tool-nav href="/admin" name="Organización" icon="🏛️"></tool-nav>
+  <superadmin-panel></superadmin-panel>
+
+  <script>
+    import '../../components/common/tool-nav.js';
+    import '../../client/superadmin.js';
+  </script>
+</Base>
