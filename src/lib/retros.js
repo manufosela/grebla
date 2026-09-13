@@ -79,7 +79,7 @@ async function listByOwner(path, ownerLeaderUid, ...constraints) {
 /**
  * Crea una retro (la invoca el líder).
  * @param {{ format: string, name: string, sprint?: string|null, ownerLeaderUid: string,
- *           scope: { type: 'team'|'squad', squadId?: string|null, label?: string|null } }} data
+ *           scope: { type: 'team'|'domain', domainKey?: string|null, label?: string|null } }} data
  * @returns {Promise<string>} id de la retro
  */
 export async function createRetro(data) {
@@ -100,11 +100,13 @@ export async function createRetro(data) {
     // Secreto del enlace para compartir (ADR): conocer el id NO basta para
     // entrar. Se puede regenerar si el enlace se va de las manos.
     joinToken: crypto.randomUUID(),
-    // `squadId` referencia el catálogo /squads (RMR-TSK-0278); `label` se
-    // conserva por las retros/acciones antiguas, con el squad como texto libre.
+    // `domainKey` referencia el catálogo /domains (F5 del ADR de dominios);
+    // `label` guarda el nombre de entonces, para que la retro siga diciendo de
+    // quién fue aunque el dominio se renombre. Las retros anteriores llevan
+    // `squadId` y se leen tal cual: un acta no se reescribe.
     scope: {
       type: data.scope?.type ?? 'team',
-      squadId: data.scope?.squadId ?? null,
+      domainKey: data.scope?.domainKey ?? null,
       label: data.scope?.label ?? null,
     },
     status: 'open',
@@ -290,7 +292,7 @@ export function unvoteNote(retroId, noteId, uid) {
 
 /**
  * @param {{ text: string, owners: string[], ownerLeaderUid: string, fromRetroId: string,
- *           scope: { type: 'team'|'squad', squadId?: string|null, label?: string|null } }} data
+ *           scope: { type: 'team'|'domain', domainKey?: string|null, label?: string|null } }} data
  * @returns {Promise<string>}
  */
 export async function addAction(data) {
@@ -299,11 +301,13 @@ export async function addAction(data) {
     owners: data.owners ?? [],
     ownerNames: data.ownerNames ?? [],
     ownerLeaderUid: data.ownerLeaderUid,
-    // `squadId` referencia el catálogo /squads (RMR-TSK-0278); `label` se
-    // conserva por las retros/acciones antiguas, con el squad como texto libre.
+    // `domainKey` referencia el catálogo /domains (F5 del ADR de dominios);
+    // `label` guarda el nombre de entonces, para que la retro siga diciendo de
+    // quién fue aunque el dominio se renombre. Las retros anteriores llevan
+    // `squadId` y se leen tal cual: un acta no se reescribe.
     scope: {
       type: data.scope?.type ?? 'team',
-      squadId: data.scope?.squadId ?? null,
+      domainKey: data.scope?.domainKey ?? null,
       label: data.scope?.label ?? null,
     },
     fromRetroId: data.fromRetroId,
@@ -351,24 +355,6 @@ export async function listTeamMembers(leaderUid) {
   return people
     .map((p) => ({ uid: p.uid, name: p.name ?? 'Sin nombre' }))
     .filter((m) => m.uid);
-}
-
-/**
- * Retros de uno o varios squads (RMR-TSK-0278). Un squad puede tener gente de
- * varios managers, así que sus retros no se encuentran por `ownerLeaderUid`.
- * Firestore limita el `in` a 30 valores; con más squads se trocea.
- * @param {ReadonlyArray<string>} squadIds
- * @returns {Promise<Array<Record<string, unknown>>>}
- */
-export async function listRetrosBySquads(squadIds) {
-  const chunks = chunkIds(squadIds);
-  if (chunks.length === 0) return [];
-  const results = await Promise.all(chunks.map(async (chunk) => {
-    const q = query(collection(db, 'retros'), where('scope.squadId', 'in', chunk));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  }));
-  return results.flat();
 }
 
 /**

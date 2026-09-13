@@ -1,6 +1,6 @@
 /**
  * <retro-manager> — gestión de retrospectivas del manager (RMR-TSK-0243). Crea una
- * retro (formato, nombre/sprint, ámbito equipo o squad) y lista las suyas con su
+ * retro (formato, nombre/sprint, ámbito equipo o dominio) y lista las suyas con su
  * estado, pudiendo cerrarlas. Abrir una retro para facilitar/ver el tablero es del
  * componente <retro-board> (card 3); aquí solo se gestiona.
  *
@@ -13,7 +13,8 @@ import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';
 import { createRetro, leaveRetro, listRetros, closeRetro, deleteRetro } from '../../lib/retros.js';
-import { listSquadsCatalog } from '../../lib/squads.js';
+import { listDomains } from '../../lib/domains.js';
+import { scopeFromForm, scopeLabel, needsDomain } from '../../tools/retro/domain/scope.js';
 
 export class RetroManager extends LitElement {
   static properties = {
@@ -21,7 +22,7 @@ export class RetroManager extends LitElement {
     chain: { attribute: false },
     scopeUids: { attribute: false },
     _retros: { state: true },
-    _squads: { state: true },
+    _domains: { state: true },
     _copiedId: { state: true },
     _tab: { state: true },
     _confirmLeaveId: { state: true },
@@ -84,9 +85,9 @@ export class RetroManager extends LitElement {
      */
     this.scopeUids = null;
     this._retros = [];
-    this._new = { format: 'ssc', name: '', sprint: '', scopeType: 'team', squadId: '' };
-    /** @type {Array<{id:string,name:string}>} catálogo de squads (RMR-TSK-0278) */
-    this._squads = [];
+    this._new = { format: 'ssc', name: '', sprint: '', scopeType: 'team', domainKey: '' };
+    /** @type {Array<{key:string,name:string}>} catálogo de dominios (ADR de dominios) */
+    this._domains = [];
     /** id de la retro cuyo enlace se acaba de copiar (feedback efímero) */
     this._copiedId = null;
     /** Sub-pestaña activa: se entra por la lista, no por el formulario. */
@@ -120,13 +121,13 @@ export class RetroManager extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      const [retros, squads] = await Promise.all([
+      const [retros, domains] = await Promise.all([
         // Por quien mira: las suyas y las de su rama (ADR «Retros por membresía»).
         listRetros(this.uid),
-        listSquadsCatalog().catch(() => []),
+        listDomains().catch(() => []),
       ]);
       this._retros = retros;
-      this._squads = squads;
+      this._domains = domains;
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las retros.';
     } finally {
@@ -144,8 +145,8 @@ export class RetroManager extends LitElement {
       this.renderRoot?.querySelector('input[type="text"]')?.focus();
       return;
     }
-    if (n.scopeType === 'squad' && !n.squadId) {
-      this._error = 'Elige el squad de la retro.';
+    if (needsDomain(n)) {
+      this._error = 'Elige el dominio de la retro.';
       return;
     }
     if (!this.uid) return;
@@ -162,13 +163,13 @@ export class RetroManager extends LitElement {
         // copia AL CREAR: si luego cambia de manager, la retro conserva la que
         // tenía, porque una retro es de su momento.
         chain: this.chain ?? [],
-        scope: {
-          type: n.scopeType,
-          squadId: n.scopeType === 'squad' ? (n.squadId || null) : null,
-          label: null,
-        },
+        scope: scopeFromForm({
+          scopeType: n.scopeType,
+          domainKey: n.domainKey,
+          label: this._domains.find((d) => d.key === n.domainKey)?.name ?? null,
+        }),
       });
-      this._new = { format: n.format, name: '', sprint: '', scopeType: n.scopeType, squadId: n.squadId };
+      this._new = { format: n.format, name: '', sprint: '', scopeType: n.scopeType, domainKey: n.domainKey };
       await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo crear la retro.';
@@ -189,16 +190,16 @@ export class RetroManager extends LitElement {
 
   _patch(key, value) { this._new = { ...this._new, [key]: value }; }
 
-  /** Selector de squad del catálogo (RMR-TSK-0278): antes era texto libre, lo
-   *  que hacía imposible cruzar la retro con el squad de las personas. */
-  _renderSquadPicker() {
-    if (this._squads.length === 0) {
-      return html`<p class="info-note">Aún no hay squads en el catálogo: los crea el superadmin en el panel.</p>`;
+  /** Selector de DOMINIO del catálogo (F5 del ADR): antes era el squad, que ya
+   *  no es a lo que pertenece la gente. */
+  _renderDomainPicker() {
+    if (this._domains.length === 0) {
+      return html`<p class="info-note">Aún no hay dominios en el catálogo: los crea el superadmin en Administración.</p>`;
     }
-    return html`<label>Squad
-      <select .value=${this._new.squadId} @change=${(e) => this._patch('squadId', e.target.value)}>
-        <option value="">— elige un squad —</option>
-        ${this._squads.map((sq) => html`<option value=${sq.id} ?selected=${sq.id === this._new.squadId}>${sq.name}</option>`)}
+    return html`<label>Dominio
+      <select .value=${this._new.domainKey} @change=${(e) => this._patch('domainKey', e.target.value)}>
+        <option value="">— elige un dominio —</option>
+        ${this._domains.map((d) => html`<option value=${d.key} ?selected=${d.key === this._new.domainKey}>${d.name}</option>`)}
       </select>
     </label>`;
   }
@@ -246,10 +247,7 @@ export class RetroManager extends LitElement {
   }
 
   _scopeText(retro) {
-    if (retro.scope?.type !== 'squad') return 'Equipo';
-    // Retros nuevas guardan squadId; las antiguas, el nombre como texto libre.
-    const byId = this._squads.find((sq) => sq.id === retro.scope?.squadId)?.name;
-    return `Squad · ${byId ?? retro.scope?.label ?? '—'}`;
+    return scopeLabel(retro, this._domains);
   }
 
   _open(retro) {
@@ -319,10 +317,10 @@ export class RetroManager extends LitElement {
           <label>Ámbito
             <span class="scope">
               <label><input type="radio" name="scope" ?checked=${this._new.scopeType === 'team'} @change=${() => this._patch('scopeType', 'team')} /> Equipo</label>
-              <label><input type="radio" name="scope" ?checked=${this._new.scopeType === 'squad'} @change=${() => this._patch('scopeType', 'squad')} /> Squad</label>
+              <label><input type="radio" name="scope" ?checked=${this._new.scopeType === 'domain'} @change=${() => this._patch('scopeType', 'domain')} /> Dominio</label>
             </span>
           </label>
-          ${this._new.scopeType === 'squad' ? this._renderSquadPicker() : null}
+          ${this._new.scopeType === 'domain' ? this._renderDomainPicker() : null}
         </div>
         <div class="bar">
           <button class="btn" ?disabled=${this._saving} @click=${() => this._create()}>

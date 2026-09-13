@@ -17,7 +17,7 @@ import './retro-carryover.js';
 import './retro-board.js';
 import './retro-actions.js';
 import { RETRO_FORMATS } from '../../tools/retro/domain/formats.js';
-import { listRetros, listRetrosBySquads } from '../../lib/retros.js';
+import { listRetros } from '../../lib/retros.js';
 
 export class RetroApp extends LitElement {
   static properties = {
@@ -26,7 +26,6 @@ export class RetroApp extends LitElement {
     leaderUids: { attribute: false },
     alsoVisibleTo: { attribute: false },
     chain: { attribute: false },
-    squadIds: { attribute: false },
     members: { attribute: false },
     authorName: { attribute: false },
     canManage: { attribute: false },
@@ -66,8 +65,6 @@ export class RetroApp extends LitElement {
     this.alsoVisibleTo = [];
     /** @type {string[]} cadena de managers de quien convoca */
     this.chain = [];
-    /** @type {string[]} squads a los que pertenece (una persona puede estar en varios) */
-    this.squadIds = [];
     /** Nombre con el que firmar sus tarjetas: el de su ficha de GREBLA. */
     this.authorName = '';
     this.members = [];
@@ -80,26 +77,19 @@ export class RetroApp extends LitElement {
   }
 
   /**
-   * De dónde salen las retros de esta persona: su manager y sus squads. Cadena
-   * vacía = no hay ninguna fuente, así que no hay nada que pedir.
-   *
-   * Se mira TAMBIÉN el squad (RMR-BUG-0049): antes solo se cargaba si había
-   * manager, así que quien tenía squad pero no `ownerLeaderUid` se quedaba sin
-   * ver ni una retro. Y como la clave incluye los squads, si estos llegan
-   * después que el manager la lista se recalcula en vez de quedarse corta.
+   * De dónde salen las retros de esta persona: de ella misma. Desde el ADR
+   * «Retros por membresía» la fuente es una —lo que tiene dentro y lo de su
+   * rama—, así que la clave es su uid y nada más.
    */
   get _sourcesKey() {
-    // Ordenados para que reordenar los mismos squads no cuente como cambio.
-    const squads = [...(this.squadIds ?? [])].toSorted((a, b) => String(a).localeCompare(String(b))).join(',');
-    if (!this.uid && !squads) return '';
-    return `${this.uid ?? ''}|${squads}`;
+    return this.uid ?? '';
   }
 
   updated(changed) {
     // El ingeniero necesita la lista (el manager la trae dentro de retro-manager).
     if (this.canManage) return;
     if (!changed.has('uid') && !changed.has('leaderUid') && !changed.has('leaderUids')
-      && !changed.has('squadIds') && !changed.has('canManage')) return;
+      && !changed.has('canManage')) return;
     const key = this._sourcesKey;
     if (!key || key === this._loadedFor) return;
     this._loadedFor = key;
@@ -110,17 +100,14 @@ export class RetroApp extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      // Las retros de un squad puede haberlas creado OTRO manager, así que no
-      // salen por ownerLeaderUid: se unen ambas fuentes y se deduplica por id
-      // (una retro de mi squad creada por mi manager saldría dos veces).
-      const [mine, ofSquads] = await Promise.all([
-        // El listado va por QUIEN MIRA (ADR «Retros por membresía»): las que
-        // tiene dentro más las de su rama. Ya no se pide «las del manager X».
-        this.uid ? listRetros(this.uid) : Promise.resolve([]),
-        listRetrosBySquads(this.squadIds ?? []).catch(() => []),
-      ]);
-      const byId = new Map([...mine, ...ofSquads].map((r) => [r.id, r]));
-      this._retros = [...byId.values()].toSorted(
+      // Una sola fuente: QUIEN MIRA (ADR «Retros por membresía»). Las que tiene
+      // dentro más las de su rama.
+      //
+      // Había una segunda consulta por squad que, desde ese ADR, choca con las
+      // reglas —que dejan leer por membresía, no por squad— y se tragaba su
+      // propio error con un catch mudo: no aportaba nada y escondía el fallo.
+      const mine = this.uid ? await listRetros(this.uid) : [];
+      this._retros = [...mine].toSorted(
         (a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0),
       );
     } catch (err) {

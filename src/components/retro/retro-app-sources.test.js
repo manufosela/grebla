@@ -2,18 +2,20 @@
  * Qué dispara la carga de la lista de retros del ingeniero (RMR-BUG-0049).
  *
  * El fallo original: solo se cargaba si la persona tenía manager, así que quien
- * pertenecía a un squad pero no tenía `ownerLeaderUid` no veía ni una retro. Se
- * ejercita el prototipo sobre un `this` mínimo, sin montar el componente Lit.
+ * pertenecía a un squad pero no tenía `ownerLeaderUid` no veía ni una retro.
  *
- * Desde el ADR «Retros por membresía» la lista va por QUIEN MIRA (`uid`) y no
- * por el manager: son las retros en las que está dentro más las de su rama. Por
- * eso el disparador es ahora `uid`, no `leaderUid`.
+ * Desde el ADR «Retros por membresía» la lista va por QUIEN MIRA (`uid`): son
+ * las retros en las que está dentro más las de su rama. Y desde la F5 del ADR
+ * de dominios, esa es la ÚNICA fuente — ya no se pregunta por squad—, así que
+ * el bug original no puede volver por otra vía: sin manager y sin nada más, con
+ * saber quién mira ya se carga.
+ *
+ * Se ejercita el prototipo sobre un `this` mínimo, sin montar el componente Lit.
  */
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../lib/retros.js', () => ({
   listRetros: vi.fn(async () => []),
-  listRetrosBySquads: vi.fn(async () => []),
 }));
 
 const { RetroApp } = await import('./retro-app.js');
@@ -22,7 +24,7 @@ const sourcesKey = Object.getOwnPropertyDescriptor(RetroApp.prototype, '_sources
 
 function makeCtx(over = {}) {
   return {
-    uid: null, leaderUid: null, squadIds: [], canManage: false, _loadedFor: null,
+    uid: null, leaderUid: null, canManage: false, _loadedFor: null,
     _loadList: vi.fn(), get _sourcesKey() { return sourcesKey.call(this); },
     ...over,
   };
@@ -31,50 +33,34 @@ function makeCtx(over = {}) {
 const changed = (...keys) => new Map(keys.map((k) => [k, undefined]));
 
 describe('fuentes de retros del ingeniero', () => {
-  it('carga en cuanto se sabe quién mira, sin squads', () => {
+  it('carga en cuanto se sabe quién mira', () => {
     const ctx = makeCtx({ uid: 'ana' });
     updated.call(ctx, changed('uid'));
     expect(ctx._loadList).toHaveBeenCalledTimes(1);
   });
 
-  it('carga con squad aunque NO tenga manager', () => {
-    const ctx = makeCtx({ squadIds: ['sq1'] });
-    updated.call(ctx, changed('squadIds'));
+  it('carga aunque NO tenga manager: es lo que arregló el bug', () => {
+    const ctx = makeCtx({ uid: 'ana', leaderUid: null });
+    updated.call(ctx, changed('uid'));
     expect(ctx._loadList).toHaveBeenCalledTimes(1);
   });
 
-  it('recalcula si los squads llegan después que el uid', () => {
+  it('no recarga si no ha cambiado quién mira', () => {
     const ctx = makeCtx({ uid: 'ana' });
     updated.call(ctx, changed('uid'));
-    ctx.squadIds = ['sq1'];
-    updated.call(ctx, changed('squadIds'));
-    expect(ctx._loadList).toHaveBeenCalledTimes(2);
-  });
-
-  it('no recarga si no ha cambiado ninguna fuente', () => {
-    const ctx = makeCtx({ uid: 'ana', squadIds: ['sq1'] });
-    updated.call(ctx, changed('uid'));
-    updated.call(ctx, changed('squadIds'));
+    updated.call(ctx, changed('leaderUid'));
     expect(ctx._loadList).toHaveBeenCalledTimes(1);
   });
 
-  it('el orden de los squads no cuenta como cambio', () => {
-    const ctx = makeCtx({ leaderUid: 'lead1', squadIds: ['b', 'a'] });
-    updated.call(ctx, changed('squadIds'));
-    ctx.squadIds = ['a', 'b'];
-    updated.call(ctx, changed('squadIds'));
-    expect(ctx._loadList).toHaveBeenCalledTimes(1);
-  });
-
-  it('sin manager ni squads no pide nada', () => {
+  it('sin saber quién mira no pide nada', () => {
     const ctx = makeCtx();
     updated.call(ctx, changed('leaderUid'));
     expect(ctx._loadList).not.toHaveBeenCalled();
   });
 
   it('el manager no usa esta lista (la trae retro-manager)', () => {
-    const ctx = makeCtx({ leaderUid: 'lead1', canManage: true });
-    updated.call(ctx, changed('leaderUid'));
+    const ctx = makeCtx({ uid: 'ana', canManage: true });
+    updated.call(ctx, changed('uid'));
     expect(ctx._loadList).not.toHaveBeenCalled();
   });
 });

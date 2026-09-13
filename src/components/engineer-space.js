@@ -999,7 +999,7 @@ export class EngineerSpace extends LitElement {
   /** Pestaña Retros: las retros del equipo del ingeniero, para participar (RMR-TSK-0247). */
   _renderRetros() {
     return html`<retro-app .uid=${this.person?.uid ?? null} .leaderUid=${this.person?.ownerLeaderUid ?? null}
-      .squadIds=${this.person?.squadIds ?? []} .canManage=${false} .members=${[]}
+      .canManage=${false} .members=${[]}
       .authorName=${this.person?.name ?? ''}></retro-app>`;
   }
 
