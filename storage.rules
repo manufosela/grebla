@@ -44,25 +44,24 @@ service firebase.storage {
         && request.resource.size < 25 * 1024 * 1024;
     }
 
-    // Gestor de documentos (RMR-PCS-0041): las presentaciones que explican cómo
-    // trabajamos. Las LEE cualquiera con sesión —son de toda la organización— y
-    // las publica quien gobierna la instancia o gestiona la herramienta.
+    // Documentos de la organización (RMR-PCS-0041): las presentaciones que
+    // explican cómo trabajamos. Las LEE cualquiera con sesión —son de toda la
+    // organización— y las escribe ÚNICAMENTE la Cloud Function.
     //
-    // Viven aquí y no en public/ del hosting justamente por esta línea: un
-    // fichero estático lo sirve Firebase sin preguntar nada, y estos llevan
+    // Viven aquí y no en public/ del hosting justamente por la regla de lectura:
+    // un fichero estático lo sirve Firebase sin preguntar nada, y estos llevan
     // nombres de personas del equipo. La protección es la regla, no que la URL
     // sea difícil de adivinar.
-    function managesDocs() {
-      return isSignedIn()
-        && firestore.exists(/databases/(default)/documents/toolManagers/$('docs--' + request.auth.uid));
-    }
+    //
+    // La escritura está cerrada a TODO cliente (RMR-BUG-0116). Antes preguntaba
+    // aquí si quien escribe es superadmin, consultando Firestore desde la regla,
+    // y esa consulta cruzada no se resuelve en estos proyectos: denegaba a todo
+    // el mundo. Medido con un token real —leer 200, escribir 403, y la misma
+    // escritura sin la consulta 200—, así que el permiso se comprueba en la
+    // función `publishDoc`, donde Firestore sí se puede leer.
     match /docs/{allPaths=**} {
       allow read: if isSignedIn();
-      // Solo HTML, y de un tamaño razonable para una presentación.
-      allow write: if (isSuperAdmin() || managesDocs())
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('text/html.*');
-      allow delete: if isSuperAdmin() || managesDocs();
+      allow write: if false;
     }
 
     // Resto: denegado por defecto.

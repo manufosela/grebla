@@ -15,10 +15,12 @@ import { randomBytes } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import * as coins from './coins.js';
 import { JD_POLISH_MODEL, JD_POLISH_TOOL, buildPolishPrompt, sanitizePolishedItems } from './jdPolish.js';
 import { sign, coinsKmsKeyName } from './signer.js';
 import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pulseAggregate.js';
+import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './docsPaths.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -3057,4 +3059,122 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
   if (mirrored) {
     logger.info(`[org-owner] espejo /leaders actualizado: ${mirrored} líderes (reportsTo/chain)`);
   }
+});
+
+
+/** Tamaño máximo de un documento publicado: una presentación, no un archivo. */
+const DOC_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Id de la ficha a partir de la ruta. Legible —ayuda a depurar— y sin
+ * colisiones: la barra de carpeta se marca con `__` y solo con eso, porque los
+ * nombres ya vienen saneados a [a-z0-9-] y nunca traen un guion bajo.
+ *
+ * Con un simple «todo lo no alfanumérico a guion», `docs/a-b.html` y
+ * `docs/a/b.html` caían en el mismo id: el segundo pisaba la ficha del primero y
+ * dejaba dos ficheros en Storage con una sola ficha, apuntando a uno de ellos.
+ * @param {string} path
+ */
+function docIdFor(path) {
+  return path
+    .replaceAll('/', '__')
+    .replaceAll(/[^a-zA-Z0-9_]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+}
+
+/**
+ * ¿Puede publicar documentos? Superadmin o gestor de la herramienta, leído del
+ * MISMO sitio que mira la aplicación (RMR-TSK-0503).
+ * @param {string} uid
+ */
+async function canPublishDocs(uid) {
+  const db = getFirestore();
+  const [admin, gestor] = await Promise.all([
+    db.doc(`admins/${uid}`).get(),
+    db.doc(`toolManagers/docs--${uid}`).get(),
+  ]);
+  return admin.exists || gestor.exists;
+}
+
+/**
+ * Publica un documento de la organización (RMR-PCS-0041).
+ *
+ * La subida pasa por aquí y no va directa a Storage porque las reglas de Storage
+ * deciden consultando Firestore, y esa consulta cruzada NO se resuelve en estos
+ * proyectos: denegaba a todo el mundo, superadmin incluido (RMR-BUG-0116).
+ * Medido con un token real: leer daba 200 y escribir 403, y la misma escritura
+ * sin la consulta daba 200.
+ *
+ * Aquí el permiso se comprueba donde sí se puede —Firestore desde el servidor— y
+ * se escribe con el Admin SDK. La LECTURA sigue siendo directa desde Storage:
+ * su regla no consulta nada y funciona.
+ */
+export const publishDoc = onCall({ region: 'europe-west1', memory: '512MiB' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await canPublishDocs(caller.uid))) {
+    throw new HttpsError('permission-denied', 'No gestionas la documentación.');
+  }
+
+  const name = String(request.data?.name ?? '').trim();
+  const html = String(request.data?.html ?? '');
+  if (!name) throw new HttpsError('invalid-argument', 'El documento necesita un nombre.');
+  if (!html) throw new HttpsError('invalid-argument', 'El documento viene vacío.');
+
+  const bytes = Buffer.byteLength(html, 'utf8');
+  if (bytes > DOC_MAX_BYTES) {
+    throw new HttpsError('invalid-argument', `El documento pesa ${(bytes / 1024 / 1024).toFixed(1)} MB; el máximo es 10 MB.`);
+  }
+
+  // La ruta se vuelve a construir AQUÍ con lo que llega, sin fiarse de la que
+  // calculó el cliente: es lo único que garantiza que nada salga de `docs/`.
+  const path = docStoragePath({ folder: request.data?.folder, fileName: request.data?.fileName });
+  if (!path) throw new HttpsError('invalid-argument', 'El nombre de fichero no da una ruta utilizable.');
+
+  await getStorage().bucket().file(path).save(html, { contentType: 'text/html; charset=utf-8' });
+
+  const id = docIdFor(path);
+  await getFirestore().doc(`docs/${id}`).set({
+    name,
+    description: String(request.data?.description ?? '').trim(),
+    folder: docFolder(request.data?.folder),
+    path,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: caller.uid,
+  }, { merge: true });
+
+  logger.info(`[docs] «${name}» publicado en ${path} (${bytes} bytes) por ${caller.uid}`);
+  return { id, path };
+});
+
+/**
+ * Retira un documento: el fichero y su ficha. Por la misma razón que la
+ * publicación — el borrado en Storage también lo deniegan las reglas.
+ */
+export const removeDoc = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await canPublishDocs(caller.uid))) {
+    throw new HttpsError('permission-denied', 'No gestionas la documentación.');
+  }
+
+  const id = String(request.data?.id ?? '').trim();
+  if (!id || id.includes('/')) throw new HttpsError('invalid-argument', 'Falta el documento a retirar.');
+
+  const ref = getFirestore().doc(`docs/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Ese documento ya no está.');
+
+  // La ruta sale de la ficha, no de lo que mande quien llama: si no, esto sería
+  // un borrado de cualquier cosa del bucket con el nombre bien puesto.
+  const path = String(snap.data()?.path ?? '');
+  if (!path.startsWith('docs/')) throw new HttpsError('failed-precondition', 'La ficha no apunta a un documento.');
+
+  await getStorage().bucket().file(path).delete().catch(() => {
+    logger.warn(`[docs] el fichero ${path} ya no estaba; se retira la ficha igual`);
+  });
+  await ref.delete();
+  logger.info(`[docs] documento ${id} retirado por ${caller.uid}`);
+  return { ok: true };
 });
