@@ -6,7 +6,7 @@
  * promesa que se le hizo a quien rellena su marea.
  */
 import { describe, it, expect } from 'vitest';
-import { sanitizeMinCount, validateMinCount, MIN_ANON, MAX_ANON, DEFAULT_ANON } from './settings.js';
+import { sanitizeMinCount, validateMinCount, initialTab, MIN_ANON, MAX_ANON, DEFAULT_ANON } from './settings.js';
 
 describe('sanitizeMinCount: qué umbral se usa al calcular', () => {
   it('deja pasar un valor válido', () => {
@@ -49,5 +49,20 @@ describe('validateMinCount: qué se puede guardar', () => {
 
   it('rechaza lo que no es un entero en vez de redondearlo a espaldas de quien lo teclea', () => {
     for (const malo of [3.5, 'tres', null, undefined]) expect(validateMinCount(malo).ok).toBe(false);
+  });
+});
+
+describe('initialTab: con qué pestaña abre Marea', () => {
+  it('quien llega desde el hub de administración aterriza en administrar', () => {
+    expect(initialTab('#admin', true)).toBe('admin');
+    expect(initialTab('admin', true)).toBe('admin');
+  });
+
+  it('quien no gestiona la herramienta no entra por teclear el ancla', () => {
+    expect(initialTab('#admin', false)).toBe('mine');
+  });
+
+  it('sin ancla, la pestaña de siempre', () => {
+    for (const h of ['', '#', '#resultados', null, undefined]) expect(initialTab(h, true)).toBe('mine');
   });
 });
