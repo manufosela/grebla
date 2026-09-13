@@ -34,16 +34,22 @@ export function isEmployeeOf(email, emailVerified, domain) {
 
 /**
  * A dónde va quien acaba de entrar.
- *  - `landing`: sin rol, sin gobierno, sin gestión de encuestas y sin ser
- *    empleado del dominio. No hay nada que enseñarle.
+ *  - `landing`: sin rol, sin gobierno, sin gestionar ninguna herramienta y sin
+ *    ser empleado del dominio. No hay nada que enseñarle.
  *  - `admin`: un viewer es observador puro y entra al panel en solo lectura.
  *  - `tools`: el hub.
  *
- * @param {{ access: Access, isEmployee: boolean, canManageSurveys: boolean }} input
+ * `managesAnyTool` era antes «gestiona encuestas» (RMR-TSK-0475): un caso
+ * especial heredado de cuando People era un rol suelto. Quien gestiona
+ * CUALQUIER herramienta sin tener otro rol tiene el mismo problema —si no
+ * entrara, no podría llegar a lo suyo—, así que la regla vale para todas y
+ * ninguna necesita su propia rama en el código.
+ *
+ * @param {{ access: Access, isEmployee: boolean, managesAnyTool?: boolean }} input
  * @returns {'landing'|'admin'|'tools'}
  */
-export function hubDestination({ access, isEmployee, canManageSurveys }) {
-  if (!hasAccess(access) && !canManageSurveys && !isEmployee) return 'landing';
+export function hubDestination({ access, isEmployee, managesAnyTool = false }) {
+  if (!hasAccess(access) && !managesAnyTool && !isEmployee) return 'landing';
   if (access?.instanceAccess === 'viewer') return 'admin';
   return 'tools';
 }
@@ -61,4 +67,21 @@ export function hubDestination({ access, isEmployee, canManageSurveys }) {
  */
 export function needsEmployeePerson({ isEmployee, person }) {
   return isEmployee === true && !person;
+}
+
+/**
+ * ¿Gestiona alguna herramienta? (RMR-TSK-0475)
+ *
+ * Se pregunta en plural a propósito: el atajo de entrada no es de una
+ * herramienta concreta —lo era, cuando People y sus encuestas eran un caso
+ * aparte—, sino de cualquiera que tenga algo que administrar y ningún otro rol
+ * con el que entrar.
+ *
+ * @param {import('../tools/team/domain/toolAccess.js').PersonRef} personRef
+ * @param {ReadonlyArray<import('../tools/team/domain/toolAccess.js').ToolPolicy>} policies
+ * @param {(ref: unknown, policy: unknown) => boolean} canManage  el decisor de siempre
+ * @returns {boolean}
+ */
+export function managesSomeTool(personRef, policies = [], canManage) {
+  return (policies ?? []).some((p) => canManage(personRef, p));
 }

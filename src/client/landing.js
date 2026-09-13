@@ -9,11 +9,11 @@ import { canGovern, hubAsView, leadsTeam } from '../lib/accessRoles.js';
 import { isSurveyAdmin } from '../lib/survey.js';
 import { getMyPerson, ensureEmployeePerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
-import { canUseTool } from '../tools/team/domain/toolAccess.js';
+import { canUseTool, canManageTool } from '../tools/team/domain/toolAccess.js';
 import { buildPersonRef } from '../lib/toolGate.js';
 import { getEmployeeDomain } from '../lib/orgConfig.js';
 import { layerTabs, activeTab } from '../lib/hubLayers.js';
-import { isEmployeeOf, hubDestination, needsEmployeePerson } from './hubBoot.js';
+import { isEmployeeOf, hubDestination, needsEmployeePerson, managesSomeTool } from './hubBoot.js';
 
 const VIEW_FLAG = 'grebla-view';
 /** Pestaña que se estaba mirando, mientras dure la sesión. */
@@ -59,10 +59,23 @@ onUserChanged(async (user) => {
 
     const employeeDomain = domainRes.status === 'fulfilled' ? domainRes.value : '';
     const isEmployee = isEmployeeOf(user.email ?? '', user.emailVerified, employeeDomain);
-    // Quien gestiona encuestas (People) llega al hub aunque no tenga otro rol.
-    const canManageSurveys = canGovern(access) || (surveyRes.status === 'fulfilled' && surveyRes.value === true);
+    // Quien gestiona ALGUNA herramienta llega al hub aunque no tenga otro rol:
+    // si no entrara, no podría llegar a lo suyo (RMR-TSK-0475). Antes esto era
+    // un caso especial de encuestas, heredado de cuando People era un rol
+    // suelto; ahora vale para todas.
+    //
+    // `isSurveyAdmin` cubre además la colección /surveyAdmins, que sigue viva
+    // mientras dure la migración —hay cuentas que solo están ahí— exactamente
+    // igual que en las reglas de Firestore. Es lo único que queda del rol viejo.
+    const managesAnyTool = canGovern(access)
+      || (surveyRes.status === 'fulfilled' && surveyRes.value === true)
+      || managesSomeTool(
+        buildPersonRef(personRes.status === 'fulfilled' ? personRes.value : null),
+        policiesRes.status === 'fulfilled' ? policiesRes.value : [],
+        canManageTool,
+      );
 
-    const destino = hubDestination({ access, isEmployee, canManageSurveys });
+    const destino = hubDestination({ access, isEmployee, managesAnyTool });
     if (destino === 'landing') return showLanding();
     // El viewer va DIRECTO a la organización, no al hub de administración: es
     // observador puro y ahí no administra herramientas, así que el hub le

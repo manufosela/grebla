@@ -7,7 +7,7 @@
  * primero, y se prueba sin red.
  */
 import { describe, it, expect } from 'vitest';
-import { isEmployeeOf, hubDestination, needsEmployeePerson } from './hubBoot.js';
+import { isEmployeeOf, hubDestination, needsEmployeePerson, managesSomeTool } from './hubBoot.js';
 
 describe('isEmployeeOf: quién es empleado del dominio de la instancia', () => {
   it('lo es con el email verificado del dominio configurado', () => {
@@ -37,27 +37,32 @@ describe('hubDestination: a dónde va quien entra', () => {
   const sinNada = { functionalRole: null, instanceAccess: null };
 
   it('sin rol, sin gobierno y sin ser empleado: la landing pública', () => {
-    expect(hubDestination({ access: sinNada, isEmployee: false, canManageSurveys: false })).toBe('landing');
+    expect(hubDestination({ access: sinNada, isEmployee: false, managesAnyTool: false })).toBe('landing');
   });
 
   it('un viewer va al panel en solo lectura: es observador, no gestiona', () => {
-    expect(hubDestination({ access: { instanceAccess: 'viewer' }, isEmployee: false, canManageSurveys: false }))
+    expect(hubDestination({ access: { instanceAccess: 'viewer' }, isEmployee: false, managesAnyTool: false }))
       .toBe('admin');
   });
 
   it('con rol funcional, al hub', () => {
-    expect(hubDestination({ access: { functionalRole: 'engineer' }, isEmployee: false, canManageSurveys: false }))
+    expect(hubDestination({ access: { functionalRole: 'engineer' }, isEmployee: false, managesAnyTool: false }))
       .toBe('tools');
   });
 
   it('un empleado del dominio sin rol también entra al hub', () => {
-    expect(hubDestination({ access: sinNada, isEmployee: true, canManageSurveys: false })).toBe('tools');
+    expect(hubDestination({ access: sinNada, isEmployee: true, managesAnyTool: false })).toBe('tools');
   });
 
-  it('quien gestiona encuestas entra aunque no tenga otro rol', () => {
-    // People gestiona las encuestas sin ser de ingeniería: si no entrara, no
-    // podría llegar a su propia herramienta.
-    expect(hubDestination({ access: sinNada, isEmployee: false, canManageSurveys: true })).toBe('tools');
+  it('quien gestiona CUALQUIER herramienta entra aunque no tenga otro rol', () => {
+    // Antes esto era un caso especial de encuestas, heredado de cuando People
+    // era un rol suelto. Quien gestiona una herramienta sin tener otro rol
+    // tiene el mismo problema: si no entrara, no podría llegar a lo suyo.
+    expect(hubDestination({ access: sinNada, isEmployee: false, managesAnyTool: true })).toBe('tools');
+  });
+
+  it('sin decir nada de herramientas, decide como si no gestionara ninguna', () => {
+    expect(hubDestination({ access: sinNada, isEmployee: false })).toBe('landing');
   });
 });
 
@@ -74,5 +79,24 @@ describe('needsEmployeePerson: cuándo hace falta la Cloud Function', () => {
 
   it('quien no es empleado del dominio nunca la necesita', () => {
     expect(needsEmployeePerson({ isEmployee: false, person: null })).toBe(false);
+  });
+});
+
+describe('managesSomeTool: el atajo de entrada no es de una herramienta concreta', () => {
+  const ref = { id: 'p1' };
+  const gestiona = (_r, p) => p.toolId === 'surveys';
+
+  it('basta con gestionar UNA', () => {
+    expect(managesSomeTool(ref, [{ toolId: 'marea' }, { toolId: 'surveys' }], gestiona)).toBe(true);
+  });
+
+  it('si no gestiona ninguna, no hay atajo', () => {
+    expect(managesSomeTool(ref, [{ toolId: 'marea' }, { toolId: 'dora' }], gestiona)).toBe(false);
+  });
+
+  it('sin políticas cargadas no se inventa permiso', () => {
+    // Si la lectura falla, entrar por esta vía sería concederlo por un error.
+    expect(managesSomeTool(ref, [], gestiona)).toBe(false);
+    expect(managesSomeTool(ref, undefined, gestiona)).toBe(false);
   });
 });
