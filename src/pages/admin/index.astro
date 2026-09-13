@@ -27,7 +27,7 @@ import Base from '../../layouts/Base.astro';
  * «← Volver» de la herramienta devuelva AQUÍ y no al hub de herramientas.
  * El parámetro va antes del ancla, que es lo que exige una URL válida.
  */
-function withOrigin(href) {
+function withOrigin(href: string): string {
   const [ruta, ancla] = href.split('#');
   const sep = ruta.includes('?') ? '&' : '?';
   return `${ruta}${sep}from=admin${ancla ? `#${ancla}` : ''}`;
