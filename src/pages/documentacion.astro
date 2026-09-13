@@ -1,0 +1,28 @@
+---
+import Base from '../layouts/Base.astro';
+
+/**
+ * DOCUMENTACIÓN (RMR-PCS-0041): las presentaciones que explican cómo
+ * trabajamos, para cualquiera de la organización.
+ *
+ * La lista y los documentos vienen de Storage, no del repositorio: su contenido
+ * es interno y este repositorio es público. Quien los publica lo hace desde
+ * Administración › Documentos.
+ */
+---
+
+<Base title="GREBLA — Documentación" requireAuth={true}>
+  <tool-nav href="/" name="Documentación" icon="📖"></tool-nav>
+  <h1 class="page-title">Documentación</h1>
+  <p class="page-lead">
+    Lo que explica por qué trabajamos así. Es documentación interna: solo se ve
+    con cuenta de GREBLA.
+  </p>
+
+  <docs-reader id="docs"></docs-reader>
+
+  <script>
+    import '../components/common/tool-nav.js';
+    import '../client/documentacion.js';
+  </script>
+</Base>
