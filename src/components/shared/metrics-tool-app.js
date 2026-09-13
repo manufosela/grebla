@@ -12,6 +12,7 @@
 import { LitElement, html } from 'lit';
 import { toolShellStyles, toolDisclaimer } from './toolShellStyles.js';
 import { skeletonBlock, skeletonLines } from '../app-skeleton.js';
+import { tabFromHash } from '../../lib/tabHash.js';
 
 export class MetricsToolApp extends LitElement {
   static properties = {
@@ -34,6 +35,14 @@ export class MetricsToolApp extends LitElement {
     this.refresh = null;
     this.view = this.constructor.tabs[0]?.id ?? '';
     this.error = '';
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // Las tarjetas de Administración enlazan con el ancla de la vista que van a
+    // gestionar (RMR-TSK-0499): así quien entra por ahí aterriza donde iba, y no
+    // en la portada teniendo que buscar la pestaña.
+    this.view = tabFromHash(globalThis.location?.hash, this.constructor.tabs, this.view);
   }
 
   render() {
