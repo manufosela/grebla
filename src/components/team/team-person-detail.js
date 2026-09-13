@@ -27,7 +27,6 @@ import {
   updatePerson,
   listLabels,
   listGuilds,
-  listSquads,
   normalizeInviteEmail,
 } from '../../tools/team/application/usecases/index.js';
 import { listUsers } from '../../lib/users.js';
@@ -197,7 +196,6 @@ export class TeamPersonDetail extends LitElement {
     _datos: { state: true },
     _guildsCat: { state: true },
     _labelsCat: { state: true },
-    _squadsCat: { state: true },
     /** Catálogo de DOMINIOS: a lo que pertenece la persona (ADR de dominios). */
     _domainsCat: { state: true },
     _usersCat: { state: true },
@@ -509,7 +507,6 @@ export class TeamPersonDetail extends LitElement {
     this._guildsCat = [];
     this._labelsCat = [];
     /** Catálogo de squads de la organización (RMR-TSK-0275). */
-    this._squadsCat = [];
     this._domainsCat = [];
     this._usersCat = [];
     this._datosSaving = false;
@@ -611,6 +608,9 @@ export class TeamPersonDetail extends LitElement {
       startDate: p?.startDate ?? '',
       guilds: [...(p?.guilds ?? [])],
       labels: [...(p?.labels ?? [])],
+      // Se arrastra sin editarse a propósito: ya no hay UI de squads (F5 del ADR
+      // de dominios), pero el dato guardado se conserva para no cerrar la puerta
+      // a volver atrás. Si se dejara fuera, guardar la ficha lo borraría.
       squadIds: [...(p?.squadIds ?? [])],
       domainKeys: [...(p?.domainKeys ?? [])],
       uid: p?.uid ?? '',
@@ -944,7 +944,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, squadsCat, toolPolicies, leaderUids, routes, domainsCat] =
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -958,7 +958,6 @@ export class TeamPersonDetail extends LitElement {
           listLabels(this.persistence).catch(() => []),
           listGuilds(this.persistence).catch(() => []),
           listUsers().catch(() => []),
-          listSquads(this.persistence).catch(() => []),
           // Políticas de herramientas para la matriz de permisos (F8b). Se cargan
           // SIEMPRE (lectura pequeña, legible por cualquier autenticado): la pestaña
           // «Permisos» aparece según _canManagePerms, no según esta carga — así se
@@ -982,7 +981,6 @@ export class TeamPersonDetail extends LitElement {
       this._labelsCat = labelsCat;
       this._guildsCat = guildsCat;
       this._usersCat = usersCat;
-      this._squadsCat = squadsCat;
       this._domainsCat = domainsCat;
       this._toolPolicies = toolPolicies;
       this._leaderUids = leaderUids;
@@ -2039,16 +2037,6 @@ export class TeamPersonDetail extends LitElement {
     this._datos = { ...this._datos, guilds };
   }
 
-  /** Los squads se guardan por ID (el catálogo puede renombrarse sin tocar
-   *  a las personas), de ahí que no use el toggle genérico por nombre.
-   *  @param {string} id @param {boolean} checked */
-  _toggleDatosSquad(id, checked) {
-    const squadIds = checked
-      ? [...new Set([...this._datos.squadIds, id])]
-      : this._datos.squadIds.filter((s) => s !== id);
-    this._datos = { ...this._datos, squadIds };
-  }
-
   /**
    * A qué DOMINIO pertenece (ADR de dominios, F4). Se elige el producto, no el
    * subdominio: la gente fluye entre los subdominios de su producto, y fijarla a
@@ -2074,21 +2062,6 @@ export class TeamPersonDetail extends LitElement {
   /** @param {string} key @param {boolean} checked */
   _toggleDatosDomain(key, checked) {
     this._datos = { ...this._datos, domainKeys: toggleDomain(this._datos.domainKeys, key, checked) };
-  }
-
-  /** Checkboxes de squads: etiqueta por nombre, valor por id. */
-  _renderDatosSquads(selectedIds) {
-    const cat = this._squadsCat ?? [];
-    if (cat.length === 0) {
-      return html`<p class="empty">Aún no hay squads (los crea el superadmin en el panel).</p>`;
-    }
-    return html`<div class="org-checks">
-      ${cat.map((sq) => html`<label class="chk">
-        <input type="checkbox" .checked=${selectedIds.includes(sq.id)}
-          @change=${(e) => this._toggleDatosSquad(sq.id, e.target.checked)} />
-        <span>${sq.name}</span>
-      </label>`)}
-    </div>`;
   }
 
   /** @param {string} name @param {boolean} checked */
