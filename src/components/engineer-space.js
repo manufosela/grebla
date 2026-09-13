@@ -51,7 +51,6 @@ import { stats } from '../tools/career/application/usecases.js';
 import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
 import { setCareerTarget, getPersonLogbook } from '../lib/engineer.js';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
-import { squadNames } from '../tools/team/application/usecases/squads.js';
 import { membershipLabel } from '../tools/team/domain/membership.js';
 
 /**
@@ -114,7 +113,6 @@ export class EngineerSpace extends LitElement {
     // self-ficha (RMR-TSK-0251): el usuario es dueño de su propia ficha y puede
     // editar sus datos básicos (nombre/nivel/disciplinas) desde aquí.
     selfOwned: { attribute: false },
-    squads: { attribute: false },
     /** Catálogo de dominios: a lo que pertenece de verdad (ADR de dominios). */
     domains: { attribute: false },
     _tab: { state: true },
@@ -316,8 +314,6 @@ export class EngineerSpace extends LitElement {
     this.o2o = null;
     /** @type {boolean} el usuario es dueño de su propia ficha (self-ficha, RMR-TSK-0251) */
     this.selfOwned = false;
-    /** @type {Array<{id:string,name:string}>} catálogo de squads (RMR-TSK-0277) */
-    this.squads = [];
     this.domains = [];
     /** @type {string|null} aviso in-place si falla la escritura del objetivo */
     this._targetError = null;
@@ -1036,10 +1032,9 @@ export class EngineerSpace extends LitElement {
       ['Disciplinas', discNames.join(', ') || null],
       ['Fecha de alta', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${p.startDate}T00:00:00`)) : null],
       ['Gremios', (p.guilds ?? []).join(', ') || null],
-      // A qué pertenece: el DOMINIO (su producto). El squad se queda debajo
-      // mientras dure la transición, y desaparecerá con él (ADR de dominios).
+      // A qué pertenece: el DOMINIO (su producto). El squad ya no se enseña: la
+      // transición terminó y nadie tiene squad sin dominio (ADR de dominios, F5).
       ['Dominio', membershipLabel(p, this.domains)],
-      ['Squads', squadNames(p.squadIds, this.squads).join(', ') || null],
     ].filter(([, v]) => v);
     return html`
       <dl class="datos-dl">
@@ -1081,10 +1076,9 @@ export class EngineerSpace extends LitElement {
       ['Desde', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(p.startDate)) : null],
       ['Ubicación', p.location],
       ['Gremios', (p.guilds ?? []).join(', ') || null],
-      // A qué pertenece: el DOMINIO (su producto). El squad se queda debajo
-      // mientras dure la transición, y desaparecerá con él (ADR de dominios).
+      // A qué pertenece: el DOMINIO (su producto). El squad ya no se enseña: la
+      // transición terminó y nadie tiene squad sin dominio (ADR de dominios, F5).
       ['Dominio', membershipLabel(p, this.domains)],
-      ['Squads', squadNames(p.squadIds, this.squads).join(', ') || null],
     ].filter(([, v]) => v);
     return html`
       <p class="datos-note">Eres una persona externa: aquí ves tus datos básicos y, en «Mis O2O», los resúmenes que tu responsable comparta contigo.</p>

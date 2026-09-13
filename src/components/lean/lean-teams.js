@@ -1,6 +1,6 @@
 /**
  * <lean-teams> — configuración de las unidades de flujo (equipos = label del grupo
- * Squad de Linear; gremios = grupo Chapter). Botón «Descubrir desde Linear»
+ * equipo de Linear; gremios = grupo Chapter). Botón «Descubrir desde Linear»
  * (auto-poblado), «Recalcular» y alta/baja manual. Props: persistence, canEdit,
  * refresh, discover.
  */
@@ -259,7 +259,7 @@ export class LeanTeams extends LitElement {
         </label>`}
         <label>Tipo
           <select .value=${this._kind} @change=${(e) => { this._kind = e.target.value; }}>
-            <option value="squad">Equipo (Squad)</option>
+            <option value="squad">Equipo</option>
             <option value="chapter">Gremio (Chapter)</option>
           </select>
         </label>
