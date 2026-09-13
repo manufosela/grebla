@@ -40,7 +40,7 @@ import { progressionSeries } from '../../tools/career/domain/progression.js';
 import { listCareerRoutes } from '../../lib/careerMap.js';
 import '../career/career-progression-chart.js';
 import { sparkline, sparklineTrend, SPARK_MAX } from '../../tools/team/domain/services/sparkline.js';
-import { BELBIN_ROLES } from '../../tools/team/domain/belbin.js';
+import { BELBIN_ROLES, BELBIN_BY_SIGLA } from '../../tools/team/domain/belbin.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import {
   composeTitle,
@@ -59,6 +59,8 @@ import { getPersonLogbook } from '../../lib/engineer.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
 import { toggleDomain } from '../../tools/team/domain/membership.js';
+import { BELBIN_ITEMS, BELBIN_SCALE } from '../../tools/team/data/belbinItems.js';
+import { proposeRoles, evidenceFor } from '../../tools/team/domain/belbinSurvey.js';
 import { listDomains } from '../../lib/domains.js';
 
 const CONTRIB_STATES = [
@@ -183,6 +185,9 @@ export class TeamPersonDetail extends LitElement {
     _form: { state: true },
     _know: { state: true },
     _contrib: { state: true },
+    /** Respuestas del cuestionario de apoyo: reactivo, la propuesta se repinta
+     *  a cada conducta marcada (RMR-TSK-0494). */
+    _belbinAnswers: { state: true },
     _conv: { state: true },
     _noteText: { state: true },
     _confirmNote: { state: true },
@@ -249,6 +254,20 @@ export class TeamPersonDetail extends LitElement {
     .link.yes { color: var(--rm-danger, #dc2626); }
     .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.75rem; }
     .belbin { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.4rem 1rem; }
+    .belbin-survey { display: grid; gap: 0.5rem; margin: 0 0 1rem; }
+    .bs-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 0.7rem; align-items: center;
+      border-top: 1px solid var(--rm-border, #eef0f2); padding-top: 0.5rem;
+    }
+    .bs-text { font-size: 0.88rem; }
+    .bs-result {
+      border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 10px;
+      padding: 0.8rem 1rem; background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 6%, transparent);
+    }
+    .bs-group h4 { font-size: 0.85rem; margin: 0.2rem 0 0.4rem; }
+    .bs-prop { margin: 0 0 0.6rem; }
+    .bs-why { margin: 0.2rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
+
     .belbin-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
     .belbin-row .b-name { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .bias { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); background: var(--rm-coral-soft, #fdecea); border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 0 0.75rem; }
@@ -513,6 +532,9 @@ export class TeamPersonDetail extends LitElement {
     };
     this._know = { areaId: '', level: 0, toNext: false, note: '', date: '' };
     this._contrib = { roles: {}, note: '', date: '' };
+    /** Respuestas del cuestionario de apoyo (RMR-TSK-0494). No se guardan: son
+     *  el camino para llegar a una propuesta, no un dato de la persona. */
+    this._belbinAnswers = {};
     this._conv = { type: 'o2o', date: '', notes: '' };
     this._noteText = '';
     /** @type {string|null} */
@@ -1006,6 +1028,72 @@ export class TeamPersonDetail extends LitElement {
     this._contrib = { ...this._contrib, roles };
   }
 
+  /**
+   * Cuestionario de apoyo (RMR-TSK-0494): preguntas sobre conductas OBSERVADAS,
+   * no sobre cómo es la persona. Al aplicar, rellena el formulario de abajo —no
+   * guarda nada—: lo que se registra es lo que el manager confirme.
+   */
+  _renderBelbinSurvey() {
+    const propuesta = proposeRoles(this._belbinAnswers);
+    const hay = propuesta.primary.length > 0 || propuesta.secondary.length > 0;
+    return html`
+      <div class="form">
+        <p class="lead">
+          Marca lo que hayas VISTO hacer a esta persona. Al final se propone un
+          reparto de roles que puedes aceptar, cambiar o ignorar: lo que se
+          registra es lo que confirmes tú.
+        </p>
+        <div class="belbin-survey">
+          ${BELBIN_ITEMS.map((item) => html`
+            <div class="bs-row">
+              <span class="bs-text">${item.text}</span>
+              <select aria-label=${item.text}
+                @change=${(e) => this._setBelbinAnswer(item.id, e.target.value)}>
+                ${BELBIN_SCALE.map((op) => html`<option value=${op.value}
+                  ?selected=${(this._belbinAnswers[item.id] ?? 0) === op.value}>${op.label}</option>`)}
+              </select>
+            </div>`)}
+        </div>
+        ${hay ? this._renderBelbinProposal(propuesta) : html`<p class="empty">Sin conductas marcadas todavía: no hay nada que proponer.</p>`}
+      </div>`;
+  }
+
+  /** La propuesta, SIEMPRE con el porqué: así se puede discutir frase a frase. */
+  _renderBelbinProposal(propuesta) {
+    const bloque = (titulo, siglas) => (siglas.length === 0 ? null : html`
+      <div class="bs-group">
+        <h4>${titulo}</h4>
+        ${siglas.map((sigla) => html`
+          <div class="bs-prop">
+            <span class="b-name">${sigla} · ${BELBIN_BY_SIGLA[sigla]?.name ?? sigla}</span>
+            <ul class="bs-why">
+              ${evidenceFor(sigla, this._belbinAnswers).map((e) => html`<li>${e.text}</li>`)}
+            </ul>
+          </div>`)}
+      </div>`);
+    return html`
+      <div class="bs-result">
+        ${bloque('Se proponen como primarios', propuesta.primary)}
+        ${bloque('Y como secundarios', propuesta.secondary)}
+        <button class="primary" @click=${() => this._applyBelbinProposal(propuesta)}>
+          Llevar al formulario
+        </button>
+        <p class="lead">No se guarda nada todavía: rellena el registro de abajo y decides tú.</p>
+      </div>`;
+  }
+
+  /** @param {string} id @param {string} value */
+  _setBelbinAnswer(id, value) {
+    this._belbinAnswers = { ...this._belbinAnswers, [id]: Number(value) };
+  }
+
+  _applyBelbinProposal(propuesta) {
+    const roles = {};
+    for (const sigla of propuesta.primary) roles[sigla] = 'primary';
+    for (const sigla of propuesta.secondary) roles[sigla] = 'secondary';
+    this._contrib = { ...this._contrib, roles };
+  }
+
   async _saveContribution() {
     const c = this._contrib;
     if (Object.keys(c.roles).length === 0) { this.error = 'Marca al menos un rol.'; return; }
@@ -1362,6 +1450,11 @@ export class TeamPersonDetail extends LitElement {
               <span class="at">${formatDate(current.date)}</span>
             </div>`
           : html`<div class="actual none"><span class="void">Sin perfil todavía</span></div>`}
+
+        <details class="add">
+          <summary>🧭 Ayúdame a situarlos</summary>
+          ${this._renderBelbinSurvey()}
+        </details>
 
         <details class="add">
           <summary>➕ Registrar contribución</summary>
