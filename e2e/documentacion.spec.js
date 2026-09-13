@@ -32,11 +32,19 @@ const DOCS = [
   { id: 'e2e-tech', name: 'Plan Tech E2E', description: 'La organización', folder: 'tech', path: 'docs/tech/e2e-tech.html' },
 ];
 
+/**
+ * La política se siembra AQUÍ y no en el arranque global: el gate de
+ * herramientas solo filtra cuando existe alguna política, así que dejar una
+ * suelta en /toolPolicies activaría el filtrado para TODAS las herramientas y
+ * el resto de la suite se quedaría sin acceso a nada.
+ */
 test.beforeEach(async () => {
+  await db().doc('toolPolicies/docs').set({ label: 'Documentación', audience: { everyone: true }, managedBy: {} });
   for (const doc of DOCS) await db().doc(`docs/${doc.id}`).set(doc);
 });
 
 test.afterEach(async () => {
+  await db().doc('toolPolicies/docs').delete();
   for (const doc of DOCS) await db().doc(`docs/${doc.id}`).delete();
 });
 

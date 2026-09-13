@@ -54,11 +54,6 @@ export default async function globalSetup() {
     ensureUser(ROLES.adminmgr, 'adminmgr@e2e.test'),
   ]);
 
-  // Política de la documentación (RMR-PCS-0041): la lee cualquiera. Sin ella, la
-  // tarjeta se filtra y la suite probaría un hub al que le falta una entrada que
-  // en las instancias reales sí está.
-  await db.doc('toolPolicies/docs').set({ label: 'Documentación', audience: { everyone: true }, managedBy: {} });
-
   // Roles y jerarquía. El Head es también líder (para tener equipo propio); el
   // manager le reporta; la persona del ingeniero cuelga del manager.
   await db.doc(`admins/${ROLES.superadmin}`).set({ name: 'Super E2E' });
