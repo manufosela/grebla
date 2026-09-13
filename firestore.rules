@@ -504,6 +504,24 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Documentos de la organización (RMR-PCS-0041): el FICHERO vive en Storage y
+    // aquí solo están sus datos —nombre legible, descripción, carpeta y ruta—,
+    // que es lo que hace falta para listarlos sin descargar nada.
+    //
+    // Los lee cualquiera con sesión, igual que el fichero. Los publica quien
+    // gobierna o quien gestiona la herramienta, y las mismas condiciones se
+    // repiten en storage.rules: los dos sitios tienen que decir lo mismo o el
+    // documento acaba visible en una lista que no se puede abrir, o al revés.
+    match /docs/{docId} {
+      allow read: if isSignedIn();
+      allow write: if (isSuperAdmin() || managesToolByPolicy('docs'))
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.path is string
+        && request.resource.data.path.matches('docs/.*');
+      allow delete: if isSuperAdmin() || managesToolByPolicy('docs');
+    }
+
     // Ajustes de cada herramienta (RMR-TSK-0496): valores que quien la gestiona
     // cambia sin desplegar. Hoy solo el umbral de anonimato de Marea.
     //
