@@ -6,6 +6,7 @@
  * siguientes.
  */
 import { LitElement, html, css } from 'lit';
+import { tabFromHash } from '../../lib/tabHash.js';
 import '../common/busy-overlay.js';
 import { toolShellStyles, toolDisclaimer } from '../shared/toolShellStyles.js';
 import { getDeck } from '../../tools/motivators/domain/decks.js';
@@ -128,10 +129,18 @@ export class MotivatorsApp extends LitElement {
     return tabs;
   }
 
-  /** Vista efectiva: la seleccionada si es válida, o la primera pestaña disponible. */
+  /**
+   * Vista efectiva: la seleccionada si es válida, la del ancla si le corresponde,
+   * o la primera pestaña disponible.
+   *
+   * El ancla llega de la tarjeta de Administración (RMR-TSK-0499) y ORIENTA, no
+   * da permiso: se valida contra las pestañas de quien mira, así que `#rounds`
+   * sin poder gestionar rondas no lleva a rondas.
+   */
   get _view() {
     const tabs = this._tabs;
-    return tabs.some((t) => t.id === this.view) ? this.view : (tabs[0]?.id ?? 'results');
+    if (tabs.some((t) => t.id === this.view)) return this.view;
+    return tabFromHash(globalThis.location?.hash, tabs, tabs[0]?.id ?? 'results');
   }
 
   get disclaimer() {

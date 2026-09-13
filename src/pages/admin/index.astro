@@ -12,7 +12,11 @@ import Base from '../../layouts/Base.astro';
  * Se ve distinto del hub de herramientas a propósito: administrar no es usar, y
  * confundir en qué lado estás es lo que hace tocar lo que no tocaba.
  *
- * Cada tarjeta lleva a la gestión que ya existe; no se duplica ninguna.
+ * Cada tarjeta lleva a la gestión que ya existe; no se duplica ninguna. Y lleva
+ * a la PESTAÑA donde se administra, no a la portada de la herramienta: tener que
+ * buscarla a mano es lo que hacía creer que no estaba (RMR-TSK-0499). El ancla
+ * orienta, no da permiso — cada herramienta la valida contra lo que esa persona
+ * puede ver.
  */
 const cards = [
   {
@@ -41,7 +45,7 @@ const cards = [
     id: 'motivators',
     name: 'Motivadores',
     icon: '🃏',
-    href: '/tools/motivators/moving',
+    href: '/tools/motivators/moving#rounds',
     description: 'Rondas de Moving y Affective Motivators: abrir, cerrar y ver los resultados del equipo.',
   },
   {
@@ -69,14 +73,14 @@ const cards = [
     id: 'lean',
     name: 'Flujo (LEAN)',
     icon: '🔀',
-    href: '/tools/lean',
+    href: '/tools/lean#teams',
     description: 'Qué unidades se miden y a qué subdominio pertenece cada una.',
   },
   {
     id: 'dora',
     name: 'DORA',
     icon: '🚀',
-    href: '/tools/dora',
+    href: '/tools/dora#repos',
     description: 'Repos medidos, su equipo y el recálculo de las métricas de entrega.',
   },
 ];
