@@ -1,7 +1,9 @@
 /**
  * <marea-results> — vista «Resultados» de Marea (RMR-TSK-0237). Lee el agregado
  * ANÓNIMO de la semana (/pulseAggregates/{weekIso}, lo calcula la Cloud Function)
- * y lo muestra en tres ámbitos: toda ingeniería, por gremio y por squad (label).
+ * y lo muestra en varios ámbitos: toda la organización, por departamento, por
+ * gremio y por label. Marea es de TODA la organización —no solo de ingeniería—,
+ * y el corte que se mira de verdad es el departamento.
  * Solo medias y recuentos; nunca datos individuales, y solo grupos con >=3.
  */
 import { LitElement, html, css } from 'lit';
@@ -13,7 +15,7 @@ import { teamSignals } from '../../tools/pulse/domain/trends.js';
 import { sparkline } from './sparkline.js';
 
 const SCOPES = [
-  ['general', 'Toda ingeniería'],
+  ['general', 'Toda la organización'],
   ['departments', 'Por departamento'],
   ['guilds', 'Por gremio'],
   ['squads', 'Por label'],
