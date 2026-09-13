@@ -17,6 +17,10 @@ onUserChanged(async (user) => {
   // Gate por política de la herramienta (RMR-TSK-0387): corta ANTES de montar.
   let isSuperadmin = false;
   try { isSuperadmin = canGovern(await resolveAccess(user)); } catch { /* sin acceso de gobierno */ }
-  if (!(await guardToolPage('marea', user, { isSuperadmin, appEl: app }))) return;
+  const gate = await guardToolPage('marea', user, { isSuperadmin, appEl: app });
+  if (!gate) return;
   app.uid = user.uid;
+  // La pestaña de administración sale del MISMO permiso que ya decide quién
+  // gestiona la herramienta; no hay un rol nuevo ni una lista aparte.
+  app.canManage = gate.manage;
 });
