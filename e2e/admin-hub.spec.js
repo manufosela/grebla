@@ -31,6 +31,18 @@ test('quien gobierna ve la organización y todas las herramientas', async ({ pag
   expect(ids).toContain('motivators');
 });
 
+test('solo hay tarjeta de lo que se puede administrar', async ({ page }) => {
+  // Retros y Poker se convocan y se usan: no hay ajustes ni datos agregados
+  // detrás. Una tarjeta que promete «Administrar» y lleva al uso normal gasta el
+  // viaje de quien vino a configurar algo.
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin');
+
+  const ids = await visibles(page);
+  expect(ids).not.toContain('retros');
+  expect(ids).not.toContain('poker');
+});
+
 test('cada tarjeta lleva a la gestión que ya existe, sin duplicarla', async ({ page }) => {
   await signInAs(page, 'superadmin');
   await page.goto('/admin');
