@@ -6,11 +6,17 @@
  * descripción, carpeta y ruta— en Firestore. Se separan a propósito: listar la
  * documentación no puede obligar a descargar cada presentación.
  *
- * Y se leen con `getBlob`, no con `getDownloadURL`: la URL de descarga lleva un
+ * ESCRIBIR va por Cloud Function y LEER va directo. No es una asimetría
+ * caprichosa (RMR-BUG-0116): las reglas de Storage deciden consultando
+ * Firestore, y esa consulta cruzada no se resuelve en estos proyectos —denegaba
+ * a todo el mundo, superadmin incluido—. La regla de lectura no consulta nada y
+ * funciona, así que se queda como está.
+ *
+ * Y se lee con `getBlob`, no con `getDownloadURL`: la URL de descarga lleva un
  * token que funciona sin sesión y se puede reenviar, que es exactamente lo que
  * este diseño viene a evitar. Con getBlob manda la regla de Storage.
  */
-import { collection, doc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { storagePathOf } from '../tools/docs/domain/paths.js';
 
@@ -54,31 +60,28 @@ export async function listDocs() {
 }
 
 /**
- * Publica un documento: sube el fichero y guarda sus datos.
+ * Publica un documento. El fichero viaja como texto a la Cloud Function, que
+ * comprueba el permiso contra Firestore y escribe con el Admin SDK.
  *
- * El orden importa. Primero el fichero: si se guardaran antes los datos y
- * fallara la subida, la lista ofrecería un documento que no se puede abrir.
- *
- * @param {{ id?: string, name: string, description?: string, folder?: string, fileName: string, file: Blob }} input
+ * @param {{ name: string, description?: string, folder?: string, fileName: string, file: Blob }} input
  * @returns {Promise<string>} id del documento
  */
 export async function publishDoc(input) {
-  const path = storagePathOf({ folder: input.folder, fileName: input.fileName });
-  if (!path) throw new Error('El documento necesita un nombre de fichero utilizable');
   if (!input?.name?.trim()) throw new Error('El documento necesita un nombre');
-
-  const { ref, uploadBytes } = await import('firebase/storage');
-  await uploadBytes(ref(await storage(), path), input.file, { contentType: 'text/html' });
-
-  const id = input.id || path.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  await setDoc(doc(db, COL, id), {
+  if (!storagePathOf({ folder: input.folder, fileName: input.fileName })) {
+    throw new Error('El documento necesita un nombre de fichero utilizable');
+  }
+  const html = await input.file.text();
+  const { httpsCallable } = await import('firebase/functions');
+  const { getRegionalFunctions } = await import('./firebase.js');
+  const res = await httpsCallable(await getRegionalFunctions(), 'publishDoc')({
     name: input.name.trim(),
-    description: String(input.description ?? '').trim(),
+    description: input.description ?? '',
     folder: input.folder ?? '',
-    path,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
-  return id;
+    fileName: input.fileName,
+    html,
+  });
+  return res.data.id;
 }
 
 /**
@@ -94,14 +97,12 @@ export async function fetchDocBlob(path) {
 }
 
 /**
- * Retira un documento: el fichero y sus datos.
- *
- * Primero los datos: si se borrara antes el fichero y fallara lo segundo,
- * quedaría en la lista un documento que ya no existe.
- * @param {{ id: string, path: string }} document
+ * Retira un documento: el fichero y su ficha, por la misma puerta que la
+ * publicación.
+ * @param {{ id: string }} document
  */
 export async function removeDoc(document) {
-  await deleteDoc(doc(db, COL, document.id));
-  const { ref, deleteObject } = await import('firebase/storage');
-  await deleteObject(ref(await storage(), document.path));
+  const { httpsCallable } = await import('firebase/functions');
+  const { getRegionalFunctions } = await import('./firebase.js');
+  await httpsCallable(await getRegionalFunctions(), 'removeDoc')({ id: document.id });
 }
