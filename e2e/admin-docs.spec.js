@@ -13,19 +13,34 @@
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { readFileSync } from 'node:fs';
 import { test, expect, signInAs } from './fixtures.js';
 
 const BUCKET = 'demo-grebla.appspot.com';
 
+/** Inicializa el Admin SDK una vez: lo necesitan Firestore y Storage por igual. */
+function admin() {
+  if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla', storageBucket: BUCKET });
+}
+
 function db() {
-  if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
+  admin();
   return getFirestore();
+}
+
+/** El bucket, siempre con la app ya inicializada — aunque este spec corra solo. */
+function bucket() {
+  admin();
+  return getStorage().bucket(BUCKET);
 }
 
 const NOMBRE = 'Documento E2E';
 
 test.afterEach(async () => {
+  for (const p of ['docs/para-editar.html', 'docs/tech/para-editar.html']) {
+    await bucket().file(p).delete().catch(() => {});
+  }
   const snap = await db().collection('docs').where('name', '>=', NOMBRE).get();
   await Promise.all(snap.docs.filter((d) => d.data().name.startsWith(NOMBRE)).map((d) => d.ref.delete()));
 });
@@ -73,6 +88,62 @@ test('dos rutas distintas no acaban en la misma ficha', async ({ page }) => {
   const snap = await db().collection('docs').where('name', '>=', NOMBRE).get();
   const rutas = snap.docs.map((d) => d.data().path).sort();
   expect(rutas).toEqual(['docs/a-b.html', 'docs/a/b.html']);
+});
+
+test('un documento publicado se puede editar, y al cambiar de carpeta se mueve el fichero', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin/documentos');
+
+  await elegirFichero(page, { name: 'para-editar.html', mimeType: 'text/html', buffer: Buffer.from('<p>x') });
+  await page.locator('docs-manager input[type="text"]').first().fill(NOMBRE);
+  await page.locator('docs-manager button', { hasText: 'Publicar documento' }).click();
+  await expect(page.locator('docs-manager .msg.ok')).toBeVisible({ timeout: 20_000 });
+
+  await page.locator('docs-manager button', { hasText: 'Editar' }).first().click();
+  const campos = page.locator('docs-manager li.editing input[type="text"]');
+  await campos.nth(0).fill(`${NOMBRE} renombrado`);
+  await campos.nth(1).fill('Descripción nueva');
+  await campos.nth(2).fill('tech');
+  await page.locator('docs-manager li.editing button', { hasText: 'Guardar cambios' }).click();
+
+  await expect.poll(async () => {
+    const snap = await db().collection('docs').where('name', '==', `${NOMBRE} renombrado`).get();
+    return snap.docs[0]?.data() ?? null;
+  }, { timeout: 20_000 }).toMatchObject({
+    description: 'Descripción nueva', folder: 'tech', path: 'docs/tech/para-editar.html',
+  });
+
+  // El fichero se movió de verdad: la ficha no apunta a una ruta vacía.
+  const [existe] = await bucket().file('docs/tech/para-editar.html').exists();
+  expect(existe, 'la ficha apunta a una ruta donde no hay fichero').toBe(true);
+  const [quedaViejo] = await bucket().file('docs/para-editar.html').exists();
+  expect(quedaViejo, 'se quedó una copia en la carpeta anterior').toBe(false);
+});
+
+test('mover a una carpeta ocupada se rechaza, no pisa el documento de otro', async ({ page }) => {
+  // Sobrescribir dejaría la ficha del otro documento apuntando a un contenido
+  // que no es el suyo: pérdida de datos silenciosa.
+  await signInAs(page, 'superadmin');
+  await page.goto('/admin/documentos');
+
+  for (const carpeta of ['tech', '']) {
+    await elegirFichero(page, { name: 'para-editar.html', mimeType: 'text/html', buffer: Buffer.from(`<p>${carpeta || 'raiz'}`) });
+    await page.locator('docs-manager input[type="text"]').first().fill(`${NOMBRE} ${carpeta || 'raiz'}`);
+    await page.locator('docs-manager input[list="docs-folders"]').fill(carpeta);
+    await page.locator('docs-manager button', { hasText: 'Publicar documento' }).click();
+    await expect(page.locator('docs-manager .msg.ok')).toBeVisible({ timeout: 20_000 });
+  }
+
+  // Mover el de la raíz a «tech», donde ya hay uno que se llama igual.
+  await page.locator('docs-manager li', { hasText: `${NOMBRE} raiz` })
+    .locator('button', { hasText: 'Editar' }).click();
+  await page.locator('docs-manager li.editing input[type="text"]').nth(2).fill('tech');
+  await page.locator('docs-manager li.editing button', { hasText: 'Guardar cambios' }).click();
+
+  await expect(page.locator('docs-manager .msg.err')).toContainText('Ya hay un documento');
+  // Y el de «tech» sigue siendo el suyo.
+  const [buf] = await bucket().file('docs/tech/para-editar.html').download();
+  expect(buf.toString()).toContain('tech');
 });
 
 test('lo que no es HTML se rechaza antes de subir nada', async ({ page }) => {

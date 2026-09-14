@@ -11,7 +11,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { noteStyles } from '../common/note-styles.js';
-import { listDocs, publishDoc, removeDoc } from '../../lib/docs.js';
+import { listDocs, publishDoc, removeDoc, updateDocMeta } from '../../lib/docs.js';
 import { groupByFolder, sanitizeFolder, sanitizeFileName, isHtmlFile } from '../../tools/docs/domain/paths.js';
 
 export class DocsManager extends LitElement {
@@ -23,6 +23,9 @@ export class DocsManager extends LitElement {
     _description: { state: true },
     _folder: { state: true },
     _confirmRemove: { state: true },
+    /** Documento en edición y los valores que se están tecleando. */
+    _editing: { state: true },
+    _edit: { state: true },
     _error: { state: true },
     _notice: { state: true },
     _busy: { state: true },
@@ -46,6 +49,9 @@ export class DocsManager extends LitElement {
     .dname { font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .ddesc { flex: 1; font-size: 0.83rem; color: var(--rm-muted, #5b6b7d); }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; }
+    li.editing { display: grid; gap: 0.6rem; background: var(--rm-surface-hover, #f5fafa); }
+    .editbar { display: flex; align-items: center; gap: 0.8rem; }
+    button.link.edit { color: var(--rm-accent-700, #1f7a6e); }
     .msg { font-size: 0.85rem; margin: 0 0 0.9rem; }
     .msg.err { color: var(--rm-danger, #b91c1c); }
     .msg.ok { color: var(--rm-accent-700, #1f7a6e); }
@@ -60,6 +66,8 @@ export class DocsManager extends LitElement {
     this._description = '';
     this._folder = '';
     this._confirmRemove = null;
+    this._editing = null;
+    this._edit = { name: '', description: '', folder: '' };
     this._error = '';
     this._notice = '';
     this._busy = false;
@@ -128,6 +136,30 @@ export class DocsManager extends LitElement {
     }
   }
 
+  /** Abre la edición de un documento con lo que tiene ahora. */
+  _startEdit(doc) {
+    this._editing = doc.id;
+    this._edit = { name: doc.name, description: doc.description ?? '', folder: doc.folder ?? '' };
+    this._error = '';
+    this._notice = '';
+  }
+
+  async _saveEdit(doc) {
+    if (!this._edit.name.trim()) { this._error = 'El documento necesita un nombre.'; return; }
+    this._busy = true;
+    this._error = '';
+    try {
+      await updateDocMeta({ id: doc.id, ...this._edit });
+      this._editing = null;
+      this._notice = `«${this._edit.name.trim()}» actualizado.`;
+      await this._load();
+    } catch (err) {
+      this._error = `No se ha podido guardar: ${err.message}`;
+    } finally {
+      this._busy = false;
+    }
+  }
+
   async _remove(doc) {
     this._busy = true;
     this._error = '';
@@ -186,14 +218,53 @@ export class DocsManager extends LitElement {
   }
 
   _renderDoc(doc) {
-    const confirmando = this._confirmRemove === doc.id;
+    if (this._editing === doc.id) return this._renderEdit(doc);
     return html`<li>
       <span class="dname">${doc.name}</span>
       <span class="ddesc">${doc.description || ''}</span>
-      ${this.readOnly ? null : confirmando
-        ? html`<button class="link" @click=${() => this._remove(doc)}>Confirmar</button>
-               <button class="link" @click=${() => { this._confirmRemove = null; }}>Cancelar</button>`
-        : html`<button class="link" @click=${() => { this._confirmRemove = doc.id; }}>Retirar</button>`}
+      ${this._renderDocActions(doc)}
+    </li>`;
+  }
+
+  /** Los botones de un documento, según lo que se esté haciendo con él. */
+  _renderDocActions(doc) {
+    if (this.readOnly) return null;
+    if (this._confirmRemove === doc.id) {
+      return html`
+        <button class="link" @click=${() => this._remove(doc)}>Confirmar</button>
+        <button class="link" @click=${() => { this._confirmRemove = null; }}>Cancelar</button>`;
+    }
+    return html`
+      <button class="link edit" @click=${() => this._startEdit(doc)}>Editar</button>
+      <button class="link" @click=${() => { this._confirmRemove = doc.id; }}>Retirar</button>`;
+  }
+
+  /**
+   * Edición de un documento ya publicado: su nombre, de qué va y en qué carpeta
+   * está. El FICHERO no se toca — para cambiarlo se publica otra vez—, pero
+   * cambiar la carpeta sí lo mueve de sitio, y eso lo hace la función.
+   */
+  _renderEdit(doc) {
+    return html`<li class="editing">
+      <label>Nombre
+        <input type="text" .value=${this._edit.name}
+          @input=${(e) => { this._edit = { ...this._edit, name: e.target.value }; }} />
+      </label>
+      <label>De qué va
+        <input type="text" .value=${this._edit.description}
+          @input=${(e) => { this._edit = { ...this._edit, description: e.target.value }; }} />
+      </label>
+      <label>Carpeta
+        <input type="text" placeholder="Vacío = primer nivel" list="docs-folders" .value=${this._edit.folder}
+          @input=${(e) => { this._edit = { ...this._edit, folder: e.target.value }; }} />
+        <span class="hint">El fichero se mueve con ella; se sigue llamando igual.</span>
+      </label>
+      <div class="editbar">
+        <button ?disabled=${this._busy} @click=${() => this._saveEdit(doc)}>
+          ${this._busy ? 'Guardando…' : 'Guardar cambios'}
+        </button>
+        <button class="link" @click=${() => { this._editing = null; }}>Cancelar</button>
+      </div>
     </li>`;
   }
 
