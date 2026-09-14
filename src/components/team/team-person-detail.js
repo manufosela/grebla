@@ -554,6 +554,11 @@ export class TeamPersonDetail extends LitElement {
           // Deep-link a una dimensión concreta: abre el grupo «Dimensiones» en ella.
           this._subtab = 'dimensiones';
           this._dimSubtab = this.initialSubtab;
+        } else if (CAREER_SUBTABS.some((t) => t.id === this.initialSubtab)) {
+          // Deep-link a una sección de carrera (la celda «Carrera» del Mapa abre
+          // directamente Expectativas, que es donde se valora).
+          this._subtab = 'carrera';
+          this._careerSubtab = this.initialSubtab;
         } else if (SUBTABS.some((t) => t.id === this.initialSubtab)) {
           this._subtab = this.initialSubtab;
         }

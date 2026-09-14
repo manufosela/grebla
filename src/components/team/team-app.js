@@ -383,6 +383,7 @@ export class TeamApp extends LitElement {
         // nada (RMR-BUG-0117). Es el mismo manejador que usa la sección Personas.
         return html`<team-map
           .persistence=${this.persistence}
+          .framework=${this.framework}
           @open-person=${this._onOpenPerson}
         ></team-map>`;
       case 'departures':

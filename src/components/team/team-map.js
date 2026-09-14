@@ -6,18 +6,58 @@
  * Belbin (primario/secundario). Es una foto del sistema y lectura privada de quien
  * lidera: NO ordena ni puntúa a las personas entre sí (R3).
  *
+ * Y una columna más, «Carrera» (RMR-TSK-0506): el nivel de la persona y cómo va
+ * frente a las expectativas de ese nivel. Son otra familia de dimensiones —las
+ * del framework de carrera, que cambian con el nivel— y vivían solo dentro de la
+ * ficha: había que entrar persona a persona para saber quién no llega en algo.
+ * Aquí se miran las dos familias de una vez.
+ *
  * Propiedades:
  *  - persistence: PersistencePort (inyectado por <team-app>)
+ *  - framework: CareerFramework (inyectado por <team-app>; sin él no hay nivel
+ *    que valorar y la columna lo dice, en vez de callarse)
  */
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getTeamMap, listAreas } from '../../tools/team/application/usecases/index.js';
 import { LEVELS, LEVEL_BY_ORDER, levelLabel } from '../../tools/team/domain/levels.js';
+import { careerStatus } from '../../tools/career/domain/careerStatus.js';
+import { getCareerAssessment } from '../../lib/careerAssessment.js';
+
+/**
+ * Valoraciones de carrera de las personas del mapa, en paralelo. Una lectura que
+ * falle (permisos, red) NO se cuenta como «sin valorar»: la persona se queda
+ * fuera del mapa y su celda lo dice, porque decir «sin valorar» de alguien a
+ * quien no hemos podido leer es inventarse el dato.
+ * @param {Array<{ id: string, external: boolean }>} rows
+ * @returns {Promise<Map<string, import('../../tools/career/data/assessment.js').CareerAssessment>>}
+ */
+async function loadAssessments(rows) {
+  // Los externos no tienen plan de carrera: ni se pregunta por ellos.
+  const ids = rows.filter((r) => !r.external).map((r) => r.id);
+  const results = await Promise.allSettled(ids.map((id) => getCareerAssessment(id)));
+  const byPerson = new Map();
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') byPerson.set(ids[i], res.value);
+    else console.warn(`Mapa · no se pudo leer la valoración de ${ids[i]}`, res.reason);
+  });
+  return byPerson;
+}
+
+/** Texto de la celda de carrera por estado. Lo que no se sabe, se dice. */
+const CAREER_TEXT = {
+  external: 'Sin plan (externa)',
+  'no-level': 'Sin nivel asignado',
+  'unknown-level': 'Nivel fuera del framework',
+  'no-expectations': 'Nivel sin expectativas',
+  unassessed: 'Sin valorar',
+};
 
 export class TeamMap extends LitElement {
   static properties = {
     persistence: { attribute: false },
+    framework: { attribute: false },
     rows: { state: true },
     loading: { state: true },
     error: { state: true },
@@ -66,13 +106,27 @@ export class TeamMap extends LitElement {
       font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
     }
     .link-inline:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; border-radius: 4px; }
+    /* Carrera: el nivel arriba y cómo va debajo. Rojo y verde SIN fallback: los
+       tokens del tema ya traen un valor por modo, y un fallback claro se
+       quedaría pegado en el tema oscuro (donde no se leería). */
+    .career { display: flex; flex-direction: column; gap: 0.15rem; }
+    .career .level { font-weight: 600; white-space: nowrap; }
+    .career .state { font-size: 0.78rem; }
+    .career .gaps { color: var(--rm-danger); font-weight: 700; }
+    .career .meets { color: var(--rm-success); font-weight: 600; }
+    .career .pending { color: var(--rm-muted, #5b6b7d); }
   `];
 
   constructor() {
     super();
     this.persistence = null;
+    this.framework = null;
     this.rows = [];
     this._areaName = new Map();
+    /** @type {Map<string, import('../../tools/career/data/assessment.js').CareerAssessment>}
+     * Valoración por persona. Una persona AUSENTE del mapa es una cuya
+     * valoración no se pudo leer — que no es lo mismo que no tenerla. */
+    this._assessments = new Map();
     this.loading = true;
     this.error = '';
     this._loaded = false;
@@ -94,6 +148,9 @@ export class TeamMap extends LitElement {
         listAreas(this.persistence),
       ]);
       this._areaName = new Map(areas.map((a) => [a.id, a.name]));
+      this._assessments = await loadAssessments(rows);
+      // La tabla se pinta con todo listo: aparecer primero sin la columna de
+      // carrera y rellenarla después movería las filas bajo el cursor.
       this.rows = rows;
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar el mapa.';
@@ -120,6 +177,43 @@ export class TeamMap extends LitElement {
         })}
       </span>
     `;
+  }
+
+  /**
+   * Celda de carrera: el nivel y cómo va frente a sus expectativas. Los estados
+   * que no son una valoración (sin nivel, sin valorar, externa…) se nombran, en
+   * vez de pintarse como si cumpliera.
+   * @param {{ id: string, external: boolean, levelId: string|null }} row
+   * @returns {import('lit').TemplateResult}
+   */
+  _careerCell(row) {
+    // Persona que no está en el mapa de valoraciones: su lectura falló. Decirlo
+    // en vez de contarla como «sin valorar», que sería otro dato distinto.
+    if (!row.external && !this._assessments.has(row.id)) {
+      return html`<span class="muted" title="No se ha podido leer su valoración">—</span>`;
+    }
+    const estado = careerStatus(this.framework, row, this._assessments.get(row.id));
+    const nivel = estado.levelName
+      ? html`<span class="level">${estado.levelName}</span>`
+      : null;
+    return html`<span class="career">${nivel}${this._careerState(estado)}</span>`;
+  }
+
+  /**
+   * La segunda línea de la celda de carrera: qué le pasa a esta persona con las
+   * expectativas de su nivel.
+   * @param {import('../../tools/career/domain/careerStatus.js').CareerStatus} estado
+   * @returns {import('lit').TemplateResult}
+   */
+  _careerState(estado) {
+    if (estado.kind === 'gaps') {
+      const plural = estado.reds === 1 ? 'expectativa' : 'expectativas';
+      return html`<span class="state gaps">No llega en ${estado.reds} ${plural} de ${estado.total}</span>`;
+    }
+    if (estado.kind === 'meets') {
+      return html`<span class="state meets">Cumple las ${estado.total}</span>`;
+    }
+    return html`<span class="state pending">${CAREER_TEXT[estado.kind]}</span>`;
   }
 
   _contributionCell(roles) {
@@ -186,8 +280,9 @@ export class TeamMap extends LitElement {
       <section>
         <h2>Mapa del equipo</h2>
         <p class="lead">
-          Foto del sistema en las cuatro dimensiones. Colores cálidos = niveles iniciales, fríos = avanzados;
-          la mezcla indica diversidad sana. Es una lectura privada de quien lidera, no una comparación entre personas.
+          Foto del sistema en las cuatro dimensiones, y cómo va cada persona en su nivel de carrera.
+          Colores cálidos = niveles iniciales, fríos = avanzados; la mezcla indica diversidad sana.
+          Es una lectura privada de quien lidera, no una comparación entre personas.
         </p>
         ${this.rows.length === 0
           ? html`<p class="empty">Aún no hay nadie en tu equipo.
@@ -198,7 +293,7 @@ export class TeamMap extends LitElement {
                 <div class="table-wrap"><table>
                   <thead>
                     <tr>
-                      <th>Persona</th><th>Seniority</th><th>Emocional</th><th>Conocimiento</th><th>Contribución</th>
+                      <th>Persona</th><th>Seniority</th><th>Emocional</th><th>Conocimiento</th><th>Contribución</th><th>Carrera</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -213,6 +308,7 @@ export class TeamMap extends LitElement {
                           <td>${this._dimButton(r, 'emotional', 'Emocional', this._levelCell(r.emotional))}</td>
                           <td>${this._dimButton(r, 'knowledge', 'Conocimiento', this._knowledgeCell(r.knowledge))}</td>
                           <td>${this._dimButton(r, 'contribution', 'Contribución', this._contributionCell(r.contribution))}</td>
+                          <td>${this._dimButton(r, 'expectativas', 'Carrera', this._careerCell(r))}</td>
                         </tr>
                       `,
                     )}
