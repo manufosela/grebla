@@ -217,6 +217,20 @@ describe('Fase 2b — casos de uso', () => {
     expect(row.contribution).toEqual({ PL: 'primary', CO: 'secondary' });
   });
 
+  it('getTeamMap trae también el nivel de carrera y si la persona es externa', async () => {
+    // El Mapa resume la carrera junto a las cuatro dimensiones, y para eso
+    // necesita el nivel; sin él tendría que abrir la ficha de cada persona.
+    const fresh = createMemoryPersistence();
+    await addPerson(fresh, { name: 'Ana', startDate: '2025-01-01', levelId: 'l3' });
+    await addPerson(fresh, { name: 'Ext', startDate: '2025-01-01', external: true });
+
+    const rows = await getTeamMap(fresh);
+    const ana = rows.find((r) => r.name === 'Ana');
+    const ext = rows.find((r) => r.name === 'Ext');
+    expect(ana).toMatchObject({ levelId: 'l3', external: false });
+    expect(ext).toMatchObject({ levelId: null, external: true });
+  });
+
   it('configuración: getSettings devuelve defaults; updateSettings valida y guarda', async () => {
     const fresh = createMemoryPersistence();
     expect((await getSettings(fresh)).cadenceDays).toBeGreaterThan(0);

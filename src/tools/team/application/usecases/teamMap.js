@@ -37,6 +37,11 @@ export async function getTeamMap(persistence) {
       id: person.id,
       name: person.name,
       guilds: person.guilds ?? [],
+      // Carrera (RMR-TSK-0506): el nivel y si es externa, para resumir en el
+      // Mapa cómo va frente a las expectativas de su nivel. La valoración en sí
+      // no se lee aquí: vive en su propio subárbol, fuera de este puerto.
+      levelId: person.levelId ?? null,
+      external: person.external === true,
       seniority: seniority ? { level: seniority.level, toNext: seniority.toNext ?? false } : null,
       emotional: emotional ? { level: emotional.level, toNext: emotional.toNext ?? false } : null,
       knowledge: { areas, profile: knowledgeProfileFromAreas(areas) },
