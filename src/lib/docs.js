@@ -85,6 +85,24 @@ export async function publishDoc(input) {
 }
 
 /**
+ * Cambia los datos de un documento publicado. Si cambia la carpeta, la función
+ * mueve además el fichero: cambiar solo la ficha la dejaría apuntando a una ruta
+ * donde no hay nada.
+ * @param {{ id: string, name: string, description?: string, folder?: string }} input
+ */
+export async function updateDocMeta(input) {
+  if (!input?.name?.trim()) throw new Error('El documento necesita un nombre');
+  const { httpsCallable } = await import('firebase/functions');
+  const { getRegionalFunctions } = await import('./firebase.js');
+  await httpsCallable(await getRegionalFunctions(), 'updateDoc')({
+    id: input.id,
+    name: input.name.trim(),
+    description: input.description ?? '',
+    folder: input.folder ?? '',
+  });
+}
+
+/**
  * Contenido de un documento, como Blob. Lo trae respetando las reglas: sin
  * sesión, Storage lo deniega.
  * @param {string} path

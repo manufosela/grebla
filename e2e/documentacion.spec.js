@@ -75,6 +75,19 @@ test('sin sesión no se llega a la lista', async ({ page }) => {
   await expect(page.locator('body')).toContainText('Usa tu cuenta de Google');
 });
 
+test('el documento se VE dentro del visor, no solo el marco', async ({ page }) => {
+  // El test anterior comprobaba el atributo `sandbox` del iframe y pasaba en
+  // verde mientras en producción no se veía nada: el bucket no tenía CORS y la
+  // descarga ni llegaba. Comprobar el marco no es comprobar el documento.
+  await subir(DOCS[0].path, '<!doctype html><title>E2E</title><h1 id="marca">CONTENIDO VISIBLE</h1>');
+  await signInAs(page, 'engineer');
+  await page.goto('/documentacion');
+  await page.locator('[data-doc-id="e2e-grebla"]').click();
+
+  const dentro = page.frameLocator('docs-reader iframe');
+  await expect(dentro.locator('#marca')).toHaveText('CONTENIDO VISIBLE', { timeout: 15_000 });
+});
+
 test('el documento se ve en un visor AISLADO, sin acceso a nuestro origen', async ({ page }) => {
   // Un blob URL hereda el origen de la aplicación: sin sandbox, un documento con
   // un script podría leer la sesión y los datos de personas de quien lo abre.

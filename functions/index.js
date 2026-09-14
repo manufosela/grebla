@@ -3178,3 +3178,93 @@ export const removeDoc = onCall({ region: 'europe-west1' }, async (request) => {
   logger.info(`[docs] documento ${id} retirado por ${caller.uid}`);
   return { ok: true };
 });
+
+
+/**
+ * Cambia los datos de un documento ya publicado: nombre, descripción y carpeta
+ * (RMR-TSK-0505).
+ *
+ * Mover de carpeta es mover el FICHERO, y en Storage eso es copiar y borrar, que
+ * ningún cliente puede hacer. Por eso va aquí y no en una escritura directa a
+ * Firestore: si solo se cambiara la ficha, apuntaría a una ruta donde no hay
+ * nada.
+ *
+ * El id NO cambia al mover. Nació de la ruta porque era una forma cómoda de
+ * tener uno estable, pero es un identificador: si cambiara, cualquier enlace
+ * guardado dejaría de valer y quedarían dos fichas del mismo documento.
+ */
+export const updateDoc = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await canPublishDocs(caller.uid))) {
+    throw new HttpsError('permission-denied', 'No gestionas la documentación.');
+  }
+
+  const id = String(request.data?.id ?? '').trim();
+  if (!id || id.includes('/')) throw new HttpsError('invalid-argument', 'Falta el documento a editar.');
+  const name = String(request.data?.name ?? '').trim();
+  if (!name) throw new HttpsError('invalid-argument', 'El documento necesita un nombre.');
+
+  const ref = getFirestore().doc(`docs/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Ese documento ya no está.');
+
+  const actual = String(snap.data()?.path ?? '');
+  if (!actual.startsWith('docs/')) throw new HttpsError('failed-precondition', 'La ficha no apunta a un documento.');
+
+  // La carpeta es lo único que mueve el fichero; el nombre del fichero se
+  // conserva, que es lo que mantiene el documento reconocible en el bucket.
+  const fileName = actual.split('/').pop();
+  const destino = docStoragePath({ folder: request.data?.folder, fileName });
+  if (!destino) throw new HttpsError('invalid-argument', 'La carpeta no da una ruta utilizable.');
+
+  if (destino !== actual) {
+    const bucket = getStorage().bucket();
+    // Mover a un sitio ocupado sobrescribiría el fichero de OTRO documento y
+    // dejaría su ficha apuntando a un contenido que no es el suyo. Se comprueba
+    // antes y, además, se pide que el destino no exista en el momento de mover:
+    // entre la comprobación y el movimiento cabe otra publicación.
+    const [ocupado] = await bucket.file(destino).exists();
+    if (ocupado) {
+      throw new HttpsError('already-exists', `Ya hay un documento en ${destino}. Cámbiale el nombre o elige otra carpeta.`);
+    }
+    try {
+      await bucket.file(actual).move(destino, { preconditionOpts: { ifGenerationMatch: 0 } });
+    } catch (err) {
+      if (err?.code === 412) {
+        throw new HttpsError('already-exists', `Acaban de publicar algo en ${destino}. Inténtalo otra vez.`);
+      }
+      throw err;
+    }
+    logger.info(`[docs] ${id} movido de ${actual} a ${destino} por ${caller.uid}`);
+  }
+
+  try {
+    await ref.set({
+      name,
+      description: String(request.data?.description ?? '').trim(),
+      folder: docFolder(request.data?.folder),
+      path: destino,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: caller.uid,
+    }, { merge: true });
+  } catch (err) {
+    // El fichero ya se movió y la ficha sigue apuntando al sitio de antes: el
+    // documento quedaría inalcanzable. Se devuelve a su sitio antes de fallar,
+    // que es lo único que deja las dos mitades otra vez de acuerdo.
+    if (destino !== actual) {
+      // La vuelta lleva la MISMA precondición que la ida: mientras tanto puede
+      // haberse publicado algo en la ruta de origen, y deshacer no puede
+      // llevarse por delante un documento ajeno. Si ya está ocupada, se deja
+      // constancia en vez de sobrescribir.
+      await getStorage().bucket().file(destino)
+        .move(actual, { preconditionOpts: { ifGenerationMatch: 0 } })
+        .catch((vuelta) => {
+          logger.error(`[docs] ${id}: el fichero quedó en ${destino} y la ficha en ${actual}; no se pudo deshacer`, vuelta);
+        });
+    }
+    throw err;
+  }
+
+  return { id, path: destino };
+});
