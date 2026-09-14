@@ -190,9 +190,9 @@ export class TeamMap extends LitElement {
           la mezcla indica diversidad sana. Es una lectura privada de quien lidera, no una comparación entre personas.
         </p>
         ${this.rows.length === 0
-          ? html`<p class="empty">Aún no hay personas con lecturas.
+          ? html`<p class="empty">Aún no hay nadie en tu equipo.
               <button type="button" class="link-inline" @click=${() => this._gotoTab('people')}>Ve a Personas</button>
-              para elegir a quién registrarle la primera lectura.</p>`
+              para dar de alta a la primera y empezar a registrar lecturas.</p>`
           : html`
               <div class="wrap">
                 <div class="table-wrap"><table>

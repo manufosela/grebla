@@ -36,7 +36,7 @@ test('la tabla de equipo no deja contenido fuera de alcance', async ({ page }) =
   await conPlantillaAncha(async () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await signInAs(page, 'superadmin');
-    await page.goto('/tools/team');
+    await page.goto('/tools/team#people');
     await expect(page.locator('team-people table')).toBeVisible();
 
     // O cabe, o se puede desplazar. Lo que no vale es desbordar sin salida.
@@ -55,7 +55,7 @@ test('la última columna se alcanza sin arrastrar la tabla a un lado', async ({ 
   await conPlantillaAncha(async () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await signInAs(page, 'superadmin');
-    await page.goto('/tools/team');
+    await page.goto('/tools/team#people');
 
     const acciones = page.locator('team-people thead th').last();
     await expect(acciones).toContainText('Acciones');
