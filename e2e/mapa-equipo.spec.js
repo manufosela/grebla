@@ -22,10 +22,56 @@ function db() {
 const PERSON = 'people/e2e-person-mapa';
 const NOMBRE = 'Persona del mapa E2E';
 
-/** Corre `fn` con una persona propia colgando del head. */
-async function conSuPersona(fn) {
-  await db().doc(PERSON).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-head', active: true });
-  try { await fn(); } finally { await db().doc(PERSON).delete(); }
+/** Framework mínimo para valorar: un nivel con dos expectativas. */
+const FRAMEWORK = {
+  tracks: [{ id: 'ic', name: 'IC', order: 1, description: '' }],
+  levels: [{ id: 'mapa-l2', code: 'L2', title: 'Senior', trackId: 'ic', order: 2, description: '', typicalProfile: '' }],
+  dimensions: [
+    { id: 'mapa-d1', name: 'Autonomía', order: 1 },
+    { id: 'mapa-d2', name: 'Impacto', order: 2 },
+  ],
+  disciplines: [],
+  expectations: [
+    { levelId: 'mapa-l2', dimensionId: 'mapa-d1', text: 'Resuelve sola' },
+    { levelId: 'mapa-l2', dimensionId: 'mapa-d2', text: 'Impacto en el equipo' },
+  ],
+  addendums: [],
+};
+
+/**
+ * Corre `fn` con una persona propia colgando del head. Al limpiar borra TAMBIÉN
+ * su valoración: Firestore no borra las subcolecciones con el documento, y una
+ * valoración olvidada haría que la persona «sin valorar» del siguiente test
+ * apareciera valorada.
+ */
+async function conSuPersona(fn, extra = {}) {
+  await db().doc(PERSON).set({
+    name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-head', active: true, ...extra,
+  });
+  try { await fn(); } finally {
+    await db().doc(`${PERSON}/career/assessment`).delete();
+    await db().doc(PERSON).delete();
+  }
+}
+
+/**
+ * Como `conSuPersona`, pero con el framework de carrera sembrado y el nivel
+ * puesto. Devuelve el framework como estaba: otros specs siembran el suyo.
+ */
+async function conCarrera(fn, { assessment = null } = {}) {
+  const previo = (await db().doc('careerFramework/engineering').get()).data() ?? null;
+  await db().doc('careerFramework/engineering').set(FRAMEWORK);
+  try {
+    await conSuPersona(async () => {
+      if (assessment) {
+        await db().doc(`${PERSON}/career/assessment`).set({ byDimension: assessment });
+      }
+      await fn();
+    }, { levelId: 'mapa-l2' });
+  } finally {
+    if (previo) await db().doc('careerFramework/engineering').set(previo);
+    else await db().doc('careerFramework/engineering').delete();
+  }
 }
 
 test('al entrar en Equipo lo primero es el mapa', async ({ page }) => {
@@ -66,4 +112,47 @@ test('quien entra por la lista de personas vuelve a la lista', async ({ page }) 
     await page.getByRole('button', { name: 'Volver a personas' }).click();
     await expect(page.locator('team-people table')).toBeVisible();
   });
+});
+
+test('el mapa dice el nivel y que nadie ha valorado todavía', async ({ page }) => {
+  await conCarrera(async () => {
+    await signInAs(page, 'head');
+    await page.goto('/tools/team');
+
+    const fila = page.getByRole('row', { name: new RegExp(NOMBRE) });
+    await expect(fila).toContainText('L2 · Senior');
+    // Sin valorar NO puede leerse como «cumple»: nadie la ha mirado aún.
+    await expect(fila).toContainText('Sin valorar');
+  });
+});
+
+test('valorada, el mapa cuenta las expectativas que no llega', async ({ page }) => {
+  await conCarrera(async () => {
+    await signInAs(page, 'head');
+    await page.goto('/tools/team');
+
+    const fila = page.getByRole('row', { name: new RegExp(NOMBRE) });
+    await expect(fila).toContainText('No llega en 1 expectativa de 2');
+  }, { assessment: { 'mapa-d1': { meets: false, note: '' }, 'mapa-d2': { meets: true, note: '' } } });
+});
+
+test('la celda de carrera abre la ficha en Expectativas, lista para valorar', async ({ page }) => {
+  await conCarrera(async () => {
+    await signInAs(page, 'head');
+    await page.goto('/tools/team');
+
+    await page.getByRole('button', { name: `Abrir Carrera de ${NOMBRE}` }).click();
+    await expect(page.getByRole('tab', { name: 'Carrera', selected: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Expectativas', selected: true })).toBeVisible();
+  });
+});
+
+test('quien no tiene plan de carrera no se valora: los externos', async ({ page }) => {
+  await conSuPersona(async () => {
+    await signInAs(page, 'head');
+    await page.goto('/tools/team');
+
+    const fila = page.getByRole('row', { name: new RegExp(NOMBRE) });
+    await expect(fila).toContainText('Sin plan (externa)');
+  }, { external: true });
 });
