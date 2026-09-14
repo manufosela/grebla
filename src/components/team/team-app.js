@@ -22,7 +22,28 @@ import './team-career.js';
 import { listActivePeople } from '../../tools/team/application/usecases/index.js';
 import { getMyPerson } from '../../lib/engineer.js';
 
-const TEAM_TABS = ['people', 'career', 'map', 'departures', 'team', 'settings'];
+/**
+ * Secciones de la herramienta, en el orden en el que se ofrecen. El Mapa va
+ * PRIMERO porque es la foto del equipo —el estado de cada persona en las cuatro
+ * dimensiones— y era lo que más costaba encontrar: vivía detrás de Personas y
+ * Carrera, así que había que saber que estaba ahí (RMR-TSK-0505).
+ */
+const TEAM_TABS = ['map', 'people', 'career', 'departures', 'team', 'settings'];
+
+/** Sección con la que se abre la herramienta cuando el hash no dice otra cosa. */
+const DEFAULT_TAB = TEAM_TABS[0];
+
+/**
+ * Rótulo de la vuelta desde una ficha, según de dónde se entró. Con el Mapa de
+ * primero, la ficha se abre sobre todo desde ahí, y un «volver a personas» fijo
+ * dejaba al lector en una sección distinta de la que había dejado a medias.
+ * Lista cerrada: una sección desconocida vuelve al principio.
+ */
+const RETURN_LABELS = {
+  map: '← Volver al mapa',
+  people: '← Volver a personas',
+  career: '← Volver a carrera',
+};
 
 /** Prefijo del hash que enlaza directamente a la ficha de una persona. */
 const PERSON_HASH = 'person=';
@@ -115,13 +136,15 @@ export class TeamApp extends LitElement {
     this.selectedSubtab = null;
     /** @type {string|null} id de persona pendiente de abrir cuando llegue `persistence` (deep-link) */
     this._pendingPersonId = null;
+    /** @type {string} sección a la que vuelve la ficha (de donde se abrió) */
+    this._returnTo = DEFAULT_TAB;
     if (rawHash.startsWith(PERSON_HASH)) {
       // Deep-link a una ficha: se resuelve cuando `persistence` esté disponible.
       /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
-      this.view = 'people';
+      this.view = DEFAULT_TAB;
       this._pendingPersonId = decodeURIComponent(rawHash.slice(PERSON_HASH.length)) || null;
     } else {
-      this.view = TEAM_TABS.includes(rawHash) ? rawHash : 'people';
+      this.view = TEAM_TABS.includes(rawHash) ? rawHash : DEFAULT_TAB;
     }
     this.error = '';
     this._onHashChange = () => this._applyHash();
@@ -208,6 +231,17 @@ export class TeamApp extends LitElement {
   }
 
   /**
+   * Anota la sección desde la que se abre una ficha, para que la vuelta lleve
+   * ahí. Si ya estábamos en una ficha (salto de persona a persona) se conserva
+   * el origen anterior: volver dos veces al mismo sitio no es volver.
+   * @returns {void}
+   */
+  _rememberReturn() {
+    if (this.view === 'person') return;
+    this._returnTo = RETURN_LABELS[this.view] ? this.view : DEFAULT_TAB;
+  }
+
+  /**
    * Abre la ficha de una persona a partir de su id (deep-link / recarga). Reutiliza
    * `listActivePeople` (mismo origen que la sección Personas) para localizarla; si
    * no existe o falla, vuelve a la lista de personas.
@@ -222,6 +256,7 @@ export class TeamApp extends LitElement {
       const person = people.find((p) => p.id === id);
       if (person) {
         this.selected = person;
+        this._rememberReturn();
         this.view = 'person';
       } else {
         this._go('people');
@@ -248,6 +283,7 @@ export class TeamApp extends LitElement {
     this.selectedSubtab = detail.subtab ?? null;
     if (person) {
       this.selected = person;
+      this._rememberReturn();
       this.view = 'person';
     }
     // Refleja la ficha en el hash para que la recarga la conserve. Si no teníamos
@@ -275,9 +311,9 @@ export class TeamApp extends LitElement {
     return html`
       ${this._renderScopeControl()}
       <nav class="sections" aria-label="Secciones">
+        ${this._tab('map', 'Mapa')}
         ${this._tab('people', 'Personas')}
         ${this._tab('career', 'Carrera')}
-        ${this._tab('map', 'Mapa')}
         ${this._tab('departures', 'Bajas')}
         ${this._tab('team', 'Equipo')}
         ${this._tab('settings', 'Ajustes')}
@@ -330,7 +366,7 @@ export class TeamApp extends LitElement {
         ></team-career>`;
       case 'person':
         return html`
-          <button class="back" @click=${() => this._go('people')}>← Volver a personas</button>
+          <button class="back" @click=${() => this._go(this._returnTo)}>${RETURN_LABELS[this._returnTo]}</button>
           <team-person-detail
             .persistence=${this.persistence}
             .person=${this.selected}
@@ -342,7 +378,13 @@ export class TeamApp extends LitElement {
           ></team-person-detail>
         `;
       case 'map':
-        return html`<team-map .persistence=${this.persistence}></team-map>`;
+        // `open-person` hay que escucharlo AQUÍ: el evento burbujea hasta el host,
+        // pero nadie lo recogía, así que pulsar una dimensión del Mapa no abría
+        // nada (RMR-BUG-0117). Es el mismo manejador que usa la sección Personas.
+        return html`<team-map
+          .persistence=${this.persistence}
+          @open-person=${this._onOpenPerson}
+        ></team-map>`;
       case 'departures':
         return html`<team-departures .persistence=${this.persistence}></team-departures>`;
       case 'team':

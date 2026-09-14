@@ -71,7 +71,7 @@ test('la tabla de equipo lista el DOMINIO de cada persona, no su squad', async (
   // veía una agrupación que ya no es a la que pertenece la gente.
   await conDominios(async () => {
     await signInAs(page, 'superadmin');
-    await page.goto('/tools/team');
+    await page.goto('/tools/team#people');
 
     const tabla = page.locator('team-people');
     await expect(tabla.locator('th', { hasText: 'Dominios' })).toBeVisible();

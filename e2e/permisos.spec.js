@@ -23,7 +23,7 @@ async function abrirPermisosDelPanel(page, nombre) {
 
 /** Abre la sub-pestaña «Permisos» de una persona en la herramienta Equipo. */
 async function abrirPermisosDeLaFicha(page, nombre) {
-  await page.goto('/tools/team');
+  await page.goto('/tools/team#people');
   await page.getByText(nombre, { exact: true }).first().click();
   await page.getByRole('tab', { name: 'Permisos' }).click();
 }
