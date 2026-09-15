@@ -21,6 +21,7 @@ import { JD_POLISH_MODEL, JD_POLISH_TOOL, buildPolishPrompt, sanitizePolishedIte
 import { sign, coinsKmsKeyName } from './signer.js';
 import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pulseAggregate.js';
 import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './docsPaths.js';
+import { upcomingFrom } from './o2oUpcoming.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -544,7 +545,19 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
   const actionsSnap = await db.collection('people').doc(personId).collection('o2oActions').get();
   const actions = actionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  return { sessions, actions };
+  // El O2O QUE VIENE (RMR-TSK-0512): el periodo más reciente de cada líder, con
+  // su formulario previo — los temas para pensar antes de la conversación. La
+  // proyección vive en o2oUpcoming.js y deja fuera la guía del manager, que está
+  // en el mismo documento y es suya. Las reglas deniegan el periodo a la
+  // persona, así que esta es la única puerta.
+  const periodsPerLeader = await Promise.all(
+    leaderUids.map((luid) => db.collection('leaders').doc(luid).collection('o2oPeriods').get()),
+  );
+  const upcoming = periodsPerLeader
+    .map((snap, i) => upcomingFrom(leaderUids[i], snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+    .filter(Boolean);
+
+  return { sessions, actions, upcoming };
 });
 
 // ── Encuestas anónimas: respuesta por token SIN login (RMR-PCS-0026) ─────────
