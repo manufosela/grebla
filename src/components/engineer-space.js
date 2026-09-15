@@ -170,6 +170,18 @@ export class EngineerSpace extends LitElement {
     .o2o-act.done { color: var(--rm-muted, #5b6b7d); text-decoration: line-through; }
     .o2o-note { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0.25rem 0 1rem; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; margin: 0; }
+    /* El O2O que viene: lo primero de la sección, porque es lo accionable —
+       hay algo que pensar ANTES de la conversación (RMR-TSK-0512). */
+    .next { border: 1px solid var(--rm-border, #e5e7eb); border-left: 4px solid var(--rm-accent, #2a9d8f);
+      border-radius: 12px; padding: 0.9rem 1.1rem; margin: 0 0 1.25rem; background: var(--rm-surface-hover, #eef3f5); }
+    .next h4 { margin: 0; font-size: 1rem; color: var(--rm-navy, #1e3a5f); }
+    .next .intro { font-size: 0.88rem; margin: 0.4rem 0 0; white-space: pre-wrap; }
+    .next .sec { margin: 0.9rem 0 0; }
+    .next .sec h5 { margin: 0 0 0.35rem; font-size: 0.8rem; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); }
+    .next ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.3rem; }
+    .next li { font-size: 0.9rem; }
+    .next .hint { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0.9rem 0 0; }
 
     /* ── Sección Mis datos (externos) ── */
     section.datos { border-left: 4px solid var(--rm-navy, #1e3a5f); }
@@ -894,10 +906,15 @@ export class EngineerSpace extends LitElement {
     const data = this.o2o;
     const sessions = data?.sessions ?? [];
     const actions = data?.actions ?? [];
-    if (!sessions.length && !actions.length) {
+    const upcoming = data?.upcoming ?? [];
+    // El vacío solo es vacío si TAMPOCO hay nada preparado: decir «aún no hay
+    // nada» teniendo un O2O con preguntas esperando sería mentir justo a quien
+    // venía a prepararlo.
+    if (!sessions.length && !actions.length && !upcoming.length) {
       return html`<p class="empty">Aún no hay O2O compartidos contigo. Cuando tu manager comparta un resumen o te asigne acciones, aparecerán aquí.</p>`;
     }
     return html`
+      ${upcoming.map((u) => this._renderUpcoming(u))}
       <p class="sub">Resúmenes compartidos</p>
       ${sessions.length
         ? html`<ul class="o2o-list">${sessions.map((s) => this._renderSharedSession(s))}</ul>`
@@ -908,6 +925,32 @@ export class EngineerSpace extends LitElement {
         : html`<p class="empty">No tienes acciones asignadas.</p>`}
       <p class="o2o-note">Solo ves lo que tu manager ha marcado como compartido; sus notas privadas no son visibles.</p>
     `;
+  }
+
+  /**
+   * El O2O que viene: el periodo que ha preparado el manager y los temas para
+   * pensar antes. Solo el formulario previo — la guía que él usará durante la
+   * conversación es suya y ni siquiera llega al navegador.
+   * @param {import('../lib/o2o.js').UpcomingO2O} u
+   * @returns {import('lit').TemplateResult}
+   */
+  _renderUpcoming(u) {
+    return html`
+      <div class="next">
+        <h4>Tu próximo O2O · ${u.name}</h4>
+        ${u.form.intro ? html`<p class="intro">${u.form.intro}</p>` : null}
+        ${u.form.sections.map((s) => this._renderUpcomingSection(s))}
+        <p class="hint">Son temas para pensar antes de la conversación, no un formulario que rellenar.</p>
+      </div>`;
+  }
+
+  /** Una sección del formulario previo. @returns {import('lit').TemplateResult} */
+  _renderUpcomingSection(section) {
+    return html`
+      <div class="sec">
+        <h5>${section.title}</h5>
+        <ul>${section.questions.map((q) => html`<li>${q.text}</li>`)}</ul>
+      </div>`;
   }
 
   /** Una sesión compartida (fecha + resumen). @returns {import('lit').TemplateResult} */
