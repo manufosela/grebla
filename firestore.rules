@@ -888,7 +888,11 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/pokerSessions/$(sessionId)).data.ownerLeaderUid == request.auth.uid;
       }
       allow read: if canAccessOrg();
-      allow create: if (isLeader() || managesToolByPolicy('poker'))
+      // Convoca quien lidera, quien gestiona la herramienta por política y quien
+      // gobierna la instancia (RMR-BUG-0114): el superadmin que no lleva equipo
+      // veía el botón —el glue le da canManage— y Firestore le denegaba. En los
+      // tres casos la sesión queda a su nombre: quien convoca es el dueño.
+      allow create: if (isSuperAdmin() || isLeader() || managesToolByPolicy('poker'))
         && request.resource.data.ownerLeaderUid == request.auth.uid;
       // El dueño gestiona todo (tema, ronda, cerrar); cualquiera con acceso solo revela (false→true).
       allow update: if isSuperAdmin()
