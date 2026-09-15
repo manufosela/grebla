@@ -22,7 +22,10 @@ test.describe('el Head ve su rama y no lo de fuera', () => {
     // progreso de la gente que sostienes se consulta (solo lectura) en la
     // pestaña «Carrera» de la herramienta de Equipo.
     await page.goto('/tools/team');
-    await page.getByRole('button', { name: 'Carrera' }).click();
+    // `exact` porque el Mapa tiene una celda «Abrir Carrera de <persona>» por
+    // fila: sin él, el nombre de la pestaña casa también con esas celdas y el
+    // test falla —o no— según cuánta gente haya ese día en el mapa.
+    await page.getByRole('button', { name: 'Carrera', exact: true }).click();
     await expect(page.getByText('Persona del manager')).toBeVisible();
     await expect(page.getByText('Persona de fuera')).toHaveCount(0);
   });
