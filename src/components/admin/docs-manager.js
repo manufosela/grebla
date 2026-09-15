@@ -79,8 +79,15 @@ export class DocsManager extends LitElement {
     this._load();
   }
 
+  /**
+   * Relee la lista. El estado «Cargando…» es solo para la PRIMERA vez: en una
+   * recarga (tras publicar, editar o retirar) sustituir la lista por un texto
+   * la hace desaparecer y volver, y lo que acabas de publicar parpadea justo
+   * donde ibas a pulsar (RMR-BUG-0118). Con datos ya en pantalla se recarga por
+   * debajo y la lista se actualiza cuando llega.
+   */
   async _load() {
-    this._loading = true;
+    this._loading = this._docs.length === 0;
     try {
       this._docs = await listDocs();
     } catch (err) {
