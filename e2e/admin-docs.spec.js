@@ -17,6 +17,11 @@ import { getStorage } from 'firebase-admin/storage';
 import { readFileSync } from 'node:fs';
 import { test, expect, signInAs } from './fixtures.js';
 
+// Estos tests publican ficheros de verdad contra el emulador de Storage y
+// esperan a Cloud Functions: con el presupuesto por defecto (30 s) un runner
+// lento agotaba el test antes de acabar, y fallaba de forma intermitente.
+test.describe.configure({ timeout: 90_000 });
+
 const BUCKET = 'demo-grebla.appspot.com';
 
 /** Inicializa el Admin SDK una vez: lo necesitan Firestore y Storage por igual. */
@@ -98,6 +103,10 @@ test('un documento publicado se puede editar, y al cambiar de carpeta se mueve e
   await page.locator('docs-manager input[type="text"]').first().fill(NOMBRE);
   await page.locator('docs-manager button', { hasText: 'Publicar documento' }).click();
   await expect(page.locator('docs-manager .msg.ok')).toBeVisible({ timeout: 20_000 });
+  // El aviso de éxito NO significa que la lista ya esté: la recarga va después.
+  // Esperar al documento —y no al aviso— es lo que hace fiable este test; dar
+  // por buena la señal anterior es lo que lo tumbaba en CI (RMR-BUG-0118).
+  await expect(page.locator('docs-manager li', { hasText: NOMBRE })).toBeVisible({ timeout: 20_000 });
 
   await page.locator('docs-manager button', { hasText: 'Editar' }).first().click();
   const campos = page.locator('docs-manager li.editing input[type="text"]');
