@@ -23,6 +23,7 @@ import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pu
 import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './docsPaths.js';
 import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, LINEAR_REF_RE } from './linearIssue.js';
+import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders } from './docTokens.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -3209,6 +3210,76 @@ export const removeDoc = onCall({ region: 'europe-west1' }, async (request) => {
   await ref.delete();
   logger.info(`[docs] documento ${id} retirado por ${caller.uid}`);
   return { ok: true };
+});
+
+// ── Visor de documentos desde OTRO origen (RMR-BUG-0124) ─────────────────────
+//
+// Las presentaciones reveal.js abren la vista del orador (tecla S) en un popup
+// que solo habla con una presentación de SU MISMO origen y que carga una copia
+// de la presentación por URL. Con el documento en un iframe aislado (blob URL o
+// srcdoc, origen opaco) eso no puede funcionar: no hay URL y los orígenes no
+// coinciden. La salida es servir el documento con su propio origen —el de esta
+// función—, que no es el de GREBLA: sus scripts no alcanzan nuestra sesión ni
+// nuestros datos por construcción, sin sandbox.
+//
+// La URL lleva un token de UN documento que caduca (DOC_TOKEN_TTL_MS). No es
+// la URL de descarga de Storage, que vale para siempre y se reenvía.
+
+/**
+ * Abre un documento para verlo: crea el token con el que `serveDoc` lo sirve.
+ * Quien puede leer los documentos (cualquiera con sesión, igual que la regla
+ * de Storage) puede abrirlos.
+ */
+export const openDoc = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const id = String(request.data?.id ?? '').trim();
+  if (!id || id.includes('/')) throw new HttpsError('invalid-argument', 'Falta el documento a abrir.');
+
+  const db = getFirestore();
+  const snap = await db.doc(`docs/${id}`).get();
+  // La ruta sale de la ficha, nunca de quien llama.
+  const path = String(snap.data()?.path ?? '');
+  if (!snap.exists || !path.startsWith('docs/')) throw new HttpsError('not-found', 'Ese documento no está.');
+
+  const token = randomBytes(24).toString('hex');
+  const expiresAt = Date.now() + DOC_TOKEN_TTL_MS;
+  await db.doc(`docTokens/${token}`).set({
+    docId: id, path, uid: caller.uid, expiresAt, createdAt: FieldValue.serverTimestamp(),
+  });
+  await purgeExpiredDocTokens(db);
+  return { token, expiresAt };
+});
+
+/** Barrido perezoso: cada apertura se lleva un puñado de tokens caducados. */
+async function purgeExpiredDocTokens(db) {
+  const caducados = await db.collection('docTokens').where('expiresAt', '<', Date.now()).limit(50).get();
+  if (caducados.empty) return;
+  const batch = db.batch();
+  for (const d of caducados.docs) batch.delete(d.ref);
+  await batch.commit();
+}
+
+/**
+ * Sirve el documento de un token vivo: GET /serveDoc/{token}/. Solo el HTML del
+ * documento; nada más bajo esa ruta. Sin token válido, 404 sin distinguir por
+ * qué (no existe, caducó, ruta rara): a quien llega sin GREBLA no se le cuenta.
+ */
+export const serveDoc = onRequest({ region: 'europe-west1', invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.status(405).type('text/plain').send('Método no permitido.');
+    return;
+  }
+  const token = tokenFromPath(req.path);
+  const ref = token ? getFirestore().doc(`docTokens/${token}`) : null;
+  const snap = ref ? await ref.get() : null;
+  if (!snap || !tokenIsLive(snap.data(), Date.now())) {
+    if (snap?.exists) await ref.delete();
+    res.status(404).type('text/plain').send('Este enlace no vale o ha caducado. Abre el documento desde GREBLA.');
+    return;
+  }
+  const [html] = await getStorage().bucket().file(snap.data().path).download();
+  res.set(viewerHeaders()).status(200).send(html);
 });
 
 
