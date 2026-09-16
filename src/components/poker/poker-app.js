@@ -9,6 +9,7 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './poker-table.js';
+import '../app-modal.js';
 import { listSessions, createSession, deleteSession, getSession } from '../../lib/poker.js';
 import { POKER_SCALES, scaleById } from '../../tools/poker/domain/deck.js';
 
@@ -28,6 +29,7 @@ export class PokerApp extends LitElement {
     _loading: { state: true },
     _error: { state: true },
     _tab: { state: true },
+    _toDelete: { state: true },
   };
 
   /**
@@ -71,6 +73,10 @@ export class PokerApp extends LitElement {
     .chip.closed { background: var(--rm-surface-hover, #eef3f5); color: var(--rm-muted, #5b6b7d); }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act.danger:hover { border-color: #b42318; color: #b42318; }
+    .act.danger.on { background: #b42318; border-color: #b42318; color: #fff; }
+    .act.danger.on:hover { filter: brightness(1.08); }
+    .modal-text { margin: 0 0 1rem; color: var(--rm-text, #1e3a5f); line-height: 1.45; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
     .act:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; padding: 0.5rem 0; }
     .error { color: #b42318; font-size: 0.85rem; }
@@ -94,6 +100,8 @@ export class PokerApp extends LitElement {
     this._loadedFor = null;
     this._openedShared = false;
     this._tab = 'sesiones';
+    // Sesión pendiente de confirmar su borrado (RMR-BUG-0120): un clic no borra.
+    this._toDelete = null;
   }
 
   /** De quién son las sesiones que se ven: la rama del supermanager, o su manager. */
@@ -189,7 +197,13 @@ export class PokerApp extends LitElement {
     }
   }
 
-  async _delete(session) {
+  /** Borrar pide confirmación (RMR-BUG-0120): cierra la sesión para todo el equipo y no se reabre. */
+  _delete(session) { this._toDelete = session; }
+
+  async _confirmDelete() {
+    const session = this._toDelete;
+    if (!session) return;
+    this._toDelete = null;
     try {
       await deleteSession(session.id);
       this._sessions = this._sessions.filter((s) => s.id !== session.id);
@@ -265,8 +279,22 @@ export class PokerApp extends LitElement {
     return html`${this._renderTabs()}${error}${body}`;
   }
 
+  _renderDeleteModal() {
+    const s = this._toDelete;
+    if (!s) return null;
+    return html`<app-modal .open=${true} heading="Borrar la sesión" @close=${() => { this._toDelete = null; }}>
+      <p class="modal-text">¿Borrar <strong>«${s.name}»</strong>? Desaparece para todo el equipo y no se puede recuperar.</p>
+      <div class="modal-actions">
+        <button class="act" @click=${() => { this._toDelete = null; }}>Cancelar</button>
+        <button class="act danger on" @click=${() => this._confirmDelete()}>Sí, borrar</button>
+      </div>
+    </app-modal>`;
+  }
+
   render() {
-    return this._selected ? this._renderDetail() : this._renderList();
+    return html`
+      ${this._selected ? this._renderDetail() : this._renderList()}
+      ${this._renderDeleteModal()}`;
   }
 }
 
