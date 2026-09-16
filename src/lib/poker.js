@@ -50,7 +50,7 @@ export async function createSession(data) {
       ? { linearLabel: data.squad.linearLabel, name: data.squad.name ?? data.squad.linearLabel }
       : null,
     scale: scaleById(data.scale).id,
-    deck: buildDeck(data.scale, data.cards),
+    deck: buildDeck(data.scale),
     tasks: [],
     currentTaskId: null,
     // En simple se vota desde el principio; en linear, tras «activar votación».

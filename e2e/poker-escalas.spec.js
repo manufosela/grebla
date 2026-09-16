@@ -32,8 +32,8 @@ test('se convoca por tallas, y el mazo queda guardado en la sesión', async ({ p
   await page.getByRole('tab', { name: 'Convocar' }).click();
   await page.getByPlaceholder(/Nombre de la sesión/).fill(NOMBRE);
   await page.getByRole('radio', { name: 'Tallas de camiseta' }).check();
-  await page.getByRole('checkbox', { name: 'S', exact: true }).check();
-  await page.getByRole('checkbox', { name: 'M', exact: true }).check();
+  // El mazo es fijo (RMR-TSK-0515): no hay cartas que marcar.
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
   await page.getByRole('button', { name: 'Crear sesión' }).click();
 
   await expect.poll(async () => {
@@ -44,8 +44,8 @@ test('se convoca por tallas, y el mazo queda guardado en la sesión', async ({ p
   const snap = await db().collection('pokerSessions').where('name', '==', NOMBRE).get();
   const sesion = snap.docs[0].data();
   expect(sesion.scale).toBe('tallas');
-  // Las marcadas, y las especiales que no se pueden quitar.
-  expect(sesion.deck).toEqual(['S', 'M', '?', '☕']);
+  // La escala entera, y las especiales que no se pueden quitar.
+  expect(sesion.deck).toEqual(['XS', 'S', 'M', 'L', 'XL', '?', '☕']);
 });
 
 /*
