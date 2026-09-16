@@ -8,22 +8,23 @@
  *
  * DOS DECISIONES DE SEGURIDAD, las dos necesarias:
  *
- * 1. El contenido se trae con `getBlob`, que pasa por las reglas de Storage. Con
- *    `getDownloadURL` sería más corto, pero esa URL lleva un token que funciona
- *    sin sesión y se puede reenviar: el documento dejaría de ser interno en
- *    cuanto alguien copiara el enlace.
+ * 1. El documento se abre con un token de visionado (`openDoc`, con sesión) de
+ *    UN documento y con caducidad, no con `getDownloadURL`: esa URL lleva un
+ *    token que funciona sin sesión, para siempre, y se puede reenviar. El
+ *    documento dejaría de ser interno en cuanto alguien copiara el enlace.
  *
- * 2. Se pinta en un IFRAME AISLADO —`sandbox="allow-scripts"`, sin
- *    `allow-same-origin`—. Un blob URL hereda el origen de la aplicación, así
- *    que abrirlo sin más dejaría que un documento con un script leyera la sesión
- *    y los datos de personas de quien lo abre. Aquí quien publica es de
- *    confianza, pero «de confianza» no es un control: basta un documento
- *    reenviado o una cuenta comprometida. Dentro del sandbox el documento se
- *    ejecuta —lo necesita: son presentaciones con JS— sin poder tocar nada
- *    nuestro.
+ * 2. Se pinta desde OTRO ORIGEN: lo sirve la Cloud Function `serveDoc` con el
+ *    suyo (RMR-BUG-0124). Un documento con un script no puede leer la sesión ni
+ *    los datos de personas de quien lo abre porque no está en nuestro origen;
+ *    quien publica es de confianza, pero «de confianza» no es un control. Antes
+ *    iba en un iframe aislado (blob URL sin `allow-same-origin`) y eso rompía
+ *    la vista del orador de reveal.js: el popup solo habla con una presentación
+ *    de SU MISMO origen y carga una copia por URL, y un origen opaco no tiene
+ *    ni lo uno ni lo otro. El `sandbox` que queda no aísla el origen (ya lo es):
+ *    quita lo que una presentación no necesita, como navegar esta pestaña.
  */
 import { LitElement, html, css } from 'lit';
-import { listDocs, fetchDocBlob } from '../../lib/docs.js';
+import { listDocs, openDocView } from '../../lib/docs.js';
 import { groupByFolder } from '../../tools/docs/domain/paths.js';
 import { skeletonLines } from '../app-skeleton.js';
 
@@ -103,9 +104,7 @@ export class DocsReader extends LitElement {
     this._opening = doc.id;
     this._error = '';
     try {
-      const blob = await fetchDocBlob(doc.path);
-      this._revoke();
-      this._src = URL.createObjectURL(blob);
+      this._src = await openDocView(doc);
       this._viewing = doc;
     } catch (err) {
       this._error = `No se ha podido abrir «${doc.name}»: ${err.message}`;
@@ -114,32 +113,19 @@ export class DocsReader extends LitElement {
     }
   }
 
-  /** Suelta el blob al cerrar: si no, el documento se queda en memoria. */
-  _revoke() {
-    if (this._src) URL.revokeObjectURL(this._src);
-    this._src = '';
-  }
-
   _close() {
-    this._revoke();
+    this._src = '';
     this._viewing = null;
   }
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this._revoke();
-  }
-
   /**
-   * Visor: el documento dentro de un iframe SIN `allow-same-origin`, que es lo
-   * que lo deja fuera de nuestro origen. `allow-scripts` sí, porque son
-   * presentaciones y sin JS no pasan de diapositiva.
-   *
-   * `allow-popups-to-escape-sandbox` (RMR-TSK-0528): las notas del presentador
-   * de reveal.js (tecla S) abren un about:blank y le escriben dentro; si ese
-   * popup hereda el sandbox nace con OTRO origen opaco y la ventana queda en
-   * blanco (comprobado). Al escapar, el popup toma el origen opaco de su
-   * creador —no el nuestro—, así que sigue sin poder tocar GREBLA.
+   * Visor: el documento en un iframe con el origen de `serveDoc` (ver la
+   * cabecera). `allow-same-origin` aquí significa «el suyo», no el nuestro, y
+   * hace falta: la vista del orador de reveal.js (tecla S, RMR-TSK-0528) abre
+   * un popup que comprueba que el origen de su opener es el mismo que el suyo
+   * y carga una copia de la presentación por URL. `allow-scripts` porque son
+   * presentaciones y sin JS no pasan de diapositiva; `allow-popups` por esa
+   * ventana; sin `allow-top-navigation`: el documento no navega esta pestaña.
    */
   _renderViewer() {
     return html`
@@ -150,7 +136,7 @@ export class DocsReader extends LitElement {
           <button class="back maximize" @click=${() => this._maximize()} title="Pantalla completa (Esc para volver)">⛶ Maximizar</button>
         </div>
         <iframe title=${this._viewing.name} src=${this._src} allow="fullscreen"
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
       </div>`;
   }
 
