@@ -877,16 +877,10 @@ service cloud.firestore {
     // puede leer una vez la sesión está `revealed`. «Pasar de tema» solo cambia
     // la ronda en la sesión, así que nadie borra los documentos de los demás.
     match /pokerSessions/{sessionId} {
-      // Revelar es colaborativo (RMR-TSK-0317): cualquiera con acceso puede
-      // revelar, pero SOLO en un sentido — poner `revealed` de false a true, y
-      // sin tocar ningún otro campo (ni tema, ni ronda, ni dueño). Volver a
-      // ocultar es cosa del dueño (pasa de tema con `startTopic`): así un
-      // participante no puede re-ocultar los votos ya revelados para fastidiar.
-      function revealsOnly() {
-        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealed'])
-          && resource.data.revealed == false
-          && request.resource.data.revealed == true;
-      }
+      // Revelar es del ORGANIZADOR (RMR-TSK-0522). Hasta ahora cualquiera con
+      // acceso podía poner `revealed` a true: en una mesa de cuatro, el primero
+      // que se impacientaba destapaba las cartas de los demás. Ahora la sesión
+      // entera —tema, ronda, revelar, tareas— la escribe solo su dueño.
       function sessionRevealed() {
         return get(/databases/$(database)/documents/pokerSessions/$(sessionId)).data.revealed == true;
       }
@@ -904,10 +898,9 @@ service cloud.firestore {
       // tres casos la sesión queda a su nombre: quien convoca es el dueño.
       allow create: if (isSuperAdmin() || isLeader() || managesToolByPolicy('poker'))
         && request.resource.data.ownerLeaderUid == request.auth.uid;
-      // El dueño gestiona todo (tema, ronda, cerrar); cualquiera con acceso solo revela (false→true).
+      // El dueño gestiona todo (tema, ronda, revelar, cerrar); nadie más toca la sesión.
       allow update: if isSuperAdmin()
-        || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
-        || (canAccessOrg() && revealsOnly());
+        || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
       allow delete: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid);
 

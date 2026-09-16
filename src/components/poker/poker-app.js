@@ -12,6 +12,7 @@ import './poker-table.js';
 import '../app-modal.js';
 import { listSessions, createSession, deleteSession, getSession } from '../../lib/poker.js';
 import { POKER_SCALES, scaleById } from '../../tools/poker/domain/deck.js';
+import { parseTaskLines } from '../../tools/poker/domain/tasks.js';
 
 export class PokerApp extends LitElement {
   static properties = {
@@ -24,6 +25,8 @@ export class PokerApp extends LitElement {
     _sessions: { state: true },
     _newName: { state: true },
     _newScale: { state: true },
+    _newOwnerVotes: { state: true },
+    _newTasks: { state: true },
     openSessionId: { attribute: false },
     _copied: { state: true },
     _loading: { state: true },
@@ -55,8 +58,11 @@ export class PokerApp extends LitElement {
     .tab:hover { color: var(--teal); }
     .tab.on { background: var(--teal); color: var(--rm-on-accent, #fff); box-shadow: 0 1px 4px rgba(42,157,143,0.4); }
     .create { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.4rem; max-width: 34rem; }
-    .create input, .create select { padding: 0.55rem 0.75rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
-    .create input:focus, .create select:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
+    .create input, .create select, .create textarea { padding: 0.55rem 0.75rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
+    .create input:focus, .create select:focus, .create textarea:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
+    .create textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+    .create .chk { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); cursor: pointer; }
+    .create .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     .modes { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
     .modes label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
     /* Escala y cartas de la sesión que se convoca (RMR-TSK-0481). */
@@ -93,6 +99,9 @@ export class PokerApp extends LitElement {
     this._sessions = [];
     this._newName = '';
     this._newScale = POKER_SCALES[0].id;
+    // Quien convoca vota salvo que diga lo contrario; las tareas, una por línea (RMR-TSK-0522).
+    this._newOwnerVotes = true;
+    this._newTasks = '';
     this.openSessionId = null;
     this._copied = false;
     this._loading = false;
@@ -184,7 +193,11 @@ export class PokerApp extends LitElement {
     const name = this._newName.trim();
     if (!name || !this.leaderUid) return;
     try {
-      const id = await createSession({ name, ownerLeaderUid: this.leaderUid, scale: this._newScale });
+      const id = await createSession({
+        name, ownerLeaderUid: this.leaderUid, scale: this._newScale,
+        ownerVotes: this._newOwnerVotes, tasks: parseTaskLines(this._newTasks),
+      });
+      this._newTasks = '';
       this._newName = '';
       this._error = '';
       // Convocada: al volver de la mesa se aterriza en la lista, no en el formulario.
@@ -242,6 +255,13 @@ export class PokerApp extends LitElement {
         @input=${(e) => { this._newName = e.target.value; }}
         @keydown=${(e) => { if (e.key === 'Enter') this._create(); }} />
       ${this._renderScalePicker()}
+      <label class="chk"><input type="checkbox" .checked=${this._newOwnerVotes}
+        @change=${(e) => { this._newOwnerVotes = e.target.checked; }} /> Yo también voto</label>
+      <label class="field">
+        <span>Tareas a estimar, una por línea (se pueden añadir más durante la sesión)</span>
+        <textarea rows="4" placeholder="BB-1231 - Nuevo onboarding&#10;BB-1240 - Exportar informe" .value=${this._newTasks}
+          @input=${(e) => { this._newTasks = e.target.value; }}></textarea>
+      </label>
       <button @click=${() => this._create()} ?disabled=${!this._newName.trim()}>Crear sesión</button>
     </div>`;
   }
