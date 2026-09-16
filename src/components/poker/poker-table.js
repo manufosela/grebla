@@ -1,8 +1,9 @@
 /**
- * <poker-table> — la mesa de una sesión de Scrum Poker (RMR-TSK-0321). Juego de
- * voto simple: al entrar ves el mazo y votas en oculto; el manager o cualquiera
- * pulsa «Mostrar votos» y se ven todas las cartas con el nombre de cada persona;
- * el manager puede «Volver a votar» para reiniciar. Sin temas ni tareas.
+ * <poker-table> — la mesa de una sesión de Scrum Poker (RMR-TSK-0321, v3 en
+ * RMR-TSK-0521..0524). Una carta boca abajo por persona; cada uno vota en
+ * oculto; cuando han votado todos, el organizador pulsa «Mostrar votos» y las
+ * cartas se giran con su juicio (acuerdo, o la más baja y la más alta). El
+ * organizador conduce: tareas, volver a votar, nueva votación, terminar.
  *
  * Todo en tiempo real: se suscribe a la sesión y a la presencia siempre, y a los
  * votos SOLO cuando la sesión está revelada (antes, las reglas no dejan leer la
