@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTaskLines, currentTask, nextPendingTask, closeTask, appendTask, cleanTitle } from './tasks.js';
+import { parseTaskLines, currentTask, nextPendingTask, closeTask, appendTask, cleanTitle, retitleTask, removeTask, moveTask, pickCurrent } from './tasks.js';
 
 describe('parseTaskLines: lo escrito una tarea por línea', () => {
   it('una tarea por línea, en orden, sin vacías ni espacios de más', () => {
@@ -54,5 +54,37 @@ describe('avanzar por las tareas', () => {
     expect(r.task.title).toBe('Otra');
     expect(r.task.value).toBeNull();
     expect(appendTask(tasks, '   ').task).toBeNull();
+  });
+});
+
+describe('editar la lista (RMR-TSK-0526)', () => {
+  const tasks = [
+    { id: 'a', title: 'A', value: '5' },
+    { id: 'b', title: 'B', value: null },
+    { id: 'c', title: 'C', value: null },
+  ];
+
+  it('retitleTask cambia el título y limpia; vacío no toca nada', () => {
+    expect(retitleTask(tasks, 'b', '  B bis ')[1].title).toBe('B bis');
+    expect(retitleTask(tasks, 'b', '   ')).toEqual(tasks);
+  });
+
+  it('removeTask quita una pendiente, pero nunca una ya estimada', () => {
+    expect(removeTask(tasks, 'b').map((t) => t.id)).toEqual(['a', 'c']);
+    expect(removeTask(tasks, 'a').map((t) => t.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('moveTask mueve un puesto y en los extremos no hace nada', () => {
+    expect(moveTask(tasks, 'c', -1).map((t) => t.id)).toEqual(['a', 'c', 'b']);
+    expect(moveTask(tasks, 'a', -1).map((t) => t.id)).toEqual(['a', 'b', 'c']);
+    expect(moveTask(tasks, 'zz', 1).map((t) => t.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('pickCurrent conserva la actual si sigue pendiente; si no, la primera pendiente; si no, null', () => {
+    expect(pickCurrent(tasks, 'c')).toBe('c');
+    expect(pickCurrent(tasks, 'zz')).toBe('b');
+    expect(pickCurrent(tasks, 'a')).toBe('b');
+    expect(pickCurrent([{ id: 'a', title: 'A', value: '3' }], 'a')).toBeNull();
+    expect(pickCurrent([], null)).toBeNull();
   });
 });
