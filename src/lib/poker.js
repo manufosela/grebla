@@ -16,7 +16,7 @@ import {
   doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc,
   writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion,
 } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { db, getRegionalFunctions } from './firebase.js';
 import { isValidCardFor, buildDeck, scaleById } from '../tools/poker/domain/deck.js';
 import { isAxisLevel } from '../tools/poker/domain/magnitude.js';
 
@@ -63,6 +63,29 @@ export function setVoteTitle(sessionId, title) {
 }
 
 /**
+ * Ficha de una historia de Linear por su identificador, vía Cloud Function
+ * (RMR-TSK-0518). Solo la llama el organizador: la ficha se guarda en la
+ * sesión y los demás la leen de ahí. Devuelve null si Linear no la conoce.
+ * @param {string} identifier BB-1234
+ */
+export async function fetchLinearIssue(identifier) {
+  const { httpsCallable } = await import('firebase/functions');
+  const fn = httpsCallable(await getRegionalFunctions(), 'getLinearIssue');
+  const res = await fn({ identifier });
+  return res.data?.issue ?? null;
+}
+
+/**
+ * Referencia de Linear de la votación en curso y su ficha, para que todos la
+ * vean al lado de la mesa. Con referencia vacía se quitan las dos.
+ * @param {string} sessionId @param {string} ref @param {object|null} issue
+ */
+export function setVoteRef(sessionId, ref, issue) {
+  const voteRef = String(ref ?? '').trim() || null;
+  return updateDoc(doc(db, SESSIONS, sessionId), { voteRef, voteIssue: voteRef ? (issue ?? null) : null });
+}
+
+/**
  * Cierra una votación con el valor ACORDADO y la deja en el historial de la
  * sesión (RMR-TSK-0482): qué se estimó, en cuánto y en qué ronda se llegó.
  *
@@ -78,11 +101,15 @@ export function recordAgreement(sessionId, acuerdo) {
   return updateDoc(doc(db, SESSIONS, sessionId), {
     agreements: arrayUnion({
       title: String(acuerdo.title ?? '').trim() || null,
+      ref: String(acuerdo.ref ?? '').trim() || null,
       value: acuerdo.value,
       round: acuerdo.round ?? null,
       at: new Date().toISOString(),
     }),
+    // La siguiente votación empieza limpia: sin título ni ficha de la anterior.
     voteTitle: '',
+    voteRef: null,
+    voteIssue: null,
   });
 }
 
