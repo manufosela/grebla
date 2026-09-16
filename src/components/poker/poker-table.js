@@ -16,6 +16,7 @@ import { deckOf, cardLabel, SPLIT_CARD } from '../../tools/poker/domain/deck.js'
 import { magnitudeCard, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/poker/domain/magnitude.js';
 import { normalizeLinearRef, findLinearRef } from '../../tools/poker/domain/reference.js';
 import '../app-modal.js';
+import '../markdown-view.js';
 import { currentTask, closeTask, appendTask } from '../../tools/poker/domain/tasks.js';
 
 /**
@@ -142,7 +143,7 @@ export class PokerTable extends LitElement {
     /* La historia de Linear va en un modal para todos (RMR-TSK-0524). */
     .issue { display: flex; flex-direction: column; gap: 0.5rem; }
     .issue-meta { margin: 0; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
-    .issue-desc { margin: 0.3rem 0 0; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 0.9rem; line-height: 1.5; color: var(--rm-text, #1e3a5f); max-height: 55vh; overflow: auto; }
+    .issue-desc { margin: 0.3rem 0 0; max-height: 55vh; overflow: auto; }
     .title-bar { justify-content: space-between; margin: 0.2rem 0 0.4rem; }
     .title-bar .lead { margin: 0; }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
@@ -632,7 +633,7 @@ export class PokerTable extends LitElement {
         ${i.url ? html`<a class="ref" href=${i.url} target="_blank" rel="noopener">Abrir en Linear ↗</a>` : null}
         ${meta.length ? html`<p class="issue-meta">${meta.join(' · ')}</p>` : null}
         ${i.labels?.length ? html`<div class="dist">${i.labels.map((l) => html`<span class="chip">${l}</span>`)}</div>` : null}
-        ${i.description ? html`<pre class="issue-desc">${i.description}</pre>` : html`<p class="lead">Sin descripción.</p>`}
+        ${i.description ? html`<markdown-view class="issue-desc" .text=${i.description}></markdown-view>` : html`<p class="lead">Sin descripción.</p>`}
         ${this.canManage ? html`<div class="bar"><button class="primary" @click=${() => this._closeIssueForAll()}>Cerrar para todos</button></div>` : null}
       </div>
     </app-modal>`;
