@@ -107,12 +107,17 @@ export class PokerTable extends LitElement {
     .flip.voted .back { border-color: #2e9e5b; box-shadow: 0 0 0 3px color-mix(in srgb, #2e9e5b 25%, transparent); }
     .flip.up .back { transform: rotateY(180deg); }
     .flip.up .front { transform: rotateY(0); }
-    .flip.tone-agree .front { background: #d9f3e3; border-color: #2e9e5b; }
-    .flip.tone-low .front, .flip.tone-high .front { background: #fbe0e0; border-color: #c0392b; }
+    /* Los tonos llevan fondo Y texto fijos (RMR-BUG-0123): en oscuro el texto del
+       tema es claro y sobre el pastel no se leía. Mismos colores en los dos temas. */
+    .flip.tone-agree .front { background: #d9f3e3; border-color: #2e9e5b; color: #14532d; }
+    .flip.tone-low .front, .flip.tone-high .front { background: #fbe0e0; border-color: #c0392b; color: #7f1d1d; }
+    .flip.tone-agree .axes { color: #2e7d4f; }
+    .flip.tone-low .axes, .flip.tone-high .axes { color: #a93226; }
     .flip.tone-empty .front { color: var(--rm-muted, #5b6b7d); border-style: dashed; }
     .bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 0.8rem 0; }
     .verdict { border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; padding: 0.7rem 1rem; background: var(--rm-surface-hover, #f6f9fa); margin: 0.4rem 0 0.8rem; }
     .verdict.agree { border-color: #2e9e5b; background: #edf9f1; }
+    .verdict.agree .headline { color: #14532d; }
     .verdict .headline { font-size: 1rem; font-weight: 700; color: var(--rm-text, #1e3a5f); margin: 0; }
     .verdict .bar { margin: 0.5rem 0 0; }
     .results li.current { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 8%, transparent); }
