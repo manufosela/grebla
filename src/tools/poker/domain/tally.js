@@ -63,14 +63,23 @@ export function allVoted(players, round) {
  * @param {Array<{uid:string,name?:string,votedRound?:number}>} players
  * @param {Map<string,{value:string,round:number}>|Record<string,{value:string,round:number}>} votesByUid
  * @param {number} round
- * @returns {Array<{uid:string,name:string,value:string|null}>}
+ * Si el voto se emitió por ejes (RMR-TSK-0516) llegan también: el debate
+ * empieza por descomponer la carta, y no es lo mismo un 8 por complejidad que
+ * un 8 por esfuerzo.
+ * @returns {Array<{uid:string,name:string,value:string|null,axes:{complexity:number,effort:number}|null}>}
  */
 export function revealedVotes(players, votesByUid, round) {
   return (players ?? [])
     .filter((p) => hasVotedThisRound(p, round) && !isSpectator(p) && !hasSkippedRound(p, round))
     .map((p) => {
       const vote = voteFor(votesByUid, p.uid);
-      return { uid: p.uid, name: p.name ?? '', value: vote?.round === round ? vote.value : null };
+      const actual = vote?.round === round;
+      return {
+        uid: p.uid,
+        name: p.name ?? '',
+        value: actual ? vote.value : null,
+        axes: actual && vote.axes ? { complexity: vote.axes.complexity, effort: vote.axes.effort } : null,
+      };
     });
 }
 

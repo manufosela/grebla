@@ -76,19 +76,26 @@ describe('revealedVotes', () => {
 
   it('devuelve la carta de cada jugador que votó esta ronda', () => {
     expect(revealedVotes(players, votes, 5)).toEqual([
-      { uid: 'a', name: 'a', value: '8' },
-      { uid: 'b', name: 'b', value: '13' },
+      { uid: 'a', name: 'a', value: '8', axes: null },
+      { uid: 'b', name: 'b', value: '13', axes: null },
     ]);
   });
 
   it('ignora votos de rondas anteriores aunque el voto exista', () => {
     const stale = { a: { value: '8', round: 4 } };
-    expect(revealedVotes([player('a', 5)], stale, 5)).toEqual([{ uid: 'a', name: 'a', value: null }]);
+    expect(revealedVotes([player('a', 5)], stale, 5)).toEqual([{ uid: 'a', name: 'a', value: null, axes: null }]);
   });
 
   it('funciona igual con un Map', () => {
     const map = new Map([['a', { value: '20', round: 5 }]]);
-    expect(revealedVotes([player('a', 5)], map, 5)).toEqual([{ uid: 'a', name: 'a', value: '20' }]);
+    expect(revealedVotes([player('a', 5)], map, 5)).toEqual([{ uid: 'a', name: 'a', value: '20', axes: null }]);
+  });
+
+  it('un voto por ejes trae complejidad y esfuerzo: el debate empieza por descomponer la carta', () => {
+    const conEjes = { a: { value: '8', round: 5, axes: { complexity: 5, effort: 1, extra: 'no' } } };
+    expect(revealedVotes([player('a', 5)], conEjes, 5)).toEqual([
+      { uid: 'a', name: 'a', value: '8', axes: { complexity: 5, effort: 1 } },
+    ]);
   });
 });
 
