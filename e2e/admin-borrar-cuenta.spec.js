@@ -40,13 +40,13 @@ test('el superadmin borra una cuenta sin ficha: desaparece de la lista, de /user
 
   const f = fila(page, NOMBRE);
   await expect(f).toBeVisible();
-  await f.getByRole('button', { name: 'Borrar cuenta' }).click();
+  await f.getByRole('button', { name: 'Borrar' }).click();
   // Confirmación antes de tocar nada.
   await expect(f).toContainText('¿Borrar la cuenta?');
   await f.getByRole('button', { name: 'No' }).click();
   expect((await db.doc(`users/${UID}`).get()).exists).toBe(true);
 
-  await f.getByRole('button', { name: 'Borrar cuenta' }).click();
+  await f.getByRole('button', { name: 'Borrar' }).click();
   await f.getByRole('button', { name: 'Sí, borrar' }).click();
   await expect(fila(page, NOMBRE)).toHaveCount(0);
   await expect(page.locator('superadmin-panel')).toContainText('Cuenta borrada.');

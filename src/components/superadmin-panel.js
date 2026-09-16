@@ -407,6 +407,8 @@ export class SuperadminPanel extends LitElement {
     .grant-h { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #5b6b7d); margin-bottom: 0.3rem; }
     .grant .chk { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.2rem 0; }
     .confirm { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
+    /* Una pregunta larga se parte en líneas: si no, ensancha la tabla y hay que arrastrarla. */
+    .confirm-wrap { white-space: normal; display: inline-block; max-width: 22rem; line-height: 1.4; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
     .row-actions { display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
@@ -1179,10 +1181,10 @@ export class SuperadminPanel extends LitElement {
       <td colspan="2"><span class="muted">${detalle}</span></td>
       <td>
         ${retirando
-          ? html`<span class="confirm">¿Borrar la cuenta? Se borra su login y su usuario, y no podrá volver a entrar. <button class="yes" @click=${() => this._removeAccount(u)}>Sí, borrar</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
+          ? html`<span class="confirm confirm-wrap">¿Borrar la cuenta? Se borra su login y su usuario; no podrá volver a entrar. <button class="yes" @click=${() => this._removeAccount(u)}>Sí, borrar</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
           : html`<button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button>
             ${tipo !== 'acceso'
-              ? html`<button class="del-btn" @click=${() => { this._confirmRemoveAccount = u.uid; }}>Borrar cuenta</button>`
+              ? html`<button class="del-btn" @click=${() => { this._confirmRemoveAccount = u.uid; }}>Borrar</button>`
               : null}`}
       </td>
     </tr>`;
