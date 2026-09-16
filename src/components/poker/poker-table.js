@@ -13,6 +13,7 @@
 import { LitElement, html, css } from 'lit';
 import { deckOf, cardLabel, SPLIT_CARD } from '../../tools/poker/domain/deck.js';
 import { magnitudeCard, axesAvailable, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/poker/domain/magnitude.js';
+import { normalizeLinearRef } from '../../tools/poker/domain/reference.js';
 
 /**
  * Dos formas de votar (RMR-TSK-0516): por complejidad × esfuerzo —el cuadro del
@@ -30,6 +31,7 @@ import {
 } from '../../tools/poker/domain/tally.js';
 import {
   joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
+  fetchLinearIssue, setVoteRef,
   watchSession, watchPlayers, watchVotes,
   setSpectator, skipRound, unskipRound,
 } from '../../lib/poker.js';
@@ -47,6 +49,8 @@ export class PokerTable extends LitElement {
     _voteTab: { state: true },
     _axisC: { state: true },
     _axisE: { state: true },
+    _refDraft: { state: true },
+    _refBusy: { state: true },
     _titleDraft: { state: true },
     _error: { state: true },
   };
@@ -99,6 +103,19 @@ export class PokerTable extends LitElement {
     .est-input { width: 5rem; padding: 0.4rem 0.6rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
     /* El título es texto, no un número: necesita sitio para leerse entero. */
     #vt.est-input { width: min(28rem, 100%); }
+    .ref-input { width: 7.5rem; text-transform: uppercase; }
+    /* La referencia va con su etiqueta: si la fila no cabe, saltan juntas. */
+    .ref-field { display: inline-flex; align-items: center; gap: 0.6rem; white-space: nowrap; }
+    .ref { font-size: 0.78rem; font-weight: 700; color: var(--rm-accent-700, var(--teal)); text-decoration: none; white-space: nowrap; }
+    a.ref:hover { text-decoration: underline; }
+    /* La historia de Linear al lado de la mesa (RMR-TSK-0518): dos columnas en desktop. */
+    .table.with-issue { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem); gap: 1.6rem; align-items: start; }
+    .table > .main { min-width: 0; }
+    .issue { border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; padding: 0.9rem 1rem; background: var(--rm-surface-hover, #f6f9fa); position: sticky; top: 1rem; }
+    .issue-head h3 { margin: 0.2rem 0 0.4rem; font-size: 1rem; line-height: 1.3; color: var(--rm-text, #1e3a5f); }
+    .issue-meta { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
+    .issue-desc { margin: 0.6rem 0 0; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 0.86rem; line-height: 1.45; color: var(--rm-text, #1e3a5f); max-height: 60vh; overflow: auto; }
+    @media (max-width: 900px) { .table.with-issue { grid-template-columns: 1fr; } .issue { position: static; } }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 0 0 0.9rem; font-size: 0.86rem; color: var(--rm-text, #1e3a5f); }
@@ -122,6 +139,9 @@ export class PokerTable extends LitElement {
     this._voteTab = null;
     this._axisC = null;
     this._axisE = null;
+    // Referencia de Linear de la votación (RMR-TSK-0518): lo escrito y si se está cargando.
+    this._refDraft = null;
+    this._refBusy = false;
     this._titleDraft = '';
     this._error = '';
     this._subs = [];
@@ -413,16 +433,23 @@ export class PokerTable extends LitElement {
 
   async _recordAgreement(value) {
     try {
-      await recordAgreement(this.sessionId, { title: this._voteTitle, value, round: this._round });
+      await recordAgreement(this.sessionId, { title: this._shownTitle, ref: this._voteRef, value, round: this._round });
       this._titleDraft = '';
+      this._refDraft = null;
       await revote(this.sessionId);
     } catch (err) { this._onError(err); }
   }
 
   /** Qué se está estimando ahora mismo: lo escribe quien coordina. */
+  get _voteRef() { return this._session?.voteRef ?? ''; }
+  get _voteIssue() { return this._session?.voteIssue ?? null; }
+  /** Lo que se enseña como «qué se estima»: el título, o el de la historia de Linear si no hay. */
+  get _shownTitle() { return this._voteTitle || this._voteIssue?.title || ''; }
+
   _renderVoteTitle() {
     if (!this.canManage) {
-      return this._voteTitle ? html`<p class="lead">Estimando: <strong>${this._voteTitle}</strong></p>` : null;
+      const t = this._shownTitle;
+      return t ? html`<p class="lead">Estimando: <strong>${t}</strong>${this._voteRef ? html` <span class="ref">${this._voteRef}</span>` : null}</p>` : null;
     }
     return html`<div class="bar">
       <label class="lead" for="vt">Qué se estima:</label>
@@ -431,6 +458,15 @@ export class PokerTable extends LitElement {
         .value=${this._titleDraft || this._voteTitle}
         @input=${(e) => { this._titleDraft = e.target.value; }}
         @change=${() => this._saveTitle()} />
+      <span class="ref-field">
+        <label class="lead" for="vr">Ref. Linear:</label>
+        <input id="vr" class="est-input ref-input" type="text" maxlength="16" placeholder="BB-1234"
+          .value=${this._refDraft ?? this._voteRef}
+          ?disabled=${this._refBusy}
+          @input=${(e) => { this._refDraft = e.target.value; }}
+          @change=${() => this._saveRef()} />
+        ${this._refBusy ? html`<span class="lead">Cargando la historia…</span>` : null}
+      </span>
     </div>`;
   }
 
@@ -438,6 +474,48 @@ export class PokerTable extends LitElement {
     const title = this._titleDraft.trim();
     if (title === this._voteTitle) return;
     try { await setVoteTitle(this.sessionId, title); } catch (err) { this._onError(err); }
+  }
+
+  /**
+   * Guarda la referencia y trae su ficha (RMR-TSK-0518). Lo que no es una
+   * referencia se rechaza aquí, sin llamar a nadie; una referencia que Linear
+   * no conoce se dice tal cual y no se guarda: mejor sin ficha que con una
+   * inventada.
+   */
+  async _saveRef() {
+    const ref = normalizeLinearRef(this._refDraft ?? this._voteRef);
+    if (ref === null) { this._error = 'La referencia debe tener la forma BB-1234.'; return; }
+    if (ref === this._voteRef) return;
+    this._error = '';
+    if (ref === '') {
+      try { await setVoteRef(this.sessionId, '', null); this._refDraft = null; } catch (err) { this._onError(err); }
+      return;
+    }
+    this._refBusy = true;
+    try {
+      const issue = await fetchLinearIssue(ref);
+      if (!issue) { this._error = `Linear no conoce ${ref}.`; return; }
+      await setVoteRef(this.sessionId, ref, issue);
+      this._refDraft = null;
+    } catch (err) { this._onError(err); }
+    finally { this._refBusy = false; }
+  }
+
+  /** La ficha de la historia, al lado de la mesa: todos la ven mientras se estima. */
+  _renderIssuePanel() {
+    const i = this._voteIssue;
+    if (!i) return null;
+    const meta = [i.state, i.estimate != null ? `estimación ${i.estimate}` : null, i.priority, i.assignee, i.project]
+      .filter(Boolean);
+    return html`<aside class="issue" aria-label="Historia de Linear">
+      <div class="issue-head">
+        ${i.url ? html`<a class="ref" href=${i.url} target="_blank" rel="noopener">${i.identifier} ↗</a>` : html`<span class="ref">${i.identifier}</span>`}
+        <h3>${i.title}</h3>
+      </div>
+      ${meta.length ? html`<p class="issue-meta">${meta.join(' · ')}</p>` : null}
+      ${i.labels?.length ? html`<div class="dist">${i.labels.map((l) => html`<span class="chip">${l}</span>`)}</div>` : null}
+      ${i.description ? html`<pre class="issue-desc">${i.description}</pre>` : html`<p class="lead">Sin descripción.</p>`}
+    </aside>`;
   }
 
   /** Lo ya acordado en esta sesión: el recorrido, no solo el último número. */
@@ -449,6 +527,7 @@ export class PokerTable extends LitElement {
       <ul>
         ${hechos.map((a) => html`<li>
           <span class="est">${a.value}</span>
+          ${a.ref ? html`<span class="ref">${a.ref}</span>` : null}
           <span class="qtitle">${a.title ?? 'Sin título'}</span>
           ${a.round ? html`<span class="lead">ronda ${a.round}</span>` : null}
         </li>`)}
@@ -469,9 +548,15 @@ export class PokerTable extends LitElement {
 
   render() {
     if (!this._session) return html`<p class="lead">Cargando la mesa…</p>`;
+    // Con ficha de Linear la mesa va en dos columnas (desktop): la historia al lado, no debajo.
     return html`
-      ${this._renderSimple()}
-      ${this._error ? html`<p class="error">${this._error}</p>` : null}`;
+      <div class="table ${this._voteIssue ? 'with-issue' : ''}">
+        <div class="main">
+          ${this._renderSimple()}
+          ${this._error ? html`<p class="error">${this._error}</p>` : null}
+        </div>
+        ${this._renderIssuePanel()}
+      </div>`;
   }
 }
 
