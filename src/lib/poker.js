@@ -13,7 +13,7 @@
  * permiten). La lógica pura (mazo y recuento) vive en tools/poker/domain.
  */
 import {
-  doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
+  doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc,
   writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion,
 } from 'firebase/firestore';
 import { db, getRegionalFunctions } from './firebase.js';
@@ -228,12 +228,12 @@ export function closeSession(sessionId) {
  * Borra una sesión y SUS subcolecciones (Firestore no las borra en cascada). Lo
  * hace el dueño o un superadmin.
  */
-export async function deleteSession(sessionId) {
-  for (const sub of ['players', 'votes']) {
-    const snap = await getDocs(collection(db, SESSIONS, sessionId, sub));
-    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
-  }
-  await deleteDoc(doc(db, SESSIONS, sessionId));
+export function deleteSession(sessionId) {
+  // Se CIERRA, no se borra el documento (RMR-BUG-0119). Borrar en cascada
+  // obligaba a listar /votes, y esa lectura está prohibida mientras la sesión
+  // no se revela —también al dueño—, porque la ocultación del voto es real.
+  // Una sesión cerrada desaparece de la lista y no se puede volver a abrir.
+  return updateDoc(doc(db, SESSIONS, sessionId), { status: 'closed', closedAt: serverTimestamp() });
 }
 
 // ── Participación ────────────────────────────────────────────────────────────
