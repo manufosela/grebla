@@ -27,7 +27,7 @@ const FICHA = {
 async function sesion(extra = {}) {
   return db().collection('pokerSessions').add({
     name: NOMBRE, ownerLeaderUid: 'e2e-head', mode: 'simple', scale: 'fibonacci',
-    deck: ['1', '2', '3', '5', '8', '13', '21', '?', '☕', 'partir'],
+    deck: ['1', '2', '3', '5', '8', '13', 'partir'],
     revealed: false, round: 1, status: 'open', createdAt: new Date(), closedAt: null,
     voteTitle: '', voteRef: null, voteIssue: null, ...extra,
   });

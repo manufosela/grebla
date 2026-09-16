@@ -9,7 +9,7 @@
  * solos, sin que nadie tenga que borrar los documentos de los demás (lo que las
  * reglas no permitirían). Los valores solo se leen tras `revealed`.
  */
-import { cardNumber, SPECIAL_CARDS } from './deck.js';
+import { cardNumber, SPLIT_CARD, UNDECIDED_CARDS } from './deck.js';
 
 /** Voto de una carta que se lee de un objeto o de un Map indexado por uid. */
 function voteFor(votesByUid, uid) {
@@ -84,18 +84,19 @@ export function revealedVotes(players, votesByUid, round) {
 }
 
 /**
- * Resumen de las cartas reveladas de la ronda: distribución (para ver el reparto
- * de un vistazo), min/max/media de las NUMÉRICAS (las especiales `?`/`☕` se
- * cuentan pero no promedian) y si hubo ACUERDO.
+ * Juicio de las cartas reveladas (RMR-TSK-0521): ACUERDO si todas coinciden y
+ * dicen algo, y si no, cuáles son la carta más BAJA y la más ALTA para que el
+ * debate empiece por ellas. Nada de medias: promediar es el atajo que mata la
+ * ceremonia, sale un número rápido y nadie aprende nada.
  *
- * Acuerdo es que todas las cartas coincidan Y digan algo (RMR-TSK-0482). Hasta
- * ahora bastaba con que coincidieran, así que un equipo entero votando «?»
- * —nadie lo sabe— veía «¡Consenso! Todas las cartas coinciden». Una carta
- * especial dice «no lo sé» o «paremos», y eso no es estar de acuerdo en nada.
+ * El orden lo da el mazo de la sesión (una talla no es un número, y «partir»
+ * está por encima de todo). «?» y «☕», de sesiones antiguas, no entran en el
+ * orden ni permiten acuerdo: dicen «no lo sé» y «paremos».
  *
  * @param {Array<string|null>} values
+ * @param {ReadonlyArray<string>} [deck] orden de las cartas; sin él, numérico con «partir» al final
  */
-export function summarizeVotes(values) {
+export function judgeVotes(values, deck) {
   const cards = (values ?? []).filter((v) => v != null && v !== '');
   const counts = new Map();
   for (const v of cards) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -103,24 +104,33 @@ export function summarizeVotes(values) {
     .map(([value, count]) => ({ value, count }))
     .sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value)));
 
-  const numbers = cards.map(cardNumber).filter((n) => n !== null);
-  const hasNumbers = numbers.length > 0;
-  // Acuerdo: todas las cartas iguales y con significado. Una talla vale —«todos
-  // decimos M» es un acuerdo—; «?» y «☕» no, porque dicen «no lo sé» y
-  // «paremos». La distinción es especial vs. no especial, no numérica.
-  const acuerdo = cards.length > 0 && counts.size === 1 && !SPECIAL_CARDS.includes(cards[0])
+  const rank = (card) => {
+    if (UNDECIDED_CARDS.includes(card)) return null;
+    if (Array.isArray(deck) && deck.length > 0) {
+      const i = deck.indexOf(card);
+      return i === -1 ? null : i;
+    }
+    if (card === SPLIT_CARD) return Number.MAX_SAFE_INTEGER;
+    return cardNumber(card);
+  };
+  const ranked = cards.map((c) => ({ card: c, r: rank(c) })).filter((x) => x.r !== null);
+  const acuerdo = cards.length > 0 && counts.size === 1 && !UNDECIDED_CARDS.includes(cards[0])
     ? cards[0]
     : null;
+  let lowest = null;
+  let highest = null;
+  if (ranked.length > 0) {
+    lowest = ranked.reduce((a, b) => (b.r < a.r ? b : a)).card;
+    highest = ranked.reduce((a, b) => (b.r > a.r ? b : a)).card;
+  }
   return {
     total: cards.length,
     distribution,
-    numericCount: numbers.length,
-    min: hasNumbers ? Math.min(...numbers) : null,
-    max: hasNumbers ? Math.max(...numbers) : null,
-    average: hasNumbers ? numbers.reduce((sum, n) => sum + n, 0) / numbers.length : null,
     consensus: acuerdo !== null,
-    // El valor acordado, para poder guardarlo sin volver a deducirlo: solo
-    // existe cuando de verdad hay acuerdo.
+    // El valor acordado, para guardarlo sin volver a deducirlo: solo existe con acuerdo.
     agreed: acuerdo,
+    // La más baja y la más alta (iguales si hay acuerdo): por ahí empieza el debate.
+    lowest,
+    highest,
   };
 }
