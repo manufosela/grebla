@@ -262,6 +262,15 @@ export class PokerApp extends LitElement {
     </div>`;
   }
 
+  /**
+   * Borrar solo en las sesiones PROPIAS (RMR-BUG-0119): las de otro líder de la
+   * rama las reglas no las dejan tocar, y un botón que va a fallar engaña.
+   */
+  _renderDelete(session) {
+    if (session.ownerLeaderUid !== this.uid) return null;
+    return html`<button class="act danger" @click=${() => this._delete(session)}>Borrar</button>`;
+  }
+
   _renderSessions() {
     if (!this._sessions.length) {
       return html`<p class="empty">${this.canManage ? 'Aún no has creado ninguna sesión.' : 'Tu equipo aún no tiene sesiones de poker.'}</p>`;
@@ -273,7 +282,7 @@ export class PokerApp extends LitElement {
         <tbody>${this._sessions.map((s) => html`<tr>
           <td>${s.name}</td>
           <td><button class="act" @click=${() => this._select(s)}>Abrir</button></td>
-          ${this.canManage ? html`<td><button class="act danger" @click=${() => this._delete(s)}>Borrar</button></td>` : null}
+          ${this.canManage ? html`<td>${this._renderDelete(s)}</td>` : null}
         </tr>`)}</tbody>
       </table>`;
   }
