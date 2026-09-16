@@ -14,6 +14,7 @@ import { LitElement, html, css } from 'lit';
 import { deckOf, cardLabel, SPLIT_CARD } from '../../tools/poker/domain/deck.js';
 import { magnitudeCard, axesAvailable, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/poker/domain/magnitude.js';
 import { normalizeLinearRef } from '../../tools/poker/domain/reference.js';
+import { currentTask, closeTask, appendTask } from '../../tools/poker/domain/tasks.js';
 
 /**
  * Dos formas de votar (RMR-TSK-0516): por complejidad × esfuerzo —el cuadro del
@@ -31,7 +32,7 @@ import {
 } from '../../tools/poker/domain/tally.js';
 import {
   joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
-  fetchLinearIssue, setVoteRef,
+  fetchLinearIssue, setVoteRef, getSession, setSessionTasks, closeCurrentTask, finishSession,
   watchSession, watchPlayers, watchVotes,
   setSpectator, skipRound, unskipRound,
 } from '../../lib/poker.js';
@@ -51,6 +52,7 @@ export class PokerTable extends LitElement {
     _axisE: { state: true },
     _refDraft: { state: true },
     _refBusy: { state: true },
+    _taskDraft: { state: true },
     _titleDraft: { state: true },
     _error: { state: true },
   };
@@ -104,6 +106,13 @@ export class PokerTable extends LitElement {
     /* El título es texto, no un número: necesita sitio para leerse entero. */
     #vt.est-input { width: min(28rem, 100%); }
     .ref-input { width: 7.5rem; text-transform: uppercase; }
+    .task-input { width: min(24rem, 100%); }
+    .muted { color: var(--rm-muted, #5b6b7d); font-weight: 400; }
+    .finished h3 { margin: 0.2rem 0 0.6rem; font-size: 1.05rem; color: var(--rm-text, #1e3a5f); }
+    .results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .results li { display: flex; align-items: baseline; gap: 0.7rem; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; font-size: 0.92rem; }
+    .results .est { min-width: 2.2rem; text-align: center; font-weight: 800; color: var(--rm-accent-700, var(--teal)); }
+    .results .qtitle { color: var(--rm-text, #1e3a5f); }
     /* La referencia va con su etiqueta: si la fila no cabe, saltan juntas. */
     .ref-field { display: inline-flex; align-items: center; gap: 0.6rem; white-space: nowrap; }
     .ref { font-size: 0.78rem; font-weight: 700; color: var(--rm-accent-700, var(--teal)); text-decoration: none; white-space: nowrap; }
@@ -142,6 +151,7 @@ export class PokerTable extends LitElement {
     // Referencia de Linear de la votación (RMR-TSK-0518): lo escrito y si se está cargando.
     this._refDraft = null;
     this._refBusy = false;
+    this._taskDraft = '';
     this._titleDraft = '';
     this._error = '';
     this._subs = [];
@@ -168,7 +178,9 @@ export class PokerTable extends LitElement {
     this._joinedFor = key;
     this._unsubscribe();
     try {
-      await joinSession(this.sessionId, this.uid, this.authorName);
+      const session = await getSession(this.sessionId);
+      const spectator = this.canManage && session?.ownerVotes === false;
+      await joinSession(this.sessionId, this.uid, this.authorName, { spectator });
       const mine = await getMyVote(this.sessionId, this.uid);
       if (mine) this._myVote = mine;
     } catch (err) {
@@ -424,7 +436,7 @@ export class PokerTable extends LitElement {
     }
     return html`<div class="bar">
       <button class="primary" @click=${() => this._recordAgreement(s.agreed)}>
-        Guardar ${s.agreed}${this._voteTitle ? ` para «${this._voteTitle}»` : ''}
+        ${this._currentTask ? `Nueva votación (queda ${cardLabel(s.agreed)})` : `Guardar ${s.agreed}${this._voteTitle ? ` para «${this._voteTitle}»` : ''}`}
       </button>
     </div>`;
   }
@@ -436,21 +448,75 @@ export class PokerTable extends LitElement {
       await recordAgreement(this.sessionId, { title: this._shownTitle, ref: this._voteRef, value, round: this._round });
       this._titleDraft = '';
       this._refDraft = null;
-      await revote(this.sessionId);
+      const task = this._currentTask;
+      if (task) {
+        // La tarea queda con su valor y se pasa a la siguiente con ronda limpia (RMR-TSK-0522).
+        const { tasks, nextId } = closeTask(this._tasks, task.id, value);
+        await closeCurrentTask(this.sessionId, tasks, nextId);
+      } else {
+        await revote(this.sessionId);
+      }
     } catch (err) { this._onError(err); }
+  }
+
+  /** Sin tarea actual: el organizador añade la siguiente o termina la sesión. */
+  _renderNextTask() {
+    return html`<div class="bar">
+      <span class="lead">No queda ninguna tarea por estimar.</span>
+      <input class="est-input task-input" type="text" maxlength="160" placeholder="Añadir otra tarea…"
+        .value=${this._taskDraft} @input=${(e) => { this._taskDraft = e.target.value; }}
+        @keydown=${(e) => { if (e.key === 'Enter') this._addTask(); }} />
+      <button @click=${() => this._addTask()} ?disabled=${!this._taskDraft.trim()}>Añadir tarea</button>
+      <button class="primary" @click=${() => this._finish()}>Terminar sesión</button>
+    </div>`;
+  }
+
+  async _addTask() {
+    const { tasks, task } = appendTask(this._tasks, this._taskDraft);
+    if (!task) return;
+    try {
+      await setSessionTasks(this.sessionId, tasks, this._currentTask?.id ?? task.id);
+      this._taskDraft = '';
+    } catch (err) { this._onError(err); }
+  }
+
+  async _finish() {
+    try { await finishSession(this.sessionId); } catch (err) { this._onError(err); }
+  }
+
+  /** La sesión terminada: la lista de tareas con su valor, en lugar de la mesa. */
+  _renderFinished() {
+    return html`<div class="finished">
+      <h3>Sesión terminada</h3>
+      <ol class="results">
+        ${this._tasks.map((task) => html`<li>
+          <span class="est">${task.value == null ? '—' : cardLabel(task.value)}</span>
+          <span class="qtitle">${task.title}</span>
+        </li>`)}
+      </ol>
+      ${this._tasks.length === 0 ? html`<p class="lead">No se estimó ninguna tarea.</p>` : null}
+    </div>`;
   }
 
   /** Qué se está estimando ahora mismo: lo escribe quien coordina. */
   get _voteRef() { return this._session?.voteRef ?? ''; }
   get _voteIssue() { return this._session?.voteIssue ?? null; }
-  /** Lo que se enseña como «qué se estima»: el título, o el de la historia de Linear si no hay. */
-  get _shownTitle() { return this._voteTitle || this._voteIssue?.title || ''; }
+  get _tasks() { return this._session?.tasks ?? []; }
+  get _currentTask() { return currentTask(this._session); }
+  get _finished() { return this._session?.status === 'finished'; }
+  /** Lo que se enseña como «qué se estima»: la tarea actual, el título, o el de la historia de Linear. */
+  get _shownTitle() { return this._currentTask?.title || this._voteTitle || this._voteIssue?.title || ''; }
 
   _renderVoteTitle() {
+    const task = this._currentTask;
     if (!this.canManage) {
       const t = this._shownTitle;
       return t ? html`<p class="lead">Estimando: <strong>${t}</strong>${this._voteRef ? html` <span class="ref">${this._voteRef}</span>` : null}</p>` : null;
     }
+    // Con lista de tareas (RMR-TSK-0522) la actual es el título; sin tarea
+    // actual, el organizador añade otra o termina.
+    if (task) return html`<p class="lead">Estimando: <strong>${task.title}</strong> <span class="muted">(${this._tasks.filter((x) => x.value != null).length}/${this._tasks.length})</span></p>`;
+    if (this._tasks.length) return this._renderNextTask();
     return html`<div class="bar">
       <label class="lead" for="vt">Qué se estima:</label>
       <input id="vt" class="est-input" type="text" maxlength="120"
@@ -548,6 +614,7 @@ export class PokerTable extends LitElement {
 
   render() {
     if (!this._session) return html`<p class="lead">Cargando la mesa…</p>`;
+    if (this._finished) return this._renderFinished();
     // Con ficha de Linear la mesa va en dos columnas (desktop): la historia al lado, no debajo.
     return html`
       <div class="table ${this._voteIssue ? 'with-issue' : ''}">
