@@ -19,7 +19,8 @@ function db() {
 
 const NOMBRE = 'Sesión con referencia E2E';
 const FICHA = {
-  identifier: 'BB-1234', title: 'Migrar el login a OAuth', description: 'Primera línea.\nSegunda línea.',
+  identifier: 'BB-1234', title: 'Migrar el login a OAuth',
+  description: '## Criterios\nPrimera línea.\nSegunda línea.\n\n- [x] **Botón** de login\n- Cuenta [vinculada](https://ejemplo.test/doc)\n\n<img src=x onerror=alert(1)> y [nada](javascript:alert(1))',
   url: 'https://linear.app/tribbu/issue/BB-1234/migrar', estimate: 5, priority: 'High',
   state: 'Backlog', assignee: 'Ana', labels: ['Squad A'], project: 'Login',
 };
@@ -55,6 +56,16 @@ test('con la historia abierta por el organizador, quien estima la ve en un modal
   const m = modal(page);
   await expect(m.locator('.issue')).toBeVisible();
   await expect(m).toContainText('Segunda línea.');
+  // El Markdown se ve con formato (RMR-TSK-0527)…
+  const md = m.locator('markdown-view');
+  await expect(md.getByRole('heading', { name: 'Criterios' })).toBeVisible();
+  await expect(md.locator('strong')).toHaveText('Botón');
+  await expect(md.getByRole('link', { name: 'vinculada' })).toHaveAttribute('href', 'https://ejemplo.test/doc');
+  await expect(md.locator('li')).toHaveCount(2);
+  // …y lo peligroso se queda en texto: ni imagen inyectada ni enlace javascript.
+  await expect(md.locator('img')).toHaveCount(0);
+  await expect(md).toContainText('<img src=x onerror=alert(1)>');
+  await expect(md.getByRole('link', { name: 'nada' })).toHaveCount(0);
   await expect(m).toContainText('Backlog · estimación 5 · High · Ana · Login');
   await expect(m.getByRole('link', { name: /Abrir en Linear/ })).toHaveAttribute('href', FICHA.url);
   // Quien estima no la cierra para los demás.
