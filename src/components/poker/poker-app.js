@@ -31,7 +31,19 @@ export class PokerApp extends LitElement {
     _copied: { state: true },
     _loading: { state: true },
     _error: { state: true },
+    _tab: { state: true },
   };
+
+  /**
+   * Pestañas de quien convoca (RMR-TSK-0514): estimar es juego y convocar es
+   * gestión. Apilados en la misma pantalla, quien entraba a votar se topaba
+   * primero con el formulario. Quien solo estima no las ve: una pestaña sola
+   * no es una pestaña.
+   */
+  static TABS = Object.freeze([
+    Object.freeze({ id: 'sesiones', label: 'Sesiones' }),
+    Object.freeze({ id: 'convocar', label: 'Convocar' }),
+  ]);
 
   static styles = css`
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); }
@@ -40,6 +52,10 @@ export class PokerApp extends LitElement {
     .back { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
     .back:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .lead { margin: 0 0 1rem; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
+    .tabs { display: inline-flex; gap: 0.25rem; padding: 0.28rem; background: var(--rm-surface-hover, #eef3f5); border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; margin: 0 0 1.1rem; }
+    .tab { background: none; border: 0; padding: 0.5rem 1.15rem; font: inherit; font-weight: 600; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); cursor: pointer; border-radius: 9px; transition: background 0.12s, color 0.12s, box-shadow 0.12s; }
+    .tab:hover { color: var(--teal); }
+    .tab.on { background: var(--teal); color: var(--rm-on-accent, #fff); box-shadow: 0 1px 4px rgba(42,157,143,0.4); }
     .create { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.4rem; max-width: 34rem; }
     .create input, .create select { padding: 0.55rem 0.75rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
     .create input:focus, .create select:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
@@ -89,6 +105,7 @@ export class PokerApp extends LitElement {
     this._error = '';
     this._loadedFor = null;
     this._openedShared = false;
+    this._tab = 'sesiones';
   }
 
   /** De quién son las sesiones que se ven: la rama del supermanager, o su manager. */
@@ -203,6 +220,8 @@ export class PokerApp extends LitElement {
       });
       this._newName = '';
       this._error = '';
+      // Convocada: al volver de la mesa se aterriza en la lista, no en el formulario.
+      this._tab = 'sesiones';
       await this._loadList();
       const created = this._sessions.find((s) => s.id === id);
       if (created) this._select(created);
@@ -236,40 +255,57 @@ export class PokerApp extends LitElement {
     </div>`;
   }
 
+  _renderTabs() {
+    return html`<div class="tabs" role="tablist" aria-label="Scrum Poker">
+      ${PokerApp.TABS.map((t) => html`<button type="button" class="tab ${this._tab === t.id ? 'on' : ''}"
+        role="tab" aria-selected=${this._tab === t.id ? 'true' : 'false'}
+        @click=${() => { this._tab = t.id; }}>${t.label}</button>`)}
+    </div>`;
+  }
+
+  _renderCreate() {
+    return html`<div class="create">
+      <input type="text" placeholder="Nombre de la sesión (p. ej. «Refinamiento sprint 12»)" .value=${this._newName}
+        @input=${(e) => { this._newName = e.target.value; }}
+        @keydown=${(e) => { if (e.key === 'Enter') this._create(); }} />
+      <div class="modes">
+        <label><input type="radio" name="mode" .checked=${this._newMode === 'simple'}
+          @change=${() => { this._newMode = 'simple'; }} /> Voto simple</label>
+        <label><input type="radio" name="mode" .checked=${this._newMode === 'linear'}
+          @change=${() => { this._newMode = 'linear'; }} /> Refinar backlog (Linear)</label>
+      </div>
+      ${this._newMode === 'linear' ? html`
+        <select @change=${(e) => { this._newSquad = e.target.value; }}>
+          <option value="">Elige un squad…</option>
+          ${this._squads.map((s) => html`<option value=${s.linearLabel} .selected=${this._newSquad === s.linearLabel}>${s.name}</option>`)}
+        </select>` : null}
+      ${this._renderScalePicker()}
+      <button @click=${() => this._create()} ?disabled=${!this._newName.trim()}>Crear sesión</button>
+    </div>`;
+  }
+
+  _renderSessions() {
+    if (!this._sessions.length) {
+      return html`<p class="empty">${this.canManage ? 'Aún no has creado ninguna sesión.' : 'Tu equipo aún no tiene sesiones de poker.'}</p>`;
+    }
+    return html`
+      <p class="lead">${this.canManage ? 'Tus sesiones de estimación.' : 'Sesiones de tu equipo. Ábrela para votar.'}</p>
+      <table>
+        <thead><tr><th>Sesión</th><th></th>${this.canManage ? html`<th></th>` : null}</tr></thead>
+        <tbody>${this._sessions.map((s) => html`<tr>
+          <td>${s.name}</td>
+          <td><button class="act" @click=${() => this._select(s)}>Abrir</button></td>
+          ${this.canManage ? html`<td><button class="act danger" @click=${() => this._delete(s)}>Borrar</button></td>` : null}
+        </tr>`)}</tbody>
+      </table>`;
+  }
+
   _renderList() {
     if (this._loading) return skeletonLines(4);
-    return html`
-      ${this.canManage ? html`
-        <div class="create">
-          <input type="text" placeholder="Nombre de la sesión (p. ej. «Refinamiento sprint 12»)" .value=${this._newName}
-            @input=${(e) => { this._newName = e.target.value; }}
-            @keydown=${(e) => { if (e.key === 'Enter') this._create(); }} />
-          <div class="modes">
-            <label><input type="radio" name="mode" .checked=${this._newMode === 'simple'}
-              @change=${() => { this._newMode = 'simple'; }} /> Voto simple</label>
-            <label><input type="radio" name="mode" .checked=${this._newMode === 'linear'}
-              @change=${() => { this._newMode = 'linear'; }} /> Refinar backlog (Linear)</label>
-          </div>
-          ${this._newMode === 'linear' ? html`
-            <select @change=${(e) => { this._newSquad = e.target.value; }}>
-              <option value="">Elige un squad…</option>
-              ${this._squads.map((s) => html`<option value=${s.linearLabel} .selected=${this._newSquad === s.linearLabel}>${s.name}</option>`)}
-            </select>` : null}
-          ${this._renderScalePicker()}
-          <button @click=${() => this._create()} ?disabled=${!this._newName.trim()}>Crear sesión</button>
-        </div>` : null}
-      ${this._error ? html`<p class="error">${this._error}</p>` : null}
-      ${this._sessions.length ? html`
-        <p class="lead">${this.canManage ? 'Tus sesiones de estimación.' : 'Sesiones de tu equipo. Ábrela para votar.'}</p>
-        <table>
-          <thead><tr><th>Sesión</th><th></th>${this.canManage ? html`<th></th>` : null}</tr></thead>
-          <tbody>${this._sessions.map((s) => html`<tr>
-            <td>${s.name}</td>
-            <td><button class="act" @click=${() => this._select(s)}>Abrir</button></td>
-            ${this.canManage ? html`<td><button class="act danger" @click=${() => this._delete(s)}>Borrar</button></td>` : null}
-          </tr>`)}</tbody>
-        </table>`
-        : html`<p class="empty">${this.canManage ? 'Aún no has creado ninguna sesión.' : 'Tu equipo aún no tiene sesiones de poker.'}</p>`}`;
+    const error = this._error ? html`<p class="error">${this._error}</p>` : null;
+    if (!this.canManage) return html`${error}${this._renderSessions()}`;
+    const body = this._tab === 'convocar' ? this._renderCreate() : this._renderSessions();
+    return html`${this._renderTabs()}${error}${body}`;
   }
 
   render() {

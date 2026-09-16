@@ -30,6 +30,7 @@ test('el superadmin sin equipo convoca una sesión y queda creada', async ({ pag
   await signInAs(page, 'superadmin');
   await page.goto('/poker');
 
+  await page.getByRole('tab', { name: 'Convocar' }).click();
   await page.getByPlaceholder(/Nombre de la sesión/).fill(NOMBRE);
   await page.getByRole('button', { name: 'Crear sesión' }).click();
 
