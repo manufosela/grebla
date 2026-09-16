@@ -589,7 +589,13 @@ export class CareerApp extends LitElement {
     /* En modo 3D el canvas es el protagonista: ocupa todo el alto disponible y
        el panel de ciudadanía y el HUD flotan SOBRE él (overlay). */
     .stage3d { position: relative; display: flex; flex: 1 1 auto; min-height: 0; border-radius: 14px; overflow: hidden; }
-    .stage3d:fullscreen { border-radius: 0; background: #0b1520; }
+    /* Pantalla completa (RMR-TSK-0529): la pide el COMPONENTE entero, no el
+       escenario, porque los overlays del juego (archipiélago, ficha, bitácora,
+       carpools, panel de la casa…) son hermanos del escenario con position:
+       fixed, y en pantalla completa solo se ve el subárbol del elemento que la
+       tiene (RMR-BUG-0125: al embarcar no se veía el mar). El marco se quita y
+       el escenario crece hasta el borde. */
+    :host(:fullscreen) { border: 0; border-radius: 0; padding: 0.5rem; background: #0b1520; }
     career-island-3d.stage { flex: 1 1 auto; min-height: 0; }
     .hud { position: absolute; top: 0.75rem; left: 0.75rem; z-index: 2; display: flex; gap: 0.5rem; flex-wrap: wrap; }
     /* Botones DENTRO del canvas: oscuros translúcidos, coherentes con el marco. */
@@ -2184,7 +2190,7 @@ export class CareerApp extends LitElement {
     // vive en <career-island-3d> y este botón HUD solo lo conmuta.
     this.audioMuted = readStoredMuted();
     this.fullscreen = false;
-    this._onFullscreenChange = () => { this.fullscreen = document.fullscreenElement === this.renderRoot.querySelector('.stage3d'); };
+    this._onFullscreenChange = () => { this.fullscreen = document.fullscreenElement === this; };
     // Compañeros en la isla (MC-12): journeys del equipo cacheados por persona
     // (1 lectura por persona, una sola vez) y lista derivada para la isla.
     /** @type {Map<string, import('../../tools/career/domain/types.js').Journey>} */
@@ -7009,17 +7015,18 @@ export class CareerApp extends LitElement {
   }
 
   /**
-   * Pantalla completa del escenario (RMR-TSK-0529): el HUD va dentro de
-   * `.stage3d`, así que sigue a mano; el canvas se redimensiona solo (la isla
-   * observa su tamaño). Esc o el mismo botón vuelven al recuadro.
+   * Pantalla completa del juego (RMR-TSK-0529): la pide el componente entero
+   * —barra, escenario y overlays—, no el escenario (ver el CSS de
+   * `:host(:fullscreen)`, RMR-BUG-0125). El HUD sigue a mano y el canvas se
+   * redimensiona solo (la isla observa su tamaño). Esc o el mismo botón vuelven
+   * al recuadro.
    */
   async _toggleFullscreen() {
-    const stage = this.renderRoot.querySelector('.stage3d');
-    if (!stage?.requestFullscreen) return;
+    if (!this.requestFullscreen) return;
     try {
-      // Solo se sale de la pantalla completa PROPIA: si otro elemento la tiene, se pide para el escenario.
-      if (document.fullscreenElement === stage) await document.exitFullscreen();
-      else await stage.requestFullscreen();
+      // Solo se sale de la pantalla completa PROPIA: si otro elemento la tiene, se pide para el juego.
+      if (document.fullscreenElement === this) await document.exitFullscreen();
+      else await this.requestFullscreen();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo poner a pantalla completa.';
     }
