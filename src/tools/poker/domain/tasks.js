@@ -69,3 +69,34 @@ export function appendTask(tasks, title, seed = Date.now()) {
   const task = { id: taskId((tasks ?? []).length, seed), title: clean, value: null };
   return { tasks: [...(tasks ?? []), task], task };
 }
+
+/** Renombra una tarea. Con título vacío no cambia nada. */
+export function retitleTask(tasks, id, title) {
+  const clean = cleanTitle(title);
+  if (!clean) return tasks ?? [];
+  return (tasks ?? []).map((t) => (t.id === id ? { ...t, title: clean } : t));
+}
+
+/** Quita una tarea que aún no tiene valor: lo estimado no se borra. */
+export function removeTask(tasks, id) {
+  return (tasks ?? []).filter((t) => t.id !== id || t.value != null);
+}
+
+/** Mueve una tarea un puesto arriba (-1) o abajo (+1); en los extremos no hace nada. */
+export function moveTask(tasks, id, dir) {
+  const list = tasks ?? [];
+  const i = list.findIndex((t) => t.id === id);
+  const j = i + dir;
+  const cabe = i !== -1 && j >= 0 && j < list.length;
+  return cabe ? list.with(i, list[j]).with(j, list[i]) : list;
+}
+
+/**
+ * Qué tarea queda como actual tras editar la lista: la que ya lo era si sigue
+ * ahí y sin valor; si no, la primera pendiente; si no hay, null.
+ */
+export function pickCurrent(tasks, currentId) {
+  const list = tasks ?? [];
+  const sigue = list.find((t) => t.id === currentId && t.value == null);
+  return sigue?.id ?? list.find((t) => t.value == null)?.id ?? null;
+}

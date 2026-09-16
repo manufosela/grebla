@@ -175,6 +175,38 @@ export async function listVisibleSessions() {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+/**
+ * La misma lista, EN VIVO (RMR-TSK-0526): si el organizador renombra la sesión
+ * o la termina, quien mira la lista lo ve sin recargar.
+ */
+export function watchVisibleSessions(onData, onError) {
+  return onSnapshot(
+    query(collection(db, SESSIONS), where('status', 'in', ['open', 'finished']), orderBy('createdAt', 'desc')),
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    onError,
+  );
+}
+
+/**
+ * Edita una sesión creada (RMR-TSK-0526): nombre, escala (el mazo se recalcula
+ * de ella), si vota el organizador, y la lista de tareas con su actual. Solo
+ * el dueño (reglas). Quien tiene la mesa abierta lo ve por su suscripción.
+ * @param {string} sessionId
+ * @param {{ name: string, scale: string, ownerVotes: boolean, tasks: Array<object>, currentTaskId: string|null }} data
+ */
+export function updateSession(sessionId, data) {
+  const name = String(data.name ?? '').trim();
+  if (!name) throw new Error('La sesión necesita un nombre');
+  return updateDoc(doc(db, SESSIONS, sessionId), {
+    name,
+    scale: scaleById(data.scale).id,
+    deck: buildDeck(data.scale),
+    ownerVotes: data.ownerVotes !== false,
+    tasks: data.tasks ?? [],
+    currentTaskId: data.currentTaskId ?? null,
+  });
+}
+
 /** Una sesión por id (para abrirla desde un enlace compartido, fuera de la lista). */
 export async function getSession(sessionId) {
   const snap = await getDoc(doc(db, SESSIONS, sessionId));
