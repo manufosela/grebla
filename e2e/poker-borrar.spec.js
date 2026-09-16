@@ -51,6 +51,18 @@ test('el dueño borra su sesión aunque haya votos ocultos, y desaparece de la l
   const fila = page.getByRole('row', { name: new RegExp(NOMBRE) });
   await expect(fila).toBeVisible();
   await fila.getByRole('button', { name: 'Borrar' }).click();
+  // Pide confirmación (RMR-BUG-0120): un clic no borra nada. El texto y los
+  // botones son hijos de <app-modal> (slot), no de su panel interno.
+  const modal = page.locator('poker-app app-modal');
+  // El host del modal mide 0 (su capa es fixed): lo visible es el texto.
+  await expect(modal.locator('.modal-text')).toBeVisible();
+  await expect(modal).toContainText(NOMBRE);
+  await modal.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(fila).toBeVisible();
+  expect((await ref.get()).data().status).toBe('open');
+
+  await fila.getByRole('button', { name: 'Borrar' }).click();
+  await modal.getByRole('button', { name: 'Sí, borrar' }).click();
   await expect(fila).toHaveCount(0);
   await expect(page.locator('poker-app').locator('.error')).toHaveCount(0);
 
