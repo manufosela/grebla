@@ -23,7 +23,7 @@ import './catalog-manager.js';
 import './org-chart.js';
 import './common/person-permissions.js';
 import './admin/domains-manager.js';
-import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteUnusedUser } from '../lib/users.js';
+import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteAccount } from '../lib/users.js';
 import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
@@ -407,6 +407,8 @@ export class SuperadminPanel extends LitElement {
     .grant-h { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rm-muted, #5b6b7d); margin-bottom: 0.3rem; }
     .grant .chk { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.2rem 0; }
     .confirm { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
+    /* Una pregunta larga se parte en líneas: si no, ensancha la tabla y hay que arrastrarla. */
+    .confirm-wrap { white-space: normal; display: inline-block; max-width: 22rem; line-height: 1.4; }
     .confirm button { border: 0; background: none; cursor: pointer; font-weight: 700; font-size: 0.78rem; padding: 0 0.25rem; color: var(--rm-text, #111827); }
     .confirm .yes { color: var(--rm-danger, #dc2626); }
     .row-actions { display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
@@ -1177,31 +1179,34 @@ export class SuperadminPanel extends LitElement {
       <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
       <td>${u.email ?? html`<span class="muted">—</span>`}</td>
       <td colspan="2"><span class="muted">${detalle}</span></td>
-      <td>
+      <td class="stack">
         ${retirando
-          ? html`<span class="confirm">¿Retirar acceso? <button class="yes" @click=${() => this._removeAccount(u)}>Sí</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
+          ? html`<span class="confirm confirm-wrap">¿Borrar la cuenta? Se borra su login y su usuario; no podrá volver a entrar. <button class="yes" @click=${() => this._removeAccount(u)}>Sí, borrar</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
           : html`<button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button>
-            ${tipo === 'residuo'
-              ? html`<button class="del-btn" @click=${() => { this._confirmRemoveAccount = u.uid; }}>Retirar</button>`
+            ${tipo !== 'acceso'
+              ? html`<button class="del-btn" @click=${() => { this._confirmRemoveAccount = u.uid; }}>Borrar</button>`
               : null}`}
       </td>
     </tr>`;
   }
 
-  /** Retira los roles y el registro de una cuenta residual. */
+  /**
+   * Borra una cuenta sin ficha ni rol (RMR-TSK-0520): login y usuario de Auth,
+   * por Cloud Function. Quien no debería estar deja de existir aquí.
+   */
   async _removeAccount(u) {
     this._confirmRemoveAccount = null;
-    return this._withBusy('Retirando la cuenta…', async () => {
+    return this._withBusy('Borrando la cuenta…', async () => {
       this._peopleError = '';
       this._peopleNotice = '';
       try {
-        await deleteUnusedUser(u.uid);
-        this._peopleNotice = 'Cuenta retirada.';
+        await deleteAccount(u.uid);
+        this._peopleNotice = 'Cuenta borrada.';
         await this._loadUsers();
       } catch (err) {
-        // El mensaje de deleteUnusedUser explica qué reasignar antes: se enseña
-        // tal cual, en vez de un «no se pudo» que no ayuda a nadie.
-        this._peopleError = err instanceof Error ? err.message : 'No se pudo retirar la cuenta.';
+        // La CF explica qué hay que quitar antes (ficha o rol): se enseña tal
+        // cual, en vez de un «no se pudo» que no ayuda a nadie.
+        this._peopleError = err instanceof Error ? err.message : 'No se pudo borrar la cuenta.';
       }
     });
   }
