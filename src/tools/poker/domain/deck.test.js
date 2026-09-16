@@ -67,18 +67,18 @@ describe('deckOf: el mazo es de la sesión', () => {
 });
 
 describe('buildDeck: el mazo de una escala es fijo (RMR-TSK-0515)', () => {
-  it('Fibonacci va del 1 al 21, con «no sé», «pausa» y «partir» al final', () => {
-    // Sin 0: si algo existe, cuesta algo. Sin 40 ni 100: eso no se estima, se parte.
-    expect(buildDeck('fibonacci')).toEqual(['1', '2', '3', '5', '8', '13', '21', '?', '☕', 'partir']);
+  it('Fibonacci va del 1 al 13, y lo que era 21 es «partir»', () => {
+    // Sin 0: si algo existe, cuesta algo. Sin ? ni ☕: se pregunta antes de votar.
+    expect(buildDeck('fibonacci')).toEqual(['1', '2', '3', '5', '8', '13', 'partir']);
   });
 
-  it('las tallas van de XS a XL', () => {
-    expect(buildDeck('tallas')).toEqual(['XS', 'S', 'M', 'L', 'XL', '?', '☕', 'partir']);
+  it('las tallas van de XS a XL, más «partir»', () => {
+    expect(buildDeck('tallas')).toEqual(['XS', 'S', 'M', 'L', 'XL', 'partir']);
   });
 
-  it('las especiales van siempre: quien no lo tiene claro no inventa un número', () => {
+  it('«partir» va siempre: lo que es demasiado grande se dice, no se le pone cifra', () => {
     for (const id of ['fibonacci', 'tallas']) {
-      expect(buildDeck(id).slice(-3)).toEqual(['?', '☕', 'partir']);
+      expect(buildDeck(id).at(-1)).toBe('partir');
     }
   });
 

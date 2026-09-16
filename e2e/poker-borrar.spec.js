@@ -22,7 +22,7 @@ const NOMBRE = 'Sesión a borrar E2E';
 async function sesion(name, ownerLeaderUid) {
   const ref = await db().collection('pokerSessions').add({
     name, ownerLeaderUid, mode: 'simple', scale: 'fibonacci',
-    deck: ['1', '2', '3', '5', '8', '13', '21', '?', '☕', 'partir'],
+    deck: ['1', '2', '3', '5', '8', '13', 'partir'],
     tasks: [], currentTaskId: null, votingActive: true, results: {},
     revealed: false, round: 1, status: 'open', createdAt: new Date(), closedAt: null, squad: null,
   });

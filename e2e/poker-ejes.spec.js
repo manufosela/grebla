@@ -17,7 +17,7 @@ function db() {
 }
 
 const NOMBRE = 'Sesión por ejes E2E';
-const MAZO = ['1', '2', '3', '5', '8', '13', '21', '?', '☕', 'partir'];
+const MAZO = ['1', '2', '3', '5', '8', '13', 'partir'];
 
 async function sesion({ revealed = false, votos = [] } = {}) {
   const ref = await db().collection('pokerSessions').add({

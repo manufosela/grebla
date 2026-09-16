@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasVotedThisRound, countVoted, allVoted, revealedVotes, summarizeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted } from './tally.js';
+import { hasVotedThisRound, countVoted, allVoted, revealedVotes, judgeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted } from './tally.js';
 
 const player = (uid, votedRound) => ({ uid, name: uid, votedRound });
 
@@ -99,89 +99,70 @@ describe('revealedVotes', () => {
   });
 });
 
-describe('summarizeVotes', () => {
+/**
+ * Juicio de una votación (RMR-TSK-0521): acuerdo, o la más baja y la más alta.
+ * Sin medias: la distancia entre extremos es la información que falta, y una
+ * media la esconde.
+ */
+describe('judgeVotes', () => {
+  const MAZO = ['1', '2', '3', '5', '8', '13', 'partir'];
+
   it('reparte la distribución, ordenada por frecuencia', () => {
-    const s = summarizeVotes(['8', '8', '13', '5']);
+    const s = judgeVotes(['8', '8', '13', '5'], MAZO);
     expect(s.total).toBe(4);
     expect(s.distribution[0]).toEqual({ value: '8', count: 2 });
   });
 
-  it('promedia solo las numéricas e ignora las especiales', () => {
-    const s = summarizeVotes(['2', '4' /* fuera de mazo pero numérica */, '?', '☕']);
-    expect(s.numericCount).toBe(2);
-    expect(s.min).toBe(2);
-    expect(s.max).toBe(4);
-    expect(s.average).toBe(3);
-    expect(s.consensus).toBe(false);
-  });
-
-  it('detecta consenso cuando todas son iguales', () => {
-    const s = summarizeVotes(['5', '5', '5']);
-    expect(s.consensus).toBe(true);
-    expect(s.average).toBe(5);
-  });
-
-  it('sin cartas no hay consenso ni medias', () => {
-    const s = summarizeVotes([]);
-    expect(s).toEqual({ total: 0, distribution: [], numericCount: 0, min: null, max: null, average: null, consensus: false, agreed: null });
-  });
-
-  it('solo especiales: ni medias ni consenso, aunque sean la misma', () => {
-    // Este test decía lo contrario hasta RMR-TSK-0482: bastaba con que las
-    // cartas coincidieran. Coincidir en «paremos» no es haber estimado nada, y
-    // cantarlo como consenso hacía dar por cerrada una votación vacía.
-    const s = summarizeVotes(['☕', '☕']);
-    expect(s.numericCount).toBe(0);
-    expect(s.average).toBeNull();
-    expect(s.consensus).toBe(false);
-  });
-});
-
-/**
- * Qué cuenta como ACUERDO (RMR-TSK-0482).
- *
- * Hasta ahora bastaba con que las cartas coincidieran, así que un equipo entero
- * votando «?» —nadie lo sabe— veía «¡Consenso! Todas las cartas coinciden». Una
- * carta especial dice «no lo sé» o «paremos»: coincidir en no saber no es estar
- * de acuerdo en nada.
- */
-describe('acuerdo: qué se puede dar por estimado', () => {
-  it('todas iguales y con significado: hay acuerdo, y se sabe en cuánto', () => {
-    const s = summarizeVotes(['5', '5', '5']);
+  it('todas iguales y con significado: acuerdo, y se sabe en cuánto', () => {
+    const s = judgeVotes(['5', '5', '5'], MAZO);
     expect(s.consensus).toBe(true);
     expect(s.agreed).toBe('5');
+    expect([s.lowest, s.highest]).toEqual(['5', '5']);
   });
 
-  it('una talla también es un acuerdo: no todo se mide en números', () => {
-    // La distinción es especial vs. no especial, no numérica vs. no numérica:
-    // «todos decimos M» es tan acuerdo como «todos decimos 5».
-    const s = summarizeVotes(['M', 'M']);
-    expect(s.consensus).toBe(true);
-    expect(s.agreed).toBe('M');
-  });
-
-  it('coincidir en «no lo sé» NO es un acuerdo', () => {
-    for (const especial of ['?', '☕']) {
-      const s = summarizeVotes([especial, especial, especial]);
-      expect(s.consensus).toBe(false);
-      expect(s.agreed).toBeNull();
-    }
-  });
-
-  it('una sola carta especial rompe el acuerdo de los demás', () => {
-    // Si alguien no lo sabe, el equipo todavía no ha estimado.
-    const s = summarizeVotes(['5', '5', '?']);
+  it('sin acuerdo señala la más baja y la más alta, sin media', () => {
+    const s = judgeVotes(['3', '8', '5'], MAZO);
     expect(s.consensus).toBe(false);
     expect(s.agreed).toBeNull();
+    expect(s.lowest).toBe('3');
+    expect(s.highest).toBe('8');
+    expect('average' in s).toBe(false);
   });
 
-  it('sin unanimidad no hay nada que guardar, por cerca que se quede', () => {
-    expect(summarizeVotes(['3', '5']).agreed).toBeNull();
-    expect(summarizeVotes(['M', 'L']).agreed).toBeNull();
+  it('«partir» está por encima de todo, y coincidir en partir SÍ es acuerdo: hay que partirla', () => {
+    expect(judgeVotes(['13', 'partir'], MAZO).highest).toBe('partir');
+    const s = judgeVotes(['partir', 'partir'], MAZO);
+    expect(s.consensus).toBe(true);
+    expect(s.agreed).toBe('partir');
   });
 
-  it('sin cartas no hay acuerdo que inventar', () => {
-    expect(summarizeVotes([]).agreed).toBeNull();
-    expect(summarizeVotes(null).agreed).toBeNull();
+  it('una talla también es un acuerdo, y el orden lo da su mazo', () => {
+    const TALLAS = ['XS', 'S', 'M', 'L', 'XL', 'partir'];
+    expect(judgeVotes(['M', 'M'], TALLAS).agreed).toBe('M');
+    const s = judgeVotes(['L', 'S', 'M'], TALLAS);
+    expect(s.lowest).toBe('S');
+    expect(s.highest).toBe('L');
+  });
+
+  it('las cartas antiguas «?» y «☕» no dicen nada: ni acuerdo ni extremo', () => {
+    for (const especial of ['?', '☕']) {
+      const s = judgeVotes([especial, especial], ['1', '2', '?', '☕']);
+      expect(s.consensus).toBe(false);
+      expect(s.agreed).toBeNull();
+      expect(s.lowest).toBeNull();
+    }
+    // Una sola rompe el acuerdo de los demás: si alguien no lo sabe, no se ha estimado.
+    expect(judgeVotes(['5', '5', '?'], ['5', '?']).consensus).toBe(false);
+  });
+
+  it('sin mazo, ordena por número con partir al final', () => {
+    const s = judgeVotes(['8', '3', 'partir']);
+    expect(s.lowest).toBe('3');
+    expect(s.highest).toBe('partir');
+  });
+
+  it('sin cartas no hay nada que juzgar', () => {
+    expect(judgeVotes([])).toEqual({ total: 0, distribution: [], consensus: false, agreed: null, lowest: null, highest: null });
+    expect(judgeVotes(null).agreed).toBeNull();
   });
 });

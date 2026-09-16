@@ -21,7 +21,7 @@ const NOMBRE = 'Sesión de acuerdo E2E';
 async function sesionCon(votos) {
   const ref = await db().collection('pokerSessions').add({
     name: NOMBRE, ownerLeaderUid: 'e2e-head', mode: 'simple',
-    scale: 'fibonacci', deck: ['1', '2', '3', '5', '8', '?', '☕'],
+    scale: 'fibonacci', deck: ['1', '2', '3', '5', '8', '13', 'partir'],
     tasks: [], currentTaskId: null, votingActive: true, results: {},
     revealed: true, round: 1, status: 'open', createdAt: new Date(), closedAt: null, squad: null,
   });
@@ -50,16 +50,17 @@ const resumen = (page) => page.locator('poker-table').evaluate(
   (el) => el.shadowRoot?.querySelector('.summary')?.textContent?.trim() ?? '',
 );
 
-test('todo el equipo votando «?» ya NO es consenso', async ({ page }) => {
-  // Antes decía «¡Consenso! Todas las cartas coinciden» sin que nadie supiera
-  // nada, y con eso se daba por cerrada una votación vacía.
-  const ref = await sesionCon(['?', '?']);
+test('todo el equipo votando «partir» SÍ es acuerdo: hay que partirla', async ({ page }) => {
+  // Coincidir en que es demasiado grande es una decisión, no una duda
+  // (RMR-TSK-0521). Lo que nunca fue acuerdo, coincidir en «?», ya no está en
+  // el mazo: se pregunta antes de votar.
+  const ref = await sesionCon(['partir', 'partir']);
   await signInAs(page, 'head');
   await page.goto('/poker');
   await page.getByRole('row', { name: new RegExp(NOMBRE) }).getByRole('button', { name: 'Abrir' }).click();
   await page.locator('poker-table').waitFor();
 
-  await expect.poll(() => resumen(page)).toContain('Todavía no hay acuerdo');
+  await expect.poll(() => resumen(page)).toContain('Todas las cartas dicen partir');
   await ref.delete();
 });
 
@@ -70,7 +71,8 @@ test('sin unanimidad no se ofrece cerrar por mayoría ni por la media', async ({
   await page.getByRole('row', { name: new RegExp(NOMBRE) }).getByRole('button', { name: 'Abrir' }).click();
   await page.locator('poker-table').waitFor();
 
-  await expect.poll(() => resumen(page)).toContain('volved a votar');
+  await expect.poll(() => resumen(page)).toContain('Más baja 3 · más alta 8');
+  expect(await resumen(page)).not.toMatch(/Media/);
   const botones = await page.locator('poker-table').evaluate(
     (el) => [...(el.shadowRoot?.querySelectorAll('.summary button') ?? [])].map((b) => b.textContent.trim()),
   );

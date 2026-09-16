@@ -1,8 +1,7 @@
 /**
  * Mazo de Scrum Poker (RMR-TSK-0317). Dominio puro (sin Firebase): define las
- * cartas y las utilidades para distinguir las numéricas (que entran en el
- * resumen) de las especiales (`?` no sé, `☕` pausa), que se cuentan pero no
- * promedian.
+ * cartas y las utilidades para distinguir las numéricas de las que no son una
+ * cantidad («partir», y «?»/«☕» en sesiones antiguas).
  *
  * Escala Fibonacci «de planning poker»: 0,1,2,3,5,8,13,20,40,100. El salto
  * creciente obliga a decidir el orden de magnitud en vez de discutir un ±1 que
@@ -25,10 +24,15 @@ export const POKER_DECK = ['0', '1', '2', '3', '5', '8', '13', '20', '40', '100'
 export const SPLIT_CARD = 'partir';
 
 /**
- * Cartas que se votan pero NO se promedian ni son acuerdo: «no sé», «pausa» y
- * «partir» no son una cantidad. Van al final de cualquier escala.
+ * Cartas que se añaden a toda escala (RMR-TSK-0521): solo «partir». «?» y «☕»
+ * se retiraron del mazo: quien no lo tiene claro pregunta antes de votar, y
+ * la pausa se pide en voz alta. Las sesiones antiguas las conservan en su mazo
+ * guardado, y por eso siguen reconociéndose como cartas que no dicen nada.
  */
-export const SPECIAL_CARDS = Object.freeze(['?', '☕', SPLIT_CARD]);
+export const SPECIAL_CARDS = Object.freeze([SPLIT_CARD]);
+
+/** Cartas de sesiones antiguas que no dicen nada: coincidir en ellas no es acuerdo. */
+export const UNDECIDED_CARDS = Object.freeze(['?', '☕']);
 
 /** Cómo se pinta una carta en la mesa: «partir» va con tijeras para caber en la carta. */
 export function cardLabel(card) {
@@ -42,16 +46,16 @@ export function cardLabel(card) {
  * promedia lo numérico, y eso vale para las dos escalas por igual.
  *
  * Los mazos son FIJOS (RMR-TSK-0515): todo el equipo estima con las mismas
- * cartas. Fibonacci va del 1 al 21 —sin 0, porque si algo existe cuesta algo, y
- * sin 40 ni 100, porque eso no se estima: se parte—. Es la escalera del taller
- * «Estimar en magnitud».
+ * cartas. Fibonacci va del 1 al 13 —sin 0, porque si algo existe cuesta algo—
+ * y lo que en el taller «Estimar en magnitud» era el 21 aquí es «partir»
+ * (RMR-TSK-0521): eso no se estima, se parte.
  */
 export const POKER_SCALES = Object.freeze([
   Object.freeze({
     id: 'fibonacci',
     label: 'Fibonacci',
     hint: 'El salto creciente obliga a decidir el orden de magnitud.',
-    cards: Object.freeze(['1', '2', '3', '5', '8', '13', '21']),
+    cards: Object.freeze(['1', '2', '3', '5', '8', '13']),
   }),
   Object.freeze({
     id: 'tallas',

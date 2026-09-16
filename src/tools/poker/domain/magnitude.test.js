@@ -5,14 +5,14 @@ import {
 import { buildDeck, POKER_DECK, SPLIT_CARD } from './deck.js';
 
 describe('magnitudeCard: el cuadro del taller «Estimar en magnitud»', () => {
-  it('reproduce el cuadro de Fibonacci casilla a casilla', () => {
-    // Filas = complejidad 1..5, columnas = esfuerzo 1..5. P = partir.
+  it('reproduce el cuadro de Fibonacci casilla a casilla, con el 21 del taller como «partir»', () => {
+    // Filas = complejidad 1..5, columnas = esfuerzo 1..5. P = partir (RMR-TSK-0521).
     const cuadro = [
       ['1', '2', '3', '5', '8'],
       ['2', '3', '5', '8', '13'],
-      ['3', '5', '8', '13', '21'],
-      ['5', '8', '13', '21', 'P'],
-      ['8', '13', '21', 'P', 'P'],
+      ['3', '5', '8', '13', 'P'],
+      ['5', '8', '13', 'P', 'P'],
+      ['8', '13', 'P', 'P', 'P'],
     ];
     for (const [ci, fila] of cuadro.entries()) {
       for (const [ei, esperado] of fila.entries()) {
@@ -22,11 +22,13 @@ describe('magnitudeCard: el cuadro del taller «Estimar en magnitud»', () => {
     }
   });
 
-  it('el 21 llega antes por la diagonal que por los lados', () => {
+  it('el «partir» llega antes por la diagonal que por los lados', () => {
     // Todo cabeza y nada de trabajo vale lo mismo que todo trabajo y nada de cabeza.
     expect(magnitudeCard('fibonacci', 5, 1)).toBe('8');
     expect(magnitudeCard('fibonacci', 1, 5)).toBe('8');
     expect(magnitudeCard('fibonacci', 3, 3)).toBe('8');
+    expect(magnitudeCard('fibonacci', 4, 4)).toBe(SPLIT_CARD);
+    expect(magnitudeCard('fibonacci', 5, 2)).toBe('13');
   });
 
   it('lo más pequeño que existe es un 1: no hay ceros', () => {
@@ -50,7 +52,7 @@ describe('axesAvailable: solo si el mazo de la sesión tiene la escalera', () =>
     expect(axesAvailable({ scale: 'tallas', deck: buildDeck('tallas') })).toBe(true);
   });
 
-  it('una sesión antigua (mazo 0..100 sin 21 ni «partir») no: antes que emitir una carta inválida, se esconde', () => {
+  it('una sesión antigua (mazo 0..100 sin «partir») no: antes que emitir una carta inválida, se esconde', () => {
     expect(axesAvailable({})).toBe(false);
     expect(axesAvailable({ deck: POKER_DECK })).toBe(false);
     expect(axesAvailable({ scale: 'tallas', deck: ['S', 'M', '?', '☕'] })).toBe(false);

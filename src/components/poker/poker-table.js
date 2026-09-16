@@ -26,7 +26,7 @@ const VOTE_TABS = Object.freeze([
   Object.freeze({ id: 'carta', label: 'Carta directa' }),
 ]);
 import {
-  countActiveVoted, hasVotedThisRound, revealedVotes, summarizeVotes,
+  countActiveVoted, hasVotedThisRound, revealedVotes, judgeVotes,
   isSpectator, hasSkippedRound, activeVoters,
 } from '../../tools/poker/domain/tally.js';
 import {
@@ -392,7 +392,7 @@ export class PokerTable extends LitElement {
   _renderSummary() {
     if (!this._revealed) return null;
     const cards = revealedVotes(this._players, Object.fromEntries(this._votes.map((v) => [v.uid, v])), this._round);
-    const s = summarizeVotes(cards.map((c) => c.value));
+    const s = judgeVotes(cards.map((c) => c.value), deckOf(this._session));
     return html`<div class="summary">
       <p class="headline">${this._headline(s)}</p>
       <div class="dist">
@@ -402,11 +402,11 @@ export class PokerTable extends LitElement {
     </div>`;
   }
 
-  /** Qué se dice del reparto de cartas, sin dar por cerrado lo que no lo está. */
+  /** Qué se dice del reparto de cartas, sin dar por cerrado lo que no lo está. Sin medias (RMR-TSK-0521). */
   _headline(s) {
     if (s.consensus) return `¡Acuerdo! Todas las cartas dicen ${s.agreed}.`;
-    if (s.average !== null) return `Media ${Number.isInteger(s.average) ? s.average : s.average.toFixed(1)} · rango ${s.min}–${s.max}`;
-    return 'Nadie ha puesto un número todavía.';
+    if (s.lowest !== null) return `Más baja ${s.lowest} · más alta ${s.highest}`;
+    return 'Nadie ha puesto una carta que diga algo todavía.';
   }
 
   /**
