@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, getRegionalFunctions } from './firebase.js';
 import { isValidCardFor, buildDeck, scaleById } from '../tools/poker/domain/deck.js';
+import { isAxisLevel } from '../tools/poker/domain/magnitude.js';
 
 const SESSIONS = 'pokerSessions';
 
@@ -258,14 +259,22 @@ export async function joinSession(sessionId, uid, name) {
  * valor en /votes y marca `votedRound` en la presencia. Valida la carta en el
  * boundary (sin fallbacks silenciosos) contra el mazo DE ESA SESIÓN: una sesión
  * de tallas no acepta un 13 solo porque exista en el otro mazo (RMR-TSK-0481).
+ *
+ * Si se votó por complejidad × esfuerzo (RMR-TSK-0516) se guardan los ejes con
+ * la carta: al revelar se enseñan para descomponer el número en el debate.
  * @param {string} sessionId @param {string} uid @param {number} round @param {string} value
  * @param {{ deck?: ReadonlyArray<string>|null }} [session]  la sesión en curso
+ * @param {{ complexity: number, effort: number }|null} [axes]  los dos ejes, si se votó así
  */
-export function castVote(sessionId, uid, round, value, session) {
+export function castVote(sessionId, uid, round, value, session, axes = null) {
   if (!isValidCardFor(session, value)) throw new Error(`Carta no válida: ${value}`);
   if (!Number.isInteger(round)) throw new Error('castVote requiere la ronda actual');
+  if (axes !== null && !(isAxisLevel(axes?.complexity) && isAxisLevel(axes?.effort))) {
+    throw new Error('Los ejes van del 1 al 5');
+  }
   const batch = writeBatch(db);
-  batch.set(doc(db, SESSIONS, sessionId, 'votes', uid), { value, round });
+  const vote = axes ? { value, round, axes: { complexity: axes.complexity, effort: axes.effort } } : { value, round };
+  batch.set(doc(db, SESSIONS, sessionId, 'votes', uid), vote);
   batch.set(doc(db, SESSIONS, sessionId, 'players', uid), { votedRound: round }, { merge: true });
   return batch.commit();
 }

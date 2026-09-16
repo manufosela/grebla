@@ -17,10 +17,23 @@
 export const POKER_DECK = ['0', '1', '2', '3', '5', '8', '13', '20', '40', '100', '?', '☕'];
 
 /**
- * Cartas que se votan pero NO se promedian: «no sé» y «pausa» no son una
- * cantidad. Van al final de cualquier escala.
+ * «Partir» (RMR-TSK-0516): la subtarea es demasiado grande para estimarla, y
+ * lo que toca es partirla, no ponerle una cifra mayor. Es lo que dicen las
+ * casillas en blanco del cuadro complejidad × esfuerzo, y se vota como carta
+ * para que quien llega ahí pueda decirlo.
  */
-export const SPECIAL_CARDS = Object.freeze(['?', '☕']);
+export const SPLIT_CARD = 'partir';
+
+/**
+ * Cartas que se votan pero NO se promedian ni son acuerdo: «no sé», «pausa» y
+ * «partir» no son una cantidad. Van al final de cualquier escala.
+ */
+export const SPECIAL_CARDS = Object.freeze(['?', '☕', SPLIT_CARD]);
+
+/** Cómo se pinta una carta en la mesa: «partir» va con tijeras para caber en la carta. */
+export function cardLabel(card) {
+  return card === SPLIT_CARD ? '✂' : card;
+}
 
 /**
  * Escalas disponibles al convocar (RMR-TSK-0481). No todos los equipos estiman

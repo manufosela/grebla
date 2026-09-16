@@ -45,7 +45,7 @@ test('se convoca por tallas, y el mazo queda guardado en la sesión', async ({ p
   const sesion = snap.docs[0].data();
   expect(sesion.scale).toBe('tallas');
   // La escala entera, y las especiales que no se pueden quitar.
-  expect(sesion.deck).toEqual(['XS', 'S', 'M', 'L', 'XL', '?', '☕']);
+  expect(sesion.deck).toEqual(['XS', 'S', 'M', 'L', 'XL', '?', '☕', 'partir']);
 });
 
 /*

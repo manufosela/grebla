@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { POKER_DECK, isNumericCard, cardNumber, isValidCard, deckOf, buildDeck, isValidCardFor } from './deck.js';
+import { POKER_DECK, isNumericCard, cardNumber, isValidCard, deckOf, buildDeck, isValidCardFor, cardLabel } from './deck.js';
 
 describe('POKER_DECK', () => {
   it('es la escala Fibonacci de planning poker más las dos especiales', () => {
@@ -67,19 +67,26 @@ describe('deckOf: el mazo es de la sesión', () => {
 });
 
 describe('buildDeck: el mazo de una escala es fijo (RMR-TSK-0515)', () => {
-  it('Fibonacci va del 1 al 21, con «no sé» y «pausa» al final', () => {
+  it('Fibonacci va del 1 al 21, con «no sé», «pausa» y «partir» al final', () => {
     // Sin 0: si algo existe, cuesta algo. Sin 40 ni 100: eso no se estima, se parte.
-    expect(buildDeck('fibonacci')).toEqual(['1', '2', '3', '5', '8', '13', '21', '?', '☕']);
+    expect(buildDeck('fibonacci')).toEqual(['1', '2', '3', '5', '8', '13', '21', '?', '☕', 'partir']);
   });
 
   it('las tallas van de XS a XL', () => {
-    expect(buildDeck('tallas')).toEqual(['XS', 'S', 'M', 'L', 'XL', '?', '☕']);
+    expect(buildDeck('tallas')).toEqual(['XS', 'S', 'M', 'L', 'XL', '?', '☕', 'partir']);
   });
 
   it('las especiales van siempre: quien no lo tiene claro no inventa un número', () => {
     for (const id of ['fibonacci', 'tallas']) {
-      expect(buildDeck(id).slice(-2)).toEqual(['?', '☕']);
+      expect(buildDeck(id).slice(-3)).toEqual(['?', '☕', 'partir']);
     }
+  });
+
+  it('«partir» no es una cantidad: ni se promedia ni se pinta como número', () => {
+    expect(isNumericCard('partir')).toBe(false);
+    expect(cardNumber('partir')).toBeNull();
+    expect(cardLabel('partir')).toBe('✂');
+    expect(cardLabel('13')).toBe('13');
   });
 
   it('una escala desconocida cae en Fibonacci en vez de dejar la mesa vacía', () => {
