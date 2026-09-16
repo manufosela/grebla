@@ -37,17 +37,23 @@ function createdAtMs(value) {
  * votación, no por sesión.)
  * El MAZO se fija al convocar y viaja con la sesión (RMR-TSK-0481): así una
  * estimación en curso no cambia de cartas porque alguien toque un catálogo.
- * @param {{ name: string, ownerLeaderUid: string, scale?: string }} data
+ * El organizador decide al convocar si vota (RMR-TSK-0522) y deja la lista de
+ * tareas a estimar; la primera pasa a ser la actual.
+ * @param {{ name: string, ownerLeaderUid: string, scale?: string, ownerVotes?: boolean, tasks?: Array<{id:string,title:string,value:null}> }} data
  * @returns {Promise<string>} id de la sesión
  */
 export async function createSession(data) {
   if (!data?.ownerLeaderUid) throw new Error('createSession requiere ownerLeaderUid');
+  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
   const ref = await addDoc(collection(db, SESSIONS), {
     name: String(data.name ?? '').trim(),
     ownerLeaderUid: data.ownerLeaderUid,
+    ownerVotes: data.ownerVotes !== false,
     mode: 'simple',
     scale: scaleById(data.scale).id,
     deck: buildDeck(data.scale),
+    tasks,
+    currentTaskId: tasks[0]?.id ?? null,
     revealed: false,
     round: 1,
     status: 'open',
@@ -55,6 +61,31 @@ export async function createSession(data) {
     closedAt: null,
   });
   return ref.id;
+}
+
+/**
+ * Tareas de la sesión (RMR-TSK-0522): la lista entera y cuál es la actual. Solo
+ * el dueño escribe la sesión, así que la lista viaja completa: no hay carreras.
+ * @param {string} sessionId @param {Array<{id:string,title:string,value:string|null}>} tasks @param {string|null} currentTaskId
+ */
+export function setSessionTasks(sessionId, tasks, currentTaskId) {
+  return updateDoc(doc(db, SESSIONS, sessionId), { tasks, currentTaskId });
+}
+
+/**
+ * Cierra la tarea actual con el valor acordado y pasa a la siguiente con una
+ * ronda limpia (votos ocultos). Si no queda siguiente, currentTaskId queda null:
+ * el organizador añade otra o termina.
+ */
+export function closeCurrentTask(sessionId, tasks, nextId) {
+  return updateDoc(doc(db, SESSIONS, sessionId), {
+    tasks, currentTaskId: nextId, round: increment(1), revealed: false, voteTitle: '', voteRef: null, voteIssue: null,
+  });
+}
+
+/** Termina la sesión: queda la lista de tareas con sus valores, y ya no se vota. */
+export function finishSession(sessionId) {
+  return updateDoc(doc(db, SESSIONS, sessionId), { status: 'finished', finishedAt: serverTimestamp(), revealed: false });
 }
 
 /** Título de la votación en curso: qué se está estimando (RMR-TSK-0482). */
@@ -215,14 +246,15 @@ export function deleteSession(sessionId) {
  * su voto de la ronda en curso).
  * @param {string} sessionId @param {string} uid @param {string} name
  */
-export async function joinSession(sessionId, uid, name) {
+export async function joinSession(sessionId, uid, name, { spectator = false } = {}) {
   const ref = doc(db, SESSIONS, sessionId, 'players', uid);
   const snap = await getDoc(ref);
   if (snap.exists()) {
     await updateDoc(ref, { name: String(name ?? snap.data().name ?? '').trim() });
     return;
   }
-  await setDoc(ref, { name: String(name ?? '').trim(), votedRound: null, joinedAt: serverTimestamp() });
+  // El organizador que dijo que no vota entra como observador desde el principio (RMR-TSK-0522).
+  await setDoc(ref, { name: String(name ?? '').trim(), votedRound: null, joinedAt: serverTimestamp(), spectator });
 }
 
 /**

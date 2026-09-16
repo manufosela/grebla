@@ -103,13 +103,15 @@ try {
   await check('un miembro NO escribe el voto de OTRO',
     assertFails(setDoc(doc(alice, 'pokerSessions', 'hidden', 'votes', 'bob-uid'), { value: '1', round: 1 })));
 
-  console.log('Revelar es colaborativo; tema/ronda solo el dueño:');
-  await check('un miembro REVELA (solo el campo revealed)',
-    assertSucceeds(updateDoc(doc(alice, 'pokerSessions', 'hidden'), { revealed: true })));
-  await check('un miembro NO cambia el tema (no es dueño ni es solo-revealed)',
+  console.log('Revelar, tema y ronda: solo el dueño (RMR-TSK-0522):');
+  await check('un miembro NO revela: el primero que se impacienta no destapa las cartas de los demás',
+    assertFails(updateDoc(doc(alice, 'pokerSessions', 'hidden'), { revealed: true })));
+  await check('un miembro NO cambia el tema',
     assertFails(updateDoc(doc(alice, 'pokerSessions', 'hidden'), { topic: 'secuestrado' })));
-  await check('un miembro NO re-oculta una sesión ya revelada (revelar es solo false→true)',
+  await check('un miembro NO re-oculta una sesión ya revelada',
     assertFails(updateDoc(doc(alice, 'pokerSessions', 'shown'), { revealed: false })));
+  await check('el dueño REVELA',
+    assertSucceeds(updateDoc(doc(leader, 'pokerSessions', 'hidden'), { revealed: true })));
   await check('el dueño CAMBIA tema y ronda (pasar de tema)',
     assertSucceeds(updateDoc(doc(leader, 'pokerSessions', 'hidden'), { topic: 'nuevo', round: 2, revealed: false })));
   await check('un gmail suelto NO revela',

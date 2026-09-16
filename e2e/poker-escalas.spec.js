@@ -32,8 +32,8 @@ test('se convoca por tallas, y el mazo queda guardado en la sesión', async ({ p
   await page.getByRole('tab', { name: 'Convocar' }).click();
   await page.getByPlaceholder(/Nombre de la sesión/).fill(NOMBRE);
   await page.getByRole('radio', { name: 'Tallas de camiseta' }).check();
-  // El mazo es fijo (RMR-TSK-0515): no hay cartas que marcar.
-  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  // El mazo es fijo (RMR-TSK-0515): no hay cartas que marcar (la única casilla es «Yo también voto»).
+  await expect(page.getByRole('checkbox', { name: /^(XS|S|M|L|XL|\d+)$/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Crear sesión' }).click();
 
   await expect.poll(async () => {
