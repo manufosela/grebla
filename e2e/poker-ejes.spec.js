@@ -48,7 +48,8 @@ test.afterEach(async () => {
 });
 
 const eje = (page, nombre) => page.getByRole('group', { name: nombre });
-const nivel = (page, nombreEje, n) => eje(page, nombreEje).getByRole('button', { name: String(n), exact: true });
+/** Mueve el slider del eje al nivel n (RMR-TSK-0525). */
+const nivel = (page, nombreEje, n) => eje(page, nombreEje).getByRole('slider').fill(String(n));
 
 test('los dos ejes dan la carta del cuadro, y el voto guarda los ejes', async ({ page }) => {
   const ref = await sesion();
@@ -57,19 +58,20 @@ test('los dos ejes dan la carta del cuadro, y el voto guarda los ejes', async ({
 
   await expect(page.getByRole('tab', { name: 'Complejidad y esfuerzo' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Carta directa' })).toBeVisible();
-  await expect(page.getByText('Marca los dos ejes para ver tu carta.')).toBeVisible();
+  // Los ejes arrancan en 1: lo más pequeño que existe, y la carta sale desde el principio.
+  await expect(page.getByText('Tu carta es 1.')).toBeVisible();
 
-  await nivel(page, 'Complejidad', 3).click();
-  await nivel(page, 'Esfuerzo', 3).click();
+  await nivel(page, 'Complejidad', 3);
+  await nivel(page, 'Esfuerzo', 3);
   await expect(page.getByText('Tu carta es 8.')).toBeVisible();
 
   // La diagonal dispara el número: 5×4 ya no se estima, se parte.
-  await nivel(page, 'Complejidad', 5).click();
-  await nivel(page, 'Esfuerzo', 4).click();
+  await nivel(page, 'Complejidad', 5);
+  await nivel(page, 'Esfuerzo', 4);
   await expect(page.getByText(/hay que partirla/)).toBeVisible();
 
-  await nivel(page, 'Complejidad', 5).click();
-  await nivel(page, 'Esfuerzo', 1).click();
+  await nivel(page, 'Complejidad', 5);
+  await nivel(page, 'Esfuerzo', 1);
   await expect(page.getByText('Tu carta es 8.')).toBeVisible();
   await page.getByRole('button', { name: 'Votar 8' }).click();
   await expect(page.getByRole('button', { name: /Votado 8/ })).toBeDisabled();
