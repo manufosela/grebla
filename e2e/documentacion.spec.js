@@ -103,6 +103,24 @@ test('el documento se ve en un visor AISLADO, sin acceso a nuestro origen', asyn
 
   expect(sandbox).toContain('allow-scripts');
   expect(sandbox).not.toContain('allow-same-origin');
+  // Las notas del presentador (tecla S de reveal.js) abren un popup al que se
+  // escribe: tiene que salir del sandbox o nace en blanco (RMR-TSK-0528). Sigue
+  // con el origen opaco del documento, no con el nuestro.
+  expect(sandbox).toContain('allow-popups-to-escape-sandbox');
+});
+
+test('la presentación se puede maximizar desde el visor', async ({ page }) => {
+  await subir(DOCS[0].path, '<!doctype html><title>E2E</title><p>contenido');
+  await signInAs(page, 'engineer');
+  await page.goto('/documentacion');
+  await page.locator('[data-doc-id="e2e-grebla"]').click();
+
+  const maximizar = page.locator('docs-reader').getByRole('button', { name: /Maximizar/ });
+  await expect(maximizar).toBeVisible();
+  await expect(page.locator('docs-reader iframe')).toHaveAttribute('allow', 'fullscreen');
+  // Pulsarlo no rompe nada aunque el navegador no conceda la pantalla completa.
+  await maximizar.click();
+  await expect(page.locator('docs-reader .error')).toHaveCount(0);
 });
 
 test('abrir un documento no deja una URL que funcione sin sesión', async ({ page }) => {
