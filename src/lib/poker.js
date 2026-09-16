@@ -335,6 +335,17 @@ export async function getMyVote(sessionId, uid) {
   return snap.exists() ? snap.data() : null;
 }
 
+/**
+ * Tras editar «Yo también voto» (RMR-TSK-0526): si el organizador ya está
+ * sentado en la mesa, su asiento cambia a observador o a votante. Si aún no
+ * ha entrado, no se le sienta: lo hará joinSession con el valor nuevo.
+ */
+export async function syncOwnerSeat(sessionId, uid, votes) {
+  const ref = doc(db, SESSIONS, sessionId, 'players', uid);
+  if (!(await getDoc(ref)).exists()) return;
+  await setDoc(ref, { spectator: !votes }, { merge: true });
+}
+
 /** Marca (o desmarca) al jugador como observador («solo ver»): persiste en la sesión. */
 export function setSpectator(sessionId, uid, spectator) {
   return setDoc(doc(db, SESSIONS, sessionId, 'players', uid), { spectator: !!spectator }, { merge: true });
