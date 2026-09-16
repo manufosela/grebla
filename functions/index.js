@@ -457,6 +457,49 @@ export const syncToolManagersOnPersonWrite = onDocumentWritten(
  * creada por error. Solo el dueño (ownerLeaderUid) o un superadmin, y SOLO si la
  * persona ya está dada de baja (precondición de seguridad).
  */
+/**
+ * Borra una CUENTA que no debería estar en la instancia (RMR-TSK-0520): su
+ * registro de login (/users) y su usuario de Firebase Auth, para que no vuelva a
+ * entrar sin que nadie se entere. Solo un superadmin, y solo cuentas SIN ficha y
+ * SIN rol: si tiene ficha o rol, primero hay que quitárselos por su camino, que
+ * es donde se ve qué se pierde. Borrar aquí no es «retirar acceso»: es que la
+ * cuenta deje de existir.
+ */
+export const deleteAccount = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(caller.uid))) throw new HttpsError('permission-denied', 'Solo un superadmin puede borrar cuentas.');
+  const uid = typeof request.data?.uid === 'string' ? request.data.uid.trim() : '';
+  if (!uid) throw new HttpsError('invalid-argument', 'Falta el uid de la cuenta.');
+  if (uid === caller.uid) throw new HttpsError('failed-precondition', 'No puedes borrar tu propia cuenta.');
+
+  const db = getFirestore();
+  const [person, owned, ...roles] = await Promise.all([
+    db.collection('people').where('uid', '==', uid).limit(1).get(),
+    db.collection('people').where('ownerLeaderUid', '==', uid).get(),
+    ...['admins', 'leaders', 'supermanagers', 'viewers', 'surveyAdmins'].map((c) => db.doc(`${c}/${uid}`).get()),
+  ]);
+  if (!person.empty) throw new HttpsError('failed-precondition', 'Esa cuenta tiene ficha de persona: bórrala o desvincúlala primero.');
+  if (roles.some((snap) => snap.exists)) throw new HttpsError('failed-precondition', 'Esa cuenta tiene un rol: retíraselo primero.');
+  // Sin rol pero con gente colgando (ownerLeaderUid): borrarla dejaría personas huérfanas.
+  if (!owned.empty) {
+    const n = owned.size;
+    throw new HttpsError('failed-precondition', `No se puede borrar: tiene ${n} persona${n === 1 ? '' : 's'} en su equipo. Reasígnalas o bórralas primero.`);
+  }
+
+  await Promise.all([
+    db.doc(`users/${uid}`).delete(),
+    db.doc(`members/${uid}`).delete(),
+  ]);
+  try {
+    await getAuth().deleteUser(uid);
+  } catch (err) {
+    // Si en Auth ya no existe, el trabajo está hecho; cualquier otro fallo se propaga.
+    if (err?.code !== 'auth/user-not-found') throw new HttpsError('internal', 'No se pudo borrar el usuario de Auth.');
+  }
+  return { ok: true, uid };
+});
+
 export const deletePerson = onCall({ region: 'europe-west1' }, async (request) => {
   const caller = request.auth;
   if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');

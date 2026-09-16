@@ -41,8 +41,8 @@ test('a quien tiene acceso a propósito no se le trata como una anomalía', asyn
     const viewer = fila(page, 'Viewer Sin Ficha');
     await expect(viewer).toContainText('acceso concedido');
     await expect(viewer).toContainText('Viewer');
-    // Y no se ofrece retirarle el acceso que se le dio queriendo.
-    await expect(viewer.getByRole('button', { name: 'Retirar' })).toHaveCount(0);
+    // Y no se ofrece borrar la cuenta a la que se le dio acceso queriendo.
+    await expect(viewer.getByRole('button', { name: 'Borrar cuenta' })).toHaveCount(0);
 
     // El rol derivado ya incluye el gobierno: nada de «Superadmin y superadmin».
     await expect(page.locator('superadmin-panel tbody')).not.toContainText('y superadmin');
@@ -57,7 +57,9 @@ test('quien acaba de entrar está pendiente de ficha, no sobra', async ({ page }
     const nueva = fila(page, 'Recién Llegada');
     await expect(nueva).toContainText('todavía no tiene ficha');
     await expect(nueva.getByRole('button', { name: 'Crear ficha' })).toBeVisible();
-    await expect(nueva.getByRole('button', { name: 'Retirar' })).toHaveCount(0);
+    // Y también se puede borrar (RMR-TSK-0520): quien no debería estar, no
+    // tiene que esperar meses a convertirse en residuo.
+    await expect(nueva.getByRole('button', { name: 'Borrar cuenta' })).toBeVisible();
   });
 });
 
@@ -68,8 +70,8 @@ test('la cuenta sin acceso ni actividad se puede retirar desde el panel', async 
 
     const vieja = fila(page, 'Cuenta Vieja');
     await expect(vieja).toContainText('se puede retirar');
-    await vieja.getByRole('button', { name: 'Retirar' }).click();
-    await vieja.getByRole('button', { name: 'Sí' }).click();
+    await vieja.getByRole('button', { name: 'Borrar cuenta' }).click();
+    await vieja.getByRole('button', { name: 'Sí, borrar' }).click();
 
     await expect.poll(async () => (await db().doc('users/e2e-cuenta-residuo').get()).exists,
       { timeout: 15_000 }).toBe(false);
@@ -90,8 +92,8 @@ test('no se retira a quien tiene gente a su cargo: dice qué reasignar antes', a
     await page.goto('/admin#users');
 
     const jefa = fila(page, 'Jefa Sin Rol');
-    await jefa.getByRole('button', { name: 'Retirar' }).click();
-    await jefa.getByRole('button', { name: 'Sí' }).click();
+    await jefa.getByRole('button', { name: 'Borrar cuenta' }).click();
+    await jefa.getByRole('button', { name: 'Sí, borrar' }).click();
 
     // El mensaje dice cuántas personas hay que reasignar, no un «no se pudo».
     await expect(page.locator('superadmin-panel .error')).toContainText('en su equipo');
