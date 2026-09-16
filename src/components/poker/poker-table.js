@@ -11,7 +11,19 @@
  * Props: sessionId, uid, authorName (nombre para la presencia), canManage (dueño).
  */
 import { LitElement, html, css } from 'lit';
-import { deckOf } from '../../tools/poker/domain/deck.js';
+import { deckOf, cardLabel, SPLIT_CARD } from '../../tools/poker/domain/deck.js';
+import { magnitudeCard, axesAvailable, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/poker/domain/magnitude.js';
+
+/**
+ * Dos formas de votar (RMR-TSK-0516): por complejidad × esfuerzo —el cuadro del
+ * taller da la carta— o eligiendo la carta directamente. Los ejes van primero:
+ * el cuadro está para que cada uno llegue a su número por el mismo camino que
+ * los demás, y no a ojo.
+ */
+const VOTE_TABS = Object.freeze([
+  Object.freeze({ id: 'ejes', label: 'Complejidad y esfuerzo' }),
+  Object.freeze({ id: 'carta', label: 'Carta directa' }),
+]);
 import {
   countActiveVoted, hasVotedThisRound, revealedVotes, summarizeVotes,
   isSpectator, hasSkippedRound, activeVoters,
@@ -33,6 +45,9 @@ export class PokerTable extends LitElement {
     _players: { state: true },
     _votes: { state: true },
     _myVote: { state: true },
+    _voteTab: { state: true },
+    _axisC: { state: true },
+    _axisE: { state: true },
     _backlog: { state: true },
     _backlogLoading: { state: true },
     _selectedTaskIds: { state: true },
@@ -51,6 +66,22 @@ export class PokerTable extends LitElement {
     .deck { display: flex; flex-wrap: wrap; gap: 0.55rem; margin: 0.4rem 0 1.3rem; }
     .card { width: 3.2rem; height: 4.4rem; font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; }
     .card.picked { background: var(--teal); border-color: var(--teal); color: var(--rm-on-accent, #fff); transform: translateY(-4px); box-shadow: 0 6px 14px color-mix(in srgb, var(--teal) 30%, transparent); }
+    /* Cómo votar: pestañas (RMR-TSK-0516), mismo patrón que la lista de sesiones. */
+    .tabs { display: inline-flex; gap: 0.25rem; padding: 0.28rem; background: var(--rm-surface-hover, #eef3f5); border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; margin: 0.2rem 0 0.8rem; }
+    .tab { background: none; border: 0; padding: 0.5rem 1.15rem; font: inherit; font-weight: 600; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); cursor: pointer; border-radius: 9px; transition: background 0.12s, color 0.12s, box-shadow 0.12s; }
+    .tab:hover { color: var(--teal); }
+    .tab.on { background: var(--teal); color: var(--rm-on-accent, #fff); box-shadow: 0 1px 4px rgba(42,157,143,0.4); }
+    .axis { display: grid; grid-template-columns: 7rem 1fr; gap: 0.3rem 0.8rem; align-items: center; margin: 0.4rem 0; }
+    .axis-name { font-weight: 700; color: var(--rm-text, #1e3a5f); font-size: 0.9rem; }
+    .levels { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .level { width: 2.6rem; height: 2.6rem; font-size: 1rem; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; }
+    .level.picked { background: var(--teal); border-color: var(--teal); color: var(--rm-on-accent, #fff); }
+    .axis-text { grid-column: 2; color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; min-height: 1.2em; }
+    .magnitude { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin: 0.9rem 0 1.3rem; }
+    .card.result { cursor: default; border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
+    .card.result.split { border-style: dashed; color: var(--rm-muted, #5b6b7d); }
+    .magnitude-text { color: var(--rm-text, #1e3a5f); font-size: 0.9rem; }
+    .axes { font-size: 0.72rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); font-variant-numeric: tabular-nums; }
     .players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
     .players li { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.65rem; border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; }
     .players .name { flex: 1; color: var(--rm-text, #1e3a5f); }
@@ -105,6 +136,10 @@ export class PokerTable extends LitElement {
     this._players = [];
     this._votes = [];
     this._myVote = null;
+    // Cómo votar: null = la primera pestaña disponible. Los ejes son de la ronda.
+    this._voteTab = null;
+    this._axisC = null;
+    this._axisE = null;
     this._backlog = [];
     this._backlogLoading = false;
     this._selectedTaskIds = new Set();
@@ -154,6 +189,8 @@ export class PokerTable extends LitElement {
     // Al volver a votar o cambiar de tarea (nueva ronda), la carta elegida deja de valer.
     if (this._lastRound !== null && session.round !== this._lastRound) {
       this._myVote = null;
+      this._axisC = null;
+      this._axisE = null;
       this._estimateDraft = '';
     }
     this._lastRound = session.round;
@@ -196,6 +233,10 @@ export class PokerTable extends LitElement {
   get _round() { return this._session?.round ?? 1; }
   get _revealed() { return !!this._session?.revealed; }
   get _myVoteValue() { return this._myVote?.round === this._round ? this._myVote.value : null; }
+  /** Los ejes de mi voto de ESTA ronda, para rehidratarlos al recargar. */
+  get _myAxes() { return this._myVote?.round === this._round ? (this._myVote.axes ?? null) : null; }
+  get _axesOn() { return axesAvailable(this._session); }
+  get _activeVoteTab() { return this._axesOn ? (this._voteTab ?? 'ejes') : 'carta'; }
   get _mode() { return this._session?.mode === 'linear' ? 'linear' : 'simple'; }
   get _tasks() { return this._session?.tasks ?? []; }
   get _currentTaskId() { return this._session?.currentTaskId ?? null; }
@@ -219,11 +260,11 @@ export class PokerTable extends LitElement {
     } catch (err) { this._onError(err); }
   }
 
-  async _vote(card) {
+  async _vote(card, axes = null) {
     if (!this._canIVote) return; // ni revelado, ni observador, ni fuera de ámbito, ni en discusión
     try {
-      await castVote(this.sessionId, this.uid, this._round, card, this._session);
-      this._myVote = { value: card, round: this._round };
+      await castVote(this.sessionId, this.uid, this._round, card, this._session, axes);
+      this._myVote = axes ? { value: card, round: this._round, axes } : { value: card, round: this._round };
     } catch (err) { this._onError(err); }
   }
 
@@ -284,13 +325,88 @@ export class PokerTable extends LitElement {
     if (this._revealed || !this._votingActive) return null;
     if (this._amSpectator) return html`<p class="lead">Estás como observador: no votas en esta sesión.</p>`;
     if (this._amSkipped) return html`<p class="lead">Te has saltado esta ronda (fuera de tu ámbito).</p>`;
+    // Sin escalera en el mazo (sesiones antiguas) solo hay carta directa, y una
+    // pestaña sola no es una pestaña.
+    if (!this._axesOn) return this._renderCards();
+    const tab = this._activeVoteTab;
+    return html`
+      <div class="tabs" role="tablist" aria-label="Cómo votar">
+        ${VOTE_TABS.map((t) => html`<button type="button" class="tab ${tab === t.id ? 'on' : ''}"
+          role="tab" aria-selected=${tab === t.id ? 'true' : 'false'}
+          @click=${() => { this._voteTab = t.id; }}>${t.label}</button>`)}
+      </div>
+      ${tab === 'ejes' ? this._renderAxes() : this._renderCards()}`;
+  }
+
+  _renderCards() {
     const picked = this._myVoteValue;
     return html`
       <p class="lead">Elige tu carta. Nadie ve tu voto hasta que se revele.</p>
       <div class="deck">
         ${deckOf(this._session).map((card) => html`
-          <button class="card ${card === picked ? 'picked' : ''}" @click=${() => this._vote(card)}>${card}</button>`)}
+          <button class="card ${card === picked ? 'picked' : ''}"
+            title=${card === SPLIT_CARD ? 'Partir: demasiado grande para estimarla' : ''}
+            @click=${() => this._vote(card)}>${cardLabel(card)}</button>`)}
       </div>`;
+  }
+
+  /** Un eje del cuadro: cinco niveles y la descripción del elegido. */
+  _renderAxis(name, levels, picked, onPick) {
+    const elegido = levels.find((n) => n.level === picked);
+    return html`<div class="axis" role="group" aria-label=${name}>
+      <span class="axis-name">${name}</span>
+      <div class="levels">
+        ${levels.map((n) => html`<button type="button" class="level ${picked === n.level ? 'picked' : ''}"
+          title="${n.text} (${n.example})" aria-pressed=${picked === n.level ? 'true' : 'false'}
+          @click=${() => onPick(n.level)}>${n.level}</button>`)}
+      </div>
+      <span class="axis-text">${elegido ? `${elegido.text} (${elegido.example})` : ''}</span>
+    </div>`;
+  }
+
+  _renderAxes() {
+    const c = this._axisC ?? this._myAxes?.complexity ?? null;
+    const e = this._axisE ?? this._myAxes?.effort ?? null;
+    return html`
+      <p class="lead">Decide qué complejidad y qué esfuerzo te supone; el cuadro te da la carta. Nadie ve tu voto hasta que se revele.</p>
+      ${this._renderAxis('Complejidad', COMPLEXITY_LEVELS, c, (n) => { this._axisC = n; })}
+      ${this._renderAxis('Esfuerzo', EFFORT_LEVELS, e, (n) => { this._axisE = n; })}
+      ${this._renderMagnitude(magnitudeCard(this._session?.scale, c, e), c, e)}`;
+  }
+
+  /** La carta que dan los dos ejes, y el botón para emitirla. */
+  _renderMagnitude(card, c, e) {
+    if (card === null) return html`<p class="lead">Marca los dos ejes para ver tu carta.</p>`;
+    const split = card === SPLIT_CARD;
+    const votada = this._myVoteValue === card && this._myAxes?.complexity === c && this._myAxes?.effort === e;
+    const texto = split ? 'Demasiado grande para estimarla: hay que partirla.' : `Tu carta es ${card}.`;
+    const boton = split ? 'Votar «partir»' : `Votar ${card}`;
+    return html`<div class="magnitude">
+      <span class="card result ${split ? 'split' : ''}" aria-label=${card}>${cardLabel(card)}</span>
+      <span class="magnitude-text">${texto}</span>
+      <button class="primary" ?disabled=${votada} @click=${() => this._vote(card, { complexity: c, effort: e })}>
+        ${votada ? `✓ Votado ${cardLabel(card)}` : boton}
+      </button>
+    </div>`;
+  }
+
+  /** Lo que se ve de cada jugador: su carta (y sus ejes) al revelar, o su estado mientras se vota. */
+  _renderPlayerState(p, vote) {
+    const round = this._round;
+    const voted = hasVotedThisRound(p, round);
+    const spec = isSpectator(p);
+    const skip = hasSkippedRound(p, round);
+    if (this._revealed) {
+      if (spec) return html`<span class="reveal-card">👁</span>`;
+      if (!voted || skip) return html`<span class="reveal-card">—</span>`;
+      return html`
+        ${vote?.axes ? html`<span class="axes" title="complejidad · esfuerzo">C${vote.axes.complexity}·E${vote.axes.effort}</span>` : null}
+        <span class="reveal-card" title=${vote?.value ?? ''}>${cardLabel(vote?.value ?? '·')}</span>`;
+    }
+    if (spec) return html`<span class="state out">solo ve</span>`;
+    if (skip) return html`<span class="state out">fuera de ámbito</span>`;
+    if (voted) return html`<span class="state voted">✓ votó</span>`;
+    return html`<span class="state waiting">pensando…</span>`;
   }
 
   _renderPlayers() {
@@ -298,23 +414,14 @@ export class PokerTable extends LitElement {
     const revealed = this._revealed;
     const byUid = Object.fromEntries(this._votes.map((v) => [v.uid, v]));
     const cards = revealed ? revealedVotes(this._players, byUid, round) : [];
-    const cardByUid = Object.fromEntries(cards.map((c) => [c.uid, c.value]));
+    const voteByUid = Object.fromEntries(cards.map((c) => [c.uid, c]));
     if (!this._players.length) return html`<p class="lead">Aún no se ha unido nadie a la mesa.</p>`;
     return html`
       <ul class="players">
-        ${this._players.map((p) => {
-          const voted = hasVotedThisRound(p, round);
-          const spec = isSpectator(p);
-          const skip = hasSkippedRound(p, round);
-          return html`<li>
-            <span class="name">${p.name || 'Sin nombre'}</span>
-            ${revealed
-              ? html`<span class="reveal-card">${(voted && !spec && !skip) ? (cardByUid[p.uid] ?? '·') : (spec ? '👁' : '—')}</span>`
-              : html`<span class="state ${voted ? 'voted' : (spec || skip ? 'out' : 'waiting')}">${
-                  spec ? 'solo ve' : skip ? 'fuera de ámbito' : voted ? '✓ votó' : 'pensando…'
-                }</span>`}
-          </li>`;
-        })}
+        ${this._players.map((p) => html`<li>
+          <span class="name">${p.name || 'Sin nombre'}</span>
+          ${this._renderPlayerState(p, voteByUid[p.uid] ?? null)}
+        </li>`)}
       </ul>`;
   }
 
