@@ -9,7 +9,7 @@
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './poker-table.js';
-import { listSessions, createSession, deleteSession, listSquads, getSession } from '../../lib/poker.js';
+import { listSessions, createSession, deleteSession, getSession } from '../../lib/poker.js';
 import { POKER_SCALES, scaleById } from '../../tools/poker/domain/deck.js';
 
 export class PokerApp extends LitElement {
@@ -22,10 +22,7 @@ export class PokerApp extends LitElement {
     _selected: { state: true },
     _sessions: { state: true },
     _newName: { state: true },
-    _newMode: { state: true },
-    _newSquad: { state: true },
     _newScale: { state: true },
-    _squads: { state: true },
     openSessionId: { attribute: false },
     _copied: { state: true },
     _loading: { state: true },
@@ -89,10 +86,7 @@ export class PokerApp extends LitElement {
     this._selected = null;
     this._sessions = [];
     this._newName = '';
-    this._newMode = 'simple';
-    this._newSquad = '';
     this._newScale = POKER_SCALES[0].id;
-    this._squads = [];
     this.openSessionId = null;
     this._copied = false;
     this._loading = false;
@@ -153,9 +147,6 @@ export class PokerApp extends LitElement {
     try {
       const sessions = await listSessions(this._ownerScope);
       this._sessions = sessions.filter((s) => s.status !== 'closed');
-      if (this.canManage && !this._squads.length) {
-        this._squads = await listSquads().catch(() => []);
-      }
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las sesiones.';
     } finally {
@@ -184,18 +175,8 @@ export class PokerApp extends LitElement {
   async _create() {
     const name = this._newName.trim();
     if (!name || !this.leaderUid) return;
-    if (this._newMode === 'linear' && !this._newSquad) {
-      this._error = 'Elige un squad para el modo Linear.';
-      return;
-    }
     try {
-      const squad = this._newMode === 'linear'
-        ? this._squads.find((s) => s.linearLabel === this._newSquad) ?? null
-        : null;
-      const id = await createSession({
-        name, ownerLeaderUid: this.leaderUid, mode: this._newMode, squad,
-        scale: this._newScale,
-      });
+      const id = await createSession({ name, ownerLeaderUid: this.leaderUid, scale: this._newScale });
       this._newName = '';
       this._error = '';
       // Convocada: al volver de la mesa se aterriza en la lista, no en el formulario.
@@ -246,17 +227,6 @@ export class PokerApp extends LitElement {
       <input type="text" placeholder="Nombre de la sesión (p. ej. «Refinamiento sprint 12»)" .value=${this._newName}
         @input=${(e) => { this._newName = e.target.value; }}
         @keydown=${(e) => { if (e.key === 'Enter') this._create(); }} />
-      <div class="modes">
-        <label><input type="radio" name="mode" .checked=${this._newMode === 'simple'}
-          @change=${() => { this._newMode = 'simple'; }} /> Voto simple</label>
-        <label><input type="radio" name="mode" .checked=${this._newMode === 'linear'}
-          @change=${() => { this._newMode = 'linear'; }} /> Refinar backlog (Linear)</label>
-      </div>
-      ${this._newMode === 'linear' ? html`
-        <select @change=${(e) => { this._newSquad = e.target.value; }}>
-          <option value="">Elige un squad…</option>
-          ${this._squads.map((s) => html`<option value=${s.linearLabel} .selected=${this._newSquad === s.linearLabel}>${s.name}</option>`)}
-        </select>` : null}
       ${this._renderScalePicker()}
       <button @click=${() => this._create()} ?disabled=${!this._newName.trim()}>Crear sesión</button>
     </div>`;
