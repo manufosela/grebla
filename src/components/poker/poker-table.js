@@ -81,13 +81,13 @@ export class PokerTable extends LitElement {
     .tab.on { background: var(--teal); color: var(--rm-on-accent, #fff); box-shadow: 0 1px 4px rgba(42,157,143,0.4); }
     /* El hover genérico de los botones pondría el texto verde sobre verde: la activa sigue en blanco. */
     .tab.on:hover:not(:disabled) { color: var(--rm-on-accent, #fff); border-color: transparent; }
-    .axis { display: grid; grid-template-columns: 6.5rem auto 1fr; gap: 0.3rem 0.8rem; align-items: center; margin: 0.3rem 0; }
+    /* Sliders cortos (RMR-TSK-0525): nombre · slider · valor · descripción, en una línea. */
+    .axis { display: grid; grid-template-columns: 6.5rem 12rem 1.6rem 1fr; gap: 0.3rem 0.8rem; align-items: center; margin: 0.35rem 0; }
     .axis-name { font-weight: 700; color: var(--rm-text, #1e3a5f); font-size: 0.9rem; }
-    .levels { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-    .level { width: 2.4rem; height: 2.4rem; font-size: 0.95rem; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; }
-    .level.picked { background: var(--teal); border-color: var(--teal); color: var(--rm-on-accent, #fff); }
+    .slider { width: 100%; accent-color: var(--teal); cursor: pointer; margin: 0; }
+    .axis-value { font-weight: 800; font-size: 1.05rem; color: var(--rm-accent-700, var(--teal)); text-align: center; font-variant-numeric: tabular-nums; }
     .axis-text { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; min-height: 1.2em; }
-    @media (max-width: 700px) { .axis { grid-template-columns: 6.5rem 1fr; } .axis-text { grid-column: 2; } }
+    @media (max-width: 700px) { .axis { grid-template-columns: 6.5rem 1fr 1.6rem; } .axis-text { grid-column: 1 / -1; } }
     .magnitude { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin: 0.9rem 0 1.3rem; }
     .card.result { cursor: default; border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .card.result.split { border-style: dashed; color: var(--rm-muted, #5b6b7d); }
@@ -330,23 +330,23 @@ export class PokerTable extends LitElement {
       </div>`;
   }
 
-  /** Un eje del cuadro: cinco niveles y la descripción del elegido. */
+  /** Un eje del cuadro (RMR-TSK-0525): un slider corto del 1 al 5, el valor al final y la descripción del nivel. */
   _renderAxis(name, levels, picked, onPick) {
-    const elegido = levels.find((n) => n.level === picked);
+    const valor = picked ?? 1;
+    const elegido = levels.find((n) => n.level === valor);
     return html`<div class="axis" role="group" aria-label=${name}>
       <span class="axis-name">${name}</span>
-      <div class="levels">
-        ${levels.map((n) => html`<button type="button" class="level ${picked === n.level ? 'picked' : ''}"
-          title="${n.text} (${n.example})" aria-pressed=${picked === n.level ? 'true' : 'false'}
-          @click=${() => onPick(n.level)}>${n.level}</button>`)}
-      </div>
+      <input class="slider" type="range" min="1" max="5" step="1" .value=${String(valor)}
+        aria-label=${`${name}: ${valor}`} aria-valuetext=${elegido?.text ?? ''}
+        @input=${(e) => onPick(Number(e.target.value))} />
+      <span class="axis-value" aria-hidden="true">${valor}</span>
       <span class="axis-text">${elegido ? `${elegido.text} (${elegido.example})` : ''}</span>
     </div>`;
   }
 
   _renderAxes() {
-    const c = this._axisC ?? this._myAxes?.complexity ?? null;
-    const e = this._axisE ?? this._myAxes?.effort ?? null;
+    const c = this._axisC ?? this._myAxes?.complexity ?? 1;
+    const e = this._axisE ?? this._myAxes?.effort ?? 1;
     return html`
       <p class="lead">Decide qué complejidad y qué esfuerzo te supone; el cuadro te da la carta. Nadie ve tu voto hasta que se revele.</p>
       ${this._renderAxis('Complejidad', COMPLEXITY_LEVELS, c, (n) => { this._axisC = n; })}
