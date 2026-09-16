@@ -26,6 +26,7 @@ export const ROLES = {
   head: 'e2e-head',       // Head of X y, a la vez, líder con su propio equipo
   engineer: 'e2e-engineer',
   adminmgr: 'e2e-adminmgr', // admin de instancia Y ADEMÁS líder de un equipo (RMR-TSK-0309)
+  stranger: 'e2e-stranger', // ha iniciado sesión pero no tiene ficha ni rol (RMR-TSK-0519)
 };
 const MANAGER = 'e2e-manager'; // reporta al Head; no es usuario que loguee
 const OUTSIDER = 'e2e-outsider'; // líder que NO reporta al Head: prueba la exclusión
@@ -52,6 +53,7 @@ export default async function globalSetup() {
     ensureUser(ROLES.head, 'head@e2e.test'),
     ensureUser(ROLES.engineer, 'engineer@e2e.test'),
     ensureUser(ROLES.adminmgr, 'adminmgr@e2e.test'),
+    ensureUser(ROLES.stranger, 'stranger@e2e.test'),
   ]);
 
   // Roles y jerarquía. El Head es también líder (para tener equipo propio); el

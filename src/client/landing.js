@@ -54,7 +54,7 @@ onUserChanged(async (user) => {
       getMyPerson(user.uid),
       listToolPolicies(),
     ]);
-    if (accessRes.status !== 'fulfilled') return showLanding();
+    if (accessRes.status !== 'fulfilled') return showLanding({ signedIn: true });
     const access = accessRes.value;
 
     const employeeDomain = domainRes.status === 'fulfilled' ? domainRes.value : '';
@@ -76,7 +76,7 @@ onUserChanged(async (user) => {
       );
 
     const destino = hubDestination({ access, isEmployee, managesAnyTool });
-    if (destino === 'landing') return showLanding();
+    if (destino === 'landing') return showLanding({ signedIn: true });
     // El viewer va DIRECTO a la organización, no al hub de administración: es
     // observador puro y ahí no administra herramientas, así que el hub le
     // saldría vacío (RMR-TSK-0495).
@@ -113,15 +113,24 @@ onUserChanged(async (user) => {
       filterFailed,
     });
   } catch {
-    showLanding();
+    showLanding({ signedIn: true });
   }
 });
 
-function showLanding() {
+/**
+ * Portada sin herramientas. Con `signedIn`, la persona ha entrado pero esta
+ * instancia no la reconoce (RMR-TSK-0519): se le dice, en vez de enseñarle la
+ * misma portada muda que a quien no ha iniciado sesión.
+ */
+function showLanding({ signedIn = false } = {}) {
   hubLoading?.setAttribute('hidden', '');
   tools?.setAttribute('hidden', '');
   layersBar?.setAttribute('hidden', '');
   landing?.removeAttribute('hidden');
+  const anon = document.getElementById('landing-anon');
+  const noAccess = document.getElementById('landing-no-access');
+  if (signedIn) { anon?.setAttribute('hidden', ''); noAccess?.removeAttribute('hidden'); }
+  else { noAccess?.setAttribute('hidden', ''); anon?.removeAttribute('hidden'); }
 }
 
 /**

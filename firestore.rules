@@ -60,12 +60,22 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/members/$(request.auth.uid));
     }
-    // Correo corporativo: permite participar en una retro por enlace aunque aún
-    // no se esté asociado a ningún manager (no da acceso a nada más de GREBLA).
+    // Correo corporativo (RMR-TSK-0519): el dominio lo declara CADA instancia en
+    // /config/org.employeeDomain —el mismo dato que ya usa el cliente— y no el
+    // código. Sin dominio declarado (la demo) no hay puerta por correo: solo
+    // entra quien tiene ficha o rol. El get() cuesta una lectura, pero solo se
+    // evalúa cuando fallan antes los roles y la membresía, es decir, para quien
+    // no es de la casa.
+    function orgEmailDomain() {
+      return get(/databases/$(database)/documents/config/org).data.get('employeeDomain', '');
+    }
     function isOrgEmail() {
       return isSignedIn()
         && request.auth.token.email is string
-        && request.auth.token.email.matches('.*@tribbuapp[.]com');
+        && request.auth.token.email.lower().split('@').size() == 2
+        && orgEmailDomain() is string
+        && orgEmailDomain() != ''
+        && request.auth.token.email.lower().split('@')[1] == orgEmailDomain().lower();
     }
     // Quién puede leer/participar en una retro (RMR-TSK-0274): roles de la
     // instancia, miembros asociados a un manager (aunque su correo sea externo)

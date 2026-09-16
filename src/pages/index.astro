@@ -218,10 +218,20 @@ const TOOL_ID: Record<string, string> = {
 
   <!-- Sin sesión/acceso: OCULTA hasta confirmar que no hay sesión. -->
   <section id="platform-landing" class="landing" hidden>
-    <p class="page-lead">Inicia sesión arriba a la derecha para acceder a las herramientas.</p>
-    <p class="muted">
-      Si no tienes acceso, pide a un superadmin de la organización que te dé de alta como manager.
-    </p>
+    <div id="landing-anon">
+      <p class="page-lead">Inicia sesión arriba a la derecha para acceder a las herramientas.</p>
+      <p class="muted">
+        Si no tienes acceso, pide a un superadmin de la organización que te dé de alta como manager.
+      </p>
+    </div>
+    <!-- Con sesión pero sin sitio en esta instancia (RMR-TSK-0519): se dice
+         claro, en vez de enseñar la portada muda de quien no ha entrado. -->
+    <div id="landing-no-access" hidden>
+      <p class="page-lead">Has entrado, pero esta instancia no te reconoce.</p>
+      <p class="muted">
+        Tu cuenta no tiene ficha ni acceso aquí. Si deberías tenerlo, pide a un superadmin que te dé de alta.
+      </p>
+    </div>
   </section>
 
 
