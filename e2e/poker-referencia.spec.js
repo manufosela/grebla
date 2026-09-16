@@ -1,12 +1,12 @@
 /**
- * Referencia de Linear por votación (RMR-TSK-0518).
+ * La historia de Linear en la mesa (RMR-TSK-0518, RMR-TSK-0524).
  *
- * El organizador escribe BB-1234 y la historia aparece al lado de la mesa para
- * todos. Aquí no se llama a Linear (el emulador no tiene clave): la ficha se
- * siembra en la sesión como la dejaría la Cloud Function, y lo que se defiende
- * es lo que hace la mesa con ella —y que una referencia mal escrita se rechace
- * en el navegador, sin molestar a nadie—. El módulo que habla con Linear tiene
- * sus tests en functions/linearIssue.test.js.
+ * La decide el organizador: si el título de la tarea lleva referencia, tiene
+ * el botón para cargarla; al cargarla se abre en un modal en todas las
+ * pantallas. Él la cierra para todos; cada participante puede cerrar la suya.
+ * Aquí no se llama a Linear (el emulador no tiene clave): la ficha se siembra
+ * como la deja la Cloud Function. El módulo que habla con Linear tiene sus
+ * tests en functions/linearIssue.test.js.
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -23,13 +23,15 @@ const FICHA = {
   url: 'https://linear.app/tribbu/issue/BB-1234/migrar', estimate: 5, priority: 'High',
   state: 'Backlog', assignee: 'Ana', labels: ['Squad A'], project: 'Login',
 };
+const TAREA = { id: 'a', title: 'BB-1234 - Migrar el login a OAuth', value: null };
 
 async function sesion(extra = {}) {
   return db().collection('pokerSessions').add({
-    name: NOMBRE, ownerLeaderUid: 'e2e-head', mode: 'simple', scale: 'fibonacci',
+    name: NOMBRE, ownerLeaderUid: 'e2e-head', ownerVotes: true, mode: 'simple', scale: 'fibonacci',
     deck: ['1', '2', '3', '5', '8', '13', 'partir'],
+    tasks: [TAREA], currentTaskId: 'a',
     revealed: false, round: 1, status: 'open', createdAt: new Date(), closedAt: null,
-    voteTitle: '', voteRef: null, voteIssue: null, ...extra,
+    voteTitle: '', voteRef: null, voteIssue: null, issueOpen: false, ...extra,
   });
 }
 
@@ -43,46 +45,49 @@ test.afterEach(async () => {
 });
 
 const mesa = (page) => page.locator('poker-table');
+const modal = (page) => mesa(page).locator('app-modal');
 
-test('con ficha, la historia se ve al lado de la mesa para quien estima', async ({ page }) => {
-  const ref = await sesion({ voteRef: 'BB-1234', voteIssue: FICHA });
+test('con la historia abierta por el organizador, quien estima la ve en un modal y puede cerrar la suya', async ({ page }) => {
+  const ref = await sesion({ voteRef: 'BB-1234', voteIssue: FICHA, issueOpen: true });
   await signInAs(page, 'engineer');
   await page.goto(`/poker?s=${ref.id}`);
 
-  const ficha = mesa(page).getByRole('complementary', { name: 'Historia de Linear' });
-  await expect(ficha).toBeVisible();
-  await expect(ficha.getByRole('link', { name: /BB-1234/ })).toHaveAttribute('href', FICHA.url);
-  await expect(ficha).toContainText('Migrar el login a OAuth');
-  await expect(ficha).toContainText('Backlog · estimación 5 · High · Ana · Login');
-  await expect(ficha).toContainText('Segunda línea.');
-  // Sin título propio, «qué se estima» es el de la historia.
-  await expect(mesa(page).getByText('Estimando:')).toContainText('Migrar el login a OAuth');
-  // Y quien estima no puede cambiar la referencia.
-  await expect(mesa(page).getByLabel('Ref. Linear:')).toHaveCount(0);
+  const m = modal(page);
+  await expect(m.locator('.issue')).toBeVisible();
+  await expect(m).toContainText('Segunda línea.');
+  await expect(m).toContainText('Backlog · estimación 5 · High · Ana · Login');
+  await expect(m.getByRole('link', { name: /Abrir en Linear/ })).toHaveAttribute('href', FICHA.url);
+  // Quien estima no la cierra para los demás.
+  await expect(m.getByRole('button', { name: 'Cerrar para todos' })).toHaveCount(0);
+
+  await page.keyboard.press('Escape');
+  await expect(m).toHaveCount(0);
+  expect((await ref.get()).data().issueOpen).toBe(true);
 });
 
-test('sin referencia no hay panel, y una mal escrita se rechaza sin llamar a nadie', async ({ page }) => {
+test('el organizador tiene el botón solo si el título lleva referencia, y cierra para todos', async ({ page }) => {
+  const ref = await sesion({ voteRef: 'BB-1234', voteIssue: FICHA, issueOpen: true });
+  await signInAs(page, 'head');
+  await page.goto(`/poker?s=${ref.id}`);
+
+  await modal(page).getByRole('button', { name: 'Cerrar para todos' }).click();
+  await expect.poll(async () => (await ref.get()).data().issueOpen, { timeout: 15_000 }).toBe(false);
+  await expect(modal(page)).toHaveCount(0);
+  // Ya cargada: se puede volver a mostrar.
+  await expect(mesa(page).getByRole('button', { name: 'Mostrar historia BB-1234' })).toBeVisible();
+  await mesa(page).getByRole('button', { name: 'Mostrar historia BB-1234' }).click();
+  await expect.poll(async () => (await ref.get()).data().issueOpen, { timeout: 15_000 }).toBe(true);
+
+  // Sin referencia en el título no hay nada que cargar.
+  await ref.update({ tasks: [{ id: 'a', title: 'Migrar el login a OAuth', value: null }], issueOpen: false });
+  await expect(mesa(page).getByRole('button', { name: /historia/ })).toHaveCount(0);
+});
+
+test('sin cargar todavía, el organizador ve «Cargar historia» con la referencia del título', async ({ page }) => {
   const ref = await sesion();
   await signInAs(page, 'head');
   await page.goto(`/poker?s=${ref.id}`);
 
-  await expect(mesa(page).getByRole('complementary')).toHaveCount(0);
-  const campo = mesa(page).getByLabel('Ref. Linear:');
-  await campo.fill('https://linear.app/tribbu/issue/BB-1234');
-  await campo.press('Tab');
-  await expect(mesa(page).getByText('La referencia debe tener la forma BB-1234.')).toBeVisible();
-  expect((await ref.get()).data().voteRef).toBeNull();
-});
-
-test('quitar la referencia quita la ficha para todos', async ({ page }) => {
-  const ref = await sesion({ voteRef: 'BB-1234', voteIssue: FICHA });
-  await signInAs(page, 'head');
-  await page.goto(`/poker?s=${ref.id}`);
-
-  await expect(mesa(page).getByRole('complementary')).toBeVisible();
-  const campo = mesa(page).getByLabel('Ref. Linear:');
-  await campo.fill('');
-  await campo.press('Tab');
-  await expect(mesa(page).getByRole('complementary')).toHaveCount(0);
-  await expect.poll(async () => (await ref.get()).data().voteIssue, { timeout: 15_000 }).toBeNull();
+  await expect(mesa(page).getByRole('button', { name: 'Cargar historia BB-1234' })).toBeVisible();
+  await expect(modal(page)).toHaveCount(0);
 });

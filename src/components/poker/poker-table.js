@@ -1,8 +1,9 @@
 /**
- * <poker-table> — la mesa de una sesión de Scrum Poker (RMR-TSK-0321). Juego de
- * voto simple: al entrar ves el mazo y votas en oculto; el manager o cualquiera
- * pulsa «Mostrar votos» y se ven todas las cartas con el nombre de cada persona;
- * el manager puede «Volver a votar» para reiniciar. Sin temas ni tareas.
+ * <poker-table> — la mesa de una sesión de Scrum Poker (RMR-TSK-0321, v3 en
+ * RMR-TSK-0521..0524). Una carta boca abajo por persona; cada uno vota en
+ * oculto; cuando han votado todos, el organizador pulsa «Mostrar votos» y las
+ * cartas se giran con su juicio (acuerdo, o la más baja y la más alta). El
+ * organizador conduce: tareas, volver a votar, nueva votación, terminar.
  *
  * Todo en tiempo real: se suscribe a la sesión y a la presencia siempre, y a los
  * votos SOLO cuando la sesión está revelada (antes, las reglas no dejan leer la
@@ -13,7 +14,8 @@
 import { LitElement, html, css } from 'lit';
 import { deckOf, cardLabel, SPLIT_CARD } from '../../tools/poker/domain/deck.js';
 import { magnitudeCard, axesAvailable, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/poker/domain/magnitude.js';
-import { normalizeLinearRef } from '../../tools/poker/domain/reference.js';
+import { normalizeLinearRef, findLinearRef } from '../../tools/poker/domain/reference.js';
+import '../app-modal.js';
 import { currentTask, closeTask, appendTask } from '../../tools/poker/domain/tasks.js';
 
 /**
@@ -35,7 +37,7 @@ import { isSpectator, hasSkippedRound } from '../../tools/poker/domain/tally.js'
 import { cardStates, allActiveVoted } from '../../tools/poker/domain/table.js';
 import {
   joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
-  fetchLinearIssue, setVoteRef, getSession, setSessionTasks, closeCurrentTask, finishSession,
+  fetchLinearIssue, setVoteRef, showIssue, setIssueOpen, getSession, setSessionTasks, closeCurrentTask, finishSession,
   watchSession, watchPlayers, watchVotes,
   setSpectator, skipRound, unskipRound,
 } from '../../lib/poker.js';
@@ -57,6 +59,7 @@ export class PokerTable extends LitElement {
     _refBusy: { state: true },
     _taskDraft: { state: true },
     _orgTab: { state: true },
+    _issueDismissed: { state: true },
     _titleDraft: { state: true },
     _error: { state: true },
   };
@@ -136,14 +139,12 @@ export class PokerTable extends LitElement {
     .ref-field { display: inline-flex; align-items: center; gap: 0.6rem; white-space: nowrap; }
     .ref { font-size: 0.78rem; font-weight: 700; color: var(--rm-accent-700, var(--teal)); text-decoration: none; white-space: nowrap; }
     a.ref:hover { text-decoration: underline; }
-    /* La historia de Linear al lado de la mesa (RMR-TSK-0518): dos columnas en desktop. */
-    .table.with-issue { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem); gap: 1.6rem; align-items: start; }
-    .table > .main { min-width: 0; }
-    .issue { border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; padding: 0.9rem 1rem; background: var(--rm-surface-hover, #f6f9fa); position: sticky; top: 1rem; }
-    .issue-head h3 { margin: 0.2rem 0 0.4rem; font-size: 1rem; line-height: 1.3; color: var(--rm-text, #1e3a5f); }
-    .issue-meta { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
-    .issue-desc { margin: 0.6rem 0 0; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 0.86rem; line-height: 1.45; color: var(--rm-text, #1e3a5f); max-height: 60vh; overflow: auto; }
-    @media (max-width: 900px) { .table.with-issue { grid-template-columns: 1fr; } .issue { position: static; } }
+    /* La historia de Linear va en un modal para todos (RMR-TSK-0524). */
+    .issue { display: flex; flex-direction: column; gap: 0.5rem; }
+    .issue-meta { margin: 0; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
+    .issue-desc { margin: 0.3rem 0 0; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 0.9rem; line-height: 1.5; color: var(--rm-text, #1e3a5f); max-height: 55vh; overflow: auto; }
+    .title-bar { justify-content: space-between; margin: 0.2rem 0 0.4rem; }
+    .title-bar .lead { margin: 0; }
     .act { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.25rem 0.7rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
     .act:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 0 0 0.9rem; font-size: 0.86rem; color: var(--rm-text, #1e3a5f); }
@@ -172,6 +173,8 @@ export class PokerTable extends LitElement {
     this._refBusy = false;
     this._taskDraft = '';
     this._orgTab = 'mesa';
+    // La historia que YO he cerrado en mi pantalla (el organizador la cierra para todos).
+    this._issueDismissed = null;
     this._titleDraft = '';
     this._error = '';
     this._subs = [];
@@ -220,6 +223,7 @@ export class PokerTable extends LitElement {
       this._myVote = null;
       this._axisC = null;
       this._axisE = null;
+      this._issueDismissed = null;
     }
     this._lastRound = session.round;
     // Suscribirse a los votos SOLO cuando el revelado está CONFIRMADO por el
@@ -521,7 +525,12 @@ export class PokerTable extends LitElement {
     }
     // Con lista de tareas (RMR-TSK-0522) la actual es el título; sin tarea
     // actual, el organizador añade otra o termina.
-    if (task) return html`<p class="lead">Estimando: <strong>${task.title}</strong> <span class="muted">(${this._tasks.filter((x) => x.value != null).length}/${this._tasks.length})</span></p>`;
+    if (task) {
+      return html`<div class="bar title-bar">
+        <p class="lead">Estimando: <strong>${task.title}</strong> <span class="muted">(${this._tasks.filter((x) => x.value != null).length}/${this._tasks.length})</span></p>
+        ${this._renderIssueButton(findLinearRef(task.title))}
+      </div>`;
+    }
     if (this._tasks.length) return this._renderNextTask();
     return html`<div class="bar">
       <label class="lead" for="vt">Qué se estima:</label>
@@ -573,21 +582,64 @@ export class PokerTable extends LitElement {
     finally { this._refBusy = false; }
   }
 
-  /** La ficha de la historia, al lado de la mesa: todos la ven mientras se estima. */
-  _renderIssuePanel() {
+  /**
+   * El botón de la historia (RMR-TSK-0524): solo el organizador, y solo si el
+   * título lleva referencia. Cargar la trae de Linear y la abre en todas las
+   * pantallas; después se puede volver a mostrar o cerrar para todos.
+   */
+  _renderIssueButton(ref) {
+    if (!this.canManage || !ref) return null;
+    if (this._refBusy) return html`<span class="lead">Cargando la historia…</span>`;
+    const cargada = this._voteIssue?.identifier === ref;
+    if (!cargada) return html`<button class="act" @click=${() => this._loadIssue(ref)}>Cargar historia ${ref}</button>`;
+    return this._issueOpen
+      ? html`<button class="act" @click=${() => this._closeIssueForAll()}>Cerrar historia</button>`
+      : html`<button class="act" @click=${() => this._openIssueForAll()}>Mostrar historia ${ref}</button>`;
+  }
+
+  get _issueOpen() { return this._session?.issueOpen === true; }
+
+  async _loadIssue(ref) {
+    this._error = '';
+    this._refBusy = true;
+    try {
+      const issue = await fetchLinearIssue(ref);
+      if (!issue) { this._error = `Linear no conoce ${ref}.`; return; }
+      await showIssue(this.sessionId, ref, issue);
+    } catch (err) { this._onError(err); }
+    finally { this._refBusy = false; }
+  }
+
+  async _openIssueForAll() {
+    this._issueDismissed = null;
+    try { await setIssueOpen(this.sessionId, true); } catch (err) { this._onError(err); }
+  }
+
+  async _closeIssueForAll() {
+    try { await setIssueOpen(this.sessionId, false); } catch (err) { this._onError(err); }
+  }
+
+  /** Cerrar el modal: el organizador lo cierra para todos; los demás, solo el suyo. */
+  _dismissIssue() {
+    if (this.canManage) { this._closeIssueForAll(); return; }
+    this._issueDismissed = this._voteIssue?.identifier ?? null;
+  }
+
+  /** La historia, en un modal por encima de todo, en todas las pantallas a la vez. */
+  _renderIssueModal() {
     const i = this._voteIssue;
-    if (!i) return null;
+    if (!i || !this._issueOpen || this._issueDismissed === i.identifier) return null;
     const meta = [i.state, i.estimate != null ? `estimación ${i.estimate}` : null, i.priority, i.assignee, i.project]
       .filter(Boolean);
-    return html`<aside class="issue" aria-label="Historia de Linear">
-      <div class="issue-head">
-        ${i.url ? html`<a class="ref" href=${i.url} target="_blank" rel="noopener">${i.identifier} ↗</a>` : html`<span class="ref">${i.identifier}</span>`}
-        <h3>${i.title}</h3>
+    return html`<app-modal .open=${true} size="wide" heading=${`${i.identifier} · ${i.title}`} @close=${() => this._dismissIssue()}>
+      <div class="issue" aria-label="Historia de Linear">
+        ${i.url ? html`<a class="ref" href=${i.url} target="_blank" rel="noopener">Abrir en Linear ↗</a>` : null}
+        ${meta.length ? html`<p class="issue-meta">${meta.join(' · ')}</p>` : null}
+        ${i.labels?.length ? html`<div class="dist">${i.labels.map((l) => html`<span class="chip">${l}</span>`)}</div>` : null}
+        ${i.description ? html`<pre class="issue-desc">${i.description}</pre>` : html`<p class="lead">Sin descripción.</p>`}
+        ${this.canManage ? html`<div class="bar"><button class="primary" @click=${() => this._closeIssueForAll()}>Cerrar para todos</button></div>` : null}
       </div>
-      ${meta.length ? html`<p class="issue-meta">${meta.join(' · ')}</p>` : null}
-      ${i.labels?.length ? html`<div class="dist">${i.labels.map((l) => html`<span class="chip">${l}</span>`)}</div>` : null}
-      ${i.description ? html`<pre class="issue-desc">${i.description}</pre>` : html`<p class="lead">Sin descripción.</p>`}
-    </aside>`;
+    </app-modal>`;
   }
 
   /** Lo ya acordado en esta sesión: el recorrido, no solo el último número. */
@@ -653,15 +705,10 @@ export class PokerTable extends LitElement {
   render() {
     if (!this._session) return html`<p class="lead">Cargando la mesa…</p>`;
     if (this._finished) return this._renderFinished();
-    // Con ficha de Linear la mesa va en dos columnas (desktop): la historia al lado, no debajo.
     return html`
-      <div class="table ${this._voteIssue ? 'with-issue' : ''}">
-        <div class="main">
-          ${this._renderSimple()}
-          ${this._error ? html`<p class="error">${this._error}</p>` : null}
-        </div>
-        ${this._renderIssuePanel()}
-      </div>`;
+      ${this._renderSimple()}
+      ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      ${this._renderIssueModal()}`;
   }
 }
 
