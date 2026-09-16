@@ -43,12 +43,15 @@ test('un superadmin ve las dos pestañas, y cada una enseña lo suyo', async ({ 
   // TRIBBU arranca abierta y NO enseña lo de ingeniería.
   const enTribbu = await visibles(page);
   expect(enTribbu).toContain('kudos');
+  // Estimar es de toda la casa (RMR-TSK-0513): el poker vive en TRIBBU.
+  expect(enTribbu).toContain('poker');
   expect(enTribbu).not.toContain('dora');
 
   await pestana(page, 'Ingeniería').click();
   const enIngenieria = await visibles(page);
   expect(enIngenieria).toContain('dora');
   expect(enIngenieria).not.toContain('kudos');
+  expect(enIngenieria).not.toContain('poker');
 });
 
 test('la pestaña abierta se marca, y solo una', async ({ page }) => {
