@@ -22,14 +22,17 @@ import { currentTask, closeTask, appendTask } from '../../tools/poker/domain/tas
  * el cuadro está para que cada uno llegue a su número por el mismo camino que
  * los demás, y no a ojo.
  */
+/** Pestañas del organizador (RMR-TSK-0523): la mesa y la lista de tareas. */
+const ORG_TABS = Object.freeze([
+  Object.freeze({ id: 'mesa', label: 'Mesa' }),
+  Object.freeze({ id: 'tareas', label: 'Tareas' }),
+]);
 const VOTE_TABS = Object.freeze([
   Object.freeze({ id: 'ejes', label: 'Complejidad y esfuerzo' }),
   Object.freeze({ id: 'carta', label: 'Carta directa' }),
 ]);
-import {
-  countActiveVoted, hasVotedThisRound, revealedVotes, judgeVotes,
-  isSpectator, hasSkippedRound, activeVoters,
-} from '../../tools/poker/domain/tally.js';
+import { isSpectator, hasSkippedRound } from '../../tools/poker/domain/tally.js';
+import { cardStates, allActiveVoted } from '../../tools/poker/domain/table.js';
 import {
   joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
   fetchLinearIssue, setVoteRef, getSession, setSessionTasks, closeCurrentTask, finishSession,
@@ -53,6 +56,7 @@ export class PokerTable extends LitElement {
     _refDraft: { state: true },
     _refBusy: { state: true },
     _taskDraft: { state: true },
+    _orgTab: { state: true },
     _titleDraft: { state: true },
     _error: { state: true },
   };
@@ -64,35 +68,50 @@ export class PokerTable extends LitElement {
     button.primary { background: var(--teal); border-color: var(--teal); color: var(--rm-on-accent, #fff); }
     button.primary:hover:not(:disabled) { color: var(--rm-on-accent, #fff); filter: brightness(1.06); }
     button:disabled { opacity: 0.5; cursor: default; }
-    .deck { display: flex; flex-wrap: wrap; gap: 0.55rem; margin: 0.4rem 0 1.3rem; }
-    .card { width: 3.2rem; height: 4.4rem; font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; }
+    .deck { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.3rem 0 0.8rem; }
+    .card { width: 3rem; height: 4rem; font-size: 1.05rem; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; }
     .card.picked { background: var(--teal); border-color: var(--teal); color: var(--rm-on-accent, #fff); transform: translateY(-4px); box-shadow: 0 6px 14px color-mix(in srgb, var(--teal) 30%, transparent); }
     /* Cómo votar: pestañas (RMR-TSK-0516), mismo patrón que la lista de sesiones. */
     .tabs { display: inline-flex; gap: 0.25rem; padding: 0.28rem; background: var(--rm-surface-hover, #eef3f5); border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; margin: 0.2rem 0 0.8rem; }
     .tab { background: none; border: 0; padding: 0.5rem 1.15rem; font: inherit; font-weight: 600; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); cursor: pointer; border-radius: 9px; transition: background 0.12s, color 0.12s, box-shadow 0.12s; }
     .tab:hover { color: var(--teal); }
     .tab.on { background: var(--teal); color: var(--rm-on-accent, #fff); box-shadow: 0 1px 4px rgba(42,157,143,0.4); }
-    .axis { display: grid; grid-template-columns: 7rem 1fr; gap: 0.3rem 0.8rem; align-items: center; margin: 0.4rem 0; }
+    /* El hover genérico de los botones pondría el texto verde sobre verde: la activa sigue en blanco. */
+    .tab.on:hover:not(:disabled) { color: var(--rm-on-accent, #fff); border-color: transparent; }
+    .axis { display: grid; grid-template-columns: 6.5rem auto 1fr; gap: 0.3rem 0.8rem; align-items: center; margin: 0.3rem 0; }
     .axis-name { font-weight: 700; color: var(--rm-text, #1e3a5f); font-size: 0.9rem; }
     .levels { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-    .level { width: 2.6rem; height: 2.6rem; font-size: 1rem; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; }
+    .level { width: 2.4rem; height: 2.4rem; font-size: 0.95rem; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0; }
     .level.picked { background: var(--teal); border-color: var(--teal); color: var(--rm-on-accent, #fff); }
-    .axis-text { grid-column: 2; color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; min-height: 1.2em; }
+    .axis-text { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; min-height: 1.2em; }
+    @media (max-width: 700px) { .axis { grid-template-columns: 6.5rem 1fr; } .axis-text { grid-column: 2; } }
     .magnitude { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; margin: 0.9rem 0 1.3rem; }
     .card.result { cursor: default; border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .card.result.split { border-style: dashed; color: var(--rm-muted, #5b6b7d); }
     .magnitude-text { color: var(--rm-text, #1e3a5f); font-size: 0.9rem; }
     .axes { font-size: 0.72rem; font-weight: 700; color: var(--rm-muted, #5b6b7d); font-variant-numeric: tabular-nums; }
-    .players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-    .players li { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.65rem; border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; }
-    .players .name { flex: 1; color: var(--rm-text, #1e3a5f); }
-    .state { font-size: 0.78rem; font-weight: 700; padding: 0.1rem 0.55rem; border-radius: 999px; }
-    .state.voted { background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--rm-accent-700, var(--teal)); }
-    .state.waiting { background: var(--rm-surface-hover, #eef3f5); color: var(--rm-muted, #5b6b7d); }
-    .reveal-card { min-width: 2.2rem; text-align: center; font-weight: 800; font-size: 1.05rem; color: var(--rm-text, #1e3a5f); }
-    .bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 1.1rem 0; }
-    .summary { border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; padding: 0.9rem 1rem; background: var(--rm-surface-hover, #f6f9fa); margin-top: 0.8rem; }
-    .summary .headline { font-size: 1.05rem; font-weight: 700; color: var(--rm-text, #1e3a5f); margin: 0 0 0.5rem; }
+    /* La mesa (RMR-TSK-0523): una carta por persona, a todo el ancho. */
+    .seats { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.8rem, 1fr)); gap: 1rem 0.8rem; margin: 0.8rem 0 1rem; }
+    .seat { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; min-width: 0; }
+    .seat-name { font-size: 0.82rem; color: var(--rm-text, #1e3a5f); text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .flip { position: relative; width: 5.4rem; height: 7.6rem; perspective: 700px; }
+    .flip .face { position: absolute; inset: 0; border-radius: 12px; border: 3px solid var(--rm-border, #dde7ec); backface-visibility: hidden; transition: transform 0.5s, border-color 0.2s, background 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem; }
+    .flip .back { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--teal) 18%, var(--rm-surface, #fff)) 0 6px, color-mix(in srgb, var(--teal) 8%, var(--rm-surface, #fff)) 6px 12px); }
+    .flip .back-mark { font-size: 1.6rem; color: color-mix(in srgb, var(--teal) 55%, transparent); }
+    .flip .front { background: var(--rm-surface, #fff); transform: rotateY(180deg); color: var(--rm-text, #1e3a5f); }
+    .flip .value { font-size: 1.7rem; font-weight: 800; }
+    .flip.voted .back { border-color: #2e9e5b; box-shadow: 0 0 0 3px color-mix(in srgb, #2e9e5b 25%, transparent); }
+    .flip.up .back { transform: rotateY(180deg); }
+    .flip.up .front { transform: rotateY(0); }
+    .flip.tone-agree .front { background: #d9f3e3; border-color: #2e9e5b; }
+    .flip.tone-low .front, .flip.tone-high .front { background: #fbe0e0; border-color: #c0392b; }
+    .flip.tone-empty .front { color: var(--rm-muted, #5b6b7d); border-style: dashed; }
+    .bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 0.8rem 0; }
+    .verdict { border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; padding: 0.7rem 1rem; background: var(--rm-surface-hover, #f6f9fa); margin: 0.4rem 0 0.8rem; }
+    .verdict.agree { border-color: #2e9e5b; background: #edf9f1; }
+    .verdict .headline { font-size: 1rem; font-weight: 700; color: var(--rm-text, #1e3a5f); margin: 0; }
+    .verdict .bar { margin: 0.5rem 0 0; }
+    .results li.current { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 8%, transparent); }
     .dist { display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .dist .chip { font-size: 0.82rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec); color: var(--rm-text, #1e3a5f); }
     .lead { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; margin: 0.2rem 0 0.6rem; }
@@ -152,6 +171,7 @@ export class PokerTable extends LitElement {
     this._refDraft = null;
     this._refBusy = false;
     this._taskDraft = '';
+    this._orgTab = 'mesa';
     this._titleDraft = '';
     this._error = '';
     this._subs = [];
@@ -350,94 +370,80 @@ export class PokerTable extends LitElement {
     </div>`;
   }
 
-  /** Lo que se ve de cada jugador: su carta (y sus ejes) al revelar, o su estado mientras se vota. */
-  _renderPlayerState(p, vote) {
-    const round = this._round;
-    const voted = hasVotedThisRound(p, round);
-    const spec = isSpectator(p);
-    const skip = hasSkippedRound(p, round);
-    if (this._revealed) {
-      if (spec) return html`<span class="reveal-card">👁</span>`;
-      if (!voted || skip) return html`<span class="reveal-card">—</span>`;
-      return html`
-        ${vote?.axes ? html`<span class="axes" title="complejidad · esfuerzo">C${vote.axes.complexity}·E${vote.axes.effort}</span>` : null}
-        <span class="reveal-card" title=${vote?.value ?? ''}>${cardLabel(vote?.value ?? '·')}</span>`;
-    }
-    if (spec) return html`<span class="state out">solo ve</span>`;
-    if (skip) return html`<span class="state out">fuera de ámbito</span>`;
-    if (voted) return html`<span class="state voted">✓ votó</span>`;
-    return html`<span class="state waiting">pensando…</span>`;
-  }
-
-  _renderPlayers() {
-    const round = this._round;
-    const revealed = this._revealed;
-    const byUid = Object.fromEntries(this._votes.map((v) => [v.uid, v]));
-    const cards = revealed ? revealedVotes(this._players, byUid, round) : [];
-    const voteByUid = Object.fromEntries(cards.map((c) => [c.uid, c]));
-    if (!this._players.length) return html`<p class="lead">Aún no se ha unido nadie a la mesa.</p>`;
-    return html`
-      <ul class="players">
-        ${this._players.map((p) => html`<li>
-          <span class="name">${p.name || 'Sin nombre'}</span>
-          ${this._renderPlayerState(p, voteByUid[p.uid] ?? null)}
-        </li>`)}
-      </ul>`;
-  }
-
-  _renderBar() {
-    // Tras revelar: solo el manager puede reiniciar la votación.
-    if (this._revealed) {
-      return this.canManage
-        ? html`<div class="bar"><button class="primary" @click=${() => this._revote()}>Volver a votar</button></div>`
-        : null;
-    }
-    const voted = countActiveVoted(this._players, this._round);
-    const total = activeVoters(this._players, this._round).length;
-    // «Mostrar votos» lo puede pulsar cualquiera (basta con que haya algún voto).
-    return html`<div class="bar">
-      <span class="lead">${voted}/${total} han votado</span>
-      <button class="primary" @click=${() => this._reveal()} ?disabled=${voted === 0}>Mostrar votos</button>
-    </div>`;
-  }
-
-  _renderSummary() {
-    if (!this._revealed) return null;
-    const cards = revealedVotes(this._players, Object.fromEntries(this._votes.map((v) => [v.uid, v])), this._round);
-    const s = judgeVotes(cards.map((c) => c.value), deckOf(this._session));
-    return html`<div class="summary">
-      <p class="headline">${this._headline(s)}</p>
-      <div class="dist">
-        ${s.distribution.map((d) => html`<span class="chip">${d.value} × ${d.count}</span>`)}
-      </div>
-      ${this._renderAgreement(s)}
-    </div>`;
-  }
-
-  /** Qué se dice del reparto de cartas, sin dar por cerrado lo que no lo está. Sin medias (RMR-TSK-0521). */
-  _headline(s) {
-    if (s.consensus) return `¡Acuerdo! Todas las cartas dicen ${s.agreed}.`;
-    if (s.lowest !== null) return `Más baja ${s.lowest} · más alta ${s.highest}`;
-    return 'Nadie ha puesto una carta que diga algo todavía.';
+  /** Los asientos y el juicio de la ronda, calculados en el dominio. */
+  get _table() {
+    const votesByUid = Object.fromEntries(this._votes.map((v) => [v.uid, v]));
+    return cardStates({ players: this._players, votesByUid, round: this._round, revealed: this._revealed, deck: deckOf(this._session) });
   }
 
   /**
-   * Cerrar la votación con el valor acordado (RMR-TSK-0482).
-   *
-   * Solo aparece si TODAS las cartas coinciden y dicen algo. Sin unanimidad no
-   * se ofrece cerrar por mayoría ni por la media: el acuerdo se demuestra
-   * votando, y darlo por bueno con un botón es justo lo que hace que nadie
-   * vuelva a discutir la diferencia entre un 3 y un 8.
+   * La mesa (RMR-TSK-0523): una carta boca abajo por persona que vota, con su
+   * nombre debajo y borde verde cuando ya ha votado. Al revelar giran y el
+   * color cuenta el juicio: verde si coinciden, rojo en la más baja y la más
+   * alta. Sin lista de personas ni contador: la mesa ya lo dice.
    */
-  _renderAgreement(s) {
-    if (!this.canManage) return null;
-    if (!s.consensus) {
-      return html`<p class="lead">Todavía no hay acuerdo: hablad la diferencia y volved a votar.</p>`;
+  _renderSeats() {
+    const { seats } = this._table;
+    if (seats.length === 0) return html`<p class="lead">Aún no se ha sentado nadie a la mesa.</p>`;
+    return html`<div class="seats" aria-label="Cartas de la mesa">
+      ${seats.map((s) => html`<div class="seat">
+        <div class="flip ${this._revealed ? 'up' : ''} ${s.voted ? 'voted' : ''} tone-${s.tone}" data-uid=${s.uid} aria-label="${s.name}: ${this._seatLabel(s)}">
+          <div class="face back"><span class="back-mark" aria-hidden="true">♠</span></div>
+          <div class="face front" title=${s.value ?? ''}>
+            <span class="value">${s.value === null ? '—' : cardLabel(s.value)}</span>
+            ${s.axes ? html`<span class="axes">C${s.axes.complexity}·E${s.axes.effort}</span>` : null}
+          </div>
+        </div>
+        <span class="seat-name">${s.name}</span>
+      </div>`)}
+    </div>`;
+  }
+
+  _seatLabel(s) {
+    if (!this._revealed) return s.voted ? 'ha votado' : 'pensando';
+    if (s.value === null) return 'sin voto';
+    return { agree: 'acuerdo', low: 'la más baja', high: 'la más alta' }[s.tone] ?? s.value;
+  }
+
+  /**
+   * El juicio y lo que puede hacer el organizador: destapar cuando han votado
+   * todos, volver a votar si no hay acuerdo, o cerrar la tarea si lo hay.
+   */
+  _renderVerdict() {
+    const { seats, verdict } = this._table;
+    if (!this._revealed) {
+      if (!this.canManage) return null;
+      const listos = allActiveVoted(this._players, this._round);
+      return html`<div class="bar">
+        <button class="primary" @click=${() => this._reveal()} ?disabled=${!listos}
+          title=${listos ? '' : 'Cuando hayan votado todos'}>Mostrar votos</button>
+      </div>`;
     }
+    const conValor = seats.filter((s) => s.value !== null);
+    let texto = 'Nadie ha puesto una carta que diga algo todavía.';
+    if (verdict?.consensus) texto = `¡Acuerdo! Todas las cartas dicen ${verdict.agreed}.`;
+    else if (verdict?.lowest !== null && conValor.length > 0) texto = `Más baja ${verdict.lowest} · más alta ${verdict.highest}. Hablad la diferencia y volved a votar.`;
+    return html`<div class="verdict ${verdict?.consensus ? 'agree' : ''}">
+      <p class="headline">${texto}</p>
+      ${this._renderVerdictActions(verdict)}
+    </div>`;
+  }
+
+  /**
+   * Cerrar la votación con el valor acordado (RMR-TSK-0482). Solo con TODAS
+   * las cartas iguales y con significado: sin unanimidad no se cierra por
+   * mayoría ni por la media, se vuelve a votar.
+   */
+  _renderVerdictActions(verdict) {
+    if (!this.canManage) return null;
+    if (!verdict?.consensus) {
+      return html`<div class="bar"><button class="primary" @click=${() => this._revote()}>Volver a votar</button></div>`;
+    }
+    const etiqueta = this._currentTask
+      ? `Nueva votación (queda ${cardLabel(verdict.agreed)})`
+      : `Guardar ${verdict.agreed}${this._voteTitle ? ` para «${this._voteTitle}»` : ''}`;
     return html`<div class="bar">
-      <button class="primary" @click=${() => this._recordAgreement(s.agreed)}>
-        ${this._currentTask ? `Nueva votación (queda ${cardLabel(s.agreed)})` : `Guardar ${s.agreed}${this._voteTitle ? ` para «${this._voteTitle}»` : ''}`}
-      </button>
+      <button class="primary" @click=${() => this._recordAgreement(verdict.agreed)}>${etiqueta}</button>
     </div>`;
   }
 
@@ -601,15 +607,47 @@ export class PokerTable extends LitElement {
     </div>`;
   }
 
-  _renderSimple() {
+  _renderMesa() {
     return html`
       ${this._renderVoteTitle()}
+      ${this._renderSeats()}
+      ${this._renderVerdict()}
       ${this._renderControls()}
-      ${this._renderDeck()}
-      ${this._renderBar()}
-      ${this._renderPlayers()}
-      ${this._renderSummary()}
-      ${this._renderAgreements()}`;
+      ${this._renderDeck()}`;
+  }
+
+  /** La lista de tareas del organizador: lo estimado, lo pendiente, añadir y terminar. */
+  _renderTasksTab() {
+    const actual = this._currentTask?.id ?? null;
+    return html`<div class="tasks">
+      ${this._tasks.length ? html`<ol class="results">
+        ${this._tasks.map((task) => html`<li class=${task.id === actual ? 'current' : ''}>
+          <span class="est">${task.value == null ? '·' : cardLabel(task.value)}</span>
+          <span class="qtitle">${task.title}</span>
+          ${task.id === actual ? html`<span class="lead">estimando</span>` : null}
+        </li>`)}
+      </ol>` : html`<p class="lead">Sin tareas planificadas: se vota con el título de cada votación.</p>`}
+      <div class="bar">
+        <input class="est-input task-input" type="text" maxlength="160" placeholder="Añadir otra tarea…"
+          .value=${this._taskDraft} @input=${(e) => { this._taskDraft = e.target.value; }}
+          @keydown=${(e) => { if (e.key === 'Enter') this._addTask(); }} />
+        <button @click=${() => this._addTask()} ?disabled=${!this._taskDraft.trim()}>Añadir tarea</button>
+        <button class="primary" @click=${() => this._finish()}>Terminar sesión</button>
+      </div>
+      ${this._renderAgreements()}
+    </div>`;
+  }
+
+  /** El organizador tiene dos pestañas (Mesa y Tareas); quien vota, solo la mesa. */
+  _renderSimple() {
+    if (!this.canManage) return this._renderMesa();
+    return html`
+      <div class="tabs" role="tablist" aria-label="Organizador">
+        ${ORG_TABS.map((t) => html`<button type="button" class="tab ${this._orgTab === t.id ? 'on' : ''}"
+          role="tab" aria-selected=${this._orgTab === t.id ? 'true' : 'false'}
+          @click=${() => { this._orgTab = t.id; }}>${t.label}</button>`)}
+      </div>
+      ${this._orgTab === 'tareas' ? this._renderTasksTab() : this._renderMesa()}`;
   }
 
   render() {
