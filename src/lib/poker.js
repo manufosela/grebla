@@ -79,7 +79,7 @@ export function setSessionTasks(sessionId, tasks, currentTaskId) {
  */
 export function closeCurrentTask(sessionId, tasks, nextId) {
   return updateDoc(doc(db, SESSIONS, sessionId), {
-    tasks, currentTaskId: nextId, round: increment(1), revealed: false, voteTitle: '', voteRef: null, voteIssue: null,
+    tasks, currentTaskId: nextId, round: increment(1), revealed: false, voteTitle: '', voteRef: null, voteIssue: null, issueOpen: false,
   });
 }
 
@@ -113,7 +113,20 @@ export async function fetchLinearIssue(identifier) {
  */
 export function setVoteRef(sessionId, ref, issue) {
   const voteRef = String(ref ?? '').trim() || null;
-  return updateDoc(doc(db, SESSIONS, sessionId), { voteRef, voteIssue: voteRef ? (issue ?? null) : null });
+  return updateDoc(doc(db, SESSIONS, sessionId), { voteRef, voteIssue: voteRef ? (issue ?? null) : null, issueOpen: false });
+}
+
+/**
+ * Enseña la historia a todos (RMR-TSK-0524): la ficha se guarda en la sesión
+ * y `issueOpen` abre el modal en todas las pantallas. Lo decide el organizador.
+ */
+export function showIssue(sessionId, ref, issue) {
+  return updateDoc(doc(db, SESSIONS, sessionId), { voteRef: ref, voteIssue: issue, issueOpen: true });
+}
+
+/** Abre o cierra el modal de la historia para todos. Solo el organizador (reglas). */
+export function setIssueOpen(sessionId, open) {
+  return updateDoc(doc(db, SESSIONS, sessionId), { issueOpen: !!open });
 }
 
 /**

@@ -19,3 +19,14 @@ export function normalizeLinearRef(input) {
   if (ref === '') return '';
   return LINEAR_REF_RE.test(ref) ? ref : null;
 }
+
+/**
+ * La referencia de Linear que va DENTRO de un título («BB-1231 - Nuevo
+ * onboarding» → BB-1231), o null si no hay ninguna. La primera que aparezca.
+ * @param {unknown} text
+ * @returns {string|null}
+ */
+export function findLinearRef(text) {
+  const tokens = String(text ?? '').toUpperCase().split(/[^A-Z0-9-]+/);
+  return tokens.find((tok) => LINEAR_REF_RE.test(tok)) ?? null;
+}
