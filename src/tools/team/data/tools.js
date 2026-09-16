@@ -23,7 +23,9 @@ export const TOOLS = [
   { toolId: 'dora', label: 'DORA', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
   { toolId: 'lean', label: 'LEAN', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
   { toolId: 'o2o', label: 'One-to-Ones', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng', 'em'] } },
-  { toolId: 'poker', label: 'Scrum Poker', audience: { branches: ['engineering'] }, managedBy: {} },
+  // Estimar es de toda la organización (RMR-TSK-0513): producto, diseño o
+  // negocio se sientan a la mesa con el equipo, no solo ingeniería.
+  { toolId: 'poker', label: 'Scrum Poker', audience: { everyone: true }, managedBy: {} },
   { toolId: 'retros', label: 'Retros', audience: { branches: ['engineering'] }, managedBy: {} },
 ];
 
