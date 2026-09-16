@@ -158,19 +158,21 @@ export function recordAgreement(sessionId, acuerdo) {
 }
 
 /**
- * Sesiones de un manager —o de toda la rama de un supermanager (uid o array de
- * uids)—, más recientes primero. Con un solo dueño mantiene el `==` de siempre.
- * @param {string|ReadonlyArray<string>} ownerScope
+ * Sesiones visibles para TODOS (RMR-BUG-0121): las abiertas de la organización
+ * y las terminadas, más recientes primero. Desde que cualquier perfil participa
+ * (RMR-TSK-0513) la lista ya no es «las mías o las de mi manager»: quien no
+ * era del equipo del organizador no encontraba la sesión. Borrar sigue siendo
+ * solo del dueño (la UI lo esconde y las reglas lo imponen). Índice compuesto
+ * status + createdAt en firestore.indexes.json.
  * @returns {Promise<Array<Record<string, unknown>>>}
  */
-export async function listSessions(ownerScope) {
-  const owners = [...new Set((Array.isArray(ownerScope) ? ownerScope : [ownerScope]).filter(Boolean))];
-  if (owners.length === 0) return [];
-  const batches = await Promise.all(owners.map(async (owner) => {
-    const snap = await getDocs(query(collection(db, SESSIONS), where('ownerLeaderUid', '==', owner), orderBy('createdAt', 'desc')));
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  }));
-  return batches.flat().sort((a, b) => createdAtMs(b.createdAt) - createdAtMs(a.createdAt));
+export async function listVisibleSessions() {
+  const snap = await getDocs(query(
+    collection(db, SESSIONS),
+    where('status', 'in', ['open', 'finished']),
+    orderBy('createdAt', 'desc'),
+  ));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
 /** Una sesión por id (para abrirla desde un enlace compartido, fuera de la lista). */

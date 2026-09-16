@@ -10,7 +10,7 @@ import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './poker-table.js';
 import '../app-modal.js';
-import { listSessions, createSession, deleteSession, getSession } from '../../lib/poker.js';
+import { listVisibleSessions, createSession, deleteSession, getSession } from '../../lib/poker.js';
 import { POKER_SCALES, scaleById } from '../../tools/poker/domain/deck.js';
 import { parseTaskLines } from '../../tools/poker/domain/tasks.js';
 
@@ -114,15 +114,6 @@ export class PokerApp extends LitElement {
     this._toDelete = null;
   }
 
-  /** De quién son las sesiones que se ven: la rama del supermanager, o su manager. */
-  get _ownerScope() {
-    return this.leaderUids?.length ? this.leaderUids : this.leaderUid;
-  }
-
-  get _sourcesKey() {
-    return this.leaderUids?.length ? this.leaderUids.join(',') : (this.leaderUid ?? '');
-  }
-
   updated(changed) {
     // Enlace compartido: abrir la sesión directamente en cuanto haya uid.
     if ((changed.has('openSessionId') || changed.has('uid'))
@@ -130,10 +121,9 @@ export class PokerApp extends LitElement {
       this._openedShared = true;
       this._openShared(this.openSessionId);
     }
-    if (!changed.has('leaderUid') && !changed.has('leaderUids') && !changed.has('canManage')) return;
-    const key = this._sourcesKey;
-    if (!key || key === this._loadedFor) return;
-    this._loadedFor = key;
+    // La lista es la de la organización (RMR-BUG-0121): se carga en cuanto hay sesión.
+    if (!changed.has('uid') || !this.uid || this.uid === this._loadedFor) return;
+    this._loadedFor = this.uid;
     this._loadList();
   }
 
@@ -163,8 +153,7 @@ export class PokerApp extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      const sessions = await listSessions(this._ownerScope);
-      this._sessions = sessions.filter((s) => s.status !== 'closed');
+      this._sessions = await listVisibleSessions();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las sesiones.';
     } finally {
@@ -277,19 +266,30 @@ export class PokerApp extends LitElement {
   }
 
   _renderSessions() {
-    if (!this._sessions.length) {
-      return html`<p class="empty">${this.canManage ? 'Aún no has creado ninguna sesión.' : 'Tu equipo aún no tiene sesiones de poker.'}</p>`;
-    }
+    const abiertas = this._sessions.filter((s) => s.status !== 'finished');
+    const terminadas = this._sessions.filter((s) => s.status === 'finished');
     return html`
-      <p class="lead">${this.canManage ? 'Tus sesiones de estimación.' : 'Sesiones de tu equipo. Ábrela para votar.'}</p>
-      <table>
-        <thead><tr><th>Sesión</th><th></th>${this.canManage ? html`<th></th>` : null}</tr></thead>
-        <tbody>${this._sessions.map((s) => html`<tr>
-          <td>${s.name}</td>
-          <td><button class="act" @click=${() => this._select(s)}>Abrir</button></td>
-          ${this.canManage ? html`<td>${this._renderDelete(s)}</td>` : null}
-        </tr>`)}</tbody>
-      </table>`;
+      ${abiertas.length ? html`
+        <p class="lead">Sesiones abiertas de la organización. Ábrela para estimar.</p>
+        <table>
+          <thead><tr><th>Sesión</th><th></th>${this.canManage ? html`<th></th>` : null}</tr></thead>
+          <tbody>${abiertas.map((s) => html`<tr>
+            <td>${s.name}</td>
+            <td><button class="act" @click=${() => this._select(s)}>Abrir</button></td>
+            ${this.canManage ? html`<td>${this._renderDelete(s)}</td>` : null}
+          </tr>`)}</tbody>
+        </table>`
+        : html`<p class="empty">No hay ninguna sesión abierta.</p>`}
+      ${terminadas.length ? html`
+        <p class="lead">Terminadas: lo que se estimó en cada una.</p>
+        <table>
+          <thead><tr><th>Sesión</th><th></th>${this.canManage ? html`<th></th>` : null}</tr></thead>
+          <tbody>${terminadas.map((s) => html`<tr>
+            <td>${s.name}</td>
+            <td><button class="act" @click=${() => this._select(s)}>Ver resultados</button></td>
+            ${this.canManage ? html`<td>${this._renderDelete(s)}</td>` : null}
+          </tr>`)}</tbody>
+        </table>` : null}`;
   }
 
   _renderList() {

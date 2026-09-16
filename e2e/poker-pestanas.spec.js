@@ -30,14 +30,14 @@ test('quien convoca ve Sesiones y Convocar, y cada pestaña enseña lo suyo', as
   await expect(crear(page)).toBeVisible();
   await expect(nombreSesion(page)).toBeVisible();
   // Y en Convocar no está la lista: ni tabla ni el vacío de «aún no has creado».
-  await expect(page.getByText(/Aún no has creado ninguna sesión/)).toHaveCount(0);
+  await expect(page.getByText(/No hay ninguna sesión abierta|Sesiones abiertas de la organización/)).toHaveCount(0);
 });
 
 test('quien solo estima no ve pestañas ni formulario', async ({ page }) => {
   await signInAs(page, 'engineer');
   await page.goto('/poker');
 
-  await expect(page.getByText(/sesiones de poker|Sesiones de tu equipo/)).toBeVisible();
+  await expect(page.getByText(/No hay ninguna sesión abierta|Sesiones abiertas de la organización/)).toBeVisible();
   await expect(pestanas(page)).toHaveCount(0);
   await expect(crear(page)).toHaveCount(0);
 });
