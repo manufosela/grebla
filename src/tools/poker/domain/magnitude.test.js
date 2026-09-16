@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  magnitudeCard, axesAvailable, isAxisLevel, COMPLEXITY_LEVELS, EFFORT_LEVELS,
+  magnitudeCard, isAxisLevel, COMPLEXITY_LEVELS, EFFORT_LEVELS,
 } from './magnitude.js';
-import { buildDeck, POKER_DECK, SPLIT_CARD } from './deck.js';
+import { SPLIT_CARD } from './deck.js';
 
 describe('magnitudeCard: el cuadro del taller «Estimar en magnitud»', () => {
   it('reproduce el cuadro de Fibonacci casilla a casilla, con el 21 del taller como «partir»', () => {
@@ -43,19 +43,6 @@ describe('magnitudeCard: el cuadro del taller «Estimar en magnitud»', () => {
     expect(magnitudeCard('tallas', 2, 2)).toBe('M');
     expect(magnitudeCard('tallas', 3, 3)).toBe('XL');
     expect(magnitudeCard('tallas', 3, 4)).toBe(SPLIT_CARD);
-  });
-});
-
-describe('axesAvailable: solo si el mazo de la sesión tiene la escalera', () => {
-  it('una sesión nueva de cualquier escala puede votar por ejes', () => {
-    expect(axesAvailable({ scale: 'fibonacci', deck: buildDeck('fibonacci') })).toBe(true);
-    expect(axesAvailable({ scale: 'tallas', deck: buildDeck('tallas') })).toBe(true);
-  });
-
-  it('una sesión antigua (mazo 0..100 sin «partir») no: antes que emitir una carta inválida, se esconde', () => {
-    expect(axesAvailable({})).toBe(false);
-    expect(axesAvailable({ deck: POKER_DECK })).toBe(false);
-    expect(axesAvailable({ scale: 'tallas', deck: ['S', 'M', '?', '☕'] })).toBe(false);
   });
 });
 

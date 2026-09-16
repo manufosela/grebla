@@ -13,7 +13,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { deckOf, cardLabel, SPLIT_CARD } from '../../tools/poker/domain/deck.js';
-import { magnitudeCard, axesAvailable, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/poker/domain/magnitude.js';
+import { magnitudeCard, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/poker/domain/magnitude.js';
 import { normalizeLinearRef, findLinearRef } from '../../tools/poker/domain/reference.js';
 import '../app-modal.js';
 import { currentTask, closeTask, appendTask } from '../../tools/poker/domain/tasks.js';
@@ -261,8 +261,7 @@ export class PokerTable extends LitElement {
   get _myVoteValue() { return this._myVote?.round === this._round ? this._myVote.value : null; }
   /** Los ejes de mi voto de ESTA ronda, para rehidratarlos al recargar. */
   get _myAxes() { return this._myVote?.round === this._round ? (this._myVote.axes ?? null) : null; }
-  get _axesOn() { return axesAvailable(this._session); }
-  get _activeVoteTab() { return this._axesOn ? (this._voteTab ?? 'ejes') : 'carta'; }
+  get _activeVoteTab() { return this._voteTab ?? 'ejes'; }
   get _myPlayer() { return this._players.find((p) => p.uid === this.uid) ?? null; }
   get _amSpectator() { return isSpectator(this._myPlayer); }
   get _amSkipped() { return hasSkippedRound(this._myPlayer, this._round); }
@@ -309,9 +308,6 @@ export class PokerTable extends LitElement {
     if (this._revealed) return null;
     if (this._amSpectator) return html`<p class="lead">Estás como observador: no votas en esta sesión.</p>`;
     if (this._amSkipped) return html`<p class="lead">Te has saltado esta ronda (fuera de tu ámbito).</p>`;
-    // Sin escalera en el mazo (sesiones antiguas) solo hay carta directa, y una
-    // pestaña sola no es una pestaña.
-    if (!this._axesOn) return this._renderCards();
     const tab = this._activeVoteTab;
     return html`
       <div class="tabs" role="tablist" aria-label="Cómo votar">

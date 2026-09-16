@@ -14,7 +14,7 @@
  * partirla, no ponerle una cifra mayor. El 21 llega antes por la diagonal que
  * por los lados: lo que dispara el número es que suban las dos cosas a la vez.
  */
-import { scaleById, deckOf, SPLIT_CARD } from './deck.js';
+import { scaleById, SPLIT_CARD } from './deck.js';
 
 /** Niveles de cada eje, con la descripción del taller para elegir con criterio. */
 export const COMPLEXITY_LEVELS = Object.freeze([
@@ -51,19 +51,4 @@ export function magnitudeCard(scaleId, complexity, effort) {
   if (!isAxisLevel(complexity) || !isAxisLevel(effort)) return null;
   const cards = scaleById(scaleId).cards;
   return cards[complexity + effort - 2] ?? SPLIT_CARD;
-}
-
-/**
- * ¿Puede ESTA sesión votar por ejes? Solo si su mazo contiene la escalera
- * entera de su escala y la carta «partir»: una sesión convocada con otro mazo
- * (las anteriores a RMR-TSK-0515) no puede aceptar un 21 que no tiene, y antes
- * que emitir una carta inválida se esconde la pestaña.
- *
- * @param {{ scale?: string, deck?: ReadonlyArray<string>|null }|null|undefined} session
- * @returns {boolean}
- */
-export function axesAvailable(session) {
-  const deck = deckOf(session);
-  const cards = scaleById(session?.scale).cards;
-  return cards.every((c) => deck.includes(c)) && deck.includes(SPLIT_CARD);
 }
