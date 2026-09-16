@@ -399,6 +399,8 @@ export class CareerApp extends LitElement {
     _eggPanel: { state: true },
     mode3d: { state: true },
     audioMuted: { state: true },
+    /** Escenario 3D a pantalla completa (RMR-TSK-0529). */
+    fullscreen: { state: true },
     teammates: { state: true },
     showTeam: { state: true },
     teammatePopover: { state: true },
@@ -587,6 +589,7 @@ export class CareerApp extends LitElement {
     /* En modo 3D el canvas es el protagonista: ocupa todo el alto disponible y
        el panel de ciudadanía y el HUD flotan SOBRE él (overlay). */
     .stage3d { position: relative; display: flex; flex: 1 1 auto; min-height: 0; border-radius: 14px; overflow: hidden; }
+    .stage3d:fullscreen { border-radius: 0; background: #0b1520; }
     career-island-3d.stage { flex: 1 1 auto; min-height: 0; }
     .hud { position: absolute; top: 0.75rem; left: 0.75rem; z-index: 2; display: flex; gap: 0.5rem; flex-wrap: wrap; }
     /* Botones DENTRO del canvas: oscuros translúcidos, coherentes con el marco. */
@@ -2180,6 +2183,8 @@ export class CareerApp extends LitElement {
     // Sonido de la isla (MC-11): preferencia persistida; el motor WebAudio
     // vive en <career-island-3d> y este botón HUD solo lo conmuta.
     this.audioMuted = readStoredMuted();
+    this.fullscreen = false;
+    this._onFullscreenChange = () => { this.fullscreen = document.fullscreenElement === this.renderRoot.querySelector('.stage3d'); };
     // Compañeros en la isla (MC-12): journeys del equipo cacheados por persona
     // (1 lectura por persona, una sola vez) y lista derivada para la isla.
     /** @type {Map<string, import('../../tools/career/domain/types.js').Journey>} */
@@ -6642,8 +6647,14 @@ export class CareerApp extends LitElement {
     this._departTo(toId);
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    document.addEventListener('fullscreenchange', this._onFullscreenChange);
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
+    document.removeEventListener('fullscreenchange', this._onFullscreenChange);
     // Barco en el mar y componente fuera del DOM: se apaga el rAF (MC-19).
     if (this._voyageRaf) cancelAnimationFrame(this._voyageRaf);
     this._voyageRaf = 0;
@@ -6995,6 +7006,33 @@ export class CareerApp extends LitElement {
         <button class="primary play" @click=${this._closeOnboarding}>¡A jugar!</button>
       </section>
     </div>`;
+  }
+
+  /**
+   * Pantalla completa del escenario (RMR-TSK-0529): el HUD va dentro de
+   * `.stage3d`, así que sigue a mano; el canvas se redimensiona solo (la isla
+   * observa su tamaño). Esc o el mismo botón vuelven al recuadro.
+   */
+  async _toggleFullscreen() {
+    const stage = this.renderRoot.querySelector('.stage3d');
+    if (!stage?.requestFullscreen) return;
+    try {
+      // Solo se sale de la pantalla completa PROPIA: si otro elemento la tiene, se pide para el escenario.
+      if (document.fullscreenElement === stage) await document.exitFullscreen();
+      else await stage.requestFullscreen();
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo poner a pantalla completa.';
+    }
+  }
+
+  _renderFullscreenButton() {
+    const on = this.fullscreen;
+    return html`<button
+      @click=${this._toggleFullscreen}
+      aria-pressed=${on}
+      aria-label=${on ? 'Salir de pantalla completa' : 'Pantalla completa'}
+      title=${on ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}
+    >${on ? '⤡ Restaurar' : '⛶ Maximizar'}</button>`;
   }
 
   /** Botón HUD del sonido, presente en vista aérea Y a pie (MC-11). */
@@ -7834,7 +7872,7 @@ export class CareerApp extends LitElement {
                   >Salir (Esc)</button><button
                     @click=${this._enterImmersive}
                     title="Captura el ratón para mirar moviéndolo, sin arrastrar (Escape lo suelta y vuelve al cursor libre)"
-                  >🎮 Inmersivo</button>${this._renderArchipelagoButton()}${this._renderPlayerCardButton()}${this._renderAudioButton()}`
+                  >🎮 Inmersivo</button>${this._renderArchipelagoButton()}${this._renderPlayerCardButton()}${this._renderAudioButton()}${this._renderFullscreenButton()}`
                 : html`
                     <button
                       @click=${this._focusOverview}
@@ -7843,6 +7881,7 @@ export class CareerApp extends LitElement {
                     ${this._renderWalkButton()}
                     ${this._renderTeamButton()}
                     ${this._renderAudioButton()}
+                    ${this._renderFullscreenButton()}
                     <button
                       @click=${this._openOnboarding}
                       aria-label="Ver la guía de la isla"
