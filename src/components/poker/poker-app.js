@@ -10,7 +10,8 @@ import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import './poker-table.js';
 import '../app-modal.js';
-import { listVisibleSessions, createSession, deleteSession, getSession } from '../../lib/poker.js';
+import './poker-session-editor.js';
+import { watchVisibleSessions, createSession, deleteSession, getSession, updateSession, syncOwnerSeat } from '../../lib/poker.js';
 import { POKER_SCALES, scaleById } from '../../tools/poker/domain/deck.js';
 import { parseTaskLines } from '../../tools/poker/domain/tasks.js';
 
@@ -33,6 +34,7 @@ export class PokerApp extends LitElement {
     _error: { state: true },
     _tab: { state: true },
     _toDelete: { state: true },
+    _editing: { state: true },
   };
 
   /**
@@ -50,6 +52,7 @@ export class PokerApp extends LitElement {
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); }
     .detail { display: flex; flex-direction: column; gap: 1rem; }
     .detail-top { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: space-between; }
+    .detail-actions { display: inline-flex; gap: 0.6rem; flex-wrap: wrap; }
     .back { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-text, #1e3a5f); border-radius: 8px; padding: 0.4rem 0.8rem; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
     .back:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .lead { margin: 0 0 1rem; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
@@ -112,6 +115,14 @@ export class PokerApp extends LitElement {
     this._tab = 'sesiones';
     // Sesión pendiente de confirmar su borrado (RMR-BUG-0120): un clic no borra.
     this._toDelete = null;
+    // Sesión que se está editando en el modal (RMR-TSK-0526).
+    this._editing = null;
+    this._listSub = null;
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._listSub) { this._listSub(); this._listSub = null; }
   }
 
   updated(changed) {
@@ -149,16 +160,23 @@ export class PokerApp extends LitElement {
     }
   }
 
-  async _loadList() {
+  /** La lista EN VIVO (RMR-TSK-0526): un cambio del organizador se ve sin recargar. */
+  _loadList() {
+    if (this._listSub) return;
     this._loading = true;
     this._error = '';
-    try {
-      this._sessions = await listVisibleSessions();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudieron cargar las sesiones.';
-    } finally {
-      this._loading = false;
-    }
+    this._listSub = watchVisibleSessions(
+      (sessions) => {
+        this._sessions = sessions;
+        this._loading = false;
+        // La sesión abierta o en edición sigue a la lista: nombre, tareas, escala.
+        if (this._selected) this._selected = sessions.find((s) => s.id === this._selected.id) ?? this._selected;
+      },
+      (err) => {
+        this._error = err instanceof Error ? err.message : 'No se pudieron cargar las sesiones.';
+        this._loading = false;
+      },
+    );
   }
 
   /**
@@ -192,8 +210,8 @@ export class PokerApp extends LitElement {
       this._error = '';
       // Convocada: al volver de la mesa se aterriza en la lista, no en el formulario.
       this._tab = 'sesiones';
-      await this._loadList();
-      const created = this._sessions.find((s) => s.id === id);
+      // La lista en vivo la traerá enseguida; la mesa se abre ya con la sesión recién leída.
+      const created = await getSession(id);
       if (created) this._select(created);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo crear la sesión.';
@@ -216,14 +234,18 @@ export class PokerApp extends LitElement {
   }
 
   _select(session) { this._selected = session; }
-  _backToList() { this._selected = null; this._loadList(); }
+  _backToList() { this._selected = null; }
 
   _renderDetail() {
     const s = this._selected;
     return html`<div class="detail">
       <div class="detail-top">
         <button class="back" @click=${() => this._backToList()}>← Volver a las sesiones</button>
-        <button class="back" @click=${() => this._shareLink(s)}>${this._copied ? '✓ Enlace copiado' : '🔗 Compartir enlace'}</button>
+        <span class="detail-actions">
+          ${this.canManage && s.ownerLeaderUid === this.uid
+            ? html`<button class="back" @click=${() => { this._editing = s; }}>✎ Editar sesión</button>` : null}
+          <button class="back" @click=${() => this._shareLink(s)}>${this._copied ? '✓ Enlace copiado' : '🔗 Compartir enlace'}</button>
+        </span>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <poker-table .sessionId=${s.id} .uid=${this.uid} .authorName=${this.authorName ?? ''}
@@ -262,7 +284,32 @@ export class PokerApp extends LitElement {
    */
   _renderDelete(session) {
     if (session.ownerLeaderUid !== this.uid) return null;
-    return html`<button class="act danger" @click=${() => this._delete(session)}>Borrar</button>`;
+    return html`<button class="act" @click=${() => { this._editing = session; }}>Editar</button>
+      <button class="act danger" @click=${() => this._delete(session)}>Borrar</button>`;
+  }
+
+  /** Guarda lo editado (RMR-TSK-0526). Si cambia si vota y ya está sentado, su asiento cambia. */
+  async _saveEdit(detail) {
+    const s = this._editing;
+    if (!s) return;
+    try {
+      await updateSession(s.id, detail);
+      if ((s.ownerVotes !== false) !== detail.ownerVotes) await syncOwnerSeat(s.id, this.uid, detail.ownerVotes);
+      this._editing = null;
+      this._error = '';
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo guardar la sesión.';
+    }
+  }
+
+  _renderEditModal() {
+    const s = this._editing;
+    if (!s) return null;
+    return html`<app-modal .open=${true} size="wide" heading="Editar la sesión" @close=${() => { this._editing = null; }}>
+      <poker-session-editor .session=${s}
+        @save=${(e) => this._saveEdit(e.detail)}
+        @cancel=${() => { this._editing = null; }}></poker-session-editor>
+    </app-modal>`;
   }
 
   _renderSessions() {
@@ -315,7 +362,8 @@ export class PokerApp extends LitElement {
   render() {
     return html`
       ${this._selected ? this._renderDetail() : this._renderList()}
-      ${this._renderDeleteModal()}`;
+      ${this._renderDeleteModal()}
+      ${this._renderEditModal()}`;
   }
 }
 
