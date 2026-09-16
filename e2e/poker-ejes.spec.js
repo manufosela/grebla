@@ -103,7 +103,7 @@ test('al revelar, quien votó por ejes enseña su C·E junto a la carta', async 
   await signInAs(page, 'engineer');
   await page.goto(`/poker?s=${ref.id}`);
 
-  const jugadores = page.locator('poker-table').locator('.players li');
+  const jugadores = page.locator('poker-table').locator('.seat');
   await expect(jugadores.filter({ hasText: 'Votante 0' })).toContainText('C5·E1');
   await expect(jugadores.filter({ hasText: 'Votante 1' })).not.toContainText('C');
 });

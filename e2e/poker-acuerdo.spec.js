@@ -47,7 +47,7 @@ test.afterEach(async () => {
 });
 
 const resumen = (page) => page.locator('poker-table').evaluate(
-  (el) => el.shadowRoot?.querySelector('.summary')?.textContent?.trim() ?? '',
+  (el) => el.shadowRoot?.querySelector('.verdict')?.textContent?.trim() ?? '',
 );
 
 test('todo el equipo votando «partir» SÍ es acuerdo: hay que partirla', async ({ page }) => {
@@ -74,9 +74,10 @@ test('sin unanimidad no se ofrece cerrar por mayoría ni por la media', async ({
   await expect.poll(() => resumen(page)).toContain('Más baja 3 · más alta 8');
   expect(await resumen(page)).not.toMatch(/Media/);
   const botones = await page.locator('poker-table').evaluate(
-    (el) => [...(el.shadowRoot?.querySelectorAll('.summary button') ?? [])].map((b) => b.textContent.trim()),
+    (el) => [...(el.shadowRoot?.querySelectorAll('.verdict button') ?? [])].map((b) => b.textContent.trim()),
   );
-  expect(botones).toEqual([]);
+  // Sin acuerdo lo único que se ofrece es volver a votar: ni guardar por mayoría ni por la media.
+  expect(botones).toEqual(['Volver a votar']);
   await ref.delete();
 });
 
@@ -90,7 +91,7 @@ test('con unanimidad se guarda el acuerdo, con su título y su ronda', async ({ 
 
   await expect.poll(() => resumen(page)).toContain('Todas las cartas dicen 5');
   await page.locator('poker-table').evaluate(
-    (el) => el.shadowRoot?.querySelector('.summary button')?.click(),
+    (el) => el.shadowRoot?.querySelector('.verdict button')?.click(),
   );
 
   await expect.poll(async () => (await ref.get()).data()?.agreements ?? [], { timeout: 15_000 })

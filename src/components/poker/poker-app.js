@@ -57,6 +57,7 @@ export class PokerApp extends LitElement {
     .tab { background: none; border: 0; padding: 0.5rem 1.15rem; font: inherit; font-weight: 600; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); cursor: pointer; border-radius: 9px; transition: background 0.12s, color 0.12s, box-shadow 0.12s; }
     .tab:hover { color: var(--teal); }
     .tab.on { background: var(--teal); color: var(--rm-on-accent, #fff); box-shadow: 0 1px 4px rgba(42,157,143,0.4); }
+    .tab.on:hover { color: var(--rm-on-accent, #fff); }
     .create { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.4rem; max-width: 34rem; }
     .create input, .create select, .create textarea { padding: 0.55rem 0.75rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
     .create input:focus, .create select:focus, .create textarea:focus { outline: none; border-color: var(--teal); background: var(--rm-surface, #fff); }
