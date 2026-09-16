@@ -22,6 +22,7 @@ import { sign, coinsKmsKeyName } from './signer.js';
 import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pulseAggregate.js';
 import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './docsPaths.js';
 import { upcomingFrom } from './o2oUpcoming.js';
+import { fetchLinearIssue, LINEAR_REF_RE } from './linearIssue.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -1543,6 +1544,41 @@ export const refreshDora = onCall(
 
 // ── LEAN / Flujo (métricas de flujo del equipo desde Linear) ─────────────────
 const LINEAR_API_KEY = defineSecret('LINEAR_API_KEY');
+
+// ── Scrum Poker: ficha de una historia de Linear por referencia (RMR-TSK-0518) ─
+/**
+ * Devuelve la ficha saneada de una historia (BB-1234) para mostrarla al lado
+ * de la mesa. La llama el organizador y la guarda en la sesión; los demás la
+ * leen de ahí, así que Linear recibe una llamada por referencia, no una por
+ * persona. Acceso: cualquiera con sitio en la organización (superadmin, líder
+ * o persona con ficha). `issue: null` significa que Linear no la conoce.
+ */
+export const getLinearIssue = onCall(
+  { region: 'europe-west1', secrets: [LINEAR_API_KEY], timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+    const identifier = String(request.data?.identifier ?? '').trim().toUpperCase();
+    if (!LINEAR_REF_RE.test(identifier)) {
+      throw new HttpsError('invalid-argument', 'La referencia debe tener la forma BB-1234.');
+    }
+    const db = getFirestore();
+    const [leader, person] = await Promise.all([
+      db.doc(`leaders/${uid}`).get(),
+      db.collection('people').where('uid', '==', uid).limit(1).get(),
+    ]);
+    if (!(await isAdmin(uid)) && !leader.exists && person.empty) {
+      throw new HttpsError('permission-denied', 'No tienes sitio en esta organización.');
+    }
+    const apiKey = LINEAR_API_KEY.value();
+    if (!apiKey) throw new HttpsError('failed-precondition', 'Esta instancia no tiene clave de Linear.');
+    try {
+      return { issue: await fetchLinearIssue(identifier, apiKey) };
+    } catch (err) {
+      throw new HttpsError('unavailable', err instanceof Error ? err.message : 'Linear no respondió.');
+    }
+  },
+);
 const FLOW_HOUR = 3_600_000;
 const FLOW_DAY = 24 * FLOW_HOUR;
 const flowRound1 = (n) => Math.round(n * 10) / 10;
