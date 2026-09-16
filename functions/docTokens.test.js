@@ -38,7 +38,7 @@ describe('tokenIsLive', () => {
   it('muerto si caducó, si la ruta no es de docs/ o si no hay registro', () => {
     expect(tokenIsLive({ path: 'docs/a.html', expiresAt: now }, now)).toBe(false);
     expect(tokenIsLive({ path: 'people/x.json', expiresAt: now + 1 }, now)).toBe(false);
-    expect(tokenIsLive({ path: 'docs/a.html', expiresAt: '9999999999' }, now)).toBe(false);
+    expect(tokenIsLive({ path: 'docs/a.html', expiresAt: 'mañana' }, now)).toBe(false);
     expect(tokenIsLive(undefined, now)).toBe(false);
   });
   it('la vida por defecto son cuatro horas', () => {
