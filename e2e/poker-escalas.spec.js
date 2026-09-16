@@ -28,6 +28,8 @@ test('se convoca por tallas, y el mazo queda guardado en la sesión', async ({ p
   await signInAs(page, 'head');
   await page.goto('/poker');
 
+  // Convocar tiene su pestaña (RMR-TSK-0514): la lista de sesiones es otra cosa.
+  await page.getByRole('tab', { name: 'Convocar' }).click();
   await page.getByPlaceholder(/Nombre de la sesión/).fill(NOMBRE);
   await page.getByRole('radio', { name: 'Tallas de camiseta' }).check();
   await page.getByRole('checkbox', { name: 'S', exact: true }).check();
