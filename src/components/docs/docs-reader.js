@@ -66,6 +66,8 @@ export class DocsReader extends LitElement {
     .back:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     .vname { font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     iframe { width: 100%; height: min(80vh, 46rem); border: 1px solid var(--rm-border, #d7dee2); border-radius: 12px; background: #fff; }
+    iframe:fullscreen { height: 100vh; border: 0; border-radius: 0; }
+    .maximize { margin-left: auto; }
   `;
 
   constructor() {
@@ -132,6 +134,12 @@ export class DocsReader extends LitElement {
    * Visor: el documento dentro de un iframe SIN `allow-same-origin`, que es lo
    * que lo deja fuera de nuestro origen. `allow-scripts` sí, porque son
    * presentaciones y sin JS no pasan de diapositiva.
+   *
+   * `allow-popups-to-escape-sandbox` (RMR-TSK-0528): las notas del presentador
+   * de reveal.js (tecla S) abren un about:blank y le escriben dentro; si ese
+   * popup hereda el sandbox nace con OTRO origen opaco y la ventana queda en
+   * blanco (comprobado). Al escapar, el popup toma el origen opaco de su
+   * creador —no el nuestro—, así que sigue sin poder tocar GREBLA.
    */
   _renderViewer() {
     return html`
@@ -139,9 +147,23 @@ export class DocsReader extends LitElement {
         <div class="vbar">
           <button class="back" @click=${() => this._close()}>← Volver a la lista</button>
           <span class="vname">${this._viewing.name}</span>
+          <button class="back maximize" @click=${() => this._maximize()} title="Pantalla completa (Esc para volver)">⛶ Maximizar</button>
         </div>
-        <iframe title=${this._viewing.name} src=${this._src} sandbox="allow-scripts allow-popups"></iframe>
+        <iframe title=${this._viewing.name} src=${this._src} allow="fullscreen"
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
       </div>`;
+  }
+
+  /** La presentación a pantalla completa; Esc vuelve al visor. */
+  async _maximize() {
+    const frame = this.renderRoot.querySelector('iframe');
+    if (!frame?.requestFullscreen) return;
+    try {
+      await frame.requestFullscreen();
+      frame.focus();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo poner a pantalla completa.';
+    }
   }
 
   _renderDoc(doc) {
