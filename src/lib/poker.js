@@ -16,7 +16,7 @@ import {
   doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc,
   writeBatch, onSnapshot, query, where, orderBy, serverTimestamp, increment, arrayUnion,
 } from 'firebase/firestore';
-import { db, getRegionalFunctions } from './firebase.js';
+import { db } from './firebase.js';
 import { isValidCardFor, buildDeck, scaleById } from '../tools/poker/domain/deck.js';
 import { isAxisLevel } from '../tools/poker/domain/magnitude.js';
 
@@ -32,31 +32,22 @@ function createdAtMs(value) {
 // ── Sesiones ─────────────────────────────────────────────────────────────────
 
 /**
- * Crea una sesión de poker. Modo `simple` = juego de voto directo (se vota desde
- * el principio). Modo `linear` = refinamiento del backlog de un squad (se elige la
- * tarea y se «activa la votación» por tarea).
+ * Crea una sesión de poker: voto directo desde el principio. (El modo «refinar
+ * backlog de Linear» se retiró en RMR-TSK-0517: la referencia a Linear va por
+ * votación, no por sesión.)
  * El MAZO se fija al convocar y viaja con la sesión (RMR-TSK-0481): así una
  * estimación en curso no cambia de cartas porque alguien toque un catálogo.
- * @param {{ name: string, ownerLeaderUid: string, mode?: 'simple'|'linear', squad?: {linearLabel: string, name: string}|null, scale?: string, cards?: ReadonlyArray<string> }} data
+ * @param {{ name: string, ownerLeaderUid: string, scale?: string }} data
  * @returns {Promise<string>} id de la sesión
  */
 export async function createSession(data) {
   if (!data?.ownerLeaderUid) throw new Error('createSession requiere ownerLeaderUid');
-  const mode = data.mode === 'linear' ? 'linear' : 'simple';
   const ref = await addDoc(collection(db, SESSIONS), {
     name: String(data.name ?? '').trim(),
     ownerLeaderUid: data.ownerLeaderUid,
-    mode,
-    squad: mode === 'linear' && data.squad
-      ? { linearLabel: data.squad.linearLabel, name: data.squad.name ?? data.squad.linearLabel }
-      : null,
+    mode: 'simple',
     scale: scaleById(data.scale).id,
     deck: buildDeck(data.scale),
-    tasks: [],
-    currentTaskId: null,
-    // En simple se vota desde el principio; en linear, tras «activar votación».
-    votingActive: mode === 'simple',
-    results: {},
     revealed: false,
     round: 1,
     status: 'open',
@@ -64,52 +55,6 @@ export async function createSession(data) {
     closedAt: null,
   });
   return ref.id;
-}
-
-// ── Modo Linear: squads y backlog ────────────────────────────────────────────
-
-/** Squads disponibles para refinar (unidades LEAN kind=squad, con label de Linear). */
-export async function listSquads() {
-  const snap = await getDocs(query(collection(db, 'leanTeams'), where('kind', '==', 'squad')));
-  return snap.docs
-    .map((d) => ({ id: d.id, name: d.data().name, linearLabel: d.data().linearLabel }))
-    .filter((s) => s.linearLabel && s.linearLabel !== 'undefined')
-    .sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? '')));
-}
-
-/** Backlog de un squad (issues de Linear con ese label), vía Cloud Function. */
-export async function listSquadBacklog(linearLabel) {
-  const { httpsCallable } = await import('firebase/functions');
-  const fn = httpsCallable(await getRegionalFunctions(), 'listSquadBacklog');
-  const res = await fn({ linearLabel });
-  return res.data?.tasks ?? [];
-}
-
-/** Fija las tareas del backlog a refinar (las que marcó el manager). Denormalizadas. */
-export function setSessionTasks(sessionId, tasks) {
-  const clean = (tasks ?? []).map((t) => ({
-    id: t.id, identifier: t.identifier ?? t.id, title: t.title ?? '', url: t.url ?? null,
-  }));
-  return updateDoc(doc(db, SESSIONS, sessionId), {
-    tasks: clean, currentTaskId: null, votingActive: false, revealed: false,
-  });
-}
-
-/** Marca la tarea actual a refinar: arranca en «discusión» (sin votar aún) y ronda limpia. */
-export function setCurrentTask(sessionId, taskId) {
-  return updateDoc(doc(db, SESSIONS, sessionId), {
-    currentTaskId: taskId, votingActive: false, revealed: false, round: increment(1),
-  });
-}
-
-/** El manager «activa la votación» de la tarea actual. */
-export function activateVoting(sessionId) {
-  return updateDoc(doc(db, SESSIONS, sessionId), { votingActive: true, revealed: false });
-}
-
-/** Guarda la estimación acordada de una tarea, asociada a su id de Linear. */
-export function saveEstimate(sessionId, taskId, value) {
-  return updateDoc(doc(db, SESSIONS, sessionId), { [`results.${taskId}`]: { value, at: serverTimestamp() } });
 }
 
 /** Título de la votación en curso: qué se está estimando (RMR-TSK-0482). */
@@ -210,7 +155,6 @@ export function revote(sessionId) {
   return updateDoc(doc(db, SESSIONS, sessionId), {
     round: increment(1),
     revealed: false,
-    votingActive: true,
   });
 }
 

@@ -31,7 +31,6 @@ import {
 import {
   joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
   watchSession, watchPlayers, watchVotes,
-  listSquadBacklog, setSessionTasks, setCurrentTask, activateVoting, saveEstimate,
   setSpectator, skipRound, unskipRound,
 } from '../../lib/poker.js';
 
@@ -48,10 +47,6 @@ export class PokerTable extends LitElement {
     _voteTab: { state: true },
     _axisC: { state: true },
     _axisE: { state: true },
-    _backlog: { state: true },
-    _backlogLoading: { state: true },
-    _selectedTaskIds: { state: true },
-    _estimateDraft: { state: true },
     _titleDraft: { state: true },
     _error: { state: true },
   };
@@ -96,24 +91,11 @@ export class PokerTable extends LitElement {
     .dist .chip { font-size: 0.82rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--rm-surface, #fff); border: 1px solid var(--rm-border, #dde7ec); color: var(--rm-text, #1e3a5f); }
     .lead { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; margin: 0.2rem 0 0.6rem; }
     .error { color: #b42318; font-size: 0.85rem; }
-    .backlog { list-style: none; margin: 0 0 0.6rem; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; max-height: 24rem; overflow-y: auto; }
-    .backlog li label { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.4rem 0.5rem; border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; cursor: pointer; line-height: 1.35; }
-    .backlog li label:hover { border-color: var(--teal); }
-    .ident { font-weight: 700; color: var(--rm-muted, #5b6b7d); font-size: 0.8rem; white-space: nowrap; }
-    .queue { list-style: none; margin: 0 0 1.2rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-    .queue li { display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #eef0f2); border-radius: 8px; }
-    .queue li.current { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 8%, transparent); }
-    .queue .qtitle { flex: 1; color: var(--rm-text, #1e3a5f); font-size: 0.9rem; }
-    .est { font-weight: 800; color: var(--rm-accent-700, var(--teal)); }
     /* Lo ya estimado en esta sesión: el recorrido, no solo el último número. */
     .agreements { margin-top: 1.1rem; border-top: 1px solid var(--rm-border, #dde7ec); padding-top: 0.8rem; }
     .agreements h3 { margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
     .agreements ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
     .agreements li { display: flex; align-items: baseline; gap: 0.6rem; font-size: 0.88rem; }
-    .task { margin: 0.4rem 0 1rem; }
-    .task h3 { margin: 0 0 0.35rem; font-size: 1.1rem; color: var(--rm-text, #1e3a5f); }
-    .linear-link { font-size: 0.82rem; font-weight: 600; color: var(--rm-accent-700, var(--teal)); text-decoration: none; }
-    .linear-link:hover { text-decoration: underline; }
     .est-input { width: 5rem; padding: 0.4rem 0.6rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
     /* El título es texto, no un número: necesita sitio para leerse entero. */
     #vt.est-input { width: min(28rem, 100%); }
@@ -140,17 +122,12 @@ export class PokerTable extends LitElement {
     this._voteTab = null;
     this._axisC = null;
     this._axisE = null;
-    this._backlog = [];
-    this._backlogLoading = false;
-    this._selectedTaskIds = new Set();
-    this._estimateDraft = '';
     this._titleDraft = '';
     this._error = '';
     this._subs = [];
     this._votesSub = null;
     this._joinedFor = null;
     this._lastRound = null;
-    this._backlogLoadedFor = null;
   }
 
   updated(changed) {
@@ -191,15 +168,8 @@ export class PokerTable extends LitElement {
       this._myVote = null;
       this._axisC = null;
       this._axisE = null;
-      this._estimateDraft = '';
     }
     this._lastRound = session.round;
-    // Modo Linear sin tareas aún: el manager carga el backlog del squad para elegir.
-    if (session.mode === 'linear' && !(session.tasks?.length) && this.canManage
-        && this._backlogLoadedFor !== session.squad?.linearLabel) {
-      this._backlogLoadedFor = session.squad?.linearLabel;
-      this._loadBacklog(session.squad?.linearLabel);
-    }
     // Suscribirse a los votos SOLO cuando el revelado está CONFIRMADO por el
     // servidor (no en la escritura pendiente): la regla lee `revealed` del
     // servidor, así que suscribirse con el revelado aún local da permission-denied.
@@ -237,17 +207,10 @@ export class PokerTable extends LitElement {
   get _myAxes() { return this._myVote?.round === this._round ? (this._myVote.axes ?? null) : null; }
   get _axesOn() { return axesAvailable(this._session); }
   get _activeVoteTab() { return this._axesOn ? (this._voteTab ?? 'ejes') : 'carta'; }
-  get _mode() { return this._session?.mode === 'linear' ? 'linear' : 'simple'; }
-  get _tasks() { return this._session?.tasks ?? []; }
-  get _currentTaskId() { return this._session?.currentTaskId ?? null; }
-  get _currentTask() { return this._tasks.find((t) => t.id === this._currentTaskId) ?? null; }
-  // En simple se vota siempre; en linear, solo tras «activar votación» de la tarea.
-  get _votingActive() { return this._mode !== 'linear' || this._session?.votingActive === true; }
-  get _results() { return this._session?.results ?? {}; }
   get _myPlayer() { return this._players.find((p) => p.uid === this.uid) ?? null; }
   get _amSpectator() { return isSpectator(this._myPlayer); }
   get _amSkipped() { return hasSkippedRound(this._myPlayer, this._round); }
-  get _canIVote() { return this._votingActive && !this._revealed && !this._amSpectator && !this._amSkipped; }
+  get _canIVote() { return !this._revealed && !this._amSpectator && !this._amSkipped; }
 
   async _toggleSpectator() {
     try { await setSpectator(this.sessionId, this.uid, !this._amSpectator); } catch (err) { this._onError(err); }
@@ -276,53 +239,18 @@ export class PokerTable extends LitElement {
     try { await revote(this.sessionId); } catch (err) { this._onError(err); }
   }
 
-  // ── Modo Linear: backlog, tareas y estimación ──────────────────────────────
-  async _loadBacklog(label) {
-    if (!label) return;
-    this._backlogLoading = true;
-    try { this._backlog = await listSquadBacklog(label); }
-    catch (err) { this._onError(err); }
-    finally { this._backlogLoading = false; }
-  }
-
-  _toggleTask(id) {
-    const next = new Set(this._selectedTaskIds);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    this._selectedTaskIds = next;
-  }
-
-  async _startRefinement() {
-    const tasks = this._backlog.filter((t) => this._selectedTaskIds.has(t.id));
-    if (!tasks.length) return;
-    try { await setSessionTasks(this.sessionId, tasks); } catch (err) { this._onError(err); }
-  }
-
-  async _pickTask(taskId) {
-    try { await setCurrentTask(this.sessionId, taskId); } catch (err) { this._onError(err); }
-  }
-
-  async _activateVoting() {
-    try { await activateVoting(this.sessionId); } catch (err) { this._onError(err); }
-  }
-
-  async _saveEstimate() {
-    const value = this._estimateDraft.trim();
-    if (!value || !this._currentTaskId) return;
-    try { await saveEstimate(this.sessionId, this._currentTaskId, value); } catch (err) { this._onError(err); }
-  }
-
   _renderControls() {
     if (this._revealed) return null;
     return html`<div class="controls">
       <label class="ctl"><input type="checkbox" .checked=${this._amSpectator}
         @change=${() => this._toggleSpectator()} /> Solo ver (no votar)</label>
-      ${this._votingActive && !this._amSpectator ? html`
+      ${!this._amSpectator ? html`
         <button class="ctl-btn" @click=${() => this._toggleSkip()}>${this._amSkipped ? 'Volver a la ronda' : 'Fuera de mi ámbito'}</button>` : null}
     </div>`;
   }
 
   _renderDeck() {
-    if (this._revealed || !this._votingActive) return null;
+    if (this._revealed) return null;
     if (this._amSpectator) return html`<p class="lead">Estás como observador: no votas en esta sesión.</p>`;
     if (this._amSkipped) return html`<p class="lead">Te has saltado esta ronda (fuera de tu ámbito).</p>`;
     // Sin escalera en el mazo (sesiones antiguas) solo hay carta directa, y una
@@ -539,95 +467,10 @@ export class PokerTable extends LitElement {
       ${this._renderAgreements()}`;
   }
 
-  _renderBacklogPicker() {
-    if (this._backlogLoading) return html`<p class="lead">Cargando el backlog de ${this._session.squad?.name}…</p>`;
-    if (!this._backlog.length) return html`<p class="lead">No hay tareas de backlog en «${this._session.squad?.name}».</p>`;
-    return html`
-      <p class="lead">Backlog de <strong>${this._session.squad?.name}</strong>. Marca las tareas a refinar.</p>
-      <ul class="backlog">
-        ${this._backlog.map((t) => html`<li>
-          <label><input type="checkbox" .checked=${this._selectedTaskIds.has(t.id)} @change=${() => this._toggleTask(t.id)} />
-            <span class="ident">${t.identifier}</span> <span>${t.title}</span></label>
-        </li>`)}
-      </ul>
-      <div class="bar">
-        <button class="primary" ?disabled=${!this._selectedTaskIds.size} @click=${() => this._startRefinement()}>
-          Empezar refinamiento (${this._selectedTaskIds.size})
-        </button>
-      </div>`;
-  }
-
-  _renderTaskQueue() {
-    return html`<ol class="queue">
-      ${this._tasks.map((t) => {
-        const isCurrent = t.id === this._currentTaskId;
-        const est = this._results[t.id]?.value;
-        return html`<li class=${isCurrent ? 'current' : ''}>
-          <span class="ident">${t.identifier}</span>
-          <span class="qtitle">${t.title}</span>
-          ${est != null ? html`<span class="est">${est}</span>` : null}
-          ${this.canManage && !isCurrent ? html`<button class="act" @click=${() => this._pickTask(t.id)}>Refinar</button>` : null}
-        </li>`;
-      })}
-    </ol>`;
-  }
-
-  _renderCurrentTask() {
-    const t = this._currentTask;
-    return html`
-      <div class="task">
-        <h3>${t.identifier} · ${t.title}</h3>
-        ${t.url ? html`<a class="linear-link" href=${t.url} target="_blank" rel="noopener">Abrir en Linear ↗</a>` : null}
-      </div>
-      ${this._renderVotingArea()}`;
-  }
-
-  _renderVotingArea() {
-    if (!this._votingActive) {
-      return html`
-        <div class="bar">
-          <span class="lead">En discusión — anotad en Linear. Cuando esté claro, a votar.</span>
-          ${this.canManage ? html`<button class="primary" @click=${() => this._activateVoting()}>Activar votación</button>` : null}
-        </div>
-        ${this._renderControls()}`;
-    }
-    return html`
-      ${this._renderControls()}
-      ${this._renderDeck()}
-      ${this._renderBar()}
-      ${this._renderPlayers()}
-      ${this._renderSummary()}
-      ${this._revealed && this.canManage ? this._renderSaveEstimate() : null}`;
-  }
-
-  _renderSaveEstimate() {
-    const saved = this._results[this._currentTaskId]?.value;
-    return html`<div class="bar">
-      <label class="lead" for="est">Estimación acordada:</label>
-      <input id="est" class="est-input" type="text" .value=${this._estimateDraft} placeholder="p. ej. 5"
-        @input=${(e) => { this._estimateDraft = e.target.value; }} />
-      <button class="primary" ?disabled=${!this._estimateDraft.trim()} @click=${() => this._saveEstimate()}>Guardar en la tarea</button>
-      ${saved != null ? html`<span class="lead">✓ Guardada: ${saved}</span>` : null}
-    </div>`;
-  }
-
-  _renderLinear() {
-    if (!this._tasks.length) {
-      return this.canManage
-        ? this._renderBacklogPicker()
-        : html`<p class="lead">El manager está preparando el backlog…</p>`;
-    }
-    return html`
-      ${this._renderTaskQueue()}
-      ${this._currentTask
-        ? this._renderCurrentTask()
-        : html`<p class="lead">${this.canManage ? 'Elige una tarea de la lista para refinar.' : 'Esperando a que el manager elija una tarea.'}</p>`}`;
-  }
-
   render() {
     if (!this._session) return html`<p class="lead">Cargando la mesa…</p>`;
     return html`
-      ${this._mode === 'linear' ? this._renderLinear() : this._renderSimple()}
+      ${this._renderSimple()}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}`;
   }
 }
