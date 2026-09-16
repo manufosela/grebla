@@ -9,7 +9,11 @@
  * no cambia nada.
  */
 
-/** Orden de presentación del mazo, de menor a mayor + las dos especiales. */
+/**
+ * Mazo de las sesiones convocadas ANTES de guardar el mazo en la sesión
+ * (RMR-TSK-0481). Se conserva tal cual para no invalidar sus votos: las
+ * sesiones nuevas usan los mazos fijos de POKER_SCALES.
+ */
 export const POKER_DECK = ['0', '1', '2', '3', '5', '8', '13', '20', '40', '100', '?', '☕'];
 
 /**
@@ -23,19 +27,24 @@ export const SPECIAL_CARDS = Object.freeze(['?', '☕']);
  * en números: quien estima por tallas compara tamaños sin fingir precisión, y
  * ahí una media entre S y XL no significa nada — por eso el resumen solo
  * promedia lo numérico, y eso vale para las dos escalas por igual.
+ *
+ * Los mazos son FIJOS (RMR-TSK-0515): todo el equipo estima con las mismas
+ * cartas. Fibonacci va del 1 al 21 —sin 0, porque si algo existe cuesta algo, y
+ * sin 40 ni 100, porque eso no se estima: se parte—. Es la escalera del taller
+ * «Estimar en magnitud».
  */
 export const POKER_SCALES = Object.freeze([
   Object.freeze({
     id: 'fibonacci',
     label: 'Fibonacci',
     hint: 'El salto creciente obliga a decidir el orden de magnitud.',
-    cards: Object.freeze(['0', '1', '2', '3', '5', '8', '13', '20', '40', '100']),
+    cards: Object.freeze(['1', '2', '3', '5', '8', '13', '21']),
   }),
   Object.freeze({
     id: 'tallas',
     label: 'Tallas de camiseta',
     hint: 'Comparar tamaños sin fingir precisión.',
-    cards: Object.freeze(['XS', 'S', 'M', 'L', 'XL', 'XXL']),
+    cards: Object.freeze(['XS', 'S', 'M', 'L', 'XL']),
   }),
 ]);
 
@@ -62,22 +71,15 @@ export function deckOf(session) {
 }
 
 /**
- * Mazo completo a partir de lo elegido al convocar: las cartas marcadas, en el
- * orden de su escala, más las especiales.
- *
- * Si no se marca ninguna, va la escala entera: convocar una estimación sin
- * cartas dejaría una mesa donde no se puede votar, y eso no es una elección —
- * es un descuido.
+ * Mazo completo de una escala: sus cartas más las especiales. Se guarda en la
+ * sesión al convocarla, para que las cartas no cambien a mitad de estimación
+ * aunque la escala cambie después.
  *
  * @param {string} scaleId
- * @param {ReadonlyArray<string>} [chosen]
  * @returns {string[]}
  */
-export function buildDeck(scaleId, chosen) {
-  const scale = scaleById(scaleId);
-  const marcadas = Array.isArray(chosen) ? scale.cards.filter((c) => chosen.includes(c)) : [];
-  const cartas = marcadas.length > 0 ? marcadas : [...scale.cards];
-  return [...cartas, ...SPECIAL_CARDS];
+export function buildDeck(scaleId) {
+  return [...scaleById(scaleId).cards, ...SPECIAL_CARDS];
 }
 
 /**

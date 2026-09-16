@@ -66,27 +66,24 @@ describe('deckOf: el mazo es de la sesión', () => {
   });
 });
 
-describe('buildDeck: qué cartas quedan al convocar', () => {
-  it('solo las marcadas, en el orden de la escala', () => {
-    expect(buildDeck('fibonacci', ['8', '1', '3'])).toEqual(['1', '3', '8', '?', '☕']);
+describe('buildDeck: el mazo de una escala es fijo (RMR-TSK-0515)', () => {
+  it('Fibonacci va del 1 al 21, con «no sé» y «pausa» al final', () => {
+    // Sin 0: si algo existe, cuesta algo. Sin 40 ni 100: eso no se estima, se parte.
+    expect(buildDeck('fibonacci')).toEqual(['1', '2', '3', '5', '8', '13', '21', '?', '☕']);
   });
 
-  it('las especiales van siempre: «no sé» y «pausa» no se pueden quitar', () => {
-    // Sin ellas, quien no lo tiene claro se ve obligado a inventar un número.
-    expect(buildDeck('tallas', ['M'])).toEqual(['M', '?', '☕']);
+  it('las tallas van de XS a XL', () => {
+    expect(buildDeck('tallas')).toEqual(['XS', 'S', 'M', 'L', 'XL', '?', '☕']);
   });
 
-  it('sin marcar ninguna va la escala entera, no una mesa sin cartas', () => {
-    expect(buildDeck('tallas')).toEqual(['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕']);
-    expect(buildDeck('tallas', [])).toEqual(['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕']);
+  it('las especiales van siempre: quien no lo tiene claro no inventa un número', () => {
+    for (const id of ['fibonacci', 'tallas']) {
+      expect(buildDeck(id).slice(-2)).toEqual(['?', '☕']);
+    }
   });
 
   it('una escala desconocida cae en Fibonacci en vez de dejar la mesa vacía', () => {
-    expect(buildDeck('inventada', ['5'])).toEqual(['5', '?', '☕']);
-  });
-
-  it('ignora cartas que no son de la escala elegida', () => {
-    expect(buildDeck('tallas', ['M', '13'])).toEqual(['M', '?', '☕']);
+    expect(buildDeck('inventada')).toEqual(buildDeck('fibonacci'));
   });
 });
 
