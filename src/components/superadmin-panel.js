@@ -1179,7 +1179,7 @@ export class SuperadminPanel extends LitElement {
       <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
       <td>${u.email ?? html`<span class="muted">—</span>`}</td>
       <td colspan="2"><span class="muted">${detalle}</span></td>
-      <td>
+      <td class="stack">
         ${retirando
           ? html`<span class="confirm confirm-wrap">¿Borrar la cuenta? Se borra su login y su usuario; no podrá volver a entrar. <button class="yes" @click=${() => this._removeAccount(u)}>Sí, borrar</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
           : html`<button class="primary" @click=${() => this._createPersonForAccount(u)}>Crear ficha</button>
