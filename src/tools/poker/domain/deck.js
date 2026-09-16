@@ -8,12 +8,6 @@
  * no cambia nada.
  */
 
-/**
- * Mazo de las sesiones convocadas ANTES de guardar el mazo en la sesión
- * (RMR-TSK-0481). Se conserva tal cual para no invalidar sus votos: las
- * sesiones nuevas usan los mazos fijos de POKER_SCALES.
- */
-export const POKER_DECK = ['0', '1', '2', '3', '5', '8', '13', '20', '40', '100', '?', '☕'];
 
 /**
  * «Partir» (RMR-TSK-0516): la subtarea es demasiado grande para estimarla, y
@@ -71,20 +65,17 @@ export function scaleById(id) {
 }
 
 /**
- * Mazo de UNA sesión: el que se guardó al convocarla y, si no lo lleva, el
- * Fibonacci de siempre.
+ * Mazo de UNA sesión: el de su escala, siempre (RMR-BUG-0122). Antes se leía
+ * el mazo guardado al convocar, y las sesiones anteriores a eso caían a un
+ * Fibonacci viejo (0…100, ?, ☕) sin el cuadro. Los valores los decide la
+ * escala, no lo que se guardó un día: una sesión antigua vota con las mismas
+ * cartas que una nueva. Sin escala guardada, Fibonacci.
  *
- * La reserva no es cortesía: las sesiones creadas antes de esto no tienen mazo
- * guardado y están en curso. Cambiarles las cartas a mitad de una estimación
- * invalidaría los votos ya emitidos.
- *
- * @param {{ deck?: ReadonlyArray<string>|null }|null|undefined} session
+ * @param {{ scale?: string }|null|undefined} session
  * @returns {ReadonlyArray<string>}
  */
 export function deckOf(session) {
-  const guardado = session?.deck;
-  if (!Array.isArray(guardado) || guardado.length === 0) return POKER_DECK;
-  return guardado;
+  return buildDeck(session?.scale);
 }
 
 /**
@@ -102,7 +93,7 @@ export function buildDeck(scaleId) {
 /**
  * ¿Vale esta carta EN ESTA SESIÓN? Sustituye a mirar la constante global: una
  * sesión de tallas no puede aceptar un 13 solo porque exista en el otro mazo.
- * @param {{ deck?: ReadonlyArray<string>|null }|null|undefined} session
+ * @param {{ scale?: string }|null|undefined} session
  * @param {string} card
  * @returns {boolean}
  */
@@ -118,9 +109,4 @@ export function isNumericCard(card) {
 /** Valor numérico de una carta, o null si es especial (`?`/`☕`) o inválida. */
 export function cardNumber(card) {
   return isNumericCard(card) ? Number(card) : null;
-}
-
-/** ¿Pertenece la carta al mazo? Valida el voto antes de escribirlo. */
-export function isValidCard(card) {
-  return POKER_DECK.includes(card);
 }

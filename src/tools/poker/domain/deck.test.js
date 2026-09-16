@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { POKER_DECK, isNumericCard, cardNumber, isValidCard, deckOf, buildDeck, isValidCardFor, cardLabel } from './deck.js';
-
-describe('POKER_DECK', () => {
-  it('es la escala Fibonacci de planning poker más las dos especiales', () => {
-    expect(POKER_DECK).toEqual(['0', '1', '2', '3', '5', '8', '13', '20', '40', '100', '?', '☕']);
-  });
-});
+import { isNumericCard, cardNumber, deckOf, buildDeck, isValidCardFor, cardLabel } from './deck.js';
 
 describe('isNumericCard', () => {
   it('las cartas de número son numéricas', () => {
@@ -33,20 +27,6 @@ describe('cardNumber', () => {
   });
 });
 
-describe('isValidCard', () => {
-  it('acepta solo cartas del mazo', () => {
-    expect(isValidCard('13')).toBe(true);
-    expect(isValidCard('☕')).toBe(true);
-  });
-
-  it('rechaza cualquier valor fuera del mazo', () => {
-    expect(isValidCard('7')).toBe(false);
-    expect(isValidCard('99')).toBe(false);
-    expect(isValidCard('')).toBe(false);
-    expect(isValidCard(undefined)).toBe(false);
-  });
-});
-
 /**
  * Escalas y mazo por sesión (RMR-TSK-0481).
  *
@@ -54,14 +34,14 @@ describe('isValidCard', () => {
  * que existieran las escalas está en curso, y cambiarle las cartas a mitad de
  * una estimación invalidaría los votos ya emitidos.
  */
-describe('deckOf: el mazo es de la sesión', () => {
-  it('usa el que se guardó al convocarla', () => {
-    expect(deckOf({ deck: ['S', 'M', 'L', '?'] })).toEqual(['S', 'M', 'L', '?']);
+describe('deckOf: el mazo es el de la escala de la sesión (RMR-BUG-0122)', () => {
+  it('sale de la escala, no de lo que se guardó al convocar', () => {
+    expect(deckOf({ scale: 'tallas', deck: ['S', 'M', '?'] })).toEqual(['XS', 'S', 'M', 'L', 'XL', 'partir']);
   });
 
-  it('una sesión SIN mazo guardado sigue con el Fibonacci de siempre', () => {
-    for (const s of [{}, { deck: null }, { deck: [] }, null, undefined]) {
-      expect(deckOf(s)).toEqual(POKER_DECK);
+  it('una sesión antigua sin escala vota con el Fibonacci de ahora, no con el de 0 a 100', () => {
+    for (const s of [{}, { deck: ['0', '100', '?'] }, null, undefined]) {
+      expect(deckOf(s)).toEqual(['1', '2', '3', '5', '8', '13', 'partir']);
     }
   });
 });
@@ -96,14 +76,15 @@ describe('buildDeck: el mazo de una escala es fijo (RMR-TSK-0515)', () => {
 
 describe('isValidCardFor: se vota lo que ESA sesión permite', () => {
   it('una sesión de tallas no acepta un número del otro mazo', () => {
-    const sesion = { deck: ['S', 'M', 'L', '?', '☕'] };
+    const sesion = { scale: 'tallas' };
     expect(isValidCardFor(sesion, 'M')).toBe(true);
     expect(isValidCardFor(sesion, '13')).toBe(false);
   });
 
-  it('una sesión antigua acepta lo de siempre', () => {
+  it('una sesión antigua acepta el Fibonacci de ahora y ya no el 100 ni el «?»', () => {
     expect(isValidCardFor({}, '13')).toBe(true);
-    expect(isValidCardFor({}, 'M')).toBe(false);
+    expect(isValidCardFor({}, '100')).toBe(false);
+    expect(isValidCardFor({}, '?')).toBe(false);
   });
 });
 
