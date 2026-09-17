@@ -5,23 +5,26 @@ import Base from '../layouts/Base.astro';
  * Organigrama (RMR-PRP-0002): consulta de SOLO LECTURA del organigrama de la
  * organización, en pirámide invertida (liderazgo afectivo). Accesible por
  * cualquier empleado logado — no edita nada (la edición vive en el panel del
- * superadmin). El componente <org-chart> lee /orgRoles y /orgBranches al montar.
+ * superadmin). <org-views> conmuta entre la pirámide GREBLA (<org-chart>, lee
+ * /orgRoles y /orgBranches) y la vista estándar de personas (<org-people-chart>,
+ * callable orgDirectory) — RMR-PCS-0042.
  */
 ---
 
 <Base title="GREBLA — Organigrama" requireAuth={true}>
   <tool-nav href="/" name="Organigrama" icon="🔻"></tool-nav>
   <p class="page-lead">
-    Así se organiza la casa. En el liderazgo afectivo la pirámide se invierte:
-    quien más responsabilidad tiene está abajo, sosteniendo a todo el equipo.
+    Así se organiza la casa, en dos vistas: la pirámide invertida de GREBLA
+    (quien más responsabilidad tiene está abajo, sosteniendo a todo el equipo)
+    y el organigrama estándar de personas, cada una bajo quien le dirige.
   </p>
 
-  <org-chart></org-chart>
+  <org-views></org-views>
 </Base>
 
 <script>
   import '../components/common/tool-nav.js';
-  import '../components/org-chart.js';
+  import '../components/org-views.js';
   import { onUserChanged } from '../lib/auth.js';
   import { resolveAccess } from '../lib/access.js';
   import { canGovern } from '../lib/accessRoles.js';
@@ -33,6 +36,6 @@ import Base from '../layouts/Base.astro';
     if (!user) return;
     let isSuperadmin = false;
     try { isSuperadmin = canGovern(await resolveAccess(user)); } catch { /* sin gobierno */ }
-    await guardToolPage('organigrama', user, { isSuperadmin, appEl: document.querySelector('org-chart') });
+    await guardToolPage('organigrama', user, { isSuperadmin, appEl: document.querySelector('org-views') });
   });
 </script>
