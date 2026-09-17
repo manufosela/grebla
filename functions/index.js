@@ -24,6 +24,7 @@ import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './
 import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders } from './docTokens.js';
+import { projectDirectory } from './orgDirectory.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -2828,6 +2829,19 @@ export const listKudosRecipients = onCall({ region: 'europe-west1' }, async (req
     .map((d) => ({ personId: d.id, name: d.data().name ?? 'Sin nombre' }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
   return { people };
+});
+
+/**
+ * Censo para el organigrama de PERSONAS (RMR-PCS-0042 · F1): nombre, rol
+ * GREBLA, rama, a quién reporta y el bloque `notion` (puesto, nivel,
+ * departamento, equipo…) cuando el censo viene de allí. Cualquier logado lo
+ * puede ver —es el organigrama— y por eso la proyección es cerrada
+ * (functions/orgDirectory.js): nada de carrera, valoraciones ni contacto.
+ */
+export const orgDirectory = onCall({ region: 'europe-west1' }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const snap = await getFirestore().collection('people').get();
+  return { people: projectDirectory(snap.docs.map((d) => ({ id: d.id, data: d.data() }))) };
 });
 
 /**
