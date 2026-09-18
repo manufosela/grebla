@@ -107,6 +107,20 @@ export async function fetchLinearIssue(identifier) {
 }
 
 /**
+ * Envía a Linear las estimaciones por gremio de una tarea cerrada (RMR-PCS-0043 ·
+ * F5): una sub-issue por gremio y un comentario resumen en la padre. Solo el
+ * organizador; la Cloud Function guarda los enlaces en la tarea.
+ * @param {string} sessionId @param {string} taskId
+ * @returns {Promise<{ linear: { parent: object, subIssues: object[] }, created: number, skipped: number }>}
+ */
+export async function pushLinearEstimates(sessionId, taskId) {
+  const { httpsCallable } = await import('firebase/functions');
+  const fn = httpsCallable(await getRegionalFunctions(), 'pushLinearEstimates');
+  const res = await fn({ sessionId, taskId });
+  return res.data;
+}
+
+/**
  * Referencia de Linear de la votación en curso y su ficha, para que todos la
  * vean al lado de la mesa. Con referencia vacía se quitan las dos.
  * @param {string} sessionId @param {string} ref @param {object|null} issue
