@@ -12,7 +12,8 @@ import { onUserChanged } from '../lib/auth.js';
 import { fetchOrgDirectory } from '../lib/orgDirectory.js';
 import { listOrgRoles } from '../lib/orgRoles.js';
 import { branchColor } from '../tools/team/domain/orgRoles.js';
-import { buildPeopleTree, peopleTreeLayout, personTitle } from '../tools/team/domain/orgPeopleTree.js';
+import { buildPeopleTree, peopleTreeLayout, personTitle, splitLoose } from '../tools/team/domain/orgPeopleTree.js';
+import './zoom-port.js';
 
 const NODE = { nodeWidth: 208, nodeHeight: 78, gapX: 22, rowHeight: 124 };
 
@@ -22,7 +23,6 @@ export class OrgPeopleChart extends LitElement {
     _roleLabels: { state: true },
     _ready: { state: true },
     _error: { state: true },
-    _fit: { state: true },
   };
 
   static styles = css`
@@ -30,11 +30,7 @@ export class OrgPeopleChart extends LitElement {
     .lead { color: var(--rm-muted, #5b6b7d); font-size: 0.95rem; margin: 0 0 0.9rem; }
     .empty, .error { color: var(--rm-muted, #5b6b7d); }
     .error { color: var(--rm-danger, #dc2626); }
-    .bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); }
-    .bar button { border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827); border-radius: 8px; padding: 0.3rem 0.7rem; font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
-    .bar button:hover { border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
-    .port { position: relative; overflow: auto; max-height: min(72vh, 680px); border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; background: color-mix(in srgb, var(--rm-text, #111827) 3%, transparent); padding: 1.2rem; box-sizing: border-box; }
-    .canvas { position: relative; transform-origin: 0 0; }
+    .bar { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin-bottom: 0.4rem; }
     .links { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
     .links path { fill: none; stroke: color-mix(in srgb, var(--rm-text, #111827) 35%, transparent); stroke-width: 1.6; }
     .node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 0.15rem; padding: 0.5rem 0.7rem 0.5rem 0.95rem; border: 1.5px solid var(--rm-border, #d1d5db); border-left: 5px solid var(--b, var(--rm-accent, #2a9d8f)); border-radius: 10px; background: var(--rm-surface, #fff); box-shadow: 0 1px 3px rgba(17, 24, 39, 0.08); overflow: hidden; }
@@ -45,6 +41,11 @@ export class OrgPeopleChart extends LitElement {
     .meta { font-size: 0.7rem; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em; }
     .count { position: absolute; top: 0.35rem; right: 0.45rem; font-size: 0.66rem; font-weight: 800; color: var(--rm-muted, #5b6b7d); border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; padding: 0.05rem 0.4rem; background: var(--rm-surface, #fff); }
     .orphan-tag { font-size: 0.66rem; color: var(--rm-danger, #dc2626); }
+    /* Personas sueltas: sin manager y sin equipo. Fuera del árbol, en rejilla. */
+    .loose { margin-top: 1.1rem; }
+    .loose h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.5rem; }
+    .loose-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
+    .loose .node { position: static; height: auto; min-height: 3.6rem; }
   `;
 
   constructor() {
@@ -53,7 +54,6 @@ export class OrgPeopleChart extends LitElement {
     this._roleLabels = new Map();
     this._ready = false;
     this._error = '';
-    this._fit = true;
     this._off = null;
   }
 
@@ -90,46 +90,51 @@ export class OrgPeopleChart extends LitElement {
     if (this._error) return html`<p class="error">${this._error}</p>`;
     const tree = buildPeopleTree(this._people);
     if (tree.total === 0) return html`<p class="empty">Todavía no hay personas dadas de alta.</p>`;
-    const layout = peopleTreeLayout(tree.roots, NODE);
+    const { tree: roots, loose } = splitLoose(tree.roots);
+    const layout = peopleTreeLayout(roots, NODE);
     return html`
       <p class="lead">Organigrama estándar: cada persona debajo de quien le dirige.</p>
-      <div class="bar">
-        <span>${tree.total} personas · ${tree.roots.length} ${tree.roots.length === 1 ? 'raíz' : 'raíces'}</span>
-        <button type="button" @click=${() => { this._fit = !this._fit; }}>${this._fit ? 'Tamaño real' : 'Ajustar al ancho'}</button>
-      </div>
-      <div class="port">${this._renderCanvas(layout)}</div>`;
+      <div class="bar">${tree.total} personas · ${roots.length} ${roots.length === 1 ? 'raíz' : 'raíces'}${loose.length ? ` · ${loose.length} sin asignar` : ''}</div>
+      ${roots.length ? html`<zoom-port .width=${layout.width} .height=${layout.height}>
+        <svg class="links" width=${layout.width} height=${layout.height} aria-hidden="true">
+          ${layout.links.map((l) => svg`<path d=${l.d} />`)}
+        </svg>
+        ${layout.nodes.map((n) => this._renderNode(n))}
+      </zoom-port>` : null}
+      ${this._renderLoose(loose)}`;
   }
 
-  _renderCanvas(layout) {
-    const scale = this._fit ? Math.min(1, (this.clientWidth - 48) / Math.max(1, layout.width)) : 1;
-    return html`<div class="canvas" style="width:${layout.width}px;height:${layout.height}px;transform:scale(${scale});margin-bottom:${(scale - 1) * layout.height}px">
-      <svg class="links" width=${layout.width} height=${layout.height} aria-hidden="true">
-        ${layout.links.map((l) => svg`<path d=${elbow(l)} />`)}
-      </svg>
-      ${layout.nodes.map((n) => this._renderNode(n))}
-    </div>`;
+  /** Sin manager y sin equipo: no cuelgan de nadie, así que no entran en el árbol. */
+  _renderLoose(loose) {
+    if (loose.length === 0) return null;
+    return html`<section class="loose">
+      <h2>Sin manager asignado (${loose.length})</h2>
+      <div class="loose-grid">${loose.map((node) => this._renderNode({ node, x: 0, y: 0 }, false))}</div>
+    </section>`;
   }
 
-  _renderNode({ node, x, y }) {
+  _renderNode({ node, x, y }, positioned = true) {
     const p = node.person;
     const title = personTitle(p, this._roleLabels);
     const meta = [p.notion?.department, p.notion?.team].filter(Boolean).join(' · ') || p.orgBranch || '';
-    const left = x - NODE.nodeWidth / 2;
-    const top = y - NODE.nodeHeight / 2;
+    const box = positioned
+      ? `left:${x - NODE.nodeWidth / 2}px;top:${y - NODE.nodeHeight / 2}px;width:${NODE.nodeWidth}px;height:${NODE.nodeHeight}px;`
+      : '';
     return html`<div class="node ${node.orphan ? 'orphan' : ''}" data-person-id=${p.personId}
-      style="left:${left}px;top:${top}px;width:${NODE.nodeWidth}px;height:${NODE.nodeHeight}px;--b:${branchColor(p.orgBranch)}">
+      style="${box}--b:${branchColor(p.orgBranch)}">
       ${node.reports > 0 ? html`<span class="count" title="Personas a su cargo, directas e indirectas">${node.reports}</span>` : null}
       <span class="name">${p.name}</span>
       ${title ? html`<span class="title">${title}</span>` : null}
-      ${node.orphan ? html`<span class="orphan-tag">Sin manager en el censo</span>` : (meta ? html`<span class="meta">${meta}</span>` : null)}
+      ${this._renderFoot(node, meta)}
     </div>`;
   }
-}
 
-/** Arista en codo: baja del padre, cruza y baja al hijo. */
-function elbow({ x1, y1, x2, y2 }) {
-  const midY = (y1 + y2) / 2;
-  return `M${x1},${y1} V${midY} H${x2} V${y2}`;
+  /** Pie de la tarjeta: el aviso de huérfano manda sobre el departamento · equipo. */
+  _renderFoot(node, meta) {
+    if (node.orphan) return html`<span class="orphan-tag">Sin manager en el censo</span>`;
+    if (meta) return html`<span class="meta">${meta}</span>`;
+    return null;
+  }
 }
 
 if (!customElements.get('org-people-chart')) customElements.define('org-people-chart', OrgPeopleChart);
