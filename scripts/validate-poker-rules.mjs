@@ -103,6 +103,24 @@ try {
   await check('un miembro NO escribe el voto de OTRO',
     assertFails(setDoc(doc(alice, 'pokerSessions', 'hidden', 'votes', 'bob-uid'), { value: '1', round: 1 })));
 
+  console.log('Gremio del asiento (RMR-PCS-0043 · F2): el dueño solo pone el gremio ajeno:');
+  await check('el dueño ASIGNA gremio a un asiento ajeno',
+    assertSucceeds(updateDoc(doc(leader, 'pokerSessions', 'hidden', 'players', 'alice-uid'), { guilds: ['QA'] })));
+  await check('el dueño NO toca otra cosa del asiento ajeno (nombre)',
+    assertFails(updateDoc(doc(leader, 'pokerSessions', 'hidden', 'players', 'alice-uid'), { guilds: ['QA'], name: 'Otra' })));
+  await check('un miembro NO pone el gremio de OTRO',
+    assertFails(updateDoc(doc(alice, 'pokerSessions', 'hidden', 'players', 'bob-uid'), { guilds: ['QA'] })));
+  await check('un miembro SÍ pone su propio gremio al entrar',
+    assertSucceeds(updateDoc(doc(alice, 'pokerSessions', 'hidden', 'players', 'alice-uid'), { guilds: ['Backend PHP'] })));
+
+  console.log('Gremio del voto: solo uno del propio asiento:');
+  await check('un miembro VOTA con un gremio de su asiento',
+    assertSucceeds(setDoc(doc(alice, 'pokerSessions', 'hidden', 'votes', 'alice-uid'), { value: '8', round: 1, guild: 'Backend PHP' })));
+  await check('un miembro NO vota con un gremio que no es suyo',
+    assertFails(setDoc(doc(alice, 'pokerSessions', 'hidden', 'votes', 'alice-uid'), { value: '8', round: 1, guild: 'iOS' })));
+  await check('un voto sin gremio (tarea general) sigue valiendo',
+    assertSucceeds(setDoc(doc(alice, 'pokerSessions', 'hidden', 'votes', 'alice-uid'), { value: '8', round: 1, guild: null })));
+
   console.log('Revelar, tema y ronda: solo el dueño (RMR-TSK-0522):');
   await check('un miembro NO revela: el primero que se impacienta no destapa las cartas de los demás',
     assertFails(updateDoc(doc(alice, 'pokerSessions', 'hidden'), { revealed: true })));

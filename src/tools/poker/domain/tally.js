@@ -37,8 +37,47 @@ export function hasSkippedRound(player, round) {
 }
 
 /** Jugadores que SÍ votan en la ronda: ni observadores ni fuera de ámbito. */
-export function activeVoters(players, round) {
-  return (players ?? []).filter((p) => !isSpectator(p) && !hasSkippedRound(p, round));
+// ── Gremio del asiento (RMR-PCS-0043 · F2) ───────────────────────────────────
+// El asiento lleva los gremios de la ficha (o los que asignó el organizador).
+// En una tarea con gremios solo votan los asientos de esos gremios; una tarea
+// sin gremios es general y votan todos.
+
+/** @returns {string[]} gremios del asiento */
+export function seatGuilds(player) {
+  return Array.isArray(player?.guilds) ? player.guilds : [];
+}
+
+/** @returns {string[]} gremios de la tarea (vacío = general) */
+function taskGuildList(task) {
+  return Array.isArray(task?.guilds) ? task.guilds : [];
+}
+
+/**
+ * Gremios con los que ESTE asiento puede votar ESTA tarea (intersección). En
+ * una tarea general no hay gremio que elegir: vacío.
+ */
+export function guildsForTask(player, task) {
+  const t = taskGuildList(task);
+  return t.length === 0 ? [] : seatGuilds(player).filter((g) => t.includes(g));
+}
+
+/** ¿Puede votar esta tarea? Tarea general, todos; con gremios, solo quien los tiene. */
+export function eligibleFor(player, task) {
+  return taskGuildList(task).length === 0 || guildsForTask(player, task).length > 0;
+}
+
+/**
+ * Con qué gremio cuenta el voto sin preguntar: el único posible. Con varios,
+ * null (hay que elegir); en tarea general, null (no aplica).
+ */
+export function impliedGuild(player, task) {
+  const g = guildsForTask(player, task);
+  return g.length === 1 ? g[0] : null;
+}
+
+/** Votantes activos de la ronda; con `task`, solo los elegibles para ella. */
+export function activeVoters(players, round, task = null) {
+  return (players ?? []).filter((p) => !isSpectator(p) && !hasSkippedRound(p, round) && (task === null || eligibleFor(p, task)));
 }
 
 /** Cuántos votantes ACTIVOS han votado (nunca supera al total de activos). */
@@ -68,9 +107,9 @@ export function allVoted(players, round) {
  * un 8 por esfuerzo.
  * @returns {Array<{uid:string,name:string,value:string|null,axes:{complexity:number,effort:number}|null}>}
  */
-export function revealedVotes(players, votesByUid, round) {
-  return (players ?? [])
-    .filter((p) => hasVotedThisRound(p, round) && !isSpectator(p) && !hasSkippedRound(p, round))
+export function revealedVotes(players, votesByUid, round, task = null) {
+  return activeVoters(players, round, task)
+    .filter((p) => hasVotedThisRound(p, round))
     .map((p) => {
       const vote = voteFor(votesByUid, p.uid);
       const actual = vote?.round === round;
@@ -79,6 +118,7 @@ export function revealedVotes(players, votesByUid, round) {
         name: p.name ?? '',
         value: actual ? vote.value : null,
         axes: actual && vote.axes ? { complexity: vote.axes.complexity, effort: vote.axes.effort } : null,
+        guild: actual && typeof vote.guild === 'string' ? vote.guild : null,
       };
     });
 }

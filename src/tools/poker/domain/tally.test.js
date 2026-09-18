@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasVotedThisRound, countVoted, allVoted, revealedVotes, judgeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted } from './tally.js';
+import { hasVotedThisRound, countVoted, allVoted, revealedVotes, judgeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted, seatGuilds, guildsForTask, eligibleFor, impliedGuild } from './tally.js';
 
 const player = (uid, votedRound) => ({ uid, name: uid, votedRound });
 
@@ -76,25 +76,25 @@ describe('revealedVotes', () => {
 
   it('devuelve la carta de cada jugador que votó esta ronda', () => {
     expect(revealedVotes(players, votes, 5)).toEqual([
-      { uid: 'a', name: 'a', value: '8', axes: null },
-      { uid: 'b', name: 'b', value: '13', axes: null },
+      { uid: 'a', name: 'a', value: '8', axes: null, guild: null },
+      { uid: 'b', name: 'b', value: '13', axes: null, guild: null },
     ]);
   });
 
   it('ignora votos de rondas anteriores aunque el voto exista', () => {
     const stale = { a: { value: '8', round: 4 } };
-    expect(revealedVotes([player('a', 5)], stale, 5)).toEqual([{ uid: 'a', name: 'a', value: null, axes: null }]);
+    expect(revealedVotes([player('a', 5)], stale, 5)).toEqual([{ uid: 'a', name: 'a', value: null, axes: null, guild: null }]);
   });
 
   it('funciona igual con un Map', () => {
     const map = new Map([['a', { value: '20', round: 5 }]]);
-    expect(revealedVotes([player('a', 5)], map, 5)).toEqual([{ uid: 'a', name: 'a', value: '20', axes: null }]);
+    expect(revealedVotes([player('a', 5)], map, 5)).toEqual([{ uid: 'a', name: 'a', value: '20', axes: null, guild: null }]);
   });
 
   it('un voto por ejes trae complejidad y esfuerzo: el debate empieza por descomponer la carta', () => {
     const conEjes = { a: { value: '8', round: 5, axes: { complexity: 5, effort: 1, extra: 'no' } } };
     expect(revealedVotes([player('a', 5)], conEjes, 5)).toEqual([
-      { uid: 'a', name: 'a', value: '8', axes: { complexity: 5, effort: 1 } },
+      { uid: 'a', name: 'a', value: '8', axes: { complexity: 5, effort: 1 }, guild: null },
     ]);
   });
 });
@@ -164,5 +164,42 @@ describe('judgeVotes', () => {
   it('sin cartas no hay nada que juzgar', () => {
     expect(judgeVotes([])).toEqual({ total: 0, distribution: [], consensus: false, agreed: null, lowest: null, highest: null });
     expect(judgeVotes(null).agreed).toBeNull();
+  });
+});
+
+describe('gremio del asiento (RMR-PCS-0043 · F2)', () => {
+  const ana = { uid: 'a', name: 'Ana', guilds: ['Backend PHP', 'QA'] };
+  const bea = { uid: 'b', name: 'Bea', guilds: ['iOS'] };
+  const sin = { uid: 's', name: 'Sin gremio' };
+  const tarea = { id: 't', title: 'x', guilds: ['Backend PHP', 'QA'] };
+  const general = { id: 'g', title: 'y', guilds: [] };
+
+  it('seatGuilds y guildsForTask: la intersección con la tarea; en general, ninguno', () => {
+    expect(seatGuilds(ana)).toEqual(['Backend PHP', 'QA']);
+    expect(seatGuilds(sin)).toEqual([]);
+    expect(guildsForTask(ana, tarea)).toEqual(['Backend PHP', 'QA']);
+    expect(guildsForTask(bea, tarea)).toEqual([]);
+    expect(guildsForTask(ana, general)).toEqual([]);
+  });
+
+  it('eligibleFor: tarea general para todos; con gremios, solo quien los tiene', () => {
+    expect([ana, bea, sin].map((p) => eligibleFor(p, tarea))).toEqual([true, false, false]);
+    expect([ana, bea, sin].map((p) => eligibleFor(p, general))).toEqual([true, true, true]);
+    expect(eligibleFor(bea, { title: 'vieja sin campo' })).toBe(true);
+  });
+
+  it('impliedGuild: el único posible; con varios o en general, hay que elegir o no aplica', () => {
+    expect(impliedGuild(bea, { guilds: ['iOS', 'QA'] })).toBe('iOS');
+    expect(impliedGuild(ana, tarea)).toBeNull();
+    expect(impliedGuild(ana, general)).toBeNull();
+  });
+
+  it('activeVoters y revealedVotes con tarea dejan fuera a quien no es del gremio, y el voto trae su gremio', () => {
+    const players = [ana, bea, { ...sin, votedRound: 1 }, { ...ana, uid: 'a2', votedRound: 1 }];
+    expect(activeVoters(players, 1, tarea).map((p) => p.uid)).toEqual(['a', 'a2']);
+    expect(activeVoters(players, 1).map((p) => p.uid)).toEqual(['a', 'b', 's', 'a2']);
+    const votos = { a2: { value: '5', round: 1, guild: 'QA' }, s: { value: '8', round: 1 } };
+    expect(revealedVotes(players, votos, 1, tarea)).toEqual([{ uid: 'a2', name: 'Ana', value: '5', axes: null, guild: 'QA' }]);
+    expect(revealedVotes(players, votos, 1).map((v) => [v.uid, v.guild])).toEqual([['s', null], ['a2', 'QA']]);
   });
 });

@@ -293,15 +293,24 @@ export function deleteSession(sessionId) {
  * su voto de la ronda en curso).
  * @param {string} sessionId @param {string} uid @param {string} name
  */
-export async function joinSession(sessionId, uid, name, { spectator = false } = {}) {
+export async function joinSession(sessionId, uid, name, { spectator = false, guilds = null } = {}) {
   const ref = doc(db, SESSIONS, sessionId, 'players', uid);
   const snap = await getDoc(ref);
+  // Los gremios del asiento vienen de la ficha (RMR-PCS-0043 · F2) y se refrescan
+  // en cada entrada; si no se conocen (null), se deja lo que haya.
+  const seatGuilds = Array.isArray(guilds) ? { guilds: guilds.map(String) } : {};
   if (snap.exists()) {
-    await updateDoc(ref, { name: String(name ?? snap.data().name ?? '').trim() });
+    await updateDoc(ref, { name: String(name ?? snap.data().name ?? '').trim(), ...seatGuilds });
     return;
   }
   // El organizador que dijo que no vota entra como observador desde el principio (RMR-TSK-0522).
-  await setDoc(ref, { name: String(name ?? '').trim(), votedRound: null, joinedAt: serverTimestamp(), spectator });
+  await setDoc(ref, { name: String(name ?? '').trim(), votedRound: null, joinedAt: serverTimestamp(), spectator, guilds: seatGuilds.guilds ?? [] });
+}
+
+/** El organizador asigna gremio a un asiento (solo ese campo, por reglas). */
+export function setSeatGuilds(sessionId, uid, guilds) {
+  if (!Array.isArray(guilds)) throw new Error('setSeatGuilds requiere una lista de gremios');
+  return updateDoc(doc(db, SESSIONS, sessionId, 'players', uid), { guilds: guilds.map(String) });
 }
 
 /**
@@ -316,14 +325,17 @@ export async function joinSession(sessionId, uid, name, { spectator = false } = 
  * @param {{ deck?: ReadonlyArray<string>|null }} [session]  la sesión en curso
  * @param {{ complexity: number, effort: number }|null} [axes]  los dos ejes, si se votó así
  */
-export function castVote(sessionId, uid, round, value, session, axes = null) {
+export function castVote(sessionId, uid, round, value, session, axes = null, guild = null) {
   if (!isValidCardFor(session, value)) throw new Error(`Carta no válida: ${value}`);
   if (!Number.isInteger(round)) throw new Error('castVote requiere la ronda actual');
   if (axes !== null && !(isAxisLevel(axes?.complexity) && isAxisLevel(axes?.effort))) {
     throw new Error('Los ejes van del 1 al 5');
   }
+  if (guild !== null && (typeof guild !== 'string' || !guild.trim())) throw new Error('El gremio del voto debe ser un nombre');
   const batch = writeBatch(db);
   const vote = axes ? { value, round, axes: { complexity: axes.complexity, effort: axes.effort } } : { value, round };
+  // Con qué gremio cuenta el voto (RMR-PCS-0043 · F2); null en tareas generales.
+  vote.guild = guild;
   batch.set(doc(db, SESSIONS, sessionId, 'votes', uid), vote);
   batch.set(doc(db, SESSIONS, sessionId, 'players', uid), { votedRound: round }, { merge: true });
   return batch.commit();
