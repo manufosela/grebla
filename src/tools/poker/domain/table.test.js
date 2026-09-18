@@ -101,3 +101,34 @@ describe('la mesa por tarea con gremios (RMR-PCS-0043 · F2)', () => {
     ]);
   });
 });
+
+describe('cartas juzgadas contra su gremio (RMR-PCS-0043 · F3)', () => {
+  const deck = ['1', '2', '3', '5', '8', '13', 'partir'];
+  const task = { id: 't', guilds: ['Backend PHP', 'QA'] };
+  const players = [
+    { uid: 'a', name: 'Ana', guilds: ['Backend PHP'], votedRound: 1 },
+    { uid: 'b', name: 'Bea', guilds: ['Backend PHP'], votedRound: 1 },
+    { uid: 'q', name: 'Quique', guilds: ['QA'], votedRound: 1 },
+  ];
+  const votesByUid = { a: { value: '5', round: 1, guild: 'Backend PHP' }, b: { value: '8', round: 1, guild: 'Backend PHP' }, q: { value: '3', round: 1, guild: 'QA' } };
+
+  it('el tono sale del veredicto de SU gremio: QA en acuerdo aunque backend no', () => {
+    const { seats, byGuild } = cardStates({ players, votesByUid, round: 1, revealed: true, deck, task });
+    expect(seats.map((s) => [s.uid, s.tone])).toEqual([['a', 'low'], ['b', 'high'], ['q', 'agree']]);
+    expect(byGuild.agreed).toEqual({ QA: '3' });
+    expect(byGuild.allAgreed).toBe(false);
+  });
+
+  it('con un gremio fijado sus asientos ya no se sientan y no cuentan para revelar', () => {
+    const locked = { QA: '3' };
+    const { seats } = cardStates({ players, votesByUid, round: 2, revealed: false, deck, task, locked });
+    expect(seats.map((s) => s.uid)).toEqual(['a', 'b']);
+    expect(allActiveVoted(players.map((p) => ({ ...p, votedRound: 2 })), 2, task, locked)).toBe(true);
+  });
+
+  it('sin gremios en la tarea el tono es el de siempre (todos contra todos)', () => {
+    const { seats, byGuild } = cardStates({ players, votesByUid, round: 1, revealed: true, deck });
+    expect(seats.map((s) => s.tone)).toEqual(['plain', 'high', 'low']);
+    expect(byGuild.groups).toHaveLength(1);
+  });
+});

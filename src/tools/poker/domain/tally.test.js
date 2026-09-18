@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasVotedThisRound, countVoted, allVoted, revealedVotes, judgeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted, seatGuilds, guildsForTask, eligibleFor, impliedGuild } from './tally.js';
+import { hasVotedThisRound, countVoted, allVoted, revealedVotes, judgeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted, seatGuilds, guildsForTask, eligibleFor, impliedGuild, isLocked, judgeByGuild, taskSettlement } from './tally.js';
 
 const player = (uid, votedRound) => ({ uid, name: uid, votedRound });
 
@@ -201,5 +201,48 @@ describe('gremio del asiento (RMR-PCS-0043 · F2)', () => {
     const votos = { a2: { value: '5', round: 1, guild: 'QA' }, s: { value: '8', round: 1 } };
     expect(revealedVotes(players, votos, 1, tarea)).toEqual([{ uid: 'a2', name: 'Ana', value: '5', axes: null, guild: 'QA' }]);
     expect(revealedVotes(players, votos, 1).map((v) => [v.uid, v.guild])).toEqual([['s', null], ['a2', 'QA']]);
+  });
+});
+
+describe('acuerdo por gremio (RMR-PCS-0043 · F3)', () => {
+  const deck = ['1', '2', '3', '5', '8', '13', 'partir'];
+  const v = (guild, value) => ({ uid: value + guild, name: 'x', value, axes: null, guild });
+
+  it('judgeByGuild juzga cada gremio aparte y dice cuáles coinciden', () => {
+    const { groups, agreed, allAgreed } = judgeByGuild([v('QA', '3'), v('Backend PHP', '5'), v('Backend PHP', '8'), v('QA', '3')], deck);
+    expect(groups.map((g) => [g.guild, g.verdict.consensus, g.verdict.lowest, g.verdict.highest])).toEqual([
+      ['Backend PHP', false, '5', '8'], ['QA', true, '3', '3'],
+    ]);
+    expect(agreed).toEqual({ QA: '3' });
+    expect(allAgreed).toBe(false);
+    expect(judgeByGuild([v('QA', '3'), v('iOS', '5')], deck).allAgreed).toBe(true);
+  });
+
+  it('los votos sin gremio (tarea general) son un solo grupo, como hasta ahora', () => {
+    const { groups, agreed } = judgeByGuild([v(null, '5'), v(null, '5')], deck);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].guild).toBeNull();
+    expect(agreed).toEqual({ '': '5' });
+    expect(judgeByGuild([], deck)).toEqual({ groups: [], agreed: {}, allAgreed: false });
+  });
+
+  it('los gremios fijados no vuelven a votar: quedan fuera de la elegibilidad', () => {
+    const ana = { uid: 'a', guilds: ['Backend PHP', 'QA'] };
+    const task = { guilds: ['Backend PHP', 'QA'] };
+    const locked = { QA: '3' };
+    expect(isLocked(locked, 'QA')).toBe(true);
+    expect(isLocked(locked, 'iOS')).toBe(false);
+    expect(isLocked(null, 'QA')).toBe(false);
+    expect(guildsForTask(ana, task, locked)).toEqual(['Backend PHP']);
+    expect(impliedGuild(ana, task, locked)).toBe('Backend PHP');
+    expect(eligibleFor({ uid: 'q', guilds: ['QA'] }, task, locked)).toBe(false);
+    expect(eligibleFor(ana, task, { 'Backend PHP': '5', QA: '3' })).toBe(false);
+  });
+
+  it('taskSettlement junta fijados y recién acordados y dice qué falta', () => {
+    const task = { guilds: ['Backend PHP', 'QA', 'iOS'] };
+    expect(taskSettlement(task, { QA: '3' }, { 'Backend PHP': '5' })).toEqual({ done: false, values: { 'Backend PHP': '5', QA: '3' }, missing: ['iOS'] });
+    expect(taskSettlement(task, { QA: '3', iOS: '8' }, { 'Backend PHP': '5' })).toEqual({ done: true, values: { 'Backend PHP': '5', QA: '3', iOS: '8' }, missing: [] });
+    expect(taskSettlement({ guilds: [] }, {}, { '': '5' }).done).toBe(false); // general: no va por gremios
   });
 });
