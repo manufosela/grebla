@@ -79,7 +79,7 @@ test('los dos ejes dan la carta del cuadro, y el voto guarda los ejes', async ({
   await expect.poll(async () => {
     const snap = await ref.collection('votes').doc('e2e-engineer').get();
     return snap.exists ? snap.data() : null;
-  }, { timeout: 15_000 }).toEqual({ value: '8', round: 1, axes: { complexity: 5, effort: 1 } });
+  }, { timeout: 15_000 }).toEqual({ value: '8', round: 1, axes: { complexity: 5, effort: 1 }, guild: null }); // sin gremio: tarea general (RMR-PCS-0043)
 });
 
 test('la carta directa sigue ahí, en su pestaña', async ({ page }) => {
@@ -94,7 +94,7 @@ test('la carta directa sigue ahí, en su pestaña', async ({ page }) => {
   await expect.poll(async () => {
     const snap = await ref.collection('votes').doc('e2e-engineer').get();
     return snap.exists ? snap.data() : null;
-  }, { timeout: 15_000 }).toEqual({ value: '13', round: 1 });
+  }, { timeout: 15_000 }).toEqual({ value: '13', round: 1, guild: null });
 });
 
 test('al revelar, quien votó por ejes enseña su C·E junto a la carta', async ({ page }) => {
