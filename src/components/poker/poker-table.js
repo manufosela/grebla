@@ -36,20 +36,23 @@ const VOTE_TABS = Object.freeze([
   Object.freeze({ id: 'ejes', label: 'Complejidad y esfuerzo' }),
   Object.freeze({ id: 'carta', label: 'Carta directa' }),
 ]);
-import { isSpectator, hasSkippedRound } from '../../tools/poker/domain/tally.js';
+import { isSpectator, hasSkippedRound, eligibleFor, guildsForTask, impliedGuild, seatGuilds, activeVoters } from '../../tools/poker/domain/tally.js';
 import { cardStates, allActiveVoted } from '../../tools/poker/domain/table.js';
 import {
   joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
   fetchLinearIssue, setVoteRef, showIssue, setIssueOpen, getSession, setSessionTasks, closeCurrentTask, finishSession,
   watchSession, watchPlayers, watchVotes,
   setSpectator, skipRound, unskipRound,
+  setSeatGuilds,
 } from '../../lib/poker.js';
 
 export class PokerTable extends LitElement {
   static properties = {
     sessionId: { attribute: false },
     _guildCatalog: { state: true },
+    _voteGuild: { state: true },
     uid: { attribute: false },
+    guilds: { attribute: false },
     authorName: { attribute: false },
     canManage: { attribute: false },
     _session: { state: true },
@@ -100,6 +103,12 @@ export class PokerTable extends LitElement {
     /* La mesa (RMR-TSK-0523): una carta por persona, a todo el ancho. */
     .seats { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.8rem, 1fr)); gap: 1rem 0.8rem; margin: 0.8rem 0 1rem; }
     .seat { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; min-width: 0; }
+    .seat-guild { font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .guild-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: 0 0 0.6rem; }
+    .guild-choice .chk { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; }
+    .unseated { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: -0.4rem 0 1rem; font-size: 0.85rem; }
+    .unseated-row { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .unseated select { font: inherit; font-size: 0.82rem; padding: 0.25rem 0.4rem; border-radius: 8px; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
     .seat-name { font-size: 0.82rem; color: var(--rm-text, #1e3a5f); text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .flip { position: relative; width: 5.4rem; height: 7.6rem; perspective: 700px; }
     .flip .face { position: absolute; inset: 0; border-radius: 12px; border: 3px solid var(--rm-border, #dde7ec); backface-visibility: hidden; transition: transform 0.5s, border-color 0.2s, background 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem; }
@@ -168,6 +177,10 @@ export class PokerTable extends LitElement {
     super();
     this.sessionId = null;
     this._guildCatalog = [];
+    /** Gremios de la ficha de quien entra (RMR-PCS-0043 · F2). */
+    this.guilds = [];
+    /** Gremio elegido para votar cuando el asiento tiene varios válidos para la tarea. */
+    this._voteGuild = null;
     this.uid = null;
     this.authorName = '';
     this.canManage = false;
@@ -218,7 +231,7 @@ export class PokerTable extends LitElement {
     try {
       const session = await getSession(this.sessionId);
       const spectator = this.canManage && session?.ownerVotes === false;
-      await joinSession(this.sessionId, this.uid, this.authorName, { spectator });
+      await joinSession(this.sessionId, this.uid, this.authorName, { spectator, guilds: this.guilds });
       const mine = await getMyVote(this.sessionId, this.uid);
       if (mine) this._myVote = mine;
     } catch (err) {
@@ -280,7 +293,11 @@ export class PokerTable extends LitElement {
   get _myPlayer() { return this._players.find((p) => p.uid === this.uid) ?? null; }
   get _amSpectator() { return isSpectator(this._myPlayer); }
   get _amSkipped() { return hasSkippedRound(this._myPlayer, this._round); }
-  get _canIVote() { return !this._revealed && !this._amSpectator && !this._amSkipped; }
+  get _canIVote() { return !this._revealed && !this._amSpectator && !this._amSkipped && this._eligible; }
+  /** ¿Es esta tarea de mi gremio? (tarea general: de todos). */
+  get _eligible() { return eligibleFor(this._myPlayer, this._currentTask); }
+  /** Con qué gremios puedo votar la tarea actual (varios = hay que elegir). */
+  get _myTaskGuilds() { return guildsForTask(this._myPlayer, this._currentTask); }
 
   async _toggleSpectator() {
     try { await setSpectator(this.sessionId, this.uid, !this._amSpectator); } catch (err) { this._onError(err); }
@@ -293,10 +310,19 @@ export class PokerTable extends LitElement {
     } catch (err) { this._onError(err); }
   }
 
+  /** El gremio con el que cuenta mi voto: el único posible, o el elegido si hay varios; null en tarea general. */
+  _guildForVote() {
+    const options = this._myTaskGuilds;
+    if (options.length <= 1) return impliedGuild(this._myPlayer, this._currentTask);
+    return options.includes(this._voteGuild) ? this._voteGuild : undefined;
+  }
+
   async _vote(card, axes = null) {
     if (!this._canIVote) return; // ni revelado, ni observador, ni fuera de ámbito, ni en discusión
+    const guild = this._guildForVote();
+    if (guild === undefined) { this._error = 'Elige con qué gremio votas.'; return; }
     try {
-      await castVote(this.sessionId, this.uid, this._round, card, this._session, axes);
+      await castVote(this.sessionId, this.uid, this._round, card, this._session, axes, guild);
       this._myVote = axes ? { value: card, round: this._round, axes } : { value: card, round: this._round };
     } catch (err) { this._onError(err); }
   }
@@ -323,14 +349,65 @@ export class PokerTable extends LitElement {
     if (this._revealed) return null;
     if (this._amSpectator) return html`<p class="lead">Estás como observador: no votas en esta sesión.</p>`;
     if (this._amSkipped) return html`<p class="lead">Te has saltado esta ronda (fuera de tu ámbito).</p>`;
+    if (!this._eligible) {
+      const de = (this._currentTask?.guilds ?? []).join(', ');
+      return html`<p class="lead">Esta tarea es de otro gremio (${de}): la miras, no la votas.</p>`;
+    }
     const tab = this._activeVoteTab;
     return html`
+      ${this._renderGuildChoice()}
       <div class="tabs" role="tablist" aria-label="Cómo votar">
         ${VOTE_TABS.map((t) => html`<button type="button" class="tab ${tab === t.id ? 'on' : ''}"
           role="tab" aria-selected=${tab === t.id ? 'true' : 'false'}
           @click=${() => { this._voteTab = t.id; }}>${t.label}</button>`)}
       </div>
       ${tab === 'ejes' ? this._renderAxes() : this._renderCards()}`;
+  }
+
+  /** Con varios gremios válidos para la tarea, se elige uno (una sola carta): caso raro. */
+  _renderGuildChoice() {
+    const options = this._myTaskGuilds;
+    if (options.length <= 1) return null;
+    return html`<div class="guild-choice" role="radiogroup" aria-label="Votas como">
+      <span class="lead">Votas como:</span>
+      ${options.map((g) => html`<label class="chk"><input type="radio" name="vote-guild" .checked=${this._voteGuild === g}
+        @change=${() => { this._voteGuild = g; this._error = ''; }} /> ${g}</label>`)}
+    </div>`;
+  }
+
+  /**
+   * Quien está en la mesa pero no es del gremio de la tarea (RMR-PCS-0043 · F2):
+   * el organizador le puede asignar uno de los gremios de la tarea; los demás
+   * solo ven cuántos miran.
+   */
+  _renderUnseated() {
+    const task = this._currentTask;
+    if (!task || (task.guilds ?? []).length === 0) return null;
+    const fuera = activeVoters(this._players, this._round).filter((p) => !eligibleFor(p, task));
+    if (fuera.length === 0) return null;
+    if (!this.canManage) return html`<p class="lead unseated">${fuera.length} ${fuera.length === 1 ? 'persona mira' : 'personas miran'} esta tarea (otro gremio).</p>`;
+    return html`<div class="unseated">
+      <span class="lead">Miran (otro gremio):</span>
+      ${fuera.map((p) => this._renderUnseatedRow(p, task))}
+    </div>`;
+  }
+
+  _renderUnseatedRow(p, task) {
+    const label = `Gremio para ${p.name}`;
+    return html`<span class="unseated-row">
+      <span class="seat-name">${p.name}</span>
+      <select aria-label=${label} @change=${(e) => this._assignGuild(p, e.target.value)}>
+        <option value="">Asignar gremio…</option>
+        ${task.guilds.map((g) => html`<option value=${g}>${g}</option>`)}
+      </select>
+    </span>`;
+  }
+
+  async _assignGuild(player, guild) {
+    if (!guild) return;
+    try {
+      await setSeatGuilds(this.sessionId, player.uid, [...new Set([...seatGuilds(player), guild])]);
+    } catch (err) { this._onError(err); }
   }
 
   _renderCards() {
@@ -388,7 +465,7 @@ export class PokerTable extends LitElement {
   /** Los asientos y el juicio de la ronda, calculados en el dominio. */
   get _table() {
     const votesByUid = Object.fromEntries(this._votes.map((v) => [v.uid, v]));
-    return cardStates({ players: this._players, votesByUid, round: this._round, revealed: this._revealed, deck: deckOf(this._session) });
+    return cardStates({ players: this._players, votesByUid, round: this._round, revealed: this._revealed, deck: deckOf(this._session), task: this._currentTask });
   }
 
   /**
@@ -399,7 +476,12 @@ export class PokerTable extends LitElement {
    */
   _renderSeats() {
     const { seats } = this._table;
-    if (seats.length === 0) return html`<p class="lead">Aún no se ha sentado nadie a la mesa.</p>`;
+    if (seats.length === 0) {
+      const vacia = (this._currentTask?.guilds ?? []).length > 0
+        ? 'Nadie del gremio de esta tarea en la mesa todavía.'
+        : 'Aún no se ha sentado nadie a la mesa.';
+      return html`<p class="lead">${vacia}</p>${this._renderUnseated()}`;
+    }
     return html`<div class="seats" aria-label="Cartas de la mesa">
       ${seats.map((s) => html`<div class="seat">
         <div class="flip ${this._revealed ? 'up' : ''} ${s.voted ? 'voted' : ''} tone-${s.tone}" data-uid=${s.uid} aria-label="${s.name}: ${this._seatLabel(s)}">
@@ -410,8 +492,16 @@ export class PokerTable extends LitElement {
           </div>
         </div>
         <span class="seat-name">${s.name}</span>
+        ${this._renderSeatGuild(s)}
       </div>`)}
-    </div>`;
+    </div>
+    ${this._renderUnseated()}`;
+  }
+
+  /** Bajo el nombre, el gremio con el que vota (o los suyos, en tarea general). */
+  _renderSeatGuild(s) {
+    const texto = s.guild ?? (s.guilds ?? []).join(' · ');
+    return texto ? html`<span class="seat-guild">${texto}</span>` : null;
   }
 
   _seatLabel(s) {
@@ -428,7 +518,7 @@ export class PokerTable extends LitElement {
     const { seats, verdict } = this._table;
     if (!this._revealed) {
       if (!this.canManage) return null;
-      const listos = allActiveVoted(this._players, this._round);
+      const listos = allActiveVoted(this._players, this._round, this._currentTask);
       return html`<div class="bar">
         <button class="primary" @click=${() => this._reveal()} ?disabled=${!listos}
           title=${listos ? '' : 'Cuando hayan votado todos'}>Mostrar votos</button>

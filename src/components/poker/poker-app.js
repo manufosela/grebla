@@ -20,6 +20,7 @@ import './guild-picker.js';
 export class PokerApp extends LitElement {
   static properties = {
     uid: { attribute: false },
+    guilds: { attribute: false },
     leaderUid: { attribute: false },
     leaderUids: { attribute: false },
     _guildCatalog: { state: true },
@@ -114,6 +115,8 @@ export class PokerApp extends LitElement {
     // Quien convoca vota salvo que diga lo contrario; las tareas, una por línea (RMR-TSK-0522).
     this._newOwnerVotes = true;
     this._guildCatalog = [];
+    /** Gremios de la ficha de quien entra (los pone el glue). */
+    this.guilds = [];
     /** false hasta que el catálogo de gremios ha cargado; si falla, se dice y no se convoca a ciegas. */
     this._guildsReady = false;
     /** @type {Array<{ title: string, guilds: string[] }>} un borrador por línea de Convocar */
@@ -266,7 +269,7 @@ export class PokerApp extends LitElement {
         </span>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
-      <poker-table .sessionId=${s.id} .uid=${this.uid} .authorName=${this.authorName ?? ''}
+      <poker-table .sessionId=${s.id} .uid=${this.uid} .authorName=${this.authorName ?? ''} .guilds=${this.guilds ?? []}
         .canManage=${this.canManage && s.ownerLeaderUid === this.uid}></poker-table>
     </div>`;
   }
