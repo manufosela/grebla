@@ -102,3 +102,19 @@ test('sin cargar todavía, el organizador ve «Cargar historia» con la referenc
   await expect(mesa(page).getByRole('button', { name: 'Cargar historia BB-1234' })).toBeVisible();
   await expect(modal(page)).toHaveCount(0);
 });
+
+test('cerrada para todos, quien vota puede reabrir la historia en local para releerla (RMR-TSK-0536)', async ({ page }) => {
+  const ref = await sesion({ voteRef: 'BB-1234', voteIssue: FICHA, issueOpen: false });
+  await signInAs(page, 'engineer');
+  await page.goto(`/poker?s=${ref.id}`);
+
+  await expect(modal(page)).toHaveCount(0);
+  await mesa(page).getByRole('button', { name: 'Ver historia BB-1234' }).click();
+  await expect(modal(page).locator('.issue')).toBeVisible();
+  await expect(modal(page)).toContainText('Segunda línea.');
+  // Solo en su pantalla: la sesión sigue cerrada para todos.
+  expect((await ref.get()).data().issueOpen).toBe(false);
+  await page.keyboard.press('Escape');
+  await expect(modal(page)).toHaveCount(0);
+  await expect(mesa(page).getByRole('button', { name: 'Ver historia BB-1234' })).toBeVisible();
+});

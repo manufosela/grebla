@@ -68,6 +68,7 @@ export class PokerTable extends LitElement {
     _taskDraft: { state: true },
     _orgTab: { state: true },
     _issueDismissed: { state: true },
+    _issueLocalOpen: { state: true },
     _titleDraft: { state: true },
     _error: { state: true },
   };
@@ -213,6 +214,8 @@ export class PokerTable extends LitElement {
     this._taskDraft = '';
     this._orgTab = 'mesa';
     // La historia que YO he cerrado en mi pantalla (el organizador la cierra para todos).
+    /** La historia abierta EN LOCAL por quien vota (RMR-TSK-0536): no toca la sesión. */
+    this._issueLocalOpen = false;
     this._issueDismissed = null;
     this._titleDraft = '';
     this._error = '';
@@ -267,6 +270,7 @@ export class PokerTable extends LitElement {
       this._axisC = null;
       this._axisE = null;
       this._issueDismissed = null;
+      this._issueLocalOpen = false;
     }
     this._lastRound = session.round;
     // Suscribirse a los votos SOLO cuando el revelado está CONFIRMADO por el
@@ -785,7 +789,7 @@ export class PokerTable extends LitElement {
       if (!t) return null;
       const ref = this._voteRef ? html` <span class="ref">${this._voteRef}</span>` : null;
       const gremios = task ? html`<div class="guild-bar"><span class="lead">Gremios:</span><guild-picker readonly .value=${taskGuilds(task)}></guild-picker></div>` : null;
-      return html`<p class="lead">Estimando: <strong>${t}</strong>${ref}</p>${gremios}`;
+      return html`<div class="bar title-bar"><p class="lead">Estimando: <strong>${t}</strong>${ref}</p>${this._renderReopenIssue()}</div>${gremios}`;
     }
     // Con lista de tareas (RMR-TSK-0522) la actual es el título; sin tarea
     // actual, el organizador añade otra o termina.
@@ -891,14 +895,27 @@ export class PokerTable extends LitElement {
 
   /** Cerrar el modal: el organizador lo cierra para todos; los demás, solo el suyo. */
   _dismissIssue() {
+    this._issueLocalOpen = false;
     if (this.canManage) { this._closeIssueForAll(); return; }
     this._issueDismissed = this._voteIssue?.identifier ?? null;
+  }
+
+  /**
+   * Quien vota puede releer la historia aunque el organizador la haya cerrado
+   * para todos (RMR-TSK-0536): se abre solo en su pantalla.
+   */
+  _renderReopenIssue() {
+    const ref = findLinearRef(this._currentTask?.title ?? this._voteTitle);
+    if (this.canManage || !ref || this._voteIssue?.identifier !== ref) return null;
+    if (this._issueOpen && this._issueDismissed !== ref) return null; // ya está abierta para todos
+    return html`<button class="act" @click=${() => { this._issueLocalOpen = true; }}>Ver historia ${ref}</button>`;
   }
 
   /** La historia, en un modal por encima de todo, en todas las pantallas a la vez. */
   _renderIssueModal() {
     const i = this._voteIssue;
-    if (!i || !this._issueOpen || this._issueDismissed === i.identifier) return null;
+    const paraTodos = this._issueOpen && this._issueDismissed !== i?.identifier;
+    if (!i || !(paraTodos || this._issueLocalOpen)) return null;
     const meta = [i.state, i.estimate != null ? `estimación ${i.estimate}` : null, i.priority, i.assignee, i.project]
       .filter(Boolean);
     return html`<app-modal .open=${true} size="wide" heading=${`${i.identifier} · ${i.title}`} @close=${() => this._dismissIssue()}>
