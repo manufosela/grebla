@@ -13,13 +13,18 @@ import '../app-modal.js';
 import './poker-session-editor.js';
 import { watchVisibleSessions, createSession, deleteSession, getSession, updateSession, syncOwnerSeat } from '../../lib/poker.js';
 import { POKER_SCALES, scaleById } from '../../tools/poker/domain/deck.js';
-import { parseTaskLines } from '../../tools/poker/domain/tasks.js';
+import { parseTaskLines, defaultGuilds, reconcileGuildDrafts } from '../../tools/poker/domain/tasks.js';
+import { listGlobalGuilds } from '../../lib/guilds.js';
+import './guild-picker.js';
 
 export class PokerApp extends LitElement {
   static properties = {
     uid: { attribute: false },
     leaderUid: { attribute: false },
     leaderUids: { attribute: false },
+    _guildCatalog: { state: true },
+    _guildsReady: { state: true },
+    _newTaskGuilds: { state: true },
     authorName: { attribute: false },
     canManage: { attribute: false },
     _selected: { state: true },
@@ -67,6 +72,9 @@ export class PokerApp extends LitElement {
     .create textarea { width: 100%; box-sizing: border-box; resize: vertical; }
     .create .chk { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); cursor: pointer; }
     .create .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
+    .task-guilds { display: flex; flex-direction: column; gap: 0.45rem; }
+    .task-guild-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.8rem; padding: 0.4rem 0.6rem; border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; }
+    .task-guild-row .qtitle { font-size: 0.88rem; font-weight: 600; color: var(--rm-text, #1e3a5f); flex: 1 1 14rem; }
     .modes { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
     .modes label { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
     /* Escala y cartas de la sesión que se convoca (RMR-TSK-0481). */
@@ -105,6 +113,11 @@ export class PokerApp extends LitElement {
     this._newScale = POKER_SCALES[0].id;
     // Quien convoca vota salvo que diga lo contrario; las tareas, una por línea (RMR-TSK-0522).
     this._newOwnerVotes = true;
+    this._guildCatalog = [];
+    /** false hasta que el catálogo de gremios ha cargado; si falla, se dice y no se convoca a ciegas. */
+    this._guildsReady = false;
+    /** @type {Array<{ title: string, guilds: string[] }>} un borrador por línea de Convocar */
+    this._newTaskGuilds = [];
     this._newTasks = '';
     this.openSessionId = null;
     this._copied = false;
@@ -118,6 +131,10 @@ export class PokerApp extends LitElement {
     // Sesión que se está editando en el modal (RMR-TSK-0526).
     this._editing = null;
     this._listSub = null;
+  }
+
+  firstUpdated() {
+    this._loadGuilds();
   }
 
   disconnectedCallback() {
@@ -203,9 +220,10 @@ export class PokerApp extends LitElement {
     try {
       const id = await createSession({
         name, ownerLeaderUid: this.leaderUid, scale: this._newScale,
-        ownerVotes: this._newOwnerVotes, tasks: parseTaskLines(this._newTasks),
+        ownerVotes: this._newOwnerVotes, tasks: this._newTasksWithGuilds(),
       });
       this._newTasks = '';
+      this._newTaskGuilds = [];
       this._newName = '';
       this._error = '';
       // Convocada: al volver de la mesa se aterriza en la lista, no en el formulario.
@@ -261,6 +279,53 @@ export class PokerApp extends LitElement {
     </div>`;
   }
 
+  /** Catálogo de gremios de la instancia, para las casillas de cada tarea (RMR-PCS-0043). */
+  async _loadGuilds() {
+    try {
+      this._guildCatalog = await listGlobalGuilds();
+      this._guildsReady = true;
+      this._newTaskGuilds = reconcileGuildDrafts([], parseTaskLines(this._newTasks).map((t) => t.title), defaultGuilds(this._guildCatalog));
+    } catch (err) {
+      // Un catálogo que no carga NO es un catálogo vacío: sin él se convocaría sin gremios sin saberlo.
+      this._guildsReady = false;
+      this._error = `No se ha podido cargar el catálogo de gremios: ${err.message}`;
+    }
+  }
+
+  /** Cada cambio del texto de tareas reconcilia los borradores de gremios línea a línea. */
+  _onTasksInput(text) {
+    this._newTasks = text;
+    this._newTaskGuilds = reconcileGuildDrafts(this._newTaskGuilds, parseTaskLines(text).map((t) => t.title), defaultGuilds(this._guildCatalog));
+  }
+
+  /** Gremios del borrador de la línea i; sin borrador (catálogo aún sin cargar), los de por defecto. */
+  _guildsForLine(i) {
+    return this._newTaskGuilds[i]?.guilds ?? defaultGuilds(this._guildCatalog);
+  }
+
+  _newTasksWithGuilds() {
+    return parseTaskLines(this._newTasks).map((t, i) => ({ ...t, guilds: this._guildsForLine(i) }));
+  }
+
+  _renderTaskGuildRow(t, i) {
+    const label = `Gremios de ${t.title}`;
+    return html`<div class="task-guild-row">
+      <span class="qtitle">${t.title}</span>
+      <guild-picker .catalog=${this._guildCatalog} .value=${this._guildsForLine(i)} label=${label}
+        @change=${(e) => { this._newTaskGuilds = this._newTaskGuilds.with(i, { title: t.title, guilds: e.detail.guilds }); }}></guild-picker>
+    </div>`;
+  }
+
+  /** Una fila por tarea escrita, con sus casillas de gremio (RMR-PCS-0043 · F1). */
+  _renderTaskGuilds() {
+    const tasks = parseTaskLines(this._newTasks);
+    if (tasks.length === 0) return null;
+    return html`<div class="task-guilds">
+      <span class="field"><span>Gremios de cada tarea (QA va marcado; sin ninguno, la tarea es general)</span></span>
+      ${tasks.map((t, i) => this._renderTaskGuildRow(t, i))}
+    </div>`;
+  }
+
   _renderCreate() {
     return html`<div class="create">
       <input type="text" placeholder="Nombre de la sesión (p. ej. «Refinamiento sprint 12»)" .value=${this._newName}
@@ -272,9 +337,11 @@ export class PokerApp extends LitElement {
       <label class="field">
         <span>Tareas a estimar, una por línea (se pueden añadir más durante la sesión)</span>
         <textarea rows="4" placeholder="BB-1231 - Nuevo onboarding&#10;BB-1240 - Exportar informe" .value=${this._newTasks}
-          @input=${(e) => { this._newTasks = e.target.value; }}></textarea>
+          @input=${(e) => this._onTasksInput(e.target.value)}></textarea>
       </label>
-      <button @click=${() => this._create()} ?disabled=${!this._newName.trim()}>Crear sesión</button>
+      ${this._renderTaskGuilds()}
+      <button @click=${() => this._create()} ?disabled=${!this._newName.trim() || !this._guildsReady}
+        title=${this._guildsReady ? '' : 'Esperando el catálogo de gremios'}>Crear sesión</button>
     </div>`;
   }
 
@@ -306,7 +373,7 @@ export class PokerApp extends LitElement {
     const s = this._editing;
     if (!s) return null;
     return html`<app-modal .open=${true} size="wide" heading="Editar la sesión" @close=${() => { this._editing = null; }}>
-      <poker-session-editor .session=${s}
+      <poker-session-editor .session=${s} .guildCatalog=${this._guildCatalog}
         @save=${(e) => this._saveEdit(e.detail)}
         @cancel=${() => { this._editing = null; }}></poker-session-editor>
     </app-modal>`;

@@ -17,7 +17,9 @@ import { magnitudeCard, COMPLEXITY_LEVELS, EFFORT_LEVELS } from '../../tools/pok
 import { normalizeLinearRef, findLinearRef } from '../../tools/poker/domain/reference.js';
 import '../app-modal.js';
 import '../markdown-view.js';
-import { currentTask, closeTask, appendTask } from '../../tools/poker/domain/tasks.js';
+import { currentTask, closeTask, appendTask, setTaskGuilds, defaultGuilds, taskGuilds } from '../../tools/poker/domain/tasks.js';
+import { listGlobalGuilds } from '../../lib/guilds.js';
+import './guild-picker.js';
 
 /**
  * Dos formas de votar (RMR-TSK-0516): por complejidad × esfuerzo —el cuadro del
@@ -46,6 +48,7 @@ import {
 export class PokerTable extends LitElement {
   static properties = {
     sessionId: { attribute: false },
+    _guildCatalog: { state: true },
     uid: { attribute: false },
     authorName: { attribute: false },
     canManage: { attribute: false },
@@ -115,6 +118,7 @@ export class PokerTable extends LitElement {
     .flip.tone-low .axes, .flip.tone-high .axes { color: #a93226; }
     .flip.tone-empty .front { color: var(--rm-muted, #5b6b7d); border-style: dashed; }
     .bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 0.8rem 0; }
+    .guild-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; margin: -0.3rem 0 0.8rem; }
     .verdict { border: 1px solid var(--rm-border, #dde7ec); border-radius: 10px; padding: 0.7rem 1rem; background: var(--rm-surface-hover, #f6f9fa); margin: 0.4rem 0 0.8rem; }
     .verdict.agree { border-color: #2e9e5b; background: #edf9f1; }
     .verdict.agree .headline { color: #14532d; }
@@ -163,6 +167,7 @@ export class PokerTable extends LitElement {
   constructor() {
     super();
     this.sessionId = null;
+    this._guildCatalog = [];
     this.uid = null;
     this.authorName = '';
     this.canManage = false;
@@ -193,6 +198,10 @@ export class PokerTable extends LitElement {
     if ((changed.has('sessionId') || changed.has('uid')) && this.sessionId && this.uid) {
       this._enter();
     }
+  }
+
+  firstUpdated() {
+    listGlobalGuilds().then((cat) => { this._guildCatalog = cat; }).catch(() => { this._guildCatalog = []; });
   }
 
   disconnectedCallback() {
@@ -483,8 +492,15 @@ export class PokerTable extends LitElement {
     </div>`;
   }
 
+  /** Los gremios de la tarea actual se cambian aquí mismo, antes de votar, y lo ven todos (RMR-PCS-0043 · F1). */
+  async _setTaskGuilds(task, guilds) {
+    try {
+      await setSessionTasks(this.sessionId, setTaskGuilds(this._tasks, task.id, guilds, this._guildCatalog), this._currentTask?.id ?? null);
+    } catch (err) { this._onError(err); }
+  }
+
   async _addTask() {
-    const { tasks, task } = appendTask(this._tasks, this._taskDraft);
+    const { tasks, task } = appendTask(this._tasks, this._taskDraft, Date.now(), defaultGuilds(this._guildCatalog));
     if (!task) return;
     try {
       await setSessionTasks(this.sessionId, tasks, this._currentTask?.id ?? task.id);
@@ -523,14 +539,23 @@ export class PokerTable extends LitElement {
     const task = this._currentTask;
     if (!this.canManage) {
       const t = this._shownTitle;
-      return t ? html`<p class="lead">Estimando: <strong>${t}</strong>${this._voteRef ? html` <span class="ref">${this._voteRef}</span>` : null}</p>` : null;
+      if (!t) return null;
+      const ref = this._voteRef ? html` <span class="ref">${this._voteRef}</span>` : null;
+      const gremios = task ? html`<div class="guild-bar"><span class="lead">Gremios:</span><guild-picker readonly .value=${taskGuilds(task)}></guild-picker></div>` : null;
+      return html`<p class="lead">Estimando: <strong>${t}</strong>${ref}</p>${gremios}`;
     }
     // Con lista de tareas (RMR-TSK-0522) la actual es el título; sin tarea
     // actual, el organizador añade otra o termina.
     if (task) {
+      const guildLabel = `Gremios de ${task.title}`;
       return html`<div class="bar title-bar">
         <p class="lead">Estimando: <strong>${task.title}</strong> <span class="muted">(${this._tasks.filter((x) => x.value != null).length}/${this._tasks.length})</span></p>
         ${this._renderIssueButton(findLinearRef(task.title))}
+      </div>
+      <div class="guild-bar">
+        <span class="lead">Gremios:</span>
+        <guild-picker .catalog=${this._guildCatalog} .value=${taskGuilds(task)} label=${guildLabel}
+          @change=${(e) => this._setTaskGuilds(task, e.detail.guilds)}></guild-picker>
       </div>`;
     }
     if (this._tasks.length) return this._renderNextTask();
