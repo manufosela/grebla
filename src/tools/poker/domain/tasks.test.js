@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseTaskLines, currentTask, nextPendingTask, closeTask, appendTask, cleanTitle, retitleTask, removeTask, moveTask, pickCurrent,
-  qaGuild, defaultGuilds, normalizeGuilds, taskGuilds, isGeneralTask, setTaskGuilds,
+  qaGuild, defaultGuilds, normalizeGuilds, taskGuilds, isGeneralTask, setTaskGuilds, reconcileGuildDrafts,
 } from './tasks.js';
 
 describe('parseTaskLines: lo escrito una tarea por línea', () => {
@@ -126,5 +126,30 @@ describe('gremios de la tarea (RMR-PCS-0043 · F1)', () => {
     expect(out[1].guilds).toEqual(['QA', 'Android']);
     expect(tasks[1].guilds).toEqual(['QA']); // inmutable
     expect(setTaskGuilds(tasks, tasks[0].id, [], CAT)[0].guilds).toEqual([]);
+  });
+});
+
+describe('reconcileGuildDrafts: los gremios de Convocar siguen a su línea', () => {
+  const d = (title, guilds) => ({ title, guilds });
+
+  it('insertar una línea delante no mueve los gremios de las demás', () => {
+    const prev = [d('A', ['PHP']), d('B', ['iOS'])];
+    expect(reconcileGuildDrafts(prev, ['Nueva', 'A', 'B'], ['QA'])).toEqual([d('Nueva', ['QA']), d('A', ['PHP']), d('B', ['iOS'])]);
+  });
+
+  it('quitar y reordenar conserva los de cada título', () => {
+    const prev = [d('A', ['PHP']), d('B', ['iOS']), d('C', [])];
+    expect(reconcileGuildDrafts(prev, ['C', 'A'], ['QA'])).toEqual([d('C', []), d('A', ['PHP'])]);
+  });
+
+  it('dos líneas con el mismo título tienen cada una su borrador', () => {
+    const prev = [d('X', ['PHP']), d('X', ['iOS'])];
+    expect(reconcileGuildDrafts(prev, ['X', 'X', 'X'], ['QA'])).toEqual([d('X', ['PHP']), d('X', ['iOS']), d('X', ['QA'])]);
+  });
+
+  it('sin borradores previos, todas nacen con los de por defecto, sin compartir el array', () => {
+    const out = reconcileGuildDrafts([], ['A', 'B'], ['QA']);
+    expect(out).toEqual([d('A', ['QA']), d('B', ['QA'])]);
+    expect(out[0].guilds).not.toBe(out[1].guilds);
   });
 });

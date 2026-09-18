@@ -145,3 +145,24 @@ export function pickCurrent(tasks, currentId) {
   const sigue = list.find((t) => t.id === currentId && t.value == null);
   return sigue?.id ?? list.find((t) => t.value == null)?.id ?? null;
 }
+
+/**
+ * Borradores de gremios de Convocar, uno por línea escrita, reconciliados al
+ * editar el texto: cada línea nueva hereda el borrador de la línea anterior con
+ * el MISMO título que aún no se haya usado (dos líneas iguales conservan cada
+ * una el suyo), y la que no encuentra pareja nace con los de por defecto. Así
+ * insertar, quitar o reordenar líneas no mueve los gremios a otra tarea.
+ * @param {Array<{ title: string, guilds: string[] }>} previous
+ * @param {string[]} titles  títulos de las líneas actuales, en orden
+ * @param {string[]} defaults
+ * @returns {Array<{ title: string, guilds: string[] }>}
+ */
+export function reconcileGuildDrafts(previous, titles, defaults = []) {
+  const libres = [...(previous ?? [])];
+  return (titles ?? []).map((title) => {
+    const i = libres.findIndex((d) => d.title === title);
+    if (i === -1) return { title, guilds: [...defaults] };
+    const [draft] = libres.splice(i, 1);
+    return { title, guilds: [...draft.guilds] };
+  });
+}

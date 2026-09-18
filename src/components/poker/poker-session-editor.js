@@ -10,7 +10,8 @@
  */
 import { LitElement, html, css } from 'lit';
 import { POKER_SCALES } from '../../tools/poker/domain/deck.js';
-import { appendTask, retitleTask, removeTask, moveTask, pickCurrent } from '../../tools/poker/domain/tasks.js';
+import { appendTask, retitleTask, removeTask, moveTask, pickCurrent, setTaskGuilds, defaultGuilds } from '../../tools/poker/domain/tasks.js';
+import './guild-picker.js';
 
 export class PokerSessionEditor extends LitElement {
   static properties = {
@@ -19,6 +20,7 @@ export class PokerSessionEditor extends LitElement {
     _scale: { state: true },
     _ownerVotes: { state: true },
     _tasks: { state: true },
+    guildCatalog: { type: Array },
     _newTask: { state: true },
   };
 
@@ -33,7 +35,8 @@ export class PokerSessionEditor extends LitElement {
     .hint { margin: 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); }
     h4 { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--rm-text, #1e3a5f); }
     ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-    li { display: grid; grid-template-columns: 2.2rem 1fr auto; gap: 0.5rem; align-items: center; }
+    li { display: grid; grid-template-columns: 2.2rem 1fr auto; gap: 0.35rem 0.5rem; align-items: center; }
+    li guild-picker { grid-column: 2 / -1; }
     li .est { text-align: center; font-weight: 800; color: var(--rm-accent-700, var(--teal)); }
     li .done { padding: 0.45rem 0.2rem; color: var(--rm-text, #1e3a5f); }
     .ctl { display: inline-flex; gap: 0.25rem; }
@@ -53,6 +56,7 @@ export class PokerSessionEditor extends LitElement {
     this._scale = POKER_SCALES[0].id;
     this._ownerVotes = true;
     this._tasks = [];
+    this.guildCatalog = [];
     this._newTask = '';
   }
 
@@ -75,7 +79,7 @@ export class PokerSessionEditor extends LitElement {
   }
 
   _add() {
-    const { tasks, task } = appendTask(this._tasks, this._newTask);
+    const { tasks, task } = appendTask(this._tasks, this._newTask, Date.now(), defaultGuilds(this.guildCatalog));
     if (!task) return;
     this._tasks = tasks;
     this._newTask = '';
@@ -101,6 +105,7 @@ export class PokerSessionEditor extends LitElement {
       subir: `Subir ${task.title}`,
       bajar: `Bajar ${task.title}`,
       quitar: `Quitar ${task.title}`,
+      gremios: `Gremios de ${task.title}`,
     };
     const campo = pendiente
       ? html`<input type="text" maxlength="160" aria-label=${etiquetas.campo} .value=${task.title}
@@ -117,6 +122,8 @@ export class PokerSessionEditor extends LitElement {
         <button type="button" title=${pendiente ? 'Quitar' : 'Ya estimada: no se quita'} aria-label=${etiquetas.quitar} ?disabled=${!pendiente}
           @click=${() => { this._tasks = removeTask(this._tasks, task.id); }}>✕</button>
       </span>
+      <guild-picker .catalog=${this.guildCatalog} .value=${task.guilds ?? []} label=${etiquetas.gremios} ?readonly=${!pendiente}
+        @change=${(e) => { this._tasks = setTaskGuilds(this._tasks, task.id, e.detail.guilds, this.guildCatalog); }}></guild-picker>
     </li>`;
   }
 
