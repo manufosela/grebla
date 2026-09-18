@@ -22,7 +22,7 @@ import { sign, coinsKmsKeyName } from './signer.js';
 import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pulseAggregate.js';
 import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './docsPaths.js';
 import { upcomingFrom } from './o2oUpcoming.js';
-import { fetchLinearIssue, LINEAR_REF_RE } from './linearIssue.js';
+import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders } from './docTokens.js';
 import { projectDirectory } from './orgDirectory.js';
 import {
@@ -1622,6 +1622,89 @@ export const getLinearIssue = onCall(
     } catch (err) {
       throw new HttpsError('unavailable', err instanceof Error ? err.message : 'Linear no respondió.');
     }
+  },
+);
+
+/** Cuánto vale el cerrojo de envío a Linear antes de considerarlo abandonado. */
+const POKER_LINEAR_LOCK_MS = 10 * 60 * 1000;
+
+/**
+ * Cambia UNA tarea de la sesión releyendo la lista en transacción: mientras se
+ * hablaba con Linear otra petición puede haber tocado otra tarea, y escribir la
+ * lista leída antes la pisaría.
+ */
+async function patchPokerTask(db, ref, taskId, mutate) {
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const list = Array.isArray(snap.data()?.tasks) ? snap.data().tasks : [];
+    const i = list.findIndex((t) => t?.id === taskId);
+    if (i === -1) return;
+    tx.update(ref, { tasks: list.with(i, mutate(list[i])) });
+  });
+}
+
+/**
+ * Sub-issues por gremio en Linear (RMR-PCS-0043 · F5): al cerrar una tarea
+ * estimada por gremios, el ORGANIZADOR envía una sub-issue por gremio con su
+ * estimación (campo oficial) colgando de la historia del título, y un
+ * comentario resumen en la padre. Idempotente por título. El resultado se
+ * guarda en la tarea de la sesión (Admin SDK) para enlazarlo desde la mesa.
+ */
+export const pushLinearEstimates = onCall(
+  { region: 'europe-west1', secrets: [LINEAR_API_KEY], timeoutSeconds: 60 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+    const sessionId = String(request.data?.sessionId ?? '').trim();
+    const taskId = String(request.data?.taskId ?? '').trim();
+    if (!sessionId || !taskId) throw new HttpsError('invalid-argument', 'Faltan la sesión y la tarea.');
+
+    const apiKey = LINEAR_API_KEY.value();
+    if (!apiKey) throw new HttpsError('failed-precondition', 'Esta instancia no tiene clave de Linear.');
+    const db = getFirestore();
+    const ref = db.doc(`pokerSessions/${sessionId}`);
+    const admin = await isAdmin(uid);
+
+    // CERROJO atómico: la transacción marca la tarea «en curso» antes de hablar
+    // con Linear. Dos llamadas a la vez (doble clic, reintento) no pueden pasar
+    // las dos: la segunda ve la marca y se rechaza; así no hay sub-issues dobles.
+    const { task, session, identifier } = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'Esa sesión no existe.');
+      const data = snap.data();
+      if (data.ownerLeaderUid !== uid && !admin) {
+        throw new HttpsError('permission-denied', 'Solo el organizador envía estimaciones a Linear.');
+      }
+      const list = Array.isArray(data.tasks) ? data.tasks : [];
+      const i = list.findIndex((t) => t?.id === taskId);
+      const t = list[i];
+      if (!t) throw new HttpsError('not-found', 'Esa tarea no está en la sesión.');
+      // Un cerrojo viejo (Linear respondió pero no se pudo guardar) caduca: se puede reintentar,
+      // y el reintento es idempotente en Linear (sub-issues por título, comentario por cuerpo).
+      const pendingMs = t.linear?.pending ? Date.now() - Date.parse(t.linear.at ?? '') : Infinity;
+      if (t.linear?.pending && pendingMs < POKER_LINEAR_LOCK_MS) throw new HttpsError('already-exists', 'Ya se está enviando a Linear.');
+      if (Array.isArray(t.linear?.subIssues)) throw new HttpsError('already-exists', 'Esta tarea ya está en Linear.');
+      const ref2 = /\b[A-Z][A-Z0-9]{1,7}-\d{1,6}\b/.exec(String(t.title ?? '').toUpperCase())?.[0];
+      if (!ref2) throw new HttpsError('failed-precondition', 'La tarea no lleva referencia de Linear (BB-1234) en el título.');
+      if (!t.values || typeof t.values !== 'object' || Object.keys(t.values).length === 0) {
+        throw new HttpsError('failed-precondition', 'La tarea no tiene valores por gremio: ciérrala primero.');
+      }
+      tx.update(ref, { tasks: list.with(i, { ...t, linear: { pending: true, at: new Date().toISOString() } }) });
+      return { task: t, session: data, identifier: ref2 };
+    });
+
+    let result;
+    try {
+      result = await pushGuildEstimates({ identifier, values: task.values, value: task.value ?? null, sessionName: session.name ?? '' }, apiKey);
+    } catch (err) {
+      // Se suelta el cerrojo para poder reintentar; la tarea vuelve a estar sin enviar.
+      await patchPokerTask(db, ref, taskId, ({ linear: _pending, ...rest }) => rest).catch(() => {});
+      throw new HttpsError('unavailable', err instanceof Error ? err.message : 'Linear no respondió.');
+    }
+    const linear = { parent: result.parent, subIssues: result.subIssues, at: new Date().toISOString() };
+    await patchPokerTask(db, ref, taskId, (t) => ({ ...t, linear }));
+    logger.info(`[poker] ${identifier}: ${result.created} sub-issues creadas, ${result.skipped} ya existían (sesión ${sessionId})`);
+    return { linear, created: result.created, skipped: result.skipped };
   },
 );
 const FLOW_HOUR = 3_600_000;
