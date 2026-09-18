@@ -29,6 +29,8 @@ onUserChanged(async (user) => {
     if (!gate) return;
 
     const person = await getMyPerson(user.uid).catch(() => null);
+    // Gremios de la ficha, para el asiento del poker (RMR-PCS-0043 · F2). Antes del uid: la mesa se sienta al recibirlo.
+    app.guilds = Array.isArray(person?.guilds) ? person.guilds : [];
     app.uid = user.uid;
     app.authorName = person?.name ?? user.displayName ?? 'Sin nombre';
     // Gestión por política (RMR-TSK-0388): managedBy compone con los roles legacy.
