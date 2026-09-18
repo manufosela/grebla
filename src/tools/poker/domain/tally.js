@@ -56,28 +56,38 @@ function taskGuildList(task) {
  * Gremios con los que ESTE asiento puede votar ESTA tarea (intersección). En
  * una tarea general no hay gremio que elegir: vacío.
  */
-export function guildsForTask(player, task) {
-  const t = taskGuildList(task);
-  return t.length === 0 ? [] : seatGuilds(player).filter((g) => t.includes(g));
+export function guildsForTask(player, task, locked = {}) {
+  const all = taskGuildList(task);
+  if (all.length === 0) return [];
+  const abiertos = all.filter((g) => !isLocked(locked, g));
+  return seatGuilds(player).filter((g) => abiertos.includes(g));
 }
 
-/** ¿Puede votar esta tarea? Tarea general, todos; con gremios, solo quien los tiene. */
-export function eligibleFor(player, task) {
-  return taskGuildList(task).length === 0 || guildsForTask(player, task).length > 0;
+/** ¿Está ese gremio FIJADO (ya con acuerdo) en esta tarea? (RMR-PCS-0043 · F3) */
+export function isLocked(locked, guild) {
+  return !!locked && typeof locked === 'object' && Object.hasOwn(locked, guild);
+}
+
+/**
+ * ¿Puede votar esta tarea? Tarea general, todos; con gremios, solo quien tiene
+ * alguno que todavía no esté fijado.
+ */
+export function eligibleFor(player, task, locked = {}) {
+  return taskGuildList(task).length === 0 || guildsForTask(player, task, locked).length > 0;
 }
 
 /**
  * Con qué gremio cuenta el voto sin preguntar: el único posible. Con varios,
  * null (hay que elegir); en tarea general, null (no aplica).
  */
-export function impliedGuild(player, task) {
-  const g = guildsForTask(player, task);
+export function impliedGuild(player, task, locked = {}) {
+  const g = guildsForTask(player, task, locked);
   return g.length === 1 ? g[0] : null;
 }
 
-/** Votantes activos de la ronda; con `task`, solo los elegibles para ella. */
-export function activeVoters(players, round, task = null) {
-  return (players ?? []).filter((p) => !isSpectator(p) && !hasSkippedRound(p, round) && (task === null || eligibleFor(p, task)));
+/** Votantes activos de la ronda; con `task`, solo los elegibles para ella (sin los gremios fijados). */
+export function activeVoters(players, round, task = null, locked = {}) {
+  return (players ?? []).filter((p) => !isSpectator(p) && !hasSkippedRound(p, round) && (task === null || eligibleFor(p, task, locked)));
 }
 
 /** Cuántos votantes ACTIVOS han votado (nunca supera al total de activos). */
@@ -107,8 +117,8 @@ export function allVoted(players, round) {
  * un 8 por esfuerzo.
  * @returns {Array<{uid:string,name:string,value:string|null,axes:{complexity:number,effort:number}|null}>}
  */
-export function revealedVotes(players, votesByUid, round, task = null) {
-  return activeVoters(players, round, task)
+export function revealedVotes(players, votesByUid, round, task = null, locked = {}) {
+  return activeVoters(players, round, task, locked)
     .filter((p) => hasVotedThisRound(p, round))
     .map((p) => {
       const vote = voteFor(votesByUid, p.uid);
@@ -173,4 +183,47 @@ export function judgeVotes(values, deck) {
     lowest,
     highest,
   };
+}
+
+/**
+ * El juicio POR GREMIO (RMR-PCS-0043 · F3): los votos revelados se agrupan por
+ * el gremio con el que se emitieron y cada grupo se juzga aparte con
+ * `judgeVotes`. Los votos sin gremio (tarea general) forman un solo grupo con
+ * gremio null. `agreed` recoge el valor de cada gremio que coincide.
+ * @param {Array<{ guild?: string|null, value: string|null }>} votes
+ * @param {string[]} deck
+ * @returns {{ groups: Array<{ guild: string|null, votes: any[], verdict: ReturnType<typeof judgeVotes> }>, agreed: Record<string, string>, allAgreed: boolean }}
+ */
+export function judgeByGuild(votes, deck) {
+  const byGuild = new Map();
+  for (const v of votes ?? []) {
+    const key = typeof v.guild === 'string' && v.guild ? v.guild : null;
+    if (!byGuild.has(key)) byGuild.set(key, []);
+    byGuild.get(key).push(v);
+  }
+  const groups = [...byGuild.entries()]
+    .map(([guild, list]) => ({ guild, votes: list, verdict: judgeVotes(list.map((v) => v.value), deck) }))
+    .sort((a, b) => String(a.guild ?? '').localeCompare(String(b.guild ?? ''), 'es'));
+  const agreed = Object.fromEntries(groups.filter((g) => g.verdict.consensus).map((g) => [g.guild ?? '', g.verdict.agreed]));
+  return { groups, agreed, allAgreed: groups.length > 0 && groups.every((g) => g.verdict.consensus) };
+}
+
+/**
+ * ¿Están todos los gremios de la tarea con valor, entre los fijados y los que
+ * acaban de coincidir? Y cuáles faltan (sin acuerdo o sin nadie en la mesa).
+ * @param {{ guilds?: string[] }} task
+ * @param {Record<string, string>} locked
+ * @param {Record<string, string>} agreed
+ * @returns {{ done: boolean, values: Record<string, string>, missing: string[] }}
+ */
+export function taskSettlement(task, locked = {}, agreed = {}) {
+  const guilds = Array.isArray(task?.guilds) ? task.guilds : [];
+  const values = {};
+  const missing = [];
+  for (const g of guilds) {
+    if (isLocked(locked, g)) values[g] = locked[g];
+    else if (Object.hasOwn(agreed ?? {}, g)) values[g] = agreed[g];
+    else missing.push(g);
+  }
+  return { done: guilds.length > 0 && missing.length === 0, values, missing };
 }

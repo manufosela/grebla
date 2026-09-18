@@ -153,3 +153,14 @@ describe('reconcileGuildDrafts: los gremios de Convocar siguen a su línea', () 
     expect(out[0].guilds).not.toBe(out[1].guilds);
   });
 });
+
+describe('closeTask con valores por gremio (RMR-PCS-0043 · F3)', () => {
+  it('guarda values y el resumen; sin values, como antes', () => {
+    const tasks = parseTaskLines('Uno\nDos', 9, ['QA']);
+    const { tasks: out, nextId } = closeTask(tasks, tasks[0].id, '8', { 'Backend PHP': '5', QA: '8' });
+    expect(out[0]).toMatchObject({ value: '8', values: { 'Backend PHP': '5', QA: '8' } });
+    expect(out[1].values).toBeUndefined();
+    expect(nextId).toBe(tasks[1].id);
+    expect(closeTask(tasks, tasks[0].id, '5').tasks[0].values).toBeUndefined();
+  });
+});

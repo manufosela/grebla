@@ -101,8 +101,9 @@ export function nextPendingTask(tasks, afterId = null) {
  * la lista nueva y el id de la siguiente (null si no queda ninguna).
  * @param {PokerTask[]} tasks @param {string} id @param {string} value
  */
-export function closeTask(tasks, id, value) {
-  const list = (tasks ?? []).map((t) => (t.id === id ? { ...t, value } : t));
+export function closeTask(tasks, id, value, values = null) {
+  // `values` (RMR-PCS-0043 · F3): el valor de cada gremio; `value` resume (el mayor).
+  const list = (tasks ?? []).map((t) => (t.id === id ? { ...t, value, ...(values ? { values: { ...values } } : {}) } : t));
   const next = nextPendingTask(list, id);
   return { tasks: list, nextId: next?.id ?? null };
 }

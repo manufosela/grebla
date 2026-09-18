@@ -79,7 +79,7 @@ export function setSessionTasks(sessionId, tasks, currentTaskId) {
  */
 export function closeCurrentTask(sessionId, tasks, nextId) {
   return updateDoc(doc(db, SESSIONS, sessionId), {
-    tasks, currentTaskId: nextId, round: increment(1), revealed: false, voteTitle: '', voteRef: null, voteIssue: null, issueOpen: false,
+    tasks, currentTaskId: nextId, round: increment(1), revealed: false, voteTitle: '', voteRef: null, voteIssue: null, issueOpen: false, lockedGuilds: {},
   });
 }
 
@@ -147,6 +147,7 @@ export function recordAgreement(sessionId, acuerdo) {
       title: String(acuerdo.title ?? '').trim() || null,
       ref: String(acuerdo.ref ?? '').trim() || null,
       value: acuerdo.value,
+      values: acuerdo.values && typeof acuerdo.values === 'object' ? { ...acuerdo.values } : null,
       round: acuerdo.round ?? null,
       at: new Date().toISOString(),
     }),
@@ -256,10 +257,12 @@ export function watchVotes(sessionId, onData, onError) {
  * ocultando los votos. Solo el dueño (o superadmin) puede: lo imponen las reglas.
  * @param {string} sessionId
  */
-export function revote(sessionId) {
+export function revote(sessionId, locked = null) {
+  // `locked` (RMR-PCS-0043 · F3): gremios ya con acuerdo {gremio: valor}, que no vuelven a votar.
   return updateDoc(doc(db, SESSIONS, sessionId), {
     round: increment(1),
     revealed: false,
+    ...(locked && typeof locked === 'object' ? { lockedGuilds: { ...locked } } : {}),
   });
 }
 
