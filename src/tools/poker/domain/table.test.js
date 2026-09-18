@@ -67,3 +67,37 @@ describe('allActiveVoted: cuándo puede el organizador destapar', () => {
     expect(allActiveVoted([{ uid: 'o', spectator: true }], 1)).toBe(false);
   });
 });
+
+describe('la mesa por tarea con gremios (RMR-PCS-0043 · F2)', () => {
+  const deck = ['1', '2', '3', '5', '8', '13', 'partir'];
+  const players = [
+    { uid: 'a', name: 'Ana', guilds: ['Backend PHP'], votedRound: 1 },
+    { uid: 'b', name: 'Bea', guilds: ['iOS'], votedRound: 1 },
+    { uid: 'c', name: 'Cris', guilds: ['Backend PHP', 'QA'], votedRound: null },
+  ];
+  const task = { id: 't', title: 'x', guilds: ['Backend PHP', 'QA'] };
+
+  it('solo se sientan a la mesa los del gremio de la tarea, con su gremio (o pendiente de elegir)', () => {
+    const { seats } = cardStates({ players, round: 1, revealed: false, deck, task });
+    expect(seats.map((s) => [s.uid, s.guild, s.guilds])).toEqual([
+      ['a', 'Backend PHP', ['Backend PHP']],
+      ['c', null, ['Backend PHP', 'QA']],
+    ]);
+    expect(allActiveVoted(players, 1, task)).toBe(false); // Cris no ha votado
+    expect(allActiveVoted(players.filter((p) => p.uid !== 'c'), 1, task)).toBe(true); // Bea no cuenta
+  });
+
+  it('al revelar, el gremio de la carta es el del voto', () => {
+    const votesByUid = { a: { value: '5', round: 1, guild: 'Backend PHP' }, c: { value: '5', round: 1, guild: 'QA' } };
+    const list = players.map((p) => ({ ...p, votedRound: 1 }));
+    const { seats } = cardStates({ players: list, votesByUid, round: 1, revealed: true, deck, task });
+    expect(seats.map((s) => [s.uid, s.value, s.guild])).toEqual([['a', '5', 'Backend PHP'], ['c', '5', 'QA']]);
+  });
+
+  it('sin tarea (o general) todo sigue como antes y el asiento muestra sus gremios', () => {
+    const { seats } = cardStates({ players, round: 1, revealed: false, deck });
+    expect(seats.map((s) => [s.uid, s.guild, s.guilds])).toEqual([
+      ['a', null, ['Backend PHP']], ['b', null, ['iOS']], ['c', null, ['Backend PHP', 'QA']],
+    ]);
+  });
+});

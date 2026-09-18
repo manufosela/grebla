@@ -908,7 +908,11 @@ service cloud.firestore {
       // lleva el valor, así que verla no filtra ningún voto.
       match /players/{uid} {
         allow read: if canAccessOrg();
-        allow create, update: if canAccessOrg() && request.auth.uid == uid;
+        allow create: if canAccessOrg() && request.auth.uid == uid;
+        // Cada uno la suya; el DUEÑO solo puede poner el gremio de un asiento
+        // (RMR-PCS-0043 · F2: quien no tiene gremio en la ficha), nada más.
+        allow update: if canAccessOrg() && (request.auth.uid == uid
+          || (isPokerOwner() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guilds'])));
         // Cada uno se sale; el dueño (o superadmin) limpia al borrar la sesión.
         allow delete: if isSuperAdmin() || isPokerOwner() || (isSignedIn() && request.auth.uid == uid);
       }
@@ -918,8 +922,15 @@ service cloud.firestore {
       // queda congelado: nadie puede cambiarlo ni borrarlo (integridad del
       // resultado); reabrir es pasar de tema, cosa del dueño.
       match /votes/{uid} {
+        // El gremio con el que cuenta el voto (RMR-PCS-0043 · F2) tiene que ser
+        // uno de los del PROPIO asiento: nadie atribuye su carta a otro gremio.
+        function voteGuildOk() {
+          return !('guild' in request.resource.data)
+            || request.resource.data.guild == null
+            || request.resource.data.guild in get(/databases/$(database)/documents/pokerSessions/$(sessionId)/players/$(uid)).data.guilds;
+        }
         allow read: if canAccessOrg() && (sessionRevealed() || request.auth.uid == uid);
-        allow create, update: if canAccessOrg() && request.auth.uid == uid && !sessionRevealed();
+        allow create, update: if canAccessOrg() && request.auth.uid == uid && !sessionRevealed() && voteGuildOk();
         // El propio solo antes de revelar; el dueño/superadmin limpia al borrar la sesión.
         allow delete: if isSuperAdmin() || isPokerOwner()
           || (isSignedIn() && request.auth.uid == uid && !sessionRevealed());

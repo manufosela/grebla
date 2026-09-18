@@ -11,11 +11,12 @@
  * @typedef {'hidden'|'agree'|'low'|'high'|'plain'|'empty'} SeatTone
  * @typedef {{ uid: string, name: string, voted: boolean, value: string|null, axes: {complexity:number, effort:number}|null, tone: SeatTone }} Seat
  */
-import { activeVoters, hasVotedThisRound, judgeVotes } from './tally.js';
+import { activeVoters, hasVotedThisRound, judgeVotes, guildsForTask, impliedGuild, seatGuilds } from './tally.js';
 
 /** ¿Han votado ya TODOS los que votan en esta ronda? (y hay al menos uno). */
-export function allActiveVoted(players, round) {
-  const activos = activeVoters(players, round);
+/** Con `task` (RMR-PCS-0043 · F2) solo cuentan los asientos elegibles para ella. */
+export function allActiveVoted(players, round, task = null) {
+  const activos = activeVoters(players, round, task);
   return activos.length > 0 && activos.every((p) => hasVotedThisRound(p, round));
 }
 
@@ -26,18 +27,22 @@ export function allActiveVoted(players, round) {
  * @param {{ players: Array<object>, votesByUid?: Record<string, {value:string, round:number, axes?:object}>, round: number, revealed: boolean, deck?: ReadonlyArray<string> }} input
  * @returns {{ seats: Seat[], verdict: ReturnType<typeof judgeVotes>|null }}
  */
-export function cardStates({ players, votesByUid = {}, round, revealed, deck }) {
-  const activos = activeVoters(players, round);
+export function cardStates({ players, votesByUid = {}, round, revealed, deck, task = null }) {
+  const activos = activeVoters(players, round, task);
   const base = activos.map((p) => {
     const voted = hasVotedThisRound(p, round);
     const vote = votesByUid?.[p.uid];
     const actual = revealed && voted && vote?.round === round;
+    // El gremio de la carta: el del voto si ya se ve; si no, el único posible del asiento para la tarea.
+    const guild = (actual && typeof vote.guild === 'string' && vote.guild) || impliedGuild(p, task);
     return {
       uid: p.uid,
       name: p.name || 'Sin nombre',
       voted,
       value: actual ? vote.value : null,
       axes: actual && vote.axes ? { complexity: vote.axes.complexity, effort: vote.axes.effort } : null,
+      guild,
+      guilds: task ? guildsForTask(p, task) : seatGuilds(p),
     };
   });
   if (!revealed) return { seats: base.map((s) => ({ ...s, tone: 'hidden' })), verdict: null };
