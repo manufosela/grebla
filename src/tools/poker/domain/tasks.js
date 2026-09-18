@@ -30,12 +30,57 @@ export function cleanTitle(input) {
  * @param {number} [seed]
  * @returns {PokerTask[]}
  */
-export function parseTaskLines(text, seed = Date.now()) {
+export function parseTaskLines(text, seed = Date.now(), guilds = []) {
   return String(text ?? '')
     .split(/\r?\n/)
     .map(cleanTitle)
     .filter(Boolean)
-    .map((title, i) => ({ id: taskId(i, seed), title, value: null }));
+    .map((title, i) => ({ id: taskId(i, seed), title, value: null, guilds: [...guilds] }));
+}
+
+// ── Gremios de la tarea (RMR-PCS-0043 · F1) ──────────────────────────────────
+// Los gremios son NOMBRES del catálogo /guilds de la instancia. Una tarea sin
+// gremios es GENERAL: votan todos. QA va marcado por defecto porque todo pasa
+// por QA, pero se puede quitar.
+
+const QA_RE = /^qa$/i;
+
+/** El gremio de QA tal como se llame en el catálogo, o null si no existe. */
+export function qaGuild(catalog) {
+  return (catalog ?? []).find((g) => QA_RE.test(String(g).trim())) ?? null;
+}
+
+/** Gremios con los que nace una tarea: QA si el catálogo lo tiene. */
+export function defaultGuilds(catalog) {
+  const qa = qaGuild(catalog);
+  return qa ? [qa] : [];
+}
+
+/**
+ * Deja solo gremios del catálogo, sin repetidos y en el orden del catálogo.
+ * Con catálogo vacío (no cargado) se conservan tal cual, limpios.
+ */
+export function normalizeGuilds(guilds, catalog = []) {
+  const limpios = [...new Set((guilds ?? []).map((g) => String(g ?? '').trim()).filter(Boolean))];
+  const cat = (catalog ?? []).map(String);
+  if (cat.length === 0) return limpios;
+  return cat.filter((g) => limpios.includes(g));
+}
+
+/** @returns {string[]} gremios de la tarea (vacío = general). */
+export function taskGuilds(task) {
+  return Array.isArray(task?.guilds) ? task.guilds : [];
+}
+
+/** Una tarea sin gremios es general: la votan todos los gremios. */
+export function isGeneralTask(task) {
+  return taskGuilds(task).length === 0;
+}
+
+/** Cambia los gremios de una tarea (inmutable). */
+export function setTaskGuilds(tasks, id, guilds, catalog = []) {
+  const limpios = normalizeGuilds(guilds, catalog);
+  return (tasks ?? []).map((t) => (t.id === id ? { ...t, guilds: limpios } : t));
 }
 
 /** La tarea actual, o null si no hay (sesión sin tareas o ya terminada). */
@@ -63,10 +108,10 @@ export function closeTask(tasks, id, value) {
 }
 
 /** Añade una tarea al final. Devuelve la lista nueva y la tarea (null si el título está vacío). */
-export function appendTask(tasks, title, seed = Date.now()) {
+export function appendTask(tasks, title, seed = Date.now(), guilds = []) {
   const clean = cleanTitle(title);
   if (!clean) return { tasks: tasks ?? [], task: null };
-  const task = { id: taskId((tasks ?? []).length, seed), title: clean, value: null };
+  const task = { id: taskId((tasks ?? []).length, seed), title: clean, value: null, guilds: [...guilds] };
   return { tasks: [...(tasks ?? []), task], task };
 }
 
