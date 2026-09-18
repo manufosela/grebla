@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPeopleTree, personTitle, peopleTreeLayout } from './orgPeopleTree.js';
+import { buildPeopleTree, personTitle, peopleTreeLayout, splitLoose, leafColumns } from './orgPeopleTree.js';
 
 const p = (personId, name, reportsToPersonId = null, extra = {}) => ({ personId, name, reportsToPersonId, ...extra });
 
@@ -56,28 +56,67 @@ describe('personTitle', () => {
   });
 });
 
+describe('splitLoose', () => {
+  it('las raíces con equipo forman el árbol; las que no tienen a nadie van sueltas, huérfanas o no', () => {
+    const { roots } = buildPeopleTree([p('ceo', 'Paloma'), p('a', 'Ana', 'ceo'), p('x', 'Fuera'), p('y', 'Sin jefe', 'baja')]);
+    const { tree, loose } = splitLoose(roots);
+    expect(tree.map((r) => r.person.name)).toEqual(['Paloma']);
+    expect(loose.map((r) => [r.person.name, r.orphan])).toEqual([['Fuera', false], ['Sin jefe', true]]);
+  });
+});
+
+describe('leafColumns', () => {
+  it('hasta tres en línea; de cuatro a ocho, tres columnas; más, cuatro', () => {
+    expect([0, 1, 3, 4, 8, 9, 20].map(leafColumns)).toEqual([0, 1, 3, 3, 3, 4, 4]);
+  });
+});
+
 describe('peopleTreeLayout', () => {
-  it('las raíces arriba, cada nivel más abajo, sin solapes y con una arista por relación', () => {
+  const O = { nodeWidth: 100, nodeHeight: 50, gapX: 20, rowHeight: 100 };
+  const at = (nodes, name) => nodes.find((n) => n.node.person.name === name);
+
+  it('las raíces arriba, cada nivel más abajo, sin solapes y con una arista trazada por relación', () => {
     const { roots } = buildPeopleTree([p('ceo', 'Paloma'), p('a', 'Ana', 'ceo'), p('b', 'Bea', 'ceo'), p('c', 'Cris', 'a')]);
-    const { nodes, links, width, height } = peopleTreeLayout(roots, { nodeWidth: 100, nodeHeight: 50, gapX: 20, rowHeight: 100 });
-    const at = (name) => nodes.find((n) => n.node.person.name === name);
-    expect(at('Paloma').y).toBeLessThan(at('Ana').y);
-    expect(at('Ana').y).toBe(at('Bea').y);
-    expect(at('Cris').y).toBeGreaterThan(at('Ana').y);
-    expect(Math.abs(at('Ana').x - at('Bea').x)).toBeGreaterThanOrEqual(120);
+    const { nodes, links, width, height } = peopleTreeLayout(roots, O);
+    expect(at(nodes, 'Paloma').y).toBeLessThan(at(nodes, 'Ana').y);
+    expect(at(nodes, 'Ana').y).toBe(at(nodes, 'Bea').y);
+    expect(at(nodes, 'Cris').y).toBeGreaterThan(at(nodes, 'Ana').y);
+    expect(Math.abs(at(nodes, 'Ana').x - at(nodes, 'Bea').x)).toBeGreaterThanOrEqual(120);
     expect(links).toHaveLength(3);
-    expect(links.find((l) => l.to === 'c').from).toBe('a');
+    expect(links.find((l) => l.to === 'c')).toMatchObject({ from: 'a' });
+    expect(links.every((l) => /^M[\d.]+,[\d.]+ V/.test(l.d))).toBe(true);
     expect(nodes.every((n) => n.x >= 50)).toBe(true);
-    expect(width).toBeGreaterThan(0);
+    expect(width).toBe(220); // Ana (con Cris debajo) y Bea, una columna cada una
     expect(height).toBe(250); // tres filas: dos saltos de 100 y la caja de la última
   });
 
+  it('un equipo grande de hojas se apila en rejilla bajo su manager en vez de en línea', () => {
+    const people = [p('m', 'Marta'), ...['a', 'b', 'c', 'd', 'e', 'f'].map((id) => p(id, `Hoja ${id}`, 'm'))];
+    const { roots } = buildPeopleTree(people);
+    const { nodes, links, width, height } = peopleTreeLayout(roots, O);
+    expect(width).toBe(352); // tres columnas (y la espina), no seis
+    expect(height).toBe(250); // manager + dos filas de hojas
+    const ys = new Set(nodes.filter((n) => n.node.person.name.startsWith('Hoja')).map((n) => n.y));
+    expect([...ys].sort((a, b) => a - b)).toEqual([125, 225]);
+    expect(at(nodes, 'Marta').x).toBe(176); // centrada sobre la rejilla
+    expect(links).toHaveLength(6);
+    // Las hojas de la segunda fila entran por la espina lateral, no atravesando la primera fila.
+    expect(links.find((l) => l.to === 'd').d).toMatch(/ H[\d.]+ V[\d.]+ H[\d.]+$/);
+  });
+
+  it('los hijos con equipo van antes que la rejilla de hojas y cada bloque tiene su sitio', () => {
+    const { roots } = buildPeopleTree([p('m', 'Marta'), p('h1', 'Hoja 1', 'm'), p('b', 'Bea', 'm'), p('bb', 'Nieta', 'b')]);
+    const { nodes } = peopleTreeLayout(roots, O);
+    expect(at(nodes, 'Bea').x).toBeLessThan(at(nodes, 'Hoja 1').x);
+    expect(at(nodes, 'Nieta').x).toBe(at(nodes, 'Bea').x);
+  });
+
   it('varias raíces conviven sin arista entre ellas', () => {
-    const { roots } = buildPeopleTree([p('ceo', 'Paloma'), p('x', 'Suelto', 'baja')]);
-    const { nodes, links } = peopleTreeLayout(roots);
-    expect(nodes).toHaveLength(2);
-    expect(links).toHaveLength(0);
-    expect(nodes[0].y).toBe(nodes[1].y);
+    const { roots } = buildPeopleTree([p('ceo', 'Paloma'), p('a', 'Ana', 'ceo'), p('x', 'Otra', ''), p('y', 'Yo', 'x')]);
+    const { nodes, links } = peopleTreeLayout(roots, O);
+    expect(nodes).toHaveLength(4);
+    expect(links).toHaveLength(2);
+    expect(at(nodes, 'Paloma').y).toBe(at(nodes, 'Otra').y);
   });
 
   it('sin personas, nada', () => {

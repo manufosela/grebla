@@ -14,8 +14,6 @@
  *  - los hijos van primero los que tienen equipo, luego por nombre, como en el
  *    portal, para que ramas y hojas no se mezclen.
  */
-import { hierarchy, tree } from 'd3-hierarchy';
-
 /**
  * @typedef {Object} DirectoryPerson
  * @property {string} personId
@@ -100,35 +98,106 @@ export function personTitle(person, roleLabels = {}) {
 }
 
 /**
- * Coordenadas para pintar el árbol hacia abajo (raíces arriba). Varias raíces
- * cuelgan de una raíz virtual que no se dibuja. Solo geometría.
+ * Separa las raíces que forman árbol (tienen a alguien a su cargo) de las
+ * PERSONAS SUELTAS: sin manager y sin reportes. Pintarlas como raíces en la
+ * misma fila que el árbol real multiplicaba el ancho (RMR-BUG-0126); van en un
+ * bloque aparte, con su aviso si reportaban a alguien que no está.
+ * @param {PeopleNode[]} roots
+ * @returns {{ tree: PeopleNode[], loose: PeopleNode[] }}
+ */
+export function splitLoose(roots) {
+  const all = roots ?? [];
+  return { tree: all.filter((r) => r.children.length > 0), loose: all.filter((r) => r.children.length === 0) };
+}
+
+/** Columnas de la rejilla de hojas: hasta 3 en línea; más, en rejilla de 3 o 4. */
+export function leafColumns(n) {
+  if (n <= 3) return n;
+  return n <= 8 ? 3 : 4;
+}
+
+/**
+ * Coordenadas para pintar el árbol hacia abajo (raíces arriba). Solo geometría.
+ *
+ * Los hijos CON equipo van uno al lado de otro con su subárbol; los hijos
+ * hoja se apilan en REJILLA bajo el manager (`leafColumns`), como el portal:
+ * un equipo de nueve no ocupa nueve columnas sino tres. Las aristas salen ya
+ * trazadas (`d`): codo para los subárboles y espina por columna para la
+ * rejilla, así ninguna línea cruza una tarjeta.
  * @param {PeopleNode[]} roots
  * @param {{ nodeWidth?: number, nodeHeight?: number, gapX?: number, rowHeight?: number }} [opts]
  * @returns {{
  *   nodes: Array<{ node: PeopleNode, x: number, y: number }>,
- *   links: Array<{ from: string, to: string, x1: number, y1: number, x2: number, y2: number }>,
+ *   links: Array<{ from: string, to: string, d: string }>,
  *   width: number, height: number,
  * }}
  */
 export function peopleTreeLayout(roots, opts = {}) {
   const { nodeWidth = 200, nodeHeight = 74, gapX = 24, rowHeight = 120 } = opts;
-  if (!roots || roots.length === 0) return { nodes: [], links: [], width: 0, height: 0 };
-  const virtual = { person: { personId: '__root__', name: '' }, children: roots, depth: -1, orphan: false, reports: 0 };
-  const root = hierarchy(virtual, (n) => n.children);
-  tree().nodeSize([nodeWidth + gapX, rowHeight])(root);
-  const real = root.descendants().filter((d) => d.depth > 0);
-  const minX = Math.min(...real.map((d) => d.x));
-  const maxX = Math.max(...real.map((d) => d.x));
-  const maxDepth = Math.max(...real.map((d) => d.depth));
-  const shift = -minX + nodeWidth / 2;
-  const pos = new Map(real.map((d) => [d.data.person.personId, { x: d.x + shift, y: (d.depth - 1) * rowHeight + nodeHeight / 2 }]));
-  const nodes = real.map((d) => ({ node: d.data, ...pos.get(d.data.person.personId) }));
-  const links = real
-    .filter((d) => d.depth > 1)
-    .map((d) => {
-      const from = pos.get(d.parent.data.person.personId);
-      const to = pos.get(d.data.person.personId);
-      return { from: d.parent.data.person.personId, to: d.data.person.personId, x1: from.x, y1: from.y + nodeHeight / 2, x2: to.x, y2: to.y - nodeHeight / 2 };
-    });
-  return { nodes, links, width: maxX - minX + nodeWidth, height: (maxDepth - 1) * rowHeight + nodeHeight };
+  const list = roots ?? [];
+  if (list.length === 0) return { nodes: [], links: [], width: 0, height: 0 };
+  const nodes = [];
+  const links = [];
+  const spine = 12; // separación de la espina respecto a la tarjeta
+  const midOf = (top) => top - (rowHeight - nodeHeight) / 2; // mitad del hueco entre filas
+
+  /** Ancho y filas que ocupa un subárbol (memoizado en el nodo). */
+  const measure = (node) => {
+    if (node._m) return node._m;
+    const branches = node.children.filter((c) => c.children.length > 0);
+    const leaves = node.children.filter((c) => c.children.length === 0);
+    const cols = leafColumns(leaves.length);
+    // La rejilla reserva a su izquierda el hueco de la espina por la que entran las filas segunda y siguientes.
+    const leafRows = cols > 0 ? Math.ceil(leaves.length / cols) : 0;
+    const leafSpine = leafRows > 1 ? spine : 0; // una sola fila entra por arriba: sin espina
+    const leafW = cols > 0 ? leafSpine + cols * nodeWidth + (cols - 1) * gapX : 0;
+    const blocks = [...branches.map((b) => measure(b).width), ...(leafW ? [leafW] : [])];
+    const inner = blocks.reduce((a, b) => a + b, 0) + Math.max(0, blocks.length - 1) * gapX;
+    const rows = 1 + Math.max(leafRows, ...branches.map((b) => measure(b).rows), 0);
+    node._m = { width: Math.max(nodeWidth, inner), rows, branches, leaves, cols, leafSpine, inner };
+    return node._m;
+  };
+
+  /** Coloca el subárbol con su esquina izquierda en `left` y su fila en `row`. */
+  const place = (node, left, row) => {
+    const m = measure(node);
+    const x = left + m.width / 2;
+    const y = row * rowHeight + nodeHeight / 2;
+    nodes.push({ node, x, y });
+    let cursor = left + (m.width - m.inner) / 2;
+    const childTop = (row + 1) * rowHeight;
+    const midY = midOf(childTop);
+    for (const b of m.branches) {
+      const bm = measure(b);
+      const bx = cursor + bm.width / 2;
+      links.push({ from: node.person.personId, to: b.person.personId, d: `M${x},${y + nodeHeight / 2} V${midY} H${bx} V${childTop}` });
+      place(b, cursor, row + 1);
+      cursor += bm.width + gapX;
+    }
+    if (m.cols > 0) {
+      const gridLeft = cursor + m.leafSpine;
+      m.leaves.forEach((leaf, i) => {
+        const col = i % m.cols;
+        const r = Math.floor(i / m.cols);
+        const lx = gridLeft + col * (nodeWidth + gapX) + nodeWidth / 2;
+        const ly = (row + 1 + r) * rowHeight + nodeHeight / 2;
+        nodes.push({ node: leaf, x: lx, y: ly });
+        const d = r === 0
+          ? `M${x},${y + nodeHeight / 2} V${midY} H${lx} V${ly - nodeHeight / 2}`
+          : `M${x},${y + nodeHeight / 2} V${midY} H${lx - nodeWidth / 2 - spine} V${ly} H${lx - nodeWidth / 2}`;
+        links.push({ from: node.person.personId, to: leaf.person.personId, d });
+      });
+    }
+  };
+
+  let left = 0;
+  let rows = 0;
+  for (const r of list) {
+    const m = measure(r);
+    place(r, left, 0);
+    left += m.width + gapX * 2;
+    rows = Math.max(rows, m.rows);
+  }
+  for (const n of nodes) delete n.node._m;
+  return { nodes, links, width: left - gapX * 2, height: (rows - 1) * rowHeight + nodeHeight };
 }

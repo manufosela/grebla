@@ -42,9 +42,11 @@ test('la pestaña Estándar pinta a cada persona bajo quien le dirige, y nadie s
   await expect(card('e2e-org-cto')).toContainText('CTO'); // el puesto de Notion manda
   await expect(card('e2e-org-cto')).toContainText('Product · Core');
   await expect(card('e2e-org-eng')).toContainText('Ana E2E');
-  // La baja no se pinta; quien reportaba a ella queda como raíz, avisando.
+  // La baja no se pinta; quien reportaba a ella no entra en el árbol: va al
+  // bloque de sin asignar, avisando (RMR-BUG-0126: los sueltos no ensanchan el árbol).
   await expect(card('e2e-org-baja')).toHaveCount(0);
-  await expect(card('e2e-org-lost')).toContainText('Sin manager en el censo');
+  await expect(chart.locator('.loose').locator('[data-person-id="e2e-org-lost"]')).toContainText('Sin manager en el censo');
+  await expect(chart.locator('zoom-port [data-person-id="e2e-org-lost"]')).toHaveCount(0);
 
   // Geometría: la CEO arriba, la CTO debajo, la ingeniera más abajo.
   const top = async (id) => (await card(id).boundingBox()).y;
@@ -55,4 +57,20 @@ test('la pestaña Estándar pinta a cada persona bajo quien le dirige, y nadie s
   const html = await chart.evaluate((el) => el.shadowRoot.innerHTML);
   expect(html).not.toContain('L3');
   await expect(page).toHaveURL(/#estandar$/);
+});
+
+test('el visor del árbol se maximiza sobre sí mismo, con zoom y arrastre a mano', async ({ page }) => {
+  await signInAs(page, 'engineer');
+  await page.goto('/organigrama#estandar');
+  const port = page.locator('org-people-chart zoom-port');
+  await expect(port.getByRole('button', { name: 'Ver todo' })).toBeVisible();
+  // La concesión real depende del navegador: se fija SOBRE QUÉ se pide.
+  await port.evaluate((el) => { el.dataset.fs = ''; el.requestFullscreen = () => { el.dataset.fs = 'visor'; return Promise.resolve(); }; });
+  await port.getByRole('button', { name: 'Pantalla completa' }).click();
+  await expect(port).toHaveAttribute('data-fs', 'visor');
+  // Acercar cambia la escala del lienzo.
+  const escala = async () => port.evaluate((el) => el.shadowRoot.querySelector('.canvas').style.transform);
+  const antes = await escala();
+  await port.getByRole('button', { name: 'Acercar' }).click();
+  expect(await escala()).not.toBe(antes);
 });
