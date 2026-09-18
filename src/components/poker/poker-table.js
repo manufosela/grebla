@@ -43,7 +43,7 @@ import {
   fetchLinearIssue, setVoteRef, showIssue, setIssueOpen, getSession, setSessionTasks, closeCurrentTask, finishSession,
   watchSession, watchPlayers, watchVotes,
   setSpectator, skipRound, unskipRound,
-  setSeatGuilds,
+  setSeatGuilds, pushLinearEstimates,
 } from '../../lib/poker.js';
 
 export class PokerTable extends LitElement {
@@ -51,6 +51,7 @@ export class PokerTable extends LitElement {
     sessionId: { attribute: false },
     _guildCatalog: { state: true },
     _voteGuild: { state: true },
+    _linearBusy: { state: true },
     uid: { attribute: false },
     guilds: { attribute: false },
     authorName: { attribute: false },
@@ -113,6 +114,8 @@ export class PokerTable extends LitElement {
     .chip.low { background: #fbe0e0; border-color: #c0392b; color: #7f1d1d; }
     .chip.warn { background: #fdf1d6; border-color: #b45309; color: #78350f; }
     .guild-values { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+    .linear-links a.chip { text-decoration: none; color: var(--rm-accent-700, var(--teal)); border-color: var(--teal); }
+    .linear-btn { font-size: 0.78rem; padding: 0.25rem 0.6rem; }
     .seat-guild { font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .guild-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: 0 0 0.6rem; }
     .guild-choice .chk { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; }
@@ -191,6 +194,8 @@ export class PokerTable extends LitElement {
     this.guilds = [];
     /** Gremio elegido para votar cuando el asiento tiene varios válidos para la tarea. */
     this._voteGuild = null;
+    /** Id de la tarea que se está enviando a Linear, o null. */
+    this._linearBusy = null;
     this.uid = null;
     this.authorName = '';
     this.canManage = false;
@@ -632,6 +637,45 @@ export class PokerTable extends LitElement {
     } catch (err) { this._onError(err); }
   }
 
+  /**
+   * Linear por gremio (RMR-PCS-0043 · F5): con la tarea cerrada por gremios y
+   * referencia en el título, el organizador la envía; después, los enlaces.
+   */
+  _renderLinear(task) {
+    const enviado = task.linear?.subIssues;
+    if (Array.isArray(enviado)) {
+      return html`<span class="guild-values linear-links">${enviado.map((si) => this._renderLinearLink(si))}</span>`;
+    }
+    // Solo una tarea CERRADA por gremios (con su valor y sus values) y con referencia; nunca la que se está estimando.
+    const porGremios = Array.isArray(task.guilds) && task.guilds.length > 0;
+    const cerrada = porGremios && task.value != null && task.values && typeof task.values === 'object' && Object.keys(task.values).length > 0;
+    if (!this.canManage || !cerrada || task.id === this._currentTask?.id || !findLinearRef(task.title)) return null;
+    const busy = this._linearBusy === task.id || task.linear?.pending === true;
+    return html`<button class="linear-btn" ?disabled=${busy} @click=${() => this._pushLinear(task)}
+      title="Crea en Linear una sub-issue por gremio con su estimación y deja un comentario resumen en la historia">
+      ${busy ? 'Enviando a Linear…' : 'Sub-issues en Linear'}</button>`;
+  }
+
+  /** Solo se enlaza a Linear de verdad: cualquier otra cosa en `url` se pinta sin enlace. */
+  _renderLinearLink(si) {
+    const url = typeof si?.url === 'string' && si.url.startsWith('https://linear.app/') ? si.url : null;
+    const texto = `${si?.guild ?? ''} ${si?.identifier ?? ''}`.trim();
+    if (!url) return html`<span class="chip">${texto}</span>`;
+    return html`<a class="chip" href=${url} target="_blank" rel="noopener noreferrer">${texto} ↗</a>`;
+  }
+
+  async _pushLinear(task) {
+    this._linearBusy = task.id;
+    this._error = '';
+    try {
+      await pushLinearEstimates(this.sessionId, task.id);
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se ha podido enviar a Linear.';
+    } finally {
+      this._linearBusy = null;
+    }
+  }
+
   /** Los valores por gremio de una tarea o acuerdo, como chips. */
   _renderValues(values) {
     if (!values || typeof values !== 'object') return null;
@@ -712,11 +756,13 @@ export class PokerTable extends LitElement {
   _renderFinished() {
     return html`<div class="finished">
       <h3>Sesión terminada</h3>
+      ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <ol class="results">
         ${this._tasks.map((task) => html`<li>
           <span class="est">${task.value == null ? '—' : cardLabel(task.value)}</span>
           <span class="qtitle">${task.title}</span>
           ${this._renderValues(task.values)}
+          ${this._renderLinear(task)}
         </li>`)}
       </ol>
       ${this._tasks.length === 0 ? html`<p class="lead">No se estimó ninguna tarea.</p>` : null}
@@ -902,6 +948,7 @@ export class PokerTable extends LitElement {
           <span class="est">${task.value == null ? '·' : cardLabel(task.value)}</span>
           <span class="qtitle">${task.title}</span>
           ${this._renderValues(task.values)}
+          ${this._renderLinear(task)}
           ${task.id === actual ? html`<span class="lead">estimando</span>` : null}
         </li>`)}
       </ol>` : html`<p class="lead">Sin tareas planificadas: se vota con el título de cada votación.</p>`}
