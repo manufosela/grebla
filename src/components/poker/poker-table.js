@@ -105,6 +105,10 @@ export class PokerTable extends LitElement {
     /* La mesa (RMR-TSK-0523): una carta por persona, a todo el ancho. */
     .seats { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.8rem, 1fr)); gap: 1rem 0.8rem; margin: 0.8rem 0 1rem; }
     .seat { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; min-width: 0; }
+    .seat.empty { opacity: 0.5; }
+    .seat.empty .back { border-style: dashed; background: var(--rm-surface-hover, #eef3f5); }
+    .seat.empty .back-mark { color: var(--rm-muted, #5b6b7d); }
+    .seat.empty .seat-name { font-style: italic; color: var(--rm-muted, #5b6b7d); }
     .guild-groups { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.8rem 0 1rem; }
     .guild-group { border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; padding: 0.5rem 0.8rem 0.2rem; }
     .guild-group h4 { margin: 0 0 0.3rem; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rm-muted, #5b6b7d); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -505,14 +509,14 @@ export class PokerTable extends LitElement {
    */
   _renderSeats() {
     const { seats, byGuild } = this._table;
-    if (seats.length === 0 && Object.keys(this._locked).length === 0) {
-      const vacia = this._byGuilds
-        ? 'Nadie del gremio de esta tarea en la mesa todavía.'
-        : 'Aún no se ha sentado nadie a la mesa.';
-      return html`<p class="lead">${vacia}</p>${this._renderUnseated()}`;
-    }
     if (!this._byGuilds) {
-      return html`<div class="seats" aria-label="Cartas de la mesa">${seats.map((s) => this._renderSeat(s))}</div>
+      // La mesa se ve SIEMPRE (RMR-BUG-0128): sin nadie sentado se deja un sitio
+      // vacío y se dice, en vez de cambiar la mesa por un párrafo (y que salte
+      // el layout en cuanto entra la primera persona).
+      return html`<div class="seats" aria-label="Cartas de la mesa">
+        ${seats.length ? seats.map((s) => this._renderSeat(s)) : this._renderEmptySeat()}
+      </div>
+      ${seats.length ? null : html`<p class="lead">Aún no se ha sentado nadie a la mesa.</p>`}
       ${this._renderUnseated()}`;
     }
     // Por gremio (RMR-PCS-0043 · F3): un grupo por gremio de la tarea, en su orden;
@@ -537,8 +541,16 @@ export class PokerTable extends LitElement {
     else if (verdict && verdict.lowest !== null) chip = html`<span class="chip low">${cardLabel(verdict.lowest)} – ${cardLabel(verdict.highest)}</span>`;
     return html`<section class="guild-group" data-guild=${guild}>
       <h4>${guild} ${chip}</h4>
-      ${seats.length ? html`<div class="seats">${seats.map((s) => this._renderSeat(s))}</div>` : null}
+      <div class="seats">${seats.length ? seats.map((s) => this._renderSeat(s)) : this._renderEmptySeat()}</div>
     </section>`;
+  }
+
+  /** Un sitio vacío: la mesa sigue puesta aunque no haya nadie (RMR-BUG-0128). */
+  _renderEmptySeat() {
+    return html`<div class="seat empty" aria-hidden="true">
+      <div class="flip"><div class="face back"><span class="back-mark">♠</span></div></div>
+      <span class="seat-name">sin ocupar</span>
+    </div>`;
   }
 
   _renderSeat(s) {
