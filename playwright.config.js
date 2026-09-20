@@ -34,7 +34,7 @@ const EMULATOR_ENV = {
 
 // El puerto se puede cambiar con E2E_PORT: en local, otro proyecto puede tener
 // ocupado el 4321 y `reuseExistingServer` correría la suite contra ESA app.
-function portFromEnv(raw) {
+export function portFromEnv(raw) {
   if (raw === undefined || raw === '') return 4321;
   const n = Number(raw);
   // Un puerto inválido no se «arregla» por su cuenta: con 0 el servidor tomaría
