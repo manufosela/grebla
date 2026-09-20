@@ -32,6 +32,20 @@ const EMULATOR_ENV = {
   ASTRO_DEV_BACKGROUND: '1',
 };
 
+// El puerto se puede cambiar con E2E_PORT: en local, otro proyecto puede tener
+// ocupado el 4321 y `reuseExistingServer` correría la suite contra ESA app.
+export function portFromEnv(raw) {
+  if (raw === undefined || raw === '') return 4321;
+  const n = Number(raw);
+  // Un puerto inválido no se «arregla» por su cuenta: con 0 el servidor tomaría
+  // uno al azar y la baseURL seguiría apuntando al 0, que es un fallo confuso.
+  if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error(`E2E_PORT no es un puerto válido: ${raw}`);
+  return n;
+}
+
+const PORT = portFromEnv(process.env.E2E_PORT);
+const BASE_URL = `http://127.0.0.1:${PORT}`;
+
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.js',
@@ -45,7 +59,7 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   use: {
-    baseURL: 'http://127.0.0.1:4321',
+    baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -56,8 +70,8 @@ export default defineConfig({
     // `--host 127.0.0.1`: sin él, astro escucha en ::1 (IPv6) y Playwright, que
     // sondea 127.0.0.1 (IPv4), nunca lo da por listo en el runner y agota el
     // timeout. En local no cambia nada.
-    command: 'npx astro dev --host 127.0.0.1 --port 4321',
-    url: 'http://127.0.0.1:4321',
+    command: `npx astro dev --host 127.0.0.1 --port ${PORT}`,
+    url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     // En un runner de CI en frío, astro dev tarda más en levantar que en local.
     timeout: 150_000,
