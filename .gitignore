@@ -56,3 +56,4 @@ coverage/
 .scannerwork/
 .karajan/policy-decisions.jsonl
 .karajan/audit-history.db
+.karajan/identity.local.yml

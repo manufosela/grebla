@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasVotedThisRound, countVoted, allVoted, revealedVotes, judgeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted, seatGuilds, guildsForTask, eligibleFor, impliedGuild, isLocked, judgeByGuild, taskSettlement } from './tally.js';
+import { hasVotedThisRound, countVoted, allVoted, revealedVotes, judgeVotes, isSpectator, hasSkippedRound, activeVoters, countActiveVoted, seatGuilds, baseGuilds, assignSeatGuilds, refreshSeatGuilds, guildsForTask, eligibleFor, impliedGuild, isLocked, judgeByGuild, taskSettlement } from './tally.js';
 
 const player = (uid, votedRound) => ({ uid, name: uid, votedRound });
 
@@ -180,6 +180,31 @@ describe('gremio del asiento (RMR-PCS-0043 · F2)', () => {
     expect(guildsForTask(ana, tarea)).toEqual(['Backend PHP', 'QA']);
     expect(guildsForTask(bea, tarea)).toEqual([]);
     expect(guildsForTask(ana, general)).toEqual([]);
+  });
+
+  it('baseGuilds: los de la ficha; sin el campo (asientos anteriores), los del asiento', () => {
+    expect(baseGuilds({ guilds: ['QA', 'iOS'], baseGuilds: ['QA'] })).toEqual(['QA']);
+    expect(baseGuilds(ana)).toEqual(['Backend PHP', 'QA']);
+    expect(baseGuilds(sin)).toEqual([]);
+  });
+
+  it('assignSeatGuilds parte SIEMPRE de la ficha: elegir otro gremio corrige el anterior', () => {
+    const manu = { uid: 'm', guilds: ['Tech Lead'], baseGuilds: ['Tech Lead'] };
+    const conPHP = { ...manu, guilds: assignSeatGuilds(manu, 'Backend PHP') };
+    expect(conPHP.guilds).toEqual(['Tech Lead', 'Backend PHP']);
+    // El error se corrige: el gremio elegido antes NO se queda pegado al asiento.
+    expect(assignSeatGuilds(conPHP, 'QA')).toEqual(['Tech Lead', 'QA']);
+    expect(assignSeatGuilds(conPHP, null)).toEqual(['Tech Lead']);
+    // Quien ya tiene el gremio en su ficha no cambia de asiento al elegirlo.
+    expect(assignSeatGuilds({ ...ana, baseGuilds: ana.guilds }, 'QA')).toEqual(['Backend PHP', 'QA']);
+  });
+
+  it('refreshSeatGuilds: al volver a entrar se refresca la ficha sin perder el gremio elegido a mano', () => {
+    const asiento = { guilds: ['Tech Lead', 'QA'], baseGuilds: ['Tech Lead'] };
+    expect(refreshSeatGuilds(asiento, ['Tech Lead'])).toEqual(['Tech Lead', 'QA']);
+    // Si la ficha cambia, manda la ficha nueva y la elección a mano sigue ahí.
+    expect(refreshSeatGuilds(asiento, ['Backend PHP'])).toEqual(['Backend PHP', 'QA']);
+    expect(refreshSeatGuilds(null, ['QA'])).toEqual(['QA']);
   });
 
   it('eligibleFor: tarea general para todos; con gremios, solo quien los tiene', () => {

@@ -19,6 +19,7 @@ import {
 import { db, getRegionalFunctions } from './firebase.js';
 import { isValidCardFor, buildDeck, scaleById } from '../tools/poker/domain/deck.js';
 import { isAxisLevel } from '../tools/poker/domain/magnitude.js';
+import { refreshSeatGuilds } from '../tools/poker/domain/tally.js';
 
 const SESSIONS = 'pokerSessions';
 
@@ -315,13 +316,16 @@ export async function joinSession(sessionId, uid, name, { spectator = false, gui
   const snap = await getDoc(ref);
   // Los gremios del asiento vienen de la ficha (RMR-PCS-0043 · F2) y se refrescan
   // en cada entrada; si no se conocen (null), se deja lo que haya.
-  const seatGuilds = Array.isArray(guilds) ? { guilds: guilds.map(String) } : {};
+  // `baseGuilds` guarda los de la FICHA y `guilds` los efectivos: así volver a
+  // entrar refresca la ficha sin tirar el gremio elegido a mano (RMR-BUG-0127).
+  const ficha = Array.isArray(guilds) ? guilds.map(String) : null;
   if (snap.exists()) {
-    await updateDoc(ref, { name: String(name ?? snap.data().name ?? '').trim(), ...seatGuilds });
+    const asiento = ficha === null ? {} : { baseGuilds: ficha, guilds: refreshSeatGuilds(snap.data(), ficha) };
+    await updateDoc(ref, { name: String(name ?? snap.data().name ?? '').trim(), ...asiento });
     return;
   }
   // El organizador que dijo que no vota entra como observador desde el principio (RMR-TSK-0522).
-  await setDoc(ref, { name: String(name ?? '').trim(), votedRound: null, joinedAt: serverTimestamp(), spectator, guilds: seatGuilds.guilds ?? [] });
+  await setDoc(ref, { name: String(name ?? '').trim(), votedRound: null, joinedAt: serverTimestamp(), spectator, guilds: ficha ?? [], baseGuilds: ficha ?? [] });
 }
 
 /** El organizador asigna gremio a un asiento (solo ese campo, por reglas). */
