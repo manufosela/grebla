@@ -36,7 +36,7 @@ const VOTE_TABS = Object.freeze([
   Object.freeze({ id: 'ejes', label: 'Complejidad y esfuerzo' }),
   Object.freeze({ id: 'carta', label: 'Carta directa' }),
 ]);
-import { isSpectator, hasSkippedRound, eligibleFor, guildsForTask, impliedGuild, seatGuilds, activeVoters, taskSettlement, judgeVotes } from '../../tools/poker/domain/tally.js';
+import { isSpectator, hasSkippedRound, eligibleFor, guildsForTask, impliedGuild, seatGuilds, baseGuilds, assignSeatGuilds, isLocked, activeVoters, taskSettlement, judgeVotes } from '../../tools/poker/domain/tally.js';
 import { cardStates, allActiveVoted } from '../../tools/poker/domain/table.js';
 import {
   joinSession, castVote, reveal, revote, getMyVote, setVoteTitle, recordAgreement,
@@ -45,6 +45,9 @@ import {
   setSpectator, skipRound, unskipRound,
   setSeatGuilds, pushLinearEstimates,
 } from '../../lib/poker.js';
+
+/** ¿Son los mismos gremios, en el mismo orden? (para no escribir en balde). */
+const sameGuilds = (a, b) => a.length === b.length && a.every((g, i) => g === b[i]);
 
 export class PokerTable extends LitElement {
   static properties = {
@@ -122,8 +125,6 @@ export class PokerTable extends LitElement {
     .linear-links a.chip { text-decoration: none; color: var(--rm-accent-700, var(--teal)); border-color: var(--teal); }
     .linear-btn { font-size: 0.78rem; padding: 0.25rem 0.6rem; }
     .seat-guild { font-size: 0.68rem; color: var(--rm-muted, #5b6b7d); text-transform: uppercase; letter-spacing: 0.03em; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .guild-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: 0 0 0.6rem; }
-    .guild-choice .chk { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; }
     .unseated { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: -0.4rem 0 1rem; font-size: 0.85rem; }
     .unseated-row { display: inline-flex; align-items: center; gap: 0.35rem; }
     .unseated select { font: inherit; font-size: 0.82rem; padding: 0.25rem 0.4rem; border-radius: 8px; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
@@ -186,6 +187,7 @@ export class PokerTable extends LitElement {
     .act:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 0 0 0.9rem; font-size: 0.86rem; color: var(--rm-text, #1e3a5f); }
     .ctl { display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .controls select { font: inherit; font-size: 0.82rem; padding: 0.25rem 0.4rem; border-radius: 8px; border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #1e3a5f); }
     .ctl-btn { border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); border-radius: 8px; padding: 0.3rem 0.75rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
     .ctl-btn:hover { border-color: var(--teal); color: var(--rm-accent-700, var(--teal)); }
     .state.out { background: var(--rm-surface-hover, #eef3f5); color: var(--rm-muted, #5b6b7d); font-style: italic; }
@@ -232,6 +234,18 @@ export class PokerTable extends LitElement {
   updated(changed) {
     if ((changed.has('sessionId') || changed.has('uid')) && this.sessionId && this.uid) {
       this._enter();
+    }
+    this._syncGuildSelects();
+  }
+
+  /** Un <select> con opciones dinámicas no refleja su valor solo: se fija aquí. */
+  _syncGuildSelects() {
+    const mio = this.renderRoot?.querySelector('#myguild');
+    if (mio) mio.value = this._guildForVote() ?? '';
+    const task = this._currentTask;
+    for (const sel of this.renderRoot?.querySelectorAll('select[data-seat]') ?? []) {
+      const asiento = this._players.find((p) => p.uid === sel.dataset.seat);
+      sel.value = asiento && task ? (guildsForTask(asiento, task, {})[0] ?? '') : '';
     }
   }
 
@@ -367,9 +381,47 @@ export class PokerTable extends LitElement {
     return html`<div class="controls">
       <label class="ctl"><input type="checkbox" .checked=${this._amSpectator}
         @change=${() => this._toggleSpectator()} /> Solo ver (no votar)</label>
+      ${this._renderMyGuild()}
       ${!this._amSpectator ? html`
         <button class="ctl-btn" @click=${() => this._toggleSkip()}>${this._amSkipped ? 'Volver a la ronda' : 'Fuera de mi ámbito'}</button>` : null}
     </div>`;
+  }
+
+  /**
+   * Con qué gremio voto esta tarea (RMR-BUG-0127): al lado de «Solo ver», que es
+   * el otro ajuste de cómo participo, y SIEMPRE cambiable — elegir mal no puede
+   * ser definitivo. Los gremios ya cerrados salen deshabilitados.
+   */
+  _renderMyGuild() {
+    if (!this._byGuilds || this._amSpectator) return null;
+    const actual = this._guildForVote() ?? '';
+    const opciones = (this._currentTask.guilds ?? []).map((g) => {
+      const fijado = isLocked(this._locked, g);
+      return html`<option value=${g} ?disabled=${fijado} ?selected=${g === actual}>${fijado ? `${g} (acordado)` : g}</option>`;
+    });
+    return html`<label class="ctl">Voto como
+      <select id="myguild" aria-label="Gremio con el que voto" @change=${(e) => this._pickMyGuild(e.target.value)}>
+        <option value="" ?selected=${actual === ''}>elige gremio…</option>
+        ${opciones}
+      </select>
+    </label>`;
+  }
+
+  /**
+   * Elijo (o corrijo) mi gremio: el asiento se recalcula desde la ficha, así que
+   * el anterior no se queda pegado, y si ya había votado esta ronda el voto se
+   * vuelve a emitir para que cuente en el gremio nuevo.
+   */
+  async _pickMyGuild(value) {
+    const elegido = value || null;
+    this._error = '';
+    this._voteGuild = elegido;
+    const votado = this._myVoteValue;
+    try {
+      const nuevo = assignSeatGuilds(this._myPlayer, elegido);
+      if (!sameGuilds(nuevo, seatGuilds(this._myPlayer))) await setSeatGuilds(this.sessionId, this.uid, nuevo);
+      if (elegido && votado !== null) await castVote(this.sessionId, this.uid, this._round, votado, this._session, this._myAxes, elegido);
+    } catch (err) { this._onError(err); }
   }
 
   _renderDeck() {
@@ -387,7 +439,6 @@ export class PokerTable extends LitElement {
     }
     const tab = this._activeVoteTab;
     return html`
-      ${this._renderGuildChoice()}
       <div class="tabs" role="tablist" aria-label="Cómo votar">
         ${VOTE_TABS.map((t) => html`<button type="button" class="tab ${tab === t.id ? 'on' : ''}"
           role="tab" aria-selected=${tab === t.id ? 'true' : 'false'}
@@ -396,50 +447,45 @@ export class PokerTable extends LitElement {
       ${tab === 'ejes' ? this._renderAxes() : this._renderCards()}`;
   }
 
-  /** Con varios gremios válidos para la tarea, se elige uno (una sola carta): caso raro. */
-  _renderGuildChoice() {
-    const options = this._myTaskGuilds;
-    if (options.length <= 1) return null;
-    return html`<div class="guild-choice" role="radiogroup" aria-label="Votas como">
-      <span class="lead">Votas como:</span>
-      ${options.map((g) => html`<label class="chk"><input type="radio" name="vote-guild" .checked=${this._voteGuild === g}
-        @change=${() => { this._voteGuild = g; this._error = ''; }} /> ${g}</label>`)}
-    </div>`;
-  }
-
   /**
-   * Quien está en la mesa pero no es del gremio de la tarea (RMR-PCS-0043 · F2):
-   * el organizador le puede asignar uno de los gremios de la tarea; los demás
-   * solo ven cuántos miran.
+   * Quien está en la mesa sin ningún gremio de la tarea EN SU FICHA
+   * (RMR-PCS-0043 · F2): el organizador le pone (o le cambia, RMR-BUG-0127) uno
+   * de los gremios de la tarea; los demás solo ven cuántos miran.
    */
   _renderUnseated() {
     const task = this._currentTask;
     if (!task || (task.guilds ?? []).length === 0) return null;
-    // Quien no tiene NINGÚN gremio de la tarea (los de gremio fijado no miran: ya han acordado).
-    const fuera = activeVoters(this._players, this._round).filter((p) => guildsForTask(p, task, {}).length === 0);
-    if (fuera.length === 0) return null;
-    if (!this.canManage) return html`<p class="lead unseated">${fuera.length} ${fuera.length === 1 ? 'persona mira' : 'personas miran'} esta tarea (otro gremio).</p>`;
+    const activos = activeVoters(this._players, this._round);
+    const sinFicha = activos.filter((p) => guildsForTask({ guilds: baseGuilds(p) }, task, {}).length === 0);
+    if (sinFicha.length === 0) return null;
+    if (!this.canManage) {
+      // Quien ya tiene gremio asignado no «mira»: está votando en ese gremio.
+      const miran = sinFicha.filter((p) => guildsForTask(p, task, {}).length === 0);
+      if (miran.length === 0) return null;
+      return html`<p class="lead unseated">${miran.length} ${miran.length === 1 ? 'persona mira' : 'personas miran'} esta tarea (otro gremio).</p>`;
+    }
     return html`<div class="unseated">
-      <span class="lead">Miran (otro gremio):</span>
-      ${fuera.map((p) => this._renderUnseatedRow(p, task))}
+      <span class="lead">Sin gremio en su ficha:</span>
+      ${sinFicha.map((p) => this._renderUnseatedRow(p, task))}
     </div>`;
   }
 
   _renderUnseatedRow(p, task) {
     const label = `Gremio para ${p.name}`;
+    const actual = guildsForTask(p, task, {})[0] ?? '';
     return html`<span class="unseated-row">
       <span class="seat-name">${p.name}</span>
-      <select aria-label=${label} @change=${(e) => this._assignGuild(p, e.target.value)}>
-        <option value="">Asignar gremio…</option>
-        ${task.guilds.map((g) => html`<option value=${g}>${g}</option>`)}
+      <select aria-label=${label} data-seat=${p.uid} @change=${(e) => this._assignGuild(p, e.target.value)}>
+        <option value="" ?selected=${actual === ''}>sin gremio</option>
+        ${task.guilds.map((g) => html`<option value=${g} ?selected=${g === actual}>${g}</option>`)}
       </select>
     </span>`;
   }
 
+  /** El organizador pone o cambia el gremio de un asiento (siempre desde la ficha). */
   async _assignGuild(player, guild) {
-    if (!guild) return;
     try {
-      await setSeatGuilds(this.sessionId, player.uid, [...new Set([...seatGuilds(player), guild])]);
+      await setSeatGuilds(this.sessionId, player.uid, assignSeatGuilds(player, guild || null));
     } catch (err) { this._onError(err); }
   }
 

@@ -76,12 +76,35 @@ test('con dos gremios válidos para la tarea se elige con cuál se vota', async 
 
   await signInAs(page, 'engineer');
   await page.goto(`/poker?s=${ref.id}`);
-  const grupo = mesa(page).getByRole('radiogroup', { name: 'Votas como' });
-  await expect(grupo).toBeVisible();
+  const selector = mesa(page).getByRole('combobox', { name: 'Gremio con el que voto' });
+  await expect(selector).toBeVisible();
   await mesa(page).getByRole('tab', { name: /carta/i }).click();
   await mesa(page).getByRole('button', { name: '5', exact: true }).click();
   await expect(mesa(page)).toContainText('Elige con qué gremio votas.');
-  await grupo.getByRole('radio', { name: 'QA' }).check();
+  await selector.selectOption('QA');
   await mesa(page).getByRole('button', { name: '5', exact: true }).click();
   await expect.poll(async () => (await ref.collection('votes').doc('e2e-engineer').get()).data()?.guild).toBe('QA');
+});
+
+test('elegir mal el gremio se corrige: el asiento no acumula y el voto pasa al gremio nuevo (RMR-BUG-0127)', async ({ page }) => {
+  await db().doc(ING).update({ guilds: ['iOS'] });
+  const ref = await sesion(['Backend PHP', 'QA']);
+
+  await signInAs(page, 'engineer');
+  await page.goto(`/poker?s=${ref.id}`);
+  const selector = mesa(page).getByRole('combobox', { name: 'Gremio con el que voto' });
+  await selector.selectOption('Backend PHP');
+  await expect.poll(async () => (await ref.collection('players').doc('e2e-engineer').get()).data()?.guilds).toEqual(['iOS', 'Backend PHP']);
+  await mesa(page).getByRole('tab', { name: /carta/i }).click();
+  await mesa(page).getByRole('button', { name: '5', exact: true }).click();
+  await expect.poll(async () => (await ref.collection('votes').doc('e2e-engineer').get()).data()?.guild).toBe('Backend PHP');
+
+  // Se corrige: el gremio anterior NO se queda pegado y el voto ya emitido cuenta en el nuevo.
+  await selector.selectOption('QA');
+  await expect.poll(async () => (await ref.collection('players').doc('e2e-engineer').get()).data()?.guilds).toEqual(['iOS', 'QA']);
+  await expect.poll(async () => (await ref.collection('votes').doc('e2e-engineer').get()).data()?.guild).toBe('QA');
+
+  // Y al recargar, la elección sigue puesta (la ficha se refresca sin pisarla).
+  await page.reload();
+  await expect(mesa(page).getByRole('combobox', { name: 'Gremio con el que voto' })).toHaveValue('QA');
 });

@@ -47,6 +47,43 @@ export function seatGuilds(player) {
   return Array.isArray(player?.guilds) ? player.guilds : [];
 }
 
+/**
+ * Gremios que trae la FICHA de quien se sentó, separados de los que se eligieron
+ * a mano durante la sesión (RMR-BUG-0127). En asientos anteriores al campo, los
+ * del asiento: entonces no había elección a mano que distinguir.
+ * @returns {string[]}
+ */
+export function baseGuilds(player) {
+  return Array.isArray(player?.baseGuilds) ? player.baseGuilds : seatGuilds(player);
+}
+
+/**
+ * El asiento después de elegir gremio, partiendo SIEMPRE de la ficha y no del
+ * asiento: así una elección equivocada se corrige eligiendo otra (antes se
+ * acumulaban y el error se quedaba pegado al asiento para siempre). Sin gremio
+ * (null), el asiento vuelve a lo que dice la ficha.
+ * @param {{guilds?: string[], baseGuilds?: string[]}} player
+ * @param {string|null} guild
+ * @returns {string[]}
+ */
+export function assignSeatGuilds(player, guild) {
+  const base = baseGuilds(player);
+  return guild && !base.includes(guild) ? [...base, guild] : [...base];
+}
+
+/**
+ * Al volver a entrar, el asiento refresca los gremios de la ficha sin tirar el
+ * que se eligió a mano (recargar la página no deshace la elección).
+ * @param {{guilds?: string[], baseGuilds?: string[]}|null} player  el asiento anterior
+ * @param {string[]} fichaGuilds  los gremios que trae la ficha ahora
+ * @returns {string[]}
+ */
+export function refreshSeatGuilds(player, fichaGuilds) {
+  const base = baseGuilds(player);
+  const aMano = seatGuilds(player).filter((g) => !base.includes(g));
+  return [...new Set([...(fichaGuilds ?? []), ...aMano])];
+}
+
 /** @returns {string[]} gremios de la tarea (vacío = general) */
 function taskGuildList(task) {
   return Array.isArray(task?.guilds) ? task.guilds : [];
