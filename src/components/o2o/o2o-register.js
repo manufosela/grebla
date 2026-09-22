@@ -17,6 +17,11 @@ import {
   listSessions, createSession, updateSession, removeSession,
 } from '../../tools/o2o/application/usecases/sessions.js';
 import { getPersonProfile } from '../../lib/firestore.js';
+import { getFramework } from '../../lib/careerFramework.js';
+import { getLevelAssessment } from '../../lib/careerAssessment.js';
+import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
+import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
+import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -36,6 +41,9 @@ export class O2ORegister extends LitElement {
     _error: { state: true },
     _confirmDelete: { state: true },
     _rmProfile: { state: true },
+    /** Contexto de carrera para el O2O (RMR-PCS-0044 · F4). */
+    _framework: { state: true },
+    _progress: { state: true },
   };
 
   static styles = css`
@@ -112,6 +120,7 @@ export class O2ORegister extends LitElement {
     this._confirmDelete = '';
     this._error = '';
     this._rmProfile = null;
+    this._progress = null;
     if (!personId) {
       this._sessions = [];
       return;
@@ -126,11 +135,59 @@ export class O2ORegister extends LitElement {
       ]);
       this._sessions = sessions;
       this._rmProfile = rmProfile;
+      await this._loadCareerContext(personId);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los O2O.';
     } finally {
       this._loadingList = false;
     }
+  }
+
+  /**
+   * Contexto de CARRERA (RMR-PCS-0044 · F4): en qué punto del nivel está la
+   * persona según lo valorado, para hablarlo en el O2O. Solo lectura: se valora
+   * en la ficha, que es donde vive el juicio del EM y del head.
+   * No crítico — si algo falla, el registro sigue sin este dato.
+   */
+  async _loadCareerContext(personId) {
+    try {
+      const persona = (this.people ?? []).find((p) => p.id === personId);
+      if (!persona?.levelId) return;
+      this._framework ??= await getFramework();
+      const next = nextLevelFor(this._framework?.levels ?? [], persona.levelId);
+      if (!next) return;
+      const valoracion = await getLevelAssessment(personId, next.id);
+      // Si mientras se cargaba se cambió de persona, esto ya no es de quien se
+      // está mirando: enseñar el avance de otra sería peor que no enseñar nada.
+      if (this._personId !== personId) return;
+      this._progress = levelProgressFor({
+        person: persona,
+        framework: this._framework,
+        marks: marksOf(valoracion),
+        history: closureHistory(valoracion),
+      });
+    } catch {
+      if (this._personId === personId) this._progress = null;
+    }
+  }
+
+  /**
+   * Banda de carrera: sub-nivel, cuánto lleva del nivel siguiente y qué le falta
+   * —lo que más pesa primero—, que es justo la conversación del O2O.
+   */
+  _renderCareerContext() {
+    const p = this._progress;
+    if (!p) return null;
+    const faltan = [...p.missing].sort((a, b) => b.weight - a.weight).slice(0, 3);
+    const nombre = (m) => (m.core ? `${m.name} (imprescindible)` : m.name);
+    const pendientes = faltan.length > 0 ? `Falta: ${faltan.map(nombre).join(', ')}.` : '';
+    let aviso = '';
+    if (p.readyToPromote) aviso = ' Cumple el 100 %: toca plantear la subida de nivel.';
+    else if (p.pendingSub === 3) aviso = ` Para el ${p.levelCode}-3 hace falta mantener el 80 % en otra valoración.`;
+    return html`<p class="rm-context">
+      🧭 <strong>Carrera:</strong> ${p.label} · ${p.pct} % hacia ${p.nextLevelCode} (${p.earned} de ${p.total} puntos).
+      ${pendientes}${aviso}
+    </p>`;
   }
 
   /** Etiqueta de un rol Role Mirror por key, o el propio key si no está en catálogo. */
@@ -233,6 +290,7 @@ export class O2ORegister extends LitElement {
       ${this._saving ? html`<busy-overlay message="Guardando el registro del O2O…"></busy-overlay>` : null}
       ${this._renderPicker()}
       ${this._renderRoleMirrorContext()}
+      ${this._renderCareerContext()}
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._renderBody()}
     `;

@@ -23,7 +23,9 @@ async function loadPeople(uid, viewAll) {
   const people = await persistence.people.list();
   return people
     .filter((p) => p.active)
-    .map((p) => ({ id: p.id, name: p.name, external: !!p.external }))
+    // `levelId` viaja con la persona para el contexto de carrera del registro
+    // (RMR-PCS-0044 · F4): sin él no hay contra qué nivel medir el avance.
+    .map((p) => ({ id: p.id, name: p.name, external: !!p.external, levelId: p.levelId ?? null }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 
