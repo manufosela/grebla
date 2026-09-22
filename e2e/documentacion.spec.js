@@ -145,6 +145,22 @@ test('abrir un documento no deja una URL de descarga permanente ni funciona con 
   expect(res.status()).toBe(404);
 });
 
+test('cada documento se puede descargar, por la misma puerta y con el mismo token', async ({ page }) => {
+  // La descarga no es una URL de Storage: es serveDoc con el token de un solo
+  // documento y caducidad, entregando el fichero con Content-Disposition.
+  await subir(DOCS[0].path, '<!doctype html><title>E2E</title><p id="marca">contenido');
+  await signInAs(page, 'engineer');
+  await page.goto('/documentacion');
+
+  const descargar = page.locator('docs-reader').getByRole('button', { name: `Descargar ${DOCS[0].name}` });
+  await expect(descargar).toBeVisible();
+  const bajada = page.waitForEvent('download');
+  await descargar.click();
+  const fichero = await bajada;
+  // Se guarda con el nombre del fichero publicado, no con el id ni como blob.
+  expect(fichero.suggestedFilename()).toBe('e2e-grebla.html');
+});
+
 test('la vista del orador (tecla S) conecta con la presentación', async ({ page, context }) => {
   // reveal.js abre un about:blank, le escribe la vista del orador y esa vista
   // solo acepta mensajes cuyo origen coincide con el suyo, y solo si el origen

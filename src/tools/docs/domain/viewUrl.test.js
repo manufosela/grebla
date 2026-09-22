@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { docViewUrl, DOC_VIEW_REGION } from './viewUrl.js';
+import { docViewUrl, docDownloadUrl, DOC_VIEW_REGION } from './viewUrl.js';
 
 const token = 'f'.repeat(48);
 
@@ -26,5 +26,15 @@ describe('docViewUrl', () => {
     expect(() => docViewUrl({ projectId: '', token })).toThrow(/proyecto/);
     expect(() => docViewUrl({ projectId: 'grebla-app', token: 'abc' })).toThrow(/Token/);
     expect(() => docViewUrl({ projectId: 'grebla-app', token: `${token}/../x` })).toThrow(/Token/);
+  });
+});
+
+describe('docDownloadUrl (RMR-TSK-0546)', () => {
+  it('es la MISMA puerta y el mismo token que el visor, pidiendo la descarga', () => {
+    expect(docDownloadUrl({ projectId: 'grebla-app', token })).toBe(`${docViewUrl({ projectId: 'grebla-app', token })}?download=1`);
+  });
+
+  it('hereda la validación: un token que no lo es tampoco se descarga', () => {
+    expect(() => docDownloadUrl({ projectId: 'grebla-app', token: 'abc' })).toThrow(/Token/);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DOC_TOKEN_TTL_MS, isDocToken, tokenFromPath, tokenIsLive, viewerHeaders } from './docTokens.js';
+import { DOC_TOKEN_TTL_MS, isDocToken, tokenFromPath, tokenIsLive, viewerHeaders, downloadFileName, downloadHeaders } from './docTokens.js';
 
 const TOKEN = 'a'.repeat(48);
 
@@ -53,5 +53,31 @@ describe('viewerHeaders', () => {
     expect(h['Cache-Control']).toContain('no-store');
     expect(h['X-Content-Type-Options']).toBe('nosniff');
     expect(h['Referrer-Policy']).toBe('no-referrer');
+  });
+});
+
+/** Descargar es el mismo documento y el mismo token, pero el navegador lo guarda. */
+describe('descarga (RMR-TSK-0546)', () => {
+  it('el nombre sale del fichero que hay en Storage', () => {
+    expect(downloadFileName('docs/onboarding/Como trabajamos.html')).toBe('Como-trabajamos.html');
+    expect(downloadFileName('docs/guia.html')).toBe('guia.html');
+  });
+
+  it('un nombre con comillas o saltos de línea NO puede colar otra cabecera', () => {
+    const sucio = downloadFileName('docs/mal"; X-Colada: 1\r\nOtra: 2.html');
+    expect(sucio).not.toMatch(/["\r\n]/);
+    expect(downloadFileName('docs/../../secreto.html')).toBe('secreto.html');
+  });
+
+  it('sin nombre utilizable, uno por defecto: nunca una cabecera vacía', () => {
+    expect(downloadFileName('docs/....')).toBe('documento.html');
+    expect(downloadFileName(null)).toBe('documento.html');
+  });
+
+  it('las cabeceras de descarga son las del visor más el attachment', () => {
+    const h = downloadHeaders('docs/onboarding/guia.html');
+    expect(h['Content-Disposition']).toBe('attachment; filename="guia.html"');
+    expect(h['Cache-Control']).toContain('no-store');
+    expect(h['X-Content-Type-Options']).toBe('nosniff');
   });
 });
