@@ -11,8 +11,8 @@ if grep -qiE 'co-authored-by:.*(claude|gpt|copilot|gemini)|(generated|written) (
   echo 'kj harden: AI attribution is not allowed in commit messages'; exit 1
 fi
 # Chain the machine's previous global hook (kj harden keeps it active).
-if [ -x "/home/manu/.git-hooks/commit-msg" ]; then
-  "/home/manu/.git-hooks/commit-msg" "$@"; rc=$?
+if [ -x "$HOME/.git-hooks/commit-msg" ]; then
+  "$HOME/.git-hooks/commit-msg" "$@"; rc=$?
   [ "$rc" -eq 0 ] || exit "$rc"
 fi
 # <<< kj:managed:hook:commit-msg <<<
