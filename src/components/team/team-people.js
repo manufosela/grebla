@@ -12,9 +12,10 @@
  */
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
-import { listCareerRoutes } from '../../lib/careerMap.js';
-import { getJourney } from '../../tools/career/application/usecases.js';
-import { subLevelForPerson, effectiveSubLevel } from '../../tools/career/domain/subLevel.js';
+import { effectiveSubLevel, nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
+import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
+import { getLevelAssessment } from '../../lib/careerAssessment.js';
 import { getMyPerson } from '../../lib/engineer.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { skeletonLines } from '../app-skeleton.js';
@@ -294,9 +295,8 @@ export class TeamPeople extends LitElement {
     this._transferFor = null;
     /** @type {string} nuevo dueño seleccionado en el modal Transferir */
     this._transferSel = '';
-    /** Badge LX.Y por persona (RMR-TSK-0429): Map personId→efectivo|null; null = sin datos. */
+    /** Badge LX-Y por persona (RMR-PCS-0044): Map personId→efectivo|null; null = sin datos. */
     this._subLevels = null;
-    this._careerRoutes = undefined;
     /** @type {boolean} confirmación de transferencia */
     this._confirmTransfer = false;
     this._loaded = false;
@@ -685,20 +685,18 @@ export class TeamPeople extends LitElement {
    * siguiente nivel + journey) con el override del manager encima. Carga
    * perezosa y tolerante: sin rutas/journeys, la tabla sale sin badges. */
   async _loadSubLevels() {
-    if (!this.framework || !this.careerStore || !(this.people?.length)) return;
+    if (!this.framework || !(this.people?.length)) return;
     try {
-      if (this._careerRoutes === undefined) {
-        this._careerRoutes = null;
-        this._careerRoutes = await listCareerRoutes();
-      }
-      if (!this._careerRoutes) return;
-      const routes = this._careerRoutes;
       const levelCodeOf = (id) => (this.framework.levels ?? []).find((l) => l.id === id)?.code ?? null;
       const entries = await Promise.all(
         (this.people ?? []).map(async (p) => {
           try {
-            const journey = await getJourney(this.careerStore, p.id);
-            const derived = subLevelForPerson({ person: p, framework: this.framework, routes, journey });
+            const next = nextLevelFor(this.framework.levels ?? [], p.levelId);
+            const valoracion = next ? await getLevelAssessment(p.id, next.id) : null;
+            const prog = valoracion
+              ? levelProgressFor({ person: p, framework: this.framework, marks: marksOf(valoracion), history: closureHistory(valoracion) })
+              : null;
+            const derived = prog ? { sub: prog.sub, done: prog.earned, total: prog.total, pct: prog.pct, label: prog.label } : null;
             return [p.id, effectiveSubLevel(p, derived, levelCodeOf(p.levelId))];
           } catch {
             return [p.id, null];
@@ -716,8 +714,8 @@ export class TeamPeople extends LitElement {
     const s = this._subLevels?.get?.(p.id) ?? null;
     if (!s) return null;
     const auto = s.pct === null
-      ? 'sin ruta publicada'
-      : `${s.pct}% del camino al siguiente nivel (${s.done}/${s.total} paradas certificadas)`;
+      ? 'sin valorar frente al nivel siguiente'
+      : `${s.pct}% del nivel siguiente cumplido (${s.done} de ${s.total} puntos valorados)`;
     const tip = s.source === 'manual'
       ? `Ajustado por el manager${s.note ? `: ${s.note}` : ''} · cálculo: ${auto}`
       : auto;

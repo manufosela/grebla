@@ -9,8 +9,10 @@
  */
 import { LitElement, html, css } from 'lit';
 import { getCurrentUser } from '../../lib/auth.js';
-import { listCareerRoutes } from '../../lib/careerMap.js';
-import { subLevelForPerson, effectiveSubLevel } from '../../tools/career/domain/subLevel.js';
+import { effectiveSubLevel, nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
+import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
+import { getLevelAssessment } from '../../lib/careerAssessment.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { listActivePeople, updatePerson } from '../../tools/team/application/usecases/index.js';
 import { getJourney } from '../../tools/career/application/usecases.js';
@@ -80,12 +82,6 @@ export class TeamCareer extends LitElement {
     this._error = '';
     try {
       const people = await listActivePeople(this.persistence);
-      // Rutas para el sub-nivel derivado (RMR-PCS-0034): si fallan, el listado
-      // sale sin badges — nunca tumba la tabla.
-      let routes = [];
-      try {
-        routes = await listCareerRoutes();
-      } catch { /* sin rutas: sin badges */ }
       const journeyById = new Map();
       // Journeys BAJO DEMANDA: 1 lectura por persona, en paralelo, al abrir la
       // pestaña. Un journey ilegible (otra rama) no tumba al resto.
@@ -99,15 +95,26 @@ export class TeamCareer extends LitElement {
         }),
       );
       const levelCodeOf = (id) => (this.framework?.levels ?? []).find((l) => l.id === id)?.code ?? null;
+      // El sub-nivel sale de lo VALORADO contra el nivel siguiente
+      // (RMR-PCS-0044), no del avance en el mapa: formarse no sube de nivel.
+      // Una valoración ilegible (otra rama) deja a esa persona sin badge, nada más.
+      const progressById = new Map();
+      await Promise.all(people.map(async (p) => {
+        const next = nextLevelFor(this.framework?.levels ?? [], p.levelId);
+        if (!next) return;
+        try {
+          const valoracion = await getLevelAssessment(p.id, next.id);
+          progressById.set(p.id, levelProgressFor({
+            person: p, framework: this.framework, marks: marksOf(valoracion), history: closureHistory(valoracion),
+          }));
+        } catch { /* sin valoración legible: sin badge */ }
+      }));
       const subLevelById = new Map(
-        people.map((p) => [
-          p.id,
-          effectiveSubLevel(
-            p,
-            subLevelForPerson({ person: p, framework: this.framework, routes, journey: journeyById.get(p.id) ?? null }),
-            levelCodeOf(p.levelId),
-          ),
-        ]),
+        people.map((p) => {
+          const prog = progressById.get(p.id) ?? null;
+          const derived = prog ? { sub: prog.sub, done: prog.earned, total: prog.total, pct: prog.pct, label: prog.label } : null;
+          return [p.id, effectiveSubLevel(p, derived, levelCodeOf(p.levelId))];
+        }),
       );
       this._rows = careerRoster({
         people,
@@ -147,8 +154,8 @@ export class TeamCareer extends LitElement {
         : html`<span class="muted">—</span>`;
     }
     const auto = s.pct === null
-      ? 'sin ruta publicada'
-      : `${s.pct}% del camino al siguiente nivel evidenciado (${s.done}/${s.total} paradas certificadas)`;
+      ? 'sin valorar todavía frente al nivel siguiente'
+      : `${s.pct}% del nivel siguiente cumplido (${s.done} de ${s.total} puntos valorados)`;
     const title = s.source === 'manual'
       ? `Ajustado por el manager${s.note ? `: ${s.note}` : ''} · cálculo: ${auto}`
       : auto;
