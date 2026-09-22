@@ -250,6 +250,10 @@ export class TeamPersonDetail extends LitElement {
     .hist li { display: flex; gap: 0.6rem; padding: 0.35rem 0; border-top: 1px solid var(--rm-border, #eef0f2); }
     .hist .when { color: var(--rm-muted, #5b6b7d); white-space: nowrap; min-width: 7.5rem; }
     .hist .lvl { font-weight: 600; }
+    /* Conversación traída por un agente (RMR-TSK-0549): se ve que no la escribió el manager. */
+    .hist .auto { white-space: nowrap; font-size: 0.75rem; font-weight: 700; padding: 0.05rem 0.45rem; border-radius: 999px;
+      color: #78350f; background: #fdf1d6; border: 1px solid #b45309; cursor: help; }
+    .hist .auto-src { font-size: 0.75rem; white-space: nowrap; color: var(--rm-accent, #2a9d8f); }
     .hist .note { color: var(--rm-muted, #5b6b7d); }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
@@ -1641,19 +1645,41 @@ export class TeamPersonDetail extends LitElement {
           ? html`<p class="empty">Sin conversaciones registradas.</p>`
           : html`
               <ul class="hist">
-                ${this.conversations.map(
-                  (cv) => html`
-                    <li>
-                      <span class="when">${authorLine(cv)}</span>
-                      <span class="lvl">${typeLabel(cv.type)}</span>
-                      <span class="note">${cv.notes}</span>
-                    </li>
-                  `,
-                )}
+                ${this.conversations.map((cv) => this._renderConversation(cv, typeLabel))}
               </ul>
             `}
       </section>
     `;
+  }
+
+  /**
+   * Una conversación de la lista. Las que trae un agente externo
+   * (RMR-TSK-0549) se marcan: es un borrador de una máquina, no algo que haya
+   * escrito ni revisado el manager, y se dice de dónde salió para poder ir al
+   * original. El enlace solo se pinta si es una dirección web.
+   * @param {{ type: string, notes?: string, automated?: boolean, source?: {system?: string, url?: string} }} cv
+   * @param {(t: string) => string} typeLabel
+   */
+  _renderConversation(cv, typeLabel) {
+    const origen = cv.automated
+      ? html`<span class="auto" title="La trajo un agente automático; revísala y edítala si hace falta">
+          🤖 automática${cv.source?.system ? ` · ${cv.source.system}` : ''}
+        </span>${this._renderSourceLink(cv.source)}`
+      : null;
+    return html`
+      <li>
+        <span class="when">${authorLine(cv)}</span>
+        <span class="lvl">${typeLabel(cv.type)}</span>
+        ${origen}
+        <span class="note">${cv.notes}</span>
+      </li>`;
+  }
+
+  /** El enlace al origen, solo si es http(s): lo demás no se pinta como enlace. */
+  _renderSourceLink(source) {
+    const url = String(source?.url ?? '');
+    if (!/^https?:\/\//i.test(url)) return null;
+    return html`<a class="auto-src" href=${url} target="_blank" rel="noopener noreferrer">ver origen</a>`;
   }
 
   _renderNotes() {

@@ -10,7 +10,7 @@
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { test, expect } from './fixtures.js';
+import { test, expect, signInAs } from './fixtures.js';
 
 function db() {
   if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
@@ -78,6 +78,24 @@ test('reenviar la misma nota no duplica: el relanzamiento del agente es inofensi
 
   const conv = await db().collection(`${PERSONA}/conversations`).get();
   expect(conv.size).toBe(1);
+});
+
+test('en la ficha se ve que la nota la trajo una máquina, con su origen', async ({ page, request }) => {
+  await enviar(request, nota());
+  await signInAs(page, 'head');
+  await page.goto('/tools/team');
+  await page.getByRole('button', { name: `Abrir ficha de Ana Ingesta E2E` }).click().catch(async () => {
+    // Según de dónde se entre, la ficha se abre desde el nombre de la persona.
+    await page.getByText('Ana Ingesta E2E').first().click();
+  });
+  const ficha = page.locator('team-person-detail');
+  await expect(ficha).toBeVisible();
+  await ficha.getByRole('tab', { name: 'O2O' }).click();
+
+  const fila = ficha.locator('.hist li', { hasText: 'Hablamos de su paso a L2' });
+  await expect(fila.locator('.auto')).toContainText('automática');
+  await expect(fila.locator('.auto')).toContainText('matias');
+  await expect(fila.getByRole('link', { name: 'ver origen' })).toHaveAttribute('href', /^https:\/\/mail\.google\.com\//);
 });
 
 test('el contrato de errores: 401, 400, 404 y 403 se distinguen', async ({ request }) => {
