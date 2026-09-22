@@ -110,7 +110,22 @@ describe('career — framework de carrera (helpers puros)', () => {
         { levelId: 'l1', dimensionId: '', text: 'sin dimensión' }, // sin dimensionId → descartada
       ],
     });
-    expect(fw.expectations).toEqual([{ levelId: 'l1', dimensionId: 'tech', text: 'Escribe código sólido' }]);
+    // Sin peso escrito, la expectativa vale 1 y no es imprescindible (RMR-PCS-0044).
+    expect(fw.expectations).toEqual([{ levelId: 'l1', dimensionId: 'tech', text: 'Escribe código sólido', weight: 1, core: false }]);
+  });
+
+  it('normalizeFramework conserva el peso y el «imprescindible» de cada expectativa', () => {
+    const fw = normalizeFramework({
+      levels: [{ id: 'l2', code: 'L2', title: 'Eng', trackId: 't', order: 2 }],
+      dimensions: [{ id: 'tech', name: 'Tech', order: 1, description: '' }],
+      tracks: [{ id: 't', name: 'T', order: 1, description: '' }],
+      disciplines: [],
+      expectations: [
+        { levelId: 'l2', dimensionId: 'tech', text: 'Diseña un servicio', weight: 3, core: true },
+        { levelId: 'l2', dimensionId: 'product', text: 'Discute el alcance', weight: 0 }, // peso inválido → 1
+      ],
+    });
+    expect(fw.expectations.map((e) => [e.weight, e.core])).toEqual([[3, true], [1, false]]);
   });
 
   it('normalizeFramework normaliza addendums y descarta los incompletos', () => {
@@ -146,7 +161,7 @@ describe('career — framework de carrera (helpers puros)', () => {
         { disciplineId: 'web', dimensionId: 'reliability', text: '' }, // vacío → fuera
       ],
     });
-    expect(serialized.expectations).toEqual([{ levelId: 'l1', dimensionId: 'tech', text: 'cumple' }]);
+    expect(serialized.expectations).toEqual([{ levelId: 'l1', dimensionId: 'tech', text: 'cumple', weight: 1, core: false }]);
     expect(serialized.addendums).toEqual([{ disciplineId: 'web', dimensionId: 'tech', text: 'Core Web Vitals' }]);
     expect(JSON.stringify(serialized)).not.toContain('undefined');
   });

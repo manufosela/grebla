@@ -35,23 +35,14 @@
  * @property {MissingExpectation[]} missing
  * @property {string[]} coreMissing  ids de dimensión imprescindibles sin cubrir
  */
-import { expectationsForLevel, getLevel } from '../data/framework.js';
+import { expectationsForLevel, getLevel, expectationWeight } from '../data/framework.js';
 import { nextLevelFor } from './subLevel.js';
 
 /** Cortes de la progresión, en porcentaje de pesos cumplidos. */
 export const PROGRESS_THRESHOLDS = Object.freeze({ consolidating: 50, atTheGates: 80 });
 
-/**
- * Peso de una expectativa: entero de 1 para arriba. El framework de hoy no
- * lleva pesos, así que sin él vale 1 — y un peso inválido también, antes que
- * inventarse una ponderación que nadie ha decidido.
- * @param {{ weight?: unknown }|null|undefined} expectation
- * @returns {number}
- */
-export function expectationWeight(expectation) {
-  const raw = expectation?.weight;
-  return Number.isInteger(raw) && raw >= 1 ? raw : 1;
-}
+// El peso vive con el framework, que es quien lo fija; aquí solo se suma.
+export { expectationWeight } from '../data/framework.js';
 
 /** ¿Es imprescindible para subir de nivel? */
 export function isCoreExpectation(expectation) {
