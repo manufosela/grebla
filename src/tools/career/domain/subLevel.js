@@ -59,12 +59,12 @@ export function subLevelFor(routeStops, journey) {
 }
 
 /**
- * Etiqueta del badge: código del nivel + sub («L1.2»). Solo para vistas
- * internas (ficha, listado del manager) — nunca para JDs.
+ * Etiqueta del badge: código del nivel + sub («L1-2», la notación de Mánu).
+ * Solo para vistas internas (ficha, listado del manager) — nunca para JDs.
  * @param {string} code @param {1|2|3} sub
  */
 export function subLevelLabel(code, sub) {
-  return `${code}.${sub}`;
+  return `${code}-${sub}`;
 }
 
 /**

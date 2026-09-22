@@ -91,6 +91,21 @@ test('marcar la expectativa que pesa 3 sube al L1-3, que queda pendiente de sost
   });
 });
 
+test('el badge de Equipo › Carrera sale de lo VALORADO, no del avance en el mapa', async ({ page }) => {
+  await conPersonaEnL1(async () => {
+    // 3 de 4 puntos valorados. En el mapa de carrera no ha certificado ni una casa:
+    // el nivel no se mueve por formarse, y el badge lo demuestra.
+    await db().doc(`${PERSON}/careerAssessments/av-l2`).set({
+      levelId: 'av-l2', byDimension: { 'av-tech': { meets: true } }, closures: [],
+    });
+    await signInAs(page, 'head');
+    await page.goto('/tools/team#career');
+    const fila = page.locator('team-career tr', { hasText: NOMBRE });
+    await expect(fila.locator('.lvl.sub')).toHaveText('L1-2');
+    await expect(fila.locator('.lvl.sub')).toHaveAttribute('title', /3 de 4 puntos valorados/);
+  });
+});
+
 test('con el 100 % de los puntos se plantea la subida de nivel', async ({ page }) => {
   await conPersonaEnL1(async () => {
     await abrirCarrera(page);
