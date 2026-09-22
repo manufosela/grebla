@@ -15,6 +15,19 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.210.0] - 2026-09-22
+
+### Añadido
+- **Ingesta desde agentes externos.** Un agente autorizado puede crear en la
+  ficha de una persona la nota de un **1-1 o un catchup** que haya detectado por
+  su cuenta (`ingestConversation`, con clave compartida). Escribe en
+  `/people/{id}/conversations` y en ningún otro sitio: el O2O privado del
+  manager, la Marea, las encuestas, los kudos y las notas de acompañamiento
+  quedan fuera. La nota llega marcada como **automática**, con su origen
+  enlazado, y el manager puede editarla o borrarla: es un borrador, no un
+  registro cerrado. Reenviar la misma nota no duplica, porque su id sale del
+  origen.
+
 ## [1.209.0] - 2026-09-22
 
 ### Añadido
