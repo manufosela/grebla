@@ -1,0 +1,45 @@
+{
+  "kj_version": "4.31.0",
+  "generated_at": "2026-09-22T05:16:05.755Z",
+  "generation": {
+    "profile": "standard",
+    "cmds": {},
+    "baseBranch": "main",
+    "globalHooksDir": "$HOME/.git-hooks"
+  },
+  "who": {
+    "gh": "manufosela",
+    "git": "1101670+manufosela@users.noreply.github.com",
+    "grade": "declarada"
+  },
+  "files": [
+    {
+      "file": ".karajan/hooks/commit-msg",
+      "sha256": "0a7bb38fe060b64c46dae5baf6e6fd3893e9a58b007515d73520fe5c5bed2666"
+    },
+    {
+      "file": ".karajan/hooks/post-merge",
+      "sha256": "3debc2a7239bb758ecaad5db145ff2c139e4bd504abfeecd4405d7ebcc98ee58"
+    },
+    {
+      "file": ".karajan/hooks/pre-commit",
+      "sha256": "e86f18668fb9069d990c51961dde4994a7cd4be40866433e481c03784dac05fc"
+    },
+    {
+      "file": ".karajan/hooks/pre-push",
+      "sha256": "15cea3fa9360a361dfbbe3d74eb5289cef9f970163a882f4732e2a2bca66e021"
+    },
+    {
+      "file": ".karajan/hooks/prepare-commit-msg",
+      "sha256": "4850712b985d9c2470fbaf55f84019ff739370ad3fd0d941aaefcbdebe6537f9"
+    }
+  ],
+  "signature": {
+    "cid": "98cffb74e42d35026d446ab4fd8d8980",
+    "nonce": "cfb5f7a41bcc311b230fc1ad460614ec",
+    "project": "grebla-app",
+    "filesHash": "a6039b13a5e7f02d8d3ca949cd0ca0bfe9e8aac9d47070d79203c81076f1faa4",
+    "signer": "EgMc2b95g5nUh8e6LDCeLjv7G69cQaszUCIy+3aLpPQ=",
+    "signature": "BSgIhzrlzVc+bP/qXRQFMWIhLA42PYSu9j/Zwh3zDL80JWKua/Ah6rH04QIwrv3gRslVVCwV7Wk2M4ZkZwezAw=="
+  }
+}
