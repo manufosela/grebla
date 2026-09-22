@@ -29,3 +29,15 @@ export function docViewUrl({ projectId, token, emulatorHost = '' }) {
     ? `http://${emulatorHost}:5001/${projectId}/${DOC_VIEW_REGION}/serveDoc/${token}/`
     : `https://${DOC_VIEW_REGION}-${projectId}.cloudfunctions.net/serveDoc/${token}/`;
 }
+
+/**
+ * URL para DESCARGAR el documento (RMR-TSK-0546). Es la misma puerta y el mismo
+ * token que el visor: se descarga lo que se puede ver, durante el rato que el
+ * token vive. La alternativa —la URL de descarga de Storage— lleva un token
+ * eterno que se reenvía, que es justo lo que este diseño evita.
+ * @param {{ projectId: string, token: string, emulatorHost?: string }} args
+ * @returns {string}
+ */
+export function docDownloadUrl(args) {
+  return `${docViewUrl(args)}?download=1`;
+}

@@ -36,6 +36,33 @@ export function tokenFromPath(pathname) {
 }
 
 /**
+ * Nombre con el que se guarda el fichero al descargarlo (RMR-TSK-0546): el del
+ * documento en Storage, dejando solo lo que es seguro escribir en una cabecera.
+ * Una cabecera se compone concatenando, así que un nombre con comillas o salto
+ * de línea podría colar otra: aquí no pasa de `documento.html`.
+ * @param {unknown} storagePath  ruta en Storage (`docs/carpeta/fichero.html`)
+ * @returns {string}
+ */
+export function downloadFileName(storagePath) {
+  const bruto = String(storagePath ?? '').split('/').pop() ?? '';
+  const limpio = bruto.normalize('NFKD').replace(/[^\w.-]+/g, '-').replace(/^[-.]+/, '').slice(0, 120);
+  return limpio || 'documento.html';
+}
+
+/**
+ * Cabeceras de DESCARGA: el mismo documento, pero el navegador lo guarda en vez
+ * de abrirlo. Se sirve por la misma puerta y con el mismo token de un solo
+ * documento y caducidad — no con una URL de Storage, que vale para siempre.
+ * @param {unknown} storagePath
+ */
+export function downloadHeaders(storagePath) {
+  return {
+    ...viewerHeaders(),
+    'Content-Disposition': `attachment; filename="${downloadFileName(storagePath)}"`,
+  };
+}
+
+/**
  * Un registro de token sirve si no ha caducado y apunta a un documento (la
  * ruta sale de la ficha al crearlo, pero aquí se vuelve a exigir `docs/`: el
  * servidor no debe fiarse de lo que haya en la colección).

@@ -24,7 +24,7 @@
  *    quita lo que una presentación no necesita, como navegar esta pestaña.
  */
 import { LitElement, html, css } from 'lit';
-import { listDocs, openDocView } from '../../lib/docs.js';
+import { listDocs, openDocView, downloadDocUrl } from '../../lib/docs.js';
 import { groupByFolder } from '../../tools/docs/domain/paths.js';
 import { skeletonLines } from '../app-skeleton.js';
 
@@ -35,6 +35,7 @@ export class DocsReader extends LitElement {
     _docs: { state: true },
     _loading: { state: true },
     _opening: { state: true },
+    _downloading: { state: true },
     _viewing: { state: true },
     _src: { state: true },
     _error: { state: true },
@@ -56,6 +57,20 @@ export class DocsReader extends LitElement {
     .doc[disabled] { opacity: 0.6; cursor: progress; }
     .doc h3 { margin: 0; font-size: 1rem; color: var(--rm-navy, #1e3a5f); }
     .doc p { margin: 0; font-size: 0.87rem; color: var(--rm-muted, #5b6b7d); line-height: 1.5; }
+    /* La tarjeta es el botón de abrir y la descarga va aparte: un botón dentro
+       de otro no es HTML válido, y además son dos acciones distintas. */
+    .doc-card { display: flex; flex-direction: column; }
+    .doc-card .doc { flex: 1; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .doc-download {
+      font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; text-align: left;
+      padding: 0.5rem 1.2rem; color: var(--rm-muted, #5b6b7d);
+      background: var(--rm-surface-hover, #f2f6f7);
+      border: 1px solid var(--rm-border, #d7dee2); border-top: 0; border-radius: 0 0 12px 12px;
+    }
+    .doc-download:hover:not([disabled]) { color: var(--rm-accent, #2a9d8f); border-color: var(--rm-accent, #2a9d8f); }
+    .doc-download:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .doc-download[disabled] { opacity: 0.6; cursor: progress; }
+    :host([theme-dark]) .doc-download { background: #141b21; }
     .cta { margin-top: auto; padding-top: 0.6rem; font-size: 0.85rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
     .error { color: var(--rm-danger, #b91c1c); font-size: 0.85rem; }
@@ -78,6 +93,7 @@ export class DocsReader extends LitElement {
     this._docs = [];
     this._loading = true;
     this._opening = '';
+    this._downloading = '';
     this._viewing = null;
     this._src = '';
     this._error = '';
@@ -119,6 +135,34 @@ export class DocsReader extends LitElement {
   }
 
   /**
+   * Descarga el documento (RMR-TSK-0546). Pide su token como para verlo y deja
+   * que el navegador guarde el fichero: la función lo entrega con
+   * `Content-Disposition: attachment`. El enlace nace y muere aquí; no se pinta
+   * en el DOM, porque una URL con token no es para copiarla ni reenviarla.
+   * @param {{ id: string, name: string }} doc
+   */
+  async _download(doc) {
+    if (this._downloading) return;
+    this._downloading = doc.id;
+    this._error = '';
+    try {
+      const url = await downloadDocUrl(doc);
+      const a = document.createElement('a');
+      a.href = url;
+      a.rel = 'noopener';
+      a.download = '';
+      a.hidden = true;
+      document.body.append(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      this._error = `No se ha podido descargar «${doc.name}»: ${err.message}`;
+    } finally {
+      this._downloading = '';
+    }
+  }
+
+  /**
    * Visor: el documento en un iframe con el origen de `serveDoc` (ver la
    * cabecera). `allow-same-origin` aquí significa «el suyo», no el nuestro, y
    * hace falta: la vista del orador de reveal.js (tecla S, RMR-TSK-0528) abre
@@ -153,13 +197,19 @@ export class DocsReader extends LitElement {
   }
 
   _renderDoc(doc) {
+    const bajando = this._downloading === doc.id;
     return html`
-      <button class="doc" data-doc-id=${doc.id} ?disabled=${this._opening === doc.id}
-        @click=${() => this._open(doc)}>
-        <h3>${doc.name}</h3>
-        <p>${doc.description || ''}</p>
-        <span class="cta">${this._opening === doc.id ? 'Abriendo…' : 'Abrir la presentación →'}</span>
-      </button>`;
+      <div class="doc-card">
+        <button class="doc" data-doc-id=${doc.id} ?disabled=${this._opening === doc.id}
+          @click=${() => this._open(doc)}>
+          <h3>${doc.name}</h3>
+          <p>${doc.description || ''}</p>
+          <span class="cta">${this._opening === doc.id ? 'Abriendo…' : 'Abrir la presentación →'}</span>
+        </button>
+        <button class="doc-download" ?disabled=${bajando}
+          aria-label=${`Descargar ${doc.name}`}
+          @click=${() => this._download(doc)}>${bajando ? 'Preparando…' : '↓ Descargar'}</button>
+      </div>`;
   }
 
   /** El aviso de que algo falló, aparte para no anidar plantillas. */

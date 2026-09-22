@@ -23,7 +23,7 @@ import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pu
 import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './docsPaths.js';
 import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
-import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders } from './docTokens.js';
+import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { projectDirectory } from './orgDirectory.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
@@ -3376,7 +3376,13 @@ export const serveDoc = onRequest({ region: 'europe-west1', invoker: 'public' },
     return;
   }
   const [html] = await getStorage().bucket().file(snap.data().path).download();
-  res.set(viewerHeaders()).status(200).send(html);
+  // `?download=1` entrega el MISMO documento para guardar (RMR-TSK-0546): mismo
+  // token de un solo documento y con caducidad, en vez de una URL de Storage
+  // que vale para siempre y se reenvía.
+  const cabeceras = String(req.query?.download ?? '') === '1'
+    ? downloadHeaders(snap.data().path)
+    : viewerHeaders();
+  res.set(cabeceras).status(200).send(html);
 });
 
 

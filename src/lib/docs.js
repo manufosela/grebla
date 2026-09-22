@@ -21,7 +21,7 @@
 import { collection, getDocs } from 'firebase/firestore';
 import { db, app } from './firebase.js';
 import { storagePathOf } from '../tools/docs/domain/paths.js';
-import { docViewUrl } from '../tools/docs/domain/viewUrl.js';
+import { docViewUrl, docDownloadUrl } from '../tools/docs/domain/viewUrl.js';
 
 const COL = 'docs';
 
@@ -92,15 +92,31 @@ export async function updateDocMeta(input) {
  * @returns {Promise<string>}
  */
 export async function openDocView(document) {
+  return (await docUrlsFor(document)).view;
+}
+
+/**
+ * URL para DESCARGAR el documento (RMR-TSK-0546): la misma puerta y el mismo
+ * token con caducidad que el visor, no la URL eterna de Storage.
+ * @param {{ id: string }} document
+ * @returns {Promise<string>}
+ */
+export async function downloadDocUrl(document) {
+  return (await docUrlsFor(document)).download;
+}
+
+/** Pide el token del documento una vez y compone las dos URLs. */
+async function docUrlsFor(document) {
   const { httpsCallable } = await import('firebase/functions');
   const { getRegionalFunctions } = await import('./firebase.js');
   const res = await httpsCallable(await getRegionalFunctions(), 'openDoc')({ id: document.id });
   const emulators = import.meta.env.PUBLIC_USE_EMULATORS === 'true' && typeof window !== 'undefined';
-  return docViewUrl({
+  const args = {
     projectId: app.options.projectId,
     token: res.data?.token,
     emulatorHost: emulators ? (import.meta.env.PUBLIC_FIRESTORE_EMULATOR_HOST ?? '127.0.0.1') : '',
-  });
+  };
+  return { view: docViewUrl(args), download: docDownloadUrl(args) };
 }
 
 /**
