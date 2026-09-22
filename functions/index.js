@@ -24,6 +24,7 @@ import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './
 import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
+import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, conversationFrom, personIsInScope } from './agentIngest.js';
 import { projectDirectory } from './orgDirectory.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
@@ -3474,3 +3475,82 @@ export const updateDoc = onCall({ region: 'europe-west1' }, async (request) => {
 
   return { id, path: destino };
 });
+
+
+// ── Ingesta desde agentes externos (RMR-TSK-0549) ───────────────────────────
+
+/**
+ * Clave compartida con el agente externo. Se genera en GREBLA y se entrega
+ * fuera de banda; en las instancias que no la usan basta un placeholder, y sin
+ * clave la puerta queda CERRADA, nunca abierta.
+ */
+const AGENT_INGEST_KEY = defineSecret('AGENT_INGEST_KEY');
+
+/**
+ * Crea en la ficha de una persona la nota de un 1-1 o un catchup que ha
+ * detectado un agente externo (MATIAS, el agente personal de Mánu, que lee el
+ * correo y Slack cada mañana).
+ *
+ * Es la ÚNICA puerta de escritura desde fuera, y escribe en un solo sitio:
+ * `/people/{personId}/conversations`. Ni el O2O privado del manager, ni la
+ * Marea, ni las encuestas, ni los kudos, ni las notas de apoyo: cada uno de
+ * esos sitios tiene una garantía hecha a una persona, y un agente no la toca.
+ *
+ * El contrato de las respuestas se pactó con quien ingesta, porque de él depende
+ * lo que haga con la nota cuando aquí no cabe: `404 person_not_found` y
+ * `403 not_in_scope` significan «guárdala tú», y cualquier otro error significa
+ * «algo va mal, grítalo». Por eso un 401 no puede parecerse a un 404.
+ */
+export const ingestConversation = onRequest(
+  { region: 'europe-west1', invoker: 'public', secrets: [AGENT_INGEST_KEY] },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+    if (!keyMatches(AGENT_INGEST_KEY.value(), bearerFrom(req.get('authorization')))) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    let nota;
+    try {
+      nota = normalizeIngest(req.body);
+    } catch (err) {
+      res.status(400).json({ error: 'invalid_payload', detail: err.message });
+      return;
+    }
+
+    const db = getFirestore();
+    const [byEmail, byPending] = await Promise.all([
+      db.collection('people').where('email', '==', nota.email).limit(1).get(),
+      db.collection('people').where('pendingEmail', '==', nota.email).limit(1).get(),
+    ]);
+    const persona = byEmail.docs.at(0) ?? byPending.docs.at(0);
+    if (!persona) {
+      res.status(404).json({ error: 'person_not_found' });
+      return;
+    }
+    if (!personIsInScope(persona.data())) {
+      res.status(403).json({ error: 'not_in_scope' });
+      return;
+    }
+
+    // El id sale del ORIGEN y el alta es exclusiva: reenviar la misma nota no
+    // duplica. Se responde 200 igual, porque para quien ingesta el resultado es
+    // el mismo —la nota está— y un error le haría reintentar en balde.
+    const id = conversationIdFor(nota.source);
+    const ref = persona.ref.collection('conversations').doc(id);
+    try {
+      await ref.create(conversationFrom(nota, { at: new Date().toISOString() }));
+    } catch (err) {
+      if (err?.code === 6 || /already exists/i.test(String(err?.message ?? ''))) {
+        res.status(200).json({ id, personId: persona.id, duplicate: true });
+        return;
+      }
+      throw err;
+    }
+    logger.info(`[ingesta] ${nota.source.system}: nota ${nota.type} en la ficha ${persona.id}`);
+    res.status(200).json({ id, personId: persona.id, duplicate: false });
+  },
+);

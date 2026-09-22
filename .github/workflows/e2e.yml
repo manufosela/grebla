@@ -49,6 +49,11 @@ jobs:
       # entorno (los usa el global-setup) y ejecuta Playwright dentro; el
       # webServer de Playwright arranca astro dev apuntando a los emuladores.
       - name: E2E contra los emuladores
+        env:
+          # Clave de la puerta de ingesta (RMR-TSK-0549). En el emulador, un
+          # secreto se lee del entorno; este valor es de pega y solo vale aqui:
+          # la de verdad vive en Secret Manager y no pasa por el repo.
+          AGENT_INGEST_KEY: e2e-agent-key
         run: npx firebase-tools emulators:exec --only auth,firestore,functions,storage --project demo-grebla "npx playwright test"
 
       - name: Subir el reporte de Playwright si algo falla
