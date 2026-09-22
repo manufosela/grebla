@@ -53,7 +53,11 @@ import {
   improvementPoints,
   careerSuggestion,
 } from '../../tools/career/data/assessment.js';
-import { getCareerAssessment, saveCareerAssessment } from '../../lib/careerAssessment.js';
+import { getCareerAssessment, saveCareerAssessment, getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
+import { normalizeLevelAssessment, markDimension, marksOf, closeAssessment, closureHistory, lastClosure } from '../../tools/career/data/levelAssessment.js';
+import { levelProgressFor, levelCompletion } from '../../tools/career/domain/levelProgress.js';
+import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { expectationWeight } from '../../tools/career/data/framework.js';
 import { getPersonLogbook } from '../../lib/engineer.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
@@ -205,6 +209,12 @@ export class TeamPersonDetail extends LitElement {
     _careerSaving: { state: true },
     _careerError: { state: true },
     _assessment: { state: true },
+    /** Valoración contra el nivel SIGUIENTE (RMR-PCS-0044): lo guardado y el borrador. */
+    _nextAssessment: { state: true },
+    _progressDraft: { state: true },
+    _progressSaving: { state: true },
+    _progressError: { state: true },
+    _progressSaved: { state: true },
     _assessmentDraft: { state: true },
     _assessmentSaving: { state: true },
     _assessmentError: { state: true },
@@ -487,6 +497,11 @@ export class TeamPersonDetail extends LitElement {
     this._careerError = '';
     /** @type {import('../../tools/career/data/assessment.js').CareerAssessment} valoración frente al nivel (persistida) */
     this._assessment = { byDimension: {} };
+    this._nextAssessment = null;
+    this._progressDraft = null;
+    this._progressSaving = false;
+    this._progressError = '';
+    this._progressSaved = false;
     /** @type {Record<string, { meets: boolean, note: string }>} borrador editable de la valoración */
     this._assessmentDraft = {};
     /** @type {boolean} guardado de la valoración en curso */
@@ -752,6 +767,81 @@ export class TeamPersonDetail extends LitElement {
     this._assessmentSaved = false;
   }
 
+  // ── Avance hacia el nivel siguiente (RMR-PCS-0044 · F3) ────────────────────
+  // Otra pregunta que la valoración de arriba: aquella dice si cumple el nivel
+  // que YA tiene; esta, cuánto lleva del siguiente. De aquí sale el L1-2.
+
+  /** El nivel contra el que se mide el avance, o null si no hay siguiente en su escalera. */
+  get _nextLevel() {
+    return nextLevelFor(this.framework?.levels ?? [], this.person?.levelId) ?? null;
+  }
+
+  /** Carga la valoración del nivel siguiente. Sin nivel siguiente no hay nada que cargar. */
+  async _loadLevelProgress() {
+    const next = this._nextLevel;
+    if (!next) {
+      this._nextAssessment = null;
+      this._progressDraft = null;
+      return;
+    }
+    try {
+      const guardada = await getLevelAssessment(this.person.id, next.id);
+      this._nextAssessment = guardada;
+      this._progressDraft = guardada;
+      this._progressError = '';
+    } catch (err) {
+      this._progressError = err instanceof Error ? err.message : 'No se pudo cargar el avance de nivel.';
+    }
+  }
+
+  /** El cumplimiento del borrador, con los pesos del framework. */
+  get _progressCompletion() {
+    return this._nextLevel ? levelCompletion(this.framework, this._nextLevel.id, marksOf(this._progressDraft)) : null;
+  }
+
+  /** Marca (o desmarca) una expectativa del nivel siguiente; queda quién lo dijo. */
+  _setProgressMark(dimensionId, meets) {
+    const previa = this._progressDraft?.byDimension?.[dimensionId];
+    this._progressDraft = markDimension(this._progressDraft, dimensionId, {
+      meets, note: previa?.note ?? '', by: currentAuthor(), at: new Date().toISOString(),
+    });
+    this._progressSaved = false;
+  }
+
+  /** Nota de una expectativa del nivel siguiente (la evidencia que se discute en el O2O). */
+  _setProgressNote(dimensionId, note) {
+    const previa = this._progressDraft?.byDimension?.[dimensionId];
+    this._progressDraft = markDimension(this._progressDraft, dimensionId, {
+      meets: previa?.meets === true, note, by: currentAuthor(), at: new Date().toISOString(),
+    });
+    this._progressSaved = false;
+  }
+
+  /**
+   * Guarda el avance. `cerrar` añade además un cierre: la foto del cumplimiento
+   * de hoy, que es lo que permite exigir el 80 % sostenido para el .3.
+   * @param {boolean} [cerrar]
+   */
+  async _saveProgress(cerrar = false) {
+    const next = this._nextLevel;
+    if (!next) return;
+    this._progressError = '';
+    this._progressSaving = true;
+    try {
+      const aGuardar = cerrar
+        ? closeAssessment(this._progressDraft, this._progressCompletion, { by: currentAuthor(), at: new Date().toISOString() })
+        : this._progressDraft;
+      await saveLevelAssessment(this.person.id, next.id, aGuardar, currentAuthor());
+      this._nextAssessment = aGuardar;
+      this._progressDraft = aGuardar;
+      this._progressSaved = true;
+    } catch (err) {
+      this._progressError = err instanceof Error ? err.message : 'No se pudo guardar el avance de nivel.';
+    } finally {
+      this._progressSaving = false;
+    }
+  }
+
   /**
    * Marca una dimensión como «cumple» (true) o «no llega» (false) en el borrador.
    * @param {string} dimensionId
@@ -991,6 +1081,7 @@ export class TeamPersonDetail extends LitElement {
       this._leaderUids = leaderUids;
       this._routes = routes;
       this._seedAssessmentDraft();
+      await this._loadLevelProgress();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la ficha.';
     } finally {
@@ -1665,6 +1756,7 @@ export class TeamPersonDetail extends LitElement {
     const nivelPanel = () => html`
       ${this._renderCareerEditor()}
       ${level ? this._renderAssessment(fw, level) : null}
+      ${level ? this._renderLevelProgress() : null}
       ${level
         ? html`
             <p class="sub">Nivel actual</p>
@@ -1813,6 +1905,89 @@ export class TeamPersonDetail extends LitElement {
         ? html`<p class="sub">Sugerencia de rol</p><p class="suggest">${suggestion}</p>`
         : null}
     `;
+  }
+
+  /**
+   * Avance hacia el nivel siguiente: el porcentaje por pesos, el sub-nivel que
+   * sale de ahí y una fila por expectativa. Lo que nadie ha marcado no cumple:
+   * el nivel siguiente se gana, no se presupone.
+   * @returns {import('lit').TemplateResult|null}
+   */
+  _renderLevelProgress() {
+    const next = this._nextLevel;
+    if (!next) return null;
+    const filas = expectationsForLevel(this.framework, next.id).filter((r) => r.text !== '');
+    if (filas.length === 0) {
+      return html`<p class="sub">Avance hacia ${next.code}</p>
+        <p class="todo">Ese nivel todavía no tiene expectativas escritas: sin ellas no hay avance que medir.</p>`;
+    }
+    const progreso = levelProgressFor({
+      person: this.person,
+      framework: this.framework,
+      marks: marksOf(this._progressDraft),
+      history: closureHistory(this._nextAssessment),
+    });
+    const ultimo = lastClosure(this._nextAssessment);
+    return html`
+      <p class="sub">Avance hacia ${next.code} · ${next.title}</p>
+      ${this._renderProgressHead(progreso, ultimo)}
+      <ul class="assess">${filas.map((row) => this._renderProgressRow(row, next.id))}</ul>
+      ${this._progressError ? html`<p class="error">${this._progressError}</p>` : null}
+      <div class="row">
+        <button type="button" ?disabled=${this._progressSaving} @click=${() => this._saveProgress(false)}>
+          ${this._progressSaving ? 'Guardando…' : 'Guardar avance'}
+        </button>
+        <button type="button" class="primary" ?disabled=${this._progressSaving}
+          title="Deja constancia del cumplimiento de hoy: es lo que permite exigir que el 80 % se mantenga"
+          @click=${() => this._saveProgress(true)}>Cerrar valoración</button>
+        ${this._progressSaved ? html`<span class="saved" role="status">Avance guardado.</span>` : null}
+      </div>`;
+  }
+
+  /** Cabecera del avance: sub-nivel, porcentaje, qué falta y desde cuándo. */
+  _renderProgressHead(progreso, ultimo) {
+    if (!progreso) return null;
+    const cerrado = ultimo ? `Última valoración cerrada: ${ultimo.pct} % el ${formatAchievedAt(ultimo.at)}.` : 'Todavía no se ha cerrado ninguna valoración.';
+    const pendiente = progreso.pendingSub === 3
+      ? html`<p class="note">Llega al 80 %, pero el ${progreso.levelCode}-3 pide mantenerlo: hace falta otra valoración cerrada por encima del 80 %.</p>`
+      : null;
+    const subir = progreso.readyToPromote
+      ? html`<p class="note">Cumple el 100 % de ${progreso.nextLevelCode}: toca plantear la subida de nivel.</p>`
+      : null;
+    const core = progreso.coreMissing.length > 0
+      ? html`<p class="note">Imprescindibles sin cubrir: ${progreso.coreMissing.length}.</p>`
+      : null;
+    return html`
+      <p class="suggest"><strong>${progreso.label}</strong> · ${progreso.pct} % (${progreso.earned} de ${progreso.total} puntos)</p>
+      <p class="note">${cerrado}</p>
+      ${pendiente}${subir}${core}`;
+  }
+
+  /** Una expectativa del nivel siguiente: cumple o no, con su peso y su nota. */
+  _renderProgressRow(row, levelId) {
+    const dimId = row.dimension.id;
+    const marca = this._progressDraft?.byDimension?.[dimId];
+    const meets = marca?.meets === true;
+    const celda = (this.framework?.expectations ?? []).find((e) => e.levelId === levelId && e.dimensionId === dimId);
+    const peso = expectationWeight(celda);
+    const quien = marca?.by?.name ? html`<span class="note">Lo valoró ${marca.by.name}</span>` : null;
+    return html`
+      <li class="assess-row ${meets ? 'ok' : 'bad'}">
+        <div class="assess-head">
+          <span class="dim">${row.dimension.name} <span class="note">peso ${peso}${celda?.core ? ' · imprescindible' : ''}</span></span>
+          <div class="seg" role="group" aria-label=${`Avance en ${row.dimension.name}`}>
+            <button type="button" class="seg-btn ok ${meets ? 'on' : ''}" aria-pressed=${meets ? 'true' : 'false'}
+              @click=${() => this._setProgressMark(dimId, true)}>Cumple</button>
+            <button type="button" class="seg-btn bad ${meets ? '' : 'on'}" aria-pressed=${meets ? 'false' : 'true'}
+              @click=${() => this._setProgressMark(dimId, false)}>Todavía no</button>
+          </div>
+        </div>
+        <details class="exp"><summary>Expectativa</summary><p>${row.text}</p></details>
+        <label class="fld note-fld">Evidencia (opcional)
+          <textarea rows="2" .value=${marca?.note ?? ''} @input=${(e) => this._setProgressNote(dimId, e.target.value)}></textarea>
+        </label>
+        ${quien}
+      </li>`;
   }
 
   /**
