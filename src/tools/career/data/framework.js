@@ -165,7 +165,22 @@ function normalizeExpectation(item) {
     levelId: String(item?.levelId ?? '').trim(),
     dimensionId: String(item?.dimensionId ?? '').trim(),
     text: String(item?.text ?? '').trim(),
+    weight: expectationWeight(item),
+    core: item?.core === true,
   };
+}
+
+/**
+ * Peso de una expectativa dentro de su nivel: entero de 1 para arriba. Lo fija
+ * el framework y NO se negocia al valorar — lo que se discute es si está
+ * cubierta, nunca cuánto vale. Sin peso escrito vale 1, y un peso inválido
+ * también: antes eso que inventar una ponderación que nadie ha decidido.
+ * @param {{ weight?: unknown }|null|undefined} expectation
+ * @returns {number}
+ */
+export function expectationWeight(expectation) {
+  const raw = expectation?.weight;
+  return Number.isInteger(raw) && raw >= 1 ? raw : 1;
 }
 
 /**
@@ -241,6 +256,8 @@ export function serializeFramework(fw) {
     levelId: String(e.levelId ?? '').trim(),
     dimensionId: String(e.dimensionId ?? '').trim(),
     text: String(e.text ?? '').trim(),
+    weight: expectationWeight(e),
+    core: e.core === true,
   })).filter((e) => e.levelId && e.dimensionId && e.text);
   const addendums = (fw?.addendums ?? []).map((a) => ({
     disciplineId: String(a.disciplineId ?? '').trim(),

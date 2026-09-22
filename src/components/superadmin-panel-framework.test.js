@@ -89,3 +89,71 @@ describe('_moveLevelInTrack: reordena solo dentro del track', () => {
     expect(ctx._framework.levels.map((l) => [l.id, l.order])).toEqual(snapshot);
   });
 });
+
+/**
+ * Peso e «imprescindible» de una expectativa (RMR-PCS-0044): el framework es
+ * quien los fija. Se ejercita el modelo, no el render.
+ */
+describe('peso e imprescindible de la matriz de expectativas', () => {
+  const { _patchExpectation, _expectationWeight, _expectationCore } = SuperadminPanel.prototype;
+  let ctx;
+
+  beforeEach(() => {
+    ctx = makeCtx();
+    ctx._framework.expectations = [
+      { levelId: 'l2', dimensionId: 'tech', text: 'Diseña un servicio' },
+      { levelId: 'l2', dimensionId: 'product', text: 'Discute el alcance', weight: 3, core: true },
+    ];
+    ctx._expectationWeight = _expectationWeight;
+    ctx._expectationCore = _expectationCore;
+  });
+
+  it('sin peso escrito, la celda vale 1 y no es imprescindible', () => {
+    expect(_expectationWeight.call(ctx, 'l2', 'tech')).toBe(1);
+    expect(_expectationCore.call(ctx, 'l2', 'tech')).toBe(false);
+    expect(_expectationWeight.call(ctx, 'l2', 'product')).toBe(3);
+    expect(_expectationCore.call(ctx, 'l2', 'product')).toBe(true);
+  });
+
+  it('cambia el peso y el imprescindible sin tocar el texto ni las demás celdas', () => {
+    _patchExpectation.call(ctx, 'l2', 'tech', { weight: 2 });
+    _patchExpectation.call(ctx, 'l2', 'tech', { core: true });
+    expect(ctx._framework.expectations[0]).toEqual({ levelId: 'l2', dimensionId: 'tech', text: 'Diseña un servicio', weight: 2, core: true });
+    expect(ctx._framework.expectations[1].weight).toBe(3);
+  });
+
+  it('una celda que no existe no se pondera: ponderar la nada no significa nada', () => {
+    const antes = ctx._framework.expectations;
+    _patchExpectation.call(ctx, 'l2', 'culture', { weight: 5 });
+    expect(ctx._framework.expectations).toBe(antes);
+  });
+});
+
+describe('_setExpectationWeight: el peso tecleado se valida, no se apaña', () => {
+  const { _patchExpectation, _expectationWeight, _setExpectationWeight } = SuperadminPanel.prototype;
+  let ctx;
+  const input = (value) => ({ value: String(value) });
+
+  beforeEach(() => {
+    ctx = makeCtx();
+    ctx._framework.expectations = [{ levelId: 'l2', dimensionId: 'tech', text: 'Diseña un servicio', weight: 2, core: false }];
+    ctx._expectationWeight = _expectationWeight;
+    ctx._patchExpectation = _patchExpectation;
+  });
+
+  it('acepta un entero dentro del rango', () => {
+    _setExpectationWeight.call(ctx, 'l2', 'tech', input(5));
+    expect(ctx._framework.expectations[0].weight).toBe(5);
+    expect(ctx._fwError).toBe('');
+  });
+
+  it('rechaza 0, decimales, vacío y pasarse de rango: avisa y devuelve el campo a su valor', () => {
+    for (const malo of [0, 2.5, '', 10, -3, 'dos']) {
+      const campo = input(malo);
+      _setExpectationWeight.call(ctx, 'l2', 'tech', campo);
+      expect(ctx._framework.expectations[0].weight).toBe(2); // sigue el de antes
+      expect(ctx._fwError).toMatch(/peso/i);
+      expect(campo.value).toBe('2'); // el campo vuelve a lo guardado
+    }
+  });
+});

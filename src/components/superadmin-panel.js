@@ -28,6 +28,10 @@ import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
 import { getFramework, saveFramework } from '../lib/careerFramework.js';
+import { expectationWeight } from '../tools/career/data/framework.js';
+
+/** Tope del peso de una expectativa: más allá, el número deja de decir nada. */
+const MAX_EXPECTATION_WEIGHT = 9;
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
@@ -483,7 +487,11 @@ export class SuperadminPanel extends LitElement {
     .matrix-row { display: grid; grid-template-columns: 12rem 1fr; gap: 0.7rem; align-items: start; }
     .matrix-dim { padding-top: 0.4rem; font-size: 0.8rem; font-weight: 600; color: var(--rm-text, #111827); }
     .matrix-pick { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
-    @media (max-width: 640px) { .matrix-row { grid-template-columns: 1fr; } }
+    /* Peso e imprescindible de la celda (RMR-PCS-0044): el peso lo fija el framework. */
+    .matrix-weight { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1rem; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
+    .matrix-weight label { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .matrix-weight input[type="number"] { width: 3.2rem; padding: 0.2rem 0.35rem; font: inherit; border: 1px solid var(--rm-border, #dde7ec); border-radius: 6px; background: var(--rm-field, var(--rm-surface, #fff)); color: var(--rm-text, #111827); }
+    @media (max-width: 640px) { .matrix-row { grid-template-columns: 1fr; } .matrix-weight { grid-column: 1; } }
   `];
 
   constructor() {
@@ -828,6 +836,46 @@ export class SuperadminPanel extends LitElement {
   /** Texto de la celda {levelId, dimensionId} o '' si no existe. @param {string} levelId @param {string} dimensionId @returns {string} */
   _expectationText(levelId, dimensionId) {
     return this._framework.expectations.find((e) => e.levelId === levelId && e.dimensionId === dimensionId)?.text ?? '';
+  }
+
+  /** Peso de la celda (1 si no está escrita): lo fija el framework, no quien valora. */
+  _expectationWeight(levelId, dimensionId) {
+    return expectationWeight(this._framework.expectations.find((e) => e.levelId === levelId && e.dimensionId === dimensionId));
+  }
+
+  /** ¿La celda es imprescindible para subir de nivel? */
+  _expectationCore(levelId, dimensionId) {
+    return this._framework.expectations.find((e) => e.levelId === levelId && e.dimensionId === dimensionId)?.core === true;
+  }
+
+  /**
+   * Cambia el peso o el «imprescindible» de una celda. Solo se aplica a celdas
+   * que existen: sin texto no hay expectativa que ponderar.
+   * @param {string} levelId @param {string} dimensionId @param {{weight?: number, core?: boolean}} patch
+   */
+  _patchExpectation(levelId, dimensionId, patch) {
+    const list = this._framework.expectations;
+    const idx = list.findIndex((e) => e.levelId === levelId && e.dimensionId === dimensionId);
+    if (idx < 0) return;
+    this._patchFramework({ expectations: list.map((e, i) => (i === idx ? { ...e, ...patch } : e)) });
+  }
+
+  /**
+   * Peso tecleado a mano: entero de 1 a MAX_EXPECTATION_WEIGHT. Un valor fuera
+   * de rango no se guarda «como se pueda» —se avisa y el campo vuelve al que
+   * estaba—, porque un peso silenciosamente convertido en 1 falsearía el
+   * porcentaje del nivel sin que nadie se entere.
+   * @param {string} levelId @param {string} dimensionId @param {HTMLInputElement} input
+   */
+  _setExpectationWeight(levelId, dimensionId, input) {
+    const value = Number(input.value);
+    if (!Number.isInteger(value) || value < 1 || value > MAX_EXPECTATION_WEIGHT) {
+      this._fwError = `El peso de una expectativa es un número entero de 1 a ${MAX_EXPECTATION_WEIGHT}.`;
+      input.value = String(this._expectationWeight(levelId, dimensionId));
+      return;
+    }
+    this._fwError = '';
+    this._patchExpectation(levelId, dimensionId, { weight: value });
   }
 
   /** Crea/actualiza (o elimina si queda vacío) la celda de expectativa. @param {string} levelId @param {string} dimensionId @param {string} value */
@@ -2019,18 +2067,45 @@ export class SuperadminPanel extends LitElement {
                 </label>
               </div>
               <div class="matrix">
-                ${dims.map((d) => html`
-                  <label class="matrix-row">
-                    <span class="matrix-dim">${d.name}</span>
-                    <textarea rows="2" placeholder="Qué se espera en esta dimensión para el nivel elegido…"
-                      ?disabled=${this.readOnly}
-                      .value=${this._expectationText(levelId, d.id)}
-                      @input=${(e) => this._setExpectation(levelId, d.id, e.target.value)}></textarea>
-                  </label>
-                `)}
+                ${dims.map((d) => this._renderFwExpectationRow(levelId, d))}
               </div>`}
       </details>
     `;
+  }
+
+  /**
+   * Una celda de la matriz: qué se espera, cuánto pesa y si es imprescindible.
+   * El peso y el «imprescindible» solo salen cuando hay texto: ponderar una
+   * expectativa que no existe no significa nada.
+   * @param {string} levelId @param {{id: string, name: string}} dim
+   */
+  _renderFwExpectationRow(levelId, dim) {
+    const texto = this._expectationText(levelId, dim.id);
+    const pesos = texto
+      ? html`
+          <span class="matrix-weight">
+            <label>Peso
+              <input type="number" min="1" max=${MAX_EXPECTATION_WEIGHT} step="1" ?disabled=${this.readOnly}
+                .value=${String(this._expectationWeight(levelId, dim.id))}
+                @change=${(e) => this._setExpectationWeight(levelId, dim.id, e.target)} />
+            </label>
+            <label title="Sin esta expectativa no se sube de nivel, por mucho porcentaje que sume el resto">
+              <input type="checkbox" ?disabled=${this.readOnly}
+                .checked=${this._expectationCore(levelId, dim.id)}
+                @change=${(e) => this._patchExpectation(levelId, dim.id, { core: e.target.checked })} /> imprescindible
+            </label>
+          </span>`
+      : null;
+    return html`
+      <div class="matrix-row">
+        <span class="matrix-dim">${dim.name}</span>
+        <textarea rows="2" placeholder="Qué se espera en esta dimensión para el nivel elegido…"
+          aria-label=${`Expectativa de ${dim.name}`}
+          ?disabled=${this.readOnly}
+          .value=${texto}
+          @input=${(e) => this._setExpectation(levelId, dim.id, e.target.value)}></textarea>
+        ${pesos}
+      </div>`;
   }
 
   /**
