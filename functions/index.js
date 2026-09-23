@@ -3487,6 +3487,37 @@ export const updateDoc = onCall({ region: 'europe-west1' }, async (request) => {
 const AGENT_INGEST_KEY = defineSecret('AGENT_INGEST_KEY');
 
 /**
+ * La ficha de quien tiene ese correo, mirando por orden: el campo `email`, la
+ * invitación pendiente y —si no aparece— la CUENTA vinculada.
+ *
+ * Lo tercero no es un adorno: en GREBLA el identificador de una persona es su
+ * `uid`, y el campo `email` solo queda relleno en las fichas que nacieron de una
+ * invitación. Medido en la instancia real: 41 personas activas, 7 con `email` y
+ * 27 con cuenta vinculada. Sin este paso, la ingesta por correo respondería
+ * «no existe» a casi todo el mundo, incluido quien la pidió.
+ *
+ * Solo cuenta un correo VERIFICADO por el proveedor: un email sin verificar lo
+ * puede declarar cualquiera al registrarse, y esto decide en qué ficha se
+ * escribe.
+ * @param {string} email
+ * @returns {Promise<FirebaseFirestore.QueryDocumentSnapshot|null>}
+ */
+async function findPersonByEmail(email) {
+  const db = getFirestore();
+  const [byEmail, byPending] = await Promise.all([
+    db.collection('people').where('email', '==', email).limit(1).get(),
+    db.collection('people').where('pendingEmail', '==', email).limit(1).get(),
+  ]);
+  const directa = byEmail.docs.at(0) ?? byPending.docs.at(0);
+  if (directa) return directa;
+
+  const user = await getAuth().getUserByEmail(email).catch(() => null);
+  if (!user?.emailVerified) return null;
+  const byUid = await db.collection('people').where('uid', '==', user.uid).limit(1).get();
+  return byUid.docs.at(0) ?? null;
+}
+
+/**
  * Crea en la ficha de una persona la nota de un 1-1 o un catchup que ha
  * detectado un agente externo (MATIAS, el agente personal de Mánu, que lee el
  * correo y Slack cada mañana).
@@ -3521,12 +3552,7 @@ export const ingestConversation = onRequest(
       return;
     }
 
-    const db = getFirestore();
-    const [byEmail, byPending] = await Promise.all([
-      db.collection('people').where('email', '==', nota.email).limit(1).get(),
-      db.collection('people').where('pendingEmail', '==', nota.email).limit(1).get(),
-    ]);
-    const persona = byEmail.docs.at(0) ?? byPending.docs.at(0);
+    const persona = await findPersonByEmail(nota.email);
     if (!persona) {
       res.status(404).json({ error: 'person_not_found' });
       return;
