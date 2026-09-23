@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.212.0] - 2026-09-23
+
+### Cambiado
+- **La curva «Progresión en el tiempo» se dibuja con las valoraciones**, no con
+  los certificados del mapa de carrera. Era el último sitio donde la formación
+  contaba como progresión de nivel. Cada valoración cerrada es un punto, con su
+  porcentaje y el sub-nivel de ese día; sin valoraciones cerradas no se dibuja
+  nada, en vez de inventar una curva con el juego.
+
 ## [1.211.0] - 2026-09-23
 
 ### Cambiado
