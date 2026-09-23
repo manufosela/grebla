@@ -35,7 +35,7 @@ import { listLeaders } from '../../lib/leaders.js';
 import '../common/person-permissions.js';
 import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
 import { appendLevelChange, normalizeLevelHistory, levelHistoryView } from '../../tools/team/domain/levelHistory.js';
-import { progressionSeries } from '../../tools/career/domain/progression.js';
+import { assessmentProgressionSeries } from '../../tools/career/domain/progression.js';
 import { listCareerRoutes } from '../../lib/careerMap.js';
 import '../career/career-progression-chart.js';
 import { sparkline, sparklineTrend, SPARK_MAX } from '../../tools/team/domain/services/sparkline.js';
@@ -53,7 +53,7 @@ import {
   improvementPoints,
   careerSuggestion,
 } from '../../tools/career/data/assessment.js';
-import { getCareerAssessment, saveCareerAssessment, getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
+import { getCareerAssessment, saveCareerAssessment, getLevelAssessment, saveLevelAssessment, listLevelAssessments } from '../../lib/careerAssessment.js';
 import { normalizeLevelAssessment, markDimension, marksOf, closeAssessment, closureHistory, lastClosure } from '../../tools/career/data/levelAssessment.js';
 import { levelProgressFor, levelCompletion } from '../../tools/career/domain/levelProgress.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
@@ -211,6 +211,8 @@ export class TeamPersonDetail extends LitElement {
     _assessment: { state: true },
     /** Valoración contra el nivel SIGUIENTE (RMR-PCS-0044): lo guardado y el borrador. */
     _nextAssessment: { state: true },
+    /** Todas las valoraciones por nivel, para la curva (RMR-TSK-0556). */
+    _levelAssessments: { state: true },
     _progressDraft: { state: true },
     _progressSaving: { state: true },
     _progressError: { state: true },
@@ -502,6 +504,7 @@ export class TeamPersonDetail extends LitElement {
     /** @type {import('../../tools/career/data/assessment.js').CareerAssessment} valoración frente al nivel (persistida) */
     this._assessment = { byDimension: {} };
     this._nextAssessment = null;
+    this._levelAssessments = [];
     this._progressDraft = null;
     this._progressSaving = false;
     this._progressError = '';
@@ -791,6 +794,8 @@ export class TeamPersonDetail extends LitElement {
     try {
       const guardada = await getLevelAssessment(this.person.id, next.id);
       this._nextAssessment = guardada;
+      // Todas las valoraciones, para la curva: una lectura, no una por nivel.
+      this._levelAssessments = await listLevelAssessments(this.person.id).catch(() => []);
       this._progressDraft = guardada;
       this._progressError = '';
     } catch (err) {
@@ -2145,11 +2150,13 @@ export class TeamPersonDetail extends LitElement {
    * @returns {import('lit').TemplateResult|null}
    */
   _renderProgressionChart() {
-    const { points, milestones } = progressionSeries({
+    // Con las VALORACIONES, no con los certificados del mapa (RMR-TSK-0556):
+    // recorrer un camino de formación no sube de nivel, así que no puede mover
+    // esta curva.
+    const { points, milestones } = assessmentProgressionSeries({
       person: this.person ?? {},
       framework: this.framework,
-      routes: this._routes,
-      logbook: this._logbook,
+      assessments: this._levelAssessments ?? [],
     });
     if (points.length === 0) return null;
     return html`
