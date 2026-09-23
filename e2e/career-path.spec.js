@@ -111,3 +111,22 @@ test('sin ficha se ve igual: el marco de niveles es de la organización', async 
     await expect(page.locator('career-ladder .mark')).toHaveCount(0);
   });
 });
+
+test('explica qué es un L1-1, un L1-2 y un L1-3, con sus porcentajes (RMR-TSK-0558)', async ({ page }) => {
+  await conEscalera(async () => {
+    await signInAs(page, 'engineer');
+    await page.goto('/tools/career-path');
+
+    const bloque = page.locator('career-ladder .sublevels');
+    // Plegado, para no tapar la escalera: lo que se viene a ver son los niveles.
+    await expect(bloque).not.toHaveAttribute('open', '');
+    await bloque.locator('summary').click();
+
+    await expect(bloque).toContainText('50 %');
+    await expect(bloque).toContainText('80 %');
+    await expect(bloque).toContainText('100 %');
+    // Lo que más se malinterpreta: que el 80 hay que sostenerlo y que el mapa no cuenta.
+    await expect(bloque).toContainText('dos valoraciones seguidas');
+    await expect(bloque).toContainText('no entra en esta cuenta');
+  });
+});
