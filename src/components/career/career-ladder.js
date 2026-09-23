@@ -31,6 +31,16 @@ export class CareerLadder extends LitElement {
     .track { margin: 0 0 1.6rem; }
     .track h3 { font-size: 0.95rem; margin: 0 0 0.15rem; color: var(--rm-text, #111827); }
     .track-desc { font-size: 0.82rem; color: var(--rm-muted, #5b6b7d); margin: 0 0 0.7rem; }
+    /* Qué significan los sub-niveles: plegado, para que no tape la escalera. */
+    .sublevels {
+      border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px;
+      background: var(--rm-surface-hover, #f6f9fa); margin: 0 0 1.1rem; padding: 0.2rem 0.9rem;
+    }
+    .sublevels > summary { cursor: pointer; padding: 0.55rem 0; font-size: 0.9rem; font-weight: 600; color: var(--rm-text, #111827); }
+    .sublevels p { margin: 0.5rem 0; font-size: 0.87rem; line-height: 1.55; color: var(--rm-text, #111827); }
+    .sublevels ul { margin: 0.5rem 0; padding-left: 1.1rem; font-size: 0.87rem; line-height: 1.6; color: var(--rm-text, #111827); }
+    .sublevels li { margin: 0.2rem 0; }
+    .sublevels .ejemplo { color: var(--rm-muted, #5b6b7d); border-left: 3px solid var(--rm-border, #dde7ec); padding-left: 0.7rem; }
     .rung {
       border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px;
       margin: 0 0 0.4rem; background: var(--rm-surface, #fff);
@@ -88,6 +98,7 @@ export class CareerLadder extends LitElement {
     const miObjetivo = this.person?.careerTargetLevelId ?? null;
     return html`
       ${this._renderIntro(miNivel, miObjetivo)}
+      ${this._renderSubLevels()}
       ${escalera.map(({ track, levels }) => html`
         <section class="track">
           <h3>${track.name}</h3>
@@ -107,6 +118,51 @@ export class CareerLadder extends LitElement {
         Todos los itinerarios y sus niveles, con lo que se espera en cada dimensión.
         Tu nivel actual va marcado${miObjetivo ? ' y tu objetivo también' : ''}.
       </p>`;
+  }
+
+  /**
+   * Qué significa el «-1», el «-2» y el «-3» del nivel (RMR-PCS-0044). Estaba
+   * implícito en el badge de la ficha y en el O2O, y quien lo veía por primera
+   * vez no tenía dónde leerlo: va aquí, junto a los niveles, que es donde se
+   * mira antes de una promoción.
+   *
+   * Los porcentajes son sobre el nivel SIGUIENTE, medidos por peso de cada
+   * expectativa, y se dicen tal cual: un número que nadie sabe explicar no
+   * sirve para preparar una conversación de carrera.
+   */
+  _renderSubLevels() {
+    return html`
+      <details class="sublevels">
+        <summary>Qué significa el <strong>-1</strong>, el <strong>-2</strong> y el <strong>-3</strong> de tu nivel</summary>
+        <p>
+          Dentro de cada nivel hay tres escalones. No son niveles nuevos: cuentan cuánto llevas
+          cumplido <em>del nivel siguiente</em>, según lo que tu manager haya valorado.
+        </p>
+        <ul>
+          <li><strong>L1-1</strong> — acabas de alcanzar el nivel: cumples todo lo que se espera en L1.</li>
+          <li><strong>L1-2</strong> — cumples ya el <strong>50 %</strong> o más de los puntos de L2.</li>
+          <li><strong>L1-3</strong> — cumples el <strong>80 %</strong> o más, y lo mantienes: hacen falta
+            dos valoraciones seguidas por encima de ese 80 %, no un buen trimestre suelto.</li>
+          <li><strong>L2-1</strong> — al llegar al <strong>100 %</strong> se plantea la subida, y el conteo
+            empieza otra vez desde el nuevo nivel.</li>
+        </ul>
+        <p>
+          Cada expectativa <strong>pesa</strong> lo que diga el framework, y algunas son imprescindibles:
+          el porcentaje es la suma de los pesos cumplidos, no el número de casillas. La valoración es
+          binaria —está cubierta o no lo está—, así que lo que se discute en un 1:1 es si lo está,
+          nunca cuánto vale.
+        </p>
+        <p class="ejemplo">
+          Un ejemplo: si el nivel siguiente tuviera cuatro expectativas y pesaran 3, 2, 1 y 1
+          (siete puntos en total), cubrir la de peso 3 y la de peso 1 son cuatro puntos, un 57 %:
+          <strong>L1-2</strong>. Cubrir además la de peso 2 serían seis de siete, un 86 %: el
+          <strong>-3</strong> llegaría al repetirlo en la siguiente valoración.
+        </p>
+        <p>
+          El mapa de carrera <strong>no entra en esta cuenta</strong>: formarte suma para ti, pero el
+          nivel lo mueve lo que se espera de ti en él.
+        </p>
+      </details>`;
   }
 
   /**
