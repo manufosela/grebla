@@ -15,6 +15,16 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.210.1] - 2026-09-23
+
+### Corregido
+- **La ingesta encuentra a la persona por su cuenta vinculada.** En GREBLA el
+  identificador es el `uid` y el campo `email` solo está relleno en las fichas
+  que nacieron de una invitación: en la instancia real, 7 de 41 personas
+  activas. La ingesta respondía «no existe» a casi todo el mundo. Ahora, si no
+  hay ficha con ese correo, se busca la cuenta de Firebase Auth que lo tenga
+  **verificado** y su ficha por `uid`.
+
 ## [1.210.0] - 2026-09-22
 
 ### Añadido
