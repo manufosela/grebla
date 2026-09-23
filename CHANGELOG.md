@@ -15,6 +15,16 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.213.0] - 2026-09-24
+
+### Añadido
+- **El Career path explica qué es un L1-1, un L1-2 y un L1-3**, con sus
+  porcentajes: 50 % para el `-2`, 80 % sostenido en dos valoraciones para el
+  `-3` y 100 % para plantear la subida. Con un ejemplo numérico, y dejando
+  claro que el porcentaje es suma de **pesos** (no de casillas), que la
+  valoración es binaria y que el mapa de carrera no entra en esa cuenta. Sale
+  en la herramienta y en «Mi espacio › Mi carrera › La escalera».
+
 ## [1.212.0] - 2026-09-23
 
 ### Cambiado
