@@ -11,7 +11,7 @@
  * @typedef {import('../tools/career/data/assessment.js').CareerAssessment} CareerAssessment
  * @typedef {import('../tools/career/data/assessment.js').DimensionMark} DimensionMark
  */
-import { doc, getDoc, setDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { normalizeLevelAssessment, assertAppendOnlyClosures } from '../tools/career/data/levelAssessment.js';
 
@@ -73,6 +73,18 @@ export async function getLevelAssessment(personId, levelId) {
   if (!personId || !levelId) throw new Error('getLevelAssessment requiere persona y nivel');
   const snap = await getDoc(levelAssessmentDoc(personId, levelId));
   return normalizeLevelAssessment(snap.exists() ? snap.data() : null, levelId);
+}
+
+/**
+ * Todas las valoraciones por nivel de una persona, para dibujar su curva
+ * (RMR-TSK-0556): una sola lectura en vez de una por nivel del framework.
+ * @param {string} personId
+ * @returns {Promise<Array<import('../tools/career/data/levelAssessment.js').LevelAssessment>>}
+ */
+export async function listLevelAssessments(personId) {
+  if (!personId) throw new Error('listLevelAssessments requiere persona');
+  const snap = await getDocs(collection(db, 'people', personId, 'careerAssessments'));
+  return snap.docs.map((d) => normalizeLevelAssessment(d.data(), d.id));
 }
 
 /**

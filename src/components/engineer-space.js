@@ -35,7 +35,8 @@ import { LitElement, html, css } from 'lit';
 import { listCareerRoutes } from '../lib/careerMap.js';
 import { subLevelForPerson, effectiveSubLevel } from '../tools/career/domain/subLevel.js';
 import { levelHistoryView } from '../tools/team/domain/levelHistory.js';
-import { progressionSeries } from '../tools/career/domain/progression.js';
+import { assessmentProgressionSeries } from '../tools/career/domain/progression.js';
+import { listLevelAssessments } from '../lib/careerAssessment.js';
 import './career/career-progression-chart.js';
 import './role-result.js';
 import './role-questionnaire.js';
@@ -738,13 +739,13 @@ export class EngineerSpace extends LitElement {
    * @returns {import('lit').TemplateResult|null}
    */
   _renderProgressionChart(fw) {
-    this._ensureCareerRoutes();
-    this._ensureLogbook();
-    const { points, milestones } = progressionSeries({
+    this._ensureLevelAssessments();
+    // Con las VALORACIONES, no con los certificados del mapa (RMR-TSK-0556):
+    // formarse no sube de nivel, así que no puede mover esta curva.
+    const { points, milestones } = assessmentProgressionSeries({
       person: this.person ?? {},
       framework: fw,
-      routes: this._careerRoutes ?? [],
-      logbook: this._logbook ?? { entries: [] },
+      assessments: this._levelAssessments ?? [],
     });
     if (points.length === 0) return null;
     return html`
@@ -1013,6 +1014,17 @@ export class EngineerSpace extends LitElement {
 
   /** Rutas del reto para el sub-nivel derivado (RMR-PCS-0034): carga perezosa
    *  y tolerante — sin rutas, la ficha sale sin la fila de progresión. */
+  /** Mis valoraciones por nivel, para la curva (RMR-TSK-0556): carga perezosa y
+   *  tolerante — sin valoraciones cerradas, la gráfica simplemente no sale. */
+  async _ensureLevelAssessments() {
+    if (this._levelAssessments !== undefined || !this.person?.id) return;
+    this._levelAssessments = null;
+    try {
+      this._levelAssessments = await listLevelAssessments(this.person.id);
+      this.requestUpdate();
+    } catch { /* sin curva */ }
+  }
+
   async _ensureCareerRoutes() {
     if (this._careerRoutes !== undefined) return;
     this._careerRoutes = null;

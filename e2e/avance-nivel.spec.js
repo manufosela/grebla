@@ -91,6 +91,21 @@ test('marcar la expectativa que pesa 3 sube al L1-3, que queda pendiente de sost
   });
 });
 
+test('la curva de progresión se dibuja con las valoraciones cerradas (RMR-TSK-0556)', async ({ page }) => {
+  await conPersonaEnL1(async () => {
+    await db().doc(`${PERSON}/careerAssessments/av-l2`).set({
+      levelId: 'av-l2',
+      byDimension: { 'av-tech': { meets: true } },
+      closures: [
+        { at: '2026-06-01T09:00:00.000Z', earned: 1, total: 4, pct: 25 },
+        { at: '2026-09-01T09:00:00.000Z', earned: 3, total: 4, pct: 75 },
+      ],
+    });
+    await abrirCarrera(page);
+    await expect(ficha(page).locator('career-progression-chart')).toBeVisible();
+  });
+});
+
 test('el badge de Equipo › Carrera sale de lo VALORADO, no del avance en el mapa', async ({ page }) => {
   await conPersonaEnL1(async () => {
     // 3 de 4 puntos valorados. En el mapa de carrera no ha certificado ni una casa:
