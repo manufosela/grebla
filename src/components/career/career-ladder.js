@@ -40,6 +40,7 @@ export class CareerLadder extends LitElement {
     .sublevels p { margin: 0.5rem 0; font-size: 0.87rem; line-height: 1.55; color: var(--rm-text, #111827); }
     .sublevels ul { margin: 0.5rem 0; padding-left: 1.1rem; font-size: 0.87rem; line-height: 1.6; color: var(--rm-text, #111827); }
     .sublevels li { margin: 0.2rem 0; }
+    .sublevels .ejemplo { color: var(--rm-muted, #5b6b7d); border-left: 3px solid var(--rm-border, #dde7ec); padding-left: 0.7rem; }
     .rung {
       border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px;
       margin: 0 0 0.4rem; background: var(--rm-surface, #fff);
@@ -150,6 +151,12 @@ export class CareerLadder extends LitElement {
           el porcentaje es la suma de los pesos cumplidos, no el número de casillas. La valoración es
           binaria —está cubierta o no lo está—, así que lo que se discute en un 1:1 es si lo está,
           nunca cuánto vale.
+        </p>
+        <p class="ejemplo">
+          Un ejemplo: si el nivel siguiente tuviera cuatro expectativas y pesaran 3, 2, 1 y 1
+          (siete puntos en total), cubrir la de peso 3 y la de peso 1 son cuatro puntos, un 57 %:
+          <strong>L1-2</strong>. Cubrir además la de peso 2 serían seis de siete, un 86 %: el
+          <strong>-3</strong> llegaría al repetirlo en la siguiente valoración.
         </p>
         <p>
           El mapa de carrera <strong>no entra en esta cuenta</strong>: formarte suma para ti, pero el
