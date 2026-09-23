@@ -10,6 +10,7 @@
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { test, expect, signInAs } from './fixtures.js';
 
 function db() {
@@ -24,6 +25,7 @@ const URL = 'http://127.0.0.1:5001/demo-grebla/europe-west1/ingestConversation';
 
 const PERSONA = 'people/e2e-person-ingesta';
 const FUERA = 'people/e2e-person-ingesta-fuera';
+const POR_UID = 'people/e2e-person-ingesta-uid';
 const EMAIL = 'ana.ingesta@e2e.test';
 const EMAIL_FUERA = 'sin.manager@e2e.test';
 
@@ -96,6 +98,37 @@ test('en la ficha se ve que la nota la trajo una máquina, con su origen', async
   await expect(fila.locator('.auto')).toContainText('automática');
   await expect(fila.locator('.auto')).toContainText('matias');
   await expect(fila.getByRole('link', { name: 'ver origen' })).toHaveAttribute('href', /^https:\/\/mail\.google\.com\//);
+});
+
+test('llega también a quien no tiene el email en la ficha, por su cuenta vinculada', async ({ request }) => {
+  // El caso normal en la instancia real: la ficha se ata por uid y el campo
+  // `email` está vacío. Sin esto, la ingesta diría «no existe» a casi todos.
+  const cuenta = await getAuth().createUser({ email: 'por.cuenta@e2e.test', emailVerified: true });
+  await db().doc(POR_UID).set({ name: 'Por Cuenta E2E', uid: cuenta.uid, ownerLeaderUid: 'e2e-head', active: true });
+  try {
+    const res = await enviar(request, nota({ email: 'por.cuenta@e2e.test', source: { system: 'matias', id: 'thread-uid' } }));
+    expect(res.status()).toBe(200);
+    expect((await res.json()).personId).toBe('e2e-person-ingesta-uid');
+  } finally {
+    const conv = await db().collection(`${POR_UID}/conversations`).get();
+    await Promise.all(conv.docs.map((d) => d.ref.delete()));
+    await db().doc(POR_UID).delete();
+    await getAuth().deleteUser(cuenta.uid);
+  }
+});
+
+test('un correo SIN verificar no vale para elegir ficha', async ({ request }) => {
+  // Un email sin verificar lo declara cualquiera al registrarse, y esto decide
+  // en qué ficha se escribe.
+  const cuenta = await getAuth().createUser({ email: 'sin.verificar@e2e.test', emailVerified: false });
+  await db().doc(POR_UID).set({ name: 'Sin Verificar E2E', uid: cuenta.uid, ownerLeaderUid: 'e2e-head', active: true });
+  try {
+    const res = await enviar(request, nota({ email: 'sin.verificar@e2e.test' }));
+    expect(res.status()).toBe(404);
+  } finally {
+    await db().doc(POR_UID).delete();
+    await getAuth().deleteUser(cuenta.uid);
+  }
 });
 
 test('el contrato de errores: 401, 400, 404 y 403 se distinguen', async ({ request }) => {
