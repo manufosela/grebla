@@ -69,7 +69,12 @@ export function canUseTool(person, policy, { isSuperadmin = false } = {}) {
   if (isSuperadmin) return true;
   const ov = overrideOf(person, policy?.toolId, 'use');
   if (ov !== undefined) return ov;
-  return matchesGrant(policy?.audience, person);
+  // Quien la ADMINISTRA también entra (RMR-TSK-0554): administrar algo en lo que
+  // no se puede entrar no significa nada. Es lo que permite que una herramienta
+  // como Encuestas —que se responde por enlace anónimo y sin login— no tenga
+  // que anunciarse a toda la organización para que su gente la gestione.
+  // Un override `use: false` sigue mandando: se ha resuelto arriba.
+  return matchesGrant(policy?.audience, person) || matchesGrant(policy?.managedBy, person);
 }
 
 /**

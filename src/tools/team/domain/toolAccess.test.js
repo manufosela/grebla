@@ -9,7 +9,8 @@ const cpeople = { personId: 'p3', branch: 'people', roleId: 'cpeople' };
 const policies = [
   { toolId: 'marea', audience: { everyone: true }, managedBy: {} },
   { toolId: 'dora', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
-  { toolId: 'surveys', audience: { everyone: true }, managedBy: { branches: ['people'] } },
+  // Encuestas se responde por enlace anónimo: su audiencia es quien la gestiona.
+  { toolId: 'surveys', audience: {}, managedBy: { branches: ['people'] } },
 ];
 
 describe('matchesGrant', () => {
@@ -43,6 +44,16 @@ describe('canUseTool', () => {
   it('todos ven Marea (everyone)', () => {
     expect(canUseTool(cpeople, policies[0])).toBe(true);
   });
+  it('quien la administra entra aunque no esté en la audiencia (RMR-TSK-0554)', () => {
+    // Encuestas no tiene audiencia: la gestiona People, y por eso la ve.
+    expect(canUseTool(cpeople, policies[2])).toBe(true);
+    expect(canUseTool(engineer, policies[2])).toBe(false);
+  });
+  it('un override «no» manda sobre el permiso de administrar', () => {
+    const vetado = { ...cpeople, toolOverrides: { surveys: { use: false } } };
+    expect(canUseTool(vetado, policies[2])).toBe(false);
+    expect(canManageTool(vetado, policies[2])).toBe(true); // sigue gestionándola
+  });
 });
 
 describe('canManageTool', () => {
@@ -61,8 +72,10 @@ describe('canManageTool', () => {
 
 describe('visibleToolIds', () => {
   it('lista lo que la persona puede ver', () => {
-    expect(visibleToolIds(engineer, policies).sort()).toEqual(['dora', 'marea', 'surveys']);
-    expect(visibleToolIds(pm, policies).sort()).toEqual(['marea', 'surveys']);
+    // Encuestas ya no sale a quien no la gestiona: se responde por enlace, no desde el hub.
+    expect(visibleToolIds(engineer, policies).sort()).toEqual(['dora', 'marea']);
+    expect(visibleToolIds(pm, policies).sort()).toEqual(['marea']);
+    expect(visibleToolIds(cpeople, policies).sort()).toEqual(['marea', 'surveys']);
   });
   it('el superadmin ve todas', () => {
     expect(visibleToolIds(pm, policies, { isSuperadmin: true }).sort()).toEqual(['dora', 'marea', 'surveys']);

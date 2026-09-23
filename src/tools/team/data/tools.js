@@ -11,7 +11,11 @@ export const TOOLS = [
   { toolId: 'organigrama', label: 'Organigrama', audience: { everyone: true }, managedBy: {} },
   { toolId: 'marea', label: 'Marea', audience: { everyone: true }, managedBy: {} },
   { toolId: 'motivators', label: 'Moving & Affective Motivators', audience: { everyone: true }, managedBy: {} },
-  { toolId: 'surveys', label: 'Encuestas de clima', audience: { everyone: true }, managedBy: { branches: ['people'] } },
+  // Encuestas se RESPONDE por enlace anónimo y sin login (RMR-TSK-0554): nadie
+  // entra desde el hub salvo para gestionarla, así que su audiencia es quien la
+  // gestiona. `audience: everyone` prometía a toda la organización una puerta
+  // que, al abrirla, no era suya.
+  { toolId: 'surveys', label: 'Encuestas de clima', audience: {}, managedBy: { branches: ['people'] } },
   { toolId: 'kudos', label: 'Kudos', audience: { everyone: true }, managedBy: {} },
   { toolId: 'library', label: 'Biblioteca de la bodega', audience: { everyone: true }, managedBy: {} },
   // Documentación de la organización (RMR-PCS-0041): la lee cualquiera —explica
