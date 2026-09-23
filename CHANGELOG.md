@@ -15,6 +15,17 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.211.0] - 2026-09-23
+
+### Cambiado
+- **Quien administra una herramienta también entra en ella**, aunque no esté en
+  su audiencia: administrar algo donde no se puede entrar no significa nada. Un
+  permiso individual «no» sigue mandando sobre todo lo demás.
+- **Encuestas de clima deja de anunciarse a toda la organización.** Se responde
+  por enlace anónimo y sin login, así que nadie entra desde el hub salvo para
+  gestionarla: ahora la ve quien la gestiona. Aplicado también a la política
+  viva de las dos instancias.
+
 ## [1.210.1] - 2026-09-23
 
 ### Corregido
