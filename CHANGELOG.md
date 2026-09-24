@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.214.0] - 2026-09-24
+
+### Cambiado
+- **Role Mirror lista solo a la gente de ingeniería.** Antes ofrecía a cualquier
+  persona del ámbito de quien miraba, incluida la que entra a GREBLA y todavía
+  no está clasificada: aparecía en una lista de evaluación quien ni siquiera se
+  sabe de qué equipo es. Ofrecer a alguien de otra rama, además, invita a
+  rellenarle un perfil con un marco que no es el suyo.
+
 ## [1.213.0] - 2026-09-24
 
 ### Añadido
