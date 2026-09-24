@@ -15,6 +15,7 @@ import { guardToolPage } from '../lib/toolGate.js';
 import { listLeaders } from '../lib/leaders.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
 import { listActivePeople } from '../tools/team/application/usecases/index.js';
+import { roleMirrorPeople } from '../tools/team/domain/roleMirrorScope.js';
 
 const el = document.querySelector('role-questionnaire');
 const review = document.querySelector('rm-proposal-review');
@@ -98,7 +99,9 @@ if (el) {
       const { persistence } = await createTeamContainer({
         mode: 'firestore', leaderUid: user.uid, viewAll, leaderUids,
       });
-      const people = await listActivePeople(persistence);
+      // Role Mirror es de INGENIERÍA (RMR-TSK-0560): la lista no ofrece a quien
+      // es de otra rama ni a quien ha entrado y todavía no está clasificado.
+      const people = roleMirrorPeople(await listActivePeople(persistence));
       // Sin nadie a quien evaluar no se enseña un desplegable vacío, que parece
       // una app rota: se explica y se envía a «Mi Role Mirror», que es lo que esa
       // persona buscaba (RMR-BUG-0110). Le pasa a cualquier ingeniero, porque la

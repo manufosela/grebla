@@ -91,8 +91,9 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
   await page.getByLabel('Persona').selectOption({ label: 'Persona del manager' });
   const fila = page.locator('person-permissions tr', { hasText: 'DORA' });
   const ve = fila.getByLabel('Ve o usa');
-  // La etiqueta de «heredar» dice qué pasa si no tocas nada.
-  await expect(ve).toContainText('Heredar (no)');
+  // La etiqueta de «heredar» dice qué pasa si no tocas nada: esta persona es de
+  // ingeniería, así que DORA le llega por su rama sin ninguna excepción.
+  await expect(ve).toContainText('Heredar (sí)');
   // Y la misma matriz que la ficha: también se decide quién la GESTIONA.
   await expect(fila.getByLabel('Gestiona')).toBeVisible();
 

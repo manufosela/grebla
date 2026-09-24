@@ -23,7 +23,7 @@ function db() {
 async function conRamaPropia(fn) {
   await db().doc('leaders/e2e-rm-mgr').set({ displayName: 'Manager RM', email: 'rm-mgr@e2e.test', reportsTo: 'e2e-head' });
   await db().doc('people/e2e-rm-persona').set({
-    name: 'Persona de la rama RM', uid: null, ownerLeaderUid: 'e2e-rm-mgr', active: true,
+    name: 'Persona de la rama RM', uid: null, ownerLeaderUid: 'e2e-rm-mgr', active: true, orgBranch: 'engineering',
   });
   try { await fn(); } finally {
     await db().doc('people/e2e-rm-persona').delete();
