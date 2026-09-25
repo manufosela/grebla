@@ -7,12 +7,18 @@
 import Base from './Base.astro';
 
 const { title = 'Plan de desarrollo' } = Astro.props;
+const path = Astro.url.pathname.replace(/\/$/, '');
+const isTracking = path.startsWith('/tools/career-map/admin');
 ---
 
 <Base title={title} requireAuth={true}>
   <nav class="tool-nav" aria-label="Plan de desarrollo">
     <a href="/" class="tool-back">← Volver</a>
     <span class="tool-name">◇ Plan de desarrollo</span>
+    <a href="/tools/career-map" class:list={["tool-link", { active: !isTracking }]}>Mi plan</a>
+    <!-- La puerta de seguimiento se desvela en cliente, solo a quien gestiona la
+         herramienta: ver por dónde va el equipo no es parte de jugar. -->
+    <a href="/tools/career-map/admin" id="cm-nav-admin" class:list={["tool-link", { active: isTracking }]} hidden>Seguimiento</a>
   </nav>
   <slot />
 </Base>
@@ -27,6 +33,14 @@ const { title = 'Plan de desarrollo' } = Astro.props;
     border-bottom: 1px solid var(--rm-border);
   }
   .tool-name { font-weight: 800; color: var(--rm-accent); }
+  .tool-link {
+    text-decoration: none;
+    color: var(--rm-muted);
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .tool-link:hover { color: var(--rm-text); }
+  .tool-link.active { color: var(--rm-text); border-bottom: 2px solid var(--rm-accent); padding-bottom: 0.2rem; }
   /* En móvil cada píxel vertical es para el juego: barra mínima. */
   @media (max-width: 760px) {
     .tool-nav {

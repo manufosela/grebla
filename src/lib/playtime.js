@@ -20,9 +20,11 @@
  * Los deltas de muestreo mayores de 2 ticks se DESCARTAN (accumulate, puro):
  * un timer suspendido (pestaña dormida, portátil en reposo) no fue juego.
  *
- * QUIÉN mide: el flujo actual de juego (líder/superadmin jugando a la persona
- * seleccionada) — <career-app> solo arranca el tracker con canEdit. El
- * jugador vinculado NO escribe (se ampliará cuando juegue con su cuenta).
+ * QUIÉN mide: cualquiera que JUEGUE su plan — <career-app> arranca el tracker
+ * con `canPlay || canEdit`, y las reglas abren `career/playtime` al jugador
+ * vinculado sobre su propia persona. (Esta nota decía lo contrario desde antes
+ * de JG-1; el código y las reglas hace tiempo que miden a todo el mundo, y de
+ * ahí salen los datos del seguimiento del plan, RMR-TSK-0566.)
  */
 import { PLAYTIME, accumulate, isActiveSample, minutesFromMs } from '../tools/career/domain/playtime.js';
 
