@@ -1,0 +1,46 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * Orden de las tarjetas (RMR-TSK-0571).
+ *
+ * El inicio y el panel crecen a base de tarjetas, y el orden en que salían era
+ * el que tuvieran en el código: quien decide qué es importante ahora no tenía
+ * forma de decirlo sin tocar un fichero.
+ *
+ * Aquí se ordena, y ese orden lo ve toda la organización. Lo que NO se decide
+ * aquí es quién ve qué: eso sigue en los permisos de cada herramienta.
+ */
+---
+
+<Base title="GREBLA — Orden de las tarjetas" requireAuth={true}>
+  <tool-nav href="/admin" name="Orden de las tarjetas" icon="🗂️"></tool-nav>
+
+  <p class="page-lead">
+    Coloca las tarjetas del inicio y las del panel. El orden es el mismo para toda la
+    organización; cada persona sigue viendo solo las suyas, en la posición que les des.
+  </p>
+
+  <p class="cl-denied" id="cl-denied" hidden>
+    El orden de las tarjetas lo lleva quien gobierna la instancia. Si crees que deberías
+    poder cambiarlo, pídeselo a un superadmin.
+  </p>
+
+  <card-layout-editor></card-layout-editor>
+</Base>
+
+<style>
+  .page-lead { max-width: 60ch; color: var(--rm-muted, #5b6b7d); margin-bottom: 1.5rem; }
+  .cl-denied {
+    max-width: 46rem; margin: 0 0 1.25rem; padding: 0.75rem 0.95rem;
+    border-radius: 10px; border: 1px solid var(--rm-info-border, #bfd6fb);
+    border-left: 4px solid var(--rm-info, #2563eb);
+    background: var(--rm-info-soft, #eff5ff); color: var(--rm-info-text, #1e3a8a);
+    font-size: 0.9rem; line-height: 1.5;
+  }
+</style>
+
+<script>
+  import '../../components/common/tool-nav.js';
+  import '../../client/cardLayoutAdmin.js';
+</script>

@@ -17,6 +17,7 @@ import { getMyPerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
 import { canManageTool } from '../tools/team/domain/toolAccess.js';
 import { buildPersonRef } from '../lib/toolGate.js';
+import { applyCardOrder } from '../lib/cardOrder.js';
 
 /** Hashes de cuando /admin ERA la gestión de la organización (RMR-TSK-0495). */
 const SECCIONES = ['organigrama', 'areas', 'guilds', 'dominios', 'labels', 'career', 'users', 'permisos', 'squads', 'herramientas'];
@@ -54,6 +55,9 @@ onUserChanged(async (user) => {
       card.toggleAttribute('hidden', !puede);
       if (puede) visibles += 1;
     }
+    // El orden lo decide el superadmin (RMR-TSK-0571); se aplica DESPUES de
+    // saber cuales se ven, porque el orden no decide visibilidad.
+    await applyCardOrder(cards, 'admin', '[data-admin-id]', (el) => el.dataset.adminId);
     cards?.toggleAttribute('hidden', visibles === 0);
     // Sin nada que administrar se dice, en vez de dejar una página vacía que
     // parece rota.
