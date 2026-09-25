@@ -28,6 +28,24 @@ async function conPolitica(fn) {
   }
 }
 
+/**
+ * Política con la gestión abierta a cualquiera: para probar el ALCANCE hace
+ * falta que quien mira pueda entrar, y el Head no gobierna la instancia. Lo que
+ * se comprueba aquí es a QUIÉN ve, no si puede pasar (eso va en su propio test).
+ */
+async function conPoliticaGestionada(fn) {
+  const previa = (await db().doc('toolPolicies/career').get()).data() ?? null;
+  await db().doc('toolPolicies/career').set({
+    label: 'Plan de desarrollo',
+    audience: { branches: ['engineering'] },
+    managedBy: { everyone: true },
+  });
+  try { await fn(); } finally {
+    if (previa) await db().doc('toolPolicies/career').set(previa);
+    else await db().doc('toolPolicies/career').delete();
+  }
+}
+
 /** Alguien que ya ha empezado su plan y le ha dedicado ratos. */
 async function conViajeYTiempo(fn) {
   const persona = db().doc('people/e2e-person-eng');
@@ -81,6 +99,25 @@ test('la vista de conjunto compara al equipo de un vistazo', async ({ page }) =>
     // Y sin ceros donde no hubo medida: un «0 min» se lee como un dato.
     await expect(tabla).not.toContainText('0 min');
   }));
+});
+
+test('un manager ve su rama entera, y lo de fuera sigue fuera', async ({ page }) => {
+  await conPoliticaGestionada(async () => {
+    await signInAs(page, 'head');
+    await page.goto('/tools/career-map/admin');
+
+    const lista = page.locator('career-tracking .side');
+    await expect(lista).toBeVisible();
+    await expect.poll(async () => lista.locator('.person .name').count(), { timeout: 15_000 })
+      .toBeGreaterThan(0);
+    const gente = await lista.locator('.person .name').allInnerTexts();
+
+    // Cuelgan de un manager que le reporta: son su rama aunque no le reporten a él.
+    expect(gente).toEqual(expect.arrayContaining(['Ingeniero E2E', 'Persona del manager']));
+    // Gestionar la herramienta no es ver a toda la organización: quien cuelga de
+    // otro líder sin relación con él no aparece.
+    expect(gente).not.toContain('Persona de fuera');
+  });
 });
 
 test('quien no gestiona no entra, aunque escriba la URL', async ({ page }) => {
