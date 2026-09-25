@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import { ADMIN_CARDS as cards } from '../../data/hubCards.js';
 
 /**
  * HUB DE ADMINISTRACIÓN (RMR-TSK-0495).
@@ -33,79 +34,6 @@ function withOrigin(href: string): string {
   return `${ruta}${sep}from=admin${ancla ? `#${ancla}` : ''}`;
 }
 
-const cards = [
-  {
-    id: 'organizacion',
-    name: 'Organización',
-    icon: '🏛️',
-    href: '/admin/organizacion',
-    description: 'Organigrama y roles, áreas, gremios, dominios, labels, el framework de carrera, usuarios y permisos.',
-    govern: true,
-  },
-  {
-    id: 'docs',
-    name: 'Documentos',
-    icon: '📖',
-    href: '/admin/documentos',
-    description: 'Las presentaciones que explican cómo trabajamos: subirlas, organizarlas en carpetas y retirarlas.',
-  },
-  {
-    id: 'surveys',
-    name: 'Encuestas',
-    icon: '📋',
-    href: '/tools/encuestas',
-    description: 'Plantillas y preguntas, padrón de participantes, ejes de segmentación y resultados.',
-  },
-  {
-    id: 'rolemirror',
-    name: 'Role Mirror',
-    icon: '◑',
-    href: '/tools/role-mirror/admin',
-    description: 'Los perfiles de ingeniería: la propuesta de cada persona, la versión que cuenta y su histórico.',
-  },
-  {
-    id: 'career',
-    name: 'Plan de desarrollo',
-    icon: '◇',
-    href: '/tools/career-map/admin',
-    description: 'Por dónde va el plan de cada persona y cuánto tiempo le dedica.',
-  },
-  {
-    id: 'o2o',
-    name: 'O2O',
-    icon: '💬',
-    href: '/tools/o2o',
-    description: 'La guía de temas y el formulario previo de cada periodo, y el seguimiento de acciones.',
-  },
-  {
-    id: 'motivators',
-    name: 'Motivadores',
-    icon: '🃏',
-    href: '/tools/motivators/moving#rounds',
-    description: 'Rondas de Moving y Affective Motivators: abrir, cerrar y ver los resultados del equipo.',
-  },
-  {
-    id: 'marea',
-    name: 'Marea',
-    icon: '🌊',
-    href: '/marea#admin',
-    description: 'El umbral de anonimato de los resultados y cuánta gente marca su marea cada semana.',
-  },
-  {
-    id: 'lean',
-    name: 'Flujo (LEAN)',
-    icon: '🔀',
-    href: '/tools/lean#teams',
-    description: 'Qué unidades se miden y a qué subdominio pertenece cada una.',
-  },
-  {
-    id: 'dora',
-    name: 'DORA',
-    icon: '🚀',
-    href: '/tools/dora#repos',
-    description: 'Repos medidos, su equipo y el recálculo de las métricas de entrega.',
-  },
-];
 ---
 
 <Base title="GREBLA — Administración" requireAuth={true}>
