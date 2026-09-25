@@ -1,0 +1,41 @@
+---
+import Career from '../../../../layouts/Career.astro';
+
+/**
+ * Seguimiento del plan de desarrollo (RMR-TSK-0566).
+ *
+ * El lado de GESTIÓN de la herramienta: por dónde va cada persona y cuánto le
+ * dedica. Hasta ahora lo único que había era un botón «⏱ Tiempo» dentro del
+ * juego, que solo daba minutos y obligaba a entrar a jugar para verlo.
+ */
+---
+
+<Career title="GREBLA — Seguimiento del plan de desarrollo">
+  <h1 class="page-title">Seguimiento del plan de desarrollo</h1>
+  <p class="page-lead">
+    Por dónde va cada persona y cuánto tiempo le dedica. Para saber con quién hay que
+    sentarse, no para puntuar a nadie.
+  </p>
+
+  <p class="ct-denied" id="ct-denied" hidden>
+    No gestionas el plan de desarrollo, así que aquí no hay nada para ti. El tuyo está
+    en <a href="/tools/career-map">Plan de desarrollo</a>.
+  </p>
+
+  <career-tracking></career-tracking>
+</Career>
+
+<style>
+  .ct-denied {
+    max-width: 46rem; margin: 0 0 1.25rem; padding: 0.75rem 0.95rem;
+    border-radius: 10px; border: 1px solid var(--rm-info-border, #bfd6fb);
+    border-left: 4px solid var(--rm-info, #2563eb);
+    background: var(--rm-info-soft, #eff5ff); color: var(--rm-info-text, #1e3a8a);
+    font-size: 0.9rem; line-height: 1.5;
+  }
+  .ct-denied a { color: inherit; text-decoration: underline; }
+</style>
+
+<script>
+  import '../../../../client/careerTracking.js';
+</script>
