@@ -596,6 +596,14 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isLeader() || isSuperAdmin();
     }
+    // Orden de las tarjetas del inicio y del panel (RMR-TSK-0571). Lo LEE
+    // cualquiera con sesión —es el mismo orden para toda la organización— y solo
+    // lo escribe quien gobierna la instancia: con varios editores el orden se
+    // pisa, y nadie sabría quién lo cambió ni por qué.
+    match /config/cardLayout {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
     // Versión desplegada de la app (para detectar clientes con caché vieja). La
     // lee cualquiera (incluida la pantalla de login, sin sesión); solo la escribe
     // el script de deploy vía Admin SDK (nunca desde el cliente).

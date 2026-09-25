@@ -188,6 +188,17 @@ export const TOOL_ID = {
 
 export const ADMIN_CARDS = [
   {
+    // El orden de estas mismas tarjetas (RMR-TSK-0571). Marcada como `govern`:
+    // es una sola configuracion para toda la organizacion, y con varios
+    // editores se pisa sin que nadie sepa quien la cambio.
+    id: 'tarjetas',
+    name: 'Orden de las tarjetas',
+    icon: '\u{1F5C2}\uFE0F',
+    href: '/admin/tarjetas',
+    description: 'Coloca las tarjetas del inicio y las del panel en el orden en que quieres que las vea la organizacion.',
+    govern: true,
+  },
+  {
     id: 'organizacion',
     name: 'Organización',
     icon: '🏛️',

@@ -10,6 +10,7 @@ import { isSurveyAdmin } from '../lib/survey.js';
 import { getMyPerson, ensureEmployeePerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
 import { canUseTool, canManageTool } from '../tools/team/domain/toolAccess.js';
+import { applyCardOrder } from '../lib/cardOrder.js';
 import { buildPersonRef } from '../lib/toolGate.js';
 import { getEmployeeDomain } from '../lib/orgConfig.js';
 import { layerTabs, activeTab } from '../lib/hubLayers.js';
@@ -105,7 +106,7 @@ onUserChanged(async (user) => {
       isSuperadmin: canGovern(access),
       isLeaderish: canGovern(access) || leadsTeam(access),
     });
-    showTools({
+    await showTools({
       personRef: vista.generic ? buildPersonRef(null) : buildPersonRef(person),
       policies,
       isSuperadmin: vista.isSuperadmin,
@@ -180,10 +181,8 @@ function aplicarCapa(capa, conPestanas) {
   }
 }
 
-function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish = false, filterFailed = false }) {
-  hubLoading?.setAttribute('hidden', '');
+async function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish = false, filterFailed = false }) {
   landing?.setAttribute('hidden', '');
-  tools?.removeAttribute('hidden');
   const policyById = new Map(policies.map((p) => [p.toolId, p]));
   // Lo personal (RMR-TSK-0459): se ve siempre que haya ficha, sin pasar por la
   // política de audiencia. La política gobierna la herramienta de equipo —llevar
@@ -217,4 +216,11 @@ function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish
   }
   // Las capas van DESPUÉS del filtrado: se derivan de lo que ha quedado visible.
   showLayers({ canAdmin: isSuperadmin });
+  // Y el orden que decidió el superadmin (RMR-TSK-0571) ANTES de enseñar nada:
+  // colocar las tarjetas con el hub ya a la vista las haría saltar delante de
+  // quien mira. No cambia quién ve qué, solo en qué posición; si la lectura
+  // falla, queda el orden del código.
+  await applyCardOrder(tools, 'home', '.tool-card[href]', (el) => el.getAttribute('href'));
+  hubLoading?.setAttribute('hidden', '');
+  tools?.removeAttribute('hidden');
 }
