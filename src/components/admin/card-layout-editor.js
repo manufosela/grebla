@@ -13,6 +13,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { orderedKeys, moveKey } from '../../tools/admin/domain/cardLayout.js';
+import { CARD_STYLES, STYLE_IDS, styleOf } from '../../tools/admin/domain/cardStyle.js';
 
 export class CardLayoutEditor extends LitElement {
   static properties = {
@@ -50,6 +51,19 @@ export class CardLayoutEditor extends LitElement {
     .ok { color: var(--rm-accent-700, #1f766c); font-size: 0.85rem; font-weight: 600; }
     .error { color: var(--rm-danger, #b91c1c); font-size: 0.85rem; }
     .empty { padding: 0.9rem; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; }
+    /* La muestra: un cuadradito con el color real de cada estilo, para elegir
+       viendo en vez de adivinando por el nombre. */
+    .swatch { width: 1.15rem; height: 1.15rem; border-radius: 6px; border: 1px solid var(--rm-border, #dde7ec); flex: none; }
+    .sw-neutro { background: var(--rm-surface, #fff); }
+    .sw-acento { background: color-mix(in srgb, var(--gr-teal, #2a9d8f) 45%, var(--rm-surface, #fff)); }
+    .sw-aviso { background: color-mix(in srgb, var(--gr-coral, #f2887a) 55%, var(--rm-surface, #fff)); }
+    .sw-calma { background: color-mix(in srgb, var(--rm-muted, #5b6b7d) 45%, var(--rm-surface, #fff)); }
+    select { font: inherit; font-size: 0.82rem; padding: 0.3rem 0.4rem; border-radius: 8px;
+      border: 1px solid var(--rm-border, #dde7ec); background: var(--rm-field, #fff); color: var(--rm-text, #111827); }
+    .star { background: none; border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; width: 2rem; height: 2rem;
+      cursor: pointer; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; line-height: 1; }
+    .star[aria-pressed="true"] { color: var(--rm-on-accent, #fff); background: var(--gr-teal, #2a9d8f); border-color: var(--gr-teal, #2a9d8f); }
+    .star:focus-visible, select:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
   `;
 
   constructor() {
@@ -60,6 +74,17 @@ export class CardLayoutEditor extends LitElement {
     this.saving = false;
     this._saved = false;
     this._error = '';
+  }
+
+  /**
+   * Un <select> cuyas <option> se pintan en la misma plantilla NO refleja su
+   * valor al repintar (gotcha conocido de Lit): hay que fijarlo a mano despues
+   * de cada render, o el desplegable enseña un color y la tarjeta tiene otro.
+   */
+  updated() {
+    for (const sel of this.renderRoot.querySelectorAll('select[data-key]')) {
+      sel.value = this._styleOf(sel.dataset.surface, sel.dataset.key).style;
+    }
   }
 
   /** ¿Hay ya con qué guardar? La persistencia llega despues del login. */
@@ -82,6 +107,25 @@ export class CardLayoutEditor extends LitElement {
     this._saved = false;
   }
 
+  /** Estilo actual de una tarjeta (el guardado, o el normal). */
+  _styleOf(surface, key) {
+    return styleOf(this.layout?.styles?.[surface], key);
+  }
+
+  /** Cambia una parte del aspecto de una tarjeta sin tocar el resto. */
+  _setStyle(surface, key, patch) {
+    const porSuperficie = this.layout?.styles ?? { home: {}, admin: {} };
+    const actual = this._styleOf(surface, key);
+    this.layout = {
+      ...this.layout,
+      styles: {
+        ...porSuperficie,
+        [surface]: { ...porSuperficie[surface], [key]: { ...actual, ...patch } },
+      },
+    };
+    this._saved = false;
+  }
+
   async _save() {
     if (!this._ready) return;
     this.saving = true;
@@ -89,7 +133,11 @@ export class CardLayoutEditor extends LitElement {
     this._saved = false;
     // Se guarda el orden COMPLETO y visible, no el retocado a medias: asi lo
     // guardado es exactamente lo que se estaba viendo.
-    const layout = { home: this._keys('home'), admin: this._keys('admin') };
+    const layout = {
+      home: this._keys('home'),
+      admin: this._keys('admin'),
+      styles: this.layout?.styles ?? { home: {}, admin: {} },
+    };
     try {
       // Se ESPERA al guardado: cantar exito antes de saberlo deja a alguien
       // creyendo que ha ordenado las tarjetas cuando no ha ordenado nada.
@@ -104,6 +152,10 @@ export class CardLayoutEditor extends LitElement {
   }
 
   render() {
+    // Nada tocable hasta tener el estado cargado. Antes se podia reordenar o
+    // destacar durante la carga, y la llegada de lo guardado se cargaba esos
+    // cambios sin decir nada: el peor fallo posible, el que no se ve.
+    if (!this._ready) return html`<p class="empty">Cargando el orden…</p>`;
     return html`
       <div class="surfaces">
         ${this._renderSurface('home', 'Inicio · herramientas')}
@@ -131,15 +183,30 @@ export class CardLayoutEditor extends LitElement {
 
   _renderItem(surface, key, index, total) {
     const label = this._label(surface, key);
+    const estilo = this._styleOf(surface, key);
     return html`
       <li>
         <span class="pos" aria-hidden="true"></span>
+        <span class="swatch sw-${estilo.style}" aria-hidden="true"></span>
         <span class="label">${label}</span>
+        ${this._renderStylePicker(surface, key, label, estilo)}
+        <button class="star" type="button" aria-pressed=${estilo.featured ? 'true' : 'false'}
+          aria-label="Destacar ${label}"
+          @click=${() => this._setStyle(surface, key, { featured: !estilo.featured })}>★</button>
         <button class="move" type="button" ?disabled=${index === 0}
           aria-label="Subir ${label}" @click=${() => this._move(surface, key, -1)}>↑</button>
         <button class="move" type="button" ?disabled=${index === total - 1}
           aria-label="Bajar ${label}" @click=${() => this._move(surface, key, 1)}>↓</button>
       </li>`;
+  }
+
+  _renderStylePicker(surface, key, label, estilo) {
+    return html`
+      <select aria-label="Color de ${label}" data-surface=${surface} data-key=${key}
+        @change=${(e) => this._setStyle(surface, key, { style: e.target.value })}>
+        ${STYLE_IDS.map((id) => html`
+          <option value=${id} ?selected=${estilo.style === id}>${CARD_STYLES[id].label}</option>`)}
+      </select>`;
   }
 }
 

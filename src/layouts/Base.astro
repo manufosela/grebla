@@ -446,6 +446,44 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       html.is-superadmin #superadmin-tag {
         display: block;
       }
+
+      /* Paleta de las tarjetas (RMR-TSK-0573). Global porque la usan el inicio y
+         el panel, y las clases se ponen en cliente segun lo que haya decidido el
+         superadmin.
+
+         El truco para que NADIE pueda dejar una tarjeta ilegible: el color solo
+         tine el FONDO, mezclando un poco de color sobre la superficie del tema
+         (color-mix se resuelve al usarse, asi que sigue al tema oscuro solo). El
+         color del texto no se toca nunca, de modo que el contraste sigue siendo
+         el de la superficie —el mismo que ya cumple AA— en claro y en oscuro.
+         Por eso la paleta es cerrada: con un selector de color libre esto no se
+         puede garantizar. */
+      /* `!important` a proposito: cada pantalla ya da fondo y filo a sus tarjetas
+         con mas especificidad que una clase suelta, asi que sin esto el color
+         elegido no se veria —que es justo lo que pasaba—. Esta es una capa de
+         ANULACION deliberada: lo que decide el superadmin manda sobre el estilo
+         por defecto de la tarjeta. */
+      .cs-acento { background: color-mix(in srgb, var(--gr-teal) 14%, var(--rm-surface)) !important; border-left-color: var(--gr-teal) !important; }
+      .cs-aviso { background: color-mix(in srgb, var(--gr-coral) 18%, var(--rm-surface)) !important; border-left-color: var(--gr-coral-600) !important; }
+      /* Calma tine con el GRIS medio, no con el azul marino: en el tema oscuro la
+         superficie ya es marino y mezclar marino sobre marino no mueve nada —el
+         estilo existia pero no se veia—. El gris se separa del fondo en los dos. */
+      .cs-calma { background: color-mix(in srgb, var(--rm-muted) 18%, var(--rm-surface)) !important; border-left-color: var(--rm-muted) !important; }
+
+      /* Destacar es independiente del color: un aro y una estrella, no un tinte.
+         Asi se puede senalar «mira esto ahora» sin cambiarle el color. */
+      .cs-featured {
+        position: relative;
+        box-shadow: 0 0 0 2px var(--gr-teal), 0 2px 10px rgba(30, 58, 95, 0.12);
+      }
+      .cs-featured::after {
+        content: '\2605';
+        position: absolute;
+        top: 0.5rem;
+        right: 0.7rem;
+        font-size: 0.9rem;
+        color: var(--gr-teal);
+      }
     </style>
 
     <!-- Define <auth-button> y aplica el guard de rutas protegidas. -->

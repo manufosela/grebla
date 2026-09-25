@@ -9,17 +9,18 @@ describe('las superficies que se pueden ordenar', () => {
 
 describe('el orden guardado', () => {
   it('se lee tal cual cuando está bien', () => {
-    expect(normalizeLayout({ home: ['a', 'b'], admin: ['x'] })).toEqual({ home: ['a', 'b'], admin: ['x'] });
+    expect(normalizeLayout({ home: ['a', 'b'], admin: ['x'] }))
+      .toEqual({ home: ['a', 'b'], admin: ['x'], styles: { home: {}, admin: {} } });
   });
 
   it('sin documento no hay orden, y eso no es un error: manda el del código', () => {
-    expect(normalizeLayout(null)).toEqual({ home: [], admin: [] });
-    expect(normalizeLayout({})).toEqual({ home: [], admin: [] });
+    expect(normalizeLayout(null)).toEqual({ home: [], admin: [], styles: { home: {}, admin: {} } });
+    expect(normalizeLayout({})).toEqual({ home: [], admin: [], styles: { home: {}, admin: {} } });
   });
 
   it('descarta la basura sin tumbar la pantalla: una config rota no deja a nadie sin tarjetas', () => {
     expect(normalizeLayout({ home: 'a,b', admin: [1, null, 'x', '', '  y  '] }))
-      .toEqual({ home: [], admin: ['x', 'y'] });
+      .toEqual({ home: [], admin: ['x', 'y'], styles: { home: {}, admin: {} } });
   });
 
   it('no se cree claves repetidas: una tarjeta está en un sitio, no en dos', () => {
@@ -27,7 +28,22 @@ describe('el orden guardado', () => {
   });
 
   it('ignora superficies que no existen', () => {
-    expect(normalizeLayout({ home: ['a'], inventada: ['z'] })).toEqual({ home: ['a'], admin: [] });
+    expect(normalizeLayout({ home: ['a'], inventada: ['z'] }))
+      .toEqual({ home: ['a'], admin: [], styles: { home: {}, admin: {} } });
+  });
+});
+
+describe('el aspecto entra por la misma puerta', () => {
+  it('se sanea junto al orden: una sola puerta, no media', () => {
+    const layout = normalizeLayout({
+      home: ['a'],
+      styles: { home: { a: { style: 'aviso', featured: true }, b: { style: 'inventado' } } },
+    });
+    expect(layout.styles.home).toEqual({ a: { style: 'aviso', featured: true } });
+  });
+
+  it('sin estilos guardados, ninguno', () => {
+    expect(normalizeLayout({ home: ['a'] }).styles).toEqual({ home: {}, admin: {} });
   });
 });
 
