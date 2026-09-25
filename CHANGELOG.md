@@ -15,6 +15,32 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.217.0] - 2026-09-25
+
+### Añadido
+
+- **El superadmin coloca las tarjetas.** En `/admin/tarjetas` se ordenan las del
+  inicio y las del panel, se **destaca** una tarjeta y se le da **color** de una
+  paleta. Ese orden y ese aspecto los ve toda la organización; cada persona
+  sigue viendo solo sus tarjetas, en la posición que les des.
+
+  El color se elige de una paleta cerrada y solo tiñe el fondo: el color del
+  texto no se toca, así que el contraste sigue siendo el que ya cumple AA en
+  claro y en oscuro. Destacar va aparte del color, para poder señalar algo sin
+  teñirlo.
+
+  El código manda sobre **qué** tarjetas hay; la configuración solo dice en qué
+  orden y con qué aspecto. Una herramienta nueva aparece aunque nadie la haya
+  colocado, y una clave guardada que ya no existe se ignora: un orden guardado
+  no puede esconder una herramienta.
+
+### Cambiado
+
+- El catálogo de tarjetas del inicio y del panel vive ahora en un módulo de
+  datos, no dentro de las páginas, con un guard que comprueba que ninguna quede
+  sin nombre o destino y que el mapa de políticas no apunte a rutas que no
+  existen.
+
 ## [1.216.0] - 2026-09-25
 
 ### Añadido
