@@ -15,6 +15,31 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.215.0] - 2026-09-25
+
+### Cambiado
+
+- **Role Mirror separa lo tuyo de lo que administras.** Al entrar en la
+  herramienta ya no sale un desplegable para elegir a alguien del equipo: sale
+  **tu propio perfil**, seas ingeniero, manager o superadmin, en modo propuesta
+  (la versión que cuenta la fija tu manager). Gobernar añade una puerta, no
+  cambia lo que la herramienta es.
+
+### Añadido
+
+- **Administración de Role Mirror con la lista de ingeniería.** En
+  `/tools/role-mirror/admin`, la gente a la izquierda —con quién está aún sin
+  perfil— y, al pinchar, su propuesta pendiente, el perfil que cuenta y su
+  histórico de mediciones, con quién tocó cada una. El panel de siempre
+  (comparativa, distribución de roles y CSV) sigue ahí, en su pestaña
+  «Resumen», y la administración tiene ya su tarjeta en el panel.
+
+### Arreglado
+
+- Las dos mitades de esa pantalla se regían por criterios de acceso distintos:
+  el panel reenviaba a la home por su cuenta sin mirar la política de la
+  herramienta. Ahora manda la política, una sola vez.
+
 ## [1.214.0] - 2026-09-24
 
 ### Cambiado
