@@ -15,6 +15,23 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.216.0] - 2026-09-25
+
+### Añadido
+
+- **Seguimiento del plan de desarrollo.** En `/tools/career-map/admin` (con su
+  tarjeta en el panel y su pestaña «Seguimiento» para quien gestiona) se ve por
+  dónde va el plan de cada persona y cuánto le dedica: la lista del equipo
+  ordenada por **quién lleva más tiempo sin tocarlo**, y al pinchar su isla,
+  paradas, ruta, objetivo y su dedicación —días activos, media por día activo,
+  total y cuándo fue la última vez—. Una pestaña «Conjunto» lo pone en tabla
+  para comparar.
+
+  No se mide nada nuevo: los datos ya estaban en la ficha de cada persona (su
+  viaje y el cronómetro de juego). Lo que cambia es que ahora se pueden mirar
+  juntos. Donde no hubo medida va una raya y no un cero, y la ventana de días es
+  de 30 porque es lo que guarda el cronómetro.
+
 ## [1.215.0] - 2026-09-25
 
 ### Cambiado
