@@ -7,6 +7,10 @@
  */
 import { getCardLayout } from './cardLayout.js';
 import { orderedKeys } from '../tools/admin/domain/cardLayout.js';
+import { CARD_STYLES, styleOf, cardClasses } from '../tools/admin/domain/cardStyle.js';
+
+/** Todas las clases de la paleta, para poder quitar la anterior al repintar. */
+const ALL_CLASSES = [...Object.values(CARD_STYLES).map((s) => s.className), 'cs-featured'];
 
 /**
  * Reordena los hijos de `box` según el orden guardado de esa superficie.
@@ -25,13 +29,23 @@ export async function applyCardOrder(box, surface, selector, keyOf) {
   if (!box) return;
   const layout = await getCardLayout();
   const orden = layout[surface] ?? [];
-  if (orden.length === 0) return; // nada guardado: manda el del código
+  const estilos = layout.styles?.[surface] ?? {};
 
   const porClave = new Map();
   for (const el of box.querySelectorAll(selector)) {
     const key = keyOf(el);
     if (key) porClave.set(key, el);
   }
+
+  // El aspecto: se quitan SIEMPRE las clases de la paleta antes de poner las que
+  // tocan, para que quitar un estilo en el editor se note de verdad.
+  for (const [key, el] of porClave) {
+    el.classList.remove(...ALL_CLASSES);
+    const clases = cardClasses(styleOf(estilos, key));
+    if (clases.length > 0) el.classList.add(...clases);
+  }
+
+  if (orden.length === 0) return; // sin orden guardado manda el del código
   // appendChild MUEVE el nodo: recorrer el orden deja cada tarjeta en su sitio
   // sin tener que sacarlas todas antes.
   for (const key of orderedKeys([...porClave.keys()], orden)) {

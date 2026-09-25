@@ -13,6 +13,8 @@
  * orden hace tres semanas».
  */
 
+import { normalizeStyles } from './cardStyle.js';
+
 /** Las dos superficies con tarjetas. Cualquier otra clave del documento se ignora. */
 export const SURFACES = ['home', 'admin'];
 
@@ -25,13 +27,18 @@ function cleanKey(raw) {
  * Orden guardado, saneado. Lo que no sea una lista de claves se descarta: una
  * configuración rota tiene que dejar las tarjetas como las pusiera el código, no
  * dejar la pantalla vacía.
+ * Incluye el ASPECTO (RMR-TSK-0573) en la misma puerta: orden y estilos viven en
+ * el mismo documento, asi que sanearlos por separado seria dejar media puerta
+ * abierta.
+ *
  * @param {Record<string, unknown>|null|undefined} doc
- * @returns {{ home: string[], admin: string[] }}
+ * @returns {{ home: string[], admin: string[], styles: { home: Object, admin: Object } }}
  */
 export function normalizeLayout(doc) {
-  /** @type {{ home: string[], admin: string[] }} */
-  const out = { home: [], admin: [] };
+  /** @type {{ home: string[], admin: string[], styles: { home: Object, admin: Object } }} */
+  const out = { home: [], admin: [], styles: { home: {}, admin: {} } };
   for (const surface of SURFACES) {
+    out.styles[surface] = normalizeStyles(doc?.styles?.[surface]);
     const raw = doc?.[surface];
     if (!Array.isArray(raw)) continue;
     const vistas = new Set();
