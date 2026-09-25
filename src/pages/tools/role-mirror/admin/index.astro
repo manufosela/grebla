@@ -1,19 +1,84 @@
 ---
 import RoleMirror from '../../../../layouts/RoleMirror.astro';
+
+/**
+ * Administración de Role Mirror (RMR-TSK-0562).
+ *
+ * Dos sub-pestañas, porque son dos preguntas distintas:
+ *  - «Personas»: la lista de ingeniería y, al pinchar en alguien, su perfil para
+ *    verlo y gestionarlo —propuesta, versión que cuenta e histórico—. Esto es
+ *    nuevo: antes había que elegir a la persona en un desplegable de la pantalla
+ *    de USO, así que gestionar a alguien obligaba a saberse el camino.
+ *  - «Resumen»: el panel que ya existía —comparativa entre perfiles, distribución
+ *    de roles y exportación CSV—, que sigue igual y aquí gana una puerta.
+ *
+ * Sub-pestañas y no dos bloques apilados: apilados, el segundo vive detrás de un
+ * scroll y se deja de encontrar.
+ */
 ---
 
-<RoleMirror title="Role Mirror — Admin" requireAuth={true}>
-  <!-- El título/lead final depende del rol (superadmin ve toda la organización;
-       manager, solo su equipo), que se resuelve en cliente tras la autenticación
-       (client/admin.js). Empieza con el texto de superadmin como fallback SSR. -->
-  <h1 class="page-title" data-page-title>Panel de administración</h1>
-  <p class="page-lead" data-page-lead>
-    Perfiles de todo el equipo, comparativas, distribución de roles y exportación CSV.
+<RoleMirror title="Role Mirror — Administrar" requireAuth={true}>
+  <h1 class="page-title">Administrar Role Mirror</h1>
+  <p class="page-lead">
+    Los perfiles de ingeniería: quién es quién en el equipo, y qué dice el conjunto.
   </p>
 
-  <admin-dashboard></admin-dashboard>
+  <p class="rm-denied" id="rm-admin-denied" hidden>
+    No gestionas Role Mirror, así que aquí no hay nada para ti. Tu propio perfil está
+    en <a href="/tools/role-mirror">Role Mirror</a>.
+  </p>
+
+  <!-- Oculto hasta saber si quien mira gestiona: pintar las pestañas y retirarlas
+       después es enseñar una puerta que no era suya. -->
+  <div id="rm-admin-body" hidden>
+    <nav class="rm-tabs" id="rm-admin-tabs" role="tablist" aria-label="Administración de Role Mirror">
+      <button class="rm-tab on" type="button" role="tab" aria-selected="true" data-tab="personas">Personas</button>
+      <button class="rm-tab" type="button" role="tab" aria-selected="false" data-tab="resumen">Resumen</button>
+    </nav>
+
+    <section data-panel="personas">
+      <rm-admin></rm-admin>
+    </section>
+
+    <section data-panel="resumen" hidden>
+      <p class="tab-lead">
+        Perfiles del equipo, comparativa entre varias personas, distribución de roles y
+        exportación a CSV.
+      </p>
+      <admin-dashboard></admin-dashboard>
+    </section>
+  </div>
 </RoleMirror>
 
+<style>
+  .rm-denied {
+    max-width: 46rem; margin: 0 0 1.25rem; padding: 0.75rem 0.95rem;
+    border-radius: 10px; border: 1px solid var(--rm-info-border, #bfd6fb);
+    border-left: 4px solid var(--rm-info, #2563eb);
+    background: var(--rm-info-soft, #eff5ff); color: var(--rm-info-text, #1e3a8a);
+    font-size: 0.9rem; line-height: 1.5;
+  }
+  .rm-denied a { color: inherit; text-decoration: underline; }
+
+  .rm-tabs {
+    display: inline-flex; gap: 0.25rem; padding: 0.28rem; margin: 0.6rem 0 1.1rem;
+    background: var(--rm-surface-hover, #eef3f5);
+    border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px;
+  }
+  .rm-tab {
+    background: none; border: 0; border-radius: 9px; padding: 0.5rem 1.15rem;
+    font: inherit; font-weight: 600; font-size: 0.9rem;
+    color: var(--rm-muted, #5b6b7d); cursor: pointer;
+  }
+  .rm-tab:hover { color: var(--rm-accent, #2a9d8f); }
+  .rm-tab.on {
+    background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff);
+    box-shadow: 0 1px 4px rgba(42, 157, 143, 0.4);
+  }
+  .rm-tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+  .tab-lead { margin: 0 0 1rem; font-size: 0.9rem; color: var(--rm-muted, #5b6b7d); }
+</style>
+
 <script>
-  import '../../../../client/admin.js';
+  import '../../../../client/roleMirrorAdmin.js';
 </script>
