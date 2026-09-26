@@ -106,19 +106,29 @@ test('la curva de progresión se dibuja con las valoraciones cerradas (RMR-TSK-0
   });
 });
 
-test('el badge de Equipo › Carrera sale de lo VALORADO, no del avance en el mapa', async ({ page }) => {
+test('el badge del seguimiento sale de lo VALORADO, no del avance en el mapa', async ({ page }) => {
   await conPersonaEnL1(async () => {
     // 3 de 4 puntos valorados. En el mapa de carrera no ha certificado ni una casa:
     // el nivel no se mueve por formarse, y el badge lo demuestra.
     await db().doc(`${PERSON}/careerAssessments/av-l2`).set({
       levelId: 'av-l2', byDimension: { 'av-tech': { meets: true } }, closures: [],
     });
-    await signInAs(page, 'head');
-    await page.goto('/tools/team#career');
-    const fila = page.locator('team-career tr', { hasText: NOMBRE });
+    // El badge se mudó con la tabla: ya no hay dos, hay una (RMR-TSK-0590).
+    await signInAs(page, 'superadmin');
+    await page.goto('/tools/career-map/admin');
+    await expect(page.locator('career-tracking .side')).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('tab', { name: 'Conjunto' }).click();
+
+    const fila = page.locator('career-tracking tr', { hasText: NOMBRE });
     await expect(fila.locator('.lvl.sub')).toHaveText('L1-2');
     await expect(fila.locator('.lvl.sub')).toHaveAttribute('title', /3 de 4 puntos valorados/);
   });
+});
+
+test('el hash viejo de «Carrera» lleva al seguimiento, no a una pestaña que ya no existe', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/tools/team#career');
+  await expect(page).toHaveURL(/\/tools\/career-map\/admin/);
 });
 
 test('con el 100 % de los puntos se plantea la subida de nivel', async ({ page }) => {

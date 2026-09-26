@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PLAYTIME } from './playtime.js';
-import { activityFrom, trackingRow, sortByNeglect, ACTIVITY_WINDOW_DAYS } from './tracking.js';
+import { activityFrom, trackingRow, sortByNeglect, withCareer, ACTIVITY_WINDOW_DAYS } from './tracking.js';
 
 const HOY = new Date('2026-09-25T10:00:00');
 
@@ -121,5 +121,35 @@ describe('a quién hay que mirar primero', () => {
     const filas = [fila('a', 2), fila('b', 30)];
     sortByNeglect(filas);
     expect(filas.map((r) => r.personId)).toEqual(['a', 'b']);
+  });
+});
+
+describe('una sola tabla: dónde va y qué ha conseguido', () => {
+  const fila = (id) => ({ personId: id, name: id, started: true, activity: { idleDays: 1 } });
+  const logro = (id) => ({ personId: id, citizenships: 2, certificates: 7, islandsVisited: 3 });
+
+  it('pega a cada persona su progreso de carrera', () => {
+    const [a] = withCareer([fila('ana')], [logro('ana')]);
+    expect(a.career.citizenships).toBe(2);
+    expect(a.career.certificates).toBe(7);
+    // Lo de seguimiento sigue ahí: fundir no es sustituir.
+    expect(a.activity.idleDays).toBe(1);
+  });
+
+  it('quien no tiene progreso de carrera sale con null, no con ceros', () => {
+    // Un cero se lee como una medida. Aquí no hay medida: no se ha podido leer.
+    const [a] = withCareer([fila('ana')], []);
+    expect(a.career).toBeNull();
+  });
+
+  it('el progreso que no corresponde a nadie de la lista se ignora', () => {
+    const filas = withCareer([fila('ana')], [logro('ana'), logro('fantasma')]);
+    expect(filas).toHaveLength(1);
+  });
+
+  it('no toca las filas que recibe', () => {
+    const filas = [fila('ana')];
+    withCareer(filas, [logro('ana')]);
+    expect(filas[0].career).toBeUndefined();
   });
 });

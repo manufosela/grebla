@@ -42,11 +42,11 @@ test('la sección que no se abre nunca, nunca se carga', async ({ page }) => {
   // El precio de conservar lo cargado no puede ser cargarlo todo al entrar.
   await signInAs(page, 'superadmin');
   await page.goto('/tools/team');
-  await expect(seccion(page, 'Carrera')).toBeVisible({ timeout: 20_000 });
+  await expect(seccion(page, 'Cobertura y riesgos')).toBeVisible({ timeout: 20_000 });
 
-  await expect(page.locator('team-app team-career')).toHaveCount(0);
-  await seccion(page, 'Carrera').click();
-  await expect(page.locator('team-app team-career')).toHaveCount(1);
+  await expect(page.locator('team-app team-overview')).toHaveCount(0);
+  await seccion(page, 'Cobertura y riesgos').click();
+  await expect(page.locator('team-app team-overview')).toHaveCount(1);
 });
 
 test('solo se ve una sección a la vez, aunque haya varias montadas', async ({ page }) => {

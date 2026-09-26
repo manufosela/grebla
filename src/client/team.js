@@ -12,7 +12,6 @@ import { resolveAccess } from '../lib/access.js';
 import { branchScopeFor, canGovern, hasAccess } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
-import { getArchipelago } from '../lib/careerMap.js';
 
 const app = document.querySelector('team-app');
 
@@ -67,15 +66,14 @@ onUserChanged(async (user) => {
     app.members = members;
     app.heads = heads;
     app.framework = framework;
-    // Carrera (RMR-PCS-0029 · F2b): store de carrera + índice del archipiélago
-    // para la pestaña «Carrera» (progreso listado del equipo). Los journeys por
-    // persona se leen BAJO DEMANDA dentro de la pestaña, no aquí.
+    // Store de carrera para lo que Personas necesita del plan de desarrollo. El
+    // progreso listado del equipo ya no vive aquí: está en el Seguimiento del
+    // plan, fundido con la dedicación (RMR-TSK-0590).
     try {
       const { store: careerStore } = await createCareerContainer({ mode: 'firestore' });
       app.careerStore = careerStore;
-      app.archipelago = await getArchipelago();
     } catch (err) {
-      console.warn('Equipo · Carrera: no se pudo preparar el store de carrera.', err);
+      console.warn('Equipo: no se pudo preparar el store de carrera.', err);
     }
     app.persistence = persistence; // dispara la carga inicial en el componente
   } catch (err) {
