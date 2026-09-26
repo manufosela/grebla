@@ -115,6 +115,48 @@ test('el superadmin ordena desde su pantalla y lo guardado es lo que se ve', asy
   });
 });
 
+test('el editor agrupa el inicio igual que se ve, y marca lo que no ve todo el mundo', async ({ page }) => {
+  await restaurandoOrden(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin/tarjetas');
+
+    const inicio = page.locator('card-layout-editor section').first();
+    await expect(inicio).toBeVisible();
+
+    // Los mismos grupos que en el inicio: una lista plana haría creer que subir
+    // una tarjeta del todo la lleva arriba del inicio, y solo la sube en su grupo.
+    // En minúsculas: las mayúsculas que se leen son del estilo, no del dato.
+    const titulos = (await inicio.locator('.group-head').allInnerTexts()).map((t) => t.toLowerCase());
+    expect(titulos).toEqual(['lo tuyo', 'tu equipo', 'cómo estamos', 'cómo entregamos', 'la casa']);
+
+    // Y la marca que explica por qué aparecen tarjetas que quien ordena no ve.
+    const fila = inicio.locator('li', { hasText: 'O2O de mi equipo' });
+    await expect(fila.locator('.only')).toHaveText('solo quien lidera');
+  });
+});
+
+test('subir una tarjeta la mueve DENTRO de su grupo, nunca a otro', async ({ page }) => {
+  await restaurandoOrden(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin/tarjetas');
+
+    const inicio = page.locator('card-layout-editor section').first();
+    await expect(inicio).toBeVisible();
+    // La primera de «Tu equipo»: subirla no puede colarla en «Lo tuyo».
+    const grupoEquipo = inicio.locator('li.group-head', { hasText: 'Tu equipo' });
+    await expect(grupoEquipo).toBeVisible();
+    const primeraDelGrupo = grupoEquipo.locator('xpath=following-sibling::li[1]');
+    const nombre = await primeraDelGrupo.locator('.label').innerText();
+
+    // Está la primera de su grupo: su botón de subir está apagado.
+    await expect(primeraDelGrupo.getByRole('button', { name: /^Subir/ })).toBeDisabled();
+    // Y la segunda sube hasta ahí, pero no más.
+    const segunda = grupoEquipo.locator('xpath=following-sibling::li[2]');
+    await segunda.getByRole('button', { name: /^Subir/ }).click();
+    await expect(grupoEquipo.locator('xpath=following-sibling::li[2]').locator('.label')).toHaveText(nombre);
+  });
+});
+
 test('quien no gobierna no ordena las tarjetas de nadie', async ({ page }) => {
   await signInAs(page, 'engineer');
   await page.goto('/admin/tarjetas');
