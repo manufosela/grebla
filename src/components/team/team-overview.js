@@ -66,6 +66,7 @@ export class TeamOverview extends LitElement {
       border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-surface, #fff); color: var(--rm-text, #111827);
       border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;
     }
+    .lead { margin: 0 0 0.6rem; max-width: 62ch; font-size: 0.92rem; line-height: 1.55; color: var(--rm-text, #111827); }
     .note { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); margin: 0.5rem 0 0; }
     .diag .score { display: flex; align-items: baseline; gap: 0.15rem; }
     .diag .score-num { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -256,10 +257,16 @@ export class TeamOverview extends LitElement {
       ${this._renderDiagnosis()}
       <section>
         <div class="head">
-          <h2>Equipo (${h.teamSize} ${h.teamSize === 1 ? 'persona' : 'personas'})</h2>
+          <h2>Cobertura y riesgos (${h.teamSize} ${h.teamSize === 1 ? 'persona' : 'personas'})</h2>
           <button @click=${this._export}>Exportar agregados (JSON)</button>
         </div>
-        <p class="note">Vistas agregadas del equipo. No se comparan ni se ordenan personas por desempeño (R3).</p>
+        <p class="lead">
+          Para qué sirve: ver <strong>de qué depende tu equipo</strong> y dónde estás
+          expuesto. Qué roles te faltan para que las cosas salgan adelante, qué áreas
+          sostiene una sola persona —si se va, se va con ella— y de quién hace tiempo
+          que no sabes nada.
+        </p>
+        <p class="note">Todo agregado. No se comparan ni se ordenan personas por desempeño (R3).</p>
         <p class="note">${this._sizeNote(h.teamSize)}</p>
       </section>
 
