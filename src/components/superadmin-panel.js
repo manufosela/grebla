@@ -23,6 +23,7 @@ import './catalog-manager.js';
 import './org-chart.js';
 import './common/person-permissions.js';
 import './admin/domains-manager.js';
+import './admin/org-identity.js';
 import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteAccount } from '../lib/users.js';
 import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -33,6 +34,7 @@ import { expectationWeight } from '../tools/career/data/framework.js';
 /** Tope del peso de una expectativa: más allá, el número deja de decir nada. */
 const MAX_EXPECTATION_WEIGHT = 9;
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
+import { getOrgIdentity, saveOrgIdentity } from '../lib/orgConfig.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
@@ -98,7 +100,9 @@ function formatLogin(ts) {
 const VIEW_FLAG = 'grebla-view';
 // «Managers» se retiró (RMR-PCS-0027 · F8e): dar el rol de mando se hace editando
 // la persona en «Usuarios», sin una pestaña aparte que duplicaba el alta.
-const TABS = ['organigrama', 'areas', 'guilds', 'dominios', 'labels', 'career', 'users', 'permisos'];
+const TABS = Object.freeze(['organigrama', 'identidad', 'areas', 'guilds', 'dominios', 'labels', 'career', 'users', 'permisos']);
+/** Las mismas, para preguntar por pertenencia sin recorrerlas. */
+const TAB_IDS = new Set(TABS);
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
  *  (RMR-TSK-0262): siguen aterrizando en su sub-pestaña correcta. */
 const LEGACY_CAREER_HASH = { careerMap: 'map', careerFramework: 'framework' };
@@ -109,7 +113,7 @@ const LEGACY_TAB_HASH = { herramientas: { tab: 'permisos', sub: 'rol' }, squads:
 function resolveHash(raw) {
   if (raw in LEGACY_CAREER_HASH) return { tab: 'career', sub: LEGACY_CAREER_HASH[raw] };
   if (raw in LEGACY_TAB_HASH) return { ...LEGACY_TAB_HASH[raw] };
-  if (TABS.includes(raw)) return { tab: raw };
+  if (TAB_IDS.has(raw)) return { tab: raw };
   return { tab: 'users' };
 }
 
@@ -130,6 +134,7 @@ export class SuperadminPanel extends LitElement {
     persistence: { attribute: false },
     currentUid: { attribute: false },
     _tab: { state: true },
+    _identity: { state: true },
     _careerSub: { state: true },
     _permSub: { state: true },
     leaders: { state: true },
@@ -502,6 +507,9 @@ export class SuperadminPanel extends LitElement {
     const initial = resolveHash(location.hash.slice(1));
     /** @type {'leaders'|'areas'|'guilds'|'labels'|'career'|'users'} pestaña activa */
     this._tab = initial.tab;
+    /** @type {Record<string, string>|null} identidad de la instancia; null mientras no se ha leido */
+    this._identity = null;
+    this._identityAsked = false;
     /** @type {'framework'|'map'} sub-pestaña de «Carrera» (RMR-TSK-0262). */
     this._careerSub = initial.sub ?? 'framework';
     /** @type {'rol'|'persona'} ámbito de «Permisos» (RMR-TSK-0460). */
@@ -637,7 +645,20 @@ export class SuperadminPanel extends LitElement {
       // El viewer no gestiona usuarios: no hace falta cargar la pestaña.
       if (!this.readOnly) this._loadUsers();
     }
+    this._loadIdentityOnce();
     this._syncOrgRoleSelects();
+  }
+
+  /**
+   * La identidad se lee la PRIMERA vez que se abre su pestaña: son cuatro campos
+   * que casi nadie toca y no merecen una lectura en cada entrada al panel.
+   */
+  _loadIdentityOnce() {
+    if (this._tab !== 'identidad' || this._identityAsked) return;
+    this._identityAsked = true;
+    getOrgIdentity()
+      .then((v) => { this._identity = v; })
+      .catch(() => { this._identity = {}; });
   }
 
   /** Fija el valor mostrado de los <select> del editor de roles DESPUÉS del render:
@@ -1390,30 +1411,47 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
+  /**
+   * Identidad de la instancia (RMR-TSK-0596). Se lee BAJO DEMANDA, al abrir la
+   * pestaña: son cuatro campos que casi nadie toca y no merecen una lectura en
+   * cada entrada al panel.
+   */
+  _renderIdentity() {
+    return html`<org-identity
+      .identity=${this._identity}
+      .save=${(patch) => saveOrgIdentity(patch)}
+      ?read-only=${this.readOnly}
+    ></org-identity>`;
+  }
+
+  /**
+   * Qué pinta cada pestaña. Tabla de despacho y no un switch de nueve ramas:
+   * el switch no decidía nada, solo elegía a quién llamar, y cada pestaña nueva
+   * le sumaba una rama más de complejidad sin sumar una sola decisión.
+   * Una pestaña desconocida no pinta nada, como antes el `default`.
+   */
   _renderTabContent() {
-    switch (this._tab) {
-      case 'organigrama':
-        return this._renderOrgRoles();
-      case 'areas':
-        return this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)');
-      case 'guilds':
-        return this._renderCatalogTab('guilds', 'Gremios (organización)');
-      case 'dominios':
-        // El catálogo de squads se sustituye por dominios y subdominios (ADR «De
-        // squads a dominios y subdominios»). /squads sigue en los datos durante
-        // la transición, pero ya no se gestiona desde aquí.
-        return html`<domains-manager .ready=${this.ready} ?read-only=${this.readOnly}></domains-manager>`;
-      case 'labels':
-        return this._renderCatalogTab('labels', 'Labels (organización)');
-      case 'career':
-        return this._renderCareer();
-      case 'permisos':
-        return this._renderPermisos();
-      case 'users':
-        return this._renderUsers();
-      default:
-        return null;
-    }
+    const pintar = {
+      organigrama: () => this._renderOrgRoles(),
+      identidad: () => this._renderIdentity(),
+      areas: () => this._renderCatalogTab('areas', 'Áreas de conocimiento (organización)'),
+      guilds: () => this._renderCatalogTab('guilds', 'Gremios (organización)'),
+      dominios: () => this._renderDomains(),
+      labels: () => this._renderCatalogTab('labels', 'Labels (organización)'),
+      career: () => this._renderCareer(),
+      permisos: () => this._renderPermisos(),
+      users: () => this._renderUsers(),
+    };
+    return pintar[this._tab]?.() ?? null;
+  }
+
+  /**
+   * El catálogo de squads se sustituye por dominios y subdominios (ADR «De
+   * squads a dominios y subdominios»). /squads sigue en los datos durante la
+   * transición, pero ya no se gestiona desde aquí.
+   */
+  _renderDomains() {
+    return html`<domains-manager .ready=${this.ready} ?read-only=${this.readOnly}></domains-manager>`;
   }
 
   render() {
@@ -1428,6 +1466,7 @@ export class SuperadminPanel extends LitElement {
       </div>
       <nav class="tabs" aria-label="Secciones de gestión">
         <button class="tab ${this._tab === 'organigrama' ? 'active' : ''}" @click=${() => this._setTab('organigrama')}>Organigrama</button>
+        <button class="tab ${this._tab === 'identidad' ? 'active' : ''}" @click=${() => this._setTab('identidad')}>Identidad</button>
         <button class="tab ${this._tab === 'areas' ? 'active' : ''}" @click=${() => this._setTab('areas')}>Áreas</button>
         <button class="tab ${this._tab === 'guilds' ? 'active' : ''}" @click=${() => this._setTab('guilds')}>Gremios</button>
         <button class="tab ${this._tab === 'dominios' ? 'active' : ''}" @click=${() => this._setTab('dominios')}>Dominios</button>

@@ -4,8 +4,38 @@
  * (RMR-PCS-0027 · F6), que habilita el acceso base al hub. Se lee en cliente; solo
  * el superadmin lo escribe (reglas de Firestore).
  */
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
+import { normalizeIdentity } from '../tools/admin/domain/orgIdentity.js';
+
+/**
+ * Identidad de la instancia (RMR-TSK-0596): los textos con los que esta
+ * organización se reconoce. Un fallo de lectura devuelve los campos vacíos, que
+ * es exactamente «sin configurar»: cada rótulo cae a su defecto del producto y la
+ * pantalla sigue diciendo algo.
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function getOrgIdentity() {
+  try {
+    const snap = await getDoc(doc(db, 'config', 'org'));
+    return normalizeIdentity(snap.exists() ? snap.data() : null);
+  } catch {
+    return normalizeIdentity(null);
+  }
+}
+
+/**
+ * Guarda la identidad. `merge` porque `/config/org` tiene más campos que estos y
+ * un documento completo se los llevaría por delante. Falla en alto: quien guarda
+ * tiene que enterarse de que no se guardó.
+ * @param {Record<string, unknown>} patch
+ * @returns {Promise<Record<string, string>>} lo que ha quedado guardado
+ */
+export async function saveOrgIdentity(patch) {
+  const limpio = normalizeIdentity(patch);
+  await setDoc(doc(db, 'config', 'org'), limpio, { merge: true });
+  return limpio;
+}
 
 /**
  * Dominio de email de los empleados de la instancia, en minúsculas y sin arroba
