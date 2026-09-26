@@ -15,6 +15,25 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.221.0] - 2026-09-26
+
+### Añadido
+
+- **Identidad de la instancia**, en Administración › Organización › **Identidad**.
+  GREBLA se despliega una vez por organización, así que sus rótulos por defecto
+  son los generales del producto; aquí cada casa pone los suyos: cómo se llama,
+  cómo llama a «verlo todo», quién va en la corona del organigrama y con qué
+  dominio de correo entra su gente.
+
+  **El dominio de empleados y la corona ya se leían desde hacía meses y no tenían
+  pantalla**: se editaban a mano en la consola de Firestore, que es como decir
+  que no se editaban.
+
+  Dejar un campo en blanco **no** deja el rótulo vacío: significa «usa el del
+  producto», y cada campo dice cuál es ese defecto antes de guardar. Lo que se
+  guarda es lista blanca y saneado —el dominio, en minúsculas y sin arroba—, y la
+  caja enseña lo que de verdad quedó, no lo que se tecleó.
+
 ## [1.220.0] - 2026-09-26
 
 ### Cambiado
