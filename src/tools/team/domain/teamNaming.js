@@ -44,9 +44,19 @@ const SIN_RESOLVER = Object.freeze({
 
 /**
  * Rótulo de la herramienta para el alcance dado.
+ *
+ * `everyoneLabel` es cómo llama esta casa a mirar más allá de un equipo
+ * (RMR-TSK-0597): se configura en Administración › Organización › Identidad, y
+ * si está vacío manda el del producto. Solo afecta al alcance `all`: «Mi equipo»
+ * es tuyo lo llame como lo llame la organización.
+ *
  * @param {'mine'|'all'|null|undefined} scope
+ * @param {{ everyoneLabel?: string }} [identity]
  * @returns {{ title: string, lead: string }}
  */
-export function teamHeading(scope) {
-  return HEADINGS[scope] ?? SIN_RESOLVER;
+export function teamHeading(scope, identity) {
+  const base = HEADINGS[scope] ?? SIN_RESOLVER;
+  if (scope !== 'all') return base;
+  const propio = (identity?.everyoneLabel ?? '').toString().trim();
+  return propio ? { ...base, title: propio } : base;
 }
