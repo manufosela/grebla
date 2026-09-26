@@ -249,14 +249,21 @@ export class TeamPersonDetail extends LitElement {
     }
     button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
     .hist { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
-    .hist li { display: flex; gap: 0.6rem; padding: 0.35rem 0; border-top: 1px solid var(--rm-border, #eef0f2); }
-    .hist .when { color: var(--rm-muted, #5b6b7d); white-space: nowrap; min-width: 7.5rem; }
+    /* Cada entrada es un BLOQUE, no una fila. Antes era un flex horizontal con
+       varios elementos en nowrap: cuando no cabian no bajaban de linea, se
+       montaban unos encima de otros y no se leia nada (RMR-TSK-0592). */
+    .hist li { padding: 0.55rem 0; border-top: 1px solid var(--rm-border, #eef0f2); }
+    /* La cabecera SI puede envolver: quien, cuando, de que tipo y de donde vino. */
+    .hist .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+    .hist .when { color: var(--rm-muted, #5b6b7d); }
     .hist .lvl { font-weight: 600; }
     /* Conversación traída por un agente (RMR-TSK-0549): se ve que no la escribió el manager. */
     .hist .auto { white-space: nowrap; font-size: 0.75rem; font-weight: 700; padding: 0.05rem 0.45rem; border-radius: 999px;
       color: #78350f; background: #fdf1d6; border: 1px solid #b45309; cursor: help; }
     .hist .auto-src { font-size: 0.75rem; white-space: nowrap; color: var(--rm-accent, #2a9d8f); }
-    .hist .note { color: var(--rm-muted, #5b6b7d); }
+    /* El texto, en su propia linea y a ancho completo: es lo que se viene a leer,
+       no un resto que compite por el hueco que quede. */
+    .hist .note { display: block; margin: 0.25rem 0 0; color: var(--rm-text, #111827); line-height: 1.5; white-space: pre-wrap; }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
     label.fld { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); font-weight: 600; }
@@ -1673,9 +1680,11 @@ export class TeamPersonDetail extends LitElement {
       : null;
     return html`
       <li>
-        <span class="when">${authorLine(cv)}</span>
-        <span class="lvl">${typeLabel(cv.type)}</span>
-        ${origen}
+        <div class="meta">
+          <span class="when">${authorLine(cv)}</span>
+          <span class="lvl">${typeLabel(cv.type)}</span>
+          ${origen}
+        </div>
         <span class="note">${cv.notes}</span>
       </li>`;
   }
@@ -1714,15 +1723,17 @@ export class TeamPersonDetail extends LitElement {
                 ${this.notes.map(
                   (n) => html`
                     <li>
-                      <span class="when">${authorLine(n)}</span>
-                      <span class="note">${n.text}</span>
-                      <span class="del">
+                      <div class="meta">
+                        <span class="when">${authorLine(n)}</span>
+                        <span class="del">
                         ${this._confirmNote === n.id
                           ? html`¿Borrar?
                               <button class="link yes" @click=${() => this._deleteNote(n.id)}>Sí</button>
                               <button class="link" @click=${() => { this._confirmNote = null; }}>No</button>`
                           : html`<button class="link" @click=${() => { this._confirmNote = n.id; }}>Borrar</button>`}
-                      </span>
+                        </span>
+                      </div>
+                      <span class="note">${n.text}</span>
                     </li>
                   `,
                 )}
