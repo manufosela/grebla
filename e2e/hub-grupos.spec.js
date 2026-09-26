@@ -67,6 +67,29 @@ test('al simular un empleado, los grupos son los de un empleado', async ({ page 
   expect(await ningunGrupoVacio(page)).toEqual([]);
 });
 
+test('o hay grupos, o se dice que no hay nada: nunca un hueco', async ({ page }) => {
+  // Al agrupar desapareció la tarjeta «Más herramientas», que era lo único que
+  // llenaba el contenedor cuando el filtro no dejaba nada. Sin este invariante,
+  // quien no tenga herramientas se queda mirando un vacío sin saber si falta
+  // algo o falla algo.
+  await signInAs(page, 'superadmin');
+  await page.goto('/');
+  await expect(page.locator('#tenant-tools')).toBeVisible();
+
+  const conGrupos = await grupos(page).count();
+  const avisoVisible = await page.locator('#tools-empty:not([hidden])').count();
+  expect(conGrupos > 0 || avisoVisible === 1).toBe(true);   // nunca ninguna de las dos
+  expect(conGrupos > 0 && avisoVisible === 1).toBe(false);  // nunca las dos a la vez
+
+  // Y simulando un perfil sin nada asignado, sigue cumpliéndose.
+  await page.getByRole('button', { name: 'Empleado' }).click();
+  await expect(page.locator('#tenant-tools')).toBeVisible();
+  const grupos2 = await grupos(page).count();
+  const aviso2 = await page.locator('#tools-empty:not([hidden])').count();
+  expect(grupos2 > 0 || aviso2 === 1).toBe(true);
+  expect(grupos2 > 0 && aviso2 === 1).toBe(false);
+});
+
 test('quien no tiene acceso no ve ni grupos ni la barra', async ({ page }) => {
   await signInAs(page, 'stranger');
   await page.goto('/');
