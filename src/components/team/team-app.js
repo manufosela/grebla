@@ -11,6 +11,7 @@
  *  - uid: string
  */
 import { LitElement, html, css } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import { skeletonBlock, skeletonLines } from '../app-skeleton.js';
 import './team-people.js';
 import './team-departures.js';
@@ -95,6 +96,9 @@ export class TeamApp extends LitElement {
       border: 1px dashed var(--rm-border, #d1d5db); border-radius: var(--rm-radius, 12px);
     }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.9rem; margin: 0.5rem 0; }
+    /* La seccion que no toca se oculta, no se destruye: asi conserva lo que ya
+       cargo y volver a ella es inmediato (RMR-TSK-0584). */
+    .section[hidden] { display: none; }
     .scope { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     .scope .seg { display: inline-flex; border: 1px solid var(--rm-border, #d1d5db); border-radius: 999px; overflow: hidden; }
     .scope button { border: 0; background: var(--rm-surface, #fff); color: var(--rm-muted, #5b6b7d); font: inherit; font-size: 0.82rem; font-weight: 600; padding: 0.3rem 0.9rem; cursor: pointer; }
@@ -129,6 +133,16 @@ export class TeamApp extends LitElement {
     this.heads = [];
     /** @type {import('../../tools/career/data/framework.js').CareerFramework|null} framework de carrera (disciplinas/niveles) */
     this.framework = null;
+    /**
+     * Secciones que se han llegado a abrir. Una seccion se monta la PRIMERA vez
+     * que se visita y a partir de ahi se queda montada, solo oculta: cambiar de
+     * pestana destruia el componente y al volver se creaba otro que pedia todo
+     * a Firestore desde cero, asi que tardaba lo mismo la quinta vez que la
+     * primera (RMR-TSK-0584). No se montan todas de golpe a proposito: lo que
+     * nunca abres, nunca se carga.
+     * @type {Set<string>}
+     */
+    this._mounted = new Set();
     const rawHash = location.hash.slice(1);
     /** @type {import('../../tools/team/domain/types.js').Person|null} */
     this.selected = null;
@@ -318,7 +332,7 @@ export class TeamApp extends LitElement {
         ${this._tab('team', 'Equipo')}
         ${this._tab('settings', 'Ajustes')}
       </nav>
-      ${this._renderView()}
+      ${this._renderSections()}
     `;
   }
 
@@ -344,8 +358,24 @@ export class TeamApp extends LitElement {
       </div>`;
   }
 
-  _renderView() {
-    switch (this.view) {
+  /**
+   * Las secciones YA VISITADAS, todas en el DOM, con la activa a la vista. La
+   * ficha de persona no entra aqui: es un detalle que cambia con la persona
+   * elegida, no una seccion con estado que convenga conservar.
+   */
+  _renderSections() {
+    if (this.view === 'person') return this._renderView();
+    this._mounted.add(this.view);
+    const secciones = [...this._mounted].filter((tab) => tab !== 'person');
+    return repeat(
+      secciones,
+      (tab) => tab,
+      (tab) => html`<div class="section" ?hidden=${tab !== this.view}>${this._renderView(tab)}</div>`,
+    );
+  }
+
+  _renderView(view = this.view) {
+    switch (view) {
       case 'people':
         return html`<team-people
           .careerStore=${this.careerStore}
