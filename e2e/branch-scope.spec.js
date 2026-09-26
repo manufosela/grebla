@@ -16,19 +16,14 @@ test.describe('el Head ve su rama y no lo de fuera', () => {
     await expect(page.getByText('Persona de fuera')).toHaveCount(0);
   });
 
-  test('Carrera: ve el progreso de la persona de su rama, no el de la ajena', async ({ page }) => {
-    await signInAs(page, 'head');
-    // El mapa ya NO tiene selector de otras personas: cada uno juega el suyo. El
-    // progreso de la gente que sostienes se consulta (solo lectura) en la
-    // pestaña «Carrera» de la herramienta de Equipo.
-    await page.goto('/tools/team');
-    // `exact` porque el Mapa tiene una celda «Abrir Carrera de <persona>» por
-    // fila: sin él, el nombre de la pestaña casa también con esas celdas y el
-    // test falla —o no— según cuánta gente haya ese día en el mapa.
-    await page.getByRole('button', { name: 'Carrera', exact: true }).click();
-    await expect(page.getByText('Persona del manager')).toBeVisible();
-    await expect(page.getByText('Persona de fuera')).toHaveCount(0);
-  });
+  /*
+   * El alcance de rama en CARRERA se comprueba donde ahora vive esa pantalla:
+   * «un manager ve su rama entera, y lo de fuera sigue fuera» en
+   * career-seguimiento.spec.js. Allí se afirma sobre la lista completa —que
+   * salgan los dos de su rama y no salga el de fuera—, así que repetirlo aquí
+   * con un click en una pestaña que ya no existe solo añadía una forma de
+   * romperse (RMR-TSK-0590).
+   */
 
   test('Retros: ve la retro de su rama, no la ajena', async ({ page }) => {
     await signInAs(page, 'head');
