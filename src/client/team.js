@@ -12,8 +12,23 @@ import { resolveAccess } from '../lib/access.js';
 import { branchScopeFor, canGovern, hasAccess } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
+import { teamHeading } from '../tools/team/domain/teamNaming.js';
 
 const app = document.querySelector('team-app');
+
+/**
+ * Pone el rótulo de la página al alcance con el que se ha entrado
+ * (RMR-TSK-0585). Se llama en cuanto el alcance está resuelto, antes de pedir
+ * datos: el nombre no debería esperar a que cargue nadie.
+ * @param {'mine'|'all'} scope
+ */
+function applyHeading(scope) {
+  const { title, lead } = teamHeading(scope);
+  const h1 = document.querySelector('#team-title');
+  const p = document.querySelector('#team-lead');
+  if (h1) h1.textContent = title;
+  if (p) p.textContent = lead;
+}
 
 onUserChanged(async (user) => {
   if (!user || !app) return;
@@ -48,6 +63,10 @@ onUserChanged(async (user) => {
       ? (sessionStorage.getItem(SCOPE_KEY) || 'mine')
       : (canGovern(access) ? 'all' : 'mine');
     const seeAll = scope === 'all';
+    // El nombre dice a quién estás viendo, y eso ya se sabe aquí: un admin puro
+    // entra con 'all' sin control que tocar, y antes le salía «Tu equipo» encima
+    // de la organización entera.
+    applyHeading(seeAll ? 'all' : 'mine');
     // Rama transitiva (RMR-TSK-0421): TODO líder con managers debajo ve su
     // subárbol, no solo el supermanager. Solo cuando mira lo suyo (con «ver
     // todo» sobra). Sin nadie que le reporte → null (ámbito simple de siempre).

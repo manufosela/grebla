@@ -15,6 +15,26 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.220.0] - 2026-09-26
+
+### Cambiado
+
+- **El nombre de Equipo dice a quién estás viendo.** Se llamaba «Tu equipo»
+  siempre, y eso hacía dos cosas malas a la vez: no decía lo que había dentro
+  —había que abrirla para saberlo— y la mitad de las veces era falso, porque
+  quien gobierna la instancia abría «Tu equipo» y le salía la organización
+  entera. Ahora el rótulo es **«Mi equipo»** o **«Toda la organización»** según
+  el alcance, y cambia con el conmutador.
+
+  La página se sirve con el nombre **neutro** («Equipo»), que es el único
+  verdadero en los dos casos: así nunca se lee un nombre falso mientras carga, y
+  sin JavaScript sigue habiendo encabezado.
+
+- **Ninguna sección se llama de forma genérica.** «Personas» pasa a **«Personas
+  activas»**, que es lo que hay dentro, y «Configuración» pasa a **«Avisos y
+  almacenamiento»**: un rótulo que no dice de qué obliga a abrirlo para saber si
+  es lo que buscas.
+
 ## [1.219.0] - 2026-09-26
 
 ### Cambiado

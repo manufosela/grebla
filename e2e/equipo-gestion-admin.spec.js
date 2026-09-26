@@ -35,7 +35,7 @@ test('quien gestiona ve las bajas y la configuración en la administración', as
 
   await expect(page.locator('team-admin')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('tab', { name: 'Bajas' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Configuración' }).click();
+  await page.getByRole('tab', { name: 'Avisos y almacenamiento' }).click();
   await expect(page.locator('team-admin team-settings')).toBeVisible();
 
   // Los catálogos NO se repiten aquí: viven en Organización.

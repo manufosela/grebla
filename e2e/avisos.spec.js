@@ -25,7 +25,7 @@ test('lo irreversible se avisa, no se susurra', async ({ page }) => {
 test('la descripción de un ajuste sigue siendo nota al pie', async ({ page }) => {
   await signInAs(page, 'superadmin');
   await page.goto('/tools/team/admin');
-  await page.getByRole('tab', { name: 'Configuración' }).click();
+  await page.getByRole('tab', { name: 'Avisos y almacenamiento' }).click();
 
   // Un aviso por cada cosa que se puede explicar convertiría la página en ruido:
   // esto describe qué hace una opción, no advierte de nada.

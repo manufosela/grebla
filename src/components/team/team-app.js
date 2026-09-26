@@ -58,7 +58,7 @@ const DEFAULT_TAB = TEAM_TABS[0];
  */
 const RETURN_LABELS = {
   map: '← Volver al mapa',
-  people: '← Volver a personas',
+  people: '← Volver a personas activas',
 };
 
 /** Prefijo del hash que enlaza directamente a la ficha de una persona. */
@@ -345,7 +345,7 @@ export class TeamApp extends LitElement {
       ${this._renderScopeControl()}
       <nav class="sections" aria-label="Secciones">
         ${this._tab('map', 'Mapa')}
-        ${this._tab('people', 'Personas')}
+        ${this._tab('people', 'Personas activas')}
         ${this._tab('team', 'Cobertura y riesgos')}
       </nav>
       ${this._renderSections()}

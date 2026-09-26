@@ -3,12 +3,14 @@ import Team from '../../../layouts/Team.astro';
 ---
 
 <Team title="GREBLA — Seguimiento de equipo">
-  <h1 class="page-title">Tu equipo</h1>
-  <p class="page-lead">
-    Da seguimiento a las personas de tu equipo en cuatro dimensiones independientes
-    (seniority, emocional, conocimiento y contribución), registra conversaciones y
-    detecta riesgos de cobertura. Los datos son privados: solo tú los ves.
-  </p>
+  <!--
+    El rótulo lo afina el glue cuando sabe el alcance (RMR-TSK-0585): «Mi equipo»
+    si ves a tu gente, «Toda la organización» si ves a todas. Lo que se sirve es el
+    nombre NEUTRO —el único que es verdad en los dos casos—, no uno de los dos: así
+    nunca se lee un nombre falso, y sin JS sigue habiendo encabezado.
+  -->
+  <h1 class="page-title" id="team-title">Equipo</h1>
+  <p class="page-lead" id="team-lead">Las personas activas y su seguimiento.</p>
 
   <!-- Mini-SPA Lit: se define e hidrata desde el script de cliente. -->
   <team-app></team-app>
