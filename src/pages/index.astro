@@ -103,6 +103,10 @@ const byGroup = GROUP_IDS
         </section>
       ))
     }
+    <p class="tools-empty" id="tools-empty" hidden>
+      Ahora mismo no tienes ninguna herramienta disponible. Si crees que deberías,
+      pídeselo a un superadmin.
+    </p>
   </div>
 
   <script>
@@ -166,6 +170,14 @@ const byGroup = GROUP_IDS
   /* El grupo entero desaparece si no le queda ninguna tarjeta visible: un
      encabezado sin nada debajo anuncia algo que no esta. */
   .tool-group[hidden] { display: none; }
+  /* Y si no queda NINGUN grupo, se dice: un contenedor vacio no es una
+     respuesta, y ademas deja la pagina sin nada donde mirar. */
+  .tools-empty {
+    margin: 0;
+    padding: 1.5rem 0;
+    color: var(--rm-muted, #5b6b7d);
+    font-size: 0.95rem;
+  }
 
   .hero { margin-bottom: 2rem; }
   .page-tagline {

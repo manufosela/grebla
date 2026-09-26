@@ -30,6 +30,7 @@ setTimeout(() => {
 }, 10_000);
 const tools = document.getElementById('tenant-tools');
 const hubBar = document.getElementById('hub-bar');
+const toolsEmpty = document.getElementById('tools-empty');
 const adminLink = document.getElementById('admin-link');
 // La administración se abre en VENTANA APARTE, así que la vista de esta ventana
 // NO se toca: no has cambiado de vista, has abierto otra cosa. Antes era una
@@ -147,6 +148,9 @@ function showGroups({ canAdmin }) {
   for (const grupo of tools?.querySelectorAll('.tool-group') ?? []) {
     grupo.toggleAttribute('hidden', !visibles.has(grupo.dataset.group));
   }
+  // Sin ningun grupo, se dice. Un contenedor vacio no es una respuesta: deja la
+  // pagina sin nada donde mirar y sin saber si falta algo o falla algo.
+  toolsEmpty?.toggleAttribute('hidden', visibles.size > 0);
   adminLink?.toggleAttribute('hidden', !canAdmin);
   // La barra entera se oculta sin enlace: una franja vacía solo añade ruido.
   hubBar?.toggleAttribute('hidden', !canAdmin);
