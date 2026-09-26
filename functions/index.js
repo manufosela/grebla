@@ -8,7 +8,6 @@
  */
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { randomBytes } from 'node:crypto';
@@ -31,7 +30,6 @@ import {
 } from './motivatorsAggregate.js';
 import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody, sanitizeParticipantMeta } from './survey.js';
 import { sendResend } from './resend.js';
-import { getPortalDb, portalConfigured, publishSquadMetrics } from './portal.js';
 
 initializeApp();
 
@@ -617,10 +615,6 @@ const SURVEY_SALT = defineSecret('SURVEY_SALT');
 // API key de Resend (https://resend.com) para el envío de correos de encuestas.
 // Debe definirse ANTES de las Cloud Functions que la usan (evita TDZ al cargar).
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
-// Clave (JSON) de la service account del portal de management (tribbu-dev-portal),
-// para el push periódico de métricas DORA/LEAN. Solo configurada en la instancia
-// que alimenta al portal; en otras (demo) es un placeholder y el push se omite.
-const PORTAL_SA_KEY = defineSecret('PORTAL_SA_KEY');
 const MAIL_FROM = 'Encuestas TRIBBU <encuestas@send.tribbu.io>';
 
 /** Carga la encuesta abierta de un token y las respuestas previas (para editar). */
@@ -2593,26 +2587,28 @@ export const syncMemberRegistry = onDocumentWritten(
   },
 );
 
-/**
- * Push periódico (semanal, GCP) de las métricas DORA/LEAN por squad al Firestore
- * del portal de management (proyecto `tribbu-dev-portal`, distinto del de GREBLA).
- * Usa una SEGUNDA app de Firebase Admin nombrada con la credencial del secret
- * `PORTAL_SA_KEY`; escribe solo `metrics_dora`/`metrics_lean`. En instancias sin
- * portal configurado (el placeholder no parsea a la SA del portal) se omite.
+/*
+ * EL PUENTE SE INVIERTE (RMR-TSK-0582, 26-sep-2026).
+ *
+ * Aquí vivía `pushMetricsToPortal`, un cron semanal que publicaba las métricas
+ * DORA/LEAN por squad en el Firestore del portal de management. Se retira, y el
+ * motivo no es técnico:
+ *
+ *  - El portal YA posee el dato crudo y lo sincroniza a diario (los PRs de
+ *    GitHub y los issues de Linear). Dos ingestas sobre las mismas fuentes
+ *    acaban discrepando, y calcular le toca a quien posee el dato.
+ *  - Lo que publicábamos no servía: `metrics_dora` nunca recibió un solo
+ *    documento, y la serie de `metrics_lean` repetía el valor actual ocho veces
+ *    hacia atrás. La página del portal llevaba meses pintando una recta que no
+ *    significaba nada y nadie lo detectó.
+ *  - Los squads que describía ya no existen: en TRIBBU hay un solo equipo y la
+ *    unidad que manda es el repositorio.
+ *
+ * GREBLA sigue calculando lo suyo para SUS pantallas —esto solo era el envío
+ * hacia fuera— y pasará a leer del portal cuando exista su función de lectura.
+ * El secreto PORTAL_SA_KEY se conserva hasta entonces, por si hiciera falta
+ * volver atrás; sin cron, no se usa.
  */
-export const pushMetricsToPortal = onSchedule(
-  { schedule: 'every monday 06:00', timeZone: 'Europe/Madrid', region: 'europe-west1', secrets: [PORTAL_SA_KEY] },
-  async () => {
-    const saKeyJson = PORTAL_SA_KEY.value();
-    if (!portalConfigured(saKeyJson)) {
-      logger.info('Portal no configurado en esta instancia: se omite el push de métricas.');
-      return;
-    }
-    const nowIso = new Date().toISOString();
-    const results = await publishSquadMetrics({ greblaDb: getFirestore(), portalDb: getPortalDb(saKeyJson), nowIso });
-    logger.info('Push de métricas al portal completado', results);
-  },
-);
 
 /**
  * Invitar a una persona a un carpool (shippooling) por su EMAIL (RMR-PCS-0029 · F3).
