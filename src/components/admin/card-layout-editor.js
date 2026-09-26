@@ -9,7 +9,13 @@
  * desaparece sin dejar una fila fantasma que no se pueda quitar.
  *
  * Lo que aquí se decide es el ORDEN, no quién ve qué. Cada persona sigue viendo
- * únicamente sus tarjetas; lo que cambia es en qué posición relativa las ve.
+ * únicamente sus tarjetas; lo que cambia es en qué posición relativa las ve. Por
+ * eso la lista incluye tarjetas que quien administra quizá no vea nunca —van
+ * marcadas—: si solo se listara lo propio, no se podrían colocar las de otros.
+ *
+ * El inicio se muestra AGRUPADO como se ve de verdad (RMR-TSK-0576), y se ordena
+ * dentro de cada grupo. Enseñarlo como una lista plana haría creer que subir una
+ * tarjeta del todo la lleva arriba del inicio, cuando solo la sube en su grupo.
  */
 import { LitElement, html, css } from 'lit';
 import { orderedKeys, moveKey } from '../../tools/admin/domain/cardLayout.js';
@@ -64,6 +70,19 @@ export class CardLayoutEditor extends LitElement {
       cursor: pointer; color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; line-height: 1; }
     .star[aria-pressed="true"] { color: var(--rm-on-accent, #fff); background: var(--gr-teal, #2a9d8f); border-color: var(--gr-teal, #2a9d8f); }
     .star:focus-visible, select:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    /* La numeracion se reinicia en cada grupo: subir y bajar solo mueven dentro
+       del grupo, asi que un contador corrido prometeria un orden global que no
+       existe. */
+    .group-head { padding: 0.5rem 0.9rem 0.3rem; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--rm-muted, #5b6b7d); background: var(--rm-surface-hover, #f6f9fa);
+      counter-reset: pos; }
+    .group-head + li { border-top: 1px solid var(--rm-border, #eef0f2); }
+    /* Marca de «esta no la ve todo el mundo»: explica por que aparece en la
+       lista una tarjeta que quien administra quiza no vea nunca. */
+    .only { font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 999px;
+      background: color-mix(in srgb, var(--gr-navy, #1e3a5f) 10%, var(--rm-surface, #fff));
+      color: var(--rm-muted, #5b6b7d); white-space: nowrap; }
+    .note { margin: 0.8rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); line-height: 1.5; }
   `;
 
   constructor() {
@@ -98,12 +117,42 @@ export class CardLayoutEditor extends LitElement {
     return orderedKeys(present, this.layout?.[surface]);
   }
 
+  /**
+   * Las claves repartidas por grupo, en el orden en que se ven. Una superficie
+   * sin grupos —el panel— devuelve un unico bloque sin titulo.
+   *
+   * Los bloques salen del GRUPO de cada tarjeta, no de tramos contiguos del
+   * orden guardado: ese orden es una lista plana y puede venir de antes de que
+   * hubiera grupos, asi que por tramos un mismo grupo saldria partido en varios
+   * bloques con el mismo titulo.
+   *
+   * @returns {{ label: string|null, keys: string[] }[]}
+   */
+  _blocks(surface) {
+    const cards = this.cards?.[surface] ?? [];
+    const porClave = new Map(cards.map((c) => [c.key, c]));
+    const bloques = new Map();
+    for (const key of this._keys(surface)) {
+      const card = porClave.get(key);
+      const label = card?.groupLabel ?? null;
+      if (!bloques.has(label)) bloques.set(label, { label, index: card?.groupIndex ?? 0, keys: [] });
+      bloques.get(label).keys.push(key);
+    }
+    return [...bloques.values()].toSorted((a, b) => a.index - b.index);
+  }
+
   _label(surface, key) {
     return (this.cards?.[surface] ?? []).find((c) => c.key === key)?.label ?? key;
   }
 
   _move(surface, key, delta) {
-    this.layout = { ...this.layout, [surface]: moveKey(this._keys(surface), key, delta) };
+    // Se mueve dentro de SU bloque y se rehace el orden completo concatenando
+    // los bloques: mover sobre la lista plana cruzaria de grupo, y el inicio no
+    // mueve tarjetas de grupo.
+    const bloques = this._blocks(surface).map((b) => (
+      b.keys.includes(key) ? { ...b, keys: moveKey(b.keys, key, delta) } : b
+    ));
+    this.layout = { ...this.layout, [surface]: bloques.flatMap((b) => b.keys) };
     this._saved = false;
   }
 
@@ -167,28 +216,43 @@ export class CardLayoutEditor extends LitElement {
         </button>
         ${this._saved ? html`<span class="ok">Guardado. Lo ve toda la organización.</span>` : null}
         ${this._error ? html`<span class="error">${this._error}</span>` : null}
-      </div>`;
+      </div>
+      <p class="note">
+        Aquí están TODAS las tarjetas, no solo las que tú ves: por eso aparecen algunas
+        marcadas. Colocarlas no cambia quién las ve — eso lo decide la política de cada
+        herramienta — sino en qué posición las ve quien tenga acceso.
+      </p>`;
   }
 
   _renderSurface(surface, title) {
-    const keys = this._keys(surface);
+    const bloques = this._blocks(surface);
+    const total = bloques.reduce((n, b) => n + b.keys.length, 0);
     return html`
       <section>
         <h2>${title}</h2>
-        ${keys.length === 0
+        ${total === 0
           ? html`<p class="empty">No hay tarjetas que ordenar.</p>`
-          : html`<ol>${keys.map((key, i) => this._renderItem(surface, key, i, keys.length))}</ol>`}
+          : html`<ol>${bloques.map((b) => this._renderBlock(surface, b))}</ol>`}
       </section>`;
+  }
+
+  /** Un grupo con su titulo; el panel no tiene grupos y va sin titulo. */
+  _renderBlock(surface, bloque) {
+    const filas = bloque.keys.map((key, i) => this._renderItem(surface, key, i, bloque.keys.length));
+    if (!bloque.label) return filas;
+    return html`<li class="group-head" aria-hidden="true">${bloque.label}</li>${filas}`;
   }
 
   _renderItem(surface, key, index, total) {
     const label = this._label(surface, key);
     const estilo = this._styleOf(surface, key);
+    const card = (this.cards?.[surface] ?? []).find((c) => c.key === key);
     return html`
       <li>
         <span class="pos" aria-hidden="true"></span>
         <span class="swatch sw-${estilo.style}" aria-hidden="true"></span>
         <span class="label">${label}</span>
+        ${card?.only ? html`<span class="only" title="No la ve todo el mundo">${card.only}</span>` : null}
         ${this._renderStylePicker(surface, key, label, estilo)}
         <button class="star" type="button" aria-pressed=${estilo.featured ? 'true' : 'false'}
           aria-label="Destacar ${label}"
