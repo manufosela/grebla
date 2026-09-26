@@ -3,9 +3,8 @@
  * contextos que NO tienen la persistencia del tool LEAN — en concreto la
  * configuración de repos DORA (RMR-TSK-0362), que necesita ofrecer los squads
  * (equipos) y chapters (gremios) YA definidos en lugar de texto libre. Así DORA
- * agrega por las MISMAS unidades que LEAN, y el push al portal puede resolver el
- * equipo de un repo contra la unidad que lo mide, que es quien guarda la clave
- * del subdominio (ver functions/portal.js: subdomainKeyForTeam).
+ * agrega por las MISMAS unidades que LEAN, y el equipo de un repo se resuelve
+ * contra la unidad que lo mide.
  *
  * Las reglas permiten leer /leanTeams a cualquier usuario autenticado, así que
  * cada editor puede elegir de todo el catálogo de la organización.
@@ -17,7 +16,6 @@ const byName = (a, b) => a.localeCompare(b, 'es');
 
 /**
  * Nombre visible de una unidad LEAN: `name` y, si falta, su `linearLabel`.
- * Espeja el criterio del push al portal para que el slug coincida.
  * @param {{ name?: string, linearLabel?: string }|null|undefined} unit
  * @returns {string}
  */
