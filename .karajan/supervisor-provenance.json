@@ -1,6 +1,6 @@
 {
-  "kj_version": "4.31.0",
-  "generated_at": "2026-09-22T05:16:05.755Z",
+  "kj_version": "4.33.0",
+  "generated_at": "2026-09-26T10:27:33.809Z",
   "generation": {
     "profile": "standard",
     "cmds": {},
@@ -23,7 +23,7 @@
     },
     {
       "file": ".karajan/hooks/pre-commit",
-      "sha256": "e86f18668fb9069d990c51961dde4994a7cd4be40866433e481c03784dac05fc"
+      "sha256": "2df4c64a0259117f1f04feda54bacbfdc010af201c627afe951de9dc9ebf13ee"
     },
     {
       "file": ".karajan/hooks/pre-push",
@@ -35,11 +35,11 @@
     }
   ],
   "signature": {
-    "cid": "98cffb74e42d35026d446ab4fd8d8980",
-    "nonce": "cfb5f7a41bcc311b230fc1ad460614ec",
+    "cid": "568aa2ba45fc2596a324f954e30e9077",
+    "nonce": "f1fba01ccc9920acbdc24e91d9cfdd61",
     "project": "grebla-app",
-    "filesHash": "a6039b13a5e7f02d8d3ca949cd0ca0bfe9e8aac9d47070d79203c81076f1faa4",
+    "filesHash": "b0ae9854df5656f155cc5e3891fb59993cc6e207c1767b8ddd40481de46aff39",
     "signer": "EgMc2b95g5nUh8e6LDCeLjv7G69cQaszUCIy+3aLpPQ=",
-    "signature": "BSgIhzrlzVc+bP/qXRQFMWIhLA42PYSu9j/Zwh3zDL80JWKua/Ah6rH04QIwrv3gRslVVCwV7Wk2M4ZkZwezAw=="
+    "signature": "091CcD92Cv7lu7fKaIS+Ve+qB57tc4t0IqPYZtJ+CeyXR3eAaPCB2tkw7DDczkTSxcr2XZfJyypMmzUpujNzBw=="
   }
 }
