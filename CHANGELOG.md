@@ -15,6 +15,29 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.218.0] - 2026-09-26
+
+### Cambiado
+
+- **El inicio se agrupa por propósito**, en cinco grupos con encabezado
+  discreto: Lo tuyo, Tu equipo, Cómo estamos, Cómo entregamos y La casa. Con 18
+  herramientas, saber a quién sirve cada una ya no ayudaba a encontrarla; saber
+  para qué sirve, sí.
+
+  **Desaparecen las pestañas TRIBBU / Ingeniería.** Dos ejes de agrupación a la
+  vez obligan a adivinar en qué pestaña vive cada cosa antes de buscar el grupo.
+  La decisión queda registrada en un ADR, y el de las tres capas pasa a
+  sustituido.
+
+  Un grupo sin tarjetas visibles no se pinta, y si no queda ninguna se dice, en
+  vez de dejar un hueco. Una herramienta sin grupo sigue apareciendo: el código
+  manda sobre qué hay, y olvidar el grupo no puede esconder nada.
+
+- **El editor del orden muestra el inicio agrupado**, se ordena dentro de cada
+  grupo y la numeración se reinicia en cada uno. Las tarjetas que no ve todo el
+  mundo salen marcadas: esa lista son todas las tarjetas, no las de quien
+  ordena.
+
 ## [1.217.0] - 2026-09-25
 
 ### Añadido
