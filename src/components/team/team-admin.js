@@ -4,8 +4,10 @@
  * Dos pestañas, porque son dos cosas distintas y ninguna es uso diario:
  *  - «Bajas»: quién ha dejado el equipo. Es gestión, y estaba a la vista de
  *    cualquiera que abriera la herramienta.
- *  - «Configuración»: la cadencia de los avisos de silencio, el umbral de bus
- *    factor y el estado del almacenamiento. Se toca una vez y se olvida.
+ *  - «Avisos y almacenamiento»: la cadencia de los avisos de silencio, el umbral
+ *    de bus factor y el estado del almacenamiento. Se toca una vez y se olvida.
+ *    Se llamaba «Configuración», que no decía de QUÉ ni PARA QUÉ: un rótulo
+ *    genérico obliga a abrirlo para saber si es lo que buscas (RMR-TSK-0585).
  *
  * No reimplementa nada: monta los mismos componentes que vivían en las pestañas
  * de la herramienta. Lo que cambia es dónde están, no lo que hacen.
@@ -16,7 +18,7 @@ import './team-settings.js';
 
 const TABS = [
   { id: 'departures', label: 'Bajas' },
-  { id: 'settings', label: 'Configuración' },
+  { id: 'settings', label: 'Avisos y almacenamiento' },
 ];
 
 export class TeamAdmin extends LitElement {
