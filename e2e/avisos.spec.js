@@ -11,8 +11,9 @@ import { test, expect, signInAs } from './fixtures.js';
 
 test('lo irreversible se avisa, no se susurra', async ({ page }) => {
   await signInAs(page, 'superadmin');
-  await page.goto('/tools/team');
-  await page.getByRole('button', { name: 'Bajas' }).click();
+  // Bajas se mudo a la administracion de Equipo (RMR-TSK-0586).
+  await page.goto('/tools/team/admin');
+  await page.getByRole('tab', { name: 'Bajas' }).click();
 
   const aviso = page.locator('team-departures .info-note');
   await expect(aviso).toContainText('irreversible');
@@ -23,8 +24,8 @@ test('lo irreversible se avisa, no se susurra', async ({ page }) => {
 
 test('la descripción de un ajuste sigue siendo nota al pie', async ({ page }) => {
   await signInAs(page, 'superadmin');
-  await page.goto('/tools/team');
-  await page.getByRole('button', { name: 'Ajustes' }).click();
+  await page.goto('/tools/team/admin');
+  await page.getByRole('tab', { name: 'Configuración' }).click();
 
   // Un aviso por cada cosa que se puede explicar convertiría la página en ruido:
   // esto describe qué hace una opción, no advierte de nada.
