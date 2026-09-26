@@ -94,7 +94,12 @@ const byGroup = GROUP_IDS
           <div class="tools">
             {cards.map((tool) => (
               <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-personal={tool.personal ? 'true' : undefined} data-manages={tool.manages ? 'true' : undefined} data-own={tool.personal ? 'true' : undefined}>
-                <h3>{tool.name}</h3>
+                <h3>
+                  {tool.name}
+                  {(tool.manages || TOOL_ID[tool.href] === 'team') && (
+                    <span class="only" title="Esta herramienta solo la ven quienes lideran un equipo">solo quien lidera</span>
+                  )}
+                </h3>
                 <p>{tool.description}</p>
                 <span class="cta">Abrir →</span>
               </a>
@@ -208,7 +213,7 @@ const byGroup = GROUP_IDS
      tuyo— se distinguen sin gritar: el mismo card con el acento marcado arriba.
      Nada de otro color de fondo, que rompería la rejilla (RMR-TSK-0460). */
   .tool-card[data-own] { border-top: 3px solid var(--rm-accent); }
-  .tool-card[data-own] h2::after {
+  .tool-card[data-own] h3::after {
     content: '';
     display: inline-block;
     width: 0.4rem; height: 0.4rem; margin-left: 0.45rem; vertical-align: middle;
@@ -216,12 +221,21 @@ const byGroup = GROUP_IDS
   }
   /* La de gobierno, en coral: distinta del verde de las herramientas. */
   .tool-card[data-admin-only] { border-top-color: var(--rm-admin); }
-  .tool-card[data-admin-only] h2::after { background: var(--rm-admin); }
+  .tool-card[data-admin-only] h3::after { background: var(--rm-admin); }
   .tool-card[data-admin-only]:hover { border-color: var(--rm-admin); }
   .tool-card[data-admin-only] .cta { color: var(--rm-admin); }
   /* La tarjeta pasa a h3: el h2 es ahora el titulo del grupo, y saltarse un
      nivel rompe el esquema de quien navega con lector de pantalla. */
-  .tool-card h3 { margin: 0; font-size: 1.15rem; }
+  .tool-card h3 { margin: 0; font-size: 1.15rem; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  /* Marca de ALCANCE: esta tarjeta no la ve todo el mundo. Va pegada al nombre
+     porque es parte de lo que la tarjeta es, no una nota al pie. Discreta a
+     proposito: informa a quien gestiona, no decora. */
+  .tool-card .only {
+    font-size: 0.66rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+    padding: 0.12rem 0.45rem; border-radius: 999px; white-space: nowrap;
+    color: var(--rm-muted, #5b6b7d);
+    background: color-mix(in srgb, var(--gr-navy, #1e3a5f) 10%, var(--rm-surface, #fff));
+  }
   .tool-card p { margin: 0; color: var(--rm-muted); font-size: 0.9rem; }
   .tool-card .cta { margin-top: auto; color: var(--rm-accent); font-weight: 700; font-size: 0.9rem; }
   .tool-card.placeholder { opacity: 0.6; border-style: dashed; cursor: default; }
