@@ -15,6 +15,20 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.222.0] - 2026-09-26
+
+### Cambiado
+
+- **El rótulo de Equipo usa el nombre que le da cada casa.** Con «Cuando se ve a
+  todo el mundo, se llama» configurado en Identidad, ver más allá de tu gente se
+  llama así —«Toda la tribbu», por ejemplo— en vez de «Toda la organización». Sin
+  configurar, el defecto del producto sigue ahí; «Mi equipo» es tuyo lo llame como
+  lo llame la organización.
+
+  La identidad se lee junto al resto para poner el rótulo **una sola vez**:
+  ponerlo por defecto y corregirlo después haría parpadear el título, que es
+  medio bug que ya evitaba servir el nombre neutro.
+
 ## [1.221.0] - 2026-09-26
 
 ### Añadido

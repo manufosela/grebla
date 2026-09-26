@@ -13,6 +13,7 @@ import { branchScopeFor, canGovern, hasAccess } from '../lib/accessRoles.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
 import { teamHeading } from '../tools/team/domain/teamNaming.js';
+import { getOrgIdentity } from '../lib/orgConfig.js';
 
 const app = document.querySelector('team-app');
 
@@ -21,9 +22,10 @@ const app = document.querySelector('team-app');
  * (RMR-TSK-0585). Se llama en cuanto el alcance está resuelto, antes de pedir
  * datos: el nombre no debería esperar a que cargue nadie.
  * @param {'mine'|'all'} scope
+ * @param {{ everyoneLabel?: string }} [identity] cómo llama esta casa a mirar más allá de un equipo
  */
-function applyHeading(scope) {
-  const { title, lead } = teamHeading(scope);
+function applyHeading(scope, identity) {
+  const { title, lead } = teamHeading(scope, identity);
   const h1 = document.querySelector('#team-title');
   const p = document.querySelector('#team-lead');
   if (h1) h1.textContent = title;
@@ -46,10 +48,11 @@ onUserChanged(async (user) => {
     // que le reportan), así que se cargan ANTES de construir el container. Los
     // heads (supermanagers) resuelven el «superior» de un manager en la lista y
     // el selector de Transferir de un manager (RMR-TSK-0367).
-    const [members, heads, framework] = await Promise.all([
+    const [members, heads, framework, identity] = await Promise.all([
       listLeaders(),
       listSupermanagers(),
       getFramework(),
+      getOrgIdentity(),
     ]);
     // Ámbito con los dos ejes (RMR-TSK-0309): quien gobierna la instancia (admin)
     // Y ADEMÁS lidera un equipo/rama puede ELEGIR entre ver lo suyo o toda la
@@ -65,8 +68,11 @@ onUserChanged(async (user) => {
     const seeAll = scope === 'all';
     // El nombre dice a quién estás viendo, y eso ya se sabe aquí: un admin puro
     // entra con 'all' sin control que tocar, y antes le salía «Tu equipo» encima
-    // de la organización entera.
-    applyHeading(seeAll ? 'all' : 'mine');
+    // de la organización entera. La identidad viaja en el mismo `Promise.all`
+    // que lo demás para poner el rótulo UNA vez: ponerlo primero por defecto y
+    // corregirlo después haría parpadear el título, que es medio bug que
+    // intentábamos evitar sirviendo el nombre neutro.
+    applyHeading(seeAll ? 'all' : 'mine', identity);
     // Rama transitiva (RMR-TSK-0421): TODO líder con managers debajo ve su
     // subárbol, no solo el supermanager. Solo cuando mira lo suyo (con «ver
     // todo» sobra). Sin nadie que le reporte → null (ámbito simple de siempre).

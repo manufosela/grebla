@@ -80,6 +80,34 @@ test('cada campo dice qué pasa si lo dejas en blanco', async ({ page }) => {
   await expect(identidad).toContainText('Vacío: no se muestra');
 });
 
+test('lo que se escribe en Identidad se lee en Equipo', async ({ page }) => {
+  // El círculo entero (RMR-TSK-0597): configurarlo no vale de nada si el rótulo
+  // sigue diciendo lo del producto.
+  await conConfigIntacta(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin/organizacion#identidad');
+
+    const identidad = panel(page).locator('org-identity');
+    await expect(identidad).toBeVisible({ timeout: 20_000 });
+    await identidad.getByLabel('Cuando se ve a todo el mundo, se llama').fill('Toda la tribbu');
+    await identidad.getByRole('button', { name: 'Guardar' }).click();
+    await expect(identidad.getByText('Guardado.')).toBeVisible();
+
+    await page.goto('/tools/team');
+    await expect(page.locator('#team-title')).toHaveText('Toda la tribbu', { timeout: 20_000 });
+  });
+});
+
+test('sin nombre propio, Equipo sigue diciendo el del producto', async ({ page }) => {
+  await conConfigIntacta(async () => {
+    await db().doc('config/org').set({ everyoneLabel: '' }, { merge: true });
+    await signInAs(page, 'superadmin');
+    await page.goto('/tools/team');
+
+    await expect(page.locator('#team-title')).toHaveText('Toda la organización', { timeout: 20_000 });
+  });
+});
+
 test('quien no gobierna no llega a la identidad', async ({ page }) => {
   await signInAs(page, 'engineer');
   await page.goto('/admin/organizacion#identidad');
