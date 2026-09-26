@@ -88,7 +88,9 @@ test('las dos viven en TRIBBU: cualquier manager hace 1:1, no solo ingeniería',
     await signInAs(page, 'head');
     await page.goto('/');
 
-    await expect(mios(page)).toHaveAttribute('data-layer', 'tribbu');
-    await expect(delEquipo(page)).toHaveAttribute('data-layer', 'tribbu');
+    // Cada una en su grupo, que es justo lo que las distingue: los mios son
+    // mios; los del equipo son de llevar a la gente.
+    await expect(mios(page).locator('xpath=ancestor::section[@data-group]')).toHaveAttribute('data-group', 'tuyo');
+    await expect(delEquipo(page).locator('xpath=ancestor::section[@data-group]')).toHaveAttribute('data-group', 'equipo');
   });
 });

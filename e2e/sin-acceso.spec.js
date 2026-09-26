@@ -17,7 +17,7 @@ test('quien entra sin ficha ni rol ve el aviso y ninguna herramienta', async ({ 
   await expect(page.getByText('Inicia sesión arriba a la derecha')).toBeHidden();
   // El hub entero queda oculto: ni una tarjeta a la vista.
   await expect(page.locator('#tenant-tools')).toBeHidden();
-  await expect(page.locator('#hub-layers')).toBeHidden();
+  await expect(page.locator('#hub-bar')).toBeHidden();
 });
 
 test('sin sesión se sigue viendo la portada de siempre', async ({ page }) => {

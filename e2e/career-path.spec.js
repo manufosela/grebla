@@ -91,8 +91,8 @@ test('es una herramienta del hub, en la pestaña de Ingeniería', async ({ page 
     await page.goto('/');
 
     const tarjeta = page.locator('[data-tool-id="careerpath"]');
-    await expect(tarjeta).toHaveAttribute('data-layer', 'ingenieria');
-    await page.locator('#hub-layers .layer-tabs button:not([hidden])', { hasText: 'Ingeniería' }).click();
+    // Vive en «Lo tuyo»: es la referencia que consultas sobre TU carrera.
+    await expect(tarjeta.locator('xpath=ancestor::section[@data-group]')).toHaveAttribute('data-group', 'tuyo');
     await expect(tarjeta).toBeVisible();
 
     await tarjeta.click();

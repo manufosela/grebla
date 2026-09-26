@@ -20,14 +20,31 @@ const ALL_CLASSES = [...Object.values(CARD_STYLES).map((s) => s.className), 'cs-
  * el del código—: una pantalla sin tarjetas por un fallo de lectura sería mucho
  * peor que un orden que no se aplica.
  *
- * @param {Element|null} box contenedor de las tarjetas
+ * Acepta VARIAS cajas porque el inicio reparte las tarjetas en grupos: el orden
+ * manda dentro de cada grupo, no entre grupos. Mover una tarjeta al contenedor
+ * de todos la sacaria de su grupo.
+ *
+ * @param {Element|Iterable<Element>|null} boxes contenedor o contenedores
  * @param {'home'|'admin'} surface
- * @param {string} selector con el que encontrarlas dentro
+ * @param {string} selector con el que encontrar las tarjetas dentro
  * @param {(el: Element) => string|undefined|null} keyOf clave de cada tarjeta
  */
-export async function applyCardOrder(box, surface, selector, keyOf) {
-  if (!box) return;
+export async function applyCardOrder(boxes, surface, selector, keyOf) {
+  const cajas = toBoxes(boxes);
+  if (cajas.length === 0) return;
+  // Una sola lectura para todas las cajas: el orden es el mismo documento.
   const layout = await getCardLayout();
+  for (const box of cajas) applyToBox(box, layout, surface, selector, keyOf);
+}
+
+/** Un elemento, una lista de elementos o nada. */
+function toBoxes(boxes) {
+  if (!boxes) return [];
+  if (boxes instanceof Element) return [boxes];
+  return [...boxes];
+}
+
+function applyToBox(box, layout, surface, selector, keyOf) {
   const orden = layout[surface] ?? [];
   const estilos = layout.styles?.[surface] ?? {};
 

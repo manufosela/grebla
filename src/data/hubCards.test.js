@@ -8,15 +8,16 @@
  */
 import { describe, it, expect } from 'vitest';
 import { HUB_TOOLS, TOOL_ID, ADMIN_CARDS } from './hubCards.js';
+import { GROUP_IDS } from '../lib/hubGroups.js';
 
 describe('las tarjetas del inicio', () => {
   it('hay unas cuantas', () => {
     expect(HUB_TOOLS.length).toBeGreaterThan(10);
   });
 
-  it('todas tienen nombre, destino, capa y descripción', () => {
+  it('todas tienen nombre, destino, grupo y descripción', () => {
     const rotas = HUB_TOOLS
-      .filter((t) => !t.name || !t.href || !t.layer || !t.description)
+      .filter((t) => !t.name || !t.href || !t.group || !t.description)
       .map((t) => t.name ?? t.href ?? '(sin nombre)');
     expect(rotas).toEqual([]);
   });
@@ -26,9 +27,16 @@ describe('las tarjetas del inicio', () => {
     expect(hrefs.length).toBe(new Set(hrefs).size);
   });
 
-  it('la capa es una de las que existen', () => {
-    const fuera = HUB_TOOLS.filter((t) => !['tribbu', 'ingenieria'].includes(t.layer)).map((t) => t.name);
+  it('el grupo es uno de los que existen', () => {
+    // Un grupo mal escrito no rompe nada —la tarjeta cae en el de cola—, pero
+    // acaba en «Otras herramientas» sin que nadie entienda por que.
+    const fuera = HUB_TOOLS.filter((t) => !GROUP_IDS.includes(t.group)).map((t) => t.name);
     expect(fuera).toEqual([]);
+  });
+
+  it('ninguna se queda en el grupo de cola: el de cola es para despistes, no un destino', () => {
+    const enCola = HUB_TOOLS.filter((t) => t.group === 'otras').map((t) => t.name);
+    expect(enCola).toEqual([]);
   });
 });
 
