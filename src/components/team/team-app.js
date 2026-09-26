@@ -329,7 +329,7 @@ export class TeamApp extends LitElement {
         ${this._tab('people', 'Personas')}
         ${this._tab('career', 'Carrera')}
         ${this._tab('departures', 'Bajas')}
-        ${this._tab('team', 'Equipo')}
+        ${this._tab('team', 'Cobertura y riesgos')}
         ${this._tab('settings', 'Ajustes')}
       </nav>
       ${this._renderSections()}
