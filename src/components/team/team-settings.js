@@ -1,18 +1,22 @@
 /**
  * <team-settings>
- * Sección Ajustes: catálogo de áreas de conocimiento (CRUD por owner) y
- * configuración de la organización (cadencia de los avisos de silencio y umbral
- * de bus factor). El estado de almacenamiento de ficheros se muestra de forma
- * informativa (OFF por defecto en el MVP).
+ * Configuración de la herramienta Equipo: cadencia de los avisos de silencio,
+ * umbral de bus factor y estado del almacenamiento de ficheros (informativo).
+ *
+ * Los catálogos de áreas, gremios y labels VIVIAN TAMBIEN aquí y se han
+ * retirado (RMR-TSK-0586): son los mismos documentos que gestiona
+ * /admin/organizacion, con el mismo componente y el mismo alcance. En
+ * produccion no habia ni una sola entrada de ambito personal —las 31 son de
+ * organizacion—, asi que no era una vista distinta: era la misma pantalla
+ * duplicada en dos sitios, y eso obliga a adivinar cual manda.
  *
  * Propiedades:
- *  - persistence: PersistencePort (inyectado por <team-app>)
+ *  - persistence: PersistencePort
  */
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
 import { getSettings, updateSettings } from '../../tools/team/application/usecases/index.js';
 import { LEVELS } from '../../tools/team/domain/levels.js';
-import '../catalog-manager.js';
 
 /**
  * Sub-pestañas de la sección Ajustes. El orden define el recorrido con las
@@ -20,9 +24,6 @@ import '../catalog-manager.js';
  * @type {ReadonlyArray<{ id: string, label: string }>}
  */
 const SUBTABS = [
-  { id: 'areas', label: 'Áreas de conocimiento' },
-  { id: 'gremios', label: 'Gremios' },
-  { id: 'labels', label: 'Labels' },
   { id: 'cadencia', label: 'Cadencia y riesgo' },
   { id: 'ficheros', label: 'Ficheros' },
 ];
@@ -104,7 +105,7 @@ export class TeamSettings extends LitElement {
     this.loading = true;
     this.error = '';
     /** @type {string} sub-pestaña activa (estado local, no usa el hash de la URL) */
-    this._subtab = 'areas';
+    this._subtab = SUBTABS[0].id;
     this._loaded = false;
   }
 
@@ -119,8 +120,7 @@ export class TeamSettings extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      // Los catálogos (áreas/gremios/labels) los carga y gestiona <catalog-manager>;
-      // aquí solo se cargan los ajustes de la organización.
+      // Solo los ajustes de la organizacion: los catalogos viven en el panel.
       this.settings = await getSettings(this.persistence);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo cargar la configuración.';
@@ -205,12 +205,9 @@ export class TeamSettings extends LitElement {
     if (this.loading) return skeletonLines(4);
     const active = this._subtab;
     const panel = {
-      areas: () => this._renderAreas(),
-      gremios: () => this._renderGuilds(),
-      labels: () => this._renderLabels(),
       cadencia: () => this._renderCadencia(),
       ficheros: () => this._renderFicheros(),
-    }[active] ?? (() => this._renderAreas());
+    }[active] ?? (() => this._renderCadencia());
     return html`
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
       ${this._renderSubtabs()}
@@ -224,58 +221,6 @@ export class TeamSettings extends LitElement {
         ${panel()}
       </div>
     `;
-  }
-
-  /** Sección de un catálogo (áreas/gremios/labels): hint + el componente único. */
-  _renderCatalogSection(kind, heading, hint, placeholder) {
-    return html`
-      <section>
-        <h2>${heading}</h2>
-        <p class="hint">${hint}</p>
-        <catalog-manager
-          .kind=${kind}
-          .placeholder=${placeholder}
-          .persistence=${this.persistence}
-          .isAdmin=${this.isAdmin}
-          .currentUid=${this.currentUid}
-          .withMeta=${kind === 'labels'}
-        ></catalog-manager>
-      </section>
-    `;
-  }
-
-  _renderAreas() {
-    return this._renderCatalogSection(
-      'areas',
-      'Áreas de conocimiento',
-      html`Unidad de dominio sobre la que mides el nivel (1–7) de cada persona y calculas el
-        <em>bus factor</em> (el riesgo si el experto se va). Ejemplos: Arquitectura, Frontend,
-        Infra/Cloud, Backend de pagos, Base de datos. Las <strong>globales</strong> las define
-        la organización; las que crees aquí son <strong>tuyas</strong>.`,
-      'Nueva área (p. ej. Pagos)',
-    );
-  }
-
-  _renderGuilds() {
-    return this._renderCatalogSection(
-      'guilds',
-      'Gremios',
-      html`Tecnología o stack como etiqueta transversal: no se mide nivel, solo se asigna a la
-        persona. Ejemplos: JavaScript, PHP, Python, Kubernetes, React. Los <strong>globales</strong>
-        los define la organización; los que crees aquí son <strong>tuyos</strong>.`,
-      'Nuevo gremio (p. ej. Python)',
-    );
-  }
-
-  _renderLabels() {
-    return this._renderCatalogSection(
-      'labels',
-      'Labels',
-      html`Etiqueta libre para agrupar personas, por ejemplo por equipo o squad. Ejemplos:
-        Equipo Web, Squad Pagos, Guardia. Las <strong>globales</strong> las define la
-        organización; las que crees aquí son <strong>tuyas</strong>.`,
-      'Nuevo label (p. ej. Squad Pagos)',
-    );
   }
 
   /**

@@ -14,9 +14,7 @@ import { LitElement, html, css } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { skeletonBlock, skeletonLines } from '../app-skeleton.js';
 import './team-people.js';
-import './team-departures.js';
 import './team-person-detail.js';
-import './team-settings.js';
 import './team-overview.js';
 import './team-map.js';
 import './team-career.js';
@@ -29,7 +27,16 @@ import { getMyPerson } from '../../lib/engineer.js';
  * dimensiones— y era lo que más costaba encontrar: vivía detrás de Personas y
  * Carrera, así que había que saber que estaba ahí (RMR-TSK-0505).
  */
-const TEAM_TABS = ['map', 'people', 'career', 'departures', 'team', 'settings'];
+/*
+ * Bajas y Ajustes salieron de aqui (RMR-TSK-0586): son GESTION y vivian entre
+ * las pestanas de uso, al alcance de cualquiera que abriera la herramienta.
+ * Ahora estan en /tools/team/admin. Los hash antiguos siguen funcionando: se
+ * redirigen alli, para no romper un enlace guardado.
+ */
+const TEAM_TABS = ['map', 'people', 'career', 'team'];
+
+/** Secciones que se mudaron a la administracion, con su destino. */
+const MOVED_TABS = { departures: 'departures', settings: 'settings' };
 
 /** Sección con la que se abre la herramienta cuando el hash no dice otra cosa. */
 const DEFAULT_TAB = TEAM_TABS[0];
@@ -152,9 +159,15 @@ export class TeamApp extends LitElement {
     this._pendingPersonId = null;
     /** @type {string} sección a la que vuelve la ficha (de donde se abrió) */
     this._returnTo = DEFAULT_TAB;
+    if (MOVED_TABS[rawHash]) {
+      // Enlace guardado a una seccion que se mudo a la administracion: se le
+      // lleva alli. Nadie deberia reaprender sus favoritos porque hayamos
+      // movido una pantalla.
+      globalThis.location.replace(`/tools/team/admin#${MOVED_TABS[rawHash]}`);
+    }
     if (rawHash.startsWith(PERSON_HASH)) {
       // Deep-link a una ficha: se resuelve cuando `persistence` esté disponible.
-      /** @type {'people'|'map'|'departures'|'team'|'settings'|'person'} */
+      /** @type {'people'|'map'|'career'|'team'|'person'} */
       this.view = DEFAULT_TAB;
       this._pendingPersonId = decodeURIComponent(rawHash.slice(PERSON_HASH.length)) || null;
     } else {
@@ -328,9 +341,7 @@ export class TeamApp extends LitElement {
         ${this._tab('map', 'Mapa')}
         ${this._tab('people', 'Personas')}
         ${this._tab('career', 'Carrera')}
-        ${this._tab('departures', 'Bajas')}
         ${this._tab('team', 'Cobertura y riesgos')}
-        ${this._tab('settings', 'Ajustes')}
       </nav>
       ${this._renderSections()}
     `;
@@ -416,12 +427,8 @@ export class TeamApp extends LitElement {
           .framework=${this.framework}
           @open-person=${this._onOpenPerson}
         ></team-map>`;
-      case 'departures':
-        return html`<team-departures .persistence=${this.persistence}></team-departures>`;
       case 'team':
         return html`<team-overview .persistence=${this.persistence}></team-overview>`;
-      case 'settings':
-        return html`<team-settings .persistence=${this.persistence} .isAdmin=${this.isAdmin}></team-settings>`;
       default:
         return null;
     }

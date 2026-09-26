@@ -1,0 +1,48 @@
+---
+import Base from '../../../../layouts/Base.astro';
+
+/**
+ * Administración de la herramienta Equipo (RMR-TSK-0586).
+ *
+ * Aquí viven las dos cosas que eran GESTIÓN y estaban metidas entre las
+ * pestañas de uso: las bajas y la configuración de la herramienta. Mezclarlas
+ * con el día a día hacía dos cosas malas a la vez: ensuciaba la herramienta con
+ * lo que casi nadie toca, y dejaba las bajas al alcance de quien no gestiona.
+ *
+ * Los catálogos —áreas, gremios y labels— NO están aquí: ya se gestionan en
+ * Administración › Organización, y eran los mismos documentos.
+ */
+---
+
+<Base title="GREBLA — Administrar Equipo" requireAuth={true}>
+  <tool-nav href="/admin" name="Administrar Equipo" icon="👥"></tool-nav>
+
+  <p class="page-lead">
+    Las bajas del equipo y cómo se configura la herramienta. Los catálogos de áreas,
+    gremios y labels se gestionan en <a href="/admin/organizacion#areas">Organización</a>.
+  </p>
+
+  <p class="ta-denied" id="ta-denied" hidden>
+    No gestionas equipos, así que aquí no hay nada para ti. Tu equipo está en
+    <a href="/tools/team">Equipo</a>.
+  </p>
+
+  <team-admin></team-admin>
+</Base>
+
+<style>
+  .page-lead { max-width: 62ch; color: var(--rm-muted, #5b6b7d); margin-bottom: 1.5rem; }
+  .ta-denied {
+    max-width: 46rem; margin: 0 0 1.25rem; padding: 0.75rem 0.95rem;
+    border-radius: 10px; border: 1px solid var(--rm-info-border, #bfd6fb);
+    border-left: 4px solid var(--rm-info, #2563eb);
+    background: var(--rm-info-soft, #eff5ff); color: var(--rm-info-text, #1e3a8a);
+    font-size: 0.9rem; line-height: 1.5;
+  }
+  .ta-denied a, .page-lead a { color: inherit; text-decoration: underline; }
+</style>
+
+<script>
+  import '../../../../components/common/tool-nav.js';
+  import '../../../../client/teamAdmin.js';
+</script>
