@@ -17,7 +17,6 @@ import './team-people.js';
 import './team-person-detail.js';
 import './team-overview.js';
 import './team-map.js';
-import './team-career.js';
 import { listActivePeople } from '../../tools/team/application/usecases/index.js';
 import { getMyPerson } from '../../lib/engineer.js';
 
@@ -33,10 +32,20 @@ import { getMyPerson } from '../../lib/engineer.js';
  * Ahora estan en /tools/team/admin. Los hash antiguos siguen funcionando: se
  * redirigen alli, para no romper un enlace guardado.
  */
-const TEAM_TABS = ['map', 'people', 'career', 'team'];
+const TEAM_TABS = ['map', 'people', 'team'];
 
-/** Secciones que se mudaron a la administracion, con su destino. */
-const MOVED_TABS = { departures: 'departures', settings: 'settings' };
+/**
+ * Secciones que se fueron de aqui, con su destino completo. «Carrera» conto
+ * durante un tiempo la mitad de la historia —nivel, ciudadanias, certificados—
+ * mientras el Seguimiento del plan contaba la otra —por donde va, cuanto le
+ * dedica—: mirar a una persona obligaba a abrir las dos y cruzarlas a mano. Ahora
+ * hay una sola tabla, y esta ahi (RMR-TSK-0590).
+ */
+const MOVED_TABS = {
+  departures: '/tools/team/admin#departures',
+  settings: '/tools/team/admin#settings',
+  career: '/tools/career-map/admin',
+};
 
 /** Sección con la que se abre la herramienta cuando el hash no dice otra cosa. */
 const DEFAULT_TAB = TEAM_TABS[0];
@@ -50,7 +59,6 @@ const DEFAULT_TAB = TEAM_TABS[0];
 const RETURN_LABELS = {
   map: '← Volver al mapa',
   people: '← Volver a personas',
-  career: '← Volver a carrera',
 };
 
 /** Prefijo del hash que enlaza directamente a la ficha de una persona. */
@@ -66,9 +74,8 @@ export class TeamApp extends LitElement {
     members: { attribute: false },
     heads: { attribute: false },
     framework: { attribute: false },
-    /** Store de carrera y archipiélago para la pestaña «Carrera» (RMR-PCS-0029 · F2b). */
+    /** Store de carrera, para el atajo al plan de desarrollo desde Personas. */
     careerStore: { attribute: false },
-    archipelago: { attribute: false },
     view: { state: true },
     selected: { state: true },
     selectedSubtab: { state: true },
@@ -118,7 +125,6 @@ export class TeamApp extends LitElement {
     /** @type {import('../../tools/team/domain/ports.js').PersistencePort|null} */
     this.persistence = null;
     this.careerStore = null;
-    this.archipelago = null;
     this.storage = null;
     /** @type {string|null} */
     this.uid = null;
@@ -160,14 +166,14 @@ export class TeamApp extends LitElement {
     /** @type {string} sección a la que vuelve la ficha (de donde se abrió) */
     this._returnTo = DEFAULT_TAB;
     if (MOVED_TABS[rawHash]) {
-      // Enlace guardado a una seccion que se mudo a la administracion: se le
-      // lleva alli. Nadie deberia reaprender sus favoritos porque hayamos
-      // movido una pantalla.
-      globalThis.location.replace(`/tools/team/admin#${MOVED_TABS[rawHash]}`);
+      // Enlace guardado a una seccion que ya no vive aqui: se le lleva a su
+      // sitio. Nadie deberia reaprender sus favoritos porque hayamos movido una
+      // pantalla.
+      globalThis.location.replace(MOVED_TABS[rawHash]);
     }
     if (rawHash.startsWith(PERSON_HASH)) {
       // Deep-link a una ficha: se resuelve cuando `persistence` esté disponible.
-      /** @type {'people'|'map'|'career'|'team'|'person'} */
+      /** @type {'people'|'map'|'team'|'person'} */
       this.view = DEFAULT_TAB;
       this._pendingPersonId = decodeURIComponent(rawHash.slice(PERSON_HASH.length)) || null;
     } else {
@@ -340,7 +346,6 @@ export class TeamApp extends LitElement {
       <nav class="sections" aria-label="Secciones">
         ${this._tab('map', 'Mapa')}
         ${this._tab('people', 'Personas')}
-        ${this._tab('career', 'Carrera')}
         ${this._tab('team', 'Cobertura y riesgos')}
       </nav>
       ${this._renderSections()}
@@ -398,13 +403,6 @@ export class TeamApp extends LitElement {
           .framework=${this.framework}
           @open-person=${this._onOpenPerson}
         ></team-people>`;
-      case 'career':
-        return html`<team-career
-          .persistence=${this.persistence}
-          .careerStore=${this.careerStore}
-          .archipelago=${this.archipelago}
-          .framework=${this.framework}
-        ></team-career>`;
       case 'person':
         return html`
           <button class="back" @click=${() => this._go(this._returnTo)}>${RETURN_LABELS[this._returnTo]}</button>

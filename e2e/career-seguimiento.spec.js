@@ -101,6 +101,83 @@ test('la vista de conjunto compara al equipo de un vistazo', async ({ page }) =>
   }));
 });
 
+/**
+ * Framework mínimo con dos niveles del mismo track: hace falta un SIGUIENTE
+ * nivel para que el sub-nivel signifique algo, y un código de nivel para que la
+ * etiqueta sea escribible («L1-2»).
+ */
+const FRAMEWORK = {
+  tracks: [{ id: 'ic', name: 'IC', order: 1, description: '' }],
+  levels: [
+    { id: 'sg-l1', code: 'L1', title: 'Engineer', trackId: 'ic', order: 1, description: '', typicalProfile: '' },
+    { id: 'sg-l2', code: 'L2', title: 'Engineer II', trackId: 'ic', order: 2, description: '', typicalProfile: '' },
+  ],
+  dimensions: [{ id: 'sg-tech', name: 'Técnica', order: 1 }],
+  disciplines: [],
+  expectations: [{ levelId: 'sg-l2', dimensionId: 'sg-tech', text: 'Diseña un servicio entero' }],
+  addendums: [],
+};
+
+/** Alguien con nivel, objetivo y un ajuste a mano del manager. */
+async function conNivelYAjuste(fn) {
+  const persona = db().doc('people/e2e-person-eng');
+  const previoFw = (await db().doc('careerFramework/engineering').get()).data() ?? null;
+  const previaPersona = (await persona.get()).data() ?? null;
+  await db().doc('careerFramework/engineering').set(FRAMEWORK);
+  await persona.set({
+    ...previaPersona,
+    levelId: 'sg-l1',
+    careerTargetLevelId: 'sg-l2',
+    subLevelOverride: { value: 2, note: 'lo he visto liderar un diseño', byUid: 'e2e-head', at: '2026-09-20T10:00:00.000Z' },
+  });
+  try { await fn(); } finally {
+    if (previaPersona) await persona.set(previaPersona);
+    if (previoFw) await db().doc('careerFramework/engineering').set(previoFw);
+    else await db().doc('careerFramework/engineering').delete();
+  }
+}
+
+test('la misma pantalla dice por dónde va Y qué ha conseguido', async ({ page }) => {
+  // Antes hacían falta dos —«Equipo › Carrera» y esta— y cruzarlas a mano para
+  // mirar a una sola persona (RMR-TSK-0590).
+  await conPolitica(() => conViajeYTiempo(() => conNivelYAjuste(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/tools/career-map/admin');
+
+    const lista = page.locator('career-tracking .side');
+    await expect(lista).toBeVisible();
+    await lista.getByRole('button', { name: /Ingeniero E2E/ }).click();
+
+    const detalle = page.locator('career-tracking .main');
+    // Lo conseguido, que vivía en la otra tabla.
+    await expect(detalle.locator('.lvl.sub.manual')).toHaveText('L1-2');
+    await expect(detalle).toContainText('Nivel objetivo');
+    await expect(detalle).toContainText('Ciudadanías');
+    await expect(detalle).toContainText('Certificados');
+    // Y lo de siempre, en la misma pantalla y sin recargar nada.
+    await expect(detalle).toContainText('3 paradas visitadas');
+    await expect(detalle).toContainText('Días activos');
+  })));
+});
+
+test('quien gestiona ajusta el sub-nivel donde lo ve', async ({ page }) => {
+  await conPolitica(() => conNivelYAjuste(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/tools/career-map/admin');
+
+    const lista = page.locator('career-tracking .side');
+    await expect(lista).toBeVisible();
+    await lista.getByRole('button', { name: /Ingeniero E2E/ }).click();
+
+    const detalle = page.locator('career-tracking .main');
+    await detalle.getByRole('button', { name: /Ajustar el sub-nivel de Ingeniero E2E/ }).click();
+    await detalle.getByLabel('Sub-nivel').selectOption('3');
+    await detalle.getByRole('button', { name: 'Guardar' }).click();
+
+    await expect(detalle.locator('.lvl.sub.manual')).toHaveText('L1-3');
+  }));
+});
+
 test('un manager ve su rama entera, y lo de fuera sigue fuera', async ({ page }) => {
   await conPoliticaGestionada(async () => {
     await signInAs(page, 'head');

@@ -115,3 +115,25 @@ export function sortByNeglect(rows) {
     : r.activity.idleDays);
   return (rows ?? []).toSorted((a, b) => peso(b) - peso(a));
 }
+
+/**
+ * Pega a cada línea de seguimiento su progreso de carrera (RMR-TSK-0590).
+ *
+ * Había DOS tablas contando media historia cada una: «Equipo › Carrera» decía
+ * qué ha conseguido (nivel, ciudadanías, certificados) y esta decía por dónde va
+ * y cuánto le dedica. Mirar a una persona obligaba a abrir las dos y cruzarlas a
+ * mano. Se unen aquí, en una función pura, para que la pantalla no tenga que
+ * hacerlo: cada mitad conserva su fuente y su cálculo.
+ *
+ * Ausencia de progreso es null, nunca ceros: un «0 certificados» se lee como una
+ * medida, y no haber podido leer la carrera de alguien no es una medida.
+ *
+ * @template {{personId: string}} T
+ * @param {T[]} rows                         líneas de seguimiento
+ * @param {{personId: string}[]} rosterRows  filas de careerRoster
+ * @returns {(T & {career: object|null})[]}
+ */
+export function withCareer(rows, rosterRows) {
+  const porPersona = new Map((rosterRows ?? []).map((r) => [r.personId, r]));
+  return (rows ?? []).map((r) => ({ ...r, career: porPersona.get(r.personId) ?? null }));
+}

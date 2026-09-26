@@ -15,6 +15,32 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.219.0] - 2026-09-26
+
+### Cambiado
+
+- **Una sola tabla para el plan de desarrollo.** «Equipo › Carrera» contaba la
+  mitad de la historia —nivel actual, sub-nivel, nivel objetivo, ciudadanías,
+  certificados— y el Seguimiento del plan contaba la otra —isla, paradas, ruta,
+  dedicación—. Mirar a una persona obligaba a abrir dos pantallas y cruzarlas a
+  mano. Ahora está todo en **Seguimiento del plan de desarrollo**, y la pestaña
+  «Carrera» de Equipo desaparece.
+
+  El ajuste a mano del sub-nivel se muda con ella y vive en la ficha de la
+  persona, no en una celda: es un juicio del manager, con su nota, y ahí se lee y
+  se escribe con sitio. Un enlace guardado a `#career` lleva al sitio nuevo.
+
+- **La gestión de Equipo sale de la herramienta.** «Bajas» y «Configuración»
+  —cadencia de avisos, umbral de bus factor, almacenamiento— viven en
+  `/tools/team/admin`, con su tarjeta en el panel y una puerta que pide gestionar
+  equipos. De «Ajustes» se retiran los catálogos de áreas, gremios y labels:
+  eran los mismos documentos que ya gestiona Administración › Organización.
+
+- **El inicio marca lo que no ve todo el mundo.** Las tarjetas que solo se
+  ofrecen a quien lidera llevan la marca «solo quien lidera», para que quien
+  gestiona sepa si lo que está viendo lo ven también los ingenieros. Lo que ve
+  todo el mundo no se marca: si se marcara todo, la marca no diría nada.
+
 ## [1.218.0] - 2026-09-26
 
 ### Cambiado
