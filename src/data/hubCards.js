@@ -235,6 +235,13 @@ export const ADMIN_CARDS = [
     description: 'Por dónde va el plan de cada persona y cuánto tiempo le dedica.',
   },
   {
+    id: 'team',
+    name: 'Equipo',
+    icon: '\u{1F465}',
+    href: '/tools/team/admin',
+    description: 'Las bajas del equipo y como se configura la herramienta: cadencia de avisos y umbral de bus factor.',
+  },
+  {
     id: 'o2o',
     name: 'O2O',
     icon: '💬',

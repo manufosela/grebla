@@ -30,8 +30,8 @@ test('volver a una sección ya vista conserva lo que ya había cargado', async (
   await marcar(page, 'team-people');
 
   // Nos vamos a otra sección y volvemos.
-  await seccion(page, 'Bajas').click();
-  await expect(page.locator('team-app team-departures')).toHaveCount(1);
+  await seccion(page, 'Cobertura y riesgos').click();
+  await expect(page.locator('team-app team-overview')).toHaveCount(1);
   await seccion(page, 'Personas').click();
 
   // El mismo nodo: no se destruyó, así que no vuelve a pedir nada.
@@ -42,11 +42,11 @@ test('la sección que no se abre nunca, nunca se carga', async ({ page }) => {
   // El precio de conservar lo cargado no puede ser cargarlo todo al entrar.
   await signInAs(page, 'superadmin');
   await page.goto('/tools/team');
-  await expect(seccion(page, 'Ajustes')).toBeVisible({ timeout: 20_000 });
+  await expect(seccion(page, 'Carrera')).toBeVisible({ timeout: 20_000 });
 
-  await expect(page.locator('team-app team-settings')).toHaveCount(0);
-  await seccion(page, 'Ajustes').click();
-  await expect(page.locator('team-app team-settings')).toHaveCount(1);
+  await expect(page.locator('team-app team-career')).toHaveCount(0);
+  await seccion(page, 'Carrera').click();
+  await expect(page.locator('team-app team-career')).toHaveCount(1);
 });
 
 test('solo se ve una sección a la vez, aunque haya varias montadas', async ({ page }) => {
@@ -55,8 +55,8 @@ test('solo se ve una sección a la vez, aunque haya varias montadas', async ({ p
   await expect(seccion(page, 'Personas')).toBeVisible({ timeout: 20_000 });
 
   await seccion(page, 'Personas').click();
-  await seccion(page, 'Bajas').click();
+  await seccion(page, 'Cobertura y riesgos').click();
 
-  await expect(page.locator('team-app team-departures')).toBeVisible();
+  await expect(page.locator('team-app team-overview')).toBeVisible();
   await expect(page.locator('team-app team-people')).toBeHidden();
 });
