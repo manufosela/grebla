@@ -74,18 +74,20 @@ test('una clave guardada que ya no existe no rompe nada', async ({ page }) => {
   });
 });
 
-test('el inicio respeta el orden guardado', async ({ page }) => {
-  await conOrden({ home: ['/kudos', '/documentacion'] }, async () => {
+test('el inicio respeta el orden guardado DENTRO de cada grupo', async ({ page }) => {
+  // El orden coloca las tarjetas de un grupo entre ellas; no mueve tarjetas de
+  // grupo, que es lo que haría que «Kudos» apareciera en «Lo tuyo».
+  await conOrden({ home: ['/kudos', '/marea'] }, async () => {
     await signInAs(page, 'superadmin');
     await page.goto('/');
     // Esperar a que el hub esté montado: mientras carga, las tarjetas están en
     // el DOM en el orden del código y se leería ese.
     await expect(page.locator('#tenant-tools')).toBeVisible();
-    const cards = page.locator('#tenant-tools .tool-card[href]');
+    const cards = page.locator('.tool-group[data-group="estamos"] .tool-card[href]');
     await expect.poll(async () => cards.count(), { timeout: 15_000 }).toBeGreaterThan(1);
     const hrefs = await cards.evaluateAll((els) => els.map((el) => el.getAttribute('href')));
 
-    expect(hrefs.slice(0, 2)).toEqual(['/kudos', '/documentacion']);
+    expect(hrefs.slice(0, 2)).toEqual(['/kudos', '/marea']);
   });
 });
 

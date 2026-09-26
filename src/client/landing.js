@@ -13,12 +13,11 @@ import { canUseTool, canManageTool } from '../tools/team/domain/toolAccess.js';
 import { applyCardOrder } from '../lib/cardOrder.js';
 import { buildPersonRef } from '../lib/toolGate.js';
 import { getEmployeeDomain } from '../lib/orgConfig.js';
-import { layerTabs, activeTab } from '../lib/hubLayers.js';
+import { groupsWithCards } from '../lib/hubGroups.js';
 import { isEmployeeOf, hubDestination, needsEmployeePerson, managesSomeTool } from './hubBoot.js';
 
 const VIEW_FLAG = 'grebla-view';
 /** Pestaña que se estaba mirando, mientras dure la sesión. */
-const TAB_FLAG = 'grebla-hub-tab';
 /** ¿Se está previsualizando el hub como otro rol? */
 const esSimulada = () => ['leader', 'engineer', 'empleado'].includes(sessionStorage.getItem(VIEW_FLAG));
 const landing = document.getElementById('platform-landing');
@@ -30,8 +29,8 @@ setTimeout(() => {
   if (hubLoading && !hubLoading.hidden) showLanding();
 }, 10_000);
 const tools = document.getElementById('tenant-tools');
-const layersBar = document.getElementById('hub-layers');
-const tabsBox = layersBar?.querySelector('.layer-tabs') ?? null;
+const hubBar = document.getElementById('hub-bar');
+const toolsEmpty = document.getElementById('tools-empty');
 const adminLink = document.getElementById('admin-link');
 // La administración se abre en VENTANA APARTE, así que la vista de esta ventana
 // NO se toca: no has cambiado de vista, has abierto otra cosa. Antes era una
@@ -126,7 +125,7 @@ onUserChanged(async (user) => {
 function showLanding({ signedIn = false } = {}) {
   hubLoading?.setAttribute('hidden', '');
   tools?.setAttribute('hidden', '');
-  layersBar?.setAttribute('hidden', '');
+  hubBar?.setAttribute('hidden', '');
   landing?.removeAttribute('hidden');
   const anon = document.getElementById('landing-anon');
   const noAccess = document.getElementById('landing-no-access');
@@ -135,50 +134,26 @@ function showLanding({ signedIn = false } = {}) {
 }
 
 /**
- * Pinta las pestañas a partir de las tarjetas que HAN QUEDADO visibles, nunca
- * calculándolas aparte desde el rol: dos fuentes de verdad acabarían enseñando
- * una pestaña vacía, o una que aparece al simular un rol que no la tiene.
+ * Enseña los grupos que TIENEN alguna tarjeta visible, a partir de lo que ha
+ * quedado tras aplicar políticas, ficha y vista simulada — nunca calculándolos
+ * aparte desde el rol: dos fuentes de verdad acabarían pintando un encabezado
+ * sin nada debajo, o uno que aparece al simular un rol que no lo tiene.
  */
-function showLayers({ canAdmin }) {
-  if (!tabsBox || !layersBar) return;
-  const conTarjetas = [...(tools?.querySelectorAll('[data-layer]:not([hidden])') ?? [])]
-    .map((card) => card.dataset.layer);
-  const { visible, tabs } = layerTabs({ layersWithCards: conTarjetas });
-  const activa = activeTab({ layersWithCards: conTarjetas, remembered: sessionStorage.getItem(TAB_FLAG) });
-  const conPestana = new Set(tabs.map((t) => t.id));
+function showGroups({ canAdmin }) {
+  const conTarjetas = [...(tools?.querySelectorAll('.tool-card:not([hidden])') ?? [])]
+    .map((card) => card.closest('.tool-group')?.dataset.group)
+    .filter(Boolean);
+  const visibles = new Set(groupsWithCards(conTarjetas).map((g) => g.id));
 
-  for (const boton of tabsBox.querySelectorAll('button')) {
-    boton.toggleAttribute('hidden', !visible || !conPestana.has(boton.dataset.layer));
-    boton.setAttribute('aria-selected', String(boton.dataset.layer === activa));
+  for (const grupo of tools?.querySelectorAll('.tool-group') ?? []) {
+    grupo.toggleAttribute('hidden', !visibles.has(grupo.dataset.group));
   }
+  // Sin ningun grupo, se dice. Un contenedor vacio no es una respuesta: deja la
+  // pagina sin nada donde mirar y sin saber si falta algo o falla algo.
+  toolsEmpty?.toggleAttribute('hidden', visibles.size > 0);
   adminLink?.toggleAttribute('hidden', !canAdmin);
-  // La barra entera se oculta si no hay ni pestañas ni enlace: una franja vacía
-  // solo añade ruido y un borde que no separa nada.
-  layersBar.toggleAttribute('hidden', !visible && !canAdmin);
-  aplicarCapa(activa, visible);
-}
-
-// Los listeners se registran UNA vez, no en cada repintado: engancharlos al
-// pintar los duplicaría cada vez que se cambia de vista.
-for (const boton of tabsBox?.querySelectorAll('button') ?? []) {
-  boton.addEventListener('click', () => {
-    const capa = boton.dataset.layer;
-    sessionStorage.setItem(TAB_FLAG, capa);
-    for (const otro of tabsBox?.querySelectorAll('button') ?? []) {
-      otro.setAttribute('aria-selected', String(otro.dataset.layer === capa));
-    }
-    aplicarCapa(capa, true);
-  });
-}
-
-/**
- * Enseña las tarjetas de una capa. Con las pestañas ocultas —una sola capa— no
- * se filtra nada: si no hay dónde elegir, esconder sería esconder por esconder.
- */
-function aplicarCapa(capa, conPestanas) {
-  for (const card of tools?.querySelectorAll('[data-layer]') ?? []) {
-    card.toggleAttribute('data-off-layer', conPestanas && card.dataset.layer !== capa);
-  }
+  // La barra entera se oculta sin enlace: una franja vacía solo añade ruido.
+  hubBar?.toggleAttribute('hidden', !canAdmin);
 }
 
 async function showTools({ personRef, policies = [], isSuperadmin = false, isLeaderish = false, filterFailed = false }) {
@@ -214,13 +189,18 @@ async function showTools({ personRef, policies = [], isSuperadmin = false, isLea
     else visible = permitido;
     card.toggleAttribute('hidden', !visible);
   }
-  // Las capas van DESPUÉS del filtrado: se derivan de lo que ha quedado visible.
-  showLayers({ canAdmin: isSuperadmin });
+  // Los grupos van DESPUÉS del filtrado: se derivan de lo que ha quedado visible.
+  showGroups({ canAdmin: isSuperadmin });
   // Y el orden que decidió el superadmin (RMR-TSK-0571) ANTES de enseñar nada:
   // colocar las tarjetas con el hub ya a la vista las haría saltar delante de
   // quien mira. No cambia quién ve qué, solo en qué posición; si la lectura
   // falla, queda el orden del código.
-  await applyCardOrder(tools, 'home', '.tool-card[href]', (el) => el.getAttribute('href'));
+  // Dentro de CADA grupo: el orden manda entre las tarjetas de un grupo, no
+  // entre grupos. Ordenar sobre el contenedor de todos las sacaria del suyo.
+  await applyCardOrder(
+    tools?.querySelectorAll('.tool-group .tools') ?? [],
+    'home', '.tool-card[href]', (el) => el.getAttribute('href'),
+  );
   hubLoading?.setAttribute('hidden', '');
   tools?.removeAttribute('hidden');
 }

@@ -1,21 +1,33 @@
 ---
 import Base from '../layouts/Base.astro';
 import { HUB_TOOLS as tools, TOOL_ID } from '../data/hubCards.js';
+import { HUB_GROUPS, GROUP_IDS, groupOf } from '../lib/hubGroups.js';
 
 /**
- * Hub de herramientas, repartido en CAPAS (ADR «Tres capas en el hub»).
+ * Las tarjetas repartidas por grupo, en el orden de los grupos. Se pinta EL
+ * CATALOGO ENTERO; landing.js oculta despues lo que no toca y retira los
+ * encabezados que se queden sin nada debajo. Pintarlo al reves —decidir aqui
+ * que grupos existen— haria falta saber quien eres antes de servir la pagina.
+ */
+const byGroup = GROUP_IDS
+  .map((id) => ({ group: HUB_GROUPS[id], cards: tools.filter((t) => groupOf(t) === id) }))
+  .filter((g) => g.cards.length > 0);
+
+/**
+ * Hub de herramientas, agrupado por PROPOSITO (ADR «El inicio se agrupa por
+ * propósito», que sustituye al de las tres capas).
  *
- * Cada herramienta declara a cuál pertenece:
- *  - `tribbu`: sirve a cualquier persona de la empresa, sea o no de tecnología.
- *  - `ingenieria`: no tiene sentido fuera de ingeniería.
+ * Cada herramienta declara para qué sirve —lo tuyo, tu equipo, cómo estamos,
+ * cómo entregamos, la casa— y no a quién pertenece. Quien entra no busca «algo
+ * de TRIBBU»: busca preparar un 1:1 o ver cómo va su carrera.
  *
- * Lo GENÉRICO vive en TRIBBU aunque GREBLA lo use: los Motivators son juegos de
- * management que usa toda la empresa, y que un manager de ingeniería los use no
- * los convierte en herramienta de ingeniería.
+ * Las capas TRIBBU / Ingeniería se retiraron con este cambio: dos ejes de
+ * agrupación a la vez obligan a adivinar en qué pestaña vive cada cosa antes de
+ * buscar el grupo.
  *
- * La ADMINISTRACIÓN no es una tarjeta ni una pestaña: es un enlace junto a las
- * pestañas que abre en ventana aparte, porque es gobierno y no uso diario, y
- * porque su página ya tiene ocho pestañas propias dentro.
+ * La ADMINISTRACIÓN no es una tarjeta ni un grupo: es un enlace aparte que abre
+ * en ventana propia, porque es gobierno y no uso diario, y porque su página ya
+ * tiene sus propias secciones dentro.
  */
 ---
 
@@ -62,39 +74,40 @@ import { HUB_TOOLS as tools, TOOL_ID } from '../data/hubCards.js';
   </section>
 
 
-  <!-- Capas del hub (ADR «Tres capas en el hub»). Oculta hasta saber quién eres:
-       pintarla antes haría saltar el contenido al resolver la sesión. Las
-       pestañas ORGANIZAN, no protegen: el gate de cada herramienta sigue igual. -->
-  <nav id="hub-layers" class="layers" aria-label="Capas de herramientas" hidden>
-    <!-- Las pestañas se pintan AQUÍ, no desde JavaScript: los estilos de Astro
-         son scoped y no alcanzan a los nodos que crea el cliente, así que un
-         botón creado a mano saldría sin estilo. landing.js solo decide cuáles se
-         ven y cuál está activa. -->
-    <div class="layer-tabs" role="tablist">
-      <button type="button" role="tab" data-layer="tribbu" aria-selected="true" hidden>TRIBBU</button>
-      <button type="button" role="tab" data-layer="ingenieria" aria-selected="false" hidden>Ingeniería</button>
-    </div>
+  <!-- El enlace de administracion (ADR de los grupos, regla G): gobierno y uso
+       diario no se mezclan, asi que no es un grupo ni una tarjeta. Oculto hasta
+       saber quien eres: pintarlo antes haria saltar el contenido. -->
+  <nav id="hub-bar" class="hub-bar" aria-label="Administracion" hidden>
     <a id="admin-link" class="admin-link" href="/admin" target="_blank" rel="noopener" hidden>
       🛠️ Administración <span class="ext" aria-hidden="true">↗</span>
     </a>
   </nav>
 
   <!-- Herramientas: ocultas por defecto. landing.js las muestra con sesión y acceso. -->
-  <section id="tenant-tools" class="tools" hidden>
+  <!-- Herramientas: ocultas por defecto. landing.js las muestra con sesion y
+       acceso, y retira los grupos que se queden sin ninguna visible. -->
+  <div id="tenant-tools" hidden>
     {
-      tools.map((tool) => (
-        <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-layer={tool.layer} data-personal={tool.personal ? 'true' : undefined} data-manages={tool.manages ? 'true' : undefined} data-own={tool.personal ? 'true' : undefined}>
-          <h2>{tool.name}</h2>
-          <p>{tool.description}</p>
-          <span class="cta">Abrir →</span>
-        </a>
+      byGroup.map(({ group, cards }) => (
+        <section class="tool-group" data-group={group.id}>
+          <h2 class="group-title">{group.label} <span class="group-hint">{group.hint}</span></h2>
+          <div class="tools">
+            {cards.map((tool) => (
+              <a class="tool-card" href={tool.href} aria-disabled={!tool.available} data-tool-id={TOOL_ID[tool.href]} data-personal={tool.personal ? 'true' : undefined} data-manages={tool.manages ? 'true' : undefined} data-own={tool.personal ? 'true' : undefined}>
+                <h3>{tool.name}</h3>
+                <p>{tool.description}</p>
+                <span class="cta">Abrir →</span>
+              </a>
+            ))}
+          </div>
+        </section>
       ))
     }
-    <div class="tool-card placeholder" aria-hidden="true">
-      <h2>Más herramientas</h2>
-      <p>Próximamente. Aquí se añadirán nuevos módulos del framework.</p>
-    </div>
-  </section>
+    <p class="tools-empty" id="tools-empty" hidden>
+      Ahora mismo no tienes ninguna herramienta disponible. Si crees que deberías,
+      pídeselo a un superadmin.
+    </p>
+  </div>
 
   <script>
     import '../client/landing.js';
@@ -107,34 +120,13 @@ import { HUB_TOOLS as tools, TOOL_ID } from '../data/hubCards.js';
   @keyframes hub-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .hub-spinner { animation: none; } }
 
-  .layers {
+  /* Barra del enlace de administracion. Sin pestanas: los grupos son el unico
+     eje de agrupacion (ADR de los grupos, regla A). */
+  .hub-bar {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
     margin: 0 0 1.4rem;
-    border-bottom: 1px solid var(--rm-border, #e5e7eb);
   }
-  .layer-tabs { display: flex; gap: 0.2rem; flex-wrap: wrap; }
-  .layer-tabs button {
-    appearance: none;
-    background: none;
-    border: 0;
-    border-bottom: 3px solid transparent;
-    padding: 0.55rem 0.95rem;
-    font: inherit;
-    font-weight: 700;
-    font-size: 0.95rem;
-    color: var(--rm-muted, #5b6b7d);
-    cursor: pointer;
-  }
-  .layer-tabs button:hover { color: var(--rm-text, #111827); }
-  .layer-tabs button[aria-selected='true'] {
-    color: var(--rm-accent, #2a9d8f);
-    border-bottom-color: var(--rm-accent, #2a9d8f);
-  }
-  .layer-tabs button:focus-visible,
-  .admin-link:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
   .admin-link {
     margin-left: auto;
     padding: 0.4rem 0.8rem;
@@ -147,12 +139,45 @@ import { HUB_TOOLS as tools, TOOL_ID } from '../data/hubCards.js';
     background: var(--rm-surface, #fff);
   }
   .admin-link:hover { border-color: var(--rm-accent, #2a9d8f); color: var(--rm-accent, #2a9d8f); }
+  .admin-link:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
   .admin-link .ext { font-size: 0.78rem; opacity: 0.7; }
 
-  /* Tarjeta de otra capa: fuera de la vista, pero SIN tocar `hidden`, que es de
-     quien filtra por política. Mezclar los dos criterios en el mismo atributo
-     haría que cambiar de pestaña revelara algo que la política ocultó. */
-  .tool-card[data-off-layer] { display: none; }
+  /* Grupos: un encabezado discreto y una linea fina. Lo justo para separar sin
+     recargar — la tarjeta sigue siendo lo que se mira. */
+  .tool-group + .tool-group { margin-top: 2.2rem; }
+  .group-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 0 0 0.9rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--rm-border, #e5e7eb);
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--rm-muted, #5b6b7d);
+  }
+  .group-hint {
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--rm-muted, #5b6b7d);
+    opacity: 0.85;
+  }
+  /* El grupo entero desaparece si no le queda ninguna tarjeta visible: un
+     encabezado sin nada debajo anuncia algo que no esta. */
+  .tool-group[hidden] { display: none; }
+  /* Y si no queda NINGUN grupo, se dice: un contenedor vacio no es una
+     respuesta, y ademas deja la pagina sin nada donde mirar. */
+  .tools-empty {
+    margin: 0;
+    padding: 1.5rem 0;
+    color: var(--rm-muted, #5b6b7d);
+    font-size: 0.95rem;
+  }
 
   .hero { margin-bottom: 2rem; }
   .page-tagline {
@@ -194,7 +219,9 @@ import { HUB_TOOLS as tools, TOOL_ID } from '../data/hubCards.js';
   .tool-card[data-admin-only] h2::after { background: var(--rm-admin); }
   .tool-card[data-admin-only]:hover { border-color: var(--rm-admin); }
   .tool-card[data-admin-only] .cta { color: var(--rm-admin); }
-  .tool-card h2 { margin: 0; font-size: 1.15rem; }
+  /* La tarjeta pasa a h3: el h2 es ahora el titulo del grupo, y saltarse un
+     nivel rompe el esquema de quien navega con lector de pantalla. */
+  .tool-card h3 { margin: 0; font-size: 1.15rem; }
   .tool-card p { margin: 0; color: var(--rm-muted); font-size: 0.9rem; }
   .tool-card .cta { margin-top: auto; color: var(--rm-accent); font-weight: 700; font-size: 0.9rem; }
   .tool-card.placeholder { opacity: 0.6; border-style: dashed; cursor: default; }
