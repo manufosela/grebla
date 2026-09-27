@@ -24,8 +24,9 @@ export const TOOLS = [
   { toolId: 'career', label: 'Plan de desarrollo', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
   { toolId: 'careerpath', label: 'Career path', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
   { toolId: 'rolemirror', label: 'Role Mirror', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
-  { toolId: 'dora', label: 'DORA', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
-  { toolId: 'lean', label: 'LEAN', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
+  // Entrega sustituye a DORA y LEAN (RMR-TSK-0603): las metricas las calcula
+  // el portal y aqui solo se miran.
+  { toolId: 'entrega', label: 'Entrega', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng'] } },
   { toolId: 'o2o', label: 'One-to-Ones', audience: { branches: ['engineering'] }, managedBy: { roleIds: ['head-eng', 'em'] } },
   // Estimar es de toda la organización (RMR-TSK-0513): producto, diseño o
   // negocio se sientan a la mesa con el equipo, no solo ingeniería.

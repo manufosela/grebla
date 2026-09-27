@@ -25,7 +25,7 @@ import { deliverySummary, repoRowFor, sparkPoints, currentWeek, ROW_STATES } fro
 import { reposSinSenal } from '../../tools/metrics/domain/portalMetrics.js';
 // El dominio da horas crudas porque elegir entre «h» y «d» es presentación, y
 // eso se decide aquí. `formatHours` devuelve null sin medida, no «0 h».
-import { formatHours } from '../dora/format.js';
+import { formatHours } from '../../tools/metrics/domain/duration.js';
 
 /** Series de la foto global que merecen una línea de 12 semanas. */
 const SPARKS = Object.freeze([

@@ -42,9 +42,12 @@ export default defineConfig({
       // Los módulos que deciden QUIÉN VE QUÉ llevan suelo propio y alto: son los
       // que fallan sin que nada se vea (RMR-TSK-0444).
       thresholds: {
+        // Trinquete: el umbral es el valor MEDIDO, no el deseado. Sube al
+        // retirar DORA y LEAN (RMR-TSK-0606) porque se fue más componente sin
+        // test que dominio con test — medido 27.85 / 29.60 / 27.14 / 28.57.
         lines: 27,
-        branches: 28,
-        functions: 26,
+        branches: 29,
+        functions: 27,
         statements: 28,
         'src/lib/access.js': { lines: 100, branches: 85, functions: 100, statements: 100 },
         'src/lib/accessRoles.js': { lines: 95, branches: 90, functions: 100, statements: 95 },
