@@ -15,6 +15,7 @@
 import { LitElement, html, css } from 'lit';
 import './team-departures.js';
 import './team-settings.js';
+import { tabFromHash } from '../../lib/tabHash.js';
 
 const TABS = [
   { id: 'departures', label: 'Bajas' },
@@ -47,7 +48,11 @@ export class TeamAdmin extends LitElement {
     this.persistence = null;
     this.isAdmin = false;
     this.currentUid = null;
-    this._tab = TABS[0].id;
+    // El ancla de la URL manda sobre la pestana por defecto: aqui aterriza
+    // quien tenia guardado un enlace a #departures o #settings de cuando esto
+    // vivia dentro de la herramienta (RMR-TSK-0586). Sin esto, el enlace llevaba
+    // a la pagina correcta y a la pestana equivocada (RMR-BUG-0132).
+    this._tab = tabFromHash(globalThis.location?.hash ?? '', TABS, TABS[0].id);
   }
 
   render() {

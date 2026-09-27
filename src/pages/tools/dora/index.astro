@@ -1,17 +1,13 @@
 ---
-import Dora from '../../../layouts/Dora.astro';
+/**
+ * DORA se retiro: sus metricas las calcula el portal y se ven en «Entrega»
+ * (RMR-TSK-0603).
+ *
+ * Antes de retirarla se midio que habia dentro en produccion: cero repos dados de alta, asi que la pantalla estaba vacia. No se
+ * pierde ningun numero.
+ *
+ * Redirige en vez de dar 404 porque un enlace guardado sigue siendo un enlace:
+ * nadie deberia reaprender sus favoritos porque hayamos movido una pantalla.
+ */
+return Astro.redirect('/tools/entrega', 301);
 ---
-
-<Dora title="GREBLA — DORA (métricas de entrega)">
-  <h1 class="page-title">Métricas de entrega (DORA)</h1>
-  <p class="page-lead">
-    Configura los repositorios de la organización que quieres medir, asígnalos a un equipo y a sus
-    gremios, e indica desde qué fecha medir. Las métricas DORA son siempre de equipo, nunca individuales.
-  </p>
-
-  <dora-app></dora-app>
-</Dora>
-
-<script>
-  import '../../../client/dora.js';
-</script>
