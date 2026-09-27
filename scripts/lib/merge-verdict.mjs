@@ -4,6 +4,8 @@
  * la parte que decide se pueda probar, que es justo la que falló en la PR #647.
  */
 
+import { missingChecks } from './expected-checks.mjs';
+
 /** Conclusiones que NO son un aprobado: si aparece alguna, no se mergea. */
 export const BAD_CONCLUSIONS = new Set([
   'FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'STALE', 'ERROR',
@@ -26,9 +28,13 @@ export function normalizeChecks(rollup = []) {
 /**
  * @param {{ statusCheckRollup?: Array<Record<string, unknown>>, state?: string, mergeable?: string,
  *   isDraft?: boolean }} pr  tal cual lo devuelve `gh pr view --json`
+ * @param {{ expected?: string[] }} [opts]  checks que este repo espera SIEMPRE,
+ *   sacados de sus workflows (`expectedChecks`). El defecto es la lista vacia
+ *   —«no se que esperar»— y entonces basta con que haya alguno: no se puede
+ *   exigir lo que no se conoce, pero tampoco se finge que se conoce.
  * @returns {{ action: 'merge'|'wait'|'abort', reason: string, checks: ReturnType<typeof normalizeChecks> }}
  */
-export function mergeVerdict(pr) {
+export function mergeVerdict(pr, { expected = [] } = {}) {
   const checks = normalizeChecks(pr?.statusCheckRollup ?? []);
 
   // Primero lo TERMINAL: si ya sabemos que la PR no se puede mergear, esperar a
@@ -64,6 +70,18 @@ export function mergeVerdict(pr) {
   // disparado. Ante la duda, no se mergea.
   if (checks.length === 0) {
     return { action: 'abort', reason: 'la PR no tiene ningún check; comprueba que el CI se ha disparado', checks };
+  }
+  // Y por ultimo lo que PARECE decidido y no lo esta: los registrados estan en
+  // verde, pero faltan por aparecer. Asi se mergeo la PR #922 con e2e y quality
+  // sin existir todavia (RMR-BUG-0131). Esperar aqui no es una espera prudente:
+  // es que aun no hay veredicto sobre lo que falta.
+  const faltan = missingChecks(expected, checks);
+  if (faltan.length > 0) {
+    return {
+      action: 'wait',
+      reason: `faltan checks por registrarse: ${faltan.join(', ')}`,
+      checks,
+    };
   }
   return { action: 'merge', reason: `${checks.length} checks en verde`, checks };
 }

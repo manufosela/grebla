@@ -22,7 +22,10 @@
  */
 import { execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { mergeVerdict } from './lib/merge-verdict.mjs';
+import { expectedChecks } from './lib/expected-checks.mjs';
 
 const POLL_MS = 15_000;
 const TIMEOUT_MS = 30 * 60_000;
@@ -70,10 +73,30 @@ const gh = (args) => execFileSync('gh', args, {
   env: { ...process.env, GH_TOKEN: token },
 });
 
+/**
+ * Los checks que este repo espera SIEMPRE, leidos de sus propios workflows. Es
+ * la unica fuente que no depende del reloj: son los ficheros que GitHub va a
+ * ejecutar para este commit (RMR-BUG-0131).
+ */
+const wfDir = join(process.cwd(), '.github/workflows');
+let expected = [];
+try {
+  expected = expectedChecks(
+    readdirSync(wfDir)
+      .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
+      .map((f) => ({ file: f, content: readFileSync(join(wfDir, f), 'utf8') })),
+  );
+} catch {
+  // Sin workflows legibles no se finge que se sabe que esperar: se dice.
+  console.log('· aviso: no se han podido leer los workflows; solo se exige que los checks presentes esten en verde');
+}
+if (expected.length > 0) console.log(`· checks que se exigen: ${expected.join(', ')}`);
+
 const started = Date.now();
 let verdict;
 for (;;) {
-  verdict = mergeVerdict(JSON.parse(gh(['pr', 'view', prArg, '--json', 'statusCheckRollup,state,mergeable,isDraft'])));
+  const pr = JSON.parse(gh(['pr', 'view', prArg, '--json', 'statusCheckRollup,state,mergeable,isDraft']));
+  verdict = mergeVerdict(pr, { expected });
   if (verdict.action !== 'wait') break;
   if (Date.now() - started > TIMEOUT_MS) {
     console.error(`✗ Tiempo agotado: ${verdict.reason}`);
