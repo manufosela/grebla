@@ -36,7 +36,7 @@
  * @property {string[]} coreMissing  ids de dimensión imprescindibles sin cubrir
  */
 import { expectationsForLevel, getLevel, expectationWeight } from '../data/framework.js';
-import { nextLevelFor } from './subLevel.js';
+import { nextLevelFor, effectiveSubLevel } from './subLevel.js';
 
 /** Cortes de la progresión, en porcentaje de pesos cumplidos. */
 export const PROGRESS_THRESHOLDS = Object.freeze({ consolidating: 50, atTheGates: 80 });
@@ -172,4 +172,54 @@ export function levelProgressFor({ person, framework, marks = null, history = nu
     // 100 % es cumplirlo TODO, no un 99,5 % que se muestra redondeado.
     readyToPromote: completion.earned === completion.total && completion.coreMissing.length === 0,
   };
+}
+
+/**
+ * El badge L1-2 a partir de la progresión, con el ajuste del manager encima
+ * (RMR-TSK-0605). Existe porque esta conversión estaba COPIADA en el Seguimiento
+ * del plan y en la tabla de Personas, y ahora la quiere también Mi Role Mirror:
+ * tres sitios haciendo la misma cuenta a mano acaban dando tres números para la
+ * misma persona, y quien los vea no sabrá a cuál creer.
+ *
+ * Sin progresión (sin valoración del siguiente nivel) solo queda el ajuste
+ * manual, que aplica igual — el manager puede fijar el sub-nivel sin valorar.
+ *
+ * @param {object|null} person
+ * @param {ReturnType<typeof levelProgressFor>} progress
+ * @param {string|null} levelCode
+ * @returns {ReturnType<typeof effectiveSubLevel>}
+ */
+export function subLevelFromProgress(person, progress, levelCode) {
+  const derived = progress
+    ? { sub: progress.sub, done: progress.earned, total: progress.total, pct: progress.pct, label: progress.label }
+    : null;
+  return effectiveSubLevel(person, derived, levelCode);
+}
+
+/**
+ * El CÁLCULO dicho en palabras: cuánto del nivel siguiente lleva cumplido. Son
+ * puntos valorados —pesos de expectativas—, no paradas del mapa: la formación no
+ * mueve el nivel.
+ * @param {ReturnType<typeof subLevelFromProgress>} subLevel
+ * @returns {string} Siempre una frase: «sin valorar» también es información.
+ */
+export function subLevelCalcText(subLevel) {
+  return subLevel?.pct === null || subLevel == null
+    ? 'sin valorar todavía frente al nivel siguiente'
+    : `${subLevel.pct}% del nivel siguiente cumplido (${subLevel.done} de ${subLevel.total} puntos valorados)`;
+}
+
+/**
+ * Lo que acompaña a la etiqueta cuando se lee de SÍ MISMO, sin repetirla: el
+ * cálculo y, si lo ajustó el manager, que fue él y por qué. Va aparte de la
+ * etiqueta porque hay pantallas que la pintan como badge y el resto al lado.
+ * @param {ReturnType<typeof subLevelFromProgress>} subLevel
+ * @returns {string|null}
+ */
+export function subLevelDetail(subLevel) {
+  if (!subLevel) return null;
+  const calc = subLevelCalcText(subLevel);
+  if (subLevel.source !== 'manual') return calc;
+  const porqué = subLevel.note ? `: «${subLevel.note}»` : '';
+  return `ajustado por tu manager${porqué} · cálculo: ${calc}`;
 }

@@ -20,6 +20,11 @@ import RoleMirror from '../../../layouts/RoleMirror.astro';
     propuesta, para decidirlo juntos.
   </p>
 
+  <p class="rm-level" id="rm-level" hidden>
+    <span class="rm-level-badge" id="rm-level-badge"></span>
+    <span class="rm-level-text" id="rm-level-text"></span>
+  </p>
+
   <p class="rm-empty" id="rm-self-empty" hidden>
     Todavía no tienes ficha en GREBLA, así que no hay perfil que rellenar. En cuanto
     te la creen, aparecerá aquí.
@@ -29,6 +34,22 @@ import RoleMirror from '../../../layouts/RoleMirror.astro';
 </RoleMirror>
 
 <style>
+  /* Nivel de carrera con su sub-nivel (RMR-TSK-0605): el mismo badge que el
+     Seguimiento del plan. Colores fijos —no grises claros— para claro y oscuro. */
+  .rm-level {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+    max-width: 46rem; margin: 0 0 1.25rem;
+    font-size: 0.9rem; color: var(--rm-text, #111827);
+  }
+  .rm-level-badge {
+    flex: none; padding: 0.2rem 0.6rem; border-radius: 999px;
+    /* En oscuro el acento es brillante y el texto va en tinta oscura (AA): lo
+       decide el tema con --rm-on-accent, no este badge. */
+    background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff);
+    font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .rm-level-text { color: var(--rm-muted, #5b6b7d); }
+
   .rm-empty {
     max-width: 46rem; margin: 0 0 1.25rem; padding: 0.75rem 0.95rem;
     border-radius: 10px; border: 1px solid var(--rm-info-border, #bfd6fb);
