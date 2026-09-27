@@ -267,12 +267,6 @@ async function pintarLogoDeLaInstancia() {
   }
 }
 
-// Sin `await`: con uno de nivel superior, todo lo que viene debajo —el registro
-// del service worker— esperaría a una lectura de Firestore que no le incumbe.
-// El `void` dice que la promesa se suelta a propósito; sus fallos ya se tragan
-// dentro, donde se sabe qué significan.
-void pintarLogoDeLaInstancia();
-
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     // Si un SW nuevo toma el control con la pestaña abierta, hay versión nueva.
@@ -298,3 +292,12 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// El logo se pide AL FINAL, y sin esperarlo. Es una lectura de Firestore que no
+// es crítica: con un `await` de nivel superior, la evaluación de este módulo
+// —que arranca el layout de todas las páginas— quedaría pendiente de la red, y
+// si el logo tarda, tarda el arranque. El `void` dice que la promesa se suelta a
+// propósito; el `catch` vive dentro, donde se sabe qué significa fallar.
+// (La regla de Sonar que pide lo contrario está ignorada para este fichero, con
+// su porqué en sonar-project.properties.)
+void pintarLogoDeLaInstancia();
