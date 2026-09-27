@@ -64,3 +64,7 @@ coverage/
 # tiene esos gates activos desde el segundo cero porque `core.hooksPath` apunta a
 # ficheros que viajan.
 .karajan/harness/
+# El índice del RAG del proyecto (chunks + embeddings, generados desde el propio
+# código). Es una caché reconstruible, no el contrato del método: versionarla
+# metería megas binarios que quedan obsoletos en el siguiente commit.
+.karajan/rag.db
