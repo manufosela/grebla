@@ -34,7 +34,7 @@ import { expectationWeight } from '../tools/career/data/framework.js';
 /** Tope del peso de una expectativa: más allá, el número deja de decir nada. */
 const MAX_EXPECTATION_WEIGHT = 9;
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
-import { getOrgIdentity, saveOrgIdentity } from '../lib/orgConfig.js';
+import { getOrgIdentity, saveOrgIdentity, getOrgLogo, saveOrgLogo } from '../lib/orgConfig.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
@@ -135,6 +135,7 @@ export class SuperadminPanel extends LitElement {
     currentUid: { attribute: false },
     _tab: { state: true },
     _identity: { state: true },
+    _orgLogo: { state: true },
     _careerSub: { state: true },
     _permSub: { state: true },
     leaders: { state: true },
@@ -510,6 +511,8 @@ export class SuperadminPanel extends LitElement {
     /** @type {Record<string, string>|null} identidad de la instancia; null mientras no se ha leido */
     this._identity = null;
     this._identityAsked = false;
+    /** @type {string|null} logo de la instancia (data URI), o null si no hay. */
+    this._orgLogo = null;
     /** @type {'framework'|'map'} sub-pestaña de «Carrera» (RMR-TSK-0262). */
     this._careerSub = initial.sub ?? 'framework';
     /** @type {'rol'|'persona'} ámbito de «Permisos» (RMR-TSK-0460). */
@@ -659,6 +662,11 @@ export class SuperadminPanel extends LitElement {
     getOrgIdentity()
       .then((v) => { this._identity = v; })
       .catch(() => { this._identity = {}; });
+    // El logo va en la misma tanda y con el mismo trato: si no se puede leer, se
+    // muestra «sin logo propio», que es lo que la cabecera enseñará igualmente.
+    getOrgLogo()
+      .then((v) => { this._orgLogo = v; })
+      .catch(() => { this._orgLogo = null; });
   }
 
   /** Fija el valor mostrado de los <select> del editor de roles DESPUÉS del render:
@@ -1420,6 +1428,8 @@ export class SuperadminPanel extends LitElement {
     return html`<org-identity
       .identity=${this._identity}
       .save=${(patch) => saveOrgIdentity(patch)}
+      .logo=${this._orgLogo}
+      .saveLogo=${(dataUrl) => saveOrgLogo(dataUrl)}
       ?read-only=${this.readOnly}
     ></org-identity>`;
   }
