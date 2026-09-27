@@ -119,3 +119,58 @@ describe('normalizeChecks — las dos formas que devuelve la API', () => {
     expect(normalizeChecks([{ status: 'COMPLETED', conclusion: 'SUCCESS' }])[0].name).toBe('(sin nombre)');
   });
 });
+
+describe('no se mergea sin los checks que este repo espera (RMR-BUG-0131)', () => {
+  const verde = (name) => action(name, 'COMPLETED', 'SUCCESS');
+
+  it('espera a los que faltan por registrarse, y dice cuales', () => {
+    // La PR #922: se miro justo tras el push, solo habia respondido GitGuardian
+    // —que tarda un segundo— y se mergeo. e2e y quality llegaron despues, y e2e
+    // tardo ocho minutos. Salio bien por suerte.
+    const v = mergeVerdict(
+      { state: 'OPEN', statusCheckRollup: [verde('GitGuardian Security Checks')] },
+      { expected: ['e2e', 'quality'] },
+    );
+    expect(v.action).toBe('wait');
+    expect(v.reason).toContain('e2e');
+    expect(v.reason).toContain('quality');
+  });
+
+  it('mergea cuando estan TODOS los esperados, aunque sobren externos', () => {
+    const v = mergeVerdict(
+      {
+        state: 'OPEN',
+        statusCheckRollup: [verde('e2e'), verde('quality'), verde('GitGuardian Security Checks')],
+      },
+      { expected: ['e2e', 'quality'] },
+    );
+    expect(v.action).toBe('merge');
+  });
+
+  it('un rojo aborta SIN esperar a los que faltan', () => {
+    // Lo terminal manda: esperar no va a poner verde lo que ya fallo, y avisar
+    // tarde de un rojo es avisar mal.
+    const v = mergeVerdict(
+      { state: 'OPEN', statusCheckRollup: [action('quality', 'COMPLETED', 'FAILURE')] },
+      { expected: ['e2e', 'quality'] },
+    );
+    expect(v.action).toBe('abort');
+    expect(v.reason).toContain('quality');
+  });
+
+  it('uno esperado que sigue corriendo se espera como siempre', () => {
+    const v = mergeVerdict(
+      { state: 'OPEN', statusCheckRollup: [verde('quality'), action('e2e', 'IN_PROGRESS', null)] },
+      { expected: ['e2e', 'quality'] },
+    );
+    expect(v.action).toBe('wait');
+    expect(v.reason).toContain('en marcha');
+  });
+
+  it('sin lista esperada NO finge que la sabe, pero sigue exigiendo que haya alguno', () => {
+    // No se puede exigir lo que no se conoce; lo que no vale es dar por bueno
+    // el vacio, que es como se cuela un merge sin CI.
+    expect(mergeVerdict({ state: 'OPEN', statusCheckRollup: [verde('x')] }).action).toBe('merge');
+    expect(mergeVerdict({ state: 'OPEN', statusCheckRollup: [] }).action).toBe('abort');
+  });
+});
