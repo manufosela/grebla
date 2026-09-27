@@ -29,7 +29,13 @@ describe('componentes: cada módulo evalúa sin error de inicialización', () =>
     expect(paths.length).toBeGreaterThan(0);
   });
 
+  // El timeout es generoso A PROPÓSITO (RMR-BUG-0134). Lo que se comprueba aquí
+  // es que el módulo EVALÚA, no lo rápido que Vite lo transforma: en frío —sin
+  // caché de transform— `career-app.js` arrastra el juego entero (Lit + Three) y
+  // pasa de los 5 s por defecto en cuanto la máquina tiene algo más entre manos.
+  // Se ponía rojo la primera vez y verde la segunda, que es la peor forma de
+  // fallar: un rojo que no significa nada enseña a ignorar los rojos.
   it.each(paths)('evalúa %s', async (path) => {
     await expect(modules[path]()).resolves.toBeDefined();
-  });
+  }, 60_000);
 });
