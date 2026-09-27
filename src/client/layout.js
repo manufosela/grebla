@@ -245,7 +245,7 @@ await watchDeployedVersion(setStaleBadge);
  * El `alt` sale del nombre configurado de la casa, así que se lee la identidad
  * en la misma tanda.
  */
-(async () => {
+async function pintarLogoDeLaInstancia() {
   const img = document.querySelector('#brand-logo');
   if (!img) return;
   try {
@@ -265,7 +265,13 @@ await watchDeployedVersion(setStaleBadge);
   } catch {
     /* sin logo propio: se queda la marca de GREBLA */
   }
-})();
+}
+
+// Sin `await`: con uno de nivel superior, todo lo que viene debajo —el registro
+// del service worker— esperaría a una lectura de Firestore que no le incumbe.
+// El `void` dice que la promesa se suelta a propósito; sus fallos ya se tragan
+// dentro, donde se sabe qué significan.
+void pintarLogoDeLaInstancia();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {

@@ -28,7 +28,12 @@ import { checkLogoFile, LOGO_MAX_BYTES } from '../../tools/admin/domain/orgLogo.
 function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
+    // `result` es string con readAsDataURL, pero el tipo admite ArrayBuffer:
+    // convertirlo a ciegas daría «[object ArrayBuffer]» como si fuera un logo.
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('el archivo no se pudo leer como imagen'));
+    };
     reader.onerror = () => reject(reader.error ?? new Error('no se pudo leer el archivo'));
     reader.readAsDataURL(file);
   });

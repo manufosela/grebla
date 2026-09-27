@@ -38,6 +38,14 @@ describe('gremio principal', () => {
     expect(normalizePrimaryGuild(['Frontend', 'QA'], '')).toBeNull();
     expect(normalizePrimaryGuild(['Frontend', 'QA'], '  QA  ')).toBe('QA');
   });
+
+  it('lo que no es texto se descarta, no se convierte', () => {
+    // Convertirlo daría «[object Object]»: un gremio fantasma que encima se
+    // guardaría tal cual.
+    expect(normalizePrimaryGuild([{}, 'QA'], 'QA')).toBe('QA');
+    expect(normalizePrimaryGuild(['Frontend', 'QA'], {})).toBeNull();
+    expect(normalizePrimaryGuild([{}, null], null)).toBeNull();
+  });
 });
 
 describe('a quién le falta elegir', () => {

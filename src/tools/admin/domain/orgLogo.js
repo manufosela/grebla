@@ -49,11 +49,19 @@ export function checkLogoFile(file) {
       error: `El logo tiene que ser SVG o PNG. Este es ${file.type || 'de un tipo que el navegador no reconoce'}.`,
     };
   }
-  if (!(file.size > 0)) return { ok: false, error: 'El archivo está vacío.' };
-  if (file.size > LOGO_MAX_BYTES) {
+  // El tamaño se exige NÚMERO finito y positivo, no «no menor que cero». Sin
+  // `size` las comparaciones dan NaN, y NaN no es ni mayor ni menor que nada:
+  // un archivo así se colaría por las dos puertas, la del vacío y la del tope.
+  // Y se comprueba el TIPO en vez de convertir: un «1024» en texto no es un
+  // tamaño, es una señal de que lo que llega no es un File.
+  const size = file.size;
+  if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+    return { ok: false, error: 'El archivo está vacío.' };
+  }
+  if (size > LOGO_MAX_BYTES) {
     return {
       ok: false,
-      error: `El logo pesa ${kb(file.size)} y el tope son ${kb(LOGO_MAX_BYTES)}. Un logo de cabecera suele bajar de 20 KB.`,
+      error: `El logo pesa ${kb(size)} y el tope son ${kb(LOGO_MAX_BYTES)}. Un logo de cabecera suele bajar de 20 KB.`,
     };
   }
   return { ok: true };
