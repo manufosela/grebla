@@ -9,6 +9,7 @@
  * @property {string} id
  * @property {string} name
  * @property {string[]} [guilds]      Nombres de gremio (tecnologías/stack) asignados a la persona; catálogo Guild con ámbito personal/global.
+ * @property {string|null} [primaryGuild] Gremio PRINCIPAL: el que manda al contar por gremio, para que quien milita en dos no se cuente dos veces (RMR-TSK-0594). Los demás son contexto.
  * @property {string[]} [disciplines] Ids de disciplina del framework de carrera (/careerFramework/engineering).
  * @property {string|null} [levelId]  Id de nivel del framework de carrera, o null si aún sin nivel.
  * @property {string|null} [careerTargetLevelId]  Nivel objetivo de carrera declarado por el propio ingeniero (o null).
