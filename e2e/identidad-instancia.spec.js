@@ -108,6 +108,56 @@ test('sin nombre propio, Equipo sigue diciendo el del producto', async ({ page }
   });
 });
 
+test('sube su logo y se queda puesto, en la cabecera y en la vista previa (RMR-TSK-0598)', async ({ page }) => {
+  await conConfigIntacta(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin/organizacion#identidad');
+
+    const identidad = panel(page).locator('org-identity');
+    await expect(identidad).toBeVisible({ timeout: 20_000 });
+    await expect(identidad.locator('.logo-empty')).toBeVisible();
+
+    // Elegir el archivo ES la decisión: se guarda ahí, sin un «guardar» de más
+    // que solo sirve para dejarlo a medias.
+    await identidad.locator('input[type=file]').setInputFiles({
+      name: 'logo.svg',
+      mimeType: 'image/svg+xml',
+      buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 20"><rect width="60" height="20"/></svg>'),
+    });
+
+    await expect(identidad.locator('.logo-preview img')).toBeVisible();
+    await expect.poll(async () => (await db().doc('config/org').get()).data()?.logo ?? null, { timeout: 15_000 })
+      .toContain('data:image/svg+xml;base64,');
+
+    // Y la cabecera, que es para lo que se sube.
+    await page.reload();
+    await expect(page.locator('#brand-logo')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.brand-word')).toBeHidden();
+  });
+});
+
+test('un archivo que no vale se rechaza diciendo por qué, y no toca lo guardado', async ({ page }) => {
+  await conConfigIntacta(async () => {
+    await signInAs(page, 'superadmin');
+    await page.goto('/admin/organizacion#identidad');
+
+    const identidad = panel(page).locator('org-identity');
+    await expect(identidad).toBeVisible({ timeout: 20_000 });
+    await identidad.locator('input[type=file]').setInputFiles({
+      name: 'foto.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from('no soy un logo'),
+    });
+
+    // Dice qué trae y qué vale, no un «archivo no válido» que obliga a adivinar.
+    const error = identidad.locator('.logo-block .error');
+    await expect(error).toContainText('SVG o PNG');
+    await expect(error).toContainText('image/jpeg');
+    await expect(identidad.locator('.logo-empty')).toBeVisible();
+    expect((await db().doc('config/org').get()).data()?.logo ?? null).toBeNull();
+  });
+});
+
 test('quien no gobierna no llega a la identidad', async ({ page }) => {
   await signInAs(page, 'engineer');
   await page.goto('/admin/organizacion#identidad');
