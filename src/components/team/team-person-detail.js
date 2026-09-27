@@ -62,6 +62,7 @@ import { getPersonLogbook } from '../../lib/engineer.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
 import { toggleDomain } from '../../tools/team/domain/membership.js';
+import { normalizePrimaryGuild } from '../../tools/team/domain/primaryGuild.js';
 import { BELBIN_ITEMS, BELBIN_SCALE } from '../../tools/team/data/belbinItems.js';
 import { proposeRoles, evidenceFor } from '../../tools/team/domain/belbinSurvey.js';
 import { listDomains } from '../../lib/domains.js';
@@ -361,6 +362,12 @@ export class TeamPersonDetail extends LitElement {
     .org-checks .chk input { width: 1.15rem; height: 1.15rem; accent-color: var(--rm-accent, #2a9d8f); flex: none; }
     .org-checks .orphan-tag { font-style: normal; font-size: 0.72rem; color: var(--rm-danger, #dc2626); }
 
+    /* ── Gremio principal (RMR-TSK-0594): solo con dos o más gremios ── */
+    .primary-guild { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 0.9rem 1rem 1rem; margin: 0; display: grid; gap: 0.6rem; }
+    .primary-guild legend { padding: 0 0.4rem; font-size: 0.9rem; font-weight: 700; color: var(--rm-text, #111827); }
+    .primary-guild .hint { margin: 0; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
+    .primary-guild .warn { margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--rm-danger, #b91c1c); }
+
 
     /* ── Valoración frente al nivel (verde «cumple» / rojo «no llega») ── */
     .career .assess { list-style: none; margin: 0.3rem 0 0.75rem; padding: 0; display: grid; gap: 0.6rem; }
@@ -531,7 +538,7 @@ export class TeamPersonDetail extends LitElement {
     this._logbook = null;
     /** Borrador editable de la pestaña «Datos» (RMR-TSK-0173). Se siembra desde
      * la persona al abrirla. @type {{ name: string, githubLogin: string, startDate: string, guilds: string[], labels: string[], uid: string }} */
-    this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], labels: [], squadIds: [], domainKeys: [], uid: '' };
+    this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], primaryGuild: null, labels: [], squadIds: [], domainKeys: [], uid: '' };
     /** Catálogos para los selectores de Datos (gremios, labels, cuentas). */
     this._guildsCat = [];
     this._labelsCat = [];
@@ -641,6 +648,10 @@ export class TeamPersonDetail extends LitElement {
       githubLogin: p?.githubLogin ?? '',
       startDate: p?.startDate ?? '',
       guilds: [...(p?.guilds ?? [])],
+      // Gremio PRINCIPAL (RMR-TSK-0594): el que cuenta cuando se corta por
+      // gremio. Se siembra normalizado, así que uno que ya no esté entre sus
+      // gremios no llega al borrador.
+      primaryGuild: normalizePrimaryGuild(p?.guilds, p?.primaryGuild),
       labels: [...(p?.labels ?? [])],
       // Se arrastra sin editarse a propósito: ya no hay UI de squads (F5 del ADR
       // de dominios), pero el dato guardado se conserva para no cerrar la puerta
@@ -2258,7 +2269,14 @@ export class TeamPersonDetail extends LitElement {
   /** @param {string} name @param {boolean} checked */
   _toggleDatosGuild(name, checked) {
     const guilds = checked ? [...this._datos.guilds, name] : this._datos.guilds.filter((g) => g !== name);
-    this._datos = { ...this._datos, guilds };
+    // El principal se recalcula con la lista nueva: al quitarle el gremio que
+    // era principal, deja de serlo en el momento — no al guardar.
+    this._datos = { ...this._datos, guilds, primaryGuild: normalizePrimaryGuild(guilds, this._datos.primaryGuild) };
+  }
+
+  /** @param {string} name */
+  _pickPrimaryGuild(name) {
+    this._datos = { ...this._datos, primaryGuild: normalizePrimaryGuild(this._datos.guilds, name) };
   }
 
   /**
@@ -2312,6 +2330,7 @@ export class TeamPersonDetail extends LitElement {
         githubLogin: this._datos.githubLogin.trim() || null,
         startDate: this._datos.startDate || null,
         guilds: [...this._datos.guilds],
+        primaryGuild: normalizePrimaryGuild(this._datos.guilds, this._datos.primaryGuild),
         labels: [...this._datos.labels],
         squadIds: [...this._datos.squadIds],
         domainKeys: [...this._datos.domainKeys],
@@ -2347,6 +2366,39 @@ export class TeamPersonDetail extends LitElement {
       ${catalog.map((c) => this._datosCheck(c.name, selected, onToggle, false))}
       ${orphans.map((name) => this._datosCheck(name, selected, onToggle, true))}
     </div>`;
+  }
+
+  /**
+   * Gremio PRINCIPAL (RMR-TSK-0594). Solo aparece con DOS o más gremios: con uno
+   * no hay nada que elegir, y preguntarlo sería ruido. Son radios y no un
+   * `<select>` a propósito — con dos o tres opciones se ven todas de un vistazo,
+   * y un select con `<option>` en la misma plantilla de Lit no refleja su valor.
+   *
+   * Mientras no haya elegido, se dice: quien mira la ficha necesita saber que ahí
+   * falta un dato, no encontrarse una elección hecha por nosotros.
+   * @param {{ guilds: string[], primaryGuild: string|null }} d
+   */
+  _renderPrimaryGuild(d) {
+    if ((d.guilds ?? []).length < 2) return null;
+    return html`<fieldset class="primary-guild">
+      <legend>Gremio principal</legend>
+      <p class="hint">
+        Está en varios gremios. El principal es el que cuenta al agrupar por gremio;
+        los demás se conservan como contexto.
+      </p>
+      ${d.primaryGuild ? null : html`<p class="warn">Sin elegir: al contar por gremio, esta persona no suma en ninguno.</p>`}
+      <div class="org-checks">
+        ${d.guilds.map((name) => html`<label class="chk">
+          <input
+            type="radio"
+            name="primary-guild"
+            .checked=${d.primaryGuild === name}
+            @change=${() => this._pickPrimaryGuild(name)}
+          />
+          <span>${name}</span>
+        </label>`)}
+      </div>
+    </fieldset>`;
   }
 
   /** Un checkbox de gremio/label; `orphan` marca los que están fuera del catálogo. */
@@ -2462,10 +2514,16 @@ export class TeamPersonDetail extends LitElement {
     const d = this._datos;
     const active = this._orgSubtab;
     const panel = {
-      gremios: () => this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c)),
+      gremios: () => html`
+        ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
+        ${this._renderPrimaryGuild(d)}
+      `,
       labels: () => this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c)),
       dominios: () => this._renderDatosDomains(d.domainKeys ?? []),
-    }[active] ?? (() => this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c)));
+    }[active] ?? (() => html`
+      ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
+      ${this._renderPrimaryGuild(d)}
+    `);
     return html`
       <section class="org-section">
         ${this._renderNestedTabs(ORG_SUBTABS, active, 'porg', 'Clasificación de la persona', (id) => { this._orgSubtab = id; })}
