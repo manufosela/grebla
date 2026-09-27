@@ -15,6 +15,28 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.223.0] - 2026-09-27
+
+### Añadido
+
+- **GREBLA lee las métricas DORA y LEAN del portal**, que es quien tiene las
+  fuentes, en vez de calcularlas. Entra el dominio que las interpreta y la Cloud
+  Function que las trae; la pantalla va detrás.
+
+  Tres reglas, las tres nacidas de errores reales: **ausente no es cero** (lo que
+  no viene sale con raya, porque un «0 %» parece una semana perfecta cuando
+  significa que nadie midió); **lo que no tiene fuente no se rellena** con la
+  métrica de al lado; y **una tasa sin base no es una tasa** —un 0 % sobre un
+  solo despliegue con señal se dice como recuento, no como porcentaje—.
+
+  Una versión de contrato distinta **falla en alto** en vez de leerse a medias:
+  leer una forma desconocida produce ceros silenciosos, que es la peor manera de
+  enterarse de un cambio. Y un fallo al leer **nunca devuelve listas vacías**: la
+  pantalla podrá decir «no se han podido leer» en vez de pintar cero actividad,
+  distinguiendo «el portal aún no ha calculado» de «no reconoce la credencial».
+
+  El token vive como secreto de la función y no llega nunca al navegador.
+
 ## [1.222.0] - 2026-09-26
 
 ### Cambiado
