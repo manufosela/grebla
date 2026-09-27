@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.225.1] - 2026-09-27
+
+### Arreglado
+
+- **El Mapa del equipo abre mucho más rápido.** Pedía las lecturas de cada
+  persona esperando a que terminaran las de la anterior: con 40 fichas eran 40
+  rondas encadenadas contra la base de datos, y de ahí que tardara tanto en
+  aparecer. Ahora se piden todas a la vez. El orden de las filas no cambia.
+
 ## [1.225.0] - 2026-09-27
 
 ### Cambiado
