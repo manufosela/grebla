@@ -99,4 +99,45 @@ describe('resolvePerson — fallback (dato pre-migración, por uid)', () => {
     expect(r.superiorPersonId).toBeNull();
     expect(r.superiorUidLegacy).toBe('head-uid');
   });
+
+  describe('el respaldo para pintar un nombre cuando el jefe no está en el roster (RMR-BUG-0091)', () => {
+    const conModeloNuevo = {
+      id: 'p-nueva', uid: null, reportsToPersonId: 'p-jefe-fuera', ownerLeaderUid: 'mgr-uid',
+    };
+
+    it('con el modelo nuevo se expone el dueño sincronizado', () => {
+      // Este es el caso que el fix original no cubría: su fallback era
+      // `superiorUidLegacy`, que en esta rama vale SIEMPRE null, así que no
+      // rescataba nada y la celda seguía diciendo «Sin manager».
+      const r = resolvePerson(conModeloNuevo, { people, leaders, heads });
+      expect(r.superiorPersonId).toBe('p-jefe-fuera');
+      expect(r.superiorUidLegacy).toBeNull();
+      expect(r.ownerUidFallback).toBe('mgr-uid');
+    });
+
+    it('y el respaldo NO se disfraza de dato legacy', () => {
+      // Meterlo en `superiorUidLegacy` habría arreglado la celda mintiendo en
+      // otro sitio: ahí no hay dato pre-migración que conservar.
+      const r = resolvePerson(conModeloNuevo, { people, leaders, heads });
+      expect(r.superiorUidLegacy).toBeNull();
+    });
+
+    it('sin dueño no se inventa: null, y la celda dirá su etiqueta de vacío', () => {
+      const sinDueno = { id: 'p-x', uid: null, reportsToPersonId: 'p-jefe-fuera' };
+      expect(resolvePerson(sinDueno, { people, leaders, heads }).ownerUidFallback).toBeNull();
+    });
+
+    it('el campo sale SIEMPRE, salga por la rama que salga', () => {
+      // Quien pinta no deberia tener que saber por que rama salio el resultado.
+      const casos = [
+        conModeloNuevo,
+        { id: 'p-huerfano', uid: null },
+        nicoFicha,
+      ];
+      for (const persona of casos) {
+        const r = resolvePerson(persona, { people, leaders, heads });
+        expect(r).toHaveProperty('ownerUidFallback');
+      }
+    });
+  });
 });

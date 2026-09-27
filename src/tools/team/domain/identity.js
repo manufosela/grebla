@@ -82,6 +82,7 @@ export function resolvePerson(person, { people = [], leaders = [], heads = [] } 
       superiorKind: 'none',
       superiorPersonId: null,
       superiorUidLegacy: null,
+      ownerUidFallback: null,
       emptyLabel: 'Sin superior',
       canTransfer: false,
     };
@@ -98,6 +99,12 @@ export function resolvePerson(person, { people = [], leaders = [], heads = [] } 
       superiorKind,
       superiorPersonId: person.reportsToPersonId,
       superiorUidLegacy: null,
+      // Último recurso para PINTAR un nombre cuando la ficha del superior no
+      // está en el roster visible (p. ej. la self-ficha del propio manager).
+      // Con organigrama y propiedad sincronizados (RMR-PCS-0035) es el mismo
+      // jefe. Va en campo propio y no dentro de `superiorUidLegacy` porque aquí
+      // NO hay dato legacy, y decir que lo hay sería mentir en otro sitio.
+      ownerUidFallback: person?.ownerLeaderUid ?? null,
       emptyLabel,
       canTransfer: true,
     };
@@ -114,6 +121,7 @@ export function resolvePerson(person, { people = [], leaders = [], heads = [] } 
     superiorKind,
     superiorPersonId: personIdByUid(superiorUidLegacy, people),
     superiorUidLegacy,
+    ownerUidFallback: person?.ownerLeaderUid ?? null,
     emptyLabel,
     canTransfer: true,
   };
