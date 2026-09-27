@@ -57,3 +57,10 @@ coverage/
 .karajan/policy-decisions.jsonl
 .karajan/audit-history.db
 .karajan/identity.local.yml
+# El arnés del agente anfitrión (hooks de sesión) NO viaja: lo instala quien
+# arranca la sesión, y una copia versionada solo podría mentir sobre lo que de
+# verdad está gobernando. Es la opción A del ADR 0009 de karajan, confirmada por
+# su equipo. Los hooks de GIT sí se versionan, y por lo contrario: un clon fresco
+# tiene esos gates activos desde el segundo cero porque `core.hooksPath` apunta a
+# ficheros que viajan.
+.karajan/harness/
