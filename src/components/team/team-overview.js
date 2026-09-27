@@ -57,6 +57,9 @@ export class TeamOverview extends LitElement {
     .muted { color: var(--rm-muted, #5b6b7d); }
     .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; }
     .error { color: var(--rm-danger, #dc2626); font-size: 0.85rem; }
+    /* Vale para <button> y para <a>: lo que vive dentro de la herramienta se
+       navega con un evento y lo de fuera con un enlace de verdad, pero al leerlo
+       tiene que dar igual. */
     .link-inline {
       border: 0; background: none; padding: 0; margin: 0; cursor: pointer;
       font: inherit; font-weight: 700; color: var(--rm-accent, #2a9d8f); text-decoration: underline;
@@ -141,8 +144,11 @@ export class TeamOverview extends LitElement {
   }
 
   /**
-   * Pide a `<team-app>` que cambie de sección principal (p. ej. «Personas» o
-   * «Ajustes») mediante el evento burbujeante `goto-tab`.
+   * Pide a `<team-app>` que cambie de sección principal mediante el evento
+   * burbujeante `goto-tab`. Solo vale para secciones que existan en `TEAM_TABS`:
+   * una que no esté se ignora EN SILENCIO, y así se quedó muerto el enlace de
+   * «Ajustes» cuando esa sección se mudó al panel (RMR-BUG-0130). Para lo que
+   * vive fuera de la herramienta, un enlace normal.
    * @param {string} tab
    * @returns {void}
    */
@@ -297,7 +303,7 @@ export class TeamOverview extends LitElement {
           ? html`<p class="empty">Sin datos de conocimiento. Registra niveles por área en las fichas de
               <button type="button" class="link-inline" @click=${() => this._gotoTab('people')}>Personas</button>.${this._areaName.size === 0
                 ? html` Antes, crea áreas de conocimiento en
-                    <button type="button" class="link-inline" @click=${() => this._gotoTab('settings')}>Ajustes</button>.`
+                    <a class="link-inline" href="/admin/organizacion#areas">Administración › Organización</a>.`
                 : ''}</p>`
           : html`
               <table>
