@@ -15,6 +15,23 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.226.0] - 2026-09-28
+
+### Añadido
+
+- **Cada persona puede tener un gremio principal.** Militar en dos gremios es
+  normal y sigue siendo posible; lo que no puede ser es contarla dos veces. El
+  principal es el que manda al agrupar por gremio y se elige en su ficha, en
+  Organización › Gremios, solo cuando está en dos o más. Mientras no se elija, se
+  dice —no se elige por ti—.
+- **Mi Role Mirror enseña el nivel de carrera con su sub-nivel** (`L1-2`), y
+  cuánto lleva cumplido del nivel siguiente. Es el mismo número que ve el manager
+  en el Seguimiento del plan, porque ahora sale del mismo sitio. Si el manager lo
+  ajustó a mano, se dice, con su nota, y el cálculo sigue a la vista.
+- **La instancia puede llevar su propio logo** en la cabecera, en lugar de la
+  marca de GREBLA. Se sube desde Organización › Identidad (SVG o PNG, hasta
+  96 KB). Sin logo propio se queda el de GREBLA: nunca una cabecera vacía.
+
 ## [1.225.1] - 2026-09-27
 
 ### Arreglado
