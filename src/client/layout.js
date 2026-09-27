@@ -235,6 +235,38 @@ async function watchDeployedVersion(setStale) {
 const setStaleBadge = mountVersionBadge();
 await watchDeployedVersion(setStaleBadge);
 
+/**
+ * Logo propio de la instancia en la cabecera (RMR-TSK-0598).
+ *
+ * Se carga SIN esperar a la sesión y sin bloquear nada: si hay logo, sustituye
+ * la marca de GREBLA; si no lo hay —o si no se puede leer— la marca se queda
+ * como está. Una cabecera vacía mientras se decide sería peor que la nuestra.
+ *
+ * El `alt` sale del nombre configurado de la casa, así que se lee la identidad
+ * en la misma tanda.
+ */
+(async () => {
+  const img = document.querySelector('#brand-logo');
+  if (!img) return;
+  try {
+    const [{ getOrgLogo, getOrgIdentity }, { logoAltFrom }] = await Promise.all([
+      import('../lib/orgConfig.js'),
+      import('../tools/admin/domain/orgLogo.js'),
+    ]);
+    const [src, identity] = await Promise.all([getOrgLogo(), getOrgIdentity()]);
+    if (!src) return;
+    img.src = src;
+    img.alt = logoAltFrom(identity);
+    img.hidden = false;
+    // La marca de GREBLA se va entera —icono y palabra—: son dos casas, no una
+    // con dos logos.
+    document.querySelector('.brand-mark')?.setAttribute('hidden', '');
+    document.querySelector('.brand-word')?.setAttribute('hidden', '');
+  } catch {
+    /* sin logo propio: se queda la marca de GREBLA */
+  }
+})();
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     // Si un SW nuevo toma el control con la pestaña abierta, hay versión nueva.
