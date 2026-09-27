@@ -26,13 +26,13 @@ test('la card «Mi espacio» se ve aunque las políticas no den ninguna herramie
   // Es lo suyo: la política gobierna la herramienta de equipo, no el derecho a
   // mirar sus propios datos. Sin esto, alguien de una rama sin permisos entraría
   // a un hub vacío.
-  const restringida = { label: 'DORA', audience: { branches: ['no-existe'] }, managedBy: {} };
-  await db().doc('toolPolicies/dora').set(restringida);
+  const restringida = { label: 'Entrega', audience: { branches: ['no-existe'] }, managedBy: {} };
+  await db().doc('toolPolicies/entrega').set(restringida);
   await signInAs(page, 'engineer');
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Mi espacio' })).toBeVisible();
-  await expect(page.locator('[data-tool-id="dora"]')).toBeHidden();
-  await db().doc('toolPolicies/dora').delete();
+  await expect(page.locator('[data-tool-id="entrega"]')).toBeHidden();
+  await db().doc('toolPolicies/entrega').delete();
 });
 
 test('Mi espacio tiene su «Volver» al hub, como cualquier herramienta', async ({ page }) => {
@@ -76,7 +76,7 @@ test('el panel tiene su «Volver» al hub', async ({ page }) => {
 });
 
 test('los permisos por persona se gestionan desde su propia sección del panel', async ({ page }) => {
-  await db().doc('toolPolicies/dora').set({ label: 'DORA', audience: { branches: ['engineering'] }, managedBy: {} });
+  await db().doc('toolPolicies/entrega').set({ label: 'Entrega', audience: { branches: ['engineering'] }, managedBy: {} });
   // Si el test muere a medias, esta política se queda puesta y desordena el hub
   // de los demás specs: por eso se retira pase lo que pase.
   try {
@@ -89,10 +89,10 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
 
   // Se elige a alguien y se ve qué le toca por su rol antes de decidir.
   await page.getByLabel('Persona').selectOption({ label: 'Persona del manager' });
-  const fila = page.locator('person-permissions tr', { hasText: 'DORA' });
+  const fila = page.locator('person-permissions tr', { hasText: 'Entrega' });
   const ve = fila.getByLabel('Ve o usa');
   // La etiqueta de «heredar» dice qué pasa si no tocas nada: esta persona es de
-  // ingeniería, así que DORA le llega por su rama sin ninguna excepción.
+  // ingeniería, así que Entrega le llega por su rama sin ninguna excepción.
   await expect(ve).toContainText('Heredar (sí)');
   // Y la misma matriz que la ficha: también se decide quién la GESTIONA.
   await expect(fila.getByLabel('Gestiona')).toBeVisible();
@@ -101,18 +101,18 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
   await ve.selectOption('yes');
   await expect.poll(async () => {
     const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
-    return snap.docs[0]?.data()?.toolOverrides?.dora?.use ?? null;
+    return snap.docs[0]?.data()?.toolOverrides?.entrega?.use ?? null;
   }, { timeout: 15_000 }).toBe(true);
 
   // Y «heredar» la retira, en vez de dejar un «no» escrito que nadie entiende.
   await ve.selectOption('inherit');
   await expect.poll(async () => {
     const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
-    return snap.docs[0]?.data()?.toolOverrides?.dora ?? null;
+    return snap.docs[0]?.data()?.toolOverrides?.entrega ?? null;
   }, { timeout: 15_000 }).toBeNull();
 
   } finally {
-    await db().doc('toolPolicies/dora').delete();
+    await db().doc('toolPolicies/entrega').delete();
   }
 });
 

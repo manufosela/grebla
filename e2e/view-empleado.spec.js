@@ -19,10 +19,14 @@ function db() {
 // global cambiaban el gate de otras herramientas y tumbaban sus tests.
 test.beforeAll(async () => {
   await db().doc('toolPolicies/kudos').set({ label: 'Kudos', audience: { everyone: true }, managedBy: {} });
-  await db().doc('toolPolicies/dora').set({ label: 'DORA', audience: { branches: ['engineering'] }, managedBy: {} });
+  // Una herramienta RESTRINGIDA, para poder ver que desaparece. Antes se usaba
+  // la de metricas de entrega por repositorio, que se retiro (RMR-TSK-0603) y
+  // dejo este poll cumpliendose al instante: el hub se leia antes de
+  // repintarse, que es justo lo que el comentario de abajo advertia.
+  await db().doc('toolPolicies/entrega').set({ label: 'Entrega', audience: { branches: ['engineering'] }, managedBy: {} });
 });
 test.afterAll(async () => {
-  await Promise.all([db().doc('toolPolicies/kudos').delete(), db().doc('toolPolicies/dora').delete()]);
+  await Promise.all([db().doc('toolPolicies/kudos').delete(), db().doc('toolPolicies/entrega').delete()]);
 });
 
 /** ids de las herramientas visibles ahora mismo en el hub. */
@@ -46,7 +50,7 @@ test('en vista «Empleado» solo quedan las herramientas abiertas a todos', asyn
   // Se espera a que DESAPAREZCA una restringida, no a que aparezca la abierta:
   // «kudos» ya estaba en la lista del superadmin, así que esperarla se cumple
   // al instante y se leería el hub antes de repintarse.
-  await expect.poll(() => visibles(page), { timeout: 10_000 }).not.toContain('dora');
+  await expect.poll(() => visibles(page), { timeout: 10_000 }).not.toContain('entrega');
   const comoEmpleado = await visibles(page);
 
   expect(comoEmpleado).toContain('kudos');    // abierta a todos
