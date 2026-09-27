@@ -12,8 +12,8 @@
  */
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
-import { effectiveSubLevel, nextLevelFor } from '../../tools/career/domain/subLevel.js';
-import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
+import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { levelProgressFor, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
 import { getLevelAssessment } from '../../lib/careerAssessment.js';
 import { getMyPerson } from '../../lib/engineer.js';
@@ -684,9 +684,10 @@ export class TeamPeople extends LitElement {
     return html`<span class="chips">${list.map((x) => this._chipEl(x, catalog ? this._catalogColor(x, catalog) : ''))}</span>`;
   }
 
-  /** Badges LX.Y de la tabla (RMR-TSK-0429): derivados del mapa (ruta del
-   * siguiente nivel + journey) con el override del manager encima. Carga
-   * perezosa y tolerante: sin rutas/journeys, la tabla sale sin badges. */
+  /** Badges LX.Y de la tabla (RMR-TSK-0429): salen de las EXPECTATIVAS cumplidas
+   * del nivel siguiente, con el ajuste del manager encima — no del avance en el
+   * mapa, que cuenta otra historia (RMR-PCS-0044). Carga perezosa y tolerante:
+   * sin valoraciones legibles, la tabla sale sin badges. */
   async _loadSubLevels() {
     if (!this.framework || !(this.people?.length)) return;
     try {
@@ -699,8 +700,7 @@ export class TeamPeople extends LitElement {
             const prog = valoracion
               ? levelProgressFor({ person: p, framework: this.framework, marks: marksOf(valoracion), history: closureHistory(valoracion) })
               : null;
-            const derived = prog ? { sub: prog.sub, done: prog.earned, total: prog.total, pct: prog.pct, label: prog.label } : null;
-            return [p.id, effectiveSubLevel(p, derived, levelCodeOf(p.levelId))];
+            return [p.id, subLevelFromProgress(p, prog, levelCodeOf(p.levelId))];
           } catch {
             return [p.id, null];
           }

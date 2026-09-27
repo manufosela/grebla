@@ -27,8 +27,8 @@ import { ARCHIPELAGO_ISLANDS } from '../../tools/career/data/archipelago.js';
 import { getJourney, getPlaytime } from '../../tools/career/application/usecases.js';
 import { getLevelAssessment } from '../../lib/careerAssessment.js';
 import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
-import { effectiveSubLevel, nextLevelFor } from '../../tools/career/domain/subLevel.js';
-import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
+import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { levelProgressFor, subLevelFromProgress, subLevelCalcText } from '../../tools/career/domain/levelProgress.js';
 import { careerRoster } from '../../tools/career/domain/careerRoster.js';
 import { updatePerson } from '../../tools/team/application/usecases/index.js';
 import { formatPlayMinutes } from '../../tools/career/domain/playtime.js';
@@ -225,13 +225,10 @@ export class CareerTracking extends LitElement {
       } catch { /* sin valoración legible: sin chip */ }
     }));
     const codeOf = (id) => niveles.find((l) => l.id === id)?.code ?? null;
-    return new Map(gente.map((p) => {
-      const prog = progressById.get(p.id) ?? null;
-      const derived = prog
-        ? { sub: prog.sub, done: prog.earned, total: prog.total, pct: prog.pct, label: prog.label }
-        : null;
-      return [p.id, effectiveSubLevel(p, derived, codeOf(p.levelId))];
-    }));
+    return new Map(gente.map((p) => [
+      p.id,
+      subLevelFromProgress(p, progressById.get(p.id) ?? null, codeOf(p.levelId)),
+    ]));
   }
 
   render() {
@@ -379,9 +376,9 @@ export class CareerTracking extends LitElement {
         ? html`<span class="lvl">${row.career.currentLevelCode}</span>`
         : html`<span class="muted">—</span>`;
     }
-    const auto = s.pct === null
-      ? 'sin valorar todavía frente al nivel siguiente'
-      : `${s.pct}% del nivel siguiente cumplido (${s.done} de ${s.total} puntos valorados)`;
+    // La frase del cálculo vive en el dominio: Mi Role Mirror enseña el mismo
+    // badge y tiene que decir lo mismo (RMR-TSK-0605).
+    const auto = subLevelCalcText(s);
     const porqué = s.note ? `: ${s.note}` : '';
     const title = s.source === 'manual'
       ? `Ajustado por el manager${porqué} · cálculo: ${auto}`

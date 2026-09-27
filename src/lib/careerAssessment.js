@@ -13,7 +13,9 @@
  */
 import { doc, getDoc, getDocs, collection, setDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { normalizeLevelAssessment, assertAppendOnlyClosures } from '../tools/career/data/levelAssessment.js';
+import { normalizeLevelAssessment, assertAppendOnlyClosures, marksOf, closureHistory } from '../tools/career/data/levelAssessment.js';
+import { levelProgressFor, subLevelFromProgress } from '../tools/career/domain/levelProgress.js';
+import { nextLevelFor } from '../tools/career/domain/subLevel.js';
 
 /**
  * Referencia al documento de valoración de una persona.
@@ -85,6 +87,41 @@ export async function listLevelAssessments(personId) {
   if (!personId) throw new Error('listLevelAssessments requiere persona');
   const snap = await getDocs(collection(db, 'people', personId, 'careerAssessments'));
   return snap.docs.map((d) => normalizeLevelAssessment(d.data(), d.id));
+}
+
+/**
+ * El sub-nivel efectivo de una persona, leyendo lo que hace falta: la valoración
+ * frente al SIGUIENTE nivel (RMR-TSK-0605).
+ *
+ * Es el único camino para pintar un badge L1-2, y por eso vive aquí y no en cada
+ * pantalla: el Seguimiento del plan, la tabla de Personas y Mi Role Mirror leen
+ * lo mismo y, por construcción, muestran el mismo número.
+ *
+ * Ojo con la fuente: el sub-nivel sale de las EXPECTATIVAS cumplidas, no del
+ * avance en el mapa de carrera. La formación cuenta otra historia y no mueve el
+ * nivel (RMR-PCS-0044).
+ *
+ * Sin nivel, sin siguiente o sin valoración legible → null, salvo que el manager
+ * lo haya ajustado a mano, que aplica igual.
+ *
+ * @param {{ id: string, levelId?: string|null }} person
+ * @param {{ levels?: any[] }|null} framework
+ * @returns {Promise<ReturnType<typeof subLevelFromProgress>>}
+ */
+export async function getPersonSubLevel(person, framework) {
+  if (!person?.id || !framework) return null;
+  const levels = framework.levels ?? [];
+  const levelCode = levels.find((l) => l.id === person.levelId)?.code ?? null;
+  const next = nextLevelFor(levels, person.levelId);
+  if (!next) return subLevelFromProgress(person, null, levelCode);
+  const assessment = await getLevelAssessment(person.id, next.id);
+  const progress = levelProgressFor({
+    person,
+    framework,
+    marks: marksOf(assessment),
+    history: closureHistory(assessment),
+  });
+  return subLevelFromProgress(person, progress, levelCode);
 }
 
 /**

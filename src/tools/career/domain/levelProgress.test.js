@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   PROGRESS_THRESHOLDS, expectationWeight, levelCompletion,
   subLevelFromCompletion, levelProgressLabel, levelProgressFor,
+  subLevelFromProgress, subLevelCalcText, subLevelDetail,
 } from './levelProgress.js';
 
 /**
@@ -164,5 +165,54 @@ describe('levelProgressFor', () => {
   it('el siguiente nivel es el de SU escalera: un IC no mide contra los EM', () => {
     const p = llamar(marcas('tech'));
     expect(p.nextLevelId).toBe('l2');
+  });
+});
+
+describe('subLevelFromProgress — el badge que comparten las tres pantallas (RMR-TSK-0605)', () => {
+  const progreso = { sub: 2, earned: 3, total: 6, pct: 50, label: 'L1-2' };
+
+  it('traduce la progresión al badge, con puntos valorados y no paradas', () => {
+    expect(subLevelFromProgress({}, progreso, 'L1')).toEqual({
+      sub: 2, done: 3, total: 6, pct: 50, label: 'L1-2', source: 'auto', note: null,
+    });
+  });
+
+  it('el ajuste del manager manda, y conserva el cálculo debajo', () => {
+    const persona = { subLevelOverride: { value: 3, note: 'lidera de facto' } };
+    const out = subLevelFromProgress(persona, progreso, 'L1');
+    expect([out.label, out.source, out.note, out.pct]).toEqual(['L1-3', 'manual', 'lidera de facto', 50]);
+  });
+
+  it('sin valoración no hay badge, salvo que el manager lo haya fijado', () => {
+    expect(subLevelFromProgress({}, null, 'L1')).toBeNull();
+    expect(subLevelFromProgress({ subLevelOverride: { value: 1 } }, null, 'L1').label).toBe('L1-1');
+  });
+});
+
+describe('cómo se dice el sub-nivel', () => {
+  const auto = { sub: 2, done: 3, total: 6, pct: 50, label: 'L1-2', source: 'auto', note: null };
+
+  it('el cálculo habla de puntos valorados del nivel siguiente', () => {
+    expect(subLevelCalcText(auto)).toBe('50% del nivel siguiente cumplido (3 de 6 puntos valorados)');
+  });
+
+  it('sin valorar todavía también es información, no un hueco', () => {
+    expect(subLevelCalcText({ ...auto, pct: null })).toBe('sin valorar todavía frente al nivel siguiente');
+    expect(subLevelCalcText(null)).toBe('sin valorar todavía frente al nivel siguiente');
+  });
+
+  it('el detalle no repite la etiqueta: se pinta como badge aparte', () => {
+    expect(subLevelDetail(auto)).toBe('50% del nivel siguiente cumplido (3 de 6 puntos valorados)');
+    expect(subLevelDetail(auto)).not.toContain('L1-2');
+  });
+
+  it('si lo ajustó el manager, lo dice con su nota y deja ver el cálculo', () => {
+    const manual = { ...auto, source: 'manual', note: 'lidera de facto', label: 'L1-3' };
+    expect(subLevelDetail(manual))
+      .toBe('ajustado por tu manager: «lidera de facto» · cálculo: 50% del nivel siguiente cumplido (3 de 6 puntos valorados)');
+  });
+
+  it('sin sub-nivel no hay detalle', () => {
+    expect(subLevelDetail(null)).toBeNull();
   });
 });
