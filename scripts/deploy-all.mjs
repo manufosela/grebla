@@ -3,7 +3,14 @@
  * sincroniza el badge de versión (/config/appVersion) en cada una, para que
  * ninguna quede avisando de «versión nueva» sin poder recargar (RMR-TSK-0345).
  *
- * Solo hosting; las Cloud Functions se despliegan aparte cuando cambian.
+ * Despliega hosting Y las reglas e indices de Firestore/Storage. Las reglas van
+ * aqui porque son parte de lo que la aplicacion NECESITA para funcionar: un
+ * cambio de reglas que se quedaba en el repo rompia produccion sin que nada en
+ * el codigo desplegado lo explicara (RMR-BUG-0129).
+ *
+ * Las Cloud Functions NO: tardan minutos, arrastran secretos que no todas las
+ * instancias tienen y pasan por su propio gate de release. Se despliegan aparte
+ * y a proposito.
  *
  * Requiere `deploy.config.json` (gitignored — ver deploy.config.example.json):
  *   { "instances": [ { "name", "project", "account", "buildScript" }, … ] }
@@ -52,7 +59,16 @@ for (const inst of instances) {
 
   console.log(`\n=== ${name} · ${project} ===`);
   run('npm', ['run', buildScript]);
-  run('firebase', ['deploy', '--only', 'hosting', '--project', project, '--account', account]);
+  // Reglas e indices junto al hosting: Firebase no toca nada si no han
+  // cambiado, asi que repetirlo es barato. Lo caro fue lo contrario — un
+  // permission-denied en produccion cuya causa no estaba en el codigo
+  // desplegado sino en lo que no se habia desplegado (RMR-BUG-0129).
+  run('firebase', [
+    'deploy',
+    '--only', 'hosting,firestore:rules,firestore:indexes,storage',
+    '--project', project,
+    '--account', account,
+  ]);
 
   // Sincroniza el badge por el MISMO camino que a mano (RMR-TSK-0433):
   // publish-version.mjs con el Admin SDK y la clave por instancia de
