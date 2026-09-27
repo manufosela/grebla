@@ -564,7 +564,10 @@ export class TeamPeople extends LitElement {
       // SINCRONIZADOS (RMR-PCS-0035), el ownerLeaderUid es el mismo jefe — se
       // usa para pintar el nombre en vez de mentir con «Sin manager»
       // (RMR-BUG-0091).
-      superiorUid = supFicha?.uid ?? id.superiorUidLegacy ?? null;
+      // `superiorUidLegacy` vale SIEMPRE null cuando el superior viene por
+      // `reportsToPersonId`, asi que por si solo no rescataba nada: el fix de
+      // este bug estuvo inerte hasta que se anadio `ownerUidFallback`.
+      superiorUid = supFicha?.uid ?? id.superiorUidLegacy ?? id.ownerUidFallback ?? null;
     }
     return {
       role: id.orgRole,
