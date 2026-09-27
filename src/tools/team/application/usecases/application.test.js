@@ -90,6 +90,15 @@ describe('Fase 2b — casos de uso', () => {
     expect(normalizePerson({}).guilds).toEqual([]);
   });
 
+  it('normalizePerson resuelve el gremio principal al leer (RMR-TSK-0594)', () => {
+    // Con uno solo no hay elección; con dos y sin elegir, queda pendiente; y un
+    // principal que ya no está entre sus gremios no sobrevive a la lectura.
+    expect(normalizePerson({ guilds: ['A'] }).primaryGuild).toBe('A');
+    expect(normalizePerson({ guilds: ['A', 'B'] }).primaryGuild).toBeNull();
+    expect(normalizePerson({ guilds: ['A', 'B'], primaryGuild: 'B' }).primaryGuild).toBe('B');
+    expect(normalizePerson({ guilds: ['A', 'B'], primaryGuild: 'C' }).primaryGuild).toBeNull();
+  });
+
   it('addPerson pre-invita por email (pendingEmail normalizado; uid null)', async () => {
     await addPerson(p, { name: 'Nuevo', guilds: [], startDate: '2025-01-01', pendingEmail: '  Nuevo@Empresa.COM ' });
     const person = (await listActivePeople(p)).find((x) => x.name === 'Nuevo');

@@ -6,16 +6,20 @@
  * @typedef {import('../../domain/types.js').Person} Person
  */
 import { turnover } from '../../domain/services/turnover.js';
+import { normalizePrimaryGuild } from '../../domain/primaryGuild.js';
 
 /**
  * Normaliza una persona leída: garantiza siempre un array `guilds` (gremios
- * asignados), aunque el documento no lo traiga.
+ * asignados), aunque el documento no lo traiga, y resuelve cuál de ellos es el
+ * PRINCIPAL — el que cuenta cuando se corta por gremio (RMR-TSK-0594). Se
+ * normaliza aquí, en la entrada, para que nadie más abajo tenga que decidir qué
+ * hacer con un principal que ya no está entre sus gremios.
  * @param {Person} person
  * @returns {Person}
  */
 export function normalizePerson(person) {
   const guilds = Array.isArray(person.guilds) ? person.guilds : [];
-  return { ...person, guilds };
+  return { ...person, guilds, primaryGuild: normalizePrimaryGuild(guilds, person.primaryGuild) };
 }
 
 /**
