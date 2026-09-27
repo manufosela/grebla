@@ -19,24 +19,23 @@ const activa = (page, host) => page.locator(host).evaluate(
   (el) => el.shadowRoot?.querySelector('.tab.active, .tab.on, [aria-selected="true"]')?.textContent?.trim() ?? '',
 );
 
-test('Flujo (LEAN) abre en las unidades que se miden', async ({ page }) => {
+// DORA y LEAN se retiraron (RMR-TSK-0603) y con ellas los casos que las usaban.
+// Lo que probaban NO era DORA ni LEAN: era que el ancla de una tarjeta de
+// administración manda sobre la pestaña por defecto. Eso sigue siendo verdad, y
+// «Equipo › admin» tiene la misma forma — dos pestañas y un ancla a la segunda.
+
+test('Equipo abre en las bajas, que es lo que se administra', async ({ page }) => {
   await signInAs(page, 'superadmin');
-  await page.goto('/tools/lean#teams');
-  await expect.poll(() => activa(page, 'lean-app')).toContain('Equipos');
+  await page.goto('/tools/team/admin#departures');
+  await expect.poll(() => activa(page, 'team-admin')).toContain('Bajas');
 });
 
-test('DORA abre en los repos medidos', async ({ page }) => {
+test('y el ancla manda de verdad: #settings no abre la pestaña por defecto', async ({ page }) => {
+  // «Bajas» es la primera, así que acertar con #departures no demuestra nada.
+  // Con #settings sí: si el ancla no se leyera, abriría en Bajas.
   await signInAs(page, 'superadmin');
-  await page.goto('/tools/dora#repos');
-  await expect.poll(() => activa(page, 'dora-app')).toContain('Repos');
-});
-
-test('y el ancla manda de verdad: #metrics no abre la pestaña por defecto', async ({ page }) => {
-  // «Equipos» es la primera de LEAN, así que acertar con #teams no demuestra
-  // nada. Con #metrics sí: si el ancla no se leyera, abriría en Equipos.
-  await signInAs(page, 'superadmin');
-  await page.goto('/tools/lean#metrics');
-  await expect.poll(() => activa(page, 'lean-app')).toContain('Métricas');
+  await page.goto('/tools/team/admin#settings');
+  await expect.poll(() => activa(page, 'team-admin')).toContain('Avisos');
 });
 
 test('Motivadores abre en Rondas, que es lo que se administra', async ({ page }) => {
@@ -48,8 +47,8 @@ test('Motivadores abre en Rondas, que es lo que se administra', async ({ page })
 test('sin ancla se entra como siempre', async ({ page }) => {
   // Quien viene a USAR la herramienta no debe notar nada de esto.
   await signInAs(page, 'superadmin');
-  await page.goto('/tools/dora');
-  await expect.poll(() => activa(page, 'dora-app')).toContain('Repos');
+  await page.goto('/tools/team/admin');
+  await expect.poll(() => activa(page, 'team-admin')).toContain('Bajas');
 });
 
 test('y desde la herramienta se vuelve a Administración, no al hub de herramientas', async ({ page }) => {

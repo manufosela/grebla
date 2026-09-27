@@ -16,7 +16,7 @@ import { test, expect, signInAs } from './fixtures.js';
 /** Rutas con contenido propio; se recorren como superadmin, que las ve todas. */
 const PAGINAS = [
   '/', '/organigrama', '/kudos', '/marea', '/poker', '/retros', '/biblioteca',
-  '/mi-espacio', '/admin', '/tools/team', '/tools/dora', '/tools/lean', '/tools/o2o',
+  '/mi-espacio', '/admin', '/tools/team', '/tools/entrega', '/tools/o2o',
   '/tools/career-map', '/tools/encuestas', '/tools/role-mirror', '/tools/motivators/moving',
 ];
 

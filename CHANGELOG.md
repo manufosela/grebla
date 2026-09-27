@@ -15,6 +15,30 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.225.0] - 2026-09-27
+
+### Cambiado
+
+- **DORA y LEAN se retiran: todo está en «Entrega».** Sus métricas las calcula
+  ahora el portal, que es quien tiene las fuentes, y tenerlas en tres sitios
+  obligaba a cruzarlas a mano. Los enlaces guardados a `/tools/dora` y
+  `/tools/lean` —también con sus anclas de administración— llevan a Entrega.
+
+  **Se midió antes de retirar:** en producción, DORA tenía **cero repos** dados
+  de alta y LEAN tenía 13 equipos configurados pero **cero métricas** calculadas.
+  Ninguna de las dos enseñaba un solo número, así que no se pierde ningún dato.
+
+  La vista por equipos de LEAN no se sustituye: la granularidad por equipo no
+  describe la organización —«miramos por repos, no por equipos»— y los 13 que
+  salían eran restos de una estructura anterior.
+
+### Arreglado
+
+- **La administración de Equipo no leía el ancla de la URL**, así que un enlace
+  guardado a `#settings` aterrizaba en la página correcta y en la pestaña
+  equivocada. Venía de cuando esas secciones se mudaron al panel, y lo destapó
+  el test que comprobaba justo eso al mudarse él también.
+
 ## [1.224.0] - 2026-09-27
 
 ### Añadido
