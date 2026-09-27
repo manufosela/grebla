@@ -9,7 +9,7 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { logger } from 'firebase-functions/v2';
-import { defineSecret, defineString } from 'firebase-functions/params';
+import { defineSecret } from 'firebase-functions/params';
 import { fetchPortalMetrics, PortalError, PORTAL_ERRORS } from './portalMetrics.js';
 import { randomBytes } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
@@ -1155,8 +1155,13 @@ const PORTAL_METRICS_TOKEN = defineSecret('PORTAL_METRICS_TOKEN');
  * Endpoint del portal. No es secreto, pero tampoco puede ir en el codigo: GREBLA
  * se despliega para varias organizaciones y el portal es de una. Sin configurar,
  * la funcion lo dice en alto en vez de fallar de forma rara.
+ *
+ * Variable de entorno y NO `defineString`: un param sin valor PREGUNTA por
+ * teclado, y eso cuelga el emulador y el CI esperando un input que nadie va a
+ * teclear. Se rellena desde el mismo .env, y si falta vale undefined, que es lo
+ * que `fetchPortalMetrics` ya sabe tratar.
  */
-const PORTAL_METRICS_URL = defineString('PORTAL_METRICS_URL', { default: '' });
+const portalMetricsUrl = () => process.env.PORTAL_METRICS_URL ?? '';
 
 /** Motivo del portal -> codigo de HttpsError, para que el cliente pueda distinguirlos. */
 const PORTAL_HTTPS_CODE = {
@@ -1195,7 +1200,7 @@ export const getPortalMetrics = onCall(
     }
     try {
       const metrics = await fetchPortalMetrics({
-        url: PORTAL_METRICS_URL.value(),
+        url: portalMetricsUrl(),
         token: PORTAL_METRICS_TOKEN.value(),
       });
       return { metrics };

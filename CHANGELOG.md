@@ -15,6 +15,34 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.224.0] - 2026-09-27
+
+### Añadido
+
+- **«Entrega»**, en `/tools/entrega`: despliegues, revisión y flujo de las
+  últimas 12 semanas, leídos del portal. Con la foto global, una línea de
+  tendencia por métrica y el detalle por repositorio.
+
+  **Los cuatro DORA salen siempre**, incluidos los dos que esta organización no
+  puede medir, con su motivo («falta registro de incidentes»). Un hueco que se
+  dice es información; un hueco que se quita invita a rellenarlo con la métrica
+  de al lado, y la de al lado mide otra cosa.
+
+  **Los avisos van pegados al número**, no al pie: los repos que cuentan
+  despliegues sin señal de estado suben la frecuencia y nunca mueven la tasa de
+  fallo, y eso tiene que leerse donde se ve el número. Los que ni entran en la
+  cuenta —los de móvil, que suben a las stores a mano— salen con su motivo.
+
+  Si no se puede leer, **se dice qué pasó** —el portal aún no ha calculado, no
+  reconoce la credencial, no responde— y no se pinta nada. Una pantalla de ceros
+  se lee como «no entregamos», que es una respuesta y no un error.
+
+### Arreglado
+
+- La URL del portal se leía con un parámetro de Firebase que **pregunta por
+  teclado** cuando no tiene valor, y dejaba el emulador y CI colgados esperando
+  un input que nadie iba a teclear. Ahora es una variable de entorno.
+
 ## [1.223.0] - 2026-09-27
 
 ### Añadido

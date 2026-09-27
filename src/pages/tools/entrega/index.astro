@@ -1,0 +1,32 @@
+---
+import Base from '../../../layouts/Base.astro';
+
+/**
+ * Cómo entrega la organización (RMR-TSK-0602).
+ *
+ * Los números los calcula el PORTAL, que es quien tiene las fuentes —GitHub para
+ * despliegues y PRs, Linear para el flujo—. GREBLA dejó de calcularlos: dos
+ * sitios midiendo lo mismo acaban dando dos cifras y nadie sabe cuál manda.
+ *
+ * Lo que aquí se decide es qué se enseña y qué NO: los dos DORA que esta
+ * organización no puede medir salen con su motivo en vez de desaparecer, y una
+ * tasa sin base se dice como recuento.
+ */
+---
+
+<Base title="GREBLA — Entrega" requireAuth={true}>
+  <tool-nav href="/" name="Entrega" icon="🚢"></tool-nav>
+
+  <h1 class="page-title">Cómo entregamos</h1>
+  <p class="page-lead">
+    Despliegues, revisión y flujo de las últimas 12 semanas. Mide al equipo, nunca a
+    las personas.
+  </p>
+
+  <delivery-app></delivery-app>
+
+  <script>
+    import '../../../components/common/tool-nav.js';
+    import '../../../client/delivery.js';
+  </script>
+</Base>
