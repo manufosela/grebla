@@ -13,8 +13,13 @@
  * porque el orden de `guilds` no significa nada.
  */
 
-/** @param {unknown} v */
-const clean = (v) => String(v ?? '').trim();
+/**
+ * Un nombre de gremio recortado. Lo que no sea una cadena se descarta en vez de
+ * convertirse: `String({})` daría «[object Object]», un gremio fantasma que
+ * además se guardaría tal cual.
+ * @param {unknown} v
+ */
+const clean = (v) => (typeof v === 'string' ? v.trim() : '');
 
 /**
  * El gremio principal que de verdad aplica, dada la lista de gremios actual.

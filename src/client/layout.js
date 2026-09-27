@@ -245,7 +245,7 @@ await watchDeployedVersion(setStaleBadge);
  * El `alt` sale del nombre configurado de la casa, así que se lee la identidad
  * en la misma tanda.
  */
-(async () => {
+async function pintarLogoDeLaInstancia() {
   const img = document.querySelector('#brand-logo');
   if (!img) return;
   try {
@@ -265,7 +265,7 @@ await watchDeployedVersion(setStaleBadge);
   } catch {
     /* sin logo propio: se queda la marca de GREBLA */
   }
-})();
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
@@ -292,3 +292,12 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// El logo se pide AL FINAL, y sin esperarlo. Es una lectura de Firestore que no
+// es crítica: con un `await` de nivel superior, la evaluación de este módulo
+// —que arranca el layout de todas las páginas— quedaría pendiente de la red, y
+// si el logo tarda, tarda el arranque. El `void` dice que la promesa se suelta a
+// propósito; el `catch` vive dentro, donde se sabe qué significa fallar.
+// (La regla de Sonar que pide lo contrario está ignorada para este fichero, con
+// su porqué en sonar-project.properties.)
+void pintarLogoDeLaInstancia();

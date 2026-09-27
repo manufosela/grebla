@@ -34,6 +34,15 @@ describe('qué archivo vale como logo', () => {
     expect(checkLogoFile(archivo('image/png', 0)).ok).toBe(false);
     expect(checkLogoFile(null).ok).toBe(false);
   });
+
+  it('un archivo SIN tamaño se rechaza, no se cuela por la puerta de atrás', () => {
+    // `undefined <= 0` es false: comparar sin normalizar dejaría pasar esto.
+    expect(checkLogoFile({ type: 'image/png' }).ok).toBe(false);
+    expect(checkLogoFile(archivo('image/png', undefined)).ok).toBe(false);
+    expect(checkLogoFile(archivo('image/png', 'mucho')).ok).toBe(false);
+    // Un «1024» en texto no es un tamaño: es la señal de que esto no es un File.
+    expect(checkLogoFile(archivo('image/png', '1024')).ok).toBe(false);
+  });
 });
 
 describe('qué se pinta en la cabecera', () => {
