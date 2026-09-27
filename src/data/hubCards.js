@@ -55,6 +55,13 @@ export const HUB_TOOLS = [
     available: true,
   },
   {
+    name: 'Entrega',
+    href: '/tools/entrega',
+    group: 'entregamos',
+    description: 'Despliegues, revision y flujo de las ultimas 12 semanas, leidos del portal. Mide al equipo, nunca a las personas.',
+    available: true,
+  },
+  {
     name: 'DORA',
     href: '/tools/dora',
     group: 'entregamos',
@@ -170,6 +177,7 @@ export const TOOL_ID = {
   '/organigrama': 'organigrama',
   '/tools/role-mirror': 'rolemirror',
   '/tools/team': 'team',
+  '/tools/entrega': 'entrega',
   '/tools/dora': 'dora',
   '/tools/lean': 'lean',
   '/tools/career-map': 'career',
