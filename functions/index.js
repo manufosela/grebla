@@ -9,7 +9,8 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { logger } from 'firebase-functions/v2';
-import { defineSecret } from 'firebase-functions/params';
+import { defineSecret, defineString } from 'firebase-functions/params';
+import { fetchPortalMetrics, PortalError, PORTAL_ERRORS } from './portalMetrics.js';
 import { randomBytes } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -1143,6 +1144,72 @@ function computeRepoMetrics(mergedPrs, from, to) {
  * `firebase functions:secrets:set DORA_GITHUB_TOKEN`. Con token, la API sube de
  * 60/h públicos a 5000/h y accede a repos PRIVADOS; sin él, se cae a la pública.
  */
+// ── Metricas del portal (RMR-TSK-0601) ───────────────────────────────────────
+/**
+ * El bearer del portal. Vive aqui y no en el cliente por lo obvio: un token en
+ * el navegador es un token publico.
+ */
+const PORTAL_METRICS_TOKEN = defineSecret('PORTAL_METRICS_TOKEN');
+
+/**
+ * Endpoint del portal. No es secreto, pero tampoco puede ir en el codigo: GREBLA
+ * se despliega para varias organizaciones y el portal es de una. Sin configurar,
+ * la funcion lo dice en alto en vez de fallar de forma rara.
+ */
+const PORTAL_METRICS_URL = defineString('PORTAL_METRICS_URL', { default: '' });
+
+/** Motivo del portal -> codigo de HttpsError, para que el cliente pueda distinguirlos. */
+const PORTAL_HTTPS_CODE = {
+  [PORTAL_ERRORS.noConfigurado]: 'failed-precondition',
+  [PORTAL_ERRORS.credencial]: 'permission-denied',
+  [PORTAL_ERRORS.sinCalcular]: 'unavailable',
+  [PORTAL_ERRORS.caido]: 'unavailable',
+};
+
+/**
+ * Metricas DORA y LEAN, leidas del portal. GREBLA ya no las calcula.
+ *
+ * Devuelve la respuesta del portal SIN interpretar: quien decide que se pinta y
+ * que no es el dominio del cliente, que es donde estan escritas las reglas
+ * («ausente no es cero», «noMedible no se rellena»).
+ *
+ * Un fallo se propaga con su motivo y NUNCA como listas vacias: la pantalla
+ * tiene que poder decir «no se han podido leer» en vez de pintar cero actividad.
+ *
+ * Acceso: quien tiene sitio en la organizacion. Son metricas de EQUIPO —salud de
+ * la entrega, no rendimiento de nadie— y esconderlas a quien las produce seria
+ * justo el anti-patron que el metodo prohibe.
+ */
+export const getPortalMetrics = onCall(
+  { region: 'europe-west1', secrets: [PORTAL_METRICS_TOKEN], timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesion.');
+    const db = getFirestore();
+    const [leader, person] = await Promise.all([
+      db.doc(`leaders/${uid}`).get(),
+      db.collection('people').where('uid', '==', uid).limit(1).get(),
+    ]);
+    if (!(await isAdmin(uid)) && !leader.exists && person.empty) {
+      throw new HttpsError('permission-denied', 'No tienes sitio en esta organizacion.');
+    }
+    try {
+      const metrics = await fetchPortalMetrics({
+        url: PORTAL_METRICS_URL.value(),
+        token: PORTAL_METRICS_TOKEN.value(),
+      });
+      return { metrics };
+    } catch (err) {
+      if (err instanceof PortalError) {
+        throw new HttpsError(PORTAL_HTTPS_CODE[err.reason] ?? 'unavailable', err.message, {
+          reason: err.reason,
+        });
+      }
+      throw new HttpsError('unavailable', 'No se pudieron leer las metricas del portal.');
+    }
+  },
+);
+
 const DORA_GITHUB_TOKEN = defineSecret('DORA_GITHUB_TOKEN');
 
 /** Cabeceras de GitHub; añade `Authorization: Bearer` si hay token (repos privados). */
