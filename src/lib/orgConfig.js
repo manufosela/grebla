@@ -7,6 +7,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { normalizeIdentity } from '../tools/admin/domain/orgIdentity.js';
+import { logoSrcFrom } from '../tools/admin/domain/orgLogo.js';
 
 /**
  * Identidad de la instancia (RMR-TSK-0596): los textos con los que esta
@@ -35,6 +36,38 @@ export async function saveOrgIdentity(patch) {
   const limpio = normalizeIdentity(patch);
   await setDoc(doc(db, 'config', 'org'), limpio, { merge: true });
   return limpio;
+}
+
+/**
+ * Logo de la instancia (RMR-TSK-0598), como data URI listo para un `<img src>`,
+ * o null si no hay ninguno configurado —o si lo guardado no es un data URI de un
+ * formato aceptado—. Vive en el MISMO documento que la identidad: es parte de
+ * cómo se reconoce esta casa.
+ * @returns {Promise<string|null>}
+ */
+export async function getOrgLogo() {
+  try {
+    const snap = await getDoc(doc(db, 'config', 'org'));
+    return logoSrcFrom(snap.exists() ? snap.data() : null);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Guarda (o quita, con `null`) el logo de la instancia. `merge` por lo mismo que
+ * la identidad: `/config/org` tiene más campos y un documento completo se los
+ * llevaría por delante. Falla en alto: quien sube un logo tiene que enterarse de
+ * que no se guardó.
+ * @param {string|null} dataUrl
+ * @returns {Promise<void>}
+ */
+export async function saveOrgLogo(dataUrl) {
+  const limpio = dataUrl === null ? null : logoSrcFrom({ logo: dataUrl });
+  if (dataUrl !== null && limpio === null) {
+    throw new Error('El logo tiene que ser un SVG o un PNG.');
+  }
+  await setDoc(doc(db, 'config', 'org'), { logo: limpio }, { merge: true });
 }
 
 /**

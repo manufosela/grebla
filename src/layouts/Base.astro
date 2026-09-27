@@ -69,6 +69,11 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
   <body data-require-auth={String(requireAuth)} data-require-admin={String(requireAdmin)}>
     <header class="site-header">
       <a class="brand" href="/">
+        <!-- Logo propio de la instancia (RMR-TSK-0598). Lo pinta el glue si
+             /config/org trae uno; mientras tanto, y si no hay, se queda la marca
+             de GREBLA: nunca una cabecera vacía. Es un <img>, nunca un SVG
+             incrustado — lo sube una persona y podría traer <script> dentro. -->
+        <img class="brand-logo" id="brand-logo" alt="" hidden />
         <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
           <circle cx="32" cy="32" r="25" fill="none" stroke="var(--gr-navy)" stroke-opacity="0.35" stroke-width="3" />
           <circle cx="7" cy="32" r="4" fill="var(--gr-teal)" />
@@ -278,6 +283,10 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
       }
       .brand-word { letter-spacing: 0.14em; }
       .brand-mark { width: 30px; height: 30px; display: block; }
+      /* Logo de la instancia: manda el ALTO y el ancho lo decide su proporción,
+         que es lo que respeta un logo apaisado sin deformarlo. El tope de ancho
+         evita que uno muy alargado empuje la navegación fuera en móvil. */
+      .brand-logo { height: 32px; width: auto; max-width: 190px; display: block; object-fit: contain; }
       .site-nav {
         display: flex;
         align-items: center;
