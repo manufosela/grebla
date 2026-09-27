@@ -91,8 +91,6 @@ describe('arquitectura de src/tools', () => {
     }).map((file) => relative(TOOLS_DIR, file)));
     expect([...coupled].toSorted()).toEqual([
       'career/composition/container.js',
-      'dora/composition/container.js',
-      'lean/composition/container.js',
       'motivators/composition/container.js',
       'o2o/composition/container.js',
       'team/composition/container.js',
