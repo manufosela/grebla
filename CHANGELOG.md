@@ -15,6 +15,33 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.227.0] - 2026-09-28
+
+### Añadido
+
+- **«Entrega» puede pedir una lectura con IA** de lo que se está viendo:
+  veredicto, resumen, causas probables y qué se puede hacer. Va **debajo** de los
+  números, nunca en su lugar —lo opinado se lee más fácil que una tabla—, se
+  genera con el mismo resumen que hay en pantalla y hay **una sola vigente**: la
+  lanza quien gobierna y la lee todo el equipo, para que se discuta sobre lo
+  mismo. De lo que está sin fuente o sin dato no saca conclusiones: puede decir
+  que todavía no se puede juzgar.
+
+### Arreglado
+
+- **Una persona que falla ya no tumba el Mapa del equipo.** Un permiso mal puesto
+  sobre una sola ficha dejaba la pantalla en blanco para todo el equipo. Ahora
+  las demás filas salen enteras y la suya sale marcada, diciendo que no se
+  pudieron leer sus lecturas — no con rayas, que en esa tabla significan otra
+  cosa: que a esa persona no la ha medido nadie.
+
+### Eliminado
+
+- **El backend de DORA y LEAN**, que quedó vivo cuando se retiraron las
+  pantallas: cuatro Cloud Functions y las reglas de sus colecciones, 831 líneas.
+  No se borra ningún dato. Se conservan la clave de Linear —la usa Scrum Poker— y
+  la interpretación con IA, ahora en Entrega.
+
 ## [1.226.0] - 2026-09-28
 
 ### Añadido
