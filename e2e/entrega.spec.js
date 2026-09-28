@@ -56,6 +56,70 @@ test('la tarjeta de Entrega está en el inicio', async ({ page }) => {
   await expect(tarjeta).toContainText('Entrega');
 });
 
+/**
+ * Métricas de mentira metidas en el componente. En el emulador no hay portal, y
+ * lo que se quiere mirar aquí es lo que la pantalla HACE con una interpretación,
+ * no si el portal responde.
+ */
+async function conMetricas(page, { canInterpret, interpretation }) {
+  await page.evaluate(({ puede, guardada }) => {
+    const el = document.querySelector('delivery-app');
+    el.error = null;
+    el.metrics = {
+      series: [{ week: '2026-W39', deploys: 12, deployFailureRate: null, deploysConEstado: 0,
+        deploysFallidos: 0, wip: 4, throughput: 7, parcial: false }],
+      repos: [],
+      measurable: {},
+      cobertura: { fueraDeCobertura: [] },
+      dataUpdatedAt: '2026-09-28',
+    };
+    el.canInterpret = puede;
+    el.interpretation = guardada;
+  }, { puede: canInterpret, guardada: interpretation });
+}
+
+const LECTURA = {
+  verdict: 'regular',
+  summary: 'Se despliega a menudo, pero el trabajo en curso crece.',
+  causes: ['Hay más empezado de lo que se cierra'],
+  recommendations: ['Terminar antes de empezar'],
+  at: '2026-09-28T09:00:00.000Z',
+  by: { uid: 'u1', name: 'Quien Gobierna' },
+};
+
+test('la lectura con IA se ve, pero solo quien gobierna puede pedirla', async ({ page }) => {
+  await signInAs(page, 'engineer');
+  await page.goto('/tools/entrega');
+  await expect(app(page)).toBeVisible({ timeout: 20_000 });
+  await conMetricas(page, { canInterpret: false, interpretation: LECTURA });
+
+  // La lectura guardada la ve cualquiera: es UNA por herramienta, no una por
+  // persona, para que se pueda discutir sobre lo mismo.
+  await expect(app(page).locator('.interp-summary')).toContainText('trabajo en curso crece');
+  await expect(app(page).locator('.verdict')).toContainText('regular');
+  await expect(app(page).locator('.interp-btn')).toHaveCount(0);
+});
+
+test('quien gobierna sí tiene el botón, y la lectura va DEBAJO de los números', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/tools/entrega');
+  await expect(app(page)).toBeVisible({ timeout: 20_000 });
+  await conMetricas(page, { canInterpret: true, interpretation: null });
+
+  await expect(app(page).locator('.interp-btn')).toHaveText('Interpretar');
+  await expect(app(page).locator('.interp')).toContainText('Nadie la ha pedido todavía');
+
+  // Primero lo medido, después lo opinado. Lo opinado se lee más fácil, y por
+  // eso no puede ir delante.
+  const orden = await app(page).evaluate((el) => {
+    const raiz = el.shadowRoot;
+    const filas = raiz.querySelector('.rows');
+    const interp = raiz.querySelector('.interp');
+    return filas.compareDocumentPosition(interp) & Node.DOCUMENT_POSITION_FOLLOWING ? 'despues' : 'antes';
+  });
+  expect(orden).toBe('despues');
+});
+
 test('la pantalla dice que mide al equipo y no a las personas', async ({ page }) => {
   // No es decoración: es la frase que impide que estas métricas acaben en una
   // evaluación individual, que es el anti-patrón que el método prohíbe.
