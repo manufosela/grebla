@@ -80,6 +80,12 @@ export class TeamMap extends LitElement {
     .lvl { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
     .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--rm-dot-border, rgba(0,0,0,0.12)); flex: none; }
     .muted { color: var(--rm-muted, #5b6b7d); }
+    /* Fila de quien no se ha podido leer (HU-0003): se ve que es distinta sin
+       gritar — el problema es de la lectura, no de la persona. */
+    tr.failed { background: var(--rm-warning-soft, #fdf3e7); }
+    /* El texto va con --rm-text, que el tema define en claro Y en oscuro: un
+       color propio aquí se vería bien en uno y se perdería en el otro. */
+    .failed-cell { color: var(--rm-text, #111827); font-size: 0.88rem; }
     .profile { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--rm-track, #e9f0f2); font-weight: 700; font-size: 0.78rem; }
     .areas { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
     .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
@@ -157,6 +163,27 @@ export class TeamMap extends LitElement {
     } finally {
       this.loading = false;
     }
+  }
+
+  /**
+   * La fila de quien no se ha podido leer (HU-0003). Ocupa la tabla entera con
+   * un aviso en vez de cinco rayas: una fila de guiones se lee como «a esta
+   * persona no la ha medido nadie», y eso es otra cosa.
+   *
+   * Su nombre sigue siendo un enlace a la ficha, que es justo donde hay que ir
+   * a ver qué pasa.
+   */
+  _renderFailedRow(r) {
+    return html`
+      <tr class="failed">
+        <td class="person">
+          <button type="button" class="link" @click=${() => this._open(r.id)} aria-label=${`Abrir ficha de ${r.name}`}>${r.name}</button>
+          ${(r.guilds ?? []).length ? html`<span class="roles">${r.guilds.join(' · ')}</span>` : null}
+        </td>
+        <td colspan="5" class="failed-cell">
+          ⚠️ No se han podido leer sus lecturas. Lo que tenga sigue ahí; lo que falla es traerlo.
+        </td>
+      </tr>`;
   }
 
   _levelCell(reading) {
@@ -297,8 +324,7 @@ export class TeamMap extends LitElement {
                     </tr>
                   </thead>
                   <tbody>
-                    ${this.rows.map(
-                      (r) => html`
+                    ${this.rows.map((r) => (r.failed ? this._renderFailedRow(r) : html`
                         <tr>
                           <td class="person">
                             <button type="button" class="link" @click=${() => this._open(r.id)} aria-label=${`Abrir ficha de ${r.name}`}>${r.name}</button>
@@ -310,8 +336,7 @@ export class TeamMap extends LitElement {
                           <td>${this._dimButton(r, 'contribution', 'Contribución', this._contributionCell(r.contribution))}</td>
                           <td>${this._dimButton(r, 'expectativas', 'Carrera', this._careerCell(r))}</td>
                         </tr>
-                      `,
-                    )}
+                      `))}
                   </tbody>
                 </table></div>
               </div>

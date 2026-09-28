@@ -60,6 +60,60 @@ describe('el Mapa no pide las lecturas en fila (RMR-BUG-0133)', () => {
   });
 });
 
+describe('una persona que falla no tumba el mapa (HU-0003)', () => {
+  /** Persistencia donde la lectura de UNA persona concreta revienta. */
+  const conUnaRota = (rota) => ({
+    people: { list: async () => gente(3) },
+    readings: {
+      seniority: {
+        latest: async (id) => {
+          if (id === rota) throw new Error('permiso denegado');
+          return { level: 3, toNext: false };
+        },
+      },
+      emotional: { latest: async () => ({ level: 4, toNext: true }) },
+      contribution: { latest: async () => ({ roles: ['CO'] }) },
+      knowledge: { listByPerson: async () => [] },
+    },
+  });
+
+  it('las demás filas salen igual', async () => {
+    const filas = await getTeamMap(conUnaRota('p1'));
+    expect(filas.map((f) => f.id)).toEqual(['p0', 'p1', 'p2']);
+    expect(filas[0].seniority).toEqual({ level: 3, toNext: false });
+    expect(filas[2].seniority).toEqual({ level: 3, toNext: false });
+  });
+
+  it('y la suya viene MARCADA, no vacía', async () => {
+    // Vacía sería indistinguible de «a esta persona no la ha leído nadie», que
+    // es una información distinta y además falsa.
+    const [, rota] = await getTeamMap(conUnaRota('p1'));
+    expect(rota.failed).toBe(true);
+    expect(rota.name).toBe('Persona 1');
+    expect(rota.seniority).toBeNull();
+  });
+
+  it('las filas que sí se leyeron no se marcan', async () => {
+    const [ok] = await getTeamMap(conUnaRota('p1'));
+    expect(ok.failed).toBe(false);
+  });
+
+  it('si fallan todas, salen todas marcadas y ninguna se pierde', async () => {
+    const todasRotas = {
+      people: { list: async () => gente(2) },
+      readings: {
+        seniority: { latest: async () => { throw new Error('sin red'); } },
+        emotional: { latest: async () => null },
+        contribution: { latest: async () => null },
+        knowledge: { listByPerson: async () => [] },
+      },
+    };
+    const filas = await getTeamMap(todasRotas);
+    expect(filas).toHaveLength(2);
+    expect(filas.every((f) => f.failed)).toBe(true);
+  });
+});
+
 describe('lo que el Mapa devuelve no cambia', () => {
   it('una fila por persona, en el MISMO orden que llegan', async () => {
     // Paralelizar no puede reordenar: la tabla se lee de arriba abajo y el
