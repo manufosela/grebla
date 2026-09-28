@@ -27,6 +27,13 @@ import { reposSinSenal } from '../../tools/metrics/domain/portalMetrics.js';
 // eso se decide aquí. `formatHours` devuelve null sin medida, no «0 h».
 import { formatHours } from '../../tools/metrics/domain/duration.js';
 
+/** El veredicto, dicho en palabras. La IA devuelve una de estas tres. */
+const VERDICT_LABEL = Object.freeze({
+  bien: '🟢 Va bien',
+  regular: '🟡 Va regular',
+  mal: '🔴 Va mal',
+});
+
 /** Series de la foto global que merecen una línea de 12 semanas. */
 const SPARKS = Object.freeze([
   ['deploys', 'Despliegues'],
@@ -40,7 +47,15 @@ export class DeliveryApp extends LitElement {
     metrics: { attribute: false },
     /** Qué pasó si no se pudo leer: `{ message, reason }`. */
     error: { attribute: false },
+    /** Interpretación vigente guardada, o null si nadie la ha pedido. */
+    interpretation: { attribute: false },
+    /** Quién puede pedir una nueva (el superadmin). */
+    canInterpret: { attribute: false },
+    /** Quien la pide (inyectado): esta pantalla no sabe de Cloud Functions. */
+    interpret: { attribute: false },
     _tab: { state: true },
+    _interpreting: { state: true },
+    _interpretError: { state: true },
   };
 
   static styles = [tableStyles, css`
@@ -78,13 +93,35 @@ export class DeliveryApp extends LitElement {
     .error strong { display: block; margin-bottom: 0.3rem; }
     .foot { margin: 1.4rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); line-height: 1.5; max-width: 60ch; }
     .muted { color: var(--rm-muted, #5b6b7d); }
+
+    /* ── Lectura con IA (RMR-TSK-0610) ── */
+    .interp { margin: 2rem 0 0; padding: 1.1rem 1.2rem; max-width: 60ch;
+      border: 1px solid var(--rm-border, #dde7ec); border-radius: 12px; background: var(--rm-surface, #fff); }
+    .interp-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .interp h3 { margin: 0; font-size: 1rem; }
+    .interp h4 { margin: 1rem 0 0.3rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
+    .interp ul { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; line-height: 1.55; }
+    .interp-summary { margin: 0.5rem 0 0; font-size: 0.95rem; line-height: 1.6; }
+    .interp-btn { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); border: 0;
+      border-radius: 9px; padding: 0.45rem 0.9rem; font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+    .interp-btn:disabled { opacity: 0.6; cursor: default; }
+    .interp-btn:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    /* El veredicto lleva emoji Y palabra: el color solo no vale para quien no lo
+       distingue, y aquí el color no es más que refuerzo. */
+    .verdict { margin: 0.8rem 0 0; font-weight: 700; font-size: 0.95rem; }
   `];
 
   constructor() {
     super();
     this.metrics = null;
     this.error = null;
+    this.interpretation = null;
+    this.canInterpret = false;
+    /** @type {((summary: unknown) => Promise<object>)|null} */
+    this.interpret = null;
     this._tab = 'global';
+    this._interpreting = false;
+    this._interpretError = '';
   }
 
   render() {
@@ -121,7 +158,70 @@ export class DeliveryApp extends LitElement {
     return html`
       <div class="rows">${filas.map((f) => this._renderMetric(f))}</div>
       <div class="sparks">${SPARKS.map(([key, label]) => this._renderSpark(key, label))}</div>
-      ${this._renderCoverage()}`;
+      ${this._renderCoverage()}
+      ${this._renderInterpretation(filas)}`;
+  }
+
+  /**
+   * Interpretación con IA (RMR-TSK-0610). Va DEBAJO de los números, nunca en su
+   * lugar: primero lo medido, después lo opinado — aunque lo opinado se lea más
+   * fácil, que es precisamente el riesgo.
+   *
+   * Se le manda el MISMO resumen que está en pantalla, así que no puede
+   * interpretar algo distinto de lo que se ve.
+   */
+  _renderInterpretation(filas) {
+    const i = this.interpretation;
+    if (!i && !this.canInterpret) return null;
+    return html`
+      <section class="interp">
+        <div class="interp-head">
+          <h3>Lectura con IA</h3>
+          ${this.canInterpret
+            ? html`<button class="interp-btn" type="button" ?disabled=${this._interpreting}
+                @click=${() => this._interpret(filas)}>
+                ${this._interpreting ? 'Interpretando…' : (i ? 'Volver a interpretar' : 'Interpretar')}
+              </button>`
+            : null}
+        </div>
+        ${this._interpretError ? html`<p class="error" role="alert">${this._interpretError}</p>` : null}
+        ${i ? this._renderInterpretationBody(i) : html`<p class="muted">Nadie la ha pedido todavía.</p>`}
+      </section>`;
+  }
+
+  _renderInterpretationBody(i) {
+    const cuando = typeof i.at === 'string' ? i.at.slice(0, 10) : null;
+    return html`
+      <p class="verdict ${i.verdict ?? ''}">${VERDICT_LABEL[i.verdict] ?? 'Sin veredicto'}</p>
+      <p class="interp-summary">${i.summary}</p>
+      ${this._renderInterpretationList('Causas probables', i.causes)}
+      ${this._renderInterpretationList('Qué se puede hacer', i.recommendations)}
+      <p class="foot">
+        La escribe una IA a partir de estos mismos números: es una lectura, no una
+        medida. ${cuando ? `Generada el ${cuando}${i.by?.name ? ` por ${i.by.name}` : ''}.` : ''}
+      </p>`;
+  }
+
+  _renderInterpretationList(title, items) {
+    if (!Array.isArray(items) || items.length === 0) return null;
+    return html`<div class="interp-list"><h4>${title}</h4>
+      <ul>${items.map((t) => html`<li>${t}</li>`)}</ul></div>`;
+  }
+
+  async _interpret(filas) {
+    if (!this.interpret) return;
+    this._interpreting = true;
+    this._interpretError = '';
+    try {
+      // Se manda el resumen YA CALCULADO, el de la pantalla: si la IA leyera las
+      // métricas por su cuenta podría interpretar otra semana que la que se ve.
+      this.interpretation = await this.interpret(filas);
+    } catch (err) {
+      console.error('[entrega] no se pudo interpretar:', err);
+      this._interpretError = 'No se pudo interpretar. Inténtalo de nuevo en un momento.';
+    } finally {
+      this._interpreting = false;
+    }
   }
 
   _renderMetric(f) {

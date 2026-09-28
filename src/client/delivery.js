@@ -15,6 +15,7 @@ import { guardToolPage } from '../lib/toolGate.js';
 import { httpsCallable } from 'firebase/functions';
 import { getRegionalFunctions } from '../lib/firebase.js';
 import { readPortalMetrics } from '../tools/metrics/domain/portalMetrics.js';
+import { getInterpretation, requestInterpretation } from '../lib/interpretations.js';
 
 const el = document.querySelector('delivery-app');
 
@@ -46,6 +47,13 @@ onUserChanged(async (user) => {
     const call = httpsCallable(await getRegionalFunctions(), 'getPortalMetrics');
     const { data } = await call();
     el.metrics = readPortalMetrics(data?.metrics);
+
+    // Lectura con IA (RMR-TSK-0610): la vigente la ve cualquiera; pedir una
+    // nueva, solo quien gobierna. Va después de pintar los números —es un extra,
+    // y que tarde no puede retrasar lo medido.
+    el.canInterpret = canGovern(access);
+    el.interpret = (summary) => requestInterpretation('entrega', summary);
+    el.interpretation = await getInterpretation('entrega');
   } catch (err) {
     console.error('[entrega] no se pudieron leer las métricas:', err);
     // Un contrato que no entendemos NO es un fallo del portal: es que esta
