@@ -10,6 +10,42 @@ import { listActivePeople } from './people.js';
 import { knowledgeProfileFromAreas } from '../../domain/services/knowledgeProfile.js';
 
 /**
+ * Lo que la fila sabe de la persona SIN haber leído nada: quién es y qué dice su
+ * ficha. Se separa porque es lo único que sigue siendo cierto cuando sus
+ * lecturas no se pueden traer.
+ * @param {import('../../domain/types.js').Person} person
+ */
+function identity(person) {
+  return {
+    id: person.id,
+    name: person.name,
+    guilds: person.guilds ?? [],
+    // Carrera (RMR-TSK-0506): el nivel y si es externa, para resumir en el
+    // Mapa cómo va frente a las expectativas de su nivel. La valoración en sí
+    // no se lee aquí: vive en su propio subárbol, fuera de este puerto.
+    levelId: person.levelId ?? null,
+    external: person.external === true,
+  };
+}
+
+/**
+ * La fila de quien no se ha podido leer (HU-0003). Va MARCADA, no vacía: unas
+ * dimensiones en blanco significan «a esta persona no la ha medido nadie», que
+ * es otra cosa —y, si de verdad tiene lecturas, una mentira—.
+ * @param {import('../../domain/types.js').Person} person
+ */
+function failedRow(person) {
+  return {
+    ...identity(person),
+    failed: true,
+    seniority: null,
+    emotional: null,
+    knowledge: { areas: [], profile: knowledgeProfileFromAreas([]) },
+    contribution: null,
+  };
+}
+
+/**
  * La fila de una persona: sus cuatro dimensiones tal como están hoy.
  * @param {PersistencePort} persistence
  * @param {import('../../domain/types.js').Person} person
@@ -33,14 +69,8 @@ async function rowFor(persistence, person) {
   }));
 
   return {
-    id: person.id,
-    name: person.name,
-    guilds: person.guilds ?? [],
-    // Carrera (RMR-TSK-0506): el nivel y si es externa, para resumir en el
-    // Mapa cómo va frente a las expectativas de su nivel. La valoración en sí
-    // no se lee aquí: vive en su propio subárbol, fuera de este puerto.
-    levelId: person.levelId ?? null,
-    external: person.external === true,
+    ...identity(person),
+    failed: false,
     seniority: seniority ? { level: seniority.level, toNext: seniority.toNext ?? false } : null,
     emotional: emotional ? { level: emotional.level, toNext: emotional.toNext ?? false } : null,
     knowledge: { areas, profile: knowledgeProfileFromAreas(areas) },
@@ -58,10 +88,17 @@ async function rowFor(persistence, person) {
  * El orden de las filas es el del roster, no el de llegada: `Promise.all`
  * preserva el orden de entrada, y la tabla se lee de arriba abajo.
  *
+ * Y una persona que falle NO se lleva el mapa por delante (HU-0003): su fila
+ * sale marcada y las demás salen enteras. Antes, un permiso mal puesto sobre
+ * una sola ficha dejaba la pantalla en blanco para todo el equipo, y el motivo
+ * —de quién era el problema— no se veía por ninguna parte.
+ *
  * @param {PersistencePort} persistence
  * @returns {Promise<Array<object>>}
  */
 export async function getTeamMap(persistence) {
   const people = await listActivePeople(persistence);
-  return Promise.all(people.map((person) => rowFor(persistence, person)));
+  return Promise.all(
+    people.map((person) => rowFor(persistence, person).catch(() => failedRow(person))),
+  );
 }
