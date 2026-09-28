@@ -11,6 +11,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { fetchPortalMetrics, PortalError, PORTAL_ERRORS } from './portalMetrics.js';
+import { INTERPRET_TOOL, buildInterpretPrompt, isInterpretableTool } from './interpretPrompt.js';
 import { randomBytes } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -1305,44 +1306,19 @@ export const pushLinearEstimates = onCall(
     return { linear, created: result.created, skipped: result.skipped };
   },
 );
-// ── Interpretación de métricas con IA (LEAN / DORA) ──────────────────────────
-const INTERPRET_TOOL = {
-  name: 'emit_interpretation',
-  description: 'Devuelve la interpretación de las métricas del equipo.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      verdict: { type: 'string', enum: ['bien', 'regular', 'mal'], description: 'Veredicto general.' },
-      summary: { type: 'string', description: 'Resumen claro de 2-3 frases, en español.' },
-      causes: { type: 'array', items: { type: 'string' }, description: 'Causas probables (correlacionando métricas).' },
-      recommendations: { type: 'array', items: { type: 'string' }, description: 'Acciones recomendadas.' },
-    },
-    required: ['verdict', 'summary'],
-  },
-};
-
-/** Prompt de interpretación según la herramienta (lean/dora). */
-function buildInterpretPrompt(tool, summary) {
-  const context = tool === 'dora'
-    ? 'métricas DORA de ENTREGA (deploy frequency, lead time, change failure rate, MTTR)'
-    : 'métricas LEAN de FLUJO (throughput/semana, cycle time p50/p85, WIP, aging en días, flow efficiency %)';
-  const refs = tool === 'dora'
-    ? 'Referencias DORA: elite = deploy diario y lead time < 1h; low = lead time > 1 semana.'
-    : 'Referencias LEAN: flow efficiency típica 15-25% (>40% muy buena, <15% mala); un WIP con aging > 2 semanas es un atasco; throughput y WIP dependen del tamaño del equipo (no juzgar en absoluto).';
-  return `Eres experto en rendimiento de equipos de ingeniería. Tienes las ${context} de uno o varios equipos/gremios (SIEMPRE a nivel de equipo/sistema, NUNCA de personas). Interprétalas EN CONJUNTO, correlacionando unas con otras.
-
-Datos (JSON):
-${JSON.stringify(summary)}
-
-${refs}
-
-Llama a emit_interpretation con: un veredicto (bien/regular/mal), un resumen de 2-3 frases, las causas PROBABLES de lo que ves y recomendaciones accionables. Todo en español. No menciones ni evalúes a personas concretas.`;
-}
-
+// ── Interpretación de métricas con IA (Entrega) ──────────────────────────────
 /**
- * Interpreta un conjunto de métricas (LEAN o DORA) con Claude: veredicto, resumen,
- * causas probables y recomendaciones. El cliente manda el resumen ya calculado.
- * Acceso: superadmin o líder.
+ * Interpreta el resumen de Entrega con Claude: veredicto, resumen, causas
+ * probables y recomendaciones. El cliente manda el resumen ya calculado —el
+ * mismo que está viendo—, así que la IA no lee métricas por su cuenta ni puede
+ * interpretar algo distinto de lo que hay en pantalla.
+ *
+ * Quien la LANZA es el superadmin; quien la LEE, cualquiera con acceso a la
+ * herramienta: la interpretación vigente se guarda y se comparte, para que no
+ * haya una versión por persona.
+ *
+ * El prompt vive en `interpretPrompt.js` porque decide lo que la IA NO puede
+ * decir, y eso se prueba (RMR-TSK-0610).
  */
 export const interpretMetrics = onCall(
   { region: 'europe-west1', secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 120 },
@@ -1350,7 +1326,13 @@ export const interpretMetrics = onCall(
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
 
-    const tool = request.data?.tool === 'dora' ? 'dora' : 'lean';
+    // La herramienta se VALIDA en vez de caer a una por defecto: con un valor
+    // desconocido antes se interpretaba «lean» y se escribía en su documento,
+    // así que un typo producía una interpretación real de otra cosa.
+    const tool = request.data?.tool;
+    if (!isInterpretableTool(tool)) {
+      throw new HttpsError('invalid-argument', 'No sé interpretar esas métricas.');
+    }
     const summary = request.data?.summary ?? {};
 
     const db = getFirestore();
