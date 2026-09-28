@@ -6,7 +6,7 @@ rules_version = '2';
 //   /admins/{uid}    Superadmin de la instancia (ve todo; da de alta líderes).
 //   /viewers/{uid}   Viewers (solo lectura, tipo C-level). Alta solo por superadmin.
 //   /leaders/{uid}   Líderes (gestionan sus personas). Alta solo por superadmin.
-//   Datos a nivel raíz: /people, /areas, /config, /guilds, /dora, /journeys.
+//   Datos a nivel raíz: /people, /areas, /config, /guilds, /journeys.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -183,7 +183,7 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
-    // Interpretación IA vigente por herramienta (lean/dora): la genera y sobrescribe
+    // Interpretación IA vigente por herramienta: la genera y sobrescribe
     // SOLO la Cloud Function interpretMetrics (Admin SDK, restringida a superadmin);
     // la leen todos los autenticados con acceso a la herramienta. El cliente nunca
     // escribe aquí (por eso write: false; el Admin SDK omite las reglas).
@@ -612,57 +612,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // DORA: config de entrega owner-scoped (mismo modelo que /guilds). Cada repo
-    // lleva ownerLeaderUid (el líder que lo añadió). Un mismo repo puede coincidir
-    // entre líderes (docs distintos). Lectura: autenticados (la lista del líder se
-    // filtra por owner en el cliente; el superadmin ve todos). El líder crea/edita/
-    // borra los SUYOS; el superadmin, todos. La Cloud Function refreshDora usa el
-    // Admin SDK (omite reglas), así que el cálculo de métricas no depende de esto.
-    match /dora/{repoId} {
-      allow read: if isSignedIn();
-      allow create: if isSuperAdmin()
-        || ((isLeader() || managesToolByPolicy('dora')) && request.resource.data.ownerLeaderUid == request.auth.uid);
-      allow update: if isSuperAdmin()
-        || ((isLeader() || managesToolByPolicy('dora')) && resource.data.ownerLeaderUid == request.auth.uid
-            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
-      allow delete: if isSuperAdmin()
-        || ((isLeader() || managesToolByPolicy('dora')) && resource.data.ownerLeaderUid == request.auth.uid);
-
-      // Eventos de despliegue real de un repo (registro manual; base de la
-      // frecuencia real, y luego de Lead Time/CFR/MTTR). Los gestiona el líder
-      // dueño del repo (comprobando el ownerLeaderUid del doc padre) o el superadmin.
-      match /deployments/{deployId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isSuperAdmin()
-          || ((isLeader() || managesToolByPolicy('dora'))
-              && 'ownerLeaderUid' in get(/databases/$(database)/documents/dora/$(repoId)).data
-              && get(/databases/$(database)/documents/dora/$(repoId)).data.ownerLeaderUid == request.auth.uid);
-      }
-
-      // Incidentes en producción de un repo (registro manual; base del MTTR, D4).
-      // Mismos permisos que /deployments: los gestiona el líder dueño del repo
-      // (comprobando el ownerLeaderUid del doc padre) o el superadmin.
-      match /incidents/{incidentId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isSuperAdmin()
-          || ((isLeader() || managesToolByPolicy('dora'))
-              && 'ownerLeaderUid' in get(/databases/$(database)/documents/dora/$(repoId)).data
-              && get(/databases/$(database)/documents/dora/$(repoId)).data.ownerLeaderUid == request.auth.uid);
-      }
-    }
-
-    // LEAN / Flujo: equipos de Linear monitorizados (mismo modelo owner-scoped que
-    // /dora). Las métricas las calcula la Cloud Function refreshLean (Admin SDK).
-    match /leanTeams/{teamId} {
-      allow read: if isSignedIn();
-      allow create: if isSuperAdmin()
-        || ((isLeader() || managesToolByPolicy('lean')) && request.resource.data.ownerLeaderUid == request.auth.uid);
-      allow update: if isSuperAdmin()
-        || ((isLeader() || managesToolByPolicy('lean')) && resource.data.ownerLeaderUid == request.auth.uid
-            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid);
-      allow delete: if isSuperAdmin()
-        || ((isLeader() || managesToolByPolicy('lean')) && resource.data.ownerLeaderUid == request.auth.uid);
-    }
+    // Aquí vivían /dora y /leanTeams, retiradas con su backend (RMR-TSK-0609).
+    // No queda quien las lea: el cliente no las toca desde RMR-TSK-0606 y
+    // /tools/dora y /tools/lean son hoy un `Astro.redirect` a Entrega, no
+    // pantallas. Sin regla, la colección queda cerrada al cliente —que es lo
+    // que se quiere—: los documentos que aún haya en producción siguen ahí para
+    // quien entre por la consola, y no se borra nada a espaldas de nadie.
 
     // Mapa de Carrera: el journey de cada persona, solo suyo.
     match /journeys/{uid} {
