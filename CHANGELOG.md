@@ -15,6 +15,31 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.228.0] - 2026-09-29
+
+### Añadido
+
+- **Cada persona ve en «Mi espacio» lo que hay anotado en su ficha**: lo que su
+  manager escribió después de hablar y lo que dejaron ahí los agentes. Ya era
+  legible por ella —las reglas siempre la incluyeron en su propio subárbol—, solo
+  que no se enseñaba en ninguna pantalla. Y lo que no se ve no se puede corregir.
+
+  De cada nota se dice **de dónde viene antes del texto**: si la escribió una
+  persona, con su nombre; si la trajo un agente, con qué sistema y un enlace al
+  origen. Las notas antiguas sin autor lo dicen, en vez de atribuirse a nadie.
+
+  Lo que **no** cambia: las sesiones de O2O siguen en su sitio y la preparación
+  privada del manager sigue siendo suya. La nota al pie ahora distingue las dos
+  cosas en vez de sugerir que no se ve nada.
+
+### Cambiado
+
+- **El overlay de «Tiempo» sale del juego.** El manager tenía dentro del mapa una
+  tabla con el tiempo de juego de su gente; esa gestión ya vive en el Seguimiento
+  del plan, y tenerla ahí obligaba a entrar en el juego para mirar algo que no es
+  jugar. El cronómetro sigue midiendo igual y cada persona sigue viendo el suyo
+  en su ficha.
+
 ## [1.227.0] - 2026-09-28
 
 ### Añadido
