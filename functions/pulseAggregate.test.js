@@ -236,4 +236,25 @@ describe('el umbral guardado no puede aflojar la privacidad', () => {
     expect(agg.general.means).toBeNull();
     expect(agg.guilds).toEqual([]);
   });
+
+  it('quien está en DOS gremios cuenta en los dos, a propósito', () => {
+    // Decisión de Mánu (29-sep-2026). No es el caso de contar plantilla, donde
+    // el gremio PRINCIPAL evita contar a alguien dos veces: aquí no se suma
+    // nada, se pregunta cómo está la gente de cada gremio, y quien pertenece a
+    // dos vive los dos. Cortar por el principal habría dejado sin publicar
+    // gremios enteros al caer bajo el mínimo.
+    const enDos = {
+      a1: { guilds: ['Backend', 'QA'], primaryGuild: 'Backend' },
+      a2: { guilds: ['Backend', 'QA'], primaryGuild: 'Backend' },
+      a3: { guilds: ['Backend', 'QA'], primaryGuild: 'Backend' },
+    };
+    const agg = computePulseAggregate('2026-W29', [
+      P('a1', '2026-07-13', full), P('a2', '2026-07-13', full), P('a3', '2026-07-13', full),
+    ], enDos, { minCount: 3 });
+
+    // QA se publica AUNQUE sea el gremio secundario de las tres: si contara solo
+    // el principal, se quedaría en cero y desaparecería del pulso.
+    expect(agg.guilds.map((g) => g.id).sort()).toEqual(['Backend', 'QA']);
+    expect(agg.guilds.find((g) => g.id === 'QA').count).toBe(3);
+  });
 });

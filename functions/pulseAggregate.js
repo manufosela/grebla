@@ -133,6 +133,17 @@ export function computePulseAggregate(weekIso, entries, peopleByUid = {}, opts =
   for (const entry of people) {
     addToAcc(general, entry);
     const person = peopleByUid[entry.uid] || {};
+    // Quien milita en DOS gremios cuenta en los dos, a propósito y decidido por
+    // Mánu (29-sep-2026). No es el mismo caso que contar plantilla: ahí se
+    // introdujo el gremio PRINCIPAL para que los totales cuadraran
+    // (RMR-TSK-0594), porque sumar columnas con la misma persona dos veces da
+    // más gente de la que hay. Aquí no se suma nada: la pregunta es «cómo está
+    // la gente de este gremio», y quien pertenece a dos vive los dos.
+    //
+    // Se midió lo que costaría cortar por el principal: dos gremios que hoy se
+    // publican dejarían de hacerlo —Tech Lead pasaba de 3 a 0 y QA de 3 a 2—
+    // porque caerían bajo el mínimo de respuestas. Perder la lectura afectiva de
+    // un gremio entero es peor que un recuento que nadie suma.
     for (const g of person.guilds || []) if (g) bump(guilds, g, entry);
     for (const l of person.labels || []) if (l) bump(labels, l, entry);
     if (person.department) bump(departments, person.department, entry);
