@@ -153,8 +153,12 @@
  * si el navegador mata la pestaña sin avisar (best-effort documentado). El
  * histórico por día se poda a los últimos 30 días al cargar a la persona
  * (dispara con >35 claves). La ficha 🏅 muestra el tiempo de la persona
- * cargada (hoy / 7 días / total) y el manager tiene el botón «⏱ Tiempo» con la
- * vista agregada de sus personas (carga en paralelo, cap MAX_TEAM_JOURNEYS).
+ * cargada (hoy / 7 días / total).
+ *
+ * Lo que el manager veía aquí —el overlay «⏱ Tiempo» con la vista agregada de
+ * su gente— se retiró (RMR-TSK-0568): esa gestión vive en el Seguimiento del
+ * plan de desarrollo, y tenerla en dos sitios obligaba a entrar en el juego
+ * para mirar algo que no es jugar. El cronómetro sigue midiendo igual.
  *
  * EL INGENIERO JUEGA (JG-1, RMR-TSK-0139): el gating se divide en DOS ejes.
  *  - JUGAR el plan de la persona cargada (marcar visitadas/actual/ruta,
@@ -429,8 +433,6 @@ export class CareerApp extends LitElement {
     wizardBusy: { state: true },
     wizardError: { state: true },
     playtime: { state: true },
-    showPlaytime: { state: true },
-    playtimeRows: { state: true },
     carpoolService: { attribute: false },
     showCarpools: { state: true },
     carpoolTab: { state: true },
@@ -1411,7 +1413,8 @@ export class CareerApp extends LitElement {
     .ruta-info strong { font-size: 0.9rem; color: var(--rm-navy, #1e3a5f); }
     .ruta-meta { font-size: 0.76rem; color: var(--rm-muted, #5b6b7d); }
     .ruta-actions { display: flex; gap: 0.3rem; flex: 0 0 auto; }
-    /* ── Tiempo de juego (MC-23): bloque de la ficha y tabla del manager. ── */
+    /* ── Tiempo de juego (MC-23): bloque de la ficha de la persona. La tabla
+       agregada del manager se retiró en RMR-TSK-0568. ── */
     .playblock {
       margin: 0 0 0.75rem;
       padding: 0.45rem 0.7rem;
@@ -1421,21 +1424,6 @@ export class CareerApp extends LitElement {
       color: var(--rm-muted, #5b6b7d);
     }
     .playblock strong { color: var(--rm-navy, #1e3a5f); }
-    .timesheet table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    .timesheet th {
-      text-align: left;
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--rm-muted, #5b6b7d);
-      padding: 0.35rem 0.5rem;
-      border-bottom: 2px solid var(--rm-border, #e5e7eb);
-    }
-    .timesheet td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
-    .timesheet th.num, .timesheet td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .timesheet td.who { font-weight: 600; color: var(--rm-navy, #1e3a5f); }
-    .timesheet .zero { color: var(--rm-muted, #5b6b7d); }
-    .playlead { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); }
     /* ── El brujo (MC-22): panel del jugador y cola del manager (hermanos de la
        ficha: mismo backdrop/section, contenido de consultas). ── */
     /* La escena de conversación (JG-8) vive sobre el pergamino del panel. */
@@ -2268,10 +2256,6 @@ export class CareerApp extends LitElement {
     // vivo (solo canEdit; se rearma al cambiar de persona con volcado final).
     /** @type {import('../../tools/career/domain/playtime.js').Playtime|null} */
     this.playtime = null;
-    this.showPlaytime = false;
-    /** Filas del overlay «⏱ Tiempo» (null = cargando).
-     * @type {{ personId: string, name: string, today: number, last7Days: number, total: number }[]|null} */
-    this.playtimeRows = null;
     /** Handle del cronómetro (startPlaytimeTracker), o null sin persona/permiso. */
     this._playtimeTracker = null;
     /** Persona a la que mide el cronómetro vivo (o null). */
@@ -2618,10 +2602,6 @@ export class CareerApp extends LitElement {
     }
     if (changed.has('showWizardQueue') && this.showWizardQueue) {
       this.renderRoot.querySelector('.wizqueue')?.focus();
-    }
-    // El resumen de tiempo del manager recibe el foco al abrirse (MC-23).
-    if (changed.has('showPlaytime') && this.showPlaytime) {
-      this.renderRoot.querySelector('.timesheet')?.focus();
     }
     // El overlay de carpools recibe el foco al abrirse (CP-1): Escape cierra.
     if (changed.has('showCarpools') && this.showCarpools) {
@@ -4595,115 +4575,6 @@ export class CareerApp extends LitElement {
     </p>`;
   }
 
-  /** Botón «⏱ Tiempo» de la barra: solo con canEdit (vista agregada del manager). */
-  _renderPlaytimeButton() {
-    if (!this.canEdit) return null;
-    return html`<button
-      @click=${this._openPlaytimeSummary}
-      title="Ver el tiempo de juego de tu gente (hoy, últimos 7 días y total)"
-    >⏱ Tiempo</button>`;
-  }
-
-  /**
-   * Abre la vista agregada del manager (MC-23): carga EN PARALELO el playtime de
-   * las personas visibles (misma política y cap que los journeys del equipo) y
-   * lo resume por filas. Una persona ilegible no tumba al resto (console.warn
-   * y fila a cero). Se recarga en cada apertura: el tiempo cambia jugando.
-   */
-  async _openPlaytimeSummary() {
-    if (!this.canEdit) return;
-    this.showPlaytime = true;
-    this.playtimeRows = null; // «Cargando…»
-    const people = this.teamRoster ?? [];
-    const capped = people.slice(0, CareerApp.MAX_TEAM_JOURNEYS);
-    if (people.length > capped.length) {
-      console.warn(
-        `Tiempo de juego: ${people.length} personas visibles; se carga solo el de las ${CareerApp.MAX_TEAM_JOURNEYS} primeras para acotar las lecturas.`,
-      );
-    }
-    const now = new Date();
-    const rows = await Promise.all(
-      capped.map(async (person) => {
-        try {
-          const summary = playtimeSummary(await getPlaytime(this.store, person.id), now);
-          return { personId: person.id, name: person.name, ...summary };
-        } catch (err) {
-          console.warn(`Tiempo de juego: no se pudo cargar el de "${person.id}".`, err);
-          return { personId: person.id, name: person.name, today: 0, last7Days: 0, total: 0 };
-        }
-      }),
-    );
-    if (!this.showPlaytime) return; // se cerró mientras cargaba
-    this.playtimeRows = rows;
-  }
-
-  /** Cierra el resumen de tiempo y devuelve el foco al HUD. */
-  _closePlaytimeSummary() {
-    this.showPlaytime = false;
-    this.playtimeRows = null;
-    this.updateComplete.then(() => this.renderRoot.querySelector('.hud button')?.focus());
-  }
-
-  /** Escape dentro del resumen de tiempo lo cierra. @param {KeyboardEvent} event */
-  _onPlaytimeKeydown(event) {
-    if (event.key !== 'Escape') return;
-    event.stopPropagation();
-    this._closePlaytimeSummary();
-  }
-
-  /**
-   * Overlay «⏱ Tiempo de juego» del manager (MC-23): tabla sencilla y legible —
-   * persona, hoy, últimos 7 días y total — de las personas visibles. Modal
-   * hermano de la ficha (mismo backdrop/section): foco al abrir, Escape/✕/
-   * fondo cierran.
-   */
-  _renderPlaytimeSummary() {
-    if (!this.showPlaytime) return null;
-    const fmt = (m) => formatPlayMinutes(m) ?? '—';
-    const cell = (m) =>
-      m > 0 ? html`<td class="num">${fmt(m)}</td>` : html`<td class="num zero">0 min</td>`;
-    return html`<div class="sea-backdrop" @click=${(e) => { if (e.target === e.currentTarget) this._closePlaytimeSummary(); }}>
-      <section
-        class="ficha timesheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Tiempo de juego del equipo"
-        tabindex="-1"
-        @keydown=${this._onPlaytimeKeydown}
-      >
-        <header class="sea-head">
-          <h3>⏱ Tiempo de juego</h3>
-          <button class="close" aria-label="Cerrar el resumen de tiempo de juego" title="Cerrar (Esc)" @click=${this._closePlaytimeSummary}>✕</button>
-        </header>
-        <p class="playlead">
-          Tiempo de sesión activa en el mapa por persona (pestaña visible y
-          jugando). Se guarda por día; el detalle diario cubre los últimos 30 días.
-        </p>
-        ${this.playtimeRows === null
-          ? html`<p class="wizempty">Cargando el tiempo de juego…</p>`
-          : this.playtimeRows.length === 0
-            ? html`<p class="wizempty">No hay personas visibles en tu equipo.</p>`
-            : html`<div class="table-wrap"><table>
-                <thead>
-                  <tr>
-                    <th scope="col">Persona</th>
-                    <th scope="col" class="num">Hoy</th>
-                    <th scope="col" class="num">7 días</th>
-                    <th scope="col" class="num">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${this.playtimeRows.map(
-                    (row) => html`<tr>
-                      <td class="who">${row.name}</td>
-                      ${cell(row.today)}${cell(row.last7Days)}${cell(row.total)}
-                    </tr>`,
-                  )}
-                </tbody>
-              </table></div>`}
-      </section>
-    </div>`;
-  }
 
   // ---- Carpools de formación (CP-1) --------------------------------------------
 
@@ -7821,7 +7692,6 @@ export class CareerApp extends LitElement {
                 ${this._renderCarpoolButton()}
                 ${this._renderCoinsButton()}
                 ${this._renderWizardQueueButton()}
-                ${this._renderPlaytimeButton()}
                 ${this._renderPersonSelect()}
               </div>
               ${prog || this._activeCarpools.at(0) || this._challenge
@@ -7852,7 +7722,6 @@ export class CareerApp extends LitElement {
               this.showPlayerCard ||
               this.showWizard ||
               this.showWizardQueue ||
-              this.showPlaytime ||
               this.showCarpools ||
               this.showChallenges ||
               this.showRoute ||
@@ -7951,7 +7820,6 @@ export class CareerApp extends LitElement {
       ${this._renderLogbook()}
       ${this._renderWizard()}
       ${this._renderWizardQueue()}
-      ${this._renderPlaytimeSummary()}
       ${this._renderCarpools()}
       ${this._renderCoins()}
       ${this._renderTravelFade()}
