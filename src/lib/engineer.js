@@ -148,6 +148,31 @@ export async function ensureEmployeePerson() {
  * @param {string} personId
  * @returns {Promise<{ entries: import('../tools/career/domain/logbook.js').LogEntry[] }>}
  */
+/**
+ * Las conversaciones registradas en la ficha de una persona (RMR-TSK-0578): lo
+ * que su manager anotó después de hablar y lo que dejaron ahí los agentes.
+ *
+ * Las reglas ya se las dejaban leer —el subárbol de la persona incluye a la
+ * propia persona—, así que esto no abre ningún acceso: enseña en su pantalla lo
+ * que ya era suyo. No es lo mismo que «Mis O2O», que es la proyección que su
+ * manager decide compartir de las sesiones de O2O (esas viven en /leaders y
+ * siguen siendo suyas).
+ *
+ * Tolerante a propósito: si no se pueden leer, se devuelve lista vacía y la
+ * sección no sale. Un error aquí no puede tumbar «Mi espacio» entero.
+ * @param {string} personId
+ * @returns {Promise<Array<object>>}
+ */
+export async function getMyConversations(personId) {
+  if (!personId) return [];
+  try {
+    const snap = await getDocs(collection(db, 'people', personId, 'conversations'));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getPersonLogbook(personId) {
   const { store } = await createCareerContainer({ mode: 'firestore' });
   return getLogbook(store, personId);
