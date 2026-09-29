@@ -10,7 +10,7 @@ import '../components/engineer-space.js';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern, leadsTeam } from '../lib/accessRoles.js';
-import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap, createMyPerson } from '../lib/engineer.js';
+import { getMyPerson, getMyRoleMirrorProfile, getMyCareerMap, createMyPerson, getMyConversations } from '../lib/engineer.js';
 import { getMyO2O } from '../lib/o2o.js';
 import { getFramework } from '../lib/careerFramework.js';
 import { getOrgConfig } from '../lib/firestore.js';
@@ -55,7 +55,7 @@ onUserChanged(async (user) => {
     // Carga en paralelo del contenido de las secciones (de solo lectura). El
     // O2O va por Cloud Function y es NO crítico: si falla, la vista sigue con el
     // resto y «Mis O2O» queda vacío (no tumba «Mi espacio»).
-    const [framework, profile, career, o2o, orgConfig, domains] = await Promise.all([
+    const [framework, profile, career, o2o, orgConfig, domains, conversations] = await Promise.all([
       getFramework(),
       getMyRoleMirrorProfile(person.id),
       getMyCareerMap(person.id),
@@ -65,9 +65,12 @@ onUserChanged(async (user) => {
       // dominios. El catálogo de squads ya no se pide — dejó de enseñarse, y
       // una lectura que nadie mira es una lectura de más (F5).
       listDomains().catch(() => []),
+      // Lo anotado en su ficha (RMR-TSK-0578). Va en la misma tanda: es una
+      // lectura más de su propio subárbol, que ya podía leer.
+      getMyConversations(person.id),
     ]);
     renderIdentity(person, framework);
-    renderSpace(person, framework, profile, career, o2o, orgConfig, { domains });
+    renderSpace(person, framework, profile, career, o2o, orgConfig, { domains, conversations });
     if (space) space.selfOwned = selfOwned;
     // Con los datos ya cargados se revela de una vez (cabecera + espacio) y se
     // quita el skeleton — sin salto de layout (RMR-TSK-0263).
@@ -114,6 +117,9 @@ function renderSpace(person, framework, profile, career, o2o, orgConfig, catalog
   space.questions = career.questions;
   // Mis O2O (F4): resúmenes compartidos + mis acciones (proyección de getMyO2O).
   space.o2o = o2o;
+  // Y lo anotado en su ficha, que es otra cosa: no lo filtra su manager, ya era
+  // legible por ella y hasta ahora solo no se enseñaba (RMR-TSK-0578).
+  space.conversations = catalogos?.conversations ?? [];
 }
 
 /**

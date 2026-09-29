@@ -53,6 +53,7 @@ import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
 import { setCareerTarget, getPersonLogbook } from '../lib/engineer.js';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 import { membershipLabel } from '../tools/team/domain/membership.js';
+import { conversationOrigin, conversationsNewestFirst } from '../tools/team/domain/conversationOrigin.js';
 
 /**
  * Pestañas de «Mi espacio». El id (clave) sincroniza con `location.hash`
@@ -111,6 +112,8 @@ export class EngineerSpace extends LitElement {
     endorsements: { attribute: false },
     questions: { attribute: false },
     o2o: { attribute: false },
+    /** Conversaciones anotadas en su ficha (RMR-TSK-0578). */
+    conversations: { attribute: false },
     // self-ficha (RMR-TSK-0251): el usuario es dueño de su propia ficha y puede
     // editar sus datos básicos (nombre/nivel/disciplinas) desde aquí.
     selfOwned: { attribute: false },
@@ -167,6 +170,12 @@ export class EngineerSpace extends LitElement {
     .o2o-card { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem; }
     .o2o-card .date { font-weight: 700; font-size: 0.88rem; }
     .o2o-card .body { font-size: 0.88rem; margin: 0.35rem 0 0; white-space: pre-wrap; }
+    /* De dónde viene la nota, ANTES del texto (RMR-TSK-0578). La de un agente se
+       distingue de la de una persona sin tener que leerla entera. */
+    .o2o-card .origin { display: inline-block; margin-left: 0.5rem; padding: 0.05rem 0.5rem; border-radius: 999px;
+      font-size: 0.72rem; font-weight: 700; background: var(--rm-chip, #eef2f7); color: var(--rm-muted, #5b6b7d); }
+    .o2o-card .origin.agente { background: color-mix(in srgb, var(--rm-info, #2563eb) 15%, transparent); color: var(--rm-info-text, #1e3a8a); }
+    .o2o-card .origin-link { font-size: 0.75rem; color: var(--rm-accent, #2a9d8f); }
     .o2o-act { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; padding: 0.15rem 0; }
     .o2o-act.done { color: var(--rm-muted, #5b6b7d); text-decoration: line-through; }
     .o2o-note { font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); margin: 0.25rem 0 1rem; }
@@ -325,6 +334,8 @@ export class EngineerSpace extends LitElement {
     this.questions = [];
     /** @type {import('../lib/o2o.js').MyO2O|null} proyección compartida de mis O2O (F4) */
     this.o2o = null;
+    /** @type {Array<object>} */
+    this.conversations = [];
     /** @type {boolean} el usuario es dueño de su propia ficha (self-ficha, RMR-TSK-0251) */
     this.selfOwned = false;
     this.domains = [];
@@ -908,10 +919,11 @@ export class EngineerSpace extends LitElement {
     const sessions = data?.sessions ?? [];
     const actions = data?.actions ?? [];
     const upcoming = data?.upcoming ?? [];
+    const conversaciones = conversationsNewestFirst(this.conversations ?? []);
     // El vacío solo es vacío si TAMPOCO hay nada preparado: decir «aún no hay
     // nada» teniendo un O2O con preguntas esperando sería mentir justo a quien
     // venía a prepararlo.
-    if (!sessions.length && !actions.length && !upcoming.length) {
+    if (!sessions.length && !actions.length && !upcoming.length && !conversaciones.length) {
       return html`<p class="empty">Aún no hay O2O compartidos contigo. Cuando tu manager comparta un resumen o te asigne acciones, aparecerán aquí.</p>`;
     }
     return html`
@@ -924,8 +936,40 @@ export class EngineerSpace extends LitElement {
       ${actions.length
         ? html`<ul class="o2o-list">${actions.map((a) => this._renderMyAction(a))}</ul>`
         : html`<p class="empty">No tienes acciones asignadas.</p>`}
-      <p class="o2o-note">Solo ves lo que tu manager ha marcado como compartido; sus notas privadas no son visibles.</p>
+      ${this._renderConversations(conversaciones)}
+      <p class="o2o-note">
+        De las sesiones de O2O solo ves lo que tu manager ha marcado como compartido;
+        sus notas privadas de preparación no son visibles. Lo que sí ves entero es lo
+        que queda registrado en tu ficha, aquí abajo.
+      </p>
     `;
+  }
+
+  /**
+   * Lo anotado en TU ficha (RMR-TSK-0578): lo que tu manager escribió después de
+   * hablar y lo que dejaron ahí los agentes. Se enseña porque ya era tuyo —las
+   * reglas siempre te dejaron leerlo—, y lo que no se ve no se puede corregir:
+   * si algo de lo que hay escrito sobre ti está mal, primero hay que poder leerlo.
+   *
+   * De cada una se dice de DÓNDE viene antes del texto. No se responde igual a
+   * una nota que escribió tu manager que a un resumen que generó una máquina.
+   */
+  _renderConversations(conversaciones) {
+    if (!conversaciones.length) return null;
+    return html`
+      <p class="sub">Anotado en tu ficha</p>
+      <ul class="o2o-list">
+        ${conversaciones.map((c) => {
+          const origen = conversationOrigin(c);
+          return html`<li class="o2o-card">
+            <span class="date">${c.date ?? 'sin fecha'}</span>
+            <span class="origin ${origen.kind}">${origen.label}</span>
+            ${origen.url ? html` <a class="origin-link" href=${origen.url} target="_blank" rel="noopener noreferrer">ver origen</a>` : null}
+            ${c.summary ? html`<p class="body">${c.summary}</p>` : null}
+            ${c.notes ? html`<p class="body">${c.notes}</p>` : null}
+          </li>`;
+        })}
+      </ul>`;
   }
 
   /**
