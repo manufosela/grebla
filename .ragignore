@@ -1,0 +1,15 @@
+# Qué NO entra en el índice del RAG (kj 4.37).
+#
+# El criterio no es "ahorrar espacio" —el índice entero son 11.474 chunks— sino
+# no meter ruido: un chunk que nunca va a responder una pregunta solo compite
+# con los que sí.
+#
+# Los SVG de `public/` son ARTE, no código: el logo de tribbu solo aportaba 25
+# chunks de coordenadas de paths, y el favicon otro. Nadie le va a preguntar al
+# RAG por una curva de Bézier, y su nombre de fichero sí puede colarse por
+# parecido léxico en una búsqueda sobre «logo» o «marca» — justo delante de
+# `orgLogo.js`, que es lo que se buscaba.
+#
+# Los iconos que SÍ son código (SVG inline en componentes Lit) no están aquí:
+# viven dentro de .js y se indexan con su contexto, que es donde tienen sentido.
+public/**/*.svg
