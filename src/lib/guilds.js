@@ -9,8 +9,12 @@ import { db } from './firebase.js';
 
 /**
  * Gremios que ESTIMAN, de entre los del catálogo (puro): globales, con nombre y
- * sin `estimates: false`. Tech Lead o Product Management son gremios de la
- * ficha, pero no votan tareas (decisión de Mánu, RMR-TSK-0532).
+ * sin `estimates: false` — un gremio puede existir en la ficha y no votar tareas
+ * (decisión de Mánu, RMR-TSK-0532).
+ *
+ * Tech Lead, Engineering Manager y Product Management ya NO están en el
+ * catálogo: son roles, no gremios (RMR-TSK-0613). Eran el ejemplo de
+ * `estimates: false`; la marca sigue sirviendo para cualquier gremio que no vote.
  * @param {Array<{ name?: unknown, ownerLeaderUid?: unknown, estimates?: unknown }>} docs
  * @returns {string[]} nombres ordenados
  */
