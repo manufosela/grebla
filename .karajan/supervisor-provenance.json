@@ -1,6 +1,6 @@
 {
-  "kj_version": "4.33.0",
-  "generated_at": "2026-09-26T10:27:33.809Z",
+  "kj_version": "4.37.0",
+  "generated_at": "2026-10-02T09:48:11.057Z",
   "generation": {
     "profile": "standard",
     "cmds": {},
@@ -14,8 +14,28 @@
   },
   "files": [
     {
+      "file": ".karajan/harness/posttooluse.mjs",
+      "sha256": "e1fc5c2ecb1849780f7443d002f0e7cdf12ba39f1c0070fade841428b6ebfd1b"
+    },
+    {
+      "file": ".karajan/harness/pretooluse-sentinel.mjs",
+      "sha256": "d6c7a25c1ace8e3118872465a2a76caccb1f95b217d1f257c5a13fe75f45bdad"
+    },
+    {
+      "file": ".karajan/harness/pretooluse.mjs",
+      "sha256": "8728772c2affd0833e322aa25f722507674dd289c24e1937b897f3f2933b92c1"
+    },
+    {
+      "file": ".karajan/harness/sentinel-lib.mjs",
+      "sha256": "ce205cb9e390024345621a0f1b3e63a479e3210221810269175feff17bde97de"
+    },
+    {
+      "file": ".karajan/harness/stop.mjs",
+      "sha256": "d7985b8c29fb5bbb44f5aa59c4682579a8502a8eea2a923c168acf1c94fbfe7d"
+    },
+    {
       "file": ".karajan/hooks/commit-msg",
-      "sha256": "0a7bb38fe060b64c46dae5baf6e6fd3893e9a58b007515d73520fe5c5bed2666"
+      "sha256": "7be3ae11b0bcd1029d70009bc1a9e0649695b4db343f8c83654a4936bbd2953e"
     },
     {
       "file": ".karajan/hooks/post-merge",
@@ -35,11 +55,15 @@
     }
   ],
   "signature": {
-    "cid": "568aa2ba45fc2596a324f954e30e9077",
-    "nonce": "f1fba01ccc9920acbdc24e91d9cfdd61",
+    "cid": "99fa6d68384809fc7a272431d3f671e2",
+    "nonce": "114daed117fa2eee688ba05eeb5ee243",
     "project": "grebla-app",
-    "filesHash": "b0ae9854df5656f155cc5e3891fb59993cc6e207c1767b8ddd40481de46aff39",
+    "filesHash": "4ac4c05a7cb516a05ab9cd5b97841ac77f04d1480b7d817330172565c88544c8",
+    "v": 2,
+    "kjVersion": "4.37.0",
+    "issuedMs": 1790934479691,
+    "expiresMs": 1790934539691,
     "signer": "EgMc2b95g5nUh8e6LDCeLjv7G69cQaszUCIy+3aLpPQ=",
-    "signature": "091CcD92Cv7lu7fKaIS+Ve+qB57tc4t0IqPYZtJ+CeyXR3eAaPCB2tkw7DDczkTSxcr2XZfJyypMmzUpujNzBw=="
+    "signature": "cZpEvUuc8Q0dI2n7EGj6+UPMyfvPBton76Ajx2oFxQsNWlazYr7VOLZ38xbvIwnyEZNpZ5t2xPIE0UfMrfGnBQ=="
   }
 }
