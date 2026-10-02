@@ -10,26 +10,30 @@
  */
 import { doc, collection, getDocs, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase.js';
+import { normalizeBranchColor } from '../tools/team/domain/orgRoles.js';
 
-/** @typedef {{ id: string, label: string }} OrgBranch */
+/** @typedef {{ id: string, label: string, color: string|null }} OrgBranch */
+
+/** El color es de la instancia (RMR-TSK-0619); uno inválido se descarta aquí. */
+const toBranch = (d) => ({ id: d.id, label: d.data().label ?? d.id, color: normalizeBranchColor(d.data().color) });
 
 /** @returns {Promise<OrgBranch[]>} */
 export async function listOrgBranches() {
   const snap = await getDocs(collection(db, 'orgBranches'));
-  return snap.docs.map((d) => ({ id: d.id, label: d.data().label ?? d.id }));
+  return snap.docs.map(toBranch);
 }
 
 /**
  * Suscripción EN VIVO a las ramas (RMR-TSK-0435): renombrar una rama en el
  * panel se refleja al instante en las vistas abiertas. Devuelve la desuscripción.
- * @param {(branches: Array<{ id: string, label: string }>) => void} onBranches
+ * @param {(branches: OrgBranch[]) => void} onBranches
  * @param {(err: Error) => void} [onError]
  * @returns {() => void}
  */
 export function watchOrgBranches(onBranches, onError) {
   return onSnapshot(
     collection(db, 'orgBranches'),
-    (snap) => onBranches(snap.docs.map((d) => ({ id: d.id, label: d.data().label ?? d.id }))),
+    (snap) => onBranches(snap.docs.map(toBranch)),
     (err) => onError?.(err),
   );
 }

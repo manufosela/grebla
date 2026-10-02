@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { areaOf, intermediateBranches, isAreaHeadIn, rolesOfArea, treeGuideKinds, treeGuideBackground, rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor } from './orgRoles.js';
+import { areaOf, intermediateBranches, isAreaHeadIn, rolesOfArea, treeGuideKinds, treeGuideBackground, rootRoles, childrenOf, intraLayerDepth, layerOf, pyramidLayers, roleChain, superiorCandidatesFor, wouldCycle, assertValidReportsTo, roleDepth, orgRoleRows, branchColor, layerColor, normalizeBranchColor } from './orgRoles.js';
 
 /** @type {import('./orgRoles.js').OrgRole[]} */
 const roles = [
@@ -117,10 +117,24 @@ describe('orgRoleRows — orden por DEPENDENCIAS (no por rama)', () => {
 });
 
 describe('branchColor — color estable por rama (var override + fallback determinista)', () => {
-  it('canónicas: var(--rm-branch-<id>, color de marca)', () => {
-    expect(branchColor('engineering')).toBe('var(--rm-branch-engineering, #2a9d8f)');
-    expect(branchColor('product')).toBe('var(--rm-branch-product, #e76f51)');
-    expect(branchColor('data')).toBe('var(--rm-branch-data, #457b9d)');
+  it('el color lo da el catálogo de la instancia (/orgBranches), no el código', () => {
+    expect(branchColor('engineering', '#2A9D8F')).toBe('var(--rm-branch-engineering, #2a9d8f)');
+    expect(branchColor('user-success', '#d63384')).toBe('var(--rm-branch-user-success, #d63384)');
+  });
+
+  it('ninguna rama de una organización concreta tiene color en el código', () => {
+    for (const id of ['engineering', 'product', 'people', 'data', 'executive']) {
+      expect(branchColor(id)).toMatch(/hsl\(/);
+    }
+    expect(branchColor('generico')).toBe('var(--rm-branch-generico, #6b7280)'); // cajón del sistema
+  });
+
+  it('un color guardado que no es #rrggbb no se pinta: cae al determinista', () => {
+    expect(branchColor('x', 'red')).toBe(branchColor('x'));
+    expect(branchColor('x', '#fff;background:url(a)')).toBe(branchColor('x'));
+    expect(normalizeBranchColor('#ABCDEF')).toBe('#abcdef');
+    expect(normalizeBranchColor('#abc')).toBeNull();
+    expect(normalizeBranchColor(undefined)).toBeNull();
   });
 
   it('rama creada: fallback HSL determinista (mismo id → mismo color)', () => {

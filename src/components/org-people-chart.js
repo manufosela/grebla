@@ -11,6 +11,7 @@ import { LitElement, html, svg, css } from 'lit';
 import { onUserChanged } from '../lib/auth.js';
 import { fetchOrgDirectory } from '../lib/orgDirectory.js';
 import { listOrgRoles } from '../lib/orgRoles.js';
+import { listOrgBranches } from '../lib/orgBranches.js';
 import { branchColor } from '../tools/team/domain/orgRoles.js';
 import { buildPeopleTree, peopleTreeLayout, personTitle, splitLoose } from '../tools/team/domain/orgPeopleTree.js';
 import './zoom-port.js';
@@ -21,6 +22,7 @@ export class OrgPeopleChart extends LitElement {
   static properties = {
     _people: { state: true },
     _roleLabels: { state: true },
+    _branchColors: { state: true },
     _ready: { state: true },
     _error: { state: true },
   };
@@ -52,6 +54,7 @@ export class OrgPeopleChart extends LitElement {
     super();
     this._people = [];
     this._roleLabels = new Map();
+    this._branchColors = new Map();
     this._ready = false;
     this._error = '';
     this._off = null;
@@ -75,9 +78,10 @@ export class OrgPeopleChart extends LitElement {
     this._ready = false;
     this._error = '';
     try {
-      const [people, roles] = await Promise.all([fetchOrgDirectory(), listOrgRoles()]);
+      const [people, roles, branches] = await Promise.all([fetchOrgDirectory(), listOrgRoles(), listOrgBranches()]);
       this._people = people;
       this._roleLabels = new Map(roles.map((r) => [r.id, r.label]));
+      this._branchColors = new Map(branches.map((b) => [b.id, b.color]));
     } catch (err) {
       this._error = `No se ha podido cargar el organigrama: ${err.message}`;
     } finally {
@@ -121,7 +125,7 @@ export class OrgPeopleChart extends LitElement {
       ? `left:${x - NODE.nodeWidth / 2}px;top:${y - NODE.nodeHeight / 2}px;width:${NODE.nodeWidth}px;height:${NODE.nodeHeight}px;`
       : '';
     return html`<div class="node ${node.orphan ? 'orphan' : ''}" data-person-id=${p.personId}
-      style="${box}--b:${branchColor(p.orgBranch)}">
+      style="${box}--b:${branchColor(p.orgBranch, this._branchColors.get(p.orgBranch))}">
       ${node.reports > 0 ? html`<span class="count" title="Personas a su cargo, directas e indirectas">${node.reports}</span>` : null}
       <span class="name">${p.name}</span>
       ${title ? html`<span class="title">${title}</span>` : null}

@@ -2628,7 +2628,7 @@ export class SuperadminPanel extends LitElement {
                     <td>${this._editBranchId === b.id
                       ? html`<input .value=${this._editBranchLabel} @input=${(e) => { this._editBranchLabel = e.target.value; }}
                           @keydown=${(e) => { if (e.key === 'Enter') this._renameBranch(b.id); }} />`
-                      : html`<span class="pyr-dot" style="display:inline-block;background:${branchColor(b.id)}"></span> ${b.label}`}</td>
+                      : html`<span class="pyr-dot" style="display:inline-block;background:${branchColor(b.id, b.color)}"></span> ${b.label}`}</td>
                     <td class="muted">${b.id}</td>
                     <td class="muted">${count}</td>
                     ${ro ? '' : html`<td>${this._editBranchId === b.id
