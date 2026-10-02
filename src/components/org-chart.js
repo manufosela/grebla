@@ -34,8 +34,6 @@ export class OrgChart extends LitElement {
     .error { color: var(--rm-danger, #dc2626); }
     .pyramid {
       display: flex; flex-direction: column; align-items: center; gap: 1.3rem; padding: 1rem 0 0.5rem;
-      --rm-branch-engineering: #2a9d8f; --rm-branch-product: #e76f51; --rm-branch-people: #9d4edd;
-      --rm-branch-data: #457b9d; --rm-branch-generico: #6b7280;
     }
     .pyr-level { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; justify-content: center; align-items: center; position: relative; max-width: 100%; box-sizing: border-box; }
     /* Apilado intra-capa (RMR-TSK-0434): la banda es columna de subfilas; quien
@@ -195,7 +193,7 @@ export class OrgChart extends LitElement {
     return this._branches.find((b) => b.id === id)?.label ?? id;
   }
 
-  _branchColor(b) { return branchColor(b); }
+  _branchColor(b) { return branchColor(b, this._branches.find((x) => x.id === b)?.color); }
 
   _role(r, color) {
     // La tarjeta dice SOLO lo que dicen los datos: rol, rama y «↑ superior»

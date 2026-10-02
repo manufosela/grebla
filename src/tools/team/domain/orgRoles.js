@@ -8,7 +8,7 @@
  * pase por encima de CTO) es solo cambiar punteros `reportsToRoleId`. La ÚNICA
  * regla es que no se formen ciclos.
  *
- * @typedef {'engineering'|'product'|'people'|'data'|'generico'|string} OrgBranch
+ * @typedef {string} OrgBranch   id de `/orgBranches` (cada instancia define los suyos; 'generico' es del sistema)
  * @typedef {Object} OrgRole
  * @property {string} id
  * @property {string} label
@@ -20,23 +20,27 @@
 /** @param {OrgRole[]} roles @returns {Map<string, OrgRole>} */
 const indexById = (roles) => new Map((roles ?? []).map((r) => [r.id, r]));
 
-/** Colores de marca de las ramas canónicas. El resto (ramas creadas por el
- *  superadmin) obtiene un color determinista por hash del id. */
-const CANONICAL_BRANCH_COLORS = {
-  engineering: '#2a9d8f',
-  product: '#e76f51',
-  people: '#9d4edd',
-  data: '#457b9d',
-  generico: '#6b7280',
-};
+/** Color del cajón del sistema. Es lo ÚNICO fijo en el código: los departamentos
+ *  son de cada instancia y su color vive en `/orgBranches/{id}.color`
+ *  (RMR-TSK-0619). */
+const GENERIC_BRANCH_COLOR = '#6b7280';
 
 /**
- * Fallback de color de una rama: el de marca si es canónica; si no, un HSL
- * DETERMINISTA derivado del id (misma rama → mismo color, siempre).
+ * Color guardado de una rama, validado: solo `#rrggbb` (en minúsculas). Cualquier
+ * otra cosa es null, para que nada arbitrario llegue a un `style`. Función PURA.
+ * @param {unknown} color @returns {string|null}
+ */
+export function normalizeBranchColor(color) {
+  return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : null;
+}
+
+/**
+ * Fallback de color de una rama sin color en el catálogo: un HSL DETERMINISTA
+ * derivado del id (misma rama → mismo color, siempre).
  * @param {string} key @returns {string} color CSS sólido
  */
 function branchColorFallback(key) {
-  if (CANONICAL_BRANCH_COLORS[key]) return CANONICAL_BRANCH_COLORS[key];
+  if (key === 'generico') return GENERIC_BRANCH_COLOR;
   let h = 0;
   for (let i = 0; i < key.length; i += 1) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   return `hsl(${h % 360} 55% 58%)`;
@@ -58,15 +62,15 @@ export function layerColor(depth) {
 
 /**
  * Color de una rama por su id, como expresión CSS. Preserva el contrato de override
- * por variable (`var(--rm-branch-<id>, …)`) para que un tema pueda re-teñir una rama,
- * PERO con un fallback DETERMINISTA por id (no el acento): así cualquier rama —canónica
- * o creada por el superadmin— tiene un color propio y estable aunque no exista la
- * variable, y funciona fuera de `.pyramid`. Función PURA.
- * @param {string} id @returns {string} color CSS
+ * por variable (`var(--rm-branch-<id>, …)`) para que un tema pueda re-teñir una rama.
+ * Debajo, el color que la instancia guardó en su catálogo; si no hay (o no es
+ * válido), uno DETERMINISTA por id. Función PURA.
+ * @param {string} id @param {unknown} [storedColor] `/orgBranches/{id}.color`
+ * @returns {string} color CSS
  */
-export function branchColor(id) {
+export function branchColor(id, storedColor) {
   const key = id || 'generico';
-  return `var(--rm-branch-${key}, ${branchColorFallback(key)})`;
+  return `var(--rm-branch-${key}, ${normalizeBranchColor(storedColor) ?? branchColorFallback(key)})`;
 }
 
 /**

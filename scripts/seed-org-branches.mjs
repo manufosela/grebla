@@ -9,12 +9,14 @@ import { serviceAccountPath } from './lib/service-account.mjs';
 
 const target = (process.argv.find((a) => a.startsWith('--target=')) || '--target=app').split('=')[1];
 
+// Departamentos GENÉRICOS de partida (demo). Cada organización los renombra,
+// borra o crea en Admin › Ramas; su color vive en el documento (RMR-TSK-0619).
 const BRANCHES = [
-  { id: 'engineering', label: 'Engineering' },
-  { id: 'product', label: 'Product' },
-  { id: 'people', label: 'People' },
-  { id: 'data', label: 'Data' },
-  { id: 'generico', label: 'Genérico' },
+  { id: 'engineering', label: 'Engineering', color: '#2a9d8f' },
+  { id: 'product', label: 'Product', color: '#e76f51' },
+  { id: 'people', label: 'People', color: '#9d4edd' },
+  { id: 'data', label: 'Data', color: '#457b9d' },
+  { id: 'generico', label: 'Genérico', color: '#6b7280' },
 ];
 
 initializeApp({ credential: cert(serviceAccountPath(target)) });
@@ -26,7 +28,7 @@ async function main() {
   for (const b of BRANCHES) {
     const ref = db.collection('orgBranches').doc(b.id);
     if ((await ref.get()).exists) { console.log(`  · ${b.id} ya existe → intacto`); continue; }
-    await ref.set({ label: b.label });
+    await ref.set({ label: b.label, color: b.color });
     created += 1;
     console.log(`  ✓ ${b.id} → «${b.label}»`);
   }
