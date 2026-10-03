@@ -38,6 +38,18 @@ async function authEmails(auth, people) {
   return out;
 }
 
+/**
+ * De qué valor a qué valor pasa cada campo de una actualización, para que quien
+ * revise el informe vea, p.ej., quién cambia de manager (eso mueve accesos).
+ * El bloque `notion` va aparte: es informativo y se ve en la ficha.
+ */
+function changesOf(update, current) {
+  const before = current.get(update.personId) ?? {};
+  return Object.fromEntries(Object.entries(update.set)
+    .filter(([field]) => field !== 'notion')
+    .map(([field, to]) => [field, { from: before[field] ?? null, to }]));
+}
+
 async function commitInBatches(db, ops) {
   for (let i = 0; i < ops.length; i += BATCH_SIZE) {
     const batch = db.batch();
@@ -63,6 +75,7 @@ export async function runNotionSync({ db, auth, fetchPages, apply, now }) {
     today: now.toISOString().slice(0, 10),
   });
 
+  const current = new Map(people.map((p) => [p.id, p.data]));
   const applied = apply && plan.errors.length === 0;
   if (applied) {
     await commitInBatches(db, [
@@ -75,7 +88,7 @@ export async function runNotionSync({ db, auth, fetchPages, apply, now }) {
     applied,
     errors: plan.errors,
     counts: { updates: plan.updates.length, creates: plan.creates.length, skipped: plan.skipped.length, notInNotion: plan.notInNotion.length },
-    updates: plan.updates.map((u) => ({ personId: u.personId, name: u.name, fields: Object.keys(u.set) })),
+    updates: plan.updates.map((u) => ({ personId: u.personId, name: u.name, fields: Object.keys(u.set), changes: changesOf(u, current) })),
     creates: plan.creates.map((c) => ({ personId: c.personId, name: c.name })),
     skipped: plan.skipped,
     notInNotion: plan.notInNotion,

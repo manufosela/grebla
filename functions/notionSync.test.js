@@ -49,7 +49,10 @@ describe('runNotionSync', () => {
     const db = setup();
     const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchPages: fetchPages([page('a-1', 'Ana Pérez', 'ana@example.com')]), apply: false, now });
     expect(report).toMatchObject({ at: '2026-10-03T08:00:00.000Z', applied: false, errors: [], counts: { updates: 1, creates: 0 } });
-    expect(report.updates[0]).toEqual({ personId: 'p1', name: 'Ana Pérez', fields: ['name', 'external', 'notion', 'orgBranch'] });
+    expect(report.updates[0]).toEqual({
+      personId: 'p1', name: 'Ana Pérez', fields: ['name', 'external', 'notion', 'orgBranch'],
+      changes: { name: { from: 'Ana', to: 'Ana Pérez' }, external: { from: null, to: false }, orgBranch: { from: null, to: 'engineering' } },
+    });
     expect(db.writes.map((w) => w.path)).toEqual(['config/notionSync']);
   });
 
