@@ -27,6 +27,8 @@ import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIss
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, conversationFrom, personIsInScope } from './agentIngest.js';
 import { projectDirectory } from './orgDirectory.js';
+import { queryAllPages, databaseQueryUrl, ORG_DB_ID } from './notionPeople.js';
+import { runNotionSync } from './notionSync.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -2153,6 +2155,37 @@ export const orgDirectory = onCall({ region: 'europe-west1' }, async (request) =
   if (!request.auth) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
   const snap = await getFirestore().collection('people').get();
   return { people: projectDirectory(snap.docs.map((d) => ({ id: d.id, data: d.data() }))) };
+});
+
+const NOTION_TOKEN = defineSecret('NOTION_TOKEN');
+
+/**
+ * Sincroniza el censo desde el Directorio de Notion (RMR-TSK-0622, ADR
+ * -P1XxVvQPrufU13Bd4RF). Solo superadmin. `apply: false` simula: guarda el
+ * informe en /config/notionSync sin tocar fichas. Una instancia sin Notion
+ * (`/config/org.notionSync` distinto de true, como la demo) se gestiona desde
+ * su admin y aquí se rechaza en voz alta. La demo necesita el secret con un
+ * valor de relleno para desplegar; nunca se lee porque la marca está apagada.
+ */
+export const notionSync = onCall({ region: 'europe-west1', secrets: [NOTION_TOKEN], timeoutSeconds: 300 }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(caller.uid))) throw new HttpsError('permission-denied', 'Solo un superadmin puede sincronizar con Notion.');
+  const db = getFirestore();
+  const org = (await db.doc('config/org').get()).data();
+  if (org?.notionSync !== true) {
+    throw new HttpsError('failed-precondition', 'Esta instancia no está conectada a Notion: las personas se gestionan desde su admin.');
+  }
+  const token = NOTION_TOKEN.value();
+  const fetchPages = () => queryAllPages({ token, urls: [databaseQueryUrl(ORG_DB_ID)] });
+  try {
+    const report = await runNotionSync({ db, auth: getAuth(), fetchPages, apply: request.data?.apply === true, now: new Date() });
+    logger.info(`[notionSync] ${report.applied ? 'aplicado' : 'simulado'}: ${JSON.stringify(report.counts)} · errores ${report.errors.length}`);
+    return report;
+  } catch (err) {
+    logger.error('[notionSync] falló', err);
+    throw new HttpsError('internal', `No se pudo sincronizar con Notion: ${err instanceof Error ? err.message : String(err)}`);
+  }
 });
 
 /**
