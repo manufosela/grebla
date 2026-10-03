@@ -600,6 +600,13 @@ service cloud.firestore {
     // cualquiera con sesión —es el mismo orden para toda la organización— y solo
     // lo escribe quien gobierna la instancia: con varios editores el orden se
     // pisa, y nadie sabría quién lo cambió ni por qué.
+    // Último informe de la sincronización con Notion (RMR-TSK-0623): lleva
+    // nombres y cambios de manager, así que solo lo lee el superadmin. Lo escribe
+    // la callable notionSync (Admin SDK), nunca el cliente.
+    match /config/notionSync {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
     match /config/cardLayout {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
