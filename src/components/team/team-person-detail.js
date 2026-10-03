@@ -66,6 +66,8 @@ import { normalizePrimaryGuild } from '../../tools/team/domain/primaryGuild.js';
 import { BELBIN_ITEMS, BELBIN_SCALE } from '../../tools/team/data/belbinItems.js';
 import { proposeRoles, evidenceFor } from '../../tools/team/domain/belbinSurvey.js';
 import { listDomains } from '../../lib/domains.js';
+import { isNotionSynced } from '../../lib/notionSync.js';
+import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -206,6 +208,8 @@ export class TeamPersonDetail extends LitElement {
     _usersCat: { state: true },
     _datosSaving: { state: true },
     _datosError: { state: true },
+    /** ¿Manda Notion en esta instancia? Sus campos se ven pero no se editan (RMR-TSK-0588). */
+    _notionSync: { state: true },
     _datosSaved: { state: true },
     _careerSaving: { state: true },
     _careerError: { state: true },
@@ -331,7 +335,11 @@ export class TeamPersonDetail extends LitElement {
     /* A fila completa: el email (lleva texto de ayuda), el aviso de cuenta, los
        fieldsets de checks, los mensajes y la barra de acciones. */
     .datos .fld:has(.fld-hint), .datos .acct, .datos .datos-checks,
-    .datos .error, .datos .datos-actions { grid-column: 1 / -1; }
+    .datos .error, .datos .datos-actions, .datos .hint, .datos .notion-datos { grid-column: 1 / -1; }
+    /* Datos de Notion en solo lectura (RMR-TSK-0588): etiqueta y valor en rejilla. */
+    .datos .notion-datos { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; margin: 0; }
+    .datos .notion-datos dt { font-size: 0.82rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
+    .datos .notion-datos dd { margin: 0; color: var(--rm-text, #111827); }
     .datos .fld { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; font-weight: 700; color: var(--rm-navy, #1e3a5f); }
     .datos .fld input { font: inherit; font-weight: 400; padding: 0.45rem 0.6rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; }
     .datos .fld .chk-loc { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 400; font-size: 0.9rem; color: var(--rm-text, #111827); }
@@ -548,6 +556,7 @@ export class TeamPersonDetail extends LitElement {
     this._datosSaving = false;
     this._datosError = '';
     this._datosSaved = false;
+    this._notionSync = false;
     /** Políticas de herramientas (defaults por rol) para la matriz de permisos. */
     this._toolPolicies = [];
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
@@ -1066,7 +1075,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat] =
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat, notionSync] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -1093,7 +1102,11 @@ export class TeamPersonDetail extends LitElement {
           listCareerRoutes().catch(() => []),
           // Catálogo de dominios: a qué pertenece la persona (ADR de dominios).
           listDomains().catch(() => []),
+          // ¿Manda Notion en esta instancia? (RMR-TSK-0588) SIN catch a propósito:
+          // decidir «no» por un fallo dejaría editable lo que no lo es.
+          isNotionSynced(),
         ]);
+      this._notionSync = notionSync;
       this.timeline = timeline;
       this.areas = areas;
       this.conversations = conversations;
@@ -2317,7 +2330,7 @@ export class TeamPersonDetail extends LitElement {
   async _saveDatos() {
     if (!this.persistence || !this.person) return;
     const name = this._datos.name.trim();
-    if (!name) {
+    if (!name && !this._notionSync) {
       this._datosError = 'El nombre es obligatorio.';
       return;
     }
@@ -2342,8 +2355,10 @@ export class TeamPersonDetail extends LitElement {
       if (!this.person.uid) {
         patch.pendingEmail = normalizeInviteEmail(this._datos.pendingEmail);
       }
-      await updatePerson(this.persistence, this.person.id, patch);
-      this.person = { ...this.person, ...patch }; // refleja en la cabecera sin recargar
+      // Con Notion conectado, lo suyo no viaja: lo escribe el importador (RMR-TSK-0588).
+      const allowed = withoutNotionFields(patch, this._notionSync);
+      await updatePerson(this.persistence, this.person.id, allowed);
+      this.person = { ...this.person, ...allowed }; // refleja en la cabecera sin recargar
       this._datosSaved = true;
       this.dispatchEvent(new CustomEvent('person-updated', { detail: { id: this.person.id }, bubbles: true, composed: true }));
     } catch (err) {
@@ -2488,24 +2503,44 @@ export class TeamPersonDetail extends LitElement {
     const d = this._datos;
     return html`
       <section class="datos">
-        <label class="fld">Nombre
-          <input type="text" .value=${d.name} @input=${(e) => { this._datos = { ...d, name: e.target.value }; }} />
-        </label>
+        ${this._notionSync ? this._renderNotionDatos(d) : this._renderEditableNotionDatos(d)}
         <label class="fld">GitHub (login)
           <input type="text" placeholder="usuario-github" .value=${d.githubLogin} @input=${(e) => { this._datos = { ...d, githubLogin: e.target.value }; }} />
         </label>
-        <label class="fld">Fecha de alta
-          <input type="date" .value=${d.startDate} @input=${(e) => { this._datos = { ...d, startDate: e.target.value }; }} />
-        </label>
         ${this._renderLocationBlock()}
-        <label class="fld chk-ext">
-          <input type="checkbox" .checked=${!!d.external} @change=${(e) => { this._datos = { ...d, external: e.target.checked }; }} />
-          Es externo/a
-        </label>
-        ${this._renderEmailBlock()}
         ${this._renderDatosActions('Guardar datos')}
       </section>
     `;
+  }
+
+  /** Sin Notion (la demo): nombre, alta, externo y email se editan aquí. */
+  _renderEditableNotionDatos(d) {
+    return html`
+      <label class="fld">Nombre
+        <input type="text" .value=${d.name} @input=${(e) => { this._datos = { ...d, name: e.target.value }; }} />
+      </label>
+      <label class="fld">Fecha de alta
+        <input type="date" .value=${d.startDate} @input=${(e) => { this._datos = { ...d, startDate: e.target.value }; }} />
+      </label>
+      <label class="fld chk-ext">
+        <input type="checkbox" .checked=${!!d.external} @change=${(e) => { this._datos = { ...d, external: e.target.checked }; }} />
+        Es externo/a
+      </label>
+      ${this._renderEmailBlock()}`;
+  }
+
+  /** Con Notion (RMR-TSK-0588): se ven, no se editan; la fuente de verdad es Notion. */
+  _renderNotionDatos(d) {
+    const email = this.person?.email ?? d.pendingEmail ?? '';
+    const external = d.external ? 'Sí' : 'No';
+    return html`
+      <p class="hint">Nombre, alta, externo, email, departamento y manager vienen de Notion: se cambian allí.</p>
+      <dl class="notion-datos">
+        <dt>Nombre</dt><dd>${d.name || '—'}</dd>
+        <dt>Fecha de alta</dt><dd>${d.startDate || '—'}</dd>
+        <dt>Externo/a</dt><dd>${external}</dd>
+        <dt>Email</dt><dd>${email || '—'}</dd>
+      </dl>`;
   }
 
   /** Pestaña «Organización»: clasificación de la persona por gremios, labels y
