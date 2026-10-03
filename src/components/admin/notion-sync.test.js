@@ -48,4 +48,9 @@ describe('pestaña Notion del panel', () => {
     expect(SuperadminPanel.prototype._renderNotion.call({ readOnly: true })).toBeNull();
     expect(SuperadminPanel.prototype._renderNotion.call({ readOnly: false })).not.toBeNull();
   });
+
+  it('va antes de Usuarios: Permisos sigue justo detrás de Usuarios', () => {
+    const tabs = SuperadminPanel.prototype._renderGovernanceTabs.call({ readOnly: false, _tab: 'users', _setTab() {} });
+    expect(tabs.map((t) => t.values.at(-1))).toEqual(['Notion', 'Usuarios']);
+  });
 });

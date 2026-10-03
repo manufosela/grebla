@@ -2819,7 +2819,8 @@ export class SuperadminPanel extends LitElement {
       const cls = this._tab === id ? 'tab active' : 'tab';
       return html`<button class=${cls} @click=${() => this._setTab(id)}>${label}</button>`;
     };
-    return [tab('users', 'Usuarios'), tab('notion', 'Notion')];
+    // Notion antes que Usuarios: Permisos vive pegada a Usuarios (e2e/permisos.spec.js).
+    return [tab('notion', 'Notion'), tab('users', 'Usuarios')];
   }
 
   /** Censo desde Notion (RMR-TSK-0623). Como Usuarios: un viewer nunca lo toca,
