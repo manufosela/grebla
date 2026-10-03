@@ -47,3 +47,11 @@ export const samplePages = () => [
   notionPage("eeee-5555", "", {}, "Activo", "aaaa-1111"),
   notionPage("ffff-6666", "Huerfano", { type: "Externo" }, "Activo", "zzzz-0000"),
 ];
+
+/** Respuesta de fetch simulada. */
+export const fakeResponse = ({ ok = true, status = 200, json = {}, text = "" } = {}) => ({
+  ok,
+  status,
+  json: async () => json,
+  text: async () => text,
+});

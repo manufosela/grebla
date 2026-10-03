@@ -17,6 +17,9 @@
  * los omite: el organigrama no los necesita y no se exponen a los logados.
  */
 
+export const NOTION_VERSION = "2022-06-28";
+const PAGE_SIZE = 100;
+
 export const stripDashes = (id) => id.replaceAll("-", "");
 export const selectName = (p) => p?.select?.name || null;
 export const firstMultiSelect = (p) => p?.multi_select?.[0]?.name || null;
@@ -28,6 +31,15 @@ export const plainText = (p) => {
   const s = p?.rich_text ? p.rich_text.map((t) => t.plain_text).join("").trim() : "";
   return s || null;
 };
+
+export const dataSourceQueryUrl = (id) => `https://api.notion.com/v1/data_sources/${id}/query`;
+export const databaseQueryUrl = (id) => `https://api.notion.com/v1/databases/${id}/query`;
+
+export const notionHeaders = (token) => ({
+  Authorization: `Bearer ${token}`,
+  "Notion-Version": NOTION_VERSION,
+  "Content-Type": "application/json",
+});
 
 /** Página de Notion → persona (sin filtrar). */
 export const pageToPerson = (page) => {
@@ -65,3 +77,42 @@ export const buildPeople = (pages, excludedStatuses) => {
   return people;
 };
 
+const postFirstOk = async (urls, init, fetchImpl) => {
+  let last;
+  for (const url of urls) {
+    last = await fetchImpl(url, { method: "POST", ...init });
+    if (last.ok) return last;
+  }
+  throw new Error(`Notion ${last.status}: ${await last.text()}`);
+};
+
+/**
+ * Descarga todas las páginas paginando. `urls` se prueban en orden en cada
+ * petición (p.ej. endpoint de data_sources y, si falla, el clásico de databases).
+ */
+export const queryAllPages = async ({ token, urls, fetchImpl = fetch }) => {
+  const headers = notionHeaders(token);
+  const results = [];
+  let cursor;
+  do {
+    const body = { page_size: PAGE_SIZE };
+    if (cursor) body.start_cursor = cursor;
+    const r = await postFirstOk(urls, { headers, body: JSON.stringify(body) }, fetchImpl);
+    const j = await r.json();
+    results.push(...j.results);
+    cursor = j.has_more ? j.next_cursor : undefined;
+  } while (cursor);
+  return results;
+};
+
+// DB del Directorio de personas (público, no es secreto) y estados excluidos.
+// Status real en Notion: Active, Pending Onboarding, Pending Offboarding, Inactive.
+// Solo se excluye Inactive (el original excluía además "Baja", que no existe).
+export const ORG_DB_ID = "4d3e7fda-a67e-4bf9-9227-30626e273bff";
+export const ORG_EXCLUDED_STATUSES = ["Inactive"];
+
+/** Descarga el Directorio de Notion y devuelve las personas activas del organigrama. */
+export const fetchDirectory = async ({ token, fetchImpl = fetch }) => {
+  const pages = await queryAllPages({ token, urls: [databaseQueryUrl(ORG_DB_ID)], fetchImpl });
+  return buildPeople(pages, ORG_EXCLUDED_STATUSES);
+};
