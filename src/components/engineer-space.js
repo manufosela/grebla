@@ -46,7 +46,6 @@ import './career/player-card.js';
 import './marea/marea-app.js';
 import './kudos/kudos-app.js';
 import './retro/retro-app.js';
-import './my-ficha-editor.js';
 import { getLevel, expectationsForLevel, addendumsForDisciplines, aspirationalLevels, composeTitle } from '../tools/career/data/framework.js';
 import { stats } from '../tools/career/application/usecases.js';
 import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
@@ -114,9 +113,6 @@ export class EngineerSpace extends LitElement {
     o2o: { attribute: false },
     /** Conversaciones anotadas en su ficha (RMR-TSK-0578). */
     conversations: { attribute: false },
-    // self-ficha (RMR-TSK-0251): el usuario es dueño de su propia ficha y puede
-    // editar sus datos básicos (nombre/nivel/disciplinas) desde aquí.
-    selfOwned: { attribute: false },
     /** Catálogo de dominios: a lo que pertenece de verdad (ADR de dominios). */
     domains: { attribute: false },
     _tab: { state: true },
@@ -336,8 +332,6 @@ export class EngineerSpace extends LitElement {
     this.o2o = null;
     /** @type {Array<object>} */
     this.conversations = [];
-    /** @type {boolean} el usuario es dueño de su propia ficha (self-ficha, RMR-TSK-0251) */
-    this.selfOwned = false;
     this.domains = [];
     /** @type {string|null} aviso in-place si falla la escritura del objetivo */
     this._targetError = null;
@@ -1046,11 +1040,6 @@ export class EngineerSpace extends LitElement {
     `;
   }
 
-  /** Refresca la persona tras editar la self-ficha (RMR-TSK-0251). */
-  _onFichaUpdated(event) {
-    this.person = event.detail;
-  }
-
   /** Pestaña Marea: el pulso semanal del propio ingeniero (RMR-BUG-0036). */
   _renderMarea() {
     return html`<marea-app .uid=${this.person?.uid ?? null}></marea-app>`;
@@ -1139,13 +1128,6 @@ export class EngineerSpace extends LitElement {
       <dl class="datos-dl">
         ${rows.map(([k, v]) => html`<div class="datos-row"><dt>${k}</dt><dd>${v}</dd></div>`)}
       </dl>
-      ${this.selfOwned
-        ? html`<my-ficha-editor
-            .person=${this.person}
-            .framework=${this.framework}
-            @ficha-updated=${this._onFichaUpdated}
-          ></my-ficha-editor>`
-        : null}
     `;
   }
 

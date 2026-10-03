@@ -49,9 +49,6 @@ onUserChanged(async (user) => {
       location.replace('/');
       return;
     }
-    // ¿Es su propia ficha? (self-ficha o ficha de la que es dueño) → puede editar
-    // sus datos básicos (nombre/nivel/disciplinas) desde «Mi espacio».
-    const selfOwned = person.self === true || person.ownerLeaderUid === user.uid;
     // Carga en paralelo del contenido de las secciones (de solo lectura). El
     // O2O va por Cloud Function y es NO crítico: si falla, la vista sigue con el
     // resto y «Mis O2O» queda vacío (no tumba «Mi espacio»).
@@ -71,7 +68,6 @@ onUserChanged(async (user) => {
     ]);
     renderIdentity(person, framework);
     renderSpace(person, framework, profile, career, o2o, orgConfig, { domains, conversations });
-    if (space) space.selfOwned = selfOwned;
     // Con los datos ya cargados se revela de una vez (cabecera + espacio) y se
     // quita el skeleton — sin salto de layout (RMR-TSK-0263).
     if (space) space.hidden = false;
