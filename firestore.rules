@@ -17,6 +17,17 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
+    // Lo que viene de Notion no se edita aquí (RMR-TSK-0588, ADR
+    // -P1XxVvQPrufU13Bd4RF): en una instancia conectada, estos campos de la ficha
+    // solo los escribe el importador (Admin SDK, que no pasa por reglas). Ni el
+    // superadmin desde el cliente; si no, la restricción sería solo visual. La
+    // baja (`active`) queda fuera a propósito: es un acto explícito, no Notion.
+    function updatesNotionFields() {
+      return exists(/databases/$(database)/documents/config/org)
+        && get(/databases/$(database)/documents/config/org).data.get('notionSync', false) == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(
+          ['name', 'email', 'pendingEmail', 'orgBranch', 'reportsToPersonId', 'startDate', 'external', 'notion']);
+    }
     // Gestor de encuestas (People): puede gestionar /surveys sin ser superadmin.
     // Desde RMR-TSK-0476 es un PERMISO DE HERRAMIENTA como cualquier otro — se
     // concede en Permisos, no con un rol aparte—, y se comprueba por el espejo
@@ -298,7 +309,7 @@ service cloud.firestore {
       // ingeniero vinculado (Person.uid == su uid) SOLO puede declarar su objetivo
       // de carrera: la última rama restringe el cambio al único campo
       // `careerTargetLevelId` (hasOnly), sin poder tocar ningún otro dato de su ficha.
-      allow update: if isSuperAdmin() || isOwner()
+      allow update: if !updatesNotionFields() && (isSuperAdmin() || isOwner()
         || (ownerReportsToMe()
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
         || (sharedPerm(resource.data) == 'edit'
@@ -307,7 +318,7 @@ service cloud.firestore {
         || (personIsMyManager()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['toolOverrides']))
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['careerTargetLevelId']));
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['careerTargetLevelId'])));
       allow delete: if isSuperAdmin() || isOwner();
 
       // Consultas al brujo (MC-22): el jugador vinculado (Person.uid ==
@@ -417,8 +428,14 @@ service cloud.firestore {
                 && (person().ownerLeaderUid == request.auth.uid
                     || ('sharedWith' in person() && person().sharedWith[request.auth.uid] == 'edit')));
         }
+        // El comodín también es la propia ficha: ahí rige lo mismo que en su
+        // `allow update` (los campos de Notion no se tocan desde el cliente).
+        function isPersonDocUpdate() {
+          return request.path == /databases/$(database)/documents/people/$(personId)
+            && resource != null && request.resource != null;
+        }
         allow read: if canView();
-        allow write: if canEdit();
+        allow write: if canEdit() && !(isPersonDocUpdate() && updatesNotionFields());
       }
     }
 
