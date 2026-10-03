@@ -43,6 +43,26 @@ describe('<notion-sync> — «Aplicar» solo tras la última simulación correct
   });
 });
 
+describe('<notion-sync> — el detalle del informe por secciones', () => {
+  const { _rowsOf, _renderSectionTab } = NotionSync.prototype;
+  const report = {
+    updates: [{ personId: 'p1', name: 'Ana', changes: { reportsToPersonId: { from: 'p2', to: 'new1' } } }],
+    creates: [{ personId: 'new1', name: 'Bea' }], skipped: [], notInNotion: [],
+  };
+
+  it('el manager sale por su nombre, también si es una ficha que se va a crear', () => {
+    const rows = _rowsOf.call({ _names: new Map([['p2', 'Jefa']]) }, report);
+    expect(rows.changes).toEqual([{ name: 'Ana', field: 'Manager', from: 'Jefa', to: 'Bea' }]);
+  });
+
+  it('cada sección dice cuántas filas tiene y cuál está abierta', () => {
+    const rows = _rowsOf.call({ _names: new Map() }, report);
+    const tab = _renderSectionTab.call({ _section: 'creates' }, ['creates', 'Altas'], rows);
+    expect(tab.values).toContain('Altas (1)');
+    expect(tab.values).toContain('true');
+  });
+});
+
 describe('pestaña Notion del panel', () => {
   it('un viewer no la ve aunque llegue por la URL', () => {
     expect(SuperadminPanel.prototype._renderNotion.call({ readOnly: true })).toBeNull();
