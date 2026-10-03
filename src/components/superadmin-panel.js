@@ -25,6 +25,8 @@ import './common/person-permissions.js';
 import './admin/domains-manager.js';
 import './admin/org-identity.js';
 import './admin/notion-sync.js';
+import { isNotionSynced } from '../lib/notionSync.js';
+import { withoutNotionFields } from '../tools/team/domain/notionFields.js';
 import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteAccount } from '../lib/users.js';
 import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -165,6 +167,8 @@ export class SuperadminPanel extends LitElement {
     _editRoleId: { state: true },
     _editRoleLabel: { state: true },
     _editEmailId: { state: true },
+    /** ¿Manda Notion? Nombre, email, rama y superior se ven sin editar (RMR-TSK-0588). */
+    _notionSync: { state: true },
     _editEmailValue: { state: true },
     _editPersonNameId: { state: true },
     _editPersonNameValue: { state: true },
@@ -571,6 +575,7 @@ export class SuperadminPanel extends LitElement {
     /** @type {string|null} id de persona en edición de email de invitación (inline) */
     this._editEmailId = null;
     this._editEmailValue = '';
+    this._notionSync = false;
     /** @type {string|null} id de persona en edición de nombre (inline) */
     this._editPersonNameId = null;
     this._editPersonNameValue = '';
@@ -990,7 +995,9 @@ export class SuperadminPanel extends LitElement {
       this._usersError = err instanceof Error ? err.message : 'No se pudieron cargar los usuarios.';
     }
     try {
-      this._peopleList = await peoplePromise;
+      // Con la marca de Notion: sin ella no se sabe qué celdas se pueden editar,
+      // así que su fallo es el de la tabla (RMR-TSK-0588).
+      [this._peopleList, this._notionSync] = await Promise.all([peoplePromise, isNotionSynced()]);
     } catch (err) {
       this._peopleError = err instanceof Error ? err.message : 'No se pudieron cargar las personas.';
     }
@@ -1020,9 +1027,11 @@ export class SuperadminPanel extends LitElement {
     const before = this._peopleList.find((p) => p.id === personId);
     const prevRole = before?.orgRole ?? null;
     const prevBranch = before?.orgBranch ?? null;
-    this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, orgRole: roleId, orgBranch: branch } : p));
+    // Con Notion, la rama (departamento) la manda Notion: el rol ya no la arrastra (RMR-TSK-0588).
+    const patch = withoutNotionFields({ orgRole: roleId, orgBranch: branch }, this._notionSync);
+    this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, ...patch } : p));
     try {
-      await this.persistence.people.update(personId, { orgRole: roleId, orgBranch: branch });
+      await this.persistence.people.update(personId, patch);
       this._peopleNotice = 'Rol actualizado.';
     } catch (err) {
       // Revert QUIRÚRGICO: solo si el valor sigue siendo el optimista de esta
@@ -1189,6 +1198,7 @@ export class SuperadminPanel extends LitElement {
   /** Celda de nombre de la tabla de personas: texto con lápiz de edición inline
    *  (Enter guarda, Esc cancela) — mismo patrón que el email (RMR-BUG-0076). */
   _renderPersonNameCell(p) {
+    if (this._notionSync) return html`${p.name}`; // viene de Notion (RMR-TSK-0588)
     if (this._editPersonNameId === p.id) {
       return html`<input class="role-rename" .value=${this._editPersonNameValue}
           @input=${(e) => { this._editPersonNameValue = e.target.value; }}
@@ -1205,7 +1215,8 @@ export class SuperadminPanel extends LitElement {
    *  cuenta); sin cuenta, editable inline (lápiz → input, Enter guarda, Esc cancela). */
   _renderPersonEmailCell(p) {
     const email = this._personEmail(p);
-    if (p.uid) return html`${email ?? html`<span class="muted">—</span>`}`;
+    // Con cuenta, el de la cuenta; con Notion, el de Notion (RMR-TSK-0588): solo lectura.
+    if (p.uid || this._notionSync) return html`${email ?? html`<span class="muted">—</span>`}`;
     if (this._editEmailId === p.id) {
       return html`<input class="role-rename" type="email" placeholder="email@empresa.com" .value=${this._editEmailValue}
           @input=${(e) => { this._editEmailValue = e.target.value; }}
@@ -2883,6 +2894,15 @@ export class SuperadminPanel extends LitElement {
     `;
   }
 
+  /** Rama de una persona: select, o texto si la manda Notion (RMR-TSK-0588). */
+  _renderBranchCell(p) {
+    if (this._notionSync) return html`<span>${this._branchLabel(p.orgBranch)}</span>`;
+    return html`<select aria-label="Rama de ${p.name ?? 'la persona'}" @change=${(e) => this._setPersonBranch(p.id, e.target.value)}>
+      <option value="" ?selected=${!this._orgBranches.some((b) => b.id === p.orgBranch)}>— sin rama —</option>
+      ${this._orgBranches.map((b) => html`<option value=${b.id} ?selected=${p.orgBranch === b.id}>${b.label}</option>`)}
+    </select>`;
+  }
+
   /** Tabla de personas: rol, superior, acceso (si tiene cuenta) y baja. */
   _renderUsersPeople() {
     const nameOf = (id) => this._peopleList.find((x) => x.id === id)?.name ?? '—';
@@ -2913,12 +2933,9 @@ export class SuperadminPanel extends LitElement {
                       <option value="" disabled ?selected=${!this._orgRoles.some((r) => r.id === p.orgRole)}>— sin rol —</option>
                       ${this._orgRoles.map((r) => html`<option value=${r.id} ?selected=${p.orgRole === r.id}>${r.label}</option>`)}
                     </select>
-                    <select aria-label="Rama de ${p.name ?? 'la persona'}" @change=${(e) => this._setPersonBranch(p.id, e.target.value)}>
-                      <option value="" ?selected=${!this._orgBranches.some((b) => b.id === p.orgBranch)}>— sin rama —</option>
-                      ${this._orgBranches.map((b) => html`<option value=${b.id} ?selected=${p.orgBranch === b.id}>${b.label}</option>`)}
-                    </select>
+                    ${this._renderBranchCell(p)}
                   </td>
-                  <td>${this._renderSuperiorSelect(p, nameOf)}</td>
+                  <td>${this._notionSync ? nameOf(p.reportsToPersonId) : this._renderSuperiorSelect(p, nameOf)}</td>
                   <td class="stack">
                     ${this._renderPersonAccess(p)}
                     ${this._confirmDeletePerson === p.id
