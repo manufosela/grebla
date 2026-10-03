@@ -15,6 +15,31 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.229.0] - 2026-10-03
+
+### Añadido
+
+- **El censo viene de Notion.** En una instancia conectada, Admin › Notion
+  simula la sincronización con el Directorio de Notion, enseña qué cambia (con
+  el antes y el después de cada campo, y de quién a quién cambia cada manager)
+  y solo entonces deja aplicarla. Quien está en Notion y no en GREBLA queda
+  pre-invitado. Nunca se da de baja ni se borra a nadie; un email repetido o un
+  ciclo de managers paran el lote entero, y una ficha que se llama casi igual
+  no se duplica: se avisa.
+- **Admin › Usuarios: «Solo sin departamento».** Lo que falta es el
+  departamento, no el gremio: el filtro deja a quien está en genérico o en una
+  rama que ya no existe, y ahí mismo se le asigna.
+
+### Cambiado
+
+- **La persona se edita en un solo sitio.** Con Notion conectado, nombre,
+  email, departamento, manager, alta y externo se ven en la ficha y en Admin ›
+  Usuarios pero no se editan: vienen de Notion, y las reglas lo impiden también
+  fuera de la pantalla. La baja sigue siendo un acto explícito de GREBLA.
+- Mi espacio ya no tiene «Editar mi ficha»: duplicaba la ficha y dejaba a un
+  manager subirse el nivel a sí mismo.
+- El color de cada departamento es dato de la instancia, no del código.
+
 ## [1.228.0] - 2026-09-29
 
 ### Añadido
