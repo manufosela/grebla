@@ -24,6 +24,7 @@ import './org-chart.js';
 import './common/person-permissions.js';
 import './admin/domains-manager.js';
 import './admin/org-identity.js';
+import './admin/notion-sync.js';
 import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteAccount } from '../lib/users.js';
 import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -100,7 +101,7 @@ function formatLogin(ts) {
 const VIEW_FLAG = 'grebla-view';
 // «Managers» se retiró (RMR-PCS-0027 · F8e): dar el rol de mando se hace editando
 // la persona en «Usuarios», sin una pestaña aparte que duplicaba el alta.
-const TABS = Object.freeze(['organigrama', 'identidad', 'areas', 'guilds', 'dominios', 'labels', 'career', 'users', 'permisos']);
+const TABS = Object.freeze(['organigrama', 'identidad', 'areas', 'guilds', 'dominios', 'labels', 'career', 'users', 'notion', 'permisos']);
 /** Las mismas, para preguntar por pertenencia sin recorrerlas. */
 const TAB_IDS = new Set(TABS);
 /** Hashes legados de las dos pestañas de carrera, ahora sub-pestañas de «career»
@@ -1451,6 +1452,7 @@ export class SuperadminPanel extends LitElement {
       career: () => this._renderCareer(),
       permisos: () => this._renderPermisos(),
       users: () => this._renderUsers(),
+      notion: () => this._renderNotion(),
     };
     return pintar[this._tab]?.() ?? null;
   }
@@ -1482,9 +1484,7 @@ export class SuperadminPanel extends LitElement {
         <button class="tab ${this._tab === 'dominios' ? 'active' : ''}" @click=${() => this._setTab('dominios')}>Dominios</button>
         <button class="tab ${this._tab === 'labels' ? 'active' : ''}" @click=${() => this._setTab('labels')}>Labels</button>
         <button class="tab ${this._tab === 'career' ? 'active' : ''}" @click=${() => this._setTab('career')}>Carrera</button>
-        ${this.readOnly
-          ? null
-          : html`<button class="tab ${this._tab === 'users' ? 'active' : ''}" @click=${() => this._setTab('users')}>Usuarios</button>`}
+        ${this._renderGovernanceTabs()}
         <button class="tab ${this._tab === 'permisos' ? 'active' : ''}" @click=${() => this._setTab('permisos')}>Permisos</button>
       </nav>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
@@ -2811,6 +2811,23 @@ export class SuperadminPanel extends LitElement {
       </section>`;
   }
 
+
+  /** Pestañas que gestionan personas (Usuarios y Notion): un viewer no las ve. */
+  _renderGovernanceTabs() {
+    if (this.readOnly) return null;
+    const tab = (id, label) => {
+      const cls = this._tab === id ? 'tab active' : 'tab';
+      return html`<button class=${cls} @click=${() => this._setTab(id)}>${label}</button>`;
+    };
+    return [tab('users', 'Usuarios'), tab('notion', 'Notion')];
+  }
+
+  /** Censo desde Notion (RMR-TSK-0623). Como Usuarios: un viewer nunca lo toca,
+   *  aunque llegue a la pestaña por la URL (la callable además exige superadmin). */
+  _renderNotion() {
+    if (this.readOnly) return null;
+    return html`<notion-sync></notion-sync>`;
+  }
 
   _renderUsers() {
     // Defensa en profundidad: un viewer nunca gestiona usuarios.
