@@ -27,6 +27,7 @@ import './admin/org-identity.js';
 import './admin/notion-sync.js';
 import { isNotionSynced } from '../lib/notionSync.js';
 import { withoutNotionFields } from '../tools/team/domain/notionFields.js';
+import { withoutDepartment } from '../tools/team/domain/withoutDepartment.js';
 import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteAccount } from '../lib/users.js';
 import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -169,6 +170,8 @@ export class SuperadminPanel extends LitElement {
     _editEmailId: { state: true },
     /** ¿Manda Notion? Nombre, email, rama y superior se ven sin editar (RMR-TSK-0588). */
     _notionSync: { state: true },
+    /** Filtro de la tabla de personas: solo quien no tiene departamento (RMR-TSK-0615). */
+    _onlyWithoutDept: { state: true },
     _editEmailValue: { state: true },
     _editPersonNameId: { state: true },
     _editPersonNameValue: { state: true },
@@ -576,6 +579,7 @@ export class SuperadminPanel extends LitElement {
     this._editEmailId = null;
     this._editEmailValue = '';
     this._notionSync = false;
+    this._onlyWithoutDept = false;
     /** @type {string|null} id de persona en edición de nombre (inline) */
     this._editPersonNameId = null;
     this._editPersonNameValue = '';
@@ -2903,6 +2907,22 @@ export class SuperadminPanel extends LitElement {
     </select>`;
   }
 
+  /** Filtro «Sin departamento» (RMR-TSK-0615): lo que de verdad falta es el
+   *  departamento, no el gremio. Se asigna en la misma fila; con Notion, allí. */
+  _renderWithoutDeptFilter() {
+    // Sin catálogo cargado, todos parecerían «sin departamento»: no se ofrece.
+    if (this._orgBranches.length === 0) return null;
+    const n = withoutDepartment(this._peopleList, this._orgBranches).length;
+    if (n === 0 && !this._onlyWithoutDept) return null;
+    const label = `Solo sin departamento (${n})`;
+    const hint = this._notionSync ? 'Su departamento viene de Notion: corrígelo allí.' : 'Asígnalo en la columna «Rol y rama».';
+    return html`<p class="ro-note">
+      <label><input type="checkbox" .checked=${this._onlyWithoutDept}
+        @change=${(e) => { this._onlyWithoutDept = e.target.checked; }} /> ${label}</label>
+      — ${hint}
+    </p>`;
+  }
+
   /** Tabla de personas: rol, superior, acceso (si tiene cuenta) y baja. */
   _renderUsersPeople() {
     const nameOf = (id) => this._peopleList.find((x) => x.id === id)?.name ?? '—';
@@ -2912,15 +2932,18 @@ export class SuperadminPanel extends LitElement {
     const sinPersonas = this._peopleError
       ? null
       : html`<p class="empty">Aún no hay personas dadas de alta.</p>`;
+    const filtering = this._onlyWithoutDept && this._orgBranches.length > 0;
+    const visible = filtering ? withoutDepartment(this._peopleList, this._orgBranches) : this._peopleList;
     return html`
       ${this._peopleError ? html`<p class="error">${this._peopleError}</p>` : null}
       ${this._peopleNotice ? html`<p class="notice">${this._peopleNotice}</p>` : null}
+      ${this._renderWithoutDeptFilter()}
       ${this._peopleList.length === 0
         ? sinPersonas
         : html`<div class="table-wrap"><table class="people">
             <thead><tr><th>Nombre</th><th>Email y cuenta</th><th>Rol y rama</th><th>Reporta a</th><th>Acceso</th></tr></thead>
             <tbody>
-              ${this._peopleList.map((p) => {
+              ${visible.map((p) => {
                 let account;
                 if (p.uid) account = html`<span class="acct" style="color:var(--rm-accent,#2a9d8f)">✓ Cuenta vinculada</span>`;
                 else if (p.pendingEmail) account = html`<span class="acct muted">Invitación pendiente</span>`;
