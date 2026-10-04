@@ -1,6 +1,6 @@
 {
-  "kj_version": "4.37.0",
-  "generated_at": "2026-10-02T09:48:11.057Z",
+  "kj_version": "4.39.0",
+  "generated_at": "2026-10-04T16:27:05.285Z",
   "generation": {
     "profile": "standard",
     "cmds": {},
@@ -15,23 +15,43 @@
   "files": [
     {
       "file": ".karajan/harness/posttooluse.mjs",
-      "sha256": "e1fc5c2ecb1849780f7443d002f0e7cdf12ba39f1c0070fade841428b6ebfd1b"
+      "sha256": "65a8fe4c749ddcdfb92e02085d4523392c0f2441c6aed9a519f3fa2ce4f7849a"
     },
     {
       "file": ".karajan/harness/pretooluse-sentinel.mjs",
-      "sha256": "d6c7a25c1ace8e3118872465a2a76caccb1f95b217d1f257c5a13fe75f45bdad"
+      "sha256": "a21358e725c569cd27e478e485c7400abe2894efeb7d50a02ffa3215662f2026"
     },
     {
       "file": ".karajan/harness/pretooluse.mjs",
-      "sha256": "8728772c2affd0833e322aa25f722507674dd289c24e1937b897f3f2933b92c1"
+      "sha256": "468f30932ead7dd9332707dc2b8dd6054f1a82b64e46203ae8cf56c96690771c"
+    },
+    {
+      "file": ".karajan/harness/sentinel-bash-write.mjs",
+      "sha256": "8bcc44048f581b0da39873658452cfb3222b2e6c9ad328c25a46ea4428237f0f"
+    },
+    {
+      "file": ".karajan/harness/sentinel-discard.mjs",
+      "sha256": "fdd8c8ce5e8914b67637abb06a920c6605b21342e9461e18e3ca3bcbc47a2763"
     },
     {
       "file": ".karajan/harness/sentinel-lib.mjs",
-      "sha256": "ce205cb9e390024345621a0f1b3e63a479e3210221810269175feff17bde97de"
+      "sha256": "d5a763b011cd99b3b0498805c667631b979672da149020eaf0ff4fc08e822be4"
+    },
+    {
+      "file": ".karajan/harness/sentinel-reminders.mjs",
+      "sha256": "8ff651803d925b0f73fda7103d27416b07bd067e91c2db6e7274a689d422e8ea"
+    },
+    {
+      "file": ".karajan/harness/sentinel-shell.mjs",
+      "sha256": "c61eb8da978ed4adb66cdeb8a5159e230a89e052070c1aa19e6fde85837245f9"
+    },
+    {
+      "file": ".karajan/harness/sessionstart.mjs",
+      "sha256": "8a21539bf901e79b1bd99acf0c93b03d9a32f988d8aee865af55b818cdacc539"
     },
     {
       "file": ".karajan/harness/stop.mjs",
-      "sha256": "d7985b8c29fb5bbb44f5aa59c4682579a8502a8eea2a923c168acf1c94fbfe7d"
+      "sha256": "4c2d4f7c0e8650be562d04f03477e40243d28cf98246937f31f192e744f77011"
     },
     {
       "file": ".karajan/hooks/commit-msg",
@@ -43,11 +63,11 @@
     },
     {
       "file": ".karajan/hooks/pre-commit",
-      "sha256": "2df4c64a0259117f1f04feda54bacbfdc010af201c627afe951de9dc9ebf13ee"
+      "sha256": "a97fad34956f711dcbafe25d156eadef6e3fd28a97c553d350051a26d9777e2a"
     },
     {
       "file": ".karajan/hooks/pre-push",
-      "sha256": "15cea3fa9360a361dfbbe3d74eb5289cef9f970163a882f4732e2a2bca66e021"
+      "sha256": "0d9a86d0117b437884074ffdfb92d9cd46a99f0a7e6d87dd147cc9eff726c1dc"
     },
     {
       "file": ".karajan/hooks/prepare-commit-msg",
@@ -55,15 +75,15 @@
     }
   ],
   "signature": {
-    "cid": "99fa6d68384809fc7a272431d3f671e2",
-    "nonce": "114daed117fa2eee688ba05eeb5ee243",
+    "cid": "559486f671681876fb6b680ea813234e",
+    "nonce": "d6013d2ffcb7e2f3ae5cb2a9b91a6f4a",
     "project": "grebla-app",
-    "filesHash": "4ac4c05a7cb516a05ab9cd5b97841ac77f04d1480b7d817330172565c88544c8",
+    "filesHash": "b9bf839f2b1503d1ed66161ad1489687c6a0f0cce60eca2abdddfba06ae86a1a",
     "v": 2,
-    "kjVersion": "4.37.0",
-    "issuedMs": 1790934479691,
-    "expiresMs": 1790934539691,
+    "kjVersion": "4.39.0",
+    "issuedMs": 1791131215566,
+    "expiresMs": 1791131275566,
     "signer": "EgMc2b95g5nUh8e6LDCeLjv7G69cQaszUCIy+3aLpPQ=",
-    "signature": "cZpEvUuc8Q0dI2n7EGj6+UPMyfvPBton76Ajx2oFxQsNWlazYr7VOLZ38xbvIwnyEZNpZ5t2xPIE0UfMrfGnBQ=="
+    "signature": "S2Feuk2CR2r+vFXlPPFwZyRfjD+oQ0HTeGtGibtT6nQqfyTt22ks8TgWIka+MdzxRXAQKYkBk5+mvHGAB1YDCA=="
   }
 }
