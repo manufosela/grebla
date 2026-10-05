@@ -15,6 +15,17 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.232.0] - 2026-10-05
+
+### Añadido
+
+- **Encuestas: el padrón se carga desde el directorio.** «Cargar desde el
+  directorio» trae a todas las personas activas (con Notion, el directorio
+  entero) con su departamento y su alta, igual que el CSV.
+- **Encuestas: a quién se envía, persona a persona.** En Participantes, el
+  padrón sale como lista con casillas: por defecto van todas, se desmarca a
+  quien no, y «Marcar/Desmarcar todas» actúa sobre lo filtrado.
+
 ## [1.231.0] - 2026-10-05
 
 ### Añadido
