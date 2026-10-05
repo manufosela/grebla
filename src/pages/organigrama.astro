@@ -2,29 +2,26 @@
 import Base from '../layouts/Base.astro';
 
 /**
- * Organigrama (RMR-PRP-0002): consulta de SOLO LECTURA del organigrama de la
- * organización, en pirámide invertida (liderazgo afectivo). Accesible por
- * cualquier empleado logado — no edita nada (la edición vive en el panel del
- * superadmin). <org-views> conmuta entre la pirámide GREBLA (<org-chart>, lee
- * /orgRoles y /orgBranches) y la vista estándar de personas (<org-people-chart>,
- * callable orgDirectory) — RMR-PCS-0042.
+ * Organigrama (RMR-PRP-0002, RMR-TSK-0617): consulta de SOLO LECTURA, en una
+ * sola vista: la pirámide invertida de PERSONAS (liderazgo afectivo). Con
+ * Notion, la capa es su Level; sin Notion, la de su rol. Accesible por
+ * cualquier empleado logado; los datos llegan por la callable orgDirectory.
  */
 ---
 
 <Base title="GREBLA — Organigrama" requireAuth={true}>
   <tool-nav href="/" name="Organigrama" icon="🔻"></tool-nav>
   <p class="page-lead">
-    Así se organiza la casa, en dos vistas: la pirámide invertida de GREBLA
-    (quien más responsabilidad tiene está abajo, sosteniendo a todo el equipo)
-    y el organigrama estándar de personas, cada una bajo quien le dirige.
+    Así se organiza la casa: una pirámide invertida, donde quien más
+    responsabilidad tiene está abajo, sosteniendo a todo el equipo.
   </p>
 
-  <org-views></org-views>
+  <org-people-pyramid></org-people-pyramid>
 </Base>
 
 <script>
   import '../components/common/tool-nav.js';
-  import '../components/org-views.js';
+  import '../components/org-people-pyramid.js';
   import { onUserChanged } from '../lib/auth.js';
   import { resolveAccess } from '../lib/access.js';
   import { canGovern } from '../lib/accessRoles.js';
@@ -36,6 +33,6 @@ import Base from '../layouts/Base.astro';
     if (!user) return;
     let isSuperadmin = false;
     try { isSuperadmin = canGovern(await resolveAccess(user)); } catch { /* sin gobierno */ }
-    await guardToolPage('organigrama', user, { isSuperadmin, appEl: document.querySelector('org-views') });
+    await guardToolPage('organigrama', user, { isSuperadmin, appEl: document.querySelector('org-people-pyramid') });
   });
 </script>
