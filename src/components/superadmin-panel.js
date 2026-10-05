@@ -38,7 +38,7 @@ import { expectationWeight } from '../tools/career/data/framework.js';
 /** Tope del peso de una expectativa: más allá, el número deja de decir nada. */
 const MAX_EXPECTATION_WEIGHT = 9;
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
-import { getOrgIdentity, saveOrgIdentity, getOrgLogo, saveOrgLogo, getBrandColors, saveBrandColors } from '../lib/orgConfig.js';
+import { getOrgIdentity, saveOrgIdentity, getOrgLogo, saveOrgLogo, getOrgLogoDark, saveOrgLogoDark, getBrandColors, saveBrandColors } from '../lib/orgConfig.js';
 import './admin/brand-colors-editor.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
@@ -141,6 +141,7 @@ export class SuperadminPanel extends LitElement {
     _tab: { state: true },
     _identity: { state: true },
     _orgLogo: { state: true },
+    _orgLogoDark: { state: true },
     _brandColors: { state: true },
     _brandError: { state: true },
     _identitySub: { state: true },
@@ -525,6 +526,8 @@ export class SuperadminPanel extends LitElement {
     this._identityAsked = false;
     /** @type {string|null} logo de la instancia (data URI), o null si no hay. */
     this._orgLogo = null;
+    /** @type {string|null} logo para el tema oscuro, o null si no hay versión propia. */
+    this._orgLogoDark = null;
     /** Colores de marca: undefined = leyendo, null = los de GREBLA (RMR-TSK-0599). */
     this._brandColors = undefined;
     this._brandError = '';
@@ -686,6 +689,9 @@ export class SuperadminPanel extends LitElement {
     getOrgLogo()
       .then((v) => { this._orgLogo = v; })
       .catch(() => { this._orgLogo = null; });
+    getOrgLogoDark()
+      .then((v) => { this._orgLogoDark = v; })
+      .catch(() => { this._orgLogoDark = null; });
     // Los colores NO tienen ese trato: si no se pueden leer, no se ofrece el
     // editor, que guardaría los de GREBLA encima de lo que no se ha visto.
     getBrandColors()
@@ -1465,6 +1471,8 @@ export class SuperadminPanel extends LitElement {
         .save=${(patch) => saveOrgIdentity(patch)}
         .logo=${this._orgLogo}
         .saveLogo=${(dataUrl) => saveOrgLogo(dataUrl)}
+        .logoDark=${this._orgLogoDark}
+        .saveLogoDark=${(dataUrl) => saveOrgLogoDark(dataUrl)}
         ?read-only=${this.readOnly}
       ></org-identity>`}`;
   }
