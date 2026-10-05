@@ -38,7 +38,8 @@ import { expectationWeight } from '../tools/career/data/framework.js';
 /** Tope del peso de una expectativa: más allá, el número deja de decir nada. */
 const MAX_EXPECTATION_WEIGHT = 9;
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
-import { getOrgIdentity, saveOrgIdentity, getOrgLogo, saveOrgLogo } from '../lib/orgConfig.js';
+import { getOrgIdentity, saveOrgIdentity, getOrgLogo, saveOrgLogo, getBrandColors, saveBrandColors } from '../lib/orgConfig.js';
+import './admin/brand-colors-editor.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
 import { generateJobDescription, validateJobDescription } from '../tools/career/domain/jobDescription.js';
@@ -140,6 +141,9 @@ export class SuperadminPanel extends LitElement {
     _tab: { state: true },
     _identity: { state: true },
     _orgLogo: { state: true },
+    _brandColors: { state: true },
+    _brandError: { state: true },
+    _identitySub: { state: true },
     _careerSub: { state: true },
     _permSub: { state: true },
     leaders: { state: true },
@@ -521,6 +525,11 @@ export class SuperadminPanel extends LitElement {
     this._identityAsked = false;
     /** @type {string|null} logo de la instancia (data URI), o null si no hay. */
     this._orgLogo = null;
+    /** Colores de marca: undefined = leyendo, null = los de GREBLA (RMR-TSK-0599). */
+    this._brandColors = undefined;
+    this._brandError = '';
+    /** @type {'textos'|'colores'} sub-pestaña de «Identidad». */
+    this._identitySub = 'textos';
     /** @type {'framework'|'map'} sub-pestaña de «Carrera» (RMR-TSK-0262). */
     this._careerSub = initial.sub ?? 'framework';
     /** @type {'rol'|'persona'} ámbito de «Permisos» (RMR-TSK-0460). */
@@ -677,6 +686,11 @@ export class SuperadminPanel extends LitElement {
     getOrgLogo()
       .then((v) => { this._orgLogo = v; })
       .catch(() => { this._orgLogo = null; });
+    // Los colores NO tienen ese trato: si no se pueden leer, no se ofrece el
+    // editor, que guardaría los de GREBLA encima de lo que no se ha visto.
+    getBrandColors()
+      .then((v) => { this._brandColors = v; })
+      .catch((err) => { this._brandError = `No se pudieron leer los colores: ${err.message}`; });
   }
 
   /** Fija el valor mostrado de los <select> del editor de roles DESPUÉS del render:
@@ -1440,14 +1454,26 @@ export class SuperadminPanel extends LitElement {
    * pestaña: son cuatro campos que casi nadie toca y no merecen una lectura en
    * cada entrada al panel.
    */
+  /** Identidad en dos sub-pestañas, sin scroll: textos y logo, y colores (RMR-TSK-0599). */
   _renderIdentity() {
-    return html`<org-identity
-      .identity=${this._identity}
-      .save=${(patch) => saveOrgIdentity(patch)}
-      .logo=${this._orgLogo}
-      .saveLogo=${(dataUrl) => saveOrgLogo(dataUrl)}
-      ?read-only=${this.readOnly}
-    ></org-identity>`;
+    const sub = (id, label) => html`<button class="tab ${this._identitySub === id ? 'active' : ''}"
+      @click=${() => { this._identitySub = id; }}>${label}</button>`;
+    return html`
+      <nav class="tabs" aria-label="Identidad">${sub('textos', 'Textos y logo')}${sub('colores', 'Colores')}</nav>
+      ${this._identitySub === 'colores' ? this._renderBrandColors() : html`<org-identity
+        .identity=${this._identity}
+        .save=${(patch) => saveOrgIdentity(patch)}
+        .logo=${this._orgLogo}
+        .saveLogo=${(dataUrl) => saveOrgLogo(dataUrl)}
+        ?read-only=${this.readOnly}
+      ></org-identity>`}`;
+  }
+
+  _renderBrandColors() {
+    if (this._brandError) return html`<p class="error">${this._brandError}</p>`;
+    if (this._brandColors === undefined) return html`<p class="muted">Leyendo los colores…</p>`;
+    return html`<brand-colors-editor .colors=${this._brandColors} .save=${(c) => saveBrandColors(c)}
+      ?read-only=${this.readOnly}></brand-colors-editor>`;
   }
 
   /**

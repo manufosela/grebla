@@ -253,19 +253,12 @@ await watchDeployedVersion(setStaleBadge);
  */
 async function pintarColoresDeLaInstancia() {
   try {
-    const [{ getBrandColors }, { brandStyleSheet }] = await Promise.all([
+    const [{ getBrandColors }, { brandStyleSheet }, { applyBrandStyle }] = await Promise.all([
       import('../lib/orgConfig.js'),
       import('../tools/admin/domain/brandColors.js'),
+      import('../lib/brandStyle.js'),
     ]);
-    const css = brandStyleSheet(await getBrandColors());
-    let style = document.getElementById('brand-colors');
-    if (!style) {
-      style = document.createElement('style');
-      style.id = 'brand-colors';
-      document.head.append(style);
-    }
-    style.textContent = css;
-    try { localStorage.setItem('grebla-brand-css', css); } catch { /* sin almacenamiento: solo se pierde el pintado temprano */ }
+    applyBrandStyle(brandStyleSheet(await getBrandColors()));
   } catch {
     /* sin colores propios: se queda la marca de GREBLA */
   }
