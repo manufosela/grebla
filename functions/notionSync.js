@@ -11,6 +11,22 @@
 import { buildPeople, ORG_EXCLUDED_STATUSES, selectName, stripDashes } from './notionPeople.js';
 import { planNotionSync } from './notionReconcile.js';
 
+/**
+ * Id de la base de Notion de ESTA instancia (`/config/org.notionDatabaseId`,
+ * RMR-TSK-0626): GREBLA es genérica y cada organización conecta la suya. Solo
+ * se acepta un id de Notion (32 hex, con o sin guiones), que acaba dentro de
+ * una URL de la API: nada arbitrario. Sin él, falla en alto.
+ * @param {Record<string, unknown>|undefined} org
+ * @returns {string} el id sin guiones, en minúsculas
+ */
+export function notionDatabaseIdOf(org) {
+  const raw = typeof org?.notionDatabaseId === 'string' ? org.notionDatabaseId.replaceAll('-', '').toLowerCase() : '';
+  if (!/^[0-9a-f]{32}$/.test(raw)) {
+    throw new Error('Falta /config/org.notionDatabaseId (o no es un id de base de Notion).');
+  }
+  return raw;
+}
+
 /** Firestore admite 500 escrituras por lote; se deja margen. */
 const BATCH_SIZE = 400;
 

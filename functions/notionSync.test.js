@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { directoryFromPages, runNotionSync } from './notionSync.js';
+import { directoryFromPages, runNotionSync, notionDatabaseIdOf } from './notionSync.js';
 import { notionPage } from './notionPeople.fixtures.js';
 
 /** Página con las propiedades que el módulo vendorizado no lee (Join Date). */
@@ -31,6 +31,18 @@ function fakeDb(collections) {
 const fakeAuth = (emails) => ({ getUsers: async (ids) => ({ users: ids.filter((i) => emails[i.uid]).map((i) => ({ uid: i.uid, email: emails[i.uid] })) }) });
 const fetchPages = (pages) => async () => pages;
 const now = new Date('2026-10-03T08:00:00Z');
+
+describe('notionDatabaseIdOf — la base de Notion es de cada instancia', () => {
+  it('acepta el id con o sin guiones y lo devuelve sin ellos', () => {
+    expect(notionDatabaseIdOf({ notionDatabaseId: 'aaaabbbb-cccc-dddd-eeee-ffffaaaabbbb' })).toBe('aaaabbbbccccddddeeeeffffaaaabbbb');
+    expect(notionDatabaseIdOf({ notionDatabaseId: 'AAAABBBBCCCCDDDDEEEEFFFFAAAABBBB' })).toBe('aaaabbbbccccddddeeeeffffaaaabbbb');
+  });
+
+  it('sin id, o con algo que no es un id de Notion, falla en alto', () => {
+    expect(() => notionDatabaseIdOf({})).toThrow('notionDatabaseId');
+    expect(() => notionDatabaseIdOf({ notionDatabaseId: 'https://evil.example/x' })).toThrow('notionDatabaseId');
+  });
+});
 
 describe('directoryFromPages', () => {
   it('añade al mapeo vendorizado el Status y la Join Date, y deja fuera a los Inactive', () => {

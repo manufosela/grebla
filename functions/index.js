@@ -27,8 +27,8 @@ import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIss
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, conversationFrom, personIsInScope } from './agentIngest.js';
 import { projectDirectory } from './orgDirectory.js';
-import { queryAllPages, databaseQueryUrl, ORG_DB_ID } from './notionPeople.js';
-import { runNotionSync } from './notionSync.js';
+import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
+import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -2162,7 +2162,8 @@ const NOTION_TOKEN = defineSecret('NOTION_TOKEN');
 /**
  * Sincroniza el censo desde el Directorio de Notion (RMR-TSK-0622, ADR
  * -P1XxVvQPrufU13Bd4RF). Solo superadmin. `apply: false` simula: guarda el
- * informe en /config/notionSync sin tocar fichas. Una instancia sin Notion
+ * informe en /config/notionSync sin tocar fichas. La base es la de cada
+ * instancia (`/config/org.notionDatabaseId`, docs/NOTION.md). Una instancia sin Notion
  * (`/config/org.notionSync` distinto de true, como la demo) se gestiona desde
  * su admin y aquí se rechaza en voz alta. La demo necesita el secret con un
  * valor de relleno para desplegar; nunca se lee porque la marca está apagada.
@@ -2176,8 +2177,14 @@ export const notionSync = onCall({ region: 'europe-west1', secrets: [NOTION_TOKE
   if (org?.notionSync !== true) {
     throw new HttpsError('failed-precondition', 'Esta instancia no está conectada a Notion: las personas se gestionan desde su admin.');
   }
+  let databaseId;
+  try {
+    databaseId = notionDatabaseIdOf(org);
+  } catch (err) {
+    throw new HttpsError('failed-precondition', err instanceof Error ? err.message : String(err));
+  }
   const token = NOTION_TOKEN.value();
-  const fetchPages = () => queryAllPages({ token, urls: [databaseQueryUrl(ORG_DB_ID)] });
+  const fetchPages = () => queryAllPages({ token, urls: [databaseQueryUrl(databaseId)] });
   try {
     const report = await runNotionSync({ db, auth: getAuth(), fetchPages, apply: request.data?.apply === true, now: new Date() });
     logger.info(`[notionSync] ${report.applied ? 'aplicado' : 'simulado'}: ${JSON.stringify(report.counts)} · errores ${report.errors.length}`);
