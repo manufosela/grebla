@@ -15,6 +15,32 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.230.0] - 2026-10-05
+
+### Añadido
+
+- **Un solo organigrama: la pirámide invertida de personas.** Cada capa es un
+  Level de Notion —C-level en la base, sosteniendo al resto; IC arriba— en su
+  propio recuadro con su etiqueta, y cada persona lleva su rol y el color de su
+  departamento. Sin Notion, la capa sale de su rol. La vista «Estándar» se va.
+- **Colores de marca de la instancia** (Admin › Identidad › Colores): un color
+  por marca. Si alguno no se lee bien en el tema claro o en el oscuro no se
+  guarda, y se dice qué par falla y con qué ratio. La versión oscura sale sola.
+- **Cómo conectar un Notion propio**: `docs/NOTION.md` explica qué estructura
+  tiene que tener la base y cómo conectarla. La base es la de cada instancia.
+
+### Cambiado
+
+- Los gremios son solo de los departamentos que los tienen (hoy, Tech): en el
+  resto la ficha ya no los pide.
+- Con el censo en Notion, Equipo ya no ofrece alta manual ni Transferir: las
+  personas y su manager vienen de allí. Sin Notion, todo sigue siendo manual.
+
+### Arreglado
+
+- El ingeniero solo puede escribir su **propuesta** de Role Mirror; la versión
+  que manda es la del manager, también en las reglas.
+
 ## [1.229.0] - 2026-10-03
 
 ### Añadido
