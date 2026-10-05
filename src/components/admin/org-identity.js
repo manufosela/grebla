@@ -49,6 +49,9 @@ export class OrgIdentity extends LitElement {
     logo: { attribute: false },
     /** Quien persiste el logo (inyectado). */
     saveLogo: { attribute: false },
+    /** Logo para el tema oscuro (data URI) o null; y quien lo persiste (RMR-TSK-0628). */
+    logoDark: { attribute: false },
+    saveLogoDark: { attribute: false },
     readOnly: { attribute: 'read-only', type: Boolean },
     _draft: { state: true },
     _saving: { state: true },
@@ -119,6 +122,9 @@ export class OrgIdentity extends LitElement {
     this.logo = null;
     /** @type {((dataUrl: string|null) => Promise<unknown>)|null} */
     this.saveLogo = null;
+    this.logoDark = null;
+    /** @type {((dataUrl: string|null) => Promise<unknown>)|null} */
+    this.saveLogoDark = null;
     this.readOnly = false;
     this._logoError = '';
     this._logoBusy = false;
@@ -165,40 +171,48 @@ export class OrgIdentity extends LitElement {
         <h3>Logo</h3>
         <p class="hint">
           SVG o PNG, hasta ${Math.round(LOGO_MAX_BYTES / 1024)} KB. Sustituye la marca de
-          GREBLA en la cabecera. Sin logo propio se queda la de GREBLA.
+          GREBLA en la cabecera. Sin logo propio se queda la de GREBLA. La versión para el
+          tema oscuro es opcional: sin ella, el oscuro usa la clara.
         </p>
-        <div class="logo-row">
-          <div class="logo-preview" aria-hidden=${this.logo ? 'false' : 'true'}>
-            ${this.logo
-              ? html`<img src=${this.logo} alt="Vista previa del logo de la instancia" />`
-              : html`<span class="logo-empty">Sin logo propio</span>`}
-          </div>
-          ${this.readOnly
-            ? null
-            : html`
-                <div class="logo-actions">
-                  <label class="file-btn">
-                    ${this._logoBusy ? 'Guardando…' : 'Elegir archivo…'}
-                    <input
-                      type="file"
-                      accept=".svg,.png,image/svg+xml,image/png"
-                      ?disabled=${this._logoBusy}
-                      @change=${(e) => this._pickLogo(e.target)}
-                    />
-                  </label>
-                  ${this.logo
-                    ? html`<button class="link" ?disabled=${this._logoBusy} @click=${() => this._clearLogo()}>
-                        Quitar el logo
-                      </button>`
-                    : null}
-                </div>`}
-        </div>
+        ${this._renderLogoSlot('logo', 'Tema claro')}
+        ${this.logo ? this._renderLogoSlot('logoDark', 'Tema oscuro') : null}
         ${this._logoError ? html`<p class="error">${this._logoError}</p>` : null}
       </section>`;
   }
 
-  /** @param {HTMLInputElement} input */
-  async _pickLogo(input) {
+  /**
+   * Una ranura de logo (RMR-TSK-0628): vista previa sobre el fondo de su tema,
+   * elegir y quitar. @param {'logo'|'logoDark'} slot @param {string} label
+   */
+  _renderLogoSlot(slot, label) {
+    const src = this[slot];
+    const darkBg = slot === 'logoDark' ? 'background: #1a202a;' : '';
+    const alt = `Vista previa del logo (${label.toLowerCase()})`;
+    const empty = `${label}: sin logo propio`;
+    return html`
+      <div class="logo-row">
+        <div class="logo-preview" style=${darkBg} aria-hidden=${src ? 'false' : 'true'}>
+          ${src ? html`<img src=${src} alt=${alt} />` : html`<span class="logo-empty">${empty}</span>`}
+        </div>
+        ${this.readOnly ? null : this._renderLogoActions(slot, src, label)}
+      </div>`;
+  }
+
+  _renderLogoActions(slot, src, label) {
+    const pick = this._logoBusy ? 'Guardando…' : `Elegir archivo (${label.toLowerCase()})…`;
+    return html`
+      <div class="logo-actions">
+        <label class="file-btn">
+          ${pick}
+          <input type="file" accept=".svg,.png,image/svg+xml,image/png" ?disabled=${this._logoBusy}
+            @change=${(e) => this._pickLogo(e.target, slot)} />
+        </label>
+        ${src ? html`<button class="link" ?disabled=${this._logoBusy} @click=${() => this._clearLogo(slot)}>Quitar</button>` : null}
+      </div>`;
+  }
+
+  /** @param {HTMLInputElement} input @param {'logo'|'logoDark'} [slot] */
+  async _pickLogo(input, slot = 'logo') {
     const file = input.files?.[0] ?? null;
     // El input se vacía siempre: si no, elegir el MISMO archivo otra vez (tras un
     // error) no dispara el evento y parece que la pantalla se ha colgado.
@@ -211,7 +225,7 @@ export class OrgIdentity extends LitElement {
     this._logoError = '';
     this._logoBusy = true;
     try {
-      await this._store(await readAsDataUrl(file));
+      await this._store(slot, await readAsDataUrl(file));
     } catch (err) {
       console.error('[identidad] no se pudo guardar el logo:', err);
       this._logoError = 'No se pudo guardar el logo (¿sigues siendo superadmin?).';
@@ -220,11 +234,12 @@ export class OrgIdentity extends LitElement {
     }
   }
 
-  async _clearLogo() {
+  /** @param {'logo'|'logoDark'} [slot] */
+  async _clearLogo(slot = 'logo') {
     this._logoBusy = true;
     this._logoError = '';
     try {
-      await this._store(null);
+      await this._store(slot, null);
     } catch (err) {
       console.error('[identidad] no se pudo quitar el logo:', err);
       this._logoError = 'No se pudo quitar el logo.';
@@ -233,13 +248,14 @@ export class OrgIdentity extends LitElement {
     }
   }
 
-  /** @param {string|null} dataUrl */
-  async _store(dataUrl) {
-    if (!this.saveLogo) throw new Error('sin con qué guardar el logo');
-    await this.saveLogo(dataUrl);
+  /** @param {'logo'|'logoDark'} slot @param {string|null} dataUrl */
+  async _store(slot, dataUrl) {
+    const save = slot === 'logoDark' ? this.saveLogoDark : this.saveLogo;
+    if (!save) throw new Error('sin con qué guardar el logo');
+    await save(dataUrl);
     // La vista previa refleja lo GUARDADO, no lo elegido: si la escritura falla,
     // sigue viéndose el logo anterior, que es el que de verdad hay.
-    this.logo = dataUrl;
+    this[slot] = dataUrl;
   }
 
   _renderField(field) {
