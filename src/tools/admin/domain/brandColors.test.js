@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, darkVariant, onAccentFor, validateBrandColors, LIGHT_SURFACE, DARK_SURFACE } from './brandColors.js';
+import { contrastRatio, darkVariant, onAccentFor, validateBrandColors, brandStyleSheet, BRAND_CSS_SHAPE, LIGHT_SURFACE, DARK_SURFACE } from './brandColors.js';
+
+describe('brandStyleSheet — los colores válidos, como tokens de los dos temas', () => {
+  const colors = { brand: '#1e3a5f', accent: '#2a9d8f', affective: '#c0392b' };
+
+  it('pinta la paleta en claro y su versión calculada en oscuro', () => {
+    const css = brandStyleSheet(colors);
+    // Sobre el teal, la tinta (5,6:1) gana al blanco (3,3:1).
+    expect(css).toContain('html[data-theme]:root{--gr-navy:#1e3a5f;--gr-teal:#2a9d8f;--gr-coral:#c0392b;--rm-on-accent:#10141a;}');
+    expect(css).toContain(`html[data-theme='dark']:root{--gr-navy:${darkVariant('#1e3a5f', 4.5)};`);
+    // Base.astro solo acepta de localStorage una hoja con esta forma exacta.
+    expect(BRAND_CSS_SHAPE.test(css)).toBe(true);
+    expect(BRAND_CSS_SHAPE.test(`${css}body{background:url(x)}`)).toBe(false);
+  });
+
+  it('con colores que no pasan la validación no pinta nada (se queda la marca de GREBLA)', () => {
+    expect(brandStyleSheet({ ...colors, accent: '#a8e6cf' })).toBe('');
+    expect(brandStyleSheet(null)).toBe('');
+  });
+});
 
 describe('contrastRatio (WCAG 2.x)', () => {
   it('negro sobre blanco es 21 y un color consigo mismo es 1', () => {

@@ -22,6 +22,13 @@ export const BRAND_SLOTS = Object.freeze([
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
+/**
+ * Forma exacta de la hoja que genera `brandStyleSheet`. Base.astro la copia
+ * tal cual (no puede importar módulos) para validar lo que lee de localStorage
+ * antes de inyectarlo: si cambia aquí, cambiar allí.
+ */
+export const BRAND_CSS_SHAPE = /^html\[data-theme\]:root\{(--[a-z-]+:#[0-9a-f]{6};)+\}html\[data-theme='dark'\]:root\{(--[a-z-]+:#[0-9a-f]{6};)+\}$/;
+
 const channels = (hex) => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
 
 /** Luminancia relativa WCAG. @param {string} hex */
@@ -87,4 +94,23 @@ export function validateBrandColors(colors) {
     }
   }
   return errors;
+}
+
+/**
+ * Hoja de estilo con la marca de la instancia: la paleta --gr-* en claro y su
+ * versión calculada en oscuro. Solo con colores que pasan la validación (y por
+ * tanto son #rrggbb: nada arbitrario llega al CSS); si no, cadena vacía y se
+ * queda la marca de GREBLA.
+ * @param {{ brand?: string, accent?: string, affective?: string }|null} colors
+ * @returns {string}
+ */
+export function brandStyleSheet(colors) {
+  if (!colors || validateBrandColors(colors).length) return '';
+  const vars = (brand, accent, affective) =>
+    `--gr-navy:${brand};--gr-teal:${accent};--gr-coral:${affective};--rm-on-accent:${onAccentFor(accent)};`;
+  const dark = Object.fromEntries(BRAND_SLOTS.map(({ key, min }) => [key, darkVariant(colors[key], min)]));
+  // Más específicos que los de Base.astro (`:root` y `html[data-theme='dark']`),
+  // que van después en el documento: si no, la marca de GREBLA pisaría la propia.
+  return `html[data-theme]:root{${vars(colors.brand.toLowerCase(), colors.accent.toLowerCase(), colors.affective.toLowerCase())}}`
+    + `html[data-theme='dark']:root{${vars(dark.brand, dark.accent, dark.affective)}}`;
 }

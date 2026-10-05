@@ -50,6 +50,22 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
         }
         const dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        // Colores de marca de la última visita (RMR-TSK-0599), pintados desde el
+        // principio para no saltar de color; layout.js los refresca. Solo se
+        // inyecta una hoja con la forma exacta de brandStyleSheet (espejo de
+        // BRAND_CSS_SHAPE en tools/admin/domain/brandColors.js).
+        try {
+          const brandCss = localStorage.getItem('grebla-brand-css');
+          const shape = /^html\[data-theme\]:root\{(--[a-z-]+:#[0-9a-f]{6};)+\}html\[data-theme='dark'\]:root\{(--[a-z-]+:#[0-9a-f]{6};)+\}$/;
+          if (brandCss && shape.test(brandCss)) {
+            const style = document.createElement('style');
+            style.id = 'brand-colors';
+            style.textContent = brandCss;
+            document.head.append(style);
+          }
+        } catch {
+          /* sin almacenamiento: los pinta layout.js al cargar */
+        }
         if (dark) {
           document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#12161d');
         }
