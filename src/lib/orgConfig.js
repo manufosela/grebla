@@ -8,6 +8,32 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { normalizeIdentity } from '../tools/admin/domain/orgIdentity.js';
 import { logoSrcFrom } from '../tools/admin/domain/orgLogo.js';
+import { validateBrandColors } from '../tools/admin/domain/brandColors.js';
+
+/**
+ * Colores de marca de la instancia (RMR-TSK-0599), o null si no hay o si no
+ * pasan la validación (entonces se queda la marca de GREBLA).
+ * @returns {Promise<{ brand: string, accent: string, affective: string }|null>}
+ */
+export async function getBrandColors() {
+  const snap = await getDoc(doc(db, 'config', 'org'));
+  const colors = snap.exists() ? snap.data().brandColors : null;
+  return colors && validateBrandColors(colors).length === 0 ? colors : null;
+}
+
+/**
+ * Guarda los colores de marca, o los quita con `null`. Si alguno no llega a AA
+ * en claro o en oscuro, NO se guarda: lanza con cada par que falla y su ratio.
+ * @param {{ brand: string, accent: string, affective: string }|null} colors
+ */
+export async function saveBrandColors(colors) {
+  if (colors !== null) {
+    const errors = validateBrandColors(colors);
+    if (errors.length) throw new Error(errors.join(' · '));
+  }
+  const clean = colors && { brand: colors.brand.toLowerCase(), accent: colors.accent.toLowerCase(), affective: colors.affective.toLowerCase() };
+  await setDoc(doc(db, 'config', 'org'), { brandColors: clean }, { merge: true });
+}
 
 /**
  * Identidad de la instancia (RMR-TSK-0596): los textos con los que esta

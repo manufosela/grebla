@@ -245,6 +245,32 @@ await watchDeployedVersion(setStaleBadge);
  * El `alt` sale del nombre configurado de la casa, así que se lee la identidad
  * en la misma tanda.
  */
+/**
+ * Colores de marca de la instancia (RMR-TSK-0599): se inyectan como una hoja
+ * de estilo y se guardan en localStorage, que solo sirve para que la próxima
+ * carga los pinte desde el primer momento (Base.astro) sin saltar de color.
+ * Sin colores propios (o si no se pueden leer), se queda la marca de GREBLA.
+ */
+async function pintarColoresDeLaInstancia() {
+  try {
+    const [{ getBrandColors }, { brandStyleSheet }] = await Promise.all([
+      import('../lib/orgConfig.js'),
+      import('../tools/admin/domain/brandColors.js'),
+    ]);
+    const css = brandStyleSheet(await getBrandColors());
+    let style = document.getElementById('brand-colors');
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'brand-colors';
+      document.head.append(style);
+    }
+    style.textContent = css;
+    try { localStorage.setItem('grebla-brand-css', css); } catch { /* sin almacenamiento: solo se pierde el pintado temprano */ }
+  } catch {
+    /* sin colores propios: se queda la marca de GREBLA */
+  }
+}
+
 async function pintarLogoDeLaInstancia() {
   const img = document.querySelector('#brand-logo');
   if (!img) return;
@@ -301,3 +327,4 @@ if ('serviceWorker' in navigator) {
 // (La regla de Sonar que pide lo contrario está ignorada para este fichero, con
 // su porqué en sonar-project.properties.)
 void pintarLogoDeLaInstancia();
+void pintarColoresDeLaInstancia();
