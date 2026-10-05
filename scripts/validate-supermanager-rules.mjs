@@ -69,7 +69,12 @@ try {
     await setDoc(doc(db, 'people', 'pb1', 'seniority', 'r1'), { date: '2026-07-01', valor: 3 });
     await setDoc(doc(db, 'people', 'pout', 'seniority', 'r1'), { date: '2026-07-01', valor: 3 });
     // Retros y acciones de la rama (RMR-TSK-0294).
-    await setDoc(doc(db, 'retros', 'retro-em1'), { name: 'Retro EM1', ownerLeaderUid: 'em1-uid', status: 'open' });
+    // Retros por membresía (ADR): quien está dentro va en memberUids y la cadena
+    // de mando en branchUids, que rellena el trigger. El Head lee por ahí.
+    await setDoc(doc(db, 'retros', 'retro-em1'), {
+      name: 'Retro EM1', ownerLeaderUid: 'em1-uid', status: 'open',
+      memberUids: ['em1-uid'], branchUids: ['head-uid'],
+    });
     await setDoc(doc(db, 'retroActions', 'act-em1'), { text: 'Acción', ownerLeaderUid: 'em1-uid', status: 'pending', owners: [] });
   });
 
@@ -177,20 +182,19 @@ try {
     assertFails(setDoc(doc(head, 'people', 'pout', 'seniority', 'r2'), { date: '2026-07-10', valor: 4 })),
   );
 
-  // El Head puede no ser líder de un equipo ni miembro con ficha, así que sin
-  // isSuperManager() en canAccessRetro() no vería ni una retro. OJO: la lectura de
-  // /retros es amplia a propósito (colaborativa: cualquiera de la organización la
-  // lee); quien acota la rama aquí es la QUERY del cliente, no la regla.
+  // Retros por membresía (ADR): el Head no está dentro, pero va en branchUids
+  // (la cadena de mando que escribe el trigger). La consulta del cliente es la
+  // misma que respalda la regla: branchUids array-contains (src/lib/retros.js).
   console.log('Retros: el Head alcanza las de su rama:');
   await check(
     'Head LEE una retro de un líder de su rama',
     assertSucceeds(getDoc(doc(head, 'retros', 'retro-em1'))),
   );
   await check(
-    'Head LISTA retros con where(ownerLeaderUid, in, [su rama])',
+    'Head LISTA las retros de su rama por branchUids',
     assertSucceeds(getDocs(query(
       collection(head, 'retros'),
-      where('ownerLeaderUid', 'in', ['em1-uid', 'em2-uid']),
+      where('branchUids', 'array-contains', 'head-uid'),
     ))),
   );
   await check(
