@@ -166,6 +166,12 @@ seguridad). Opciones:
 Las reglas de Firestore solo permiten escribir en `/admins` a un admin ya
 existente; el alta inicial se hace con el Admin SDK, que omite las reglas.
 
+### 7. Censo de personas: manual o desde Notion
+
+Por defecto las personas, su departamento y su manager se gestionan en la
+propia aplicación. Opcionalmente, una instancia puede tomarlos de una base de
+datos de Notion con una estructura concreta: ver [docs/NOTION.md](docs/NOTION.md).
+
 ## Cómo funciona el cálculo
 
 Para cada rol: `Σ (respuesta_normalizada × peso_del_rol_en_el_ítem)` dividido
