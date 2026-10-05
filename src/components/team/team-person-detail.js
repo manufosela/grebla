@@ -68,6 +68,8 @@ import { proposeRoles, evidenceFor } from '../../tools/team/domain/belbinSurvey.
 import { listDomains } from '../../lib/domains.js';
 import { isNotionSynced } from '../../lib/notionSync.js';
 import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
+import { listOrgBranches } from '../../lib/orgBranches.js';
+import { departmentHasGuilds } from '../../tools/team/domain/guildScope.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -210,6 +212,7 @@ export class TeamPersonDetail extends LitElement {
     _datosError: { state: true },
     /** ¿Manda Notion en esta instancia? Sus campos se ven pero no se editan (RMR-TSK-0588). */
     _notionSync: { state: true },
+    _branchesCat: { state: true },
     _datosSaved: { state: true },
     _careerSaving: { state: true },
     _careerError: { state: true },
@@ -557,6 +560,8 @@ export class TeamPersonDetail extends LitElement {
     this._datosError = '';
     this._datosSaved = false;
     this._notionSync = false;
+    /** @type {Array<{ id: string, hasGuilds: boolean }>} catálogo de departamentos */
+    this._branchesCat = [];
     /** Políticas de herramientas (defaults por rol) para la matriz de permisos. */
     this._toolPolicies = [];
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
@@ -1075,7 +1080,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat, notionSync] =
+      const [timeline, areas, conversations, notes, assessment, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat, notionSync, branchesCat] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -1105,8 +1110,11 @@ export class TeamPersonDetail extends LitElement {
           // ¿Manda Notion en esta instancia? (RMR-TSK-0588) SIN catch a propósito:
           // decidir «no» por un fallo dejaría editable lo que no lo es.
           isNotionSynced(),
+          // Catálogo de departamentos: dice cuáles tienen gremios (RMR-TSK-0593).
+          listOrgBranches(),
         ]);
       this._notionSync = notionSync;
+      this._branchesCat = branchesCat;
       this.timeline = timeline;
       this.areas = areas;
       this.conversations = conversations;
@@ -2547,7 +2555,10 @@ export class TeamPersonDetail extends LitElement {
    * squads. Comparte el borrador `this._datos` y el guardado con «Datos». */
   _renderOrganizacion() {
     const d = this._datos;
-    const active = this._orgSubtab;
+    // Gremios solo en los departamentos que los tienen (hoy Tech, RMR-TSK-0593).
+    const withGuilds = departmentHasGuilds(this.person?.orgBranch, this._branchesCat);
+    const subtabs = withGuilds ? ORG_SUBTABS : ORG_SUBTABS.filter((t) => t.id !== 'gremios');
+    const active = subtabs.some((t) => t.id === this._orgSubtab) ? this._orgSubtab : subtabs[0].id;
     const panel = {
       gremios: () => html`
         ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
@@ -2561,7 +2572,7 @@ export class TeamPersonDetail extends LitElement {
     `);
     return html`
       <section class="org-section">
-        ${this._renderNestedTabs(ORG_SUBTABS, active, 'porg', 'Clasificación de la persona', (id) => { this._orgSubtab = id; })}
+        ${this._renderNestedTabs(subtabs, active, 'porg', 'Clasificación de la persona', (id) => { this._orgSubtab = id; })}
         <div id="porgpanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="porg-${active}" tabindex="0">
           ${panel()}
         </div>

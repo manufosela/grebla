@@ -21,12 +21,16 @@ const GUILDS = ['e2e-g-front', 'e2e-g-qa'];
 async function conDosGremios(fn, { guilds = [] } = {}) {
   await db().doc('guilds/e2e-g-front').set({ name: 'E2E Frontend' });
   await db().doc('guilds/e2e-g-qa').set({ name: 'E2E QA' });
+  // Los gremios son de los departamentos que los tienen (RMR-TSK-0593): la
+  // persona es de uno así, como en Tech.
+  await db().doc('orgBranches/e2e-tech').set({ label: 'E2E Tech', hasGuilds: true });
   const suya = db().doc('people/e2e-person-gremio');
-  await suya.set({ name: 'Persona de gremios E2E', uid: null, ownerLeaderUid: 'e2e-head', active: true, guilds });
+  await suya.set({ name: 'Persona de gremios E2E', uid: null, ownerLeaderUid: 'e2e-head', active: true, guilds, orgBranch: 'e2e-tech' });
   try {
     await fn(suya);
   } finally {
     await suya.delete();
+    await db().doc('orgBranches/e2e-tech').delete();
     for (const id of GUILDS) await db().doc(`guilds/${id}`).delete();
   }
 }

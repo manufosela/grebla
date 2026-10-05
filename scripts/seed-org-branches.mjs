@@ -12,7 +12,8 @@ const target = (process.argv.find((a) => a.startsWith('--target=')) || '--target
 // Departamentos GENÉRICOS de partida (demo). Cada organización los renombra,
 // borra o crea en Admin › Ramas; su color vive en el documento (RMR-TSK-0619).
 const BRANCHES = [
-  { id: 'engineering', label: 'Engineering', color: '#2a9d8f' },
+  // Solo Engineering se reparte en gremios (RMR-TSK-0593); el resto, gremio único.
+  { id: 'engineering', label: 'Engineering', color: '#2a9d8f', hasGuilds: true },
   { id: 'product', label: 'Product', color: '#e76f51' },
   { id: 'people', label: 'People', color: '#9d4edd' },
   { id: 'data', label: 'Data', color: '#457b9d' },
@@ -28,7 +29,7 @@ async function main() {
   for (const b of BRANCHES) {
     const ref = db.collection('orgBranches').doc(b.id);
     if ((await ref.get()).exists) { console.log(`  · ${b.id} ya existe → intacto`); continue; }
-    await ref.set({ label: b.label, color: b.color });
+    await ref.set({ label: b.label, color: b.color, hasGuilds: b.hasGuilds === true });
     created += 1;
     console.log(`  ✓ ${b.id} → «${b.label}»`);
   }
