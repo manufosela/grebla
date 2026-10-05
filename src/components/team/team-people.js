@@ -36,6 +36,7 @@ import {
 import { composeTitle } from '../../tools/career/data/framework.js';
 import { listUsers, unlinkedUsers } from '../../lib/users.js';
 import { listDomains } from '../../lib/domains.js';
+import { isNotionSynced } from '../../lib/notionSync.js';
 import { domainsOf } from '../../tools/team/domain/membership.js';
 import { setLeaderReportsTo } from '../../lib/leaders.js';
 import { resolvePerson } from '../../tools/team/domain/identity.js';
@@ -92,6 +93,8 @@ export class TeamPeople extends LitElement {
     _shareSel: { state: true },
     _sharePerm: { state: true },
     _transferFor: { state: true },
+    /** ¿El censo viene de Notion? Sin alta manual ni Transferir (RMR-TSK-0625). */
+    _notionSync: { state: true },
     _transferSel: { state: true },
     _confirmTransfer: { state: true },
   };
@@ -293,6 +296,8 @@ export class TeamPeople extends LitElement {
     this._sharePerm = 'view';
     /** @type {import('../../tools/team/domain/types.js').Person|null} persona del modal Transferir */
     this._transferFor = null;
+    /** @type {boolean|null} null = aún no se sabe (o falló la lectura): ni alta ni Transferir */
+    this._notionSync = null;
     /** @type {string} nuevo dueño seleccionado en el modal Transferir */
     this._transferSel = '';
     /** Badge LX-Y por persona (RMR-PCS-0044): Map personId→efectivo|null; null = sin datos. */
@@ -322,8 +327,10 @@ export class TeamPeople extends LitElement {
   async _load() {
     this.loading = true;
     this.error = '';
+    this._notionSync = null; // en cada carga se vuelve a no saber: ni alta ni Transferir
+
     try {
-      const [people, labels, guilds, users, domains, orgRoles] = await Promise.all([
+      const [people, labels, guilds, users, domains, orgRoles, notionSync] = await Promise.all([
         listActivePeople(this.persistence),
         listLabels(this.persistence),
         listGuilds(this.persistence),
@@ -332,7 +339,10 @@ export class TeamPeople extends LitElement {
         // El fallo se marca (no se traga) para que el alta admin no cree con un
         // rol por defecto incorrecto sin avisar (RMR-PCS-0027 · F8a).
         listOrgRoles().then((r) => { this._orgRolesError = false; return r; }).catch(() => { this._orgRolesError = true; return []; }),
+        // Sin catch: decidir «no» por un fallo ofrecería un alta que Notion pisaría.
+        isNotionSynced(),
       ]);
+      this._notionSync = notionSync;
       this.people = people;
       this.labels = labels;
       this.domains = domains;
@@ -801,6 +811,9 @@ export class TeamPeople extends LitElement {
    * @returns {boolean}
    */
   _canTransfer(person, sup) {
+    // Solo si se SABE que no hay Notion: con Notion el manager lo dice Notion, y
+    // sin saberlo (cargando o lectura fallida) no se ofrece (RMR-TSK-0625).
+    if (this._notionSync !== false) return false;
     if (!sup.canTransfer) return false;
     if (sup.role === 'manager') return this.isAdmin;
     return this._canManage(person);
@@ -1149,6 +1162,17 @@ export class TeamPeople extends LitElement {
   render() {
     return html`
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
+      ${this._renderAddCard()}
+      ${this._renderPeopleAndModals()}`;
+  }
+
+  /** Alta manual, salvo con el censo en Notion: ahí las altas llegan de allí (RMR-TSK-0625). */
+  _renderAddCard() {
+    if (this._notionSync === null) return null; // aún no se sabe: no se ofrece el alta
+    if (this._notionSync) {
+      return html`<p class="empty">Las personas y su manager vienen de Notion: las altas y los cambios de equipo se hacen allí.</p>`;
+    }
+    return html`
       <details class="add-card">
         <summary>Añadir persona</summary>
         <div class="body">
@@ -1245,8 +1269,11 @@ export class TeamPeople extends LitElement {
           </div>
         </form>
         </div>
-      </details>
+      </details>`;
+  }
 
+  _renderPeopleAndModals() {
+    return html`
       <details open>
         <summary>Personas activas <span class="count">(${this.people.length})</span></summary>
         <div class="body">
