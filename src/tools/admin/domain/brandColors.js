@@ -50,14 +50,22 @@ function towardWhite(hex, t) {
 }
 
 /**
- * Versión del tema oscuro: el mismo color, aclarado lo justo para llegar a `min`
+ * Contraste al que apunta la versión oscura (RMR-TSK-0628): no el mínimo justo,
+ * que deja colores apagados sobre el fondo oscuro, sino lo que lleva la paleta
+ * oscura de GREBLA: 7:1 el texto, 4,5:1 lo demás.
+ * @param {number} min el mínimo AA del papel (4,5 texto, 3 lo demás)
+ */
+const darkTarget = (min) => (min >= 4.5 ? 7 : 4.5);
+
+/**
+ * Versión del tema oscuro: el mismo color, aclarado hasta llegar al objetivo
  * sobre la superficie oscura. Si ya llega, se queda como está.
  * @param {string} hex @param {number} min
  */
 export function darkVariant(hex, min) {
   for (let t = 0; t <= 1; t += 0.02) {
     const candidate = towardWhite(hex, t);
-    if (contrastRatio(candidate, DARK_SURFACE) >= min) return candidate;
+    if (contrastRatio(candidate, DARK_SURFACE) >= darkTarget(min)) return candidate;
   }
   return '#ffffff';
 }

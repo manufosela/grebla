@@ -7,7 +7,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { normalizeIdentity } from '../tools/admin/domain/orgIdentity.js';
-import { logoSrcFrom } from '../tools/admin/domain/orgLogo.js';
+import { logoSrcFrom, logoDarkSrcFrom } from '../tools/admin/domain/orgLogo.js';
 import { validateBrandColors } from '../tools/admin/domain/brandColors.js';
 
 /**
@@ -78,6 +78,45 @@ export async function getOrgLogo() {
   } catch {
     return null;
   }
+}
+
+/**
+ * Los dos logos de la instancia (RMR-TSK-0628): el del tema claro y el del
+ * oscuro (que, sin versión propia, es el mismo). Null si no hay logo.
+ * @returns {Promise<{ light: string, dark: string }|null>}
+ */
+export async function getOrgLogos() {
+  try {
+    const snap = await getDoc(doc(db, 'config', 'org'));
+    const data = snap.exists() ? snap.data() : null;
+    const light = logoSrcFrom(data);
+    return light ? { light, dark: logoDarkSrcFrom(data) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Logo para el tema oscuro guardado tal cual (o null si no hay versión propia):
+ * lo que enseña el editor, no el que acaba pintándose.
+ * @returns {Promise<string|null>}
+ */
+export async function getOrgLogoDark() {
+  const snap = await getDoc(doc(db, 'config', 'org'));
+  const data = snap.exists() ? snap.data() : null;
+  return data?.logoDark && logoDarkSrcFrom(data) === data.logoDark ? data.logoDark : null;
+}
+
+/**
+ * Guarda (o quita, con `null`) la versión del logo para el tema oscuro.
+ * @param {string|null} dataUrl
+ */
+export async function saveOrgLogoDark(dataUrl) {
+  const limpio = dataUrl === null ? null : logoSrcFrom({ logo: dataUrl });
+  if (dataUrl !== null && limpio === null) {
+    throw new Error('El logo tiene que ser un SVG o un PNG.');
+  }
+  await setDoc(doc(db, 'config', 'org'), { logoDark: limpio }, { merge: true });
 }
 
 /**
