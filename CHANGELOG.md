@@ -15,6 +15,19 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.231.0] - 2026-10-05
+
+### Añadido
+
+- **Logo para el tema oscuro.** La instancia puede tener un logo para cada
+  tema (Admin › Identidad): la cabecera enseña el del tema activo y cambia al
+  conmutarlo. Sin versión oscura, el oscuro usa la clara.
+
+### Cambiado
+
+- La versión oscura de los colores de marca ya no se queda en el mínimo justo:
+  se aclara hasta leerse como la paleta oscura de GREBLA.
+
 ## [1.230.0] - 2026-10-05
 
 ### Añadido
