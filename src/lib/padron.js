@@ -7,7 +7,20 @@
  * calcula al vuelo).
  */
 import { doc, collection, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, query, orderBy } from 'firebase/firestore';
-import { db } from './firebase.js';
+import { httpsCallable } from 'firebase/functions';
+import { db, getRegionalFunctions } from './firebase.js';
+
+/**
+ * Carga en el padrón a todas las personas activas del censo (RMR-TSK-0629): con
+ * Notion conectado, todo el directorio. Mismo upsert por email que el CSV.
+ * @returns {Promise<{ added: number, updated: number }>}
+ */
+export async function loadPadronFromDirectory() {
+  const fn = httpsCallable(await getRegionalFunctions(), 'directoryPadron');
+  const { data } = await fn();
+  if (!Array.isArray(data?.rows)) throw new Error('El directorio ha llegado mal formado.');
+  return importPadron(data.rows);
+}
 
 const COL = 'padron';
 

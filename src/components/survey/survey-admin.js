@@ -16,6 +16,7 @@ import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/su
 import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domain/email.js';
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
+import { withoutExcluded } from '../../tools/survey/domain/padronSelection.js';
 import { listPadron, getPadronAxes } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
@@ -82,6 +83,8 @@ export class SurveyAdmin extends LitElement {
     _padron: { state: true },
     _padronDept: { state: true },
     _padronActive: { state: true },
+    /** Emails (minúsculas) desmarcados: no se les envía (RMR-TSK-0629). */
+    _padronExcluded: { state: true },
     _padronError: { state: true },
     _testEmail: { state: true },
     _sendBusy: { state: true },
@@ -103,6 +106,12 @@ export class SurveyAdmin extends LitElement {
     :host { display: block; --teal: var(--rm-accent, #2a9d8f); color: var(--rm-text, #1e3a5f); }
     h2 { font-size: 1.15rem; margin: 0 0 1rem; }
     .lead { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; margin: 0 0 1rem; }
+    /* Marcar y desmarcar a quién se envía (RMR-TSK-0629): caja con su propio
+       desplazamiento, para que un directorio entero no alargue la página. */
+    .padron-list { list-style: none; margin: 0.5rem 0; padding: 0.4rem 0.6rem; max-height: 18rem; overflow-y: auto;
+      border: 1px solid var(--rm-border, #dde7ec); border-radius: 8px; background: var(--rm-field, var(--rm-surface, #fff)); }
+    .padron-list li { padding: 0.15rem 0; }
+    .padron-list .who { font-weight: 600; }
     button { font: inherit; cursor: pointer; border-radius: 8px; font-weight: 600; }
     .primary { background: var(--teal); border: 1px solid var(--teal); color: var(--rm-on-accent, #fff); padding: 0.5rem 1.1rem; }
     .primary:disabled { opacity: 0.5; cursor: default; }
@@ -294,6 +303,7 @@ export class SurveyAdmin extends LitElement {
     this._padron = [];
     this._padronDept = '';
     this._padronActive = true;
+    this._padronExcluded = new Set();
     this._padronError = '';
     this._testEmail = '';
     this._sendBusy = false;
@@ -628,6 +638,7 @@ export class SurveyAdmin extends LitElement {
     this._padron = [];
     this._padronDept = '';
     this._padronActive = true;
+    this._padronExcluded = new Set();
     this._error = '';
     this._padronError = '';
     this._phase = 'participants';
@@ -778,9 +789,27 @@ export class SurveyAdmin extends LitElement {
   }
 
   _generateFromPadron() {
-    const participants = this._padronSelection;
-    if (!participants.length) { this._error = 'El padrón no tiene a nadie con ese filtro.'; return; }
+    const participants = withoutExcluded(this._padronSelection, this._padronExcluded);
+    if (!participants.length) { this._error = 'No hay nadie marcado con ese filtro.'; return; }
     return this._createTokens(participants);
+  }
+
+  /** Marca o desmarca a una persona del padrón (RMR-TSK-0629). */
+  _togglePadron(email, checked) {
+    const next = new Set(this._padronExcluded);
+    if (checked) next.delete(email.toLowerCase());
+    else next.add(email.toLowerCase());
+    this._padronExcluded = next;
+  }
+
+  /** Marca o desmarca de golpe a todas las de la lista filtrada. */
+  _toggleAllPadron(checked) {
+    const next = new Set(this._padronExcluded);
+    for (const p of this._padronSelection) {
+      if (checked) next.delete(p.email.toLowerCase());
+      else next.add(p.email.toLowerCase());
+    }
+    this._padronExcluded = next;
   }
 
   _linkFor(token) {
@@ -1214,7 +1243,7 @@ export class SurveyAdmin extends LitElement {
 
   /** Generar enlaces tirando del padrón de empresa, con filtro por departamento y activos. */
   _renderPadronSource() {
-    const sel = this._padronSelection;
+    const sel = withoutExcluded(this._padronSelection, this._padronExcluded);
     return html`<div class="field">
       <label>Desde el <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}). Filtra y genera un enlace por persona; los metadatos (departamento, antigüedad) salen del padrón.</label>
       <div class="q-opts">
@@ -1227,12 +1256,35 @@ export class SurveyAdmin extends LitElement {
         <label><input type="checkbox" .checked=${this._padronActive}
           @change=${(e) => { this._padronActive = e.target.checked; }} /> Solo activos</label>
       </div>
+      ${this._renderPadronPicker()}
       <div class="save-row">
         <button class="primary" ?disabled=${this._partBusy || !sel.length} @click=${() => this._generateFromPadron()}>
           ${this._partBusy ? 'Generando…' : `Generar enlaces desde el padrón (${sel.length})`}
         </button>
       </div>
     </div>`;
+  }
+
+  /** Lista para marcar y desmarcar a quién se envía (RMR-TSK-0629). */
+  _renderPadronPicker() {
+    const nameByEmail = new Map(this._padron.map((p) => [String(p.email ?? '').toLowerCase(), p.name]));
+    const list = this._padronSelection;
+    return html`<div class="padron-picker">
+      <div class="q-opts">
+        <button class="ghost" @click=${() => this._toggleAllPadron(true)}>Marcar todas</button>
+        <button class="ghost" @click=${() => this._toggleAllPadron(false)}>Desmarcar todas</button>
+      </div>
+      <ul class="padron-list">${list.map((p) => this._renderPadronRow(p, nameByEmail.get(p.email.toLowerCase())))}</ul>
+    </div>`;
+  }
+
+  _renderPadronRow(p, name) {
+    const checked = !this._padronExcluded.has(p.email.toLowerCase());
+    const dept = p.metadata.department ?? '';
+    return html`<li><label>
+      <input type="checkbox" .checked=${checked} @change=${(e) => this._togglePadron(p.email, e.target.checked)} />
+      <span class="who">${name ?? p.email}</span> <span class="muted">${p.email}${dept ? ' · ' : ''}${dept}</span>
+    </label></li>`;
   }
 
   /** Valor actual de un campo de participante (edición en curso o el ya guardado). */

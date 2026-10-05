@@ -11,7 +11,7 @@ import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { parsePadron } from '../../tools/survey/domain/padron.js';
 import { customColumnsOf, validateAxis } from '../../tools/survey/domain/customAxes.js';
-import { listPadron, addPadronPerson, updatePadronPerson, deletePadronPerson, importPadron, getPadronAxes, savePadronAxes } from '../../lib/padron.js';
+import { listPadron, addPadronPerson, updatePadronPerson, deletePadronPerson, importPadron, getPadronAxes, savePadronAxes, loadPadronFromDirectory } from '../../lib/padron.js';
 
 const EMPTY = { id: null, email: '', name: '', department: '', hireDate: '', birthDate: '', location: '', active: true };
 
@@ -113,6 +113,22 @@ export class SurveyPadron extends LitElement {
       await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo importar el CSV.';
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  /** Todo el censo (con Notion, el directorio entero) al padrón (RMR-TSK-0629). */
+  async _fromDirectory() {
+    this._busy = true;
+    this._error = '';
+    this._notice = '';
+    try {
+      const { added, updated } = await loadPadronFromDirectory();
+      this._notice = `Padrón cargado desde el directorio: ${added} nueva${added === 1 ? '' : 's'}, ${updated} actualizada${updated === 1 ? '' : 's'}.`;
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo cargar el directorio.';
     } finally {
       this._busy = false;
     }
@@ -256,6 +272,7 @@ export class SurveyPadron extends LitElement {
       <p class="lead">Las personas y sus datos alimentan la segmentación de las encuestas. Importa el CSV (upsert por email), añade a mano, edita o borra. Se guarda la fecha de nacimiento; la edad se calcula sola.</p>
       <div class="toolbar">
         <button class="primary" @click=${() => this._new()}>Añadir persona</button>
+        <button class="ghost" ?disabled=${this._busy} @click=${() => this._fromDirectory()}>Cargar desde el directorio</button>
         <label class="ghost">Importar CSV <input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onCsv(e)} hidden /></label>
         ${this._busy ? html`<span class="lead">Procesando…</span>` : null}
       </div>

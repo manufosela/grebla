@@ -29,6 +29,7 @@ import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, conversatio
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
+import { directoryPadronRows } from './directoryPadron.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -2155,6 +2156,32 @@ export const orgDirectory = onCall({ region: 'europe-west1' }, async (request) =
   if (!request.auth) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
   const snap = await getFirestore().collection('people').get();
   return { people: projectDirectory(snap.docs.map((d) => ({ id: d.id, data: d.data() }))) };
+});
+
+/**
+ * El padrón de las encuestas desde el censo (RMR-TSK-0629): con Notion
+ * conectado, todo el directorio. Quien gestiona encuestas no lee /people; esto
+ * solo deja salir nombre, email, departamento y alta de las personas activas.
+ * Mismo permiso que generar enlaces (createSurveyTokens).
+ */
+export const directoryPadron = onCall({ region: 'europe-west1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
+    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede cargar el padrón.');
+  }
+  const db = getFirestore();
+  const [peopleSnap, branchesSnap] = await Promise.all([db.collection('people').get(), db.collection('orgBranches').get()]);
+  const people = peopleSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
+  const uids = people.map((p) => p.data.uid).filter((u) => typeof u === 'string' && u);
+  const authEmail = new Map();
+  for (let i = 0; i < uids.length; i += 100) {
+    const { users } = await getAuth().getUsers(uids.slice(i, i + 100).map((u) => ({ uid: u })));
+    for (const u of users) authEmail.set(u.uid, u.email ?? null);
+  }
+  const labels = new Map(branchesSnap.docs.map((d) => [d.id, d.data().label ?? d.id]));
+  const rows = directoryPadronRows(people.map((p) => ({ ...p, authEmail: authEmail.get(p.data.uid) ?? null })), labels);
+  return { rows };
 });
 
 const NOTION_TOKEN = defineSecret('NOTION_TOKEN');
