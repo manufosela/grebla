@@ -180,6 +180,12 @@ try {
     assertFails(setDoc(doc(eng, 'people', 'p1', 'notes', 'n1'), { text: 'hola' })),
   );
   await check(
+    'vinculado SÍ escribe su PROPUESTA de Role Mirror (prevalece el manager, RMR-PCS-0036)',
+    assertSucceeds(
+      setDoc(doc(eng, 'people', 'p1', 'rolemirror', 'proposal'), { answers: {}, status: 'open' }),
+    ),
+  );
+  await check(
     'vinculado NO escribe su resumen de Role Mirror',
     assertFails(
       setDoc(doc(eng, 'people', 'p1', 'rolemirror', 'summary'), { dominant: 'architect' }),
