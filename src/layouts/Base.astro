@@ -89,7 +89,9 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
              /config/org trae uno; mientras tanto, y si no hay, se queda la marca
              de GREBLA: nunca una cabecera vacía. Es un <img>, nunca un SVG
              incrustado — lo sube una persona y podría traer <script> dentro. -->
-        <img class="brand-logo" id="brand-logo" alt="" hidden />
+        <img class="brand-logo brand-logo-light" id="brand-logo" alt="" hidden />
+        <!-- Versión para el tema oscuro (RMR-TSK-0628); sin ella, la misma clara. -->
+        <img class="brand-logo brand-logo-dark" id="brand-logo-dark" alt="" hidden />
         <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
           <circle cx="32" cy="32" r="25" fill="none" stroke="var(--gr-navy)" stroke-opacity="0.35" stroke-width="3" />
           <circle cx="7" cy="32" r="4" fill="var(--gr-teal)" />
@@ -303,6 +305,10 @@ const ogImage = Astro.site ? new URL('/og-image.png', Astro.site).href : '/og-im
          que es lo que respeta un logo apaisado sin deformarlo. El tope de ancho
          evita que uno muy alargado empuje la navegación fuera en móvil. */
       .brand-logo { height: 32px; width: auto; max-width: 190px; display: block; object-fit: contain; }
+      /* Cada tema enseña su logo (RMR-TSK-0628). `hidden` lo pone el glue hasta
+         que hay logo; aquí solo se esconde el del otro tema. */
+      html[data-theme='dark'] .brand-logo-light,
+      html:not([data-theme='dark']) .brand-logo-dark { display: none; }
       .site-nav {
         display: flex;
         align-items: center;

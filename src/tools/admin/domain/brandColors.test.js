@@ -40,6 +40,12 @@ describe('darkVariant — la versión del tema oscuro sale sola del mismo color'
   it('un color que ya llega se queda como está', () => {
     expect(darkVariant('#f2887a', 3)).toBe('#f2887a');
   });
+
+  it('la versión oscura apunta alto, no al mínimo justo: se lee como la paleta de GREBLA', () => {
+    const accent = darkVariant('#965392', 3); // el rosa r-800 de tribbu
+    expect(contrastRatio(accent, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(darkVariant('#130916', 4.5), DARK_SURFACE)).toBeGreaterThanOrEqual(7);
+  });
 });
 
 describe('onAccentFor — el texto sobre el acento es el que más contrasta', () => {

@@ -94,11 +94,28 @@ function base64Ok(payload) {
  * @returns {string|null}
  */
 export function logoSrcFrom(orgConfig) {
-  const raw = orgConfig?.logo;
+  return validLogo(orgConfig?.logo);
+}
+
+/** Un data URI de logo válido, o null. @param {unknown} raw */
+function validLogo(raw) {
   if (typeof raw !== 'string' || raw === '') return null;
   const type = LOGO_TYPES.find((t) => raw.startsWith(`data:${t};base64,`));
   if (!type) return null;
   return base64Ok(raw.slice(`data:${type};base64,`.length)) ? raw : null;
+}
+
+/**
+ * Logo del tema oscuro (RMR-TSK-0628): la versión para fondo oscuro si la hay
+ * (`logoDark`), y si no, la misma del claro. Sin logo claro no hay oscuro: un
+ * logo solo en un tema dejaría la cabecera del otro con la marca de GREBLA.
+ * @param {{ logo?: unknown, logoDark?: unknown }|null|undefined} orgConfig
+ * @returns {string|null}
+ */
+export function logoDarkSrcFrom(orgConfig) {
+  const light = validLogo(orgConfig?.logo);
+  if (!light) return null;
+  return validLogo(orgConfig?.logoDark) ?? light;
 }
 
 /**

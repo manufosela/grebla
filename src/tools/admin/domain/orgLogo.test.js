@@ -1,7 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import {
-  checkLogoFile, logoSrcFrom, logoAltFrom, LOGO_MAX_BYTES,
+  checkLogoFile, logoSrcFrom, logoDarkSrcFrom, logoAltFrom, LOGO_MAX_BYTES,
 } from './orgLogo.js';
+
+describe('logo del tema oscuro (RMR-TSK-0628)', () => {
+  const claro = 'data:image/svg+xml;base64,PHN2Zy8+';
+  const oscuro = `data:image/png;base64,${Buffer.from('logo blanco').toString('base64')}`;
+
+  it('si hay versión oscura válida, es la del tema oscuro', () => {
+    expect(logoDarkSrcFrom({ logo: claro, logoDark: oscuro })).toBe(oscuro);
+  });
+
+  it('sin versión oscura (o inválida), el tema oscuro usa la clara', () => {
+    expect(logoDarkSrcFrom({ logo: claro })).toBe(claro);
+    expect(logoDarkSrcFrom({ logo: claro, logoDark: 'data:text/html;base64,PGI+' })).toBe(claro);
+  });
+
+  it('sin logo claro tampoco hay oscuro: la cabecera se queda con GREBLA', () => {
+    expect(logoDarkSrcFrom({ logoDark: oscuro })).toBeNull();
+  });
+});
 
 const archivo = (type, size) => ({ type, size, name: 'logo' });
 

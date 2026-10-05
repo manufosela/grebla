@@ -268,15 +268,20 @@ async function pintarLogoDeLaInstancia() {
   const img = document.querySelector('#brand-logo');
   if (!img) return;
   try {
-    const [{ getOrgLogo, getOrgIdentity }, { logoAltFrom }] = await Promise.all([
+    const [{ getOrgLogos, getOrgIdentity }, { logoAltFrom }] = await Promise.all([
       import('../lib/orgConfig.js'),
       import('../tools/admin/domain/orgLogo.js'),
     ]);
-    const [src, identity] = await Promise.all([getOrgLogo(), getOrgIdentity()]);
-    if (!src) return;
-    img.src = src;
-    img.alt = logoAltFrom(identity);
-    img.hidden = false;
+    const [logos, identity] = await Promise.all([getOrgLogos(), getOrgIdentity()]);
+    if (!logos) return;
+    // Un logo por tema (RMR-TSK-0628); el CSS enseña el del tema activo.
+    const alt = logoAltFrom(identity);
+    for (const [el, src] of [[img, logos.light], [document.querySelector('#brand-logo-dark'), logos.dark]]) {
+      if (!el) continue;
+      el.src = src;
+      el.alt = alt;
+      el.hidden = false;
+    }
     // La marca de GREBLA se va entera —icono y palabra—: son dos casas, no una
     // con dos logos.
     document.querySelector('.brand-mark')?.setAttribute('hidden', '');
