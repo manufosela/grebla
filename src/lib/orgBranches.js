@@ -12,10 +12,14 @@ import { doc, collection, getDocs, onSnapshot, setDoc, deleteDoc, serverTimestam
 import { db } from './firebase.js';
 import { normalizeBranchColor } from '../tools/team/domain/orgRoles.js';
 
-/** @typedef {{ id: string, label: string, color: string|null }} OrgBranch */
+/** @typedef {{ id: string, label: string, color: string|null, hasGuilds: boolean }} OrgBranch */
 
-/** El color es de la instancia (RMR-TSK-0619); uno inválido se descarta aquí. */
-const toBranch = (d) => ({ id: d.id, label: d.data().label ?? d.id, color: normalizeBranchColor(d.data().color) });
+/** El color es de la instancia (RMR-TSK-0619); uno inválido se descarta aquí.
+ *  `hasGuilds`: si el departamento se reparte en gremios (RMR-TSK-0593). */
+const toBranch = (d) => ({
+  id: d.id, label: d.data().label ?? d.id, color: normalizeBranchColor(d.data().color),
+  hasGuilds: d.data().hasGuilds === true,
+});
 
 /** @returns {Promise<OrgBranch[]>} */
 export async function listOrgBranches() {
