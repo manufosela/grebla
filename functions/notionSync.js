@@ -57,13 +57,24 @@ async function authEmails(auth, people) {
 /**
  * De qué valor a qué valor pasa cada campo de una actualización, para que quien
  * revise el informe vea, p.ej., quién cambia de manager (eso mueve accesos).
- * El bloque `notion` va aparte: es informativo y se ve en la ficha.
+ * El bloque `notion` se informa dato a dato (`notion.role`…), y solo lo que
+ * cambia: si no, una ficha que solo cambia ahí cuenta como cambio y no se ve
+ * (RMR-TSK-0633).
  */
 function changesOf(update, current) {
   const before = current.get(update.personId) ?? {};
-  return Object.fromEntries(Object.entries(update.set)
-    .filter(([field]) => field !== 'notion')
-    .map(([field, to]) => [field, { from: before[field] ?? null, to }]));
+  const { notion, ...fields } = update.set;
+  return {
+    ...Object.fromEntries(Object.entries(fields).map(([field, to]) => [field, { from: before[field] ?? null, to }])),
+    ...notionChanges(before.notion ?? {}, notion ?? {}),
+  };
+}
+
+function notionChanges(before, after) {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return Object.fromEntries([...keys]
+    .filter((k) => (before[k] ?? null) !== (after[k] ?? null))
+    .map((k) => [`notion.${k}`, { from: before[k] ?? null, to: after[k] ?? null }]));
 }
 
 async function commitInBatches(db, ops) {

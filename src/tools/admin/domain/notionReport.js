@@ -8,6 +8,10 @@
 const FIELD_LABELS = {
   name: 'Nombre', orgBranch: 'Departamento', reportsToPersonId: 'Manager',
   startDate: 'Alta', external: 'Externo',
+  // Bloque informativo `notion` (RMR-TSK-0633): lo que el organigrama muestra tal cual.
+  'notion.id': 'Id (Notion)', 'notion.role': 'Rol (Notion)', 'notion.level': 'Nivel (Notion)',
+  'notion.department': 'Departamento (Notion)', 'notion.team': 'Equipo (Notion)',
+  'notion.type': 'Tipo (Notion)', 'notion.status': 'Estado (Notion)',
 };
 
 /** @param {string} field @param {unknown} value @param {(id: string) => string} nameOf */
