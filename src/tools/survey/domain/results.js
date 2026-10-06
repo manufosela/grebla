@@ -71,6 +71,27 @@ export function choiceTally(answers, question, threshold) {
  * `department`), aplicando k-anonimato: devuelve `{ visible, suppressed }` con la
  * media (y eNPS si procede) de cada segmento visible.
  */
+const NO_DEPARTMENT = '—';
+const departmentOf = (answer) => answer?.metadata?.department ?? NO_DEPARTMENT;
+
+/**
+ * Departamentos de las respuestas (RMR-TSK-0632), de más a menos. Solo se
+ * pueden abrir los que llegan a `threshold`; el resto, igual que las
+ * respuestas sin departamento, se cuentan como ocultos sin nombrarlos.
+ * @returns {{ visible: Array<{ key: string, count: number }>, suppressed: Array<{ key: string, count: number }> }}
+ */
+export function departmentGroups(answers, threshold) {
+  const counts = Map.groupBy(answers ?? [], departmentOf);
+  const groups = [...counts].map(([key, list]) => ({ key, count: list.length })).toSorted((a, b) => b.count - a.count);
+  const { visible, suppressed } = partitionSegments(groups.filter((g) => g.key !== NO_DEPARTMENT), threshold);
+  return { visible, suppressed: [...suppressed, ...groups.filter((g) => g.key === NO_DEPARTMENT)] };
+}
+
+/** Las respuestas de un departamento. */
+export function answersOfDepartment(answers, department) {
+  return (answers ?? []).filter((a) => departmentOf(a) === department);
+}
+
 export function segmentedScale(answers, question, field, threshold) {
   const groups = new Map();
   for (const a of answers ?? []) {

@@ -21,6 +21,7 @@ import { WIZARD_STEPS, stepBlocker, savedRecipients, linksToCreate } from '../..
 import { listPadron, getPadronAxes, getPadronSyncedAt, syncPadron } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
+  departmentGroups, answersOfDepartment,
 } from '../../tools/survey/domain/results.js';
 import {
   listSurveys, createSurvey, updateSurvey, setSurveyStatus, deleteSurvey, surveyHasResponses, createSurveyTokens, listTokens, listAnswers,
@@ -39,6 +40,7 @@ const SEGMENT_FIELDS = ['department', 'tenure', 'location', 'age'];
 const SEGMENT_LABELS = { department: 'Departamento', tenure: 'Antigüedad', location: 'Ubicación', age: 'Edad' };
 const SEGMENT_MIN = 5; // k-anonimato mínimo por grupo, aunque el umbral de la encuesta sea menor
 const PADRON_EDITOR = html`<survey-padron></survey-padron>`;
+const RESULT_TABS = [['all', 'Toda la empresa'], ['dept', 'Por departamento']];
 const PADRON_EMPTY = html`<p class="lead">El padrón está vacío. Actualízalo desde el directorio o rellénalo en «Padrón de empresa» (a mano o con un CSV).</p>`;
 export class SurveyAdmin extends LitElement {
   static properties = {
@@ -107,6 +109,9 @@ export class SurveyAdmin extends LitElement {
     _resAnswers: { state: true },
     _resTokens: { state: true },
     _resLoading: { state: true },
+    /** Resultados (RMR-TSK-0632): pestaña 'all' | 'dept' y departamento abierto. */
+    _resTab: { state: true },
+    _resDept: { state: true },
     _error: { state: true },
   };
 
@@ -329,6 +334,8 @@ export class SurveyAdmin extends LitElement {
     this._resAnswers = [];
     this._resTokens = [];
     this._resLoading = false;
+    this._resTab = 'all';
+    this._resDept = null;
     this._error = '';
     this._loaded = false;
   }
@@ -890,6 +897,8 @@ export class SurveyAdmin extends LitElement {
     this._resAnswers = [];
     this._resTokens = [];
     this._resLoading = true;
+    this._resTab = 'all';
+    this._resDept = null;
     this._error = '';
     this._phase = 'results';
     try {
@@ -945,12 +954,13 @@ export class SurveyAdmin extends LitElement {
     </div>`;
   }
 
-  _renderQuestionResult(q, answers, threshold) {
+  /** `grouped`: con los grupos de «Agrupar por» (toda la empresa); sin ellos dentro de un departamento. */
+  _renderQuestionResult(q, answers, threshold, grouped = true) {
     if (q.type === 'choice') return this._renderChoiceResult(q, answers, threshold);
     if (q.type === 'text') return this._renderTextResult(q, answers, threshold);
     const r = scaleResult(q, answerValues(answers, q.id));
     const segMin = Math.max(SEGMENT_MIN, threshold);
-    const seg = segmentedScale(answers, q, this._segmentField, segMin);
+    const seg = grouped ? segmentedScale(answers, q, this._segmentField, segMin) : { visible: [], suppressed: [] };
     return html`<div class="qr">
       <p class="qr-label">${q.label}</p>
       <p class="qr-summary">
@@ -968,12 +978,45 @@ export class SurveyAdmin extends LitElement {
     const survey = this._resSurvey;
     const threshold = Number.isInteger(survey.threshold) ? survey.threshold : 5;
     const part = participationTotal(this._resTokens);
-    const byDept = participationByDept(this._resTokens);
+    const body = this._resTab === 'dept' ? this._renderDeptResults(survey, threshold) : this._renderCompanyResults(survey, threshold);
     return html`
       <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
       <h2>${survey.title} · Resultados</h2>
       <p class="lead">${this._resAnswers.length} respuesta${this._resAnswers.length === 1 ? '' : 's'} · participación ${part.responded}/${part.total} (${part.pct}%). Umbral de anonimato: ${threshold}.</p>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      <div class="tabs" role="tablist">
+        ${RESULT_TABS.map(([id, label]) => html`<button class="tab ${this._resTab === id ? 'on' : ''}" role="tab"
+          aria-selected=${this._resTab === id ? 'true' : 'false'} @click=${() => { this._resTab = id; }}>${label}</button>`)}
+      </div>
+      <div class="tab-body">${body}</div>`;
+  }
+
+  /** Por departamento (RMR-TSK-0632): todas las preguntas de UN departamento, si llega al mínimo de anonimato. */
+  _renderDeptResults(survey, threshold) {
+    const min = Math.max(SEGMENT_MIN, threshold);
+    const { visible, suppressed } = departmentGroups(this._resAnswers, min);
+    const n = suppressed.length;
+    const what = n === 1 ? '1 departamento con' : `${n} departamentos con`;
+    const verb = n === 1 ? 'muestra' : 'muestran';
+    const hidden = n ? html`<p class="hidden-note">${what} menos de ${min} respuestas no se ${verb}, para no comprometer el anonimato.</p>` : null;
+    if (!visible.length) return html`<p class="empty">Ningún departamento llega todavía a ${min} respuestas.</p>${hidden}`;
+    const current = visible.some((g) => g.key === this._resDept) ? this._resDept : visible[0].key;
+    const answers = answersOfDepartment(this._resAnswers, current);
+    return html`
+      <div class="seg-picker">
+        <label>Departamento:
+          <select @change=${(e) => { this._resDept = e.target.value; }}>
+            ${visible.map((g) => html`<option value=${g.key} ?selected=${g.key === current}>${g.key} (${g.count} respuestas)</option>`)}
+          </select>
+        </label>
+      </div>
+      ${hidden}
+      ${(survey.questions ?? []).map((q) => this._renderQuestionResult(q, answers, min, false))}`;
+  }
+
+  _renderCompanyResults(survey, threshold) {
+    const byDept = participationByDept(this._resTokens);
+    return html`
       <h3>Participación por departamento</h3>
       ${byDept.length ? html`<table>
         <thead><tr><th>Departamento</th><th>Respondidos</th><th>%</th></tr></thead>

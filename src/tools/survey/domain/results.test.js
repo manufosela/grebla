@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally } from './results.js';
+import { participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally, departmentGroups, answersOfDepartment } from './results.js';
 
 const tokens = [
   { metadata: { department: 'People' }, used: true },
@@ -71,5 +71,22 @@ describe('choiceTally (k-anon por opción)', () => {
     expect(visible.map((s) => s.key)).toEqual(['Producto', 'Ventas']);
     expect(visible.find((s) => s.key === 'Producto').count).toBe(4);
     expect(suppressed.map((s) => s.key)).toEqual(['Soporte']);
+  });
+});
+
+describe('por departamento (RMR-TSK-0632)', () => {
+  const ans = (department) => ({ metadata: department ? { department } : {}, answers: { q1: 3 } });
+  const answers = [...Array(5).fill('Tech'), ...Array(2).fill('People'), null].map(ans);
+
+  it('solo se pueden abrir los departamentos que llegan al mínimo, de más a menos respuestas', () => {
+    const { visible, suppressed } = departmentGroups(answers, 5);
+    expect(visible).toEqual([{ key: 'Tech', count: 5 }]);
+    // Los ocultos se cuentan, no se nombran: también los que no tienen departamento.
+    expect(suppressed).toHaveLength(2);
+  });
+
+  it('las respuestas de un departamento son solo las suyas', () => {
+    expect(answersOfDepartment(answers, 'Tech')).toHaveLength(5);
+    expect(answersOfDepartment(answers, 'People')).toHaveLength(2);
   });
 });
