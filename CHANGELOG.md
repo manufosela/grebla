@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.235.1] - 2026-10-06
+
+### Corregido
+
+- **Informe de Notion.** Una ficha que solo cambiaba en sus datos de Notion
+  (rol, nivel, equipo…) contaba en «Aplicar N cambios» pero la pestaña Cambios
+  salía vacía. Ahora cada uno de esos datos sale en su fila, con antes y después.
+
 ## [1.235.0] - 2026-10-06
 
 ### Añadido
