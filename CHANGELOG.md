@@ -15,6 +15,31 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.237.0] - 2026-10-06
+
+### Añadido
+
+- **Retros: seguimiento de acciones.** Nueva pestaña «Acciones» con todas las
+  acciones de tus retros: responsable, retro y estado. Se filtran por
+  pendientes, hechas o todas, se marcan hechas desde la lista y se descargan
+  en CSV.
+- **Retros: el responsable de una acción se elige entre los participantes**
+  de la retro, aunque no sean del equipo de quien la convoca.
+- **Retros: votar de un clic.** Con la zona revelada, cada tarjeta lleva su
+  «me gusta»: se vota y se retira el voto sin abrirla.
+- **Encuestas: seguimiento de los envíos.** Cada enlace apunta si se le envió
+  el correo; el paso Envío dice cuántos tienen correo, cuántos faltan y cuántos
+  no han respondido, y deja enviar solo a quienes faltan o a todos los que no
+  han respondido.
+
+### Corregido
+
+- **Retros: guardar acciones.** Quien convoca una retro sin ser manager veía
+  «no tienes permisos» al guardar una acción. Además, quien participa ve las
+  acciones de su retro y el Head ve las de su rama.
+- **Encuestas: el envío masivo respeta el ritmo y el cupo del proveedor.** Va a
+  un correo cada 0,6 s y, al llegar al límite diario, para y dice cuántos quedan.
+
 ## [1.236.0] - 2026-10-06
 
 ### Añadido
