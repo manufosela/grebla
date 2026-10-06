@@ -58,6 +58,17 @@ test.describe('reglas de /retroActions', () => {
     await assertFails(setDoc(doc(como(env, PARTICIPA), 'retroActions', 'a3'), accion(PARTICIPA)));
   });
 
+  test('quien participa en la retro ve y lista sus acciones, aunque no la convocara (RMR-TSK-0642)', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'retroActions', 'de-r1'), accion(CONVOCA)));
+    const db = como(env, PARTICIPA);
+    await assertSucceeds(getDoc(doc(db, 'retroActions', 'de-r1')));
+    await assertSucceeds(getDocs(query(collection(db, 'retroActions'), where('fromRetroId', '==', 'r1'))));
+  });
+
+  test('quien no participa no las ve', async () => {
+    await assertFails(getDocs(query(collection(como(env, 'uid-fuera'), 'retroActions'), where('fromRetroId', '==', 'r1'))));
+  });
+
   test('el Head ve y lista las acciones pendientes de las retros de su rama', async () => {
     const db = como(env, HEAD);
     await assertSucceeds(getDoc(doc(db, 'retroActions', 'de-la-rama')));

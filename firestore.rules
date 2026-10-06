@@ -884,7 +884,14 @@ service cloud.firestore {
         return seesAllRetros()
           || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
           || (isSignedIn() && resource.data.owners is list && request.auth.uid in resource.data.owners)
-          || ownerReportsToMe();
+          || ownerReportsToMe()
+          || participatesInSourceRetro();
+      }
+      // Quien participa en la retro de la que salió ve sus acciones (RMR-TSK-0642):
+      // se acuerdan entre todos; sin esto, solo quien convocaba podía listarlas.
+      function participatesInSourceRetro() {
+        let retro = /databases/$(database)/documents/retros/$(resource.data.get('fromRetroId', '-'));
+        return isSignedIn() && exists(retro) && canReadRetro(get(retro).data);
       }
       allow read: if canAccessAction();
       // La crea quien convocó la retro de la que sale (RMR-TSK-0640): desde que

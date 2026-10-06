@@ -33,6 +33,7 @@ import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
 import { directoryPadronRows, padronUpsertPlan } from './directoryPadron.js';
 import { managesSurveys } from './surveyManager.js';
 import { sendTargets, isQuotaError, SEND_INTERVAL_MS } from './surveySend.js';
+import { canSeeRetro, participantRows } from './retroParticipants.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -215,6 +216,34 @@ export const joinRetro = onCall({ region: 'europe-west1' }, async (request) => {
   if (dentro.includes(caller.uid)) return { joined: true, already: true };
   await ref.update({ memberUids: FieldValue.arrayUnion(caller.uid) });
   return { joined: true, already: false };
+});
+
+/**
+ * Participantes de una retro con su nombre (RMR-TSK-0642), para elegir el
+ * responsable de una acción. Solo para quien puede ver la retro (mismo criterio
+ * que las reglas); quien convoca puede no ser manager y no leer /people.
+ */
+export const retroParticipants = onCall({ region: 'europe-west1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const retroId = typeof request.data?.retroId === 'string' ? request.data.retroId.trim() : '';
+  if (!retroId) throw new HttpsError('invalid-argument', 'Falta la retro.');
+  const db = getFirestore();
+  const snap = await db.doc(`retros/${retroId}`).get();
+  const seesAll = (await isAdmin(uid)) || (await db.doc(`toolManagers/retros--${uid}`).get()).exists;
+  if (!snap.exists || !canSeeRetro(snap.data(), uid, seesAll)) {
+    throw new HttpsError('permission-denied', 'No tienes acceso a esta retro.');
+  }
+  const memberUids = (snap.data().memberUids ?? []).filter((u) => typeof u === 'string' && u).slice(0, 100);
+  // `in` admite 30 valores: las fichas se buscan por tandas.
+  const chunks = Array.from({ length: Math.ceil(memberUids.length / 30) }, (_, i) => memberUids.slice(i * 30, i * 30 + 30));
+  const [fichaSnaps, accounts] = await Promise.all([
+    Promise.all(chunks.map((c) => db.collection('people').where('uid', 'in', c).get())),
+    memberUids.length ? getAuth().getUsers(memberUids.map((u) => ({ uid: u }))) : { users: [] },
+  ]);
+  const fichaByUid = new Map(fichaSnaps.flatMap((s) => s.docs).map((d) => [d.data().uid, d.data().name ?? '']));
+  const accountByUid = new Map(accounts.users.map((u) => [u.uid, { displayName: u.displayName ?? null, email: u.email ?? null }]));
+  return { participants: participantRows({ memberUids }, { fichaByUid, accounts: accountByUid }) };
 });
 
 /**
