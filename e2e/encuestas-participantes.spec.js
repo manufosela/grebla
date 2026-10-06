@@ -58,3 +58,24 @@ test('se marca un departamento entero, se quita a una persona y solo cuentan las
   await admin.getByRole('button', { name: 'Ninguno', exact: true }).click();
   await expect(generar).toHaveText(/\(0\)/);
 });
+
+test('«Actualizar desde el directorio» trae a quien está en el censo y no en el padrón (RMR-TSK-0631)', async ({ page }) => {
+  await db().doc('people/e2e-dir-dani').set({ name: 'Dani Directorio', email: 'dani.e2e@example.com', active: true });
+  try {
+    await signInAs(page, 'superadmin');
+    await page.goto('/tools/encuestas');
+    const admin = page.locator('survey-admin');
+    await admin.getByRole('row', { name: /Encuesta E2E del padrón/ }).getByRole('button', { name: 'Enlaces' }).click();
+    // Se ve al instante lo que ya hay: no se espera a ninguna sincronización.
+    await expect(admin.getByRole('checkbox', { name: /Ana Padrón/ })).toBeVisible();
+    await expect(admin.getByRole('checkbox', { name: /Dani Directorio/ })).toHaveCount(0);
+
+    await admin.getByRole('button', { name: 'Actualizar desde el directorio' }).click();
+    await expect(admin.getByRole('checkbox', { name: /Dani Directorio/ })).toBeVisible();
+    await expect(admin.getByText(/Actualizado con el directorio el/)).toBeVisible();
+  } finally {
+    await db().doc('people/e2e-dir-dani').delete();
+    for (const d of (await db().collection('padron').where('email', '==', 'dani.e2e@example.com').get()).docs) await d.ref.delete();
+    await db().doc('padron/_sync').delete();
+  }
+});

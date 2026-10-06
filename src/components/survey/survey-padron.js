@@ -11,7 +11,7 @@ import '../common/busy-overlay.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { parsePadron } from '../../tools/survey/domain/padron.js';
 import { customColumnsOf, validateAxis } from '../../tools/survey/domain/customAxes.js';
-import { listPadron, addPadronPerson, updatePadronPerson, deletePadronPerson, importPadron, getPadronAxes, savePadronAxes, loadPadronFromDirectory } from '../../lib/padron.js';
+import { listPadron, addPadronPerson, updatePadronPerson, deletePadronPerson, importPadron, getPadronAxes, savePadronAxes } from '../../lib/padron.js';
 
 const EMPTY = { id: null, email: '', name: '', department: '', hireDate: '', birthDate: '', location: '', active: true };
 
@@ -89,16 +89,7 @@ export class SurveyPadron extends LitElement {
   async _load() {
     this._loading = true;
     this._error = '';
-    // El padrón es toda la empresa (RMR-TSK-0630): la primera vez que se abre
-    // se sincroniza con el directorio. Lo añadido a mano se conserva.
-    if (!this._synced) {
-      this._synced = true;
-      try {
-        await loadPadronFromDirectory();
-      } catch (err) {
-        this._error = `No se pudo sincronizar con el directorio: ${err instanceof Error ? err.message : err}`;
-      }
-    }
+    // El servidor lo mantiene al día con el directorio (RMR-TSK-0631): se lee tal cual.
     try {
       [this._rows, this._axes] = await Promise.all([listPadron(), getPadronAxes()]);
     } catch (err) {

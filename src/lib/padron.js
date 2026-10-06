@@ -11,18 +11,25 @@ import { httpsCallable } from 'firebase/functions';
 import { db, getRegionalFunctions } from './firebase.js';
 
 /**
- * Carga en el padrón a todas las personas activas del censo (RMR-TSK-0629): con
- * Notion conectado, todo el directorio. Mismo upsert por email que el CSV.
+ * Pone el padrón al día con el directorio ya mismo (RMR-TSK-0631). El servidor
+ * lo hace solo cada noche; esto es el botón «Actualizar». Mismo upsert por
+ * email que el CSV: lo añadido a mano se conserva.
  * @returns {Promise<{ added: number, updated: number }>}
  */
-export async function loadPadronFromDirectory() {
-  const fn = httpsCallable(await getRegionalFunctions(), 'directoryPadron');
+export async function syncPadron() {
+  const fn = httpsCallable(await getRegionalFunctions(), 'syncPadron');
   const { data } = await fn();
-  if (!Array.isArray(data?.rows)) throw new Error('El directorio ha llegado mal formado.');
-  return importPadron(data.rows);
+  if (!Number.isInteger(data?.added) || !Number.isInteger(data?.updated)) throw new Error('La sincronización ha respondido mal formada.');
+  return data;
 }
 
 const COL = 'padron';
+
+/** Cuándo se sincronizó el padrón con el directorio por última vez; null si nunca. */
+export async function getPadronSyncedAt() {
+  const snap = await getDoc(doc(db, COL, '_sync'));
+  return snap.exists() ? (snap.data().at?.toDate?.() ?? null) : null;
+}
 
 /** Normaliza una persona del padrón (email en minúsculas, campos ausentes a null). */
 function clean(person) {
@@ -40,13 +47,14 @@ function clean(person) {
 }
 
 /** Doc de EJES declarados (RMR-TSK-0355): vive dentro de /padron para heredar
- *  su regla (People); listPadron lo excluye (no es una persona). */
+ *  su regla (People). Como él, _sync y _syncLock: listPadron excluye todo
+ *  documento interno (id con «_»), que no es una persona. */
 const AXES_DOC = '_axes';
 
 /** Todo el padrón, ordenado por email. */
 export async function listPadron() {
   const snap = await getDocs(query(collection(db, COL), orderBy('email')));
-  return snap.docs.filter((d) => d.id !== AXES_DOC).map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs.filter((d) => !d.id.startsWith('_')).map((d) => ({ id: d.id, ...d.data() }));
 }
 
 /**

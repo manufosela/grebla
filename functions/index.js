@@ -2160,21 +2160,10 @@ export const orgDirectory = onCall({ region: 'europe-west1' }, async (request) =
 });
 
 /**
- * El padrón de las encuestas desde el censo (RMR-TSK-0629): con Notion
- * conectado, todo el directorio. Quien gestiona encuestas no lee /people; esto
- * solo deja salir nombre, email, departamento y alta de las personas activas.
- * Mismo permiso que generar enlaces (createSurveyTokens).
+ * Las filas del padrón que salen del censo (RMR-TSK-0629): personas activas con
+ * su email (ficha, invitación o cuenta). Quien gestiona encuestas no lee
+ * /people; solo salen nombre, email, departamento y alta.
  */
-export const directoryPadron = onCall({ region: 'europe-west1' }, async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
-  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
-    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede cargar el padrón.');
-  }
-  return { rows: await readDirectoryRows(getFirestore()) };
-});
-
-/** Las filas del padrón que salen del censo: personas activas con su email (ficha, invitación o cuenta). */
 async function readDirectoryRows(db) {
   const [peopleSnap, branchesSnap] = await Promise.all([db.collection('people').get(), db.collection('orgBranches').get()]);
   const people = peopleSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
