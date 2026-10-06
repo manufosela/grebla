@@ -871,15 +871,27 @@ service cloud.firestore {
       function onlyStatusChanged() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'doneAt']);
       }
-      // Una acción la lee su dueño (el manager), quien la tiene asignada, y
-      // quien ve todas las retros. Ya no basta con tener correo del dominio.
+      // Una acción la lee su dueño (quien convocó la retro), quien la tiene
+      // asignada, quien ve todas las retros y —RMR-TSK-0640— el manager por
+      // encima de su dueño (cadena de /leaders), que arrastra las de su rama.
+      function ownerReportsToMe() {
+        let owner = /databases/$(database)/documents/leaders/$(resource.data.ownerLeaderUid);
+        return (isLeader() || isSuperManager()) && exists(owner)
+          && (get(owner).data.get('reportsTo', null) == request.auth.uid
+              || request.auth.uid in get(owner).data.get('chain', []));
+      }
       function canAccessAction() {
         return seesAllRetros()
           || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
-          || (isSignedIn() && resource.data.owners is list && request.auth.uid in resource.data.owners);
+          || (isSignedIn() && resource.data.owners is list && request.auth.uid in resource.data.owners)
+          || ownerReportsToMe();
       }
       allow read: if canAccessAction();
-      allow create: if isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid;
+      // La crea quien convocó la retro de la que sale (RMR-TSK-0640): desde que
+      // convocar es de cualquiera, exigir ser líder dejaba sin poder guardarlas.
+      allow create: if isSignedIn()
+        && request.resource.data.ownerLeaderUid == request.auth.uid
+        && get(/databases/$(database)/documents/retros/$(request.resource.data.fromRetroId)).data.ownerLeaderUid == request.auth.uid;
       allow update: if isSuperAdmin()
         || (isSignedIn() && resource.data.ownerLeaderUid == request.auth.uid)
         || (canAccessAction() && request.auth.uid in resource.data.owners && onlyStatusChanged());
