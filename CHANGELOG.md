@@ -15,6 +15,19 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.236.0] - 2026-10-06
+
+### Añadido
+
+- **Notas privadas del manager en los O2O.** En la ficha de cada persona, O2O
+  se parte en «Conversaciones» y «Privado». En Privado su manager (y quien está
+  por encima) guarda performance reviews y notas de contexto con la fecha en
+  que se hicieron. La persona no las ve nunca: lo garantizan las reglas.
+- **Quien tiene ficha se llama como diga la instancia.** Nuevo campo en
+  Identidad, «Cómo se llama quien tiene ficha» (por defecto «Tripulante»). Lo
+  usan la etiqueta junto al nombre, el selector de vistas y el aviso de vista
+  simulada, que antes decían «Ingeniero» a todo el mundo.
+
 ## [1.235.3] - 2026-10-06
 
 ### Cambiado
