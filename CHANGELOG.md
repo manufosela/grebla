@@ -15,6 +15,24 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.234.0] - 2026-10-06
+
+### Cambiado
+
+- **Encuestas: un asistente por pasos.** «Gestionar» abre cada encuesta en
+  cuatro pasos: Preguntas, Destinatarios, Enlaces y Envío, con Anterior y
+  Siguiente. La selección de a quién se envía queda guardada en la encuesta,
+  generar solo crea los enlaces que faltan y el borrador se abre desde el
+  propio paso de envío. El padrón de empresa pasa a ser una sub-pestaña de
+  Destinatarios y desaparecen los botones sueltos de la lista.
+- **El padrón está siempre cargado.** Se sincroniza con el directorio cada
+  noche y con el botón «Actualizar desde el directorio»; abrir una encuesta
+  ya no espera a cargarlo.
+
+### Quitado
+
+- El atajo de pegar o subir un CSV en Enlaces: el CSV se importa en el padrón.
+
 ## [1.233.0] - 2026-10-06
 
 ### Cambiado
