@@ -333,6 +333,18 @@ export async function listRetroActions(retroId) {
 }
 
 /**
+ * Todas las acciones de unas retros (RMR-TSK-0644), para su seguimiento. `in`
+ * admite 30 valores: se consulta por tandas.
+ * @param {string[]} retroIds
+ */
+export async function listActionsForRetros(retroIds) {
+  const chunks = Array.from({ length: Math.ceil(retroIds.length / 30) }, (_, i) => retroIds.slice(i * 30, i * 30 + 30));
+  const snaps = await Promise.all(chunks.map((c) => getDocs(query(collection(db, 'retroActions'), where('fromRetroId', 'in', c)))));
+  return snaps.flatMap((s) => s.docs.map((d) => ({ id: d.id, ...d.data() })))
+    .toSorted((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+}
+
+/**
  * Acciones pendientes de un líder —o de toda la rama de un supermanager— para
  * arrastrar a la siguiente retro.
  * @param {string|ReadonlyArray<string>} ownerLeaderUid
