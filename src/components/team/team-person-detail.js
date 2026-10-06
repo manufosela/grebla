@@ -70,6 +70,7 @@ import { isNotionSynced } from '../../lib/notionSync.js';
 import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
 import { listOrgBranches } from '../../lib/orgBranches.js';
 import { departmentHasGuilds } from '../../tools/team/domain/guildScope.js';
+import '../o2o/manager-notes.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -142,6 +143,12 @@ const SUBTABS = [
   { id: 'notes', label: 'Notas' },
 ];
 
+/** Dentro de «O2O»: las conversaciones y las notas privadas del manager (RMR-TSK-0636). */
+const O2O_SUBTABS = [
+  { id: 'conversaciones', label: 'Conversaciones' },
+  { id: 'privado', label: 'Privado' },
+];
+
 /**
  * Sub-sub-pestañas de la pestaña «Dimensiones»: las cuatro dimensiones de
  * evaluación agrupadas bajo un único primer nivel. El orden define el recorrido
@@ -190,6 +197,7 @@ export class TeamPersonDetail extends LitElement {
     _dimSubtab: { state: true },
     _orgSubtab: { state: true },
     _careerSubtab: { state: true },
+    _o2oSubtab: { state: true },
     _form: { state: true },
     _know: { state: true },
     _contrib: { state: true },
@@ -520,6 +528,8 @@ export class TeamPersonDetail extends LitElement {
     this._orgSubtab = 'gremios';
     /** @type {string} sub-sub-pestaña activa dentro de «Carrera» */
     this._careerSubtab = 'nivel';
+    /** @type {string} sub-sub-pestaña activa dentro de «O2O» */
+    this._o2oSubtab = 'conversaciones';
     /** @type {{ levelId: string, disciplines: string[], note: string }} edición inline de carrera (nivel + disciplinas + nota del cambio de nivel) */
     this._career = { levelId: '', disciplines: [], note: '' };
     /** @type {boolean} guardado de carrera en curso */
@@ -599,6 +609,7 @@ export class TeamPersonDetail extends LitElement {
       this._dimSubtab = 'seniority';
       this._orgSubtab = 'gremios';
       this._careerSubtab = 'nivel';
+      this._o2oSubtab = 'conversaciones';
       if (this.initialSubtab) {
         if (DIM_SUBTABS.some((t) => t.id === this.initialSubtab)) {
           // Deep-link a una dimensión concreta: abre el grupo «Dimensiones» en ella.
@@ -1657,6 +1668,19 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
+  /** «O2O»: conversaciones y, para sus managers, las notas privadas. Quien mira su propia ficha no ve «Privado». */
+  _renderO2O() {
+    const isSelf = Boolean(this.person?.uid) && this.person.uid === this.currentUid;
+    if (isSelf) return this._renderConversations();
+    const active = this._o2oSubtab;
+    const panel = active === 'privado'
+      ? html`<manager-notes person-id=${this.person.id}></manager-notes>`
+      : this._renderConversations();
+    return html`
+      ${this._renderNestedTabs(O2O_SUBTABS, active, 'po2o', 'Secciones de O2O', (id) => { this._o2oSubtab = id; })}
+      <div id="po2opanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="po2o-${active}" tabindex="0">${panel}</div>`;
+  }
+
   _renderConversations() {
     const c = this._conv;
     const typeLabel = (t) => CONVERSATION_TYPES.find((x) => x.value === t)?.label ?? t;
@@ -2651,7 +2675,7 @@ export class TeamPersonDetail extends LitElement {
       organizacion: () => this._renderOrganizacion(),
       carrera: () => this._renderCareer(),
       dimensiones: () => this._renderDimensions(),
-      conversations: () => this._renderConversations(),
+      conversations: () => this._renderO2O(),
       notes: () => this._renderNotes(),
       permisos: () => this._renderPermisos(),
     }[this._subtab] ?? (() => this._renderDatos());
