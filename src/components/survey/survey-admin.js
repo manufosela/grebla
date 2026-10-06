@@ -17,6 +17,7 @@ import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domai
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { selectedOnes, departmentsOf, departmentState, toggleDepartment, togglePerson, selectAll } from '../../tools/survey/domain/padronSelection.js';
+import { WIZARD_STEPS, stepBlocker, savedRecipients, linksToCreate } from '../../tools/survey/domain/surveyWizard.js';
 import { listPadron, getPadronAxes, getPadronSyncedAt, syncPadron } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
@@ -37,11 +38,14 @@ const OPS_CHOICE = ['eq', 'neq'];
 const SEGMENT_FIELDS = ['department', 'tenure', 'location', 'age'];
 const SEGMENT_LABELS = { department: 'Departamento', tenure: 'Antigüedad', location: 'Ubicación', age: 'Edad' };
 const SEGMENT_MIN = 5; // k-anonimato mínimo por grupo, aunque el umbral de la encuesta sea menor
-
+const PADRON_EDITOR = html`<survey-padron></survey-padron>`;
 export class SurveyAdmin extends LitElement {
   static properties = {
     canDelete: { type: Boolean }, // solo superadmin: el glue lo activa
-    _phase: { state: true }, // 'list' | 'edit'
+    _phase: { state: true }, // 'list' | 'wizard' | 'results'
+    /** Paso del asistente (RMR-TSK-0631) y sub-pestaña de Destinatarios ('pick' | 'padron'). */
+    _step: { state: true },
+    _recipTab: { state: true },
     _surveys: { state: true },
     _loading: { state: true },
     _confirmDeleteId: { state: true },
@@ -298,6 +302,8 @@ export class SurveyAdmin extends LitElement {
     this._renameId = null;
     this._saving = false;
     this._partSurvey = null;
+    this._step = 'questions';
+    this._recipTab = 'pick';
     this._partTokens = [];
     this._partBusy = false;
     this._padron = [];
@@ -362,7 +368,10 @@ export class SurveyAdmin extends LitElement {
     this._flowLayout = {};
     this._editTab = 'questions';
     this._error = '';
-    this._phase = 'edit';
+    this._partSurvey = null;
+    this._partTokens = [];
+    this._step = 'questions';
+    this._phase = 'wizard';
   }
 
   _edit(survey) {
@@ -379,7 +388,9 @@ export class SurveyAdmin extends LitElement {
     this._flowLayout = survey.layout ?? {};
     this._editTab = 'questions';
     this._error = '';
-    this._phase = 'edit';
+    this._step = 'questions';
+    this._phase = 'wizard';
+    this._loadParticipants(survey);
   }
 
   _loadTemplate() { this._questions = climateTemplate(); }
@@ -560,7 +571,7 @@ export class SurveyAdmin extends LitElement {
       return;
     }
     const errors = [...surveyDraftErrors({ title, questions, threshold: this._threshold }), ...flowErrors(questions)];
-    if (errors.length) { this._error = errors[0]; return; }
+    if (errors.length) { this._error = errors[0]; return null; }
     this._saving = true;
     this._error = '';
     try {
@@ -572,14 +583,63 @@ export class SurveyAdmin extends LitElement {
         thanksMessage: this._thanksMessage,
       });
       if (this._editId) await updateSurvey(this._editId, payload);
-      else await createSurvey(payload);
+      else this._editId = await createSurvey(payload);
       await this._loadList();
-      this._phase = 'list';
+      return this._editId;
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo guardar.';
+      return null;
     } finally {
       this._saving = false;
     }
+  }
+
+  /** Paso 1 → 2: guarda las preguntas y pasa a elegir a quién se envía. */
+  async _saveAndNext() {
+    const id = await this._save();
+    if (!id) return;
+    const survey = this._surveys.find((s) => s.id === id);
+    if (this._partSurvey?.id === id) this._partSurvey = survey;
+    else await this._loadParticipants(survey);
+    this._step = 'recipients';
+  }
+
+  /** Cambia de paso; al salir de Destinatarios, la selección queda guardada en la encuesta. */
+  async _goStep(step) {
+    if (this._step === 'recipients' && step !== 'recipients' && !(await this._saveRecipients())) return;
+    this._step = step;
+  }
+
+  async _saveRecipients() {
+    this._saving = true;
+    try {
+      await updateSurvey(this._editId, { recipients: [...this._padronSelected] });
+      return true;
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo guardar a quién se envía.';
+      return false;
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  get _wizardState() {
+    return {
+      surveyId: this._editId,
+      selected: selectedOnes(this._padronSelection, this._padronSelected).length,
+      links: this._partTokens.length,
+    };
+  }
+
+  async _backToList() {
+    if (this._step === 'recipients' && this._editId && !(await this._saveRecipients())) return;
+    this._phase = 'list';
+    this._loadList();
+  }
+
+  _setRecipTab(tab) {
+    this._recipTab = tab;
+    if (tab === 'pick') this._loadPadron(); // lo añadido en el padrón aparece ya para marcar
   }
 
   async _setStatus(survey, status) {
@@ -629,7 +689,8 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
-  async _openParticipants(survey) {
+  /** Padrón, selección guardada y enlaces de la encuesta, para los pasos 2-4 del asistente. */
+  async _loadParticipants(survey) {
     this._partSurvey = survey;
     this._partTokens = [];
     // El visor 🧪 y las filas desplegadas se resetean al cambiar de encuesta.
@@ -638,11 +699,10 @@ export class SurveyAdmin extends LitElement {
     this._openParts = new Set();
     this._padron = [];
     this._padronActive = true;
-    this._padronSelected = new Set();
+    this._padronSelected = savedRecipients(survey);
     this._padronSyncError = '';
-    this._error = '';
     this._padronError = '';
-    this._phase = 'participants';
+    this._recipTab = 'pick';
     // Cargas independientes: un fallo del padrón NO debe ocultarse como «vacío»
     // ni impedir ver los tokens ya generados.
     try {
@@ -783,10 +843,9 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
-  _generateFromPadron() {
-    const participants = selectedOnes(this._padronSelection, this._padronSelected);
-    if (!participants.length) { this._error = 'No hay nadie marcado.'; return; }
-    return this._createTokens(participants);
+  /** Marcados que aún no tienen enlace (RMR-TSK-0631): generar otra vez no toca los ya enviados. */
+  get _pendingLinks() {
+    return linksToCreate(selectedOnes(this._padronSelection, this._padronSelected), this._partTokens);
   }
 
   /** Marca o desmarca a una persona (RMR-TSK-0630). */
@@ -978,7 +1037,6 @@ export class SurveyAdmin extends LitElement {
     return html`
       <div class="toolbar">
         <button class="primary" @click=${() => this._new()}>Nueva encuesta</button>
-        <button class="ghost" @click=${() => { this._phase = 'padron'; }}>Padrón de empresa</button>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
@@ -999,8 +1057,7 @@ export class SurveyAdmin extends LitElement {
             <td><span class="chip ${s.status}">${STATUS_LABEL[s.status] ?? s.status}</span></td>
             <td>${(s.questions ?? []).length}</td>
             <td><div class="row-actions">
-              <button class="ghost" @click=${() => this._edit(s)}>Editar</button>
-              <button class="ghost" @click=${() => this._openParticipants(s)}>Enlaces</button>
+              <button class="primary" @click=${() => this._edit(s)}>Gestionar</button>
               <button class="ghost" @click=${() => this._openResults(s)}>Resultados</button>
               ${s.status === 'draft' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'open')}>Abrir</button>` : null}
               ${s.status === 'open' ? html`<button class="ghost" @click=${() => this._setStatus(s, 'closed')}>Cerrar</button>` : null}
@@ -1091,7 +1148,6 @@ export class SurveyAdmin extends LitElement {
   _renderEdit() {
     const TABS = [['questions', 'Preguntas'], ['flow', 'Flujo visual'], ['email', 'Correo']];
     return html`
-      <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
       <div class="field">
         <label for="t">Título de la encuesta</label>
         <input id="t" class="title" type="text" placeholder="p. ej. «Encuesta de clima — agosto»" .value=${this._title}
@@ -1105,11 +1161,59 @@ export class SurveyAdmin extends LitElement {
         ${this._editTab === 'questions' ? this._renderQuestionsTab() : null}
         ${this._editTab === 'flow' ? this._renderFlowTab() : null}
         ${this._editTab === 'email' ? this._renderEmailTab() : null}
+      </div>`;
+  }
+
+  /** Una encuesta, un camino (RMR-TSK-0631): Preguntas → Destinatarios → Enlaces → Envío. */
+  _renderWizard() {
+    const idx = WIZARD_STEPS.findIndex((s) => s.id === this._step);
+    const next = WIZARD_STEPS[idx + 1];
+    const blocker = idx > 0 ? stepBlocker(this._step, this._wizardState) : null;
+    return html`
+      <div class="toolbar"><button class="ghost" @click=${() => this._backToList()}>← Encuestas</button></div>
+      <h3>${this._editId ? this._title : 'Nueva encuesta'}</h3>
+      <div class="tabs" role="tablist" aria-label="Pasos de la encuesta">
+        ${WIZARD_STEPS.map((s, i) => html`<button class="tab ${s.id === this._step ? 'on' : ''}" role="tab"
+          aria-selected=${s.id === this._step ? 'true' : 'false'} ?disabled=${i > 0 && !this._editId}
+          @click=${() => this._goStep(s.id)}>${i + 1}. ${s.label}</button>`)}
+      </div>
+      <div class="tab-body">
+        ${this._step === 'questions' ? this._renderEdit() : null}
+        ${this._step === 'recipients' ? this._renderRecipientsStep() : null}
+        ${this._step === 'links' ? this._renderLinksStep() : null}
+        ${this._step === 'send' ? this._renderSendBox() : null}
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-bar">
-        <button class="primary" ?disabled=${this._saving} @click=${() => this._save()}>${this._saving ? 'Guardando…' : 'Guardar encuesta'}</button>
+        ${idx > 0 ? html`<button class="ghost" @click=${() => this._goStep(WIZARD_STEPS[idx - 1].id)}>← Anterior</button>` : null}
+        ${idx === 0 ? html`<button class="primary" ?disabled=${this._saving} @click=${() => this._saveAndNext()}>Guardar y seguir →</button>` : null}
+        ${idx > 0 && next ? html`<button class="primary" ?disabled=${Boolean(blocker)} @click=${() => this._goStep(next.id)}>Siguiente: ${next.label} →</button>` : null}
+        ${blocker ? html`<span class="muted">${blocker}</span>` : null}
       </div>`;
+  }
+
+  /** Paso 2: a quién se envía, o gestionar el padrón (añadir a mano, CSV, ejes) sin salir. */
+  _renderRecipientsStep() {
+    const tabs = [['pick', 'A quién se envía'], ['padron', 'Padrón de empresa']];
+    const body = this._recipTab === 'padron' ? PADRON_EDITOR : this._renderPadronBlock();
+    return html`
+      <div class="tabs" role="tablist">
+        ${tabs.map(([id, label]) => html`<button class="tab ${this._recipTab === id ? 'on' : ''}" role="tab"
+          aria-selected=${this._recipTab === id ? 'true' : 'false'} @click=${() => this._setRecipTab(id)}>${label}</button>`)}
+      </div>
+      <div class="tab-body">${body}</div>`;
+  }
+
+  /** Paso 3: un enlace personal por persona marcada. */
+  _renderLinksStep() {
+    const pending = this._pendingLinks;
+    return html`
+      <div class="save-row">
+        <button class="primary" ?disabled=${this._partBusy || !pending.length} @click=${() => this._createTokens(pending)}>
+          ${this._partBusy ? 'Generando…' : `Generar enlaces (${pending.length})`}</button>
+        ${pending.length ? null : html`<span class="muted">Todas las personas marcadas tienen ya su enlace.</span>`}
+      </div>
+      ${this._renderParticipants()}`;
   }
 
   _renderQuestionsTab() {
@@ -1236,9 +1340,8 @@ export class SurveyAdmin extends LitElement {
   /** Generar enlaces desde el padrón de empresa: solo para quien se marca (RMR-TSK-0630). */
   _renderPadronSource() {
     const sel = selectedOnes(this._padronSelection, this._padronSelected);
-    const label = this._partBusy ? 'Generando…' : `Generar enlaces para las marcadas (${sel.length})`;
     return html`<div class="field">
-      <label>El <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}): marca a quién se envía la encuesta, por departamento o persona a persona. Los metadatos (departamento, antigüedad) salen del padrón.</label>
+      <label>El <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}): marca a quién se envía la encuesta, por departamento o persona a persona. <strong>Marcadas: ${sel.length}</strong>.</label>
       <div class="q-opts">
         <span class="muted">${this._padronSyncedAt ? `Actualizado con el directorio el ${this._padronSyncedAt.toLocaleString('es-ES')}` : 'Aún no se ha actualizado con el directorio'}</span>
         <button class="ghost" ?disabled=${this._padronSyncing} @click=${() => this._refreshPadron()}>Actualizar desde el directorio</button>
@@ -1250,9 +1353,6 @@ export class SurveyAdmin extends LitElement {
           @change=${(e) => { this._padronActive = e.target.checked; }} /> Solo activos</label>
       </div>
       ${this._renderPadronPicker()}
-      <div class="save-row">
-        <button class="primary" ?disabled=${this._partBusy || !sel.length} @click=${() => this._generateFromPadron()}>${label}</button>
-      </div>
     </div>`;
   }
 
@@ -1384,15 +1484,9 @@ export class SurveyAdmin extends LitElement {
     const total = this._partTokens.length;
     const responded = this._partTokens.filter((t) => t.used).length;
     return html`
-      <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
-      <h2>${this._partSurvey.title} · Participantes</h2>
-      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Marca a quién se envía y genera sus enlaces personales.</p>
-      ${this._renderPadronBlock()}
-      ${this._error ? html`<p class="error">${this._error}</p>` : null}
+      <p class="lead">${total} con enlace · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido.</p>
       ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
-      ${total ? this._renderSendBox() : null}
       ${total ? html`
-        <h3>Participantes</h3>
         <p class="lead">Pulsa un participante para desplegar sus campos de segmentación (se guardan en su enlace, sin regenerarlo), su enlace personal y el borrado.</p>
         <div class="save-row">
           <button class="ghost" @click=${() => { this._openParts = new Set(this._partTokens.map((t) => t.token)); }}>Desplegar todo</button>
@@ -1407,10 +1501,8 @@ export class SurveyAdmin extends LitElement {
     const total = this._partTokens.length;
     const open = this._partSurvey?.status === 'open';
     return html`
-      <h3>Enviar por correo</h3>
-      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. El mensaje debe incluir <code>${LINK_PLACEHOLDER}</code> (pestaña de edición). La <strong>prueba</strong> se puede enviar con la encuesta en borrador; el envío a todos exige abrirla.</p>
+      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. El mensaje debe incluir <code>${LINK_PLACEHOLDER}</code> (paso 1, pestaña Correo). Primero mándate una <strong>prueba</strong> (no cuenta); el envío a todos exige abrir la encuesta.</p>
       ${this._sendNotice ? html`<p class="notice">${this._sendNotice}</p>` : null}
-      ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-row">
         <input type="email" placeholder="email para la prueba" .value=${this._testEmail}
           @input=${(e) => { this._testEmail = e.target.value; }} />
@@ -1432,13 +1524,13 @@ export class SurveyAdmin extends LitElement {
       ${this._sendBusy ? html`<busy-overlay message="Enviando el correo…"></busy-overlay>` : null}
       <h2>Encuestas de clima</h2>
       <p class="lead">Crea y gestiona las encuestas anónimas. Solo tú (People) ves esto; las respuestas son anónimas.</p>
-      ${this._phase === 'edit' ? this._renderEdit()
-        : this._phase === 'participants' ? this._renderParticipants()
-        : this._phase === 'results' ? this._renderResults()
-        : this._phase === 'padron' ? html`
-            <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
-            <survey-padron></survey-padron>`
-        : this._renderList()}`;
+      ${this._renderPhase()}`;
+  }
+
+  _renderPhase() {
+    if (this._phase === 'wizard') return this._renderWizard();
+    if (this._phase === 'results') return this._renderResults();
+    return this._renderList();
   }
 }
 

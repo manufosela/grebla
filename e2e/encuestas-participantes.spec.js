@@ -1,7 +1,7 @@
 /**
- * Encuestas › Enlaces (RMR-TSK-0630): el padrón es toda la empresa y la
- * encuesta va a quien se marca. Por defecto no va nadie; se marca un
- * departamento entero y se quita a una persona.
+ * Encuestas (RMR-TSK-0630/0631): cada encuesta se prepara en un asistente por
+ * pasos. El padrón es toda la empresa y la encuesta va a quien se marca: por
+ * defecto nadie; se marca un departamento entero y se quita a una persona.
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -21,8 +21,22 @@ const SURVEY = 'e2e-survey-padron';
 
 test.beforeEach(async () => {
   for (const [id, data] of Object.entries(PADRON)) await db().doc(`padron/${id}`).set(data);
-  await db().doc(`surveys/${SURVEY}`).set({ title: 'Encuesta E2E del padrón', questions: [], threshold: 5, status: 'draft', createdAt: new Date() });
+  await db().doc(`surveys/${SURVEY}`).set({
+    title: 'Encuesta E2E del padrón', threshold: 5, status: 'draft', createdAt: new Date(),
+    questions: [{ id: 'q1', type: 'scale', label: '¿Qué tal el equipo?', min: 1, max: 5 }],
+  });
 });
+
+/** Abre el asistente de la encuesta sembrada y llega a Destinatarios guardando las preguntas. */
+async function openRecipients(page) {
+  await signInAs(page, 'superadmin');
+  await page.goto('/tools/encuestas');
+  const admin = page.locator('survey-admin');
+  await admin.getByRole('row', { name: /Encuesta E2E del padrón/ }).getByRole('button', { name: 'Gestionar' }).click();
+  await admin.getByRole('button', { name: 'Guardar y seguir →' }).click();
+  await expect(admin.getByRole('tab', { name: '2. Destinatarios' })).toHaveAttribute('aria-selected', 'true');
+  return admin;
+}
 
 test.afterEach(async () => {
   for (const id of Object.keys(PADRON)) await db().doc(`padron/${id}`).delete();
@@ -30,42 +44,40 @@ test.afterEach(async () => {
   await db().doc(`surveys/${SURVEY}`).delete();
 });
 
-test('se marca un departamento entero, se quita a una persona y solo cuentan las marcadas', async ({ page }) => {
-  await signInAs(page, 'superadmin');
-  await page.goto('/tools/encuestas');
-  const admin = page.locator('survey-admin');
-  await admin.getByRole('row', { name: /Encuesta E2E del padrón/ }).getByRole('button', { name: 'Enlaces' }).click();
+test('asistente: se marca un departamento, se quita a una persona, se generan sus enlaces y se llega al envío', async ({ page }) => {
+  const admin = await openRecipients(page);
+  const siguiente = admin.getByRole('button', { name: 'Siguiente: Enlaces →' });
+  await expect(admin.getByText('Marcadas: 0')).toBeVisible(); // por defecto, nadie
+  await expect(siguiente).toBeDisabled();
 
-  const generar = admin.getByRole('button', { name: /Generar enlaces para las marcadas/ });
-  await expect(generar).toHaveText(/\(0\)/); // por defecto, nadie
-  await expect(generar).toBeDisabled();
+  await admin.getByRole('button', { name: 'Todos', exact: true }).click();
+  await expect(admin.getByText('Marcadas: 3')).toBeVisible();
+  await admin.getByRole('button', { name: 'Ninguno', exact: true }).click();
 
   await admin.getByLabel('E2E Tech', { exact: true }).check();
-  await expect(generar).toHaveText(/\(2\)/);
-
   await admin.getByRole('checkbox', { name: /Bea Padrón/ }).uncheck();
-  await expect(generar).toHaveText(/\(1\)/);
+  await expect(admin.getByText('Marcadas: 1')).toBeVisible();
   // El departamento queda a medias: ni marcado ni vacío.
   await expect(admin.getByLabel('E2E Tech', { exact: true })).toHaveJSProperty('indeterminate', true);
 
+  // Al avanzar, la selección queda guardada en la encuesta.
+  await siguiente.click();
+  await expect.poll(async () => (await db().doc(`surveys/${SURVEY}`).get()).data().recipients).toEqual(['ana.e2e@example.com']);
+
   // Solo se generan enlaces para las marcadas: Ana, y ni Bea ni Carla.
-  await generar.click();
+  await admin.getByRole('button', { name: 'Generar enlaces (1)' }).click();
   const emails = async () => (await db().collection(`surveys/${SURVEY}/tokens`).get()).docs.map((d) => d.data().email);
   await expect.poll(emails).toEqual(['ana.e2e@example.com']);
+  await expect(admin.getByRole('button', { name: 'Generar enlaces (0)' })).toBeDisabled();
 
-  await admin.getByRole('button', { name: 'Todos', exact: true }).click();
-  await expect(generar).not.toHaveText(/\(0\)|\(1\)/);
-  await admin.getByRole('button', { name: 'Ninguno', exact: true }).click();
-  await expect(generar).toHaveText(/\(0\)/);
+  await admin.getByRole('button', { name: 'Siguiente: Envío →' }).click();
+  await expect(admin.getByRole('button', { name: 'Enviar prueba' })).toBeVisible();
 });
 
 test('«Actualizar desde el directorio» trae a quien está en el censo y no en el padrón (RMR-TSK-0631)', async ({ page }) => {
   await db().doc('people/e2e-dir-dani').set({ name: 'Dani Directorio', email: 'dani.e2e@example.com', active: true });
   try {
-    await signInAs(page, 'superadmin');
-    await page.goto('/tools/encuestas');
-    const admin = page.locator('survey-admin');
-    await admin.getByRole('row', { name: /Encuesta E2E del padrón/ }).getByRole('button', { name: 'Enlaces' }).click();
+    const admin = await openRecipients(page);
     // Se ve al instante lo que ya hay: no se espera a ninguna sincronización.
     await expect(admin.getByRole('checkbox', { name: /Ana Padrón/ })).toBeVisible();
     await expect(admin.getByRole('checkbox', { name: /Dani Directorio/ })).toHaveCount(0);
