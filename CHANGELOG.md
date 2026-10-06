@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.235.2] - 2026-10-06
+
+### Corregido
+
+- **Encuestas: gestores con permiso de la herramienta.** Quien gestiona
+  Encuestas por su política (concedida en Permisos) entraba en la pantalla pero
+  no podía generar enlaces, enviar ni actualizar el padrón: el servidor solo
+  reconocía el permiso antiguo. Ahora reconoce los dos, como las reglas.
+
 ## [1.235.1] - 2026-10-06
 
 ### Corregido
