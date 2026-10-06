@@ -41,6 +41,7 @@ const SEGMENT_LABELS = { department: 'Departamento', tenure: 'Antigüedad', loca
 const SEGMENT_MIN = 5; // k-anonimato mínimo por grupo, aunque el umbral de la encuesta sea menor
 const PADRON_EDITOR = html`<survey-padron></survey-padron>`;
 const RESULT_TABS = [['all', 'Toda la empresa'], ['dept', 'Por departamento']];
+const SEND_TABS = [['compose', 'Redactar correo'], ['send', 'Enviar']];
 const PADRON_EMPTY = html`<p class="lead">El padrón está vacío. Actualízalo desde el directorio o rellénalo en «Padrón de empresa» (a mano o con un CSV).</p>`;
 export class SurveyAdmin extends LitElement {
   static properties = {
@@ -49,6 +50,9 @@ export class SurveyAdmin extends LitElement {
     /** Paso del asistente (RMR-TSK-0631) y sub-pestaña de Destinatarios ('pick' | 'padron'). */
     _step: { state: true },
     _recipTab: { state: true },
+    /** Sub-pestaña del paso Envío (RMR-TSK-0638): 'compose' | 'send'. */
+    _sendTab: { state: true },
+    _emailNotice: { state: true },
     _surveys: { state: true },
     _loading: { state: true },
     _confirmDeleteId: { state: true },
@@ -310,6 +314,8 @@ export class SurveyAdmin extends LitElement {
     this._partSurvey = null;
     this._step = 'questions';
     this._recipTab = 'pick';
+    this._sendTab = 'compose';
+    this._emailNotice = '';
     this._partTokens = [];
     this._partBusy = false;
     this._padron = [];
@@ -717,6 +723,7 @@ export class SurveyAdmin extends LitElement {
     this._padronSyncError = '';
     this._padronError = '';
     this._recipTab = 'pick';
+    this._sendTab = 'compose';
     // Cargas independientes: un fallo del padrón NO debe ocultarse como «vacío»
     // ni impedir ver los tokens ya generados.
     try {
@@ -1196,7 +1203,7 @@ export class SurveyAdmin extends LitElement {
   }
 
   _renderEdit() {
-    const TABS = [['questions', 'Preguntas'], ['flow', 'Flujo visual'], ['email', 'Correo']];
+    const TABS = [['questions', 'Preguntas'], ['flow', 'Flujo visual']];
     return html`
       <div class="field">
         <label for="t">Título de la encuesta</label>
@@ -1210,7 +1217,6 @@ export class SurveyAdmin extends LitElement {
       <div class="tab-body">
         ${this._editTab === 'questions' ? this._renderQuestionsTab() : null}
         ${this._editTab === 'flow' ? this._renderFlowTab() : null}
-        ${this._editTab === 'email' ? this._renderEmailTab() : null}
       </div>`;
   }
 
@@ -1231,7 +1237,7 @@ export class SurveyAdmin extends LitElement {
         ${this._step === 'questions' ? this._renderEdit() : null}
         ${this._step === 'recipients' ? this._renderRecipientsStep() : null}
         ${this._step === 'links' ? this._renderLinksStep() : null}
-        ${this._step === 'send' ? this._renderSendBox() : null}
+        ${this._step === 'send' ? this._renderSendStep() : null}
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div class="save-bar">
@@ -1547,12 +1553,38 @@ export class SurveyAdmin extends LitElement {
         <div class="parts-list">${this._partTokens.map((t) => this._renderPartRow(t))}</div>` : null}`;
   }
 
+  /** Paso 4 (RMR-TSK-0638): primero se redacta el correo y luego se envía, en dos sub-pestañas. */
+  _renderSendStep() {
+    const body = this._sendTab === 'send' ? this._renderSendBox() : this._renderComposeEmail();
+    return html`
+      <div class="tabs" role="tablist">
+        ${SEND_TABS.map(([id, label]) => html`<button class="tab ${this._sendTab === id ? 'on' : ''}" role="tab"
+          aria-selected=${this._sendTab === id ? 'true' : 'false'} @click=${() => { this._sendTab = id; }}>${label}</button>`)}
+      </div>
+      <div class="tab-body">${body}</div>`;
+  }
+
+  /** Redactar: asunto, cuerpo con sus variables y mensaje de gracias; se guarda con la encuesta. */
+  _renderComposeEmail() {
+    return html`
+      ${this._renderEmailTab()}
+      ${this._emailNotice ? html`<p class="notice">${this._emailNotice}</p>` : null}
+      <div class="save-row">
+        <button class="primary" ?disabled=${this._saving} @click=${() => this._saveEmail()}>Guardar correo</button>
+      </div>`;
+  }
+
+  async _saveEmail() {
+    this._emailNotice = '';
+    if (await this._save()) this._emailNotice = 'Correo guardado.';
+  }
+
   /** Envío por correo: prueba (no cuenta) y masivo (con confirmación inline). */
   _renderSendBox() {
     const total = this._partTokens.length;
     const open = this._partSurvey?.status === 'open';
     return html`
-      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. El mensaje debe incluir <code>${LINK_PLACEHOLDER}</code> (paso 1, pestaña Correo). Primero mándate una <strong>prueba</strong> (no cuenta); el envío a todos exige abrir la encuesta.</p>
+      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. El mensaje debe incluir <code>${LINK_PLACEHOLDER}</code> (pestaña «Redactar correo»). Primero mándate una <strong>prueba</strong> (no cuenta); el envío a todos exige abrir la encuesta.</p>
       ${this._sendNotice ? html`<p class="notice">${this._sendNotice}</p>` : null}
       <div class="save-row">
         <input type="email" placeholder="email para la prueba" .value=${this._testEmail}
