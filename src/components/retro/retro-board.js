@@ -153,6 +153,7 @@ export class RetroBoard extends LitElement {
     .card-text { font-size: 0.8rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .card-foot { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); }
     .xn { font-weight: 800; color: var(--rm-accent, #2a9d8f); }
+    .card-vote { align-self: flex-end; margin: 0 0.45rem 0.45rem 0; flex: 0 0 auto; }
     .groupbar { position: sticky; bottom: 0.75rem; display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; padding: 0.6rem 0.9rem; background: var(--rm-surface, #fff); border: 1px solid var(--rm-accent, #2a9d8f); border-radius: 999px; box-shadow: var(--rm-shadow, 0 6px 18px rgba(0,0,0,.15)); font-size: 0.85rem; }
     .groupbar .primary { background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); border: 0; border-radius: 999px; padding: 0.35rem 0.9rem; font: inherit; font-weight: 700; cursor: pointer; }
     .groupbar .ghost { border: 0; background: none; color: var(--rm-muted, #5b6b7d); font: inherit; cursor: pointer; }
@@ -402,6 +403,9 @@ export class RetroBoard extends LitElement {
     // Oculta: se difumina y NO se abre. Votar o comentar algo que no se ha leído
     // es justo lo que se quiere evitar hasta que la zona se revele.
     const hidden = !this._canRead(group);
+    // Revelada, se vota de un clic en la propia tarjeta (RMR-TSK-0641): abrirla
+    // para votar era un paso de más. Oculta, solo se ve el recuento.
+    const canVote = !hidden && this._open;
     return html`<div class="card">
       <button class="card-body" ?disabled=${hidden}
         aria-label=${hidden ? 'Tarjeta oculta hasta que se revele la zona' : ''}
@@ -409,11 +413,20 @@ export class RetroBoard extends LitElement {
         <span class="card-text ${hidden ? 'blurred' : ''}" aria-hidden=${hidden}>${group.text}</span>
         <span class="card-foot">
           ${many ? html`<span class="xn" title="${group.notes.length} tarjetas agrupadas">×${group.notes.length}</span>` : null}
-          <span class="votes">👍 ${group.votes}</span>
+          ${canVote ? null : html`<span class="votes">👍 ${group.votes}</span>`}
         </span>
         ${this._renderAuthors(group, hidden)}
       </button>
+      ${canVote ? this._renderCardVote(group) : null}
     </div>`;
+  }
+
+  /** «Me gusta» de la tarjeta: vota o retira el voto sobre su nota principal. */
+  _renderCardVote(group) {
+    const primary = group.notes.find((n) => n.id === group.id) ?? group.notes[0];
+    const voted = (primary?.voters ?? []).includes(this.uid);
+    return html`<button class="vote card-vote ${voted ? 'voted' : ''}" aria-pressed=${voted ? 'true' : 'false'}
+      aria-label=${voted ? 'Quitar me gusta' : 'Me gusta'} @click=${() => this._toggleVote(primary)}>👍 ${group.votes}</button>`;
   }
 
   /** Firma de la tarjeta (RMR-TSK-0285). No se pinta mientras la zona esté
