@@ -32,6 +32,7 @@ import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
 import { directoryPadronRows, padronUpsertPlan } from './directoryPadron.js';
 import { managesSurveys } from './surveyManager.js';
+import { sendTargets, isQuotaError, SEND_INTERVAL_MS } from './surveySend.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -955,28 +956,38 @@ export const sendSurveyBulkEmails = onCall(
   { region: 'europe-west1', secrets: [RESEND_API_KEY], timeoutSeconds: 540 },
   async (request) => {
     await assertSurveyManager(request.auth?.uid);
-    const { surveyId } = request.data ?? {};
+    const { surveyId, mode = 'pending' } = request.data ?? {};
     if (!surveyId) throw new HttpsError('invalid-argument', 'Falta surveyId.');
+    if (mode !== 'pending' && mode !== 'reminder') throw new HttpsError('invalid-argument', 'Modo de envío desconocido.');
     const db = getFirestore();
     const { ref, survey } = await loadSurveyForEmail(db, surveyId);
-    const tokens = await ref.collection('tokens').get();
+    const targets = sendTargets((await ref.collection('tokens').get()).docs.map((d) => ({ id: d.id, ref: d.ref, data: d.data() })), mode);
+    // Cada enlace apunta si se le envió (RMR-TSK-0643): sin eso, al pasarse del
+    // cupo de Resend nadie sabía a quién le había llegado.
     let sent = 0;
     let failed = 0;
-    for (const doc of tokens.docs) {
-      const data = doc.data();
-      if (data.test === true || !data.email) continue; // los de prueba no se reenvían
-      const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${doc.id}`;
+    let quotaReached = false;
+    for (const [i, token] of targets.entries()) {
+      if (i > 0) await new Promise((resolve) => { setTimeout(resolve, SEND_INTERVAL_MS); });
+      const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token.id}`;
+      let outcome;
       try {
         await sendResend({
           apiKey: RESEND_API_KEY.value(), from: MAIL_FROM,
-          to: data.email, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
+          to: token.data.email, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
         });
+        outcome = { sentAt: FieldValue.serverTimestamp(), sendError: FieldValue.delete() };
         sent += 1;
-      } catch {
+      } catch (err) {
+        if (isQuotaError(err)) { quotaReached = true; break; }
+        outcome = { sendError: String(err?.message ?? err).slice(0, 300) };
         failed += 1;
       }
+      // Anotarlo va aparte del envío: si falla la anotación, el correo salió igual
+      // y no se cuenta como fallido; se registra para poder reconstruirlo.
+      await token.ref.update(outcome).catch((err) => logger.error('[encuestas] no se pudo anotar el envío', { surveyId, token: token.id, err: String(err) }));
     }
-    return { sent, failed };
+    return { sent, failed, pending: targets.length - sent - failed, quotaReached };
   },
 );
 
