@@ -15,6 +15,16 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.233.0] - 2026-10-06
+
+### Cambiado
+
+- **Encuestas: el padrón es toda la empresa y la encuesta va a quien se
+  marca.** El padrón se sincroniza solo con el directorio al abrirlo (lo
+  añadido a mano se conserva). Por defecto no va nadie: arriba Todos/Ninguno y
+  un check por departamento —a medias si solo hay parte marcada—, debajo cada
+  persona. Solo se generan enlaces para las marcadas.
+
 ## [1.232.0] - 2026-10-05
 
 ### Añadido
