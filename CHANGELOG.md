@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.235.0] - 2026-10-06
+
+### Añadido
+
+- **Resultados de encuesta por departamento.** Resultados tiene dos pestañas:
+  «Toda la empresa» (lo de siempre) y «Por departamento», que muestra todas
+  las preguntas de un departamento solo si llega al mínimo de anonimato. Los
+  departamentos con menos respuestas se cuentan como ocultos, sin nombrarlos.
+
 ## [1.234.0] - 2026-10-06
 
 ### Cambiado
