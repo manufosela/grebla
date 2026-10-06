@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.235.3] - 2026-10-06
+
+### Cambiado
+
+- **Encuestas: el correo se redacta al enviar.** El paso Envío del asistente
+  tiene dos sub-pestañas: «Redactar correo» (asunto, cuerpo con `{{enlace}}` y
+  mensaje de gracias, con su botón Guardar) y «Enviar». Antes estaba escondido
+  en una pestaña del paso Preguntas.
+
 ## [1.235.2] - 2026-10-06
 
 ### Corregido
