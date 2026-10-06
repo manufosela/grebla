@@ -25,6 +25,14 @@ describe('reportRows — el informe de Notion en filas que se leen', () => {
     });
   });
 
+  it('los datos del bloque de Notion salen con su nombre (RMR-TSK-0633)', () => {
+    const report = { updates: [{ personId: 'p1', name: 'Ana', changes: { 'notion.role': { from: 'Dev', to: 'Lead' }, 'notion.team': { from: null, to: 'Core' } } }] };
+    expect(reportRows(report, nameOf).changes).toEqual([
+      { name: 'Ana', field: 'Rol (Notion)', from: 'Dev', to: 'Lead' },
+      { name: 'Ana', field: 'Equipo (Notion)', from: '—', to: 'Core' },
+    ]);
+  });
+
   it('un informe vacío o sin cambios no rompe', () => {
     expect(reportRows({}, nameOf)).toEqual({ changes: [], creates: [], skipped: [], notInNotion: [] });
     expect(reportRows({ updates: [{ personId: 'p1', name: 'Ana' }] }, nameOf).changes).toEqual([]);

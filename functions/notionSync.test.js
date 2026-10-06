@@ -63,9 +63,23 @@ describe('runNotionSync', () => {
     expect(report).toMatchObject({ at: '2026-10-03T08:00:00.000Z', applied: false, errors: [], counts: { updates: 1, creates: 0 } });
     expect(report.updates[0]).toEqual({
       personId: 'p1', name: 'Ana Pérez', fields: ['name', 'external', 'notion', 'orgBranch'],
-      changes: { name: { from: 'Ana', to: 'Ana Pérez' }, external: { from: null, to: false }, orgBranch: { from: null, to: 'engineering' } },
+      changes: expect.objectContaining({
+        name: { from: 'Ana', to: 'Ana Pérez' }, external: { from: null, to: false }, orgBranch: { from: null, to: 'engineering' },
+        // Primera vez enlazada: sus datos de Notion llegan, uno por fila.
+        'notion.role': { from: null, to: 'Dev' }, 'notion.team': { from: null, to: 'Tech' },
+      }),
     });
     expect(db.writes.map((w) => w.path)).toEqual(['config/notionSync']);
+  });
+
+  it('el bloque de Notion se informa dato a dato: un cambio solo ahí no queda invisible (RMR-TSK-0633)', async () => {
+    const base = { name: 'Ana', active: true, uid: 'u1', external: false, orgBranch: 'engineering', reportsToPersonId: null };
+    const first = setup();
+    await runNotionSync({ db: first, auth: fakeAuth({ u1: 'ana@example.com' }), fetchPages: fetchPages([page('a-1', 'Ana', 'ana@example.com')]), apply: true, now });
+    const notion = first.writes.find((w) => w.path === 'people/p1').data.notion;
+    const db = fakeDb({ people: { p1: { ...base, notion: { ...notion, role: 'Rol viejo' } } }, orgBranches: { engineering: { label: 'Tech' } } });
+    const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchPages: fetchPages([page('a-1', 'Ana', 'ana@example.com')]), apply: false, now });
+    expect(report.updates[0].changes).toEqual({ 'notion.role': { from: 'Rol viejo', to: notion.role } });
   });
 
   it('aplicando: actualiza, crea y guarda el informe', async () => {
