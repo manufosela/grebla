@@ -72,6 +72,12 @@ test('asistente: se marca un departamento, se quita a una persona, se generan su
 
   await admin.getByRole('button', { name: 'Siguiente: Envío →' }).click();
   await expect(admin.getByRole('button', { name: 'Enviar prueba' })).toBeVisible();
+
+  // En borrador no se envía a todos; se abre desde el mismo paso.
+  await expect(admin.getByRole('button', { name: 'Enviar a todos (1)' })).toBeDisabled();
+  await admin.getByRole('button', { name: 'Abrir la encuesta' }).click();
+  await expect(admin.getByRole('button', { name: 'Enviar a todos (1)' })).toBeEnabled();
+  await expect.poll(async () => (await db().doc(`surveys/${SURVEY}`).get()).data().status).toBe('open');
 });
 
 test('«Actualizar desde el directorio» trae a quien está en el censo y no en el padrón (RMR-TSK-0631)', async ({ page }) => {

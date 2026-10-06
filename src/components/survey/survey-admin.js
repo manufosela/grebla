@@ -39,6 +39,7 @@ const SEGMENT_FIELDS = ['department', 'tenure', 'location', 'age'];
 const SEGMENT_LABELS = { department: 'Departamento', tenure: 'Antigüedad', location: 'Ubicación', age: 'Edad' };
 const SEGMENT_MIN = 5; // k-anonimato mínimo por grupo, aunque el umbral de la encuesta sea menor
 const PADRON_EDITOR = html`<survey-padron></survey-padron>`;
+const PADRON_EMPTY = html`<p class="lead">El padrón está vacío. Actualízalo desde el directorio o rellénalo en «Padrón de empresa» (a mano o con un CSV).</p>`;
 export class SurveyAdmin extends LitElement {
   static properties = {
     canDelete: { type: Boolean }, // solo superadmin: el glue lo activa
@@ -635,6 +636,12 @@ export class SurveyAdmin extends LitElement {
     if (this._step === 'recipients' && this._editId && !(await this._saveRecipients())) return;
     this._phase = 'list';
     this._loadList();
+  }
+
+  /** Paso 4: abrir la encuesta (borrador → abierta) sin salir del asistente. */
+  async _openSurveyNow() {
+    await this._setStatus(this._partSurvey, 'open');
+    this._partSurvey = this._surveys.find((s) => s.id === this._partSurvey.id) ?? this._partSurvey;
   }
 
   _setRecipTab(tab) {
@@ -1333,8 +1340,15 @@ export class SurveyAdmin extends LitElement {
   /** Bloque del padrón en Participantes: error de carga, vacío o el generador. */
   _renderPadronBlock() {
     if (this._padronError) return html`<p class="error">No se pudo cargar el padrón: ${this._padronError}</p>`;
-    if (this._padron.length) return this._renderPadronSource();
-    return html`<p class="lead">El padrón está vacío. Rellénalo en «Padrón de empresa» (a mano o importando un CSV).</p>`;
+    // La barra de sincronización va SIEMPRE: con el padrón vacío es la salida.
+    return html`
+      <div class="q-opts">
+        <span class="muted">${this._padronSyncedAt ? `Actualizado con el directorio el ${this._padronSyncedAt.toLocaleString('es-ES')}` : 'Aún no se ha actualizado con el directorio'}</span>
+        <button class="ghost" ?disabled=${this._padronSyncing} @click=${() => this._refreshPadron()}>Actualizar desde el directorio</button>
+      </div>
+      ${this._padronSyncError ? html`<p class="error">${this._padronSyncError}</p>` : null}
+      ${this._padronSyncing ? html`<busy-overlay message="Actualizando el padrón…"></busy-overlay>` : null}
+      ${this._padron.length ? this._renderPadronSource() : PADRON_EMPTY}`;
   }
 
   /** Generar enlaces desde el padrón de empresa: solo para quien se marca (RMR-TSK-0630). */
@@ -1342,12 +1356,6 @@ export class SurveyAdmin extends LitElement {
     const sel = selectedOnes(this._padronSelection, this._padronSelected);
     return html`<div class="field">
       <label>El <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}): marca a quién se envía la encuesta, por departamento o persona a persona. <strong>Marcadas: ${sel.length}</strong>.</label>
-      <div class="q-opts">
-        <span class="muted">${this._padronSyncedAt ? `Actualizado con el directorio el ${this._padronSyncedAt.toLocaleString('es-ES')}` : 'Aún no se ha actualizado con el directorio'}</span>
-        <button class="ghost" ?disabled=${this._padronSyncing} @click=${() => this._refreshPadron()}>Actualizar desde el directorio</button>
-      </div>
-      ${this._padronSyncError ? html`<p class="error">${this._padronSyncError}</p>` : null}
-      ${this._padronSyncing ? html`<busy-overlay message="Actualizando el padrón…"></busy-overlay>` : null}
       <div class="q-opts">
         <label><input type="checkbox" .checked=${this._padronActive}
           @change=${(e) => { this._padronActive = e.target.checked; }} /> Solo activos</label>
@@ -1508,14 +1516,20 @@ export class SurveyAdmin extends LitElement {
           @input=${(e) => { this._testEmail = e.target.value; }} />
         <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._sendTest()}>Enviar prueba</button>
       </div>
-      <div class="save-row">
-        ${this._confirmBulk
-          ? html`<button class="primary" ?disabled=${this._sendBusy} @click=${() => this._sendBulk()}>${this._sendBusy ? 'Enviando…' : `Confirmar envío a ${total}`}</button>
-              <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._cancelBulk()}>Cancelar</button>`
-          : html`<button class="primary" ?disabled=${!open || !total || this._sendBusy} @click=${() => this._askBulk()}>Enviar a todos (${total})</button>
-              ${open ? null : html`<span class="muted">Abre la encuesta para poder enviarla a todos.</span>`}`}
-      </div>
+      <div class="save-row">${this._renderBulkActions(total, open)}</div>
       ${this._renderTestAnswers()}`;
+  }
+
+  /** Enviar a todos (con confirmación inline); en borrador, antes hay que abrir la encuesta. */
+  _renderBulkActions(total, open) {
+    if (this._confirmBulk) {
+      const label = this._sendBusy ? 'Enviando…' : `Confirmar envío a ${total}`;
+      return html`<button class="primary" ?disabled=${this._sendBusy} @click=${() => this._sendBulk()}>${label}</button>
+        <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._cancelBulk()}>Cancelar</button>`;
+    }
+    const openButton = open ? null : html`<button class="ghost" @click=${() => this._openSurveyNow()}>Abrir la encuesta</button>`;
+    return html`<button class="primary" ?disabled=${!open || !total || this._sendBusy} @click=${() => this._askBulk()}>Enviar a todos (${total})</button>
+      ${openButton}`;
   }
 
   render() {
