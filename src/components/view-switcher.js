@@ -18,6 +18,8 @@
 import { LitElement, html, css } from 'lit';
 import { onUserChanged } from '../lib/auth.js';
 import { resolveViews } from '../lib/access.js';
+import { getOrgIdentity } from '../lib/orgConfig.js';
+import { labelOf } from '../tools/admin/domain/orgIdentity.js';
 
 const VIEW_FLAG = 'grebla-view';
 
@@ -25,7 +27,8 @@ const VIEW_FLAG = 'grebla-view';
 const VIEW_META = {
   gestion: { label: 'Admin (superadmin)', title: 'El hub con todo, incluida la administración', path: '/', flag: 'admin' },
   manager: { label: 'Manager', title: 'El hub como lo ve quien lleva un equipo', path: '/', flag: 'leader' },
-  engineer: { label: 'Ingeniero', title: 'El hub como lo ve un ingeniero', path: '/', flag: 'engineer' },
+  // Su etiqueta es la de la instancia (memberLabel de Identidad, RMR-TSK-0639): se pone al pintar.
+  engineer: { label: 'Tripulante', title: 'El hub como lo ve quien tiene ficha', path: '/', flag: 'engineer' },
   empleado: { label: 'Empleado', title: 'El hub como lo ve quien no está en ningún equipo', path: '/', flag: 'empleado' },
 };
 
@@ -46,6 +49,7 @@ export class ViewSwitcher extends LitElement {
   static properties = {
     _views: { state: true },
     _current: { state: true },
+    _memberLabel: { state: true },
   };
 
   static styles = css`
@@ -78,6 +82,7 @@ export class ViewSwitcher extends LitElement {
     super();
     this._views = [];
     this._current = currentView();
+    this._memberLabel = VIEW_META.engineer.label;
     this._unsub = null;
   }
 
@@ -85,7 +90,8 @@ export class ViewSwitcher extends LitElement {
     super.connectedCallback();
     this._unsub = onUserChanged(async (user) => {
       try {
-        const { views } = await resolveViews(user);
+        const [{ views }, identity] = await Promise.all([resolveViews(user), getOrgIdentity()]);
+        this._memberLabel = labelOf(identity, 'memberLabel');
         // Solo tiene sentido conmutar con 2+ vistas.
         this._views = views.length >= 2 ? views : [];
       } catch {
@@ -123,7 +129,7 @@ export class ViewSwitcher extends LitElement {
             aria-pressed=${on}
             title=${meta.title}
             @click=${() => this._select(view)}
-          >${meta.label}</button>`;
+          >${view === 'engineer' ? this._memberLabel : meta.label}</button>`;
         })}
       </div>
     `;

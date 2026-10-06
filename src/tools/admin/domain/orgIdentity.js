@@ -38,6 +38,13 @@ export const IDENTITY_FIELDS = Object.freeze([
     placeholder: 'p. ej. Toda la tribbu',
   }),
   Object.freeze({
+    key: 'memberLabel',
+    label: 'Cómo se llama quien tiene ficha',
+    hint: 'La etiqueta junto a su nombre y en el selector de vistas (RMR-TSK-0639). Vacío: «Tripulante».',
+    fallback: 'Tripulante',
+    placeholder: 'p. ej. TRIBBUlante',
+  }),
+  Object.freeze({
     key: 'usersCrownLabel',
     label: 'Corona del organigrama',
     hint: 'Quiénes están arriba del todo en la pirámide invertida. Vacío: no se muestra.',

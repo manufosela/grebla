@@ -386,7 +386,9 @@ describe('predicados de ejes (RMR-TSK-0310) — adiós al role derivado', () => 
     expect(accessLabel({ instanceAccess: 'viewer', functionalRole: null })).toBe('Viewer');
     expect(accessLabel({ instanceAccess: null, functionalRole: 'supermanager' })).toBe('Head');
     expect(accessLabel({ instanceAccess: null, functionalRole: 'leader' })).toBe('Manager');
-    expect(accessLabel({ instanceAccess: null, functionalRole: 'engineer' })).toBe('Ingeniero/a');
+    // Quien tiene ficha no es «ingeniero/a» por tenerla (RMR-TSK-0639): se llama como diga la instancia.
+    expect(accessLabel({ instanceAccess: null, functionalRole: 'engineer' })).toBe('Tripulante');
+    expect(accessLabel({ instanceAccess: null, functionalRole: 'engineer' }, 'TRIBBUlante')).toBe('TRIBBUlante');
     expect(accessLabel({ instanceAccess: null, functionalRole: null })).toBe(null);
   });
 });
