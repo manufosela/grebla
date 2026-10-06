@@ -31,6 +31,7 @@ import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
 import { directoryPadronRows, padronUpsertPlan } from './directoryPadron.js';
+import { managesSurveys } from './surveyManager.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -45,10 +46,9 @@ async function isAdmin(uid) {
   return snap.exists;
 }
 
-/** Gestor de encuestas (People): gestiona /surveys sin ser superadmin. @param {string} uid */
-async function isSurveyAdmin(uid) {
-  const snap = await getFirestore().doc(`surveyAdmins/${uid}`).get();
-  return snap.exists;
+/** Gestor de encuestas (People): por política o legacy, como las reglas. @param {string} uid */
+function isSurveyAdmin(uid) {
+  return managesSurveys(getFirestore(), uid);
 }
 
 export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => {
