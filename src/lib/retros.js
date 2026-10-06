@@ -342,6 +342,20 @@ export function listOpenActions(ownerLeaderUid) {
 }
 
 /**
+ * Participantes de una retro con su nombre (RMR-TSK-0642): entre ellos se elige
+ * el responsable de una acción. Lo sirve la callable `retroParticipants`.
+ * @param {string} retroId
+ * @returns {Promise<Array<{ uid: string, name: string }>>}
+ */
+export async function listRetroParticipants(retroId) {
+  const { getRegionalFunctions } = await import('./firebase.js');
+  const { httpsCallable } = await import('firebase/functions');
+  const res = await httpsCallable(await getRegionalFunctions(), 'retroParticipants')({ retroId });
+  if (!Array.isArray(res.data?.participants)) throw new Error('Los participantes han llegado mal formados.');
+  return res.data.participants;
+}
+
+/**
  * Roster ({uid, name} de las personas con cuenta) para el selector de owner: el
  * equipo de un líder o, si se pasa una rama, el de todos sus líderes. Solo lo
  * puede leer el propio líder o el supermanager de la rama (reglas de /people); el

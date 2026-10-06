@@ -8,7 +8,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import './retro-action-row.js';
-import { listRetroActions, addAction, setActionStatus } from '../../lib/retros.js';
+import { listRetroActions, addAction, setActionStatus, listRetroParticipants } from '../../lib/retros.js';
 
 export class RetroActions extends LitElement {
   static properties = {
@@ -18,6 +18,8 @@ export class RetroActions extends LitElement {
     scope: { attribute: false },
     members: { attribute: false },
     _actions: { state: true },
+    /** Participantes de la retro (RMR-TSK-0642): entre ellos se elige responsable. */
+    _participants: { state: true },
     _newText: { state: true },
     _newOwners: { state: true },
     _loading: { state: true },
@@ -46,6 +48,7 @@ export class RetroActions extends LitElement {
     this.scope = { type: 'team', label: null };
     this.members = [];
     this._actions = [];
+    this._participants = [];
     this._newText = '';
     this._newOwners = [];
     this._loading = false;
@@ -56,6 +59,7 @@ export class RetroActions extends LitElement {
   updated(changed) {
     if (changed.has('retroId') && this.retroId && this.retroId !== this._loadedFor) {
       this._loadedFor = this.retroId;
+      this._participants = [];
       this._load();
     }
   }
@@ -66,7 +70,10 @@ export class RetroActions extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._actions = await listRetroActions(this.retroId);
+      [this._actions, this._participants] = await Promise.all([
+        listRetroActions(this.retroId),
+        this._participants.length ? this._participants : listRetroParticipants(this.retroId),
+      ]);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar las acciones.';
     } finally {
@@ -85,7 +92,7 @@ export class RetroActions extends LitElement {
     if (!text || !this._canManage) return;
     this._error = '';
     try {
-      const ownerNames = this._newOwners.map((uid) => this.members.find((m) => m.uid === uid)?.name ?? 'Alguien');
+      const ownerNames = this._newOwners.map((uid) => this._participants.find((m) => m.uid === uid)?.name ?? 'Alguien');
       await addAction({ text, owners: this._newOwners, ownerNames, ownerLeaderUid: this.leaderUid, scope: this.scope, fromRetroId: this.retroId });
       this._newText = '';
       this._newOwners = [];
@@ -111,8 +118,9 @@ export class RetroActions extends LitElement {
         <input type="text" placeholder="Nueva acción…" .value=${this._newText}
           @input=${(e) => { this._newText = e.target.value; }}
           @keydown=${(e) => { if (e.key === 'Enter') this._add(); }} />
+        <p class="h">Responsable</p>
         <div class="owners">
-          ${this.members.map((m) => html`
+          ${this._participants.map((m) => html`
             <button type="button" class="owner-chip ${this._newOwners.includes(m.uid) ? 'on' : ''}" @click=${() => this._toggleOwner(m.uid)}>
               ${this._newOwners.includes(m.uid) ? '✓' : '+'} ${m.name}
             </button>`)}
@@ -127,7 +135,7 @@ export class RetroActions extends LitElement {
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       <div @retro-toggle=${(e) => this._toggle(e.detail.action)}>
         ${this._actions.length
-          ? this._actions.map((a) => html`<retro-action-row .action=${a} .uid=${this.uid} .leaderUid=${this.leaderUid} .members=${this.members}></retro-action-row>`)
+          ? this._actions.map((a) => html`<retro-action-row .action=${a} .uid=${this.uid} .leaderUid=${this.leaderUid} .members=${this._participants}></retro-action-row>`)
           : html`<p class="empty">Aún no hay acciones.</p>`}
       </div>
       ${this._renderAdd()}
