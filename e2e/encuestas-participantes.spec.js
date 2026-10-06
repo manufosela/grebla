@@ -71,6 +71,13 @@ test('asistente: se marca un departamento, se quita a una persona, se generan su
   await expect(admin.getByRole('button', { name: 'Generar enlaces (0)' })).toBeDisabled();
 
   await admin.getByRole('button', { name: 'Siguiente: Envío →' }).click();
+  // Primero se redacta el correo (RMR-TSK-0638): asunto y cuerpo con {{enlace}}, y se guarda.
+  await admin.getByLabel('Asunto').fill('Tu opinión cuenta');
+  await admin.getByRole('button', { name: 'Guardar correo' }).click();
+  await expect(admin.getByText('Correo guardado.')).toBeVisible();
+  await expect.poll(async () => (await db().doc(`surveys/${SURVEY}`).get()).data().email?.subject).toBe('Tu opinión cuenta');
+
+  await admin.getByRole('tab', { name: 'Enviar' }).click();
   await expect(admin.getByRole('button', { name: 'Enviar prueba' })).toBeVisible();
 
   // En borrador no se envía a todos; se abre desde el mismo paso.
