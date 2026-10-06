@@ -29,3 +29,33 @@ export function directoryPadronRows(people, branchLabels) {
   }
   return rows;
 }
+
+const SYNCED_FIELDS = ['name', 'department', 'hireDate'];
+
+/**
+ * Qué escribir en /padron para dejarlo al día con el directorio (RMR-TSK-0631).
+ * Upsert por email como el CSV: solo actualiza los campos con valor que cambian
+ * (nunca vacía lo que People ya cargó) y da de alta a quien falta. No borra:
+ * quitar a alguien del padrón es una decisión de People.
+ * @param {Array<Record<string, any>>} existing documentos actuales de /padron (con id)
+ * @param {ReturnType<typeof directoryPadronRows>} rows
+ * @returns {{ updates: Array<{ id: string, patch: Record<string, string> }>, adds: Array<Record<string, any>> }}
+ */
+export function padronUpsertPlan(existing, rows) {
+  const byEmail = new Map(existing.filter((p) => norm(p.email)).map((p) => [norm(p.email), p]));
+  const updates = [];
+  const adds = [];
+  for (const row of rows) {
+    const current = byEmail.get(row.email);
+    if (!current) {
+      const person = { email: row.email, name: row.name, department: row.department, hireDate: row.hireDate, birthDate: null, location: null, active: true };
+      adds.push(person);
+      byEmail.set(row.email, person);
+      continue;
+    }
+    if (!current.id) continue;
+    const patch = Object.fromEntries(SYNCED_FIELDS.filter((k) => row[k] && row[k] !== current[k]).map((k) => [k, row[k]]));
+    if (Object.keys(patch).length > 0) updates.push({ id: current.id, patch });
+  }
+  return { updates, adds };
+}

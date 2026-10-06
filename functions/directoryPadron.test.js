@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { directoryPadronRows } from './directoryPadron.js';
+import { directoryPadronRows, padronUpsertPlan } from './directoryPadron.js';
 
 const branches = new Map([['engineering', 'Tech'], ['people', 'PeopOps']]);
 const person = (id, data, authEmail = null) => ({ id, data: { active: true, ...data }, authEmail });
@@ -33,5 +33,35 @@ describe('directoryPadronRows (RMR-TSK-0629) — el padrón de encuestas desde e
   it('un departamento fuera del catálogo se queda sin nombre, no con su id', () => {
     const [row] = directoryPadronRows([person('p1', { name: 'Eva', email: 'eva@example.com', orgBranch: 'data' })], branches);
     expect(row.department).toBeNull();
+  });
+});
+
+describe('padronUpsertPlan (RMR-TSK-0631) — sincronizar sin pisar lo que el padrón ya sabe', () => {
+  const existing = [
+    { id: 'x1', email: 'Ana@Example.com', name: 'Ana', department: 'Tech', location: 'Madrid' },
+    { id: '_axes', axes: [] },
+  ];
+
+  it('actualiza por email solo los campos que trae el directorio, sin vaciar ninguno', () => {
+    const plan = padronUpsertPlan(existing, [{ email: 'ana@example.com', name: 'Ana G.', department: null, hireDate: '2024-01-15' }]);
+    expect(plan.updates).toEqual([{ id: 'x1', patch: { name: 'Ana G.', hireDate: '2024-01-15' } }]);
+    expect(plan.adds).toEqual([]);
+  });
+
+  it('da de alta a quien no estaba, activo y con los campos ausentes a null', () => {
+    const plan = padronUpsertPlan(existing, [{ email: 'bea@example.com', name: 'Bea', department: 'Tech', hireDate: null }]);
+    expect(plan.adds).toEqual([{
+      email: 'bea@example.com', name: 'Bea', department: 'Tech', hireDate: null, birthDate: null, location: null, active: true,
+    }]);
+  });
+
+  it('el mismo email dos veces en el directorio da una sola alta', () => {
+    const row = { email: 'bea@example.com', name: 'Bea', department: null, hireDate: null };
+    expect(padronUpsertPlan([], [row, { ...row, name: 'Bea bis' }]).adds.map((p) => p.name)).toEqual(['Bea']);
+  });
+
+  it('una fila sin cambios no genera escritura; los documentos internos no son personas', () => {
+    const plan = padronUpsertPlan(existing, [{ email: 'ana@example.com', name: 'Ana', department: 'Tech', hireDate: null }]);
+    expect(plan).toEqual({ updates: [], adds: [] });
   });
 });
