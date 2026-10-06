@@ -17,7 +17,7 @@ import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domai
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { selectedOnes, departmentsOf, departmentState, toggleDepartment, togglePerson, selectAll } from '../../tools/survey/domain/padronSelection.js';
-import { WIZARD_STEPS, stepBlocker, savedRecipients, linksToCreate } from '../../tools/survey/domain/surveyWizard.js';
+import { WIZARD_STEPS, stepBlocker, savedRecipients, linksToCreate, sendCounts, bulkNotice } from '../../tools/survey/domain/surveyWizard.js';
 import { listPadron, getPadronAxes, getPadronSyncedAt, syncPadron } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
@@ -107,6 +107,7 @@ export class SurveyAdmin extends LitElement {
     _thanksMessage: { state: true },
     _openParts: { state: true },
     _sendNotice: { state: true },
+    /** Envío masivo pendiente de confirmar: null | 'pending' | 'reminder' (RMR-TSK-0643). */
     _confirmBulk: { state: true },
     _copiedAll: { state: true },
     _resSurvey: { state: true },
@@ -334,7 +335,7 @@ export class SurveyAdmin extends LitElement {
     /** Tokens con la fila desplegada en la lista de participantes. @type {Set<string>} */
     this._openParts = new Set();
     this._sendNotice = '';
-    this._confirmBulk = false;
+    this._confirmBulk = null;
     this._copiedAll = false;
     this._resSurvey = null;
     this._resAnswers = [];
@@ -847,16 +848,19 @@ export class SurveyAdmin extends LitElement {
             )}`;
   }
 
-  _askBulk() { this._confirmBulk = true; this._error = ''; this._sendNotice = ''; }
-  _cancelBulk() { this._confirmBulk = false; }
+  _askBulk(mode) { this._confirmBulk = mode; this._error = ''; this._sendNotice = ''; }
+  _cancelBulk() { this._confirmBulk = null; }
 
   /** Envío masivo a todos los participantes (tras confirmación inline). */
+  /** Envío masivo en el modo confirmado ('pending' | 'reminder'); recarga los enlaces para ver a quién llegó. */
   async _sendBulk() {
+    const mode = this._confirmBulk;
     this._sendBusy = true; this._error = ''; this._sendNotice = '';
     try {
-      const { sent, failed } = await sendSurveyBulkEmails(this._partSurvey.id);
-      this._confirmBulk = false;
-      this._sendNotice = `Enviados ${sent} correo${sent === 1 ? '' : 's'}${failed ? `, ${failed} fallido${failed === 1 ? '' : 's'}` : ''}.`;
+      const result = await sendSurveyBulkEmails(this._partSurvey.id, mode);
+      this._confirmBulk = null;
+      this._sendNotice = bulkNotice(result);
+      this._partTokens = (await listTokens(this._partSurvey.id)).filter((t) => t.test !== true);
     } catch (err) {
       this._error = this._sendMsg(err);
     } finally {
@@ -1595,15 +1599,25 @@ export class SurveyAdmin extends LitElement {
       ${this._renderTestAnswers()}`;
   }
 
-  /** Enviar a todos (con confirmación inline); en borrador, antes hay que abrir la encuesta. */
+  /**
+   * «Enviar a quienes faltan» (sin correo registrado) y «Enviar a todos los que
+   * no han respondido» —hayan recibido el correo o no: los envíos anteriores al
+   * registro no constan— (RMR-TSK-0643), con confirmación en línea; en
+   * borrador, antes hay que abrir la encuesta.
+   */
   _renderBulkActions(total, open) {
+    const counts = sendCounts(this._partTokens);
     if (this._confirmBulk) {
-      const label = this._sendBusy ? 'Enviando…' : `Confirmar envío a ${total}`;
+      const n = this._confirmBulk === 'reminder' ? counts.unanswered : counts.pending;
+      const label = this._sendBusy ? 'Enviando…' : `Confirmar envío a ${n}`;
       return html`<button class="primary" ?disabled=${this._sendBusy} @click=${() => this._sendBulk()}>${label}</button>
         <button class="ghost" ?disabled=${this._sendBusy} @click=${() => this._cancelBulk()}>Cancelar</button>`;
     }
     const openButton = open ? null : html`<button class="ghost" @click=${() => this._openSurveyNow()}>Abrir la encuesta</button>`;
-    return html`<button class="primary" ?disabled=${!open || !total || this._sendBusy} @click=${() => this._askBulk()}>Enviar a todos (${total})</button>
+    const off = !open || !total || this._sendBusy;
+    return html`<span class="muted">Con correo enviado: ${counts.sent} · Faltan: ${counts.pending} · Sin responder: ${counts.unanswered}</span>
+      <button class="primary" ?disabled=${off || !counts.pending} @click=${() => this._askBulk('pending')}>Enviar a quienes faltan (${counts.pending})</button>
+      <button class="ghost" ?disabled=${off || !counts.unanswered} @click=${() => this._askBulk('reminder')}>Enviar a todos los que no han respondido (${counts.unanswered})</button>
       ${openButton}`;
   }
 

@@ -81,9 +81,11 @@ test('asistente: se marca un departamento, se quita a una persona, se generan su
   await expect(admin.getByRole('button', { name: 'Enviar prueba' })).toBeVisible();
 
   // En borrador no se envía a todos; se abre desde el mismo paso.
-  await expect(admin.getByRole('button', { name: 'Enviar a todos (1)' })).toBeDisabled();
+  await expect(admin.getByText('Con correo enviado: 0 · Faltan: 1 · Sin responder: 1')).toBeVisible();
+  await expect(admin.getByRole('button', { name: 'Enviar a quienes faltan (1)' })).toBeDisabled();
   await admin.getByRole('button', { name: 'Abrir la encuesta' }).click();
-  await expect(admin.getByRole('button', { name: 'Enviar a todos (1)' })).toBeEnabled();
+  await expect(admin.getByRole('button', { name: 'Enviar a quienes faltan (1)' })).toBeEnabled();
+  await expect(admin.getByRole('button', { name: 'Enviar a todos los que no han respondido (1)' })).toBeEnabled();
   await expect.poll(async () => (await db().doc(`surveys/${SURVEY}`).get()).data().status).toBe('open');
 });
 

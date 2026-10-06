@@ -44,3 +44,33 @@ export function linksToCreate(marked, tokens) {
   const have = new Set(tokens.filter((t) => t.email).map((t) => key(t.email)));
   return marked.filter((p) => !have.has(key(p.email)));
 }
+
+/**
+ * Lo que se dice tras un envío masivo (RMR-TSK-0643). Si Resend llega a su
+ * límite, se dice cuántos quedan y qué hacer: nada se queda sin contar.
+ * @param {{ sent: number, failed: number, pending: number, quotaReached: boolean }} result
+ */
+export function bulkNotice({ sent, failed, pending, quotaReached }) {
+  const parts = [`Enviados ${sent} correo${sent === 1 ? '' : 's'}.`];
+  if (failed) parts.push(`${failed} fallaron: se ve el motivo en su enlace y se pueden reintentar con «Enviar a quienes faltan».`);
+  if (quotaReached) parts.push(`Resend ha llegado a su límite de envíos: quedan ${pending} sin enviar. Pulsa «Enviar a quienes faltan» cuando se renueve el cupo.`);
+  return parts.join(' ');
+}
+
+/**
+ * Recuentos del paso Envío (RMR-TSK-0643), con el mismo criterio que el
+ * servidor: «faltan» = sin correo enviado y sin responder; «sin responder» =
+ * todos los que no han respondido, se les enviara o no (los envíos anteriores
+ * al registro de sentAt no constan, así que excluirlos dejaría gente fuera).
+ * Enlaces sin email no cuentan.
+ * @param {Array<{ email?: string, used?: boolean, sentAt?: unknown }>} tokens
+ */
+export function sendCounts(tokens) {
+  const withEmail = tokens.filter((t) => t.email);
+  const unanswered = withEmail.filter((t) => t.used !== true);
+  return {
+    sent: withEmail.filter((t) => t.sentAt).length,
+    pending: unanswered.filter((t) => !t.sentAt).length,
+    unanswered: unanswered.length,
+  };
+}
