@@ -123,11 +123,16 @@ export async function sendSurveyTestEmail(surveyId, to) {
   return data;
 }
 
-/** Envío MASIVO: manda a cada participante su enlace. @returns {Promise<{sent,failed}>} */
-export async function sendSurveyBulkEmails(surveyId) {
+/**
+ * Envío MASIVO (RMR-TSK-0643): `pending` a quienes aún no se les envió;
+ * `reminder` a quienes no han respondido. Para en el límite de Resend.
+ * @returns {Promise<{ sent: number, failed: number, pending: number, quotaReached: boolean }>}
+ */
+export async function sendSurveyBulkEmails(surveyId, mode = 'pending') {
   const fn = await callable('sendSurveyBulkEmails');
-  const res = await fn({ surveyId });
-  return res.data ?? { sent: 0, failed: 0 };
+  const res = await fn({ surveyId, mode });
+  if (!Number.isInteger(res.data?.sent)) throw new Error('El envío ha respondido mal formado.');
+  return res.data;
 }
 
 /**
