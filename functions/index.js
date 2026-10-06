@@ -8,6 +8,7 @@
  */
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { fetchPortalMetrics, PortalError, PORTAL_ERRORS } from './portalMetrics.js';
@@ -29,7 +30,7 @@ import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, conversatio
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
-import { directoryPadronRows } from './directoryPadron.js';
+import { directoryPadronRows, padronUpsertPlan } from './directoryPadron.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
@@ -2170,7 +2171,11 @@ export const directoryPadron = onCall({ region: 'europe-west1' }, async (request
   if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
     throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede cargar el padrón.');
   }
-  const db = getFirestore();
+  return { rows: await readDirectoryRows(getFirestore()) };
+});
+
+/** Las filas del padrón que salen del censo: personas activas con su email (ficha, invitación o cuenta). */
+async function readDirectoryRows(db) {
   const [peopleSnap, branchesSnap] = await Promise.all([db.collection('people').get(), db.collection('orgBranches').get()]);
   const people = peopleSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
   const uids = people.map((p) => p.data.uid).filter((u) => typeof u === 'string' && u);
@@ -2180,8 +2185,63 @@ export const directoryPadron = onCall({ region: 'europe-west1' }, async (request
     for (const u of users) authEmail.set(u.uid, u.email ?? null);
   }
   const labels = new Map(branchesSnap.docs.map((d) => [d.id, d.data().label ?? d.id]));
-  const rows = directoryPadronRows(people.map((p) => ({ ...p, authEmail: authEmail.get(p.data.uid) ?? null })), labels);
-  return { rows };
+  return directoryPadronRows(people.map((p) => ({ ...p, authEmail: authEmail.get(p.data.uid) ?? null })), labels);
+}
+
+/**
+ * Deja /padron al día con el directorio (RMR-TSK-0631) y anota cuándo en
+ * /padron/_sync, para que las encuestas lean el padrón al instante en vez de
+ * esperar a cargarlo. Corre cada noche y bajo demanda (botón «Actualizar»).
+ */
+async function syncPadronFromDirectory() {
+  const db = getFirestore();
+  const lock = db.doc('padron/_syncLock');
+  const owner = randomBytes(12).toString('hex');
+  await db.runTransaction(async (tx) => {
+    const held = await tx.get(lock);
+    if (held.exists && Date.now() - held.data().startedAt < PADRON_SYNC_LOCK_MS) {
+      throw new HttpsError('aborted', 'Ya hay una actualización del padrón en curso; prueba en un minuto.');
+    }
+    tx.set(lock, { startedAt: Date.now(), owner });
+  });
+  try {
+    return await writePadronFromDirectory(db);
+  } finally {
+    // Solo suelta SU cerrojo: si caducó y otra ejecución lo tomó, es de ella.
+    await db.runTransaction(async (tx) => {
+      const held = await tx.get(lock);
+      if (held.exists && held.data().owner === owner) tx.delete(lock);
+    });
+  }
+}
+
+/** Un cerrojo más viejo que esto es de una ejecución que murió sin soltarlo. */
+const PADRON_SYNC_LOCK_MS = 10 * 60 * 1000;
+
+async function writePadronFromDirectory(db) {
+  const [directory, padronSnap] = await Promise.all([readDirectoryRows(db), db.collection('padron').get()]);
+  const { updates, adds } = padronUpsertPlan(padronSnap.docs.map((d) => ({ id: d.id, ...d.data() })), directory);
+  const writer = db.bulkWriter();
+  for (const { id, patch } of updates) writer.update(db.doc(`padron/${id}`), patch);
+  for (const person of adds) writer.create(db.collection('padron').doc(), person);
+  const summary = { at: FieldValue.serverTimestamp(), added: adds.length, updated: updates.length };
+  writer.set(db.doc('padron/_sync'), summary);
+  await writer.close();
+  return { added: adds.length, updated: updates.length };
+}
+
+export const syncPadron = onCall({ region: 'europe-west1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
+    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede actualizar el padrón.');
+  }
+  return syncPadronFromDirectory();
+});
+
+export const syncPadronNightly = onSchedule({ region: 'europe-west1', schedule: 'every day 03:00', timeZone: 'Europe/Madrid' }, async () => {
+  const result = await syncPadronFromDirectory();
+  logger.info('padrón sincronizado con el directorio', result);
 });
 
 const NOTION_TOKEN = defineSecret('NOTION_TOKEN');
