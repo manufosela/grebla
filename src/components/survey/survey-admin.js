@@ -17,7 +17,7 @@ import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domai
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { selectedOnes, departmentsOf, departmentState, toggleDepartment, togglePerson, selectAll } from '../../tools/survey/domain/padronSelection.js';
-import { listPadron, getPadronAxes, loadPadronFromDirectory } from '../../lib/padron.js';
+import { listPadron, getPadronAxes, getPadronSyncedAt, syncPadron } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
@@ -86,6 +86,9 @@ export class SurveyAdmin extends LitElement {
     _padronSelected: { state: true },
     /** Aviso si no se pudo sincronizar el padrón con el directorio. */
     _padronSyncError: { state: true },
+    /** Última sincronización con el directorio (RMR-TSK-0631) y si hay una en curso. */
+    _padronSyncedAt: { state: true },
+    _padronSyncing: { state: true },
     _padronError: { state: true },
     _testEmail: { state: true },
     _sendBusy: { state: true },
@@ -305,6 +308,8 @@ export class SurveyAdmin extends LitElement {
     this._padronActive = true;
     this._padronSelected = new Set();
     this._padronSyncError = '';
+    this._padronSyncedAt = null;
+    this._padronSyncing = false;
     this._padronError = '';
     this._testEmail = '';
     this._sendBusy = false;
@@ -650,21 +655,32 @@ export class SurveyAdmin extends LitElement {
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los participantes.';
     }
-    // El padrón es toda la empresa y está siempre al día (RMR-TSK-0630): se
-    // sincroniza con el directorio al abrir. Si falla, se dice y se sigue con
-    // el padrón que hay —con lo añadido a mano—, no se calla.
+    await this._loadPadron();
+  }
+
+  /** El padrón ya guardado: el servidor lo sincroniza cada noche (RMR-TSK-0631), aquí no se espera. */
+  async _loadPadron() {
     try {
-      await loadPadronFromDirectory();
-    } catch (err) {
-      this._padronSyncError = `No se pudo sincronizar con el directorio: ${err instanceof Error ? err.message : err}`;
-    }
-    try {
-      this._padron = await listPadron();
+      [this._padron, this._padronSyncedAt] = await Promise.all([listPadron(), getPadronSyncedAt()]);
       // Ejes a medida declarados (RMR-TSK-0355): viajan al token al generar
       // los enlaces. Best-effort: sin doc no hay ejes.
       this._padronAxes = await getPadronAxes().catch(() => []);
     } catch (err) {
       this._padronError = err instanceof Error ? err.message : 'No se pudo cargar el padrón.';
+    }
+  }
+
+  /** Botón «Actualizar»: trae ya los cambios del directorio sin esperar a la noche. La selección se conserva. */
+  async _refreshPadron() {
+    this._padronSyncing = true;
+    this._padronSyncError = '';
+    try {
+      await syncPadron();
+      await this._loadPadron();
+    } catch (err) {
+      this._padronSyncError = `No se pudo actualizar desde el directorio: ${err instanceof Error ? err.message : err}`;
+    } finally {
+      this._padronSyncing = false;
     }
   }
 
@@ -1248,7 +1264,12 @@ export class SurveyAdmin extends LitElement {
     const label = this._partBusy ? 'Generando…' : `Generar enlaces para las marcadas (${sel.length})`;
     return html`<div class="field">
       <label>El <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}): marca a quién se envía la encuesta, por departamento o persona a persona. Los metadatos (departamento, antigüedad) salen del padrón.</label>
+      <div class="q-opts">
+        <span class="muted">${this._padronSyncedAt ? `Actualizado con el directorio el ${this._padronSyncedAt.toLocaleString('es-ES')}` : 'Aún no se ha actualizado con el directorio'}</span>
+        <button class="ghost" ?disabled=${this._padronSyncing} @click=${() => this._refreshPadron()}>Actualizar desde el directorio</button>
+      </div>
       ${this._padronSyncError ? html`<p class="error">${this._padronSyncError}</p>` : null}
+      ${this._padronSyncing ? html`<busy-overlay message="Actualizando el padrón…"></busy-overlay>` : null}
       <div class="q-opts">
         <label><input type="checkbox" .checked=${this._padronActive}
           @change=${(e) => { this._padronActive = e.target.checked; }} /> Solo activos</label>
