@@ -34,7 +34,7 @@ if (requireAuth || requireAdmin) {
 const VIEW_FLAG = 'grebla-view';
 
 /** Cómo se llama cada vista simulada en el aviso. */
-const SIM_LABEL = { leader: 'Manager', engineer: 'Ingeniero', empleado: 'Empleado' };
+const SIM_LABEL = { leader: 'Manager', engineer: 'Tripulante', empleado: 'Empleado' };
 
 /**
  * Aviso de simulación (RMR-BUG-0113). La vista elegida dura toda la pestaña, y
@@ -49,7 +49,16 @@ function pintarAvisoSimulacion() {
   if (label) {
     const rol = document.getElementById('sim-role');
     if (rol) rol.textContent = label;
+    if (rol && sessionStorage.getItem(VIEW_FLAG) === 'engineer') pintarNombreTripulante(rol);
   }
+}
+
+/** La vista de quien tiene ficha se llama como diga la instancia (RMR-TSK-0639). */
+async function pintarNombreTripulante(el) {
+  const [{ getOrgIdentity }, { labelOf }] = await Promise.all([
+    import('../lib/orgConfig.js'), import('../tools/admin/domain/orgIdentity.js'),
+  ]);
+  el.textContent = labelOf(await getOrgIdentity(), 'memberLabel');
 }
 
 document.getElementById('sim-exit')?.addEventListener('click', () => {

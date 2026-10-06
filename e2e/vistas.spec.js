@@ -27,7 +27,8 @@ test('la vista de ingeniero enseña el hub, no desvía a Mi espacio', async ({ p
   await conFicha(async () => {
     await signInAs(page, 'superadmin');
     await page.goto('/');
-    await vista(page, 'Ingeniero').click();
+    // Se llama como diga la instancia; sin configurar, «Tripulante» (RMR-TSK-0639).
+    await vista(page, 'Tripulante').click();
 
     await expect(page).toHaveURL(/\/$/);
     // Lo personal sigue estando: como card del hub, igual que para todos. El
@@ -43,7 +44,7 @@ test('«Volver» desde Mi espacio devuelve al hub, no a Mi espacio', async ({ pa
   await conFicha(async () => {
     await signInAs(page, 'superadmin');
     await page.goto('/');
-    await vista(page, 'Ingeniero').click();
+    await vista(page, 'Tripulante').click();
     await page.locator('[data-personal]:not([data-tool-id])').click();
     await expect(page).toHaveURL(/\/mi-espacio/);
 

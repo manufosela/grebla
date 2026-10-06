@@ -7,6 +7,8 @@ import { LitElement, html, css } from 'lit';
 import { onUserChanged, signInWithGoogle, signOutUser } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { accessLabel } from '../lib/accessRoles.js';
+import { getOrgIdentity } from '../lib/orgConfig.js';
+import { labelOf } from '../tools/admin/domain/orgIdentity.js';
 
 export class AuthButton extends LitElement {
   static properties = {
@@ -102,7 +104,8 @@ export class AuthButton extends LitElement {
       this.roleLabel = null;
       if (user) {
         try {
-          this.roleLabel = accessLabel(await resolveAccess(user));
+          const [access, identity] = await Promise.all([resolveAccess(user), getOrgIdentity()]);
+          this.roleLabel = accessLabel(access, labelOf(identity, 'memberLabel'));
         } catch {
           this.roleLabel = null;
         }

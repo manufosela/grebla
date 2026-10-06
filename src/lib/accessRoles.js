@@ -340,17 +340,21 @@ export function hasAccess(access) {
 
 /** Etiquetas legibles de cada eje, para el badge de sesión. */
 const INSTANCE_LABEL = { admin: 'Superadmin', viewer: 'Viewer' };
-const FUNCTIONAL_LABEL = { supermanager: 'Head', leader: 'Manager', engineer: 'Ingeniero/a' };
+const FUNCTIONAL_LABEL = { supermanager: 'Head', leader: 'Manager' };
 
 /**
  * Etiqueta legible del acceso desde los DOS ejes (RMR-TSK-0310): el gobierno
  * primero y el rol funcional después («Superadmin · Manager»), sin aplastar
- * ninguna faceta como hacía el rol derivado. Sin acceso → null.
+ * ninguna faceta como hacía el rol derivado. Sin acceso → null. Quien solo
+ * tiene ficha no es «ingeniero/a» por tenerla (RMR-TSK-0639): se llama como
+ * diga la instancia (`memberLabel` de Identidad; por defecto «Tripulante»).
  * @param {{ instanceAccess?: string|null, functionalRole?: string|null }|null|undefined} access
+ * @param {string} [memberLabel]
  * @returns {string|null}
  */
-export function accessLabel(access) {
-  const parts = [INSTANCE_LABEL[access?.instanceAccess], FUNCTIONAL_LABEL[access?.functionalRole]].filter(Boolean);
+export function accessLabel(access, memberLabel = 'Tripulante') {
+  const functional = access?.functionalRole === 'engineer' ? memberLabel : FUNCTIONAL_LABEL[access?.functionalRole];
+  const parts = [INSTANCE_LABEL[access?.instanceAccess], functional].filter(Boolean);
   return parts.length ? parts.join(' · ') : null;
 }
 

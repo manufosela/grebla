@@ -38,13 +38,13 @@ test('el aviso sigue ahí al recargar, que es cuando se olvida', async ({ page }
   await signInAs(page, 'superadmin');
   await page.goto('/');
   await listo(page);
-  await vista(page, 'Ingeniero').click();
+  await vista(page, 'Tripulante').click();
 
   await page.goto('/');
   await listo(page);
 
   await expect(aviso(page)).toBeVisible();
-  await expect(aviso(page)).toContainText('Ingeniero');
+  await expect(aviso(page)).toContainText('Tripulante');
   await expect(page.locator('#admin-link')).toBeHidden();
 });
 

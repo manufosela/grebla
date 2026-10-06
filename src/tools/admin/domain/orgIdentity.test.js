@@ -38,6 +38,13 @@ describe('lo que se guarda de la identidad', () => {
   });
 });
 
+describe('cómo se llama quien tiene ficha (RMR-TSK-0639)', () => {
+  it('por defecto «Tripulante»; cada instancia pone el suyo', () => {
+    expect(labelOf({}, 'memberLabel')).toBe('Tripulante');
+    expect(labelOf(normalizeIdentity({ memberLabel: ' TRIBBUlante ' }), 'memberLabel')).toBe('TRIBBUlante');
+  });
+});
+
 describe('qué texto se enseña', () => {
   it('el de la instancia cuando lo hay', () => {
     expect(labelOf({ everyoneLabel: 'Toda la tribbu' }, 'everyoneLabel')).toBe('Toda la tribbu');
