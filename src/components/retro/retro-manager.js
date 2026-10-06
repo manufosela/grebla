@@ -10,6 +10,7 @@ import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
 import { noteStyles } from '../common/note-styles.js';
 import '../common/busy-overlay.js';
+import './retro-actions-tracker.js';
 import { skeletonLines } from '../app-skeleton.js';
 import { RETRO_FORMATS, RETRO_FORMAT_IDS } from '../../tools/retro/domain/formats.js';
 import { createRetro, leaveRetro, listRetros, closeRetro, deleteRetro } from '../../lib/retros.js';
@@ -299,7 +300,11 @@ export class RetroManager extends LitElement {
           @click=${() => { this._tab = 'list'; }}>Mis retros (${this._retros.length})</button>
         <button role="tab" aria-selected=${this._tab === 'new'}
           @click=${() => { this._tab = 'new'; }}>Nueva retro</button>
+        <button role="tab" aria-selected=${this._tab === 'actions'}
+          @click=${() => { this._tab = 'actions'; }}>Acciones</button>
       </div>
+
+      ${this._tab === 'actions' ? html`<retro-actions-tracker .retros=${this._retros} .uid=${this.uid}></retro-actions-tracker>` : null}
 
       <div class="create" ?hidden=${this._tab !== 'new'}>
         <div class="grid">
