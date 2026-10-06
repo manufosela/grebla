@@ -1,15 +1,47 @@
 import { describe, it, expect } from 'vitest';
-import { withoutExcluded } from './padronSelection.js';
+import { selectedOnes, departmentsOf, departmentState, toggleDepartment, togglePerson, selectAll, NO_DEPARTMENT } from './padronSelection.js';
 
-describe('withoutExcluded (RMR-TSK-0629) — marcar y desmarcar a quién se envía', () => {
-  const list = [{ email: 'ana@example.com', metadata: {} }, { email: 'Bea@example.com', metadata: {} }];
+const p = (email, department) => ({ email, metadata: department ? { department } : {} });
+const list = [p('ana@example.com', 'Tech'), p('Bea@example.com', 'Tech'), p('carla@example.com', 'PeopOps'), p('dani@example.com', null)];
 
-  it('por defecto van todas; desmarcar a alguien lo saca, sin distinguir mayúsculas', () => {
-    expect(withoutExcluded(list, new Set())).toEqual(list);
-    expect(withoutExcluded(list, new Set(['bea@example.com'])).map((p) => p.email)).toEqual(['ana@example.com']);
+describe('a quién se envía (RMR-TSK-0630): solo a quien se marca', () => {
+  it('por defecto no va nadie', () => {
+    expect(selectedOnes(list, new Set())).toEqual([]);
   });
 
-  it('desmarcar a todas deja la lista vacía', () => {
-    expect(withoutExcluded(list, new Set(['ana@example.com', 'bea@example.com']))).toEqual([]);
+  it('marcar a una persona la incluye, sin distinguir mayúsculas; desmarcarla la saca', () => {
+    const s = togglePerson(new Set(), 'Bea@example.com', true);
+    expect(selectedOnes(list, s).map((x) => x.email)).toEqual(['Bea@example.com']);
+    expect(selectedOnes(list, togglePerson(s, 'BEA@example.com', false))).toEqual([]);
+  });
+
+  it('Todos marca a la lista entera; Ninguno es el conjunto vacío', () => {
+    expect(selectedOnes(list, selectAll(list))).toEqual(list);
+  });
+});
+
+describe('selección por departamento', () => {
+  it('los departamentos salen ordenados, con «Sin departamento» al final', () => {
+    expect(departmentsOf(list)).toEqual(['PeopOps', 'Tech', NO_DEPARTMENT]);
+  });
+
+  it('marcar Tech marca a todo Tech y luego se puede quitar a una persona', () => {
+    let s = toggleDepartment(list, new Set(), 'Tech', true);
+    expect(departmentState(list, s, 'Tech')).toBe('all');
+    s = togglePerson(s, 'ana@example.com', false);
+    expect(departmentState(list, s, 'Tech')).toBe('some');
+    expect(selectedOnes(list, s).map((x) => x.email)).toEqual(['Bea@example.com']);
+  });
+
+  it('desmarcar un departamento no toca a los demás', () => {
+    let s = selectAll(list);
+    s = toggleDepartment(list, s, 'Tech', false);
+    expect(departmentState(list, s, 'Tech')).toBe('none');
+    expect(departmentState(list, s, 'PeopOps')).toBe('all');
+  });
+
+  it('quien no tiene departamento se marca con «Sin departamento»', () => {
+    const s = toggleDepartment(list, new Set(), NO_DEPARTMENT, true);
+    expect(selectedOnes(list, s).map((x) => x.email)).toEqual(['dani@example.com']);
   });
 });

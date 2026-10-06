@@ -16,8 +16,8 @@ import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/su
 import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domain/email.js';
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
 import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
-import { withoutExcluded } from '../../tools/survey/domain/padronSelection.js';
-import { listPadron, getPadronAxes } from '../../lib/padron.js';
+import { selectedOnes, departmentsOf, departmentState, toggleDepartment, togglePerson, selectAll } from '../../tools/survey/domain/padronSelection.js';
+import { listPadron, getPadronAxes, loadPadronFromDirectory } from '../../lib/padron.js';
 import {
   participationByDept, participationTotal, answerValues, textAnswers, scaleResult, segmentedScale, choiceTally,
 } from '../../tools/survey/domain/results.js';
@@ -81,10 +81,11 @@ export class SurveyAdmin extends LitElement {
     _partTokens: { state: true },
     _partBusy: { state: true },
     _padron: { state: true },
-    _padronDept: { state: true },
     _padronActive: { state: true },
-    /** Emails (minúsculas) desmarcados: no se les envía (RMR-TSK-0629). */
-    _padronExcluded: { state: true },
+    /** Emails (minúsculas) marcados: solo a ellos se envía (RMR-TSK-0630). */
+    _padronSelected: { state: true },
+    /** Aviso si no se pudo sincronizar el padrón con el directorio. */
+    _padronSyncError: { state: true },
     _padronError: { state: true },
     _testEmail: { state: true },
     _sendBusy: { state: true },
@@ -301,9 +302,9 @@ export class SurveyAdmin extends LitElement {
     this._partTokens = [];
     this._partBusy = false;
     this._padron = [];
-    this._padronDept = '';
     this._padronActive = true;
-    this._padronExcluded = new Set();
+    this._padronSelected = new Set();
+    this._padronSyncError = '';
     this._padronError = '';
     this._testEmail = '';
     this._sendBusy = false;
@@ -636,9 +637,9 @@ export class SurveyAdmin extends LitElement {
     this._showTestAnswers = false;
     this._openParts = new Set();
     this._padron = [];
-    this._padronDept = '';
     this._padronActive = true;
-    this._padronExcluded = new Set();
+    this._padronSelected = new Set();
+    this._padronSyncError = '';
     this._error = '';
     this._padronError = '';
     this._phase = 'participants';
@@ -648,6 +649,14 @@ export class SurveyAdmin extends LitElement {
       this._partTokens = (await listTokens(survey.id)).filter((t) => t.test !== true);
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron cargar los participantes.';
+    }
+    // El padrón es toda la empresa y está siempre al día (RMR-TSK-0630): se
+    // sincroniza con el directorio al abrir. Si falla, se dice y se sigue con
+    // el padrón que hay —con lo añadido a mano—, no se calla.
+    try {
+      await loadPadronFromDirectory();
+    } catch (err) {
+      this._padronSyncError = `No se pudo sincronizar con el directorio: ${err instanceof Error ? err.message : err}`;
     }
     try {
       this._padron = await listPadron();
@@ -659,14 +668,9 @@ export class SurveyAdmin extends LitElement {
     }
   }
 
-  /** Departamentos únicos presentes en el padrón, para el filtro. */
-  get _padronDepartments() {
-    return [...new Set(this._padron.map((p) => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  }
-
-  /** Personas del padrón que recibirían enlace con el filtro actual. */
+  /** Todo el padrón elegible (activos, si se pide): de aquí se marca a quién se envía. */
   get _padronSelection() {
-    return padronToParticipants(this._padron, { department: this._padronDept || null, onlyActive: this._padronActive, axisIds: (this._padronAxes ?? []).map((a) => a.id) });
+    return padronToParticipants(this._padron, { onlyActive: this._padronActive, axisIds: (this._padronAxes ?? []).map((a) => a.id) });
   }
 
   /** Lee un CSV subido y vuelca su contenido al área de texto para revisar. */
@@ -789,27 +793,24 @@ export class SurveyAdmin extends LitElement {
   }
 
   _generateFromPadron() {
-    const participants = withoutExcluded(this._padronSelection, this._padronExcluded);
-    if (!participants.length) { this._error = 'No hay nadie marcado con ese filtro.'; return; }
+    const participants = selectedOnes(this._padronSelection, this._padronSelected);
+    if (!participants.length) { this._error = 'No hay nadie marcado.'; return; }
     return this._createTokens(participants);
   }
 
-  /** Marca o desmarca a una persona del padrón (RMR-TSK-0629). */
+  /** Marca o desmarca a una persona (RMR-TSK-0630). */
   _togglePadron(email, checked) {
-    const next = new Set(this._padronExcluded);
-    if (checked) next.delete(email.toLowerCase());
-    else next.add(email.toLowerCase());
-    this._padronExcluded = next;
+    this._padronSelected = togglePerson(this._padronSelected, email, checked);
   }
 
-  /** Marca o desmarca de golpe a todas las de la lista filtrada. */
+  /** Marca o desmarca a todo un departamento, sin tocar a los demás. */
+  _togglePadronDept(department, checked) {
+    this._padronSelected = toggleDepartment(this._padronSelection, this._padronSelected, department, checked);
+  }
+
+  /** «Todos» o «Ninguno». */
   _toggleAllPadron(checked) {
-    const next = new Set(this._padronExcluded);
-    for (const p of this._padronSelection) {
-      if (checked) next.delete(p.email.toLowerCase());
-      else next.add(p.email.toLowerCase());
-    }
-    this._padronExcluded = next;
+    this._padronSelected = checked ? selectAll(this._padronSelection) : new Set();
   }
 
   _linkFor(token) {
@@ -1241,45 +1242,47 @@ export class SurveyAdmin extends LitElement {
     return html`<p class="lead">El padrón está vacío. Puedes rellenarlo en «Padrón de empresa» o generar los enlaces con un CSV aquí abajo.</p>`;
   }
 
-  /** Generar enlaces tirando del padrón de empresa, con filtro por departamento y activos. */
+  /** Generar enlaces desde el padrón de empresa: solo para quien se marca (RMR-TSK-0630). */
   _renderPadronSource() {
-    const sel = withoutExcluded(this._padronSelection, this._padronExcluded);
+    const sel = selectedOnes(this._padronSelection, this._padronSelected);
+    const label = this._partBusy ? 'Generando…' : `Generar enlaces para las marcadas (${sel.length})`;
     return html`<div class="field">
-      <label>Desde el <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}). Filtra y genera un enlace por persona; los metadatos (departamento, antigüedad) salen del padrón.</label>
+      <label>El <strong>padrón de empresa</strong> (${this._padron.length} persona${this._padron.length === 1 ? '' : 's'}): marca a quién se envía la encuesta, por departamento o persona a persona. Los metadatos (departamento, antigüedad) salen del padrón.</label>
+      ${this._padronSyncError ? html`<p class="error">${this._padronSyncError}</p>` : null}
       <div class="q-opts">
-        <label>Departamento
-          <select @change=${(e) => { this._padronDept = e.target.value; }}>
-            <option value="" ?selected=${!this._padronDept}>Todos</option>
-            ${this._padronDepartments.map((d) => html`<option value=${d} ?selected=${this._padronDept === d}>${d}</option>`)}
-          </select>
-        </label>
         <label><input type="checkbox" .checked=${this._padronActive}
           @change=${(e) => { this._padronActive = e.target.checked; }} /> Solo activos</label>
       </div>
       ${this._renderPadronPicker()}
       <div class="save-row">
-        <button class="primary" ?disabled=${this._partBusy || !sel.length} @click=${() => this._generateFromPadron()}>
-          ${this._partBusy ? 'Generando…' : `Generar enlaces desde el padrón (${sel.length})`}
-        </button>
+        <button class="primary" ?disabled=${this._partBusy || !sel.length} @click=${() => this._generateFromPadron()}>${label}</button>
       </div>
     </div>`;
   }
 
-  /** Lista para marcar y desmarcar a quién se envía (RMR-TSK-0629). */
+  /** Arriba Todos/Ninguno y un check por departamento; debajo, cada persona (RMR-TSK-0630). */
   _renderPadronPicker() {
     const nameByEmail = new Map(this._padron.map((p) => [String(p.email ?? '').toLowerCase(), p.name]));
     const list = this._padronSelection;
     return html`<div class="padron-picker">
       <div class="q-opts">
-        <button class="ghost" @click=${() => this._toggleAllPadron(true)}>Marcar todas</button>
-        <button class="ghost" @click=${() => this._toggleAllPadron(false)}>Desmarcar todas</button>
+        <button class="ghost" @click=${() => this._toggleAllPadron(true)}>Todos</button>
+        <button class="ghost" @click=${() => this._toggleAllPadron(false)}>Ninguno</button>
       </div>
+      <div class="q-opts padron-depts">${departmentsOf(list).map((d) => this._renderPadronDept(list, d))}</div>
       <ul class="padron-list">${list.map((p) => this._renderPadronRow(p, nameByEmail.get(p.email.toLowerCase())))}</ul>
     </div>`;
   }
 
+  /** Check de un departamento: marcado, vacío o a medias (indeterminate). */
+  _renderPadronDept(list, department) {
+    const state = departmentState(list, this._padronSelected, department);
+    return html`<label><input type="checkbox" .checked=${state === 'all'} .indeterminate=${state === 'some'}
+      @change=${(e) => this._togglePadronDept(department, e.target.checked)} /> ${department}</label>`;
+  }
+
   _renderPadronRow(p, name) {
-    const checked = !this._padronExcluded.has(p.email.toLowerCase());
+    const checked = this._padronSelected.has(p.email.toLowerCase());
     const dept = p.metadata.department ?? '';
     return html`<li><label>
       <input type="checkbox" .checked=${checked} @change=${(e) => this._togglePadron(p.email, e.target.checked)} />

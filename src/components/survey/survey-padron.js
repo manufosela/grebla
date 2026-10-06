@@ -89,6 +89,16 @@ export class SurveyPadron extends LitElement {
   async _load() {
     this._loading = true;
     this._error = '';
+    // El padrón es toda la empresa (RMR-TSK-0630): la primera vez que se abre
+    // se sincroniza con el directorio. Lo añadido a mano se conserva.
+    if (!this._synced) {
+      this._synced = true;
+      try {
+        await loadPadronFromDirectory();
+      } catch (err) {
+        this._error = `No se pudo sincronizar con el directorio: ${err instanceof Error ? err.message : err}`;
+      }
+    }
     try {
       [this._rows, this._axes] = await Promise.all([listPadron(), getPadronAxes()]);
     } catch (err) {
@@ -113,22 +123,6 @@ export class SurveyPadron extends LitElement {
       await this._load();
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo importar el CSV.';
-    } finally {
-      this._busy = false;
-    }
-  }
-
-  /** Todo el censo (con Notion, el directorio entero) al padrón (RMR-TSK-0629). */
-  async _fromDirectory() {
-    this._busy = true;
-    this._error = '';
-    this._notice = '';
-    try {
-      const { added, updated } = await loadPadronFromDirectory();
-      this._notice = `Padrón cargado desde el directorio: ${added} nueva${added === 1 ? '' : 's'}, ${updated} actualizada${updated === 1 ? '' : 's'}.`;
-      await this._load();
-    } catch (err) {
-      this._error = err instanceof Error ? err.message : 'No se pudo cargar el directorio.';
     } finally {
       this._busy = false;
     }
@@ -269,10 +263,9 @@ export class SurveyPadron extends LitElement {
     return html`
       ${this._busy ? html`<busy-overlay message="Guardando el padrón…"></busy-overlay>` : null}
       <h2>Padrón de empresa</h2>
-      <p class="lead">Las personas y sus datos alimentan la segmentación de las encuestas. Importa el CSV (upsert por email), añade a mano, edita o borra. Se guarda la fecha de nacimiento; la edad se calcula sola.</p>
+      <p class="lead">Toda la empresa: se sincroniza sola con el directorio al abrir. Además puedes añadir a mano, importar un CSV (upsert por email), editar o borrar. Se guarda la fecha de nacimiento; la edad se calcula sola.</p>
       <div class="toolbar">
         <button class="primary" @click=${() => this._new()}>Añadir persona</button>
-        <button class="ghost" ?disabled=${this._busy} @click=${() => this._fromDirectory()}>Cargar desde el directorio</button>
         <label class="ghost">Importar CSV <input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onCsv(e)} hidden /></label>
         ${this._busy ? html`<span class="lead">Procesando…</span>` : null}
       </div>
