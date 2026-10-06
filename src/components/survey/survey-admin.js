@@ -15,7 +15,7 @@ import { climateTemplate, serializeTemplate, parseTemplate, parseQuestionsCsv } 
 import { surveyDraftErrors, choiceOptions, draftToPayload } from '../../tools/survey/domain/questions.js';
 import { LINK_PLACEHOLDER, defaultEmailTemplate } from '../../tools/survey/domain/email.js';
 import { END, flowErrors, ruleOp, ruleValue } from '../../tools/survey/domain/flow.js';
-import { parseParticipants, padronToParticipants } from '../../tools/survey/domain/participants.js';
+import { padronToParticipants } from '../../tools/survey/domain/participants.js';
 import { selectedOnes, departmentsOf, departmentState, toggleDepartment, togglePerson, selectAll } from '../../tools/survey/domain/padronSelection.js';
 import { listPadron, getPadronAxes, getPadronSyncedAt, syncPadron } from '../../lib/padron.js';
 import {
@@ -77,7 +77,6 @@ export class SurveyAdmin extends LitElement {
     _renameId: { state: true },
     _saving: { state: true },
     _partSurvey: { state: true },
-    _partText: { state: true },
     _partTokens: { state: true },
     _partBusy: { state: true },
     _padron: { state: true },
@@ -160,8 +159,6 @@ export class SurveyAdmin extends LitElement {
     .save-row { display: flex; gap: 0.8rem; align-items: center; }
     .error { color: #b42318; font-size: 0.85rem; }
     .muted { color: var(--rm-muted, #5b6b7d); font-size: 0.85rem; align-self: center; }
-    .csv-details { border: 1px dashed var(--rm-border, #cbd5e1); border-radius: 10px; padding: 0.5rem 0.9rem; margin: 0.75rem 0 1rem; }
-    .csv-details summary { cursor: pointer; font-weight: 700; font-size: 0.95rem; padding: 0.25rem 0; }
     .pb-toggle { width: 100%; border: 0; background: none; font: inherit; text-align: left; display: flex; align-items: center; gap: 0.55rem; cursor: pointer; padding: 0.1rem 0; color: inherit; }
     .pb-caret { color: var(--rm-muted, #5b6b7d); font-size: 0.8rem; width: 0.9rem; }
     .test-answer { border: 1px dashed var(--rm-border, #cbd5e1); border-radius: 8px; padding: 0.6rem 0.85rem; margin: 0.5rem 0; }
@@ -301,7 +298,6 @@ export class SurveyAdmin extends LitElement {
     this._renameId = null;
     this._saving = false;
     this._partSurvey = null;
-    this._partText = '';
     this._partTokens = [];
     this._partBusy = false;
     this._padron = [];
@@ -635,7 +631,6 @@ export class SurveyAdmin extends LitElement {
 
   async _openParticipants(survey) {
     this._partSurvey = survey;
-    this._partText = '';
     this._partTokens = [];
     // El visor 🧪 y las filas desplegadas se resetean al cambiar de encuesta.
     this._testAnswers = null;
@@ -689,19 +684,6 @@ export class SurveyAdmin extends LitElement {
     return padronToParticipants(this._padron, { onlyActive: this._padronActive, axisIds: (this._padronAxes ?? []).map((a) => a.id) });
   }
 
-  /** Lee un CSV subido y vuelca su contenido al área de texto para revisar. */
-  async _onCsvFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // permite volver a subir el mismo fichero
-    if (!file) return;
-    try {
-      this._partText = await file.text();
-      this._error = '';
-    } catch {
-      this._error = 'No se pudo leer el fichero.';
-    }
-  }
-
   /** Crea los tokens de una lista de participantes y recarga la tabla. */
   async _createTokens(participants) {
     if (!participants.length) { this._error = 'No hay ningún participante válido.'; return; }
@@ -710,18 +692,11 @@ export class SurveyAdmin extends LitElement {
     try {
       await createSurveyTokens(this._partSurvey.id, participants);
       this._partTokens = (await listTokens(this._partSurvey.id)).filter((t) => t.test !== true);
-      this._partText = '';
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudieron generar los enlaces.';
     } finally {
       this._partBusy = false;
     }
-  }
-
-  _generate() {
-    const participants = parseParticipants(this._partText);
-    if (!participants.length) { this._error = 'Pega o sube al menos un email válido.'; return; }
-    return this._createTokens(participants);
   }
 
   _sendMsg(err) { return err instanceof Error ? err.message : 'No se pudo enviar el correo.'; }
@@ -1255,7 +1230,7 @@ export class SurveyAdmin extends LitElement {
   _renderPadronBlock() {
     if (this._padronError) return html`<p class="error">No se pudo cargar el padrón: ${this._padronError}</p>`;
     if (this._padron.length) return this._renderPadronSource();
-    return html`<p class="lead">El padrón está vacío. Puedes rellenarlo en «Padrón de empresa» o generar los enlaces con un CSV aquí abajo.</p>`;
+    return html`<p class="lead">El padrón está vacío. Rellénalo en «Padrón de empresa» (a mano o importando un CSV).</p>`;
   }
 
   /** Generar enlaces desde el padrón de empresa: solo para quien se marca (RMR-TSK-0630). */
@@ -1411,24 +1386,8 @@ export class SurveyAdmin extends LitElement {
     return html`
       <div class="toolbar"><button class="ghost" @click=${() => { this._phase = 'list'; }}>← Volver</button></div>
       <h2>${this._partSurvey.title} · Participantes</h2>
-      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Genera los enlaces personales desde el padrón o subiendo un CSV.</p>
+      <p class="lead">${total} participante${total === 1 ? '' : 's'} · ${responded} ${responded === 1 ? 'ha' : 'han'} respondido. Marca a quién se envía y genera sus enlaces personales.</p>
       ${this._renderPadronBlock()}
-      <details class="csv-details">
-        <summary>O bien, sube o pega un CSV</summary>
-        <div class="field">
-          <label for="pp">Sube un <strong>CSV</strong> o pega el padrón. Una persona por fila. Columnas:
-            <code>email</code> (obligatoria), y opcionales <code>departamento</code>, <code>fecha_alta</code>, <code>nacimiento</code> y <code>ubicación</code> (fechas en YYYY-MM-DD).
-            Con cabecera se mapean por nombre en cualquier orden (las columnas extra se ignoran). Re-subir con los mismos emails <strong>actualiza</strong> sus campos sin duplicar el enlace.</label>
-          <input type="file" accept=".csv,text/csv,text/plain" @change=${(e) => this._onCsvFile(e)} />
-          <textarea id="pp" rows="6" placeholder="email,departamento,fecha_alta&#10;ana@tribbuapp.com,People,2024-01-15" .value=${this._partText}
-            @input=${(e) => { this._partText = e.target.value; }}></textarea>
-        </div>
-        <div class="save-row">
-          <button class="primary" ?disabled=${this._partBusy || !this._partText.trim()} @click=${() => this._generate()}>
-            ${this._partBusy ? 'Generando…' : 'Generar enlaces'}
-          </button>
-        </div>
-      </details>
       ${this._error ? html`<p class="error">${this._error}</p>` : null}
       ${this._notice ? html`<p class="notice">${this._notice}</p>` : null}
       ${total ? this._renderSendBox() : null}
