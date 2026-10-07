@@ -166,6 +166,25 @@ export function o2oSessionFrom(input, meta) {
 }
 
 /**
+ * Lo que el agente puede saber del equipo de su manager (RMR-TSK-0657): nombre y
+ * correo de cada persona activa de la organización que le tiene como manager de
+ * O2O, para decidir si una reunión es un O2O. Nada más sale de la ficha.
+ * @param {Array<{ name?: unknown, email?: unknown, pendingEmail?: unknown, uid?: unknown, active?: unknown, external?: unknown }>} people
+ * @param {Map<string, string>} emailByUid correo verificado de las cuentas vinculadas
+ * @returns {Array<{ name: string, email: string }>}
+ */
+export function agentTeamView(people, emailByUid) {
+  return (people ?? [])
+    .filter((p) => p && p.active !== false && p.external !== true)
+    .map((p) => ({
+      name: texto(p.name, 200),
+      email: texto(p.email || p.pendingEmail || emailByUid.get(p.uid) || '', 320).toLowerCase(),
+    }))
+    .filter((p) => p.email)
+    .toSorted((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+/**
  * ¿Entra esta persona en el ámbito de la ingesta de ESTE manager? Activa, de la
  * organización y con él entre sus managers de O2O (RMR-TSK-0655): una clave solo
  * escribe O2O de quien su manager lleva. Fuera de eso, el agente se guarda la

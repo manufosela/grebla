@@ -26,7 +26,7 @@ import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './
 import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
-import { bearerFrom, agentKeyId, agentKeyVerdict, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
+import { bearerFrom, agentKeyId, agentKeyVerdict, agentTeamView, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
@@ -2917,6 +2917,37 @@ async function findPersonByEmail(email) {
  * `403 not_in_scope` significan «guárdala tú», y cualquier otro error significa
  * «algo va mal, grítalo». Por eso un 401 no puede parecerse a un 404.
  */
+/**
+ * El equipo del manager de la clave (RMR-TSK-0657): GET con la clave del agente;
+ * devuelve nombre y correo de las personas que le tienen como manager de O2O.
+ * Sirve para que el agente decida si una reunión es un O2O antes de ingestarla.
+ */
+export const agentTeam = onRequest(
+  { region: 'europe-west1', invoker: 'public' },
+  async (req, res) => {
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+    const bearer = bearerFrom(req.get('authorization'));
+    const keyDoc = bearer ? (await getFirestore().doc(`agentKeys/${agentKeyId(bearer)}`).get()).data() ?? null : null;
+    const verdict = agentKeyVerdict(keyDoc, null);
+    if (!verdict.ok) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+    const snap = await getFirestore().collection('people').where('o2oManagerUids', 'array-contains', verdict.managerUid).get();
+    const people = snap.docs.map((d) => d.data());
+    const uids = people.map((p) => p.uid).filter((u) => typeof u === 'string' && u);
+    const emailByUid = new Map();
+    for (let i = 0; i < uids.length; i += 100) {
+      const { users } = await getAuth().getUsers(uids.slice(i, i + 100).map((uid) => ({ uid })));
+      for (const u of users) if (u.email && u.emailVerified) emailByUid.set(u.uid, u.email);
+    }
+    res.status(200).json({ people: agentTeamView(people, emailByUid) });
+  },
+);
+
 export const ingestConversation = onRequest(
   { region: 'europe-west1', invoker: 'public' },
   async (req, res) => {
