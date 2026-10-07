@@ -12,6 +12,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import '../common/busy-overlay.js';
+import './o2o-session-view.js';
 import { skeletonLines } from '../app-skeleton.js';
 import {
   listSessions, createSession, updateSession, removeSession,
@@ -40,6 +41,8 @@ export class O2ORegister extends LitElement {
     _saving: { state: true },
     _error: { state: true },
     _confirmDelete: { state: true },
+    /** Sesión desplegada para leerla (RMR-TSK-0648). */
+    _openSessionId: { state: true },
     _rmProfile: { state: true },
     /** Contexto de carrera para el O2O (RMR-PCS-0044 · F4). */
     _framework: { state: true },
@@ -64,10 +67,11 @@ export class O2ORegister extends LitElement {
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
     .item {
-      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;
       border: 1px solid var(--rm-border, #e5e7eb); border-radius: 10px; padding: 0.6rem 0.85rem;
     }
     .item .meta { font-size: 0.9rem; }
+    .item .view { flex-basis: 100%; }
     .item .sub { font-size: 0.78rem; color: var(--rm-muted, #5b6b7d); }
     .tag { font-size: 0.72rem; border-radius: 999px; padding: 0.1rem 0.5rem; background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f); }
     .actions { display: flex; gap: 0.4rem; }
@@ -101,6 +105,7 @@ export class O2ORegister extends LitElement {
     this._saving = false;
     this._error = '';
     this._confirmDelete = '';
+    this._openSessionId = null;
     /** @type {object|null} resumen de Role Mirror de la persona (RMR-TSK-0226) */
     this._rmProfile = null;
   }
@@ -340,12 +345,18 @@ export class O2ORegister extends LitElement {
              <button class="btn" type="button" @click=${() => { this._confirmDelete = ''; }}>Cancelar</button>`
       : html`<button class="btn" type="button" @click=${() => this._editDraft(s)}>Editar</button>
              <button class="btn danger" type="button" @click=${() => { this._confirmDelete = s.id; }}>Borrar</button>`;
+    const open = this._openSessionId === s.id;
     return html`<li class="item">
       <div class="meta">
         <div>${s.date?.slice(0, 10)} ${shared}</div>
         <div class="sub">${nAnswers} respuesta(s)${s.summary ? ' · con resumen' : ''}</div>
       </div>
-      <div class="actions">${delControl}</div>
+      <div class="actions">
+        <button class="btn" type="button" aria-expanded=${open ? 'true' : 'false'}
+          @click=${() => { this._openSessionId = open ? null : s.id; }}>${open ? 'Ocultar' : 'Ver'}</button>
+        ${delControl}
+      </div>
+      ${open ? html`<o2o-session-view class="view" .session=${s} .personName=${this._personName}></o2o-session-view>` : null}
     </li>`;
   }
 
