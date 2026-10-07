@@ -145,6 +145,25 @@ test('un correo SIN verificar no vale para elegir ficha', async ({ request }) =>
   }
 });
 
+test('el agente consulta el equipo de su manager: solo nombre y correo (RMR-TSK-0657)', async ({ request }) => {
+  const EQUIPO = 'http://127.0.0.1:5001/demo-grebla/europe-west1/agentTeam';
+  const pedir = (clave) => request.get(EQUIPO, { headers: { Authorization: `Bearer ${clave}` }, failOnStatusCode: false });
+
+  const res = await pedir(CLAVE);
+  expect(res.status()).toBe(200);
+  const { people } = await res.json();
+  expect(people).toContainEqual({ name: 'Ana Ingesta E2E', email: EMAIL });
+  // Sin manager de O2O asignado, no sale; y nada más que nombre y correo.
+  expect(people.some((p) => p.email === EMAIL_FUERA)).toBe(false);
+  expect(people.every((p) => Object.keys(p).toSorted().join() === 'email,name')).toBe(true);
+
+  // La de otro manager no ve al equipo del Head.
+  const ajena = await (await pedir(CLAVE_OTRA)).json();
+  expect(ajena.people.some((p) => p.email === EMAIL)).toBe(false);
+
+  expect((await pedir('clave-que-no-es')).status()).toBe(401);
+});
+
 test('el contrato de errores: 401, 400, 404 y 403 se distinguen', async ({ request }) => {
   const mala = await enviar(request, nota(), 'clave-que-no-es');
   expect(mala.status()).toBe(401);

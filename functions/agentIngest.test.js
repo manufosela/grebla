@@ -2,8 +2,32 @@ import { describe, it, expect } from 'vitest';
 import {
   INGEST_TYPES, bearerFrom, normalizeIngest,
   conversationIdFor, o2oSessionFrom, personIsInScope,
-  generateAgentKey, agentKeyId, agentKeyVerdict,
+  generateAgentKey, agentKeyId, agentKeyVerdict, agentTeamView,
 } from './agentIngest.js';
+
+describe('agentTeamView: lo único que el agente sabe del equipo (RMR-TSK-0657)', () => {
+  const emails = new Map([['u-ana', 'ana@tribbuapp.com']]);
+  it('nombre y correo de quien está activa y es de la organización, por nombre', () => {
+    const people = [
+      { name: 'Zoe', email: 'Zoe@TribbuApp.com', levelId: 'l3', notes: 'privado' },
+      { name: 'Ana', uid: 'u-ana' },
+      { name: 'Pablo', pendingEmail: 'pablo@tribbuapp.com' },
+    ];
+    expect(agentTeamView(people, emails)).toEqual([
+      { name: 'Ana', email: 'ana@tribbuapp.com' },
+      { name: 'Pablo', email: 'pablo@tribbuapp.com' },
+      { name: 'Zoe', email: 'zoe@tribbuapp.com' },
+    ]);
+  });
+  it('fuera: dadas de baja, externas y sin correo conocido', () => {
+    const people = [
+      { name: 'Baja', email: 'b@x.com', active: false },
+      { name: 'Externa', email: 'e@x.com', external: true },
+      { name: 'Sin correo', uid: 'u-nadie' },
+    ];
+    expect(agentTeamView(people, emails)).toEqual([]);
+  });
+});
 
 describe('una clave por agente, atada a su manager (RMR-TSK-0650)', () => {
   it('cada clave nueva es distinta, larga y reconocible', () => {
