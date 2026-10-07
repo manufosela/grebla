@@ -4,8 +4,8 @@
  * Los asigna a mano el superadmin. Solo puede ser manager de alguien quien está
  * por DEBAJO en la pirámide invertida, es decir, más senior. Puro.
  */
-import { layerOf } from '../../team/domain/orgRoles.js';
-import { NOTION_LEVELS } from '../../team/domain/peoplePyramid.js';
+import { layerOf } from './orgRoles.js';
+import { NOTION_LEVELS } from './peoplePyramid.js';
 
 /**
  * Rango en la pirámide con la escala de la que sale. El Level de Notion y la capa
