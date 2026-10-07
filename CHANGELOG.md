@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.238.0] - 2026-10-07
+
+### Cambiado
+
+- **Los correos de encuestas salen por Gmail.** La prueba y el envío masivo se
+  mandan con la API de Gmail como `noreply@tribbuapp.com`, en vez de Resend,
+  cuyo plan cortaba a los 100 correos al día. Si se llega al límite diario de
+  Gmail, el envío para y dice cuántos quedan, igual que antes.
+
 ## [1.237.0] - 2026-10-06
 
 ### Añadido
