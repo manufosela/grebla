@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { buildRawMessage } from './gmail.js';
+import { describe, expect, it, vi } from 'vitest';
+
+// El CI de calidad no instala las dependencias de functions/: la librería de
+// Google no hace falta para construir el mensaje, así que se sustituye.
+vi.mock('google-auth-library', () => ({ JWT: class {} }));
+const { buildRawMessage } = await import('./gmail.js');
 
 const decode = (raw) => Buffer.from(raw, 'base64url').toString('utf8');
 
