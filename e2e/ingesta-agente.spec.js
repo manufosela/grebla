@@ -8,6 +8,7 @@
  * «guárdala tú», y el resto, «algo va mal». Por eso se comprueban los códigos
  * uno a uno, y no solo el camino feliz.
  */
+import { createHash } from 'node:crypto';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
@@ -18,9 +19,11 @@ function db() {
   return getFirestore();
 }
 
-// En el emulador el secreto vale lo que diga functions/.secret.local; el
-// arranque de los E2E deja este valor.
+// Una clave por agente, atada a su manager (RMR-TSK-0650): en /agentKeys solo
+// va la huella. CLAVE es la del agente del Head; CLAVE_OTRA, la de adminmgr.
 const CLAVE = 'e2e-agent-key';
+const CLAVE_OTRA = 'e2e-agent-key-adminmgr';
+const huella = (k) => createHash('sha256').update(k).digest('hex');
 const URL = 'http://127.0.0.1:5001/demo-grebla/europe-west1/ingestConversation';
 
 const PERSONA = 'people/e2e-person-ingesta';
@@ -45,6 +48,11 @@ const o2oDe = (personPath) => db().collection('leaders/e2e-head/o2o').where('per
 /** Envía la nota con la clave indicada (por defecto, la buena). */
 const enviar = (request, cuerpo, clave = CLAVE) =>
   request.post(URL, { headers: { Authorization: `Bearer ${clave}` }, data: cuerpo, failOnStatusCode: false });
+
+test.beforeAll(async () => {
+  await db().doc(`agentKeys/${huella(CLAVE)}`).set({ label: 'e2e-head', managerUid: 'e2e-head', managerEmail: 'head@e2e.test', active: true });
+  await db().doc(`agentKeys/${huella(CLAVE_OTRA)}`).set({ label: 'e2e-adminmgr', managerUid: 'e2e-adminmgr', managerEmail: 'adminmgr@e2e.test', active: true });
+});
 
 test.beforeEach(async () => {
   await db().doc(PERSONA).set({ name: 'Ana Ingesta E2E', email: EMAIL, ownerLeaderUid: 'e2e-head', active: true });
@@ -85,8 +93,9 @@ test('reenviar la misma nota no duplica: el relanzamiento del agente es inofensi
   expect((await o2oDe(PERSONA)).size).toBe(1);
 });
 
-test('con managerEmail el O2O es de quien lo hizo, aunque no sea su manager', async ({ request }) => {
-  const res = await enviar(request, nota({ managerEmail: 'adminmgr@e2e.test', source: { system: 'matias', id: 'thread-otro' } }));
+test('cada clave escribe solo en los O2O de su manager: no hay cruce (RMR-TSK-0650)', async ({ request }) => {
+  // La clave de adminmgr escribe en los O2O de adminmgr, aunque la persona sea del Head.
+  const res = await enviar(request, nota({ source: { system: 'matias', id: 'thread-otro' } }), CLAVE_OTRA);
   expect(res.status()).toBe(200);
   const { id } = await res.json();
   const ref = db().doc(`leaders/e2e-adminmgr/o2o/${id}`);
@@ -95,8 +104,10 @@ test('con managerEmail el O2O es de quien lo hizo, aunque no sea su manager', as
   } finally {
     await ref.delete();
   }
-  const noManager = await enviar(request, nota({ managerEmail: 'engineer@e2e.test', source: { system: 'matias', id: 'thread-x' } }));
-  expect(noManager.status()).toBe(400);
+  // Y la del Head no puede escribir a nombre de otro manager.
+  const cruce = await enviar(request, nota({ managerEmail: 'adminmgr@e2e.test', source: { system: 'matias', id: 'thread-x' } }));
+  expect(cruce.status()).toBe(403);
+  expect((await cruce.json()).error).toBe('manager_mismatch');
 });
 
 test('llega también a quien no tiene el email en la ficha, por su cuenta vinculada', async ({ request }) => {
