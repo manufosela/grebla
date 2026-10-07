@@ -37,3 +37,21 @@ export function sortO2OManagers(managers, roles) {
   const rank = (m) => seniorityRank(m, roles) ?? Number.POSITIVE_INFINITY;
   return (managers ?? []).toSorted((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name), 'es'));
 }
+
+/**
+ * Los managers de O2O asignados a `person`, resueltos a su ficha y en orden. Un
+ * uid que ya no casa con ninguna ficha se enseña, no se esconde: sigue dando acceso.
+ */
+export function o2oManagersOf(person, people, roles) {
+  const byUid = new Map((people ?? []).filter((x) => x.uid).map((x) => [x.uid, x]));
+  return sortO2OManagers(
+    (person?.o2oManagerUids ?? []).map((uid) => byUid.get(uid) ?? { id: null, uid, name: '(cuenta sin ficha)' }),
+    roles,
+  );
+}
+
+/** Quién se puede añadir como manager de O2O de `person`: válido y no asignado ya. */
+export function o2oManagerCandidates(person, people, roles) {
+  const assigned = new Set(person?.o2oManagerUids ?? []);
+  return sortO2OManagers((people ?? []).filter((c) => !assigned.has(c.uid) && canBeO2OManager(c, person, roles)), roles);
+}
