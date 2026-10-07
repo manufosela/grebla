@@ -28,6 +28,7 @@ import './admin/notion-sync.js';
 import { isNotionSynced } from '../lib/notionSync.js';
 import { withoutNotionFields } from '../tools/team/domain/notionFields.js';
 import { withoutDepartment } from '../tools/team/domain/withoutDepartment.js';
+import { o2oManagersOf, o2oManagerCandidates } from '../tools/team/domain/o2oManagers.js';
 import { listAllUsers, setUserRole, setUserAdmin, listLinkedUids, assignUserToLeader, deleteAccount } from '../lib/users.js';
 import { classifyAccountWithoutPerson } from '../lib/accessRoles.js';
 import { createTeamContainer } from '../tools/team/composition/container.js';
@@ -331,6 +332,11 @@ export class SuperadminPanel extends LitElement {
     /* El nombre y el email sí envuelven: son lo más largo y no hace falta
        verlos en una línea para entenderlos. */
     table.people td.wrap { white-space: normal; word-break: break-word; min-width: 8rem; }
+    /* Managers de O2O (RMR-TSK-0656): chips en orden de pirámide + «Añadir». */
+    table.people .o2o-mgrs { display: flex; flex-wrap: wrap; gap: 0.3rem; min-width: 9rem; white-space: normal; }
+    table.people .o2o-mgrs .chip { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.1rem 0.45rem;
+      border: 1px solid var(--rm-border, #c8c8c8); border-radius: 999px; font-size: 0.8rem; color: var(--rm-text, inherit); }
+    table.people .o2o-mgrs .chip button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0.15rem; }
     table.people select { max-width: 10.5rem; width: 100%; }
     /* Los dos controles de acceso (excepción y acceso extra) caben en menos:
        el texto de sus opciones es corto y el ancho sobrante empujaba la tabla
@@ -1136,6 +1142,41 @@ export class SuperadminPanel extends LitElement {
    * @param {string} message lo que se está haciendo, en primera persona del plural
    * @param {() => Promise<unknown>} action
    */
+  /** Cambia los managers de O2O de una persona (RMR-TSK-0656). Solo el superadmin. */
+  async _setO2OManagers(personId, uids) {
+    return this._withBusy('Guardando los managers de O2O…', async () => {
+      this._peopleError = '';
+      this._peopleNotice = '';
+      const prev = this._peopleList.find((p) => p.id === personId)?.o2oManagerUids ?? [];
+      this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, o2oManagerUids: uids } : p));
+      try {
+        await this.persistence.people.update(personId, { o2oManagerUids: uids });
+        this._peopleNotice = 'Managers de O2O actualizados.';
+      } catch {
+        this._peopleList = this._peopleList.map((p) => (p.id === personId && p.o2oManagerUids === uids ? { ...p, o2oManagerUids: prev } : p));
+        this._peopleError = 'No se pudieron guardar los managers de O2O.';
+      }
+    });
+  }
+
+  /** Managers de O2O de una persona: los suyos en orden, quitar y añadir. */
+  _renderO2OManagersCell(p) {
+    const current = p.o2oManagerUids ?? [];
+    const candidates = o2oManagerCandidates(p, this._peopleList, this._orgRoles);
+    return html`<div class="o2o-mgrs">
+      ${o2oManagersOf(p, this._peopleList, this._orgRoles).map((m) => html`<span class="chip">${m.name}
+        <button aria-label="Quitar a ${m.name} como manager de O2O de ${p.name}"
+          @click=${() => this._setO2OManagers(p.id, current.filter((u) => u !== m.uid))}>✕</button></span>`)}
+      ${candidates.length
+        ? html`<select aria-label="Añadir manager de O2O a ${p.name ?? 'la persona'}"
+            @change=${(e) => { const uid = e.target.value; e.target.value = ''; if (uid) this._setO2OManagers(p.id, [...current, uid]); }}>
+            <option value="" selected>+ Añadir…</option>
+            ${candidates.map((c) => html`<option value=${c.uid}>${c.name}</option>`)}
+          </select>`
+        : null}
+    </div>`;
+  }
+
   async _withBusy(message, action) {
     this._busy = message;
     try {
@@ -1291,7 +1332,7 @@ export class SuperadminPanel extends LitElement {
     return html`<tr>
       <td>${u.displayName ?? '—'} <span class="muted">(cuenta sin ficha)</span></td>
       <td>${u.email ?? html`<span class="muted">—</span>`}</td>
-      <td colspan="2"><span class="muted">${detalle}</span></td>
+      <td colspan="3"><span class="muted">${detalle}</span></td>
       <td class="stack">
         ${retirando
           ? html`<span class="confirm confirm-wrap">¿Borrar la cuenta? Se borra su login y su usuario; no podrá volver a entrar. <button class="yes" @click=${() => this._removeAccount(u)}>Sí, borrar</button> <button @click=${() => { this._confirmRemoveAccount = null; }}>No</button></span>`
@@ -2975,7 +3016,7 @@ export class SuperadminPanel extends LitElement {
       ${this._peopleList.length === 0
         ? sinPersonas
         : html`<div class="table-wrap"><table class="people">
-            <thead><tr><th>Nombre</th><th>Email y cuenta</th><th>Rol y rama</th><th>Reporta a</th><th>Acceso</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Email y cuenta</th><th>Rol y rama</th><th>Reporta a</th><th>Managers de O2O</th><th>Acceso</th></tr></thead>
             <tbody>
               ${visible.map((p) => {
                 let account;
@@ -2993,6 +3034,7 @@ export class SuperadminPanel extends LitElement {
                     ${this._renderBranchCell(p)}
                   </td>
                   <td>${this._notionSync ? nameOf(p.reportsToPersonId) : this._renderSuperiorSelect(p, nameOf)}</td>
+                  <td>${this._renderO2OManagersCell(p)}</td>
                   <td class="stack">
                     ${this._renderPersonAccess(p)}
                     ${this._confirmDeletePerson === p.id
