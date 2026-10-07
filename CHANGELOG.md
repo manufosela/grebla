@@ -15,6 +15,16 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.241.0] - 2026-10-07
+
+### Cambiado
+
+- **Una clave por agente de ingesta, atada a su manager.** Se retira la clave
+  compartida: cada agente (p. ej. el MATIAS de cada manager) tiene la suya y
+  solo escribe en los O2O de ese manager. Si un envío dice ser de otro manager,
+  se rechaza (403 `manager_mismatch`). Las claves se dan de alta y se retiran
+  con `scripts/create-agent-key.mjs`; GREBLA guarda solo su huella.
+
 ## [1.240.0] - 2026-10-07
 
 ### Cambiado
