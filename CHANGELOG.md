@@ -15,6 +15,20 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.239.0] - 2026-10-07
+
+### Añadido
+
+- **O2O: leer los O2O hechos.** En «Registrar O2O» cada sesión tiene «Ver», y en
+  el «Resumen» del periodo cada O2O se despliega igual: «Solo tú» (notas y
+  resumen privados) separado de «Lo que ve la persona» (el resumen compartido, y
+  si de verdad lo ve).
+
+### Corregido
+
+- **O2O: solo tu equipo.** La herramienta cargaba a toda la organización si eras
+  superadmin; ahora salen las personas de tu equipo.
+
 ## [1.238.0] - 2026-10-07
 
 ### Cambiado
