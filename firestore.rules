@@ -298,18 +298,26 @@ service cloud.firestore {
       // (solo lectura, tipo C-level) ve todo, igual que el superadmin. El usuario
       // vinculado (Person.uid == su uid) lee su propia ficha en solo lectura; el
       // guard 'uid' in resource.data evita romper la regla en personas sin campo.
+      // Managers de O2O (RMR-TSK-0654): quien la persona tiene asignado para sus
+      // O2O la lee. La lista solo la cambia el superadmin (ver create/update).
+      function touchesO2OManagers() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(['o2oManagerUids']);
+      }
       allow read: if isSuperAdmin() || isViewer() || isOwner() || ownerReportsToMe()
         || ('sharedWithUids' in resource.data && request.auth.uid in resource.data.sharedWithUids)
+        || (isSignedIn() && 'o2oManagerUids' in resource.data && request.auth.uid in resource.data.o2oManagerUids)
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid);
       // El líder crea sus personas; el superadmin puede crear una persona para
       // cualquier líder (asignar un usuario a un equipo desde el panel).
       allow create: if isSuperAdmin()
-        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid);
+        || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid
+            && !('o2oManagerUids' in request.resource.data));
       // Un editor compartido edita datos pero NO transfiere la propiedad. El
       // ingeniero vinculado (Person.uid == su uid) SOLO puede declarar su objetivo
       // de carrera: la última rama restringe el cambio al único campo
       // `careerTargetLevelId` (hasOnly), sin poder tocar ningún otro dato de su ficha.
-      allow update: if !updatesNotionFields() && (isSuperAdmin() || isOwner()
+      allow update: if !updatesNotionFields() && (isSuperAdmin() || !touchesO2OManagers())
+        && (isSuperAdmin() || isOwner()
         || (ownerReportsToMe()
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
         || (sharedPerm(resource.data) == 'edit'
@@ -434,7 +442,8 @@ service cloud.firestore {
             && resource != null && request.resource != null;
         }
         allow read: if canView();
-        allow write: if canEdit() && !(isPersonDocUpdate() && updatesNotionFields());
+        allow write: if canEdit() && !(isPersonDocUpdate() && updatesNotionFields())
+          && !(isPersonDocUpdate() && touchesO2OManagers() && !isSuperAdmin());
       }
     }
 
