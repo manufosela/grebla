@@ -65,6 +65,12 @@ describe('normalizeIngest', () => {
     expect(limpia.source.url).toBeNull();
   });
 
+  it('quien hizo el O2O es opcional; si viene, tiene que ser un correo (RMR-TSK-0649)', () => {
+    expect(normalizeIngest(nota).managerEmail).toBeNull();
+    expect(normalizeIngest({ ...nota, managerEmail: ' Jefa@Ejemplo.test ' }).managerEmail).toBe('jefa@ejemplo.test');
+    expect(() => normalizeIngest({ ...nota, managerEmail: 'no-es-un-email' })).toThrow(/managerEmail/);
+  });
+
   it('acota el tamaño: una nota no es un volcado de correo entero', () => {
     const limpia = normalizeIngest({ ...nota, notes: 'x'.repeat(50_000) });
     expect(limpia.notes.length).toBeLessThanOrEqual(20_000);

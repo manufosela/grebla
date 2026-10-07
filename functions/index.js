@@ -2950,10 +2950,20 @@ export const ingestConversation = onRequest(
     // El id sale del ORIGEN y el alta es exclusiva: reenviar la misma nota no
     // duplica. Se responde 200 igual, porque para quien ingesta el resultado es
     // el mismo —la nota está— y un error le haría reintentar en balde.
-    // Va a los O2O PRIVADOS de su manager (RMR-TSK-0649), en su periodo más
-    // reciente: las conversaciones de la ficha las lee la propia persona.
+    // Va a los O2O PRIVADOS de quien lo hizo (`managerEmail`) o, si no se dice,
+    // de su manager (RMR-TSK-0649), en su periodo más reciente: las
+    // conversaciones de la ficha las lee la propia persona.
+    let leaderUid = persona.data().ownerLeaderUid;
+    if (nota.managerEmail) {
+      const manager = await getAuth().getUserByEmail(nota.managerEmail).catch(() => null);
+      if (!manager || !(await getFirestore().doc(`leaders/${manager.uid}`).get()).exists) {
+        res.status(400).json({ error: 'invalid_payload', detail: '`managerEmail` no es de ningún manager de GREBLA.' });
+        return;
+      }
+      leaderUid = manager.uid;
+    }
     const id = conversationIdFor(nota.source);
-    const leader = getFirestore().collection('leaders').doc(persona.data().ownerLeaderUid);
+    const leader = getFirestore().collection('leaders').doc(leaderUid);
     const periods = await leader.collection('o2oPeriods').orderBy('createdAt', 'desc').limit(1).get();
     const ref = leader.collection('o2o').doc(id);
     try {

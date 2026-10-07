@@ -103,7 +103,11 @@ export function normalizeIngest(body) {
   const summary = texto(body?.summary, MAX_SUMMARY);
   if (!notes && !summary) throw new IngestError('La nota llega vacía: hace falta `notes` o `summary`.');
 
-  return { email, type, date, notes, summary, source: { system, id, url: sourceUrl(body?.source?.url) } };
+  // Quien hizo el O2O (RMR-TSK-0649), opcional: sin él, el O2O es de su manager.
+  const managerEmail = texto(body?.managerEmail, 200).toLowerCase() || null;
+  if (managerEmail && !EMAIL_RE.test(managerEmail)) throw new IngestError('El campo `managerEmail` no es un correo.');
+
+  return { email, type, date, notes, summary, managerEmail, source: { system, id, url: sourceUrl(body?.source?.url) } };
 }
 
 /**

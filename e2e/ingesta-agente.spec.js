@@ -85,6 +85,20 @@ test('reenviar la misma nota no duplica: el relanzamiento del agente es inofensi
   expect((await o2oDe(PERSONA)).size).toBe(1);
 });
 
+test('con managerEmail el O2O es de quien lo hizo, aunque no sea su manager', async ({ request }) => {
+  const res = await enviar(request, nota({ managerEmail: 'adminmgr@e2e.test', source: { system: 'matias', id: 'thread-otro' } }));
+  expect(res.status()).toBe(200);
+  const { id } = await res.json();
+  const ref = db().doc(`leaders/e2e-adminmgr/o2o/${id}`);
+  try {
+    expect((await ref.get()).data()?.personId).toBe('e2e-person-ingesta');
+  } finally {
+    await ref.delete();
+  }
+  const noManager = await enviar(request, nota({ managerEmail: 'engineer@e2e.test', source: { system: 'matias', id: 'thread-x' } }));
+  expect(noManager.status()).toBe(400);
+});
+
 test('llega también a quien no tiene el email en la ficha, por su cuenta vinculada', async ({ request }) => {
   // El caso normal en la instancia real: la ficha se ata por uid y el campo
   // `email` está vacío. Sin esto, la ingesta diría «no existe» a casi todos.
