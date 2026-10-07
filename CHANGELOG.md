@@ -15,6 +15,27 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.242.0] - 2026-10-07
+
+### Añadido
+
+- **Managers de O2O asignados a mano.** En Administración › Personas, la columna
+  «Managers de O2O» dice quién hace O2O a cada persona; puede ser más de uno
+  (su EM, su Head, el CTO). Solo los asigna el superadmin y solo se ofrece a
+  quien tiene cuenta y está por debajo en la pirámide invertida. Se sembró con el
+  reparto que había.
+- **El agente consulta el equipo de su manager** (`agentTeam`): con su clave
+  obtiene nombre y correo de las personas que su manager lleva, para saber qué
+  reuniones son O2O.
+
+### Cambiado
+
+- **El O2O muestra a quien tienes asignado**, no a quien eres dueño de ficha ni a
+  toda la organización por ser superadmin. Sus managers de O2O llevan las
+  acciones y leen las notas privadas de la persona.
+- **La ingesta de un agente solo escribe O2O de personas que tienen asignado a
+  su manager**; antes valía cualquier persona con dueño (403 `not_in_scope`).
+
 ## [1.241.0] - 2026-10-07
 
 ### Cambiado
