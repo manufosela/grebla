@@ -71,6 +71,7 @@ import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
 import { listOrgBranches } from '../../lib/orgBranches.js';
 import { departmentHasGuilds } from '../../tools/team/domain/guildScope.js';
 import '../o2o/manager-notes.js';
+import '../o2o/person-o2o.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -143,9 +144,9 @@ const SUBTABS = [
   { id: 'notes', label: 'Notas' },
 ];
 
-/** Dentro de «O2O»: las conversaciones y las notas privadas del manager (RMR-TSK-0636). */
+/** Dentro de «O2O»: los O2O hechos (RMR-TSK-0649) y las notas privadas del manager (RMR-TSK-0636). */
 const O2O_SUBTABS = [
-  { id: 'conversaciones', label: 'Conversaciones' },
+  { id: 'conversaciones', label: 'O2O hechos' },
   { id: 'privado', label: 'Privado' },
 ];
 
@@ -1668,14 +1669,18 @@ export class TeamPersonDetail extends LitElement {
     `;
   }
 
-  /** «O2O»: conversaciones y, para sus managers, las notas privadas. Quien mira su propia ficha no ve «Privado». */
+  /**
+   * «O2O» (RMR-TSK-0649): los O2O hechos —los mismos de la herramienta O2O— y,
+   * para sus managers, las notas privadas. Quien mira su propia ficha no ve «Privado».
+   */
   _renderO2O() {
     const isSelf = Boolean(this.person?.uid) && this.person.uid === this.currentUid;
-    if (isSelf) return this._renderConversations();
+    // Un O2O es de quien lo hace: aquí, TUS O2O con esta persona (los de tu herramienta O2O).
+    const done = html`<person-o2o .personId=${this.person.id} .leaderUid=${this.currentUid ?? null}
+      .personName=${this.person.name ?? ''}></person-o2o>`;
+    if (isSelf) return done;
     const active = this._o2oSubtab;
-    const panel = active === 'privado'
-      ? html`<manager-notes person-id=${this.person.id}></manager-notes>`
-      : this._renderConversations();
+    const panel = active === 'privado' ? html`<manager-notes person-id=${this.person.id}></manager-notes>` : done;
     return html`
       ${this._renderNestedTabs(O2O_SUBTABS, active, 'po2o', 'Secciones de O2O', (id) => { this._o2oSubtab = id; })}
       <div id="po2opanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="po2o-${active}" tabindex="0">${panel}</div>`;
