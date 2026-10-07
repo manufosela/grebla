@@ -129,16 +129,21 @@ describe('o2oSessionFrom (RMR-TSK-0649)', () => {
   });
 });
 
-describe('personIsInScope', () => {
-  it('dentro: persona activa con manager asignado', () => {
-    expect(personIsInScope({ active: true, ownerLeaderUid: 'u-em' })).toBe(true);
-    expect(personIsInScope({ ownerLeaderUid: 'u-em' })).toBe(true); // sin campo `active` cuenta como activa
+describe('personIsInScope: solo personas que tienen a ESE manager de O2O (RMR-TSK-0655)', () => {
+  it('dentro: persona activa con el manager de la clave en su lista', () => {
+    expect(personIsInScope({ active: true, o2oManagerUids: ['u-em'] }, 'u-em')).toBe(true);
+    expect(personIsInScope({ o2oManagerUids: ['u-head', 'u-em'] }, 'u-em')).toBe(true); // sin `active` cuenta como activa
   });
 
-  it('fuera: sin manager, desactivada o externa', () => {
-    expect(personIsInScope({ active: true, ownerLeaderUid: '' })).toBe(false);
-    expect(personIsInScope({ active: false, ownerLeaderUid: 'u-em' })).toBe(false);
-    expect(personIsInScope({ active: true, ownerLeaderUid: 'u-em', external: true })).toBe(false);
-    expect(personIsInScope(null)).toBe(false);
+  it('fuera: de otro manager, aunque sea su dueño, o sin lista', () => {
+    expect(personIsInScope({ active: true, o2oManagerUids: ['u-otro'] }, 'u-em')).toBe(false);
+    expect(personIsInScope({ active: true, ownerLeaderUid: 'u-em' }, 'u-em')).toBe(false);
+    expect(personIsInScope({ active: true, o2oManagerUids: ['u-em'] }, '')).toBe(false);
+  });
+
+  it('fuera: desactivada o externa', () => {
+    expect(personIsInScope({ active: false, o2oManagerUids: ['u-em'] }, 'u-em')).toBe(false);
+    expect(personIsInScope({ active: true, o2oManagerUids: ['u-em'], external: true }, 'u-em')).toBe(false);
+    expect(personIsInScope(null, 'u-em')).toBe(false);
   });
 });

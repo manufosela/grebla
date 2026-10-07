@@ -40,7 +40,7 @@ const FRAMEWORK = {
 async function conValoracion(byDimension, fn) {
   const previo = (await db().doc('careerFramework/engineering').get()).data() ?? null;
   await db().doc('careerFramework/engineering').set(FRAMEWORK);
-  await db().doc(PERSON).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', active: true, levelId: 'oc-l1' });
+  await db().doc(PERSON).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', o2oManagerUids: ['e2e-superadmin'], active: true, levelId: 'oc-l1' });
   await db().doc(`${PERSON}/careerAssessments/oc-l2`).set({ levelId: 'oc-l2', byDimension, closures: [] });
   try { await fn(); } finally {
     await db().doc(`${PERSON}/careerAssessments/oc-l2`).delete();

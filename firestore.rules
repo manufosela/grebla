@@ -392,6 +392,14 @@ service cloud.firestore {
         allow create, update: if isLinkedPlayer();
       }
 
+      // Acciones de O2O de la persona: también las llevan sus managers de O2O
+      // asignados (RMR-TSK-0655), aunque no sean dueños de la ficha. ADITIVO al
+      // {document=**} de abajo; solo esta subcolección, no el resto de la ficha.
+      match /o2oActions/{actionId} {
+        allow read, write: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/people/$(personId)).data.get('o2oManagerUids', []);
+      }
+
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
       match /{document=**} {
@@ -627,6 +635,8 @@ service cloud.firestore {
         let owner = notedPerson().get('ownerLeaderUid', null);
         let ownerLeader = /databases/$(database)/documents/leaders/$(owner);
         return owner == request.auth.uid
+          // Sus managers de O2O asignados (RMR-TSK-0655).
+          || request.auth.uid in notedPerson().get('o2oManagerUids', [])
           || ((isLeader() || isSuperManager()) && owner != null && exists(ownerLeader)
               && (get(ownerLeader).data.get('reportsTo', null) == request.auth.uid
                   || request.auth.uid in get(ownerLeader).data.get('chain', [])));

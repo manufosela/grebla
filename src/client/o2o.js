@@ -7,7 +7,7 @@
 import '../components/o2o/o2o-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createO2OContainer } from '../tools/o2o/composition/container.js';
-import { createTeamContainer } from '../tools/team/composition/container.js';
+import { listMyO2OPeople } from '../lib/o2oManagers.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { proposePrep } from '../lib/o2oAi.js';
@@ -18,13 +18,11 @@ import { ROLES } from '../data/roles.js';
 const app = document.querySelector('o2o-app');
 
 /**
- * Personas activas de TU equipo para el selector. Gobernar la instancia no hace
- * que tu equipo sea toda la organización (RMR-TSK-0647): los O2O son de cada
- * manager con su gente, también para el superadmin.
+ * Personas activas a las que estás asignado como manager de O2O (RMR-TSK-0655).
+ * Gobernar la instancia no hace que tu equipo sea toda la organización
+ * (RMR-TSK-0647), y ser dueño de una ficha tampoco: la lista la fija el superadmin.
  */
-async function loadPeople(uid) {
-  const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: uid, viewAll: false });
-  const people = await persistence.people.list();
+function forSelector(people) {
   return people
     .filter((p) => p.active)
     // `levelId` viaja con la persona para el contexto de carrera del registro
@@ -42,9 +40,11 @@ onUserChanged(async (user) => {
     if (!gate) return;
 
     const { uid } = access;
+    const mine = await listMyO2OPeople(uid);
     // Tres papeles distintos (RMR-TSK-0497): quien gobierna y quien lleva equipo
     // USAN la herramienta; quien solo la gestiona entra a cambiar las preguntas.
-    const quien = { governs: canGovern(access), leads: leadsTeam(access), managesTool: gate.manage };
+    // Llevar gente asignada para O2O también es llevar equipo (RMR-TSK-0655).
+    const quien = { governs: canGovern(access), leads: leadsTeam(access) || mine.length > 0, managesTool: gate.manage };
     if (!quien.governs && !quien.leads && !quien.managesTool) {
       app.error = 'Esta herramienta es para managers. Tu espacio de O2O está en «Mi espacio».';
       return;
@@ -54,10 +54,8 @@ onUserChanged(async (user) => {
     // En modo administración no se cargan personas: lo que se habló en un O2O es
     // de dos, y aquí solo se vienen a cambiar las preguntas. Lo que no se pide,
     // no llega al navegador.
-    const [{ persistence }, people] = await Promise.all([
-      createO2OContainer({ mode: 'firestore', leaderUid: uid }),
-      soloAdmin ? [] : loadPeople(uid),
-    ]);
+    const { persistence } = await createO2OContainer({ mode: 'firestore', leaderUid: uid });
+    const people = soloAdmin ? [] : forSelector(mine);
     app.canEdit = true;
     app.people = people;
     app.roles = ROLES; // para mostrar el rol Role Mirror en «Registrar O2O» (RMR-TSK-0226)

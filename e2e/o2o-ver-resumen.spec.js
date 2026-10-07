@@ -23,7 +23,7 @@ test.afterEach(async () => {
 });
 
 test('un O2O se despliega con lo privado del manager y lo que ve la persona', async ({ page }) => {
-  await db().doc(`people/${PERSON}`).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', active: true });
+  await db().doc(`people/${PERSON}`).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', o2oManagerUids: ['e2e-superadmin'], active: true });
   await signInAs(page, 'superadmin');
   await page.goto('/tools/o2o');
   await page.locator('o2o-app input[type="text"]').fill(PERIODO);
