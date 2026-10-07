@@ -26,7 +26,7 @@ import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './
 import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
-import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, conversationFrom, personIsInScope } from './agentIngest.js';
+import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
@@ -2903,12 +2903,12 @@ async function findPersonByEmail(email) {
 }
 
 /**
- * Crea en la ficha de una persona la nota de un 1-1 o un catchup que ha
- * detectado un agente externo (MATIAS, el agente personal de Mánu, que lee el
- * correo y Slack cada mañana).
+ * Registra como O2O PRIVADO del manager de una persona un 1-1 o un catchup que
+ * ha detectado un agente externo (MATIAS, el agente personal de Mánu).
  *
  * Es la ÚNICA puerta de escritura desde fuera, y escribe en un solo sitio:
- * `/people/{personId}/conversations`. Ni el O2O privado del manager, ni la
+ * `/leaders/{manager}/o2o` (RMR-TSK-0649). Antes escribía en las conversaciones
+ * de la ficha, que lee la propia persona: un 1-1 son notas del manager. Ni la
  * Marea, ni las encuestas, ni los kudos, ni las notas de apoyo: cada uno de
  * esos sitios tiene una garantía hecha a una persona, y un agente no la toca.
  *
@@ -2950,10 +2950,24 @@ export const ingestConversation = onRequest(
     // El id sale del ORIGEN y el alta es exclusiva: reenviar la misma nota no
     // duplica. Se responde 200 igual, porque para quien ingesta el resultado es
     // el mismo —la nota está— y un error le haría reintentar en balde.
+    // Va a los O2O PRIVADOS de quien lo hizo (`managerEmail`) o, si no se dice,
+    // de su manager (RMR-TSK-0649), en su periodo más reciente: las
+    // conversaciones de la ficha las lee la propia persona.
+    let leaderUid = persona.data().ownerLeaderUid;
+    if (nota.managerEmail) {
+      const manager = await getAuth().getUserByEmail(nota.managerEmail).catch(() => null);
+      if (!manager || !(await getFirestore().doc(`leaders/${manager.uid}`).get()).exists) {
+        res.status(400).json({ error: 'invalid_payload', detail: '`managerEmail` no es de ningún manager de GREBLA.' });
+        return;
+      }
+      leaderUid = manager.uid;
+    }
     const id = conversationIdFor(nota.source);
-    const ref = persona.ref.collection('conversations').doc(id);
+    const leader = getFirestore().collection('leaders').doc(leaderUid);
+    const periods = await leader.collection('o2oPeriods').orderBy('createdAt', 'desc').limit(1).get();
+    const ref = leader.collection('o2o').doc(id);
     try {
-      await ref.create(conversationFrom(nota, { at: new Date().toISOString() }));
+      await ref.create(o2oSessionFrom(nota, { personId: persona.id, periodId: periods.docs[0]?.id ?? null, at: new Date().toISOString() }));
     } catch (err) {
       if (err?.code === 6 || /already exists/i.test(String(err?.message ?? ''))) {
         res.status(200).json({ id, personId: persona.id, duplicate: true });
@@ -2961,7 +2975,7 @@ export const ingestConversation = onRequest(
       }
       throw err;
     }
-    logger.info(`[ingesta] ${nota.source.system}: nota ${nota.type} en la ficha ${persona.id}`);
+    logger.info(`[ingesta] ${nota.source.system}: O2O privado ${nota.type} de ${persona.id}`);
     res.status(200).json({ id, personId: persona.id, duplicate: false });
   },
 );
