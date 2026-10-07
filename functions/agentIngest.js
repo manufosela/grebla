@@ -118,24 +118,28 @@ export function conversationIdFor(source) {
 }
 
 /**
- * El documento que se guarda en `/people/{id}/conversations`.
+ * La sesión O2O que se guarda en `/leaders/{manager}/o2o`.
  * @param {ReturnType<typeof normalizeIngest>} input
- * @param {{ at: string }} meta  momento de la ingesta (ISO)
+ * @param {{ personId: string, periodId?: string|null, at: string }} meta  persona, periodo y momento (ISO)
  */
-export function conversationFrom(input, meta) {
+export function o2oSessionFrom(input, meta) {
+  // Un O2O PRIVADO del manager (RMR-TSK-0649): antes iba a las conversaciones de
+  // la ficha, que la propia persona puede leer. Nada se comparte con ella.
   return {
-    type: input.type,
+    personId: meta.personId,
+    periodId: meta.periodId ?? null,
     date: input.date,
-    notes: input.notes,
+    guideVersion: null,
+    answers: [],
+    // El agente trae la nota ya redactada, no la transcripción.
+    transcript: '',
+    privateNotes: input.notes,
     summary: input.summary,
-    // El agente trae la nota ya redactada, no el audio ni su transcripción.
-    transcription: '',
-    audio: null,
-    linkedDimensions: [],
+    sharedSummary: '',
+    sharedWithPerson: false,
     automated: true,
     source: input.source,
     createdAt: meta.at,
-    createdBy: { uid: `agent:${input.source.system}`, name: `${input.source.system} (automático)` },
   };
 }
 

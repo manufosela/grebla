@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   INGEST_TYPES, bearerFrom, keyMatches, normalizeIngest,
-  conversationIdFor, conversationFrom, personIsInScope,
+  conversationIdFor, o2oSessionFrom, personIsInScope,
 } from './agentIngest.js';
 
 /**
@@ -84,20 +84,18 @@ describe('conversationIdFor', () => {
   });
 });
 
-describe('conversationFrom', () => {
-  const doc = conversationFrom(normalizeIngest(nota), { at: '2026-09-22T10:00:00.000Z' });
+describe('o2oSessionFrom (RMR-TSK-0649)', () => {
+  const doc = o2oSessionFrom(normalizeIngest(nota), { personId: 'p1', periodId: 'per1', at: '2026-09-22T10:00:00.000Z' });
 
-  it('es una conversación de la ficha, con su tipo y su fecha', () => {
-    expect(doc.type).toBe('o2o');
-    expect(doc.date).toBe('2026-09-22');
-    expect(doc.notes).toBe('Hablamos de su paso a L2');
-    expect(doc.transcription).toBe('');
+  it('es un O2O PRIVADO del manager: nada compartido con la persona', () => {
+    expect(doc).toMatchObject({ personId: 'p1', periodId: 'per1', date: '2026-09-22', sharedSummary: '', sharedWithPerson: false });
+    expect(doc.privateNotes).toBe('Hablamos de su paso a L2');
+    expect(doc.summary).toBe(normalizeIngest(nota).summary);
   });
 
-  it('queda marcada como AUTOMÁTICA y con quién la trajo: no es un registro del manager', () => {
+  it('queda marcado como AUTOMÁTICO y con su origen', () => {
     expect(doc.automated).toBe(true);
-    expect(doc.createdBy.uid).toBe('agent:matias');
-    expect(doc.createdBy.name).toMatch(/autom/i);
+    expect(doc.source.system).toBe('matias');
     expect(doc.source.url).toBe('https://mail.google.com/x/thread-abc');
   });
 });

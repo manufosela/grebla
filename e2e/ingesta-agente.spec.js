@@ -1,7 +1,7 @@
 /**
  * Ingesta desde un agente externo (RMR-TSK-0549): la nota de un 1-1 que MATIAS
- * encuentra en el correo acaba en la ficha de la persona, no en su lista de
- * tareas.
+ * encuentra en el correo acaba como O2O PRIVADO de su manager (RMR-TSK-0649),
+ * no en las conversaciones de la ficha, que la persona puede leer.
  *
  * Lo que se fija aquí es el CONTRATO que pactamos con quien ingesta, porque de
  * él depende lo que haga cuando la nota no cabe aquí: 404 y 403 significan
@@ -11,7 +11,7 @@
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { test, expect, signInAs } from './fixtures.js';
+import { test, expect } from './fixtures.js';
 
 function db() {
   if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
@@ -39,6 +39,9 @@ const nota = (extra = {}) => ({
   ...extra,
 });
 
+/** Los O2O privados que el manager (e2e-head) tiene de una persona. */
+const o2oDe = (personPath) => db().collection('leaders/e2e-head/o2o').where('personId', '==', personPath.split('/')[1]).get();
+
 /** Envía la nota con la clave indicada (por defecto, la buena). */
 const enviar = (request, cuerpo, clave = CLAVE) =>
   request.post(URL, { headers: { Authorization: `Bearer ${clave}` }, data: cuerpo, failOnStatusCode: false });
@@ -50,25 +53,26 @@ test.beforeEach(async () => {
 
 test.afterEach(async () => {
   for (const ruta of [PERSONA, FUERA]) {
-    const conv = await db().collection(`${ruta}/conversations`).get();
-    await Promise.all(conv.docs.map((d) => d.ref.delete()));
+    await Promise.all((await o2oDe(ruta)).docs.map((d) => d.ref.delete()));
     await db().doc(ruta).delete();
   }
 });
 
-test('la nota entra en la ficha de la persona, marcada como automática', async ({ request }) => {
+test('la nota entra como O2O privado de su manager, marcado como automático', async ({ request }) => {
   const res = await enviar(request, nota());
   expect(res.status()).toBe(200);
   const { id, personId, duplicate } = await res.json();
   expect([personId, duplicate]).toEqual(['e2e-person-ingesta', false]);
 
-  const doc = (await db().doc(`${PERSONA}/conversations/${id}`).get()).data();
-  expect(doc.type).toBe('o2o');
-  expect(doc.notes).toBe('Hablamos de su paso a L2');
-  // Es un borrador de una máquina, y se ve que lo es.
+  const doc = (await db().doc(`leaders/e2e-head/o2o/${id}`).get()).data();
+  expect(doc.personId).toBe('e2e-person-ingesta');
+  expect(doc.privateNotes).toBe('Hablamos de su paso a L2');
+  // Nada compartido con la persona, y se ve que lo trajo una máquina.
+  expect(doc.sharedWithPerson).toBe(false);
   expect(doc.automated).toBe(true);
-  expect(doc.createdBy.uid).toBe('agent:matias');
   expect(doc.source.id).toBe('thread-e2e-1');
+  // Y nada en las conversaciones de la ficha, que la persona puede leer.
+  expect((await db().collection(`${PERSONA}/conversations`).get()).size).toBe(0);
 });
 
 test('reenviar la misma nota no duplica: el relanzamiento del agente es inofensivo', async ({ request }) => {
@@ -78,26 +82,7 @@ test('reenviar la misma nota no duplica: el relanzamiento del agente es inofensi
   expect((await segunda.json()).duplicate).toBe(true);
   expect((await primera.json()).id).toBe((await segunda.json()).id);
 
-  const conv = await db().collection(`${PERSONA}/conversations`).get();
-  expect(conv.size).toBe(1);
-});
-
-test('en la ficha se ve que la nota la trajo una máquina, con su origen', async ({ page, request }) => {
-  await enviar(request, nota());
-  await signInAs(page, 'head');
-  await page.goto('/tools/team');
-  await page.getByRole('button', { name: `Abrir ficha de Ana Ingesta E2E` }).click().catch(async () => {
-    // Según de dónde se entre, la ficha se abre desde el nombre de la persona.
-    await page.getByText('Ana Ingesta E2E').first().click();
-  });
-  const ficha = page.locator('team-person-detail');
-  await expect(ficha).toBeVisible();
-  await ficha.getByRole('tab', { name: 'O2O' }).click();
-
-  const fila = ficha.locator('.hist li', { hasText: 'Hablamos de su paso a L2' });
-  await expect(fila.locator('.auto')).toContainText('automática');
-  await expect(fila.locator('.auto')).toContainText('matias');
-  await expect(fila.getByRole('link', { name: 'ver origen' })).toHaveAttribute('href', /^https:\/\/mail\.google\.com\//);
+  expect((await o2oDe(PERSONA)).size).toBe(1);
 });
 
 test('llega también a quien no tiene el email en la ficha, por su cuenta vinculada', async ({ request }) => {
@@ -110,8 +95,7 @@ test('llega también a quien no tiene el email en la ficha, por su cuenta vincul
     expect(res.status()).toBe(200);
     expect((await res.json()).personId).toBe('e2e-person-ingesta-uid');
   } finally {
-    const conv = await db().collection(`${POR_UID}/conversations`).get();
-    await Promise.all(conv.docs.map((d) => d.ref.delete()));
+    await Promise.all((await o2oDe(POR_UID)).docs.map((d) => d.ref.delete()));
     await db().doc(POR_UID).delete();
     await getAuth().deleteUser(cuenta.uid);
   }
@@ -149,6 +133,5 @@ test('el contrato de errores: 401, 400, 404 y 403 se distinguen', async ({ reque
   expect((await sinManager.json()).error).toBe('not_in_scope');
 
   // Ninguno de los cuatro ha escrito nada.
-  const conv = await db().collection(`${PERSONA}/conversations`).get();
-  expect(conv.size).toBe(0);
+  expect((await o2oDe(PERSONA)).size).toBe(0);
 });
