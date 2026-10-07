@@ -55,7 +55,7 @@ test.beforeAll(async () => {
 });
 
 test.beforeEach(async () => {
-  await db().doc(PERSONA).set({ name: 'Ana Ingesta E2E', email: EMAIL, ownerLeaderUid: 'e2e-head', active: true });
+  await db().doc(PERSONA).set({ name: 'Ana Ingesta E2E', email: EMAIL, ownerLeaderUid: 'e2e-head', o2oManagerUids: ['e2e-head'], active: true });
   await db().doc(FUERA).set({ name: 'Sin Manager E2E', email: EMAIL_FUERA, ownerLeaderUid: '', active: true });
 });
 
@@ -93,8 +93,13 @@ test('reenviar la misma nota no duplica: el relanzamiento del agente es inofensi
   expect((await o2oDe(PERSONA)).size).toBe(1);
 });
 
-test('cada clave escribe solo en los O2O de su manager: no hay cruce (RMR-TSK-0650)', async ({ request }) => {
-  // La clave de adminmgr escribe en los O2O de adminmgr, aunque la persona sea del Head.
+test('cada clave escribe solo en los O2O de su manager: no hay cruce (RMR-TSK-0650/0655)', async ({ request }) => {
+  // La clave de adminmgr no escribe O2O de quien no le tiene como manager de O2O.
+  const ajena = await enviar(request, nota({ source: { system: 'matias', id: 'thread-otro' } }), CLAVE_OTRA);
+  expect(ajena.status()).toBe(403);
+  expect((await ajena.json()).error).toBe('not_in_scope');
+  // Con adminmgr también en su lista, entra en los O2O de adminmgr, no en los del Head.
+  await db().doc(PERSONA).update({ o2oManagerUids: ['e2e-head', 'e2e-adminmgr'] });
   const res = await enviar(request, nota({ source: { system: 'matias', id: 'thread-otro' } }), CLAVE_OTRA);
   expect(res.status()).toBe(200);
   const { id } = await res.json();
@@ -114,7 +119,7 @@ test('llega también a quien no tiene el email en la ficha, por su cuenta vincul
   // El caso normal en la instancia real: la ficha se ata por uid y el campo
   // `email` está vacío. Sin esto, la ingesta diría «no existe» a casi todos.
   const cuenta = await getAuth().createUser({ email: 'por.cuenta@e2e.test', emailVerified: true });
-  await db().doc(POR_UID).set({ name: 'Por Cuenta E2E', uid: cuenta.uid, ownerLeaderUid: 'e2e-head', active: true });
+  await db().doc(POR_UID).set({ name: 'Por Cuenta E2E', uid: cuenta.uid, ownerLeaderUid: 'e2e-head', o2oManagerUids: ['e2e-head'], active: true });
   try {
     const res = await enviar(request, nota({ email: 'por.cuenta@e2e.test', source: { system: 'matias', id: 'thread-uid' } }));
     expect(res.status()).toBe(200);

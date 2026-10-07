@@ -17,7 +17,7 @@ const NOMBRE = 'Bea O2O Ficha E2E';
 const SESION = 'leaders/e2e-head/o2o/e2e-sesion-ficha';
 
 test.beforeEach(async () => {
-  await db().doc(`people/${PERSONA}`).set({ name: NOMBRE, ownerLeaderUid: 'e2e-head', active: true });
+  await db().doc(`people/${PERSONA}`).set({ name: NOMBRE, ownerLeaderUid: 'e2e-head', o2oManagerUids: ['e2e-head'], active: true });
   await db().doc(SESION).set({
     personId: PERSONA, periodId: 'x', date: '2026-10-07', guideVersion: 2, answers: [], transcript: '',
     privateNotes: 'Preparar el roadmap juntos', summary: 'Buen arranque', sharedSummary: 'Gracias por el esfuerzo', sharedWithPerson: true,

@@ -47,6 +47,20 @@ test.describe('reglas: managers de O2O', () => {
     await assertSucceeds(updateDoc(doc(como(env, 'duena').firestore(), 'people', 'p1'), { name: 'Ana B.' }));
   });
 
+  test('el manager de O2O lleva las acciones y lee las notas privadas; otro, no (RMR-TSK-0655)', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'managerNotes', 'p1', 'entries', 'n1'), { type: 'perf-review', date: '2026-07-30', title: 'PR', content: 'x' });
+    });
+    const mario = como(env, 'mario').firestore();
+    await assertSucceeds(getDoc(doc(mario, 'managerNotes', 'p1', 'entries', 'n1')));
+    await assertSucceeds(setDoc(doc(mario, 'people', 'p1', 'o2oActions', 'a1'), { description: 'Hacer X', status: 'open' }));
+    const otro = como(env, 'otro').firestore();
+    await assertFails(getDoc(doc(otro, 'managerNotes', 'p1', 'entries', 'n1')));
+    await assertFails(getDoc(doc(otro, 'people', 'p1', 'o2oActions', 'a1')));
+    // Lo demás de la ficha sigue siendo del dueño: el manager de O2O no escribe su carrera.
+    await assertFails(setDoc(doc(mario, 'people', 'p1', 'career', 'journey'), { x: 1 }));
+  });
+
   test('un líder no crea personas con managers de O2O puestos', async () => {
     const db = como(env, 'duena').firestore();
     await assertFails(setDoc(doc(db, 'people', 'p2'), { name: 'B', ownerLeaderUid: 'duena', o2oManagerUids: ['duena'] }));

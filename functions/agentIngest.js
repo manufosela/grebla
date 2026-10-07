@@ -166,13 +166,15 @@ export function o2oSessionFrom(input, meta) {
 }
 
 /**
- * ¿Entra esta persona en el ámbito de la ingesta? Activa, con manager asignado
- * y de la organización. Fuera de eso, el agente se guarda la nota en su lado:
- * mejor eso que dejarla en una ficha que nadie mira.
- * @param {{ active?: unknown, ownerLeaderUid?: unknown, external?: unknown }|null|undefined} person
+ * ¿Entra esta persona en el ámbito de la ingesta de ESTE manager? Activa, de la
+ * organización y con él entre sus managers de O2O (RMR-TSK-0655): una clave solo
+ * escribe O2O de quien su manager lleva. Fuera de eso, el agente se guarda la
+ * nota en su lado: mejor eso que dejarla donde no toca.
+ * @param {{ active?: unknown, external?: unknown, o2oManagerUids?: unknown }|null|undefined} person
+ * @param {string} managerUid
  */
-export function personIsInScope(person) {
+export function personIsInScope(person, managerUid) {
   if (!person || person.external === true) return false;
-  if (person.active === false) return false;
-  return texto(person.ownerLeaderUid, 200) !== '';
+  if (person.active === false || !managerUid) return false;
+  return Array.isArray(person.o2oManagerUids) && person.o2oManagerUids.includes(managerUid);
 }

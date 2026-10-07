@@ -2950,7 +2950,7 @@ export const ingestConversation = onRequest(
       res.status(404).json({ error: 'person_not_found' });
       return;
     }
-    if (!personIsInScope(persona.data())) {
+    if (!personIsInScope(persona.data(), verdict.managerUid)) {
       res.status(403).json({ error: 'not_in_scope' });
       return;
     }
