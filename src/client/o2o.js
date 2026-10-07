@@ -17,9 +17,13 @@ import { ROLES } from '../data/roles.js';
 
 const app = document.querySelector('o2o-app');
 
-/** Personas activas del manager (o de toda la org si superadmin) para el selector. */
-async function loadPeople(uid, viewAll) {
-  const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: uid, viewAll });
+/**
+ * Personas activas de TU equipo para el selector. Gobernar la instancia no hace
+ * que tu equipo sea toda la organización (RMR-TSK-0647): los O2O son de cada
+ * manager con su gente, también para el superadmin.
+ */
+async function loadPeople(uid) {
+  const { persistence } = await createTeamContainer({ mode: 'firestore', leaderUid: uid, viewAll: false });
   const people = await persistence.people.list();
   return people
     .filter((p) => p.active)
@@ -52,7 +56,7 @@ onUserChanged(async (user) => {
     // no llega al navegador.
     const [{ persistence }, people] = await Promise.all([
       createO2OContainer({ mode: 'firestore', leaderUid: uid }),
-      soloAdmin ? [] : loadPeople(uid, quien.governs),
+      soloAdmin ? [] : loadPeople(uid),
     ]);
     app.canEdit = true;
     app.people = people;
