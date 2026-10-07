@@ -1,8 +1,39 @@
 import { describe, it, expect } from 'vitest';
 import {
-  INGEST_TYPES, bearerFrom, keyMatches, normalizeIngest,
+  INGEST_TYPES, bearerFrom, normalizeIngest,
   conversationIdFor, o2oSessionFrom, personIsInScope,
+  generateAgentKey, agentKeyId, agentKeyVerdict,
 } from './agentIngest.js';
+
+describe('una clave por agente, atada a su manager (RMR-TSK-0650)', () => {
+  it('cada clave nueva es distinta, larga y reconocible', () => {
+    const a = generateAgentKey();
+    expect(a).toMatch(/^gk_[A-Za-z0-9_-]{43}$/);
+    expect(generateAgentKey()).not.toBe(a);
+  });
+
+  it('en GREBLA se guarda la huella, no la clave', () => {
+    expect(agentKeyId('gk_abc')).toMatch(/^[0-9a-f]{64}$/);
+    expect(agentKeyId('gk_abc')).toBe(agentKeyId('gk_abc'));
+    expect(agentKeyId('gk_abd')).not.toBe(agentKeyId('gk_abc'));
+  });
+
+  const key = { active: true, managerUid: 'u-manu', managerEmail: 'manu@ejemplo.test' };
+
+  it('una clave activa escribe en los O2O de SU manager', () => {
+    expect(agentKeyVerdict(key, null)).toEqual({ ok: true, managerUid: 'u-manu' });
+    expect(agentKeyVerdict(key, 'MANU@ejemplo.test')).toEqual({ ok: true, managerUid: 'u-manu' });
+  });
+
+  it('no hay cruce: si el envío dice otro manager, se rechaza', () => {
+    expect(agentKeyVerdict(key, 'otra@ejemplo.test')).toEqual({ ok: false, status: 403, error: 'manager_mismatch' });
+  });
+
+  it('sin clave o con una clave retirada, no se entra', () => {
+    expect(agentKeyVerdict(null, null)).toEqual({ ok: false, status: 401, error: 'unauthorized' });
+    expect(agentKeyVerdict({ ...key, active: false }, null)).toEqual({ ok: false, status: 401, error: 'unauthorized' });
+  });
+});
 
 /**
  * Ingesta de notas de 1-1 desde un agente externo (RMR-TSK-0549). Lo puro: qué
@@ -17,20 +48,12 @@ const nota = {
   source: { system: 'matias', id: 'thread-abc', url: 'https://mail.google.com/x/thread-abc' },
 };
 
-describe('bearerFrom y keyMatches', () => {
+describe('bearerFrom', () => {
   it('saca la clave del header Authorization', () => {
     expect(bearerFrom('Bearer abc123')).toBe('abc123');
     expect(bearerFrom('bearer abc123')).toBe('abc123');
     expect(bearerFrom('Basic abc123')).toBe('');
     expect(bearerFrom(undefined)).toBe('');
-  });
-
-  it('compara sin filtrar el tiempo, y una clave vacía nunca vale', () => {
-    expect(keyMatches('secreto', 'secreto')).toBe(true);
-    expect(keyMatches('secreto', 'secretO')).toBe(false);
-    expect(keyMatches('secreto', 'secreto-largo')).toBe(false);
-    // Sin clave configurada no se abre la puerta a quien mande cadena vacía.
-    expect(keyMatches('', '')).toBe(false);
   });
 });
 

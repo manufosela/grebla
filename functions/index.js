@@ -26,7 +26,7 @@ import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './
 import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
-import { bearerFrom, keyMatches, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
+import { bearerFrom, agentKeyId, agentKeyVerdict, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
@@ -2865,11 +2865,11 @@ export const updateDoc = onCall({ region: 'europe-west1' }, async (request) => {
 // ── Ingesta desde agentes externos (RMR-TSK-0549) ───────────────────────────
 
 /**
- * Clave compartida con el agente externo. Se genera en GREBLA y se entrega
- * fuera de banda; en las instancias que no la usan basta un placeholder, y sin
- * clave la puerta queda CERRADA, nunca abierta.
+ * Claves de los agentes (RMR-TSK-0650): una por agente, atada a su manager, en
+ * /agentKeys/{huella} (solo Admin SDK; las reglas la cierran al cliente). Se
+ * crean con scripts/create-agent-key.mjs, que enseña la clave una sola vez.
+ * Sin clave dada de alta la puerta queda CERRADA, nunca abierta.
  */
-const AGENT_INGEST_KEY = defineSecret('AGENT_INGEST_KEY');
 
 /**
  * La ficha de quien tiene ese correo, mirando por orden: el campo `email`, la
@@ -2918,13 +2918,15 @@ async function findPersonByEmail(email) {
  * «algo va mal, grítalo». Por eso un 401 no puede parecerse a un 404.
  */
 export const ingestConversation = onRequest(
-  { region: 'europe-west1', invoker: 'public', secrets: [AGENT_INGEST_KEY] },
+  { region: 'europe-west1', invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'method_not_allowed' });
       return;
     }
-    if (!keyMatches(AGENT_INGEST_KEY.value(), bearerFrom(req.get('authorization')))) {
+    const bearer = bearerFrom(req.get('authorization'));
+    const keyDoc = bearer ? (await getFirestore().doc(`agentKeys/${agentKeyId(bearer)}`).get()).data() ?? null : null;
+    if (!agentKeyVerdict(keyDoc, null).ok) {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
@@ -2934,6 +2936,12 @@ export const ingestConversation = onRequest(
       nota = normalizeIngest(req.body);
     } catch (err) {
       res.status(400).json({ error: 'invalid_payload', detail: err.message });
+      return;
+    }
+    // Cada clave escribe SOLO en los O2O de su manager: no hay cruce entre agentes.
+    const verdict = agentKeyVerdict(keyDoc, nota.managerEmail);
+    if (!verdict.ok) {
+      res.status(verdict.status).json({ error: verdict.error });
       return;
     }
 
@@ -2950,20 +2958,11 @@ export const ingestConversation = onRequest(
     // El id sale del ORIGEN y el alta es exclusiva: reenviar la misma nota no
     // duplica. Se responde 200 igual, porque para quien ingesta el resultado es
     // el mismo —la nota está— y un error le haría reintentar en balde.
-    // Va a los O2O PRIVADOS de quien lo hizo (`managerEmail`) o, si no se dice,
-    // de su manager (RMR-TSK-0649), en su periodo más reciente: las
-    // conversaciones de la ficha las lee la propia persona.
-    let leaderUid = persona.data().ownerLeaderUid;
-    if (nota.managerEmail) {
-      const manager = await getAuth().getUserByEmail(nota.managerEmail).catch(() => null);
-      if (!manager || !(await getFirestore().doc(`leaders/${manager.uid}`).get()).exists) {
-        res.status(400).json({ error: 'invalid_payload', detail: '`managerEmail` no es de ningún manager de GREBLA.' });
-        return;
-      }
-      leaderUid = manager.uid;
-    }
+    // Va a los O2O PRIVADOS del manager dueño de la clave (RMR-TSK-0649/0650),
+    // en su periodo más reciente: las conversaciones de la ficha las lee la
+    // propia persona.
     const id = conversationIdFor(nota.source);
-    const leader = getFirestore().collection('leaders').doc(leaderUid);
+    const leader = getFirestore().collection('leaders').doc(verdict.managerUid);
     const periods = await leader.collection('o2oPeriods').orderBy('createdAt', 'desc').limit(1).get();
     const ref = leader.collection('o2o').doc(id);
     try {

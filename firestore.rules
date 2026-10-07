@@ -1121,6 +1121,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Claves de los agentes de ingesta (RMR-TSK-0650): huella → manager. Solo
+    // las leen y escriben la Cloud Function y el script de alta (Admin SDK).
+    match /agentKeys/{keyId} {
+      allow read, write: if false;
+    }
+
     // Resto: denegado por defecto.
     match /{document=**} {
       allow read, write: if false;

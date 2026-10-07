@@ -19,7 +19,7 @@
  *    el día entero, y sin esto cada incidencia dejaría notas duplicadas justo
  *    donde más molestan.
  */
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 /** Lo único que viaja a la ficha: una conversación de tú a tú. */
 export const INGEST_TYPES = Object.freeze(['o2o', 'catchup']);
@@ -48,16 +48,34 @@ export function bearerFrom(authorization) {
 }
 
 /**
- * ¿Coincide la clave? Comparación de tiempo constante: comparar con `===` filtra
- * el tiempo y deja adivinar la clave carácter a carácter. Sin clave configurada
- * no se abre la puerta, por mucho que el cliente mande una cadena vacía.
- * @param {string} expected @param {string} received
+ * Una clave nueva para un agente (RMR-TSK-0650): 32 bytes aleatorios. Se le
+ * enseña UNA vez a quien la crea; GREBLA solo guarda su huella.
  */
-export function keyMatches(expected, received) {
-  const a = Buffer.from(String(expected ?? ''));
-  const b = Buffer.from(String(received ?? ''));
-  if (a.length === 0 || a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+export function generateAgentKey() {
+  return `gk_${randomBytes(32).toString('base64url')}`;
+}
+
+/**
+ * Huella de una clave: el id del documento en /agentKeys. Buscar por huella no
+ * filtra la clave (no hay comparación carácter a carácter que medir), y quien lea
+ * la colección no obtiene ninguna clave usable.
+ */
+export function agentKeyId(key) {
+  return createHash('sha256').update(String(key ?? '')).digest('hex');
+}
+
+/**
+ * ¿Qué puede hacer esta clave? Escribir SOLO en los O2O de su manager. Si el
+ * envío dice otro manager, se rechaza: no hay cruce entre agentes.
+ * @param {{ active?: boolean, managerUid?: string, managerEmail?: string }|null} keyDoc
+ * @param {string|null} managerEmail el que trae el envío (opcional)
+ */
+export function agentKeyVerdict(keyDoc, managerEmail) {
+  if (!keyDoc || keyDoc.active !== true || !keyDoc.managerUid) return { ok: false, status: 401, error: 'unauthorized' };
+  if (managerEmail && managerEmail.toLowerCase() !== String(keyDoc.managerEmail ?? '').toLowerCase()) {
+    return { ok: false, status: 403, error: 'manager_mismatch' };
+  }
+  return { ok: true, managerUid: keyDoc.managerUid };
 }
 
 /**
