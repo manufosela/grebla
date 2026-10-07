@@ -37,7 +37,12 @@ if (arg('revoke')) {
 
 const managerEmail = arg('manager').trim().toLowerCase();
 const manager = await getAuth().getUserByEmail(managerEmail).catch(() => null);
-if (!manager || !(await db.doc(`leaders/${manager.uid}`).get()).exists) {
+// Manager es quien tiene ficha de líder o personas a su cargo: un superadmin
+// que lleva equipo puede no tener /leaders y su agente igual le sirve.
+const managesSomeone = async (uid) =>
+  (await db.doc(`leaders/${uid}`).get()).exists
+  || !(await db.collection('people').where('ownerLeaderUid', '==', uid).limit(1).get()).empty;
+if (!manager || !(await managesSomeone(manager.uid))) {
   console.error(`✗ ${managerEmail || '(sin --manager)'} no es un manager de GREBLA en ${instance}.`);
   process.exit(1);
 }
