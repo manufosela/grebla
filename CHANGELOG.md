@@ -15,6 +15,18 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.240.0] - 2026-10-07
+
+### Cambiado
+
+- **Los O2O, en un solo sitio.** En Equipo › ficha › O2O, «O2O hechos» enseña
+  tus O2O con esa persona: los mismos de la herramienta O2O, con lo que es solo
+  tuyo separado de lo que ve ella. Desaparece el formulario suelto de
+  «Conversaciones». «Privado» sigue para las notas que no son de un O2O.
+- **Las notas de 1-1 que traen los agentes son O2O privados** del manager que
+  los hizo (campo opcional `managerEmail`), no conversaciones de la ficha, que
+  la propia persona podía leer.
+
 ## [1.239.0] - 2026-10-07
 
 ### Añadido
