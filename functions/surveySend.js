@@ -26,7 +26,13 @@ export function sendTargets(tokens, mode) {
     && (mode === 'reminder' || !data.sentAt));
 }
 
-/** ¿Es el límite de cupo (diario o mensual) de Resend? Ahí hay que parar: seguir solo acumula fallos. */
+/**
+ * ¿Es el límite de cupo del proveedor? Ahí hay que parar: seguir solo acumula
+ * fallos. Resend: 429 daily/monthly_quota_exceeded. Gmail (RMR-TSK-0646): 403 o
+ * 429 con dailyLimitExceeded / «Daily user sending limit exceeded».
+ */
 export function isQuotaError(err) {
-  return /\b429\b/.test(err?.message ?? '') && /(daily|monthly)_quota_exceeded/.test(err.message);
+  const msg = err?.message ?? '';
+  return /\b(403|429)\b/.test(msg)
+    && /(daily|monthly)_quota_exceeded|dailyLimitExceeded|Daily user sending limit/i.test(msg);
 }

@@ -1588,7 +1588,7 @@ export class SurveyAdmin extends LitElement {
     const total = this._partTokens.length;
     const open = this._partSurvey?.status === 'open';
     return html`
-      <p class="lead">Se envía desde <code>encuestas@send.tribbu.io</code>. El mensaje debe incluir <code>${LINK_PLACEHOLDER}</code> (pestaña «Redactar correo»). Primero mándate una <strong>prueba</strong> (no cuenta); el envío a todos exige abrir la encuesta.</p>
+      <p class="lead">Se envía desde <code>noreply@tribbuapp.com</code>. El mensaje debe incluir <code>${LINK_PLACEHOLDER}</code> (pestaña «Redactar correo»). Primero mándate una <strong>prueba</strong> (no cuenta); el envío a todos exige abrir la encuesta.</p>
       ${this._sendNotice ? html`<p class="notice">${this._sendNotice}</p>` : null}
       <div class="save-row">
         <input type="email" placeholder="email para la prueba" .value=${this._testEmail}
