@@ -38,7 +38,7 @@ import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
 import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody, sanitizeParticipantMeta } from './survey.js';
-import { sendResend } from './resend.js';
+import { sendGmail } from './gmail.js';
 
 initializeApp();
 
@@ -648,10 +648,18 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
 // answerId = HMAC(salt, token), así se edita la MISMA respuesta sin guardar el
 // mapeo token→respuesta (un admin con la BBDD no puede reidentificar por ahí).
 const SURVEY_SALT = defineSecret('SURVEY_SALT');
-// API key de Resend (https://resend.com) para el envío de correos de encuestas.
-// Debe definirse ANTES de las Cloud Functions que la usan (evita TDZ al cargar).
-const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
-const MAIL_FROM = 'Encuestas TRIBBU <encuestas@send.tribbu.io>';
+// Los correos de encuestas salen por la API de Gmail (RMR-TSK-0646): Resend tenía
+// un cupo de 100 al día que se quedaba corto. La cuenta de servicio (clave en
+// GMAIL_SA_KEY) envía como el buzón MAIL_SENDER por delegación de dominio, con el
+// único permiso gmail.send. Debe definirse ANTES de las CF que la usan (TDZ).
+const GMAIL_SA_KEY = defineSecret('GMAIL_SA_KEY');
+const MAIL_SENDER = 'noreply@tribbuapp.com';
+const MAIL_FROM = `Encuestas TRIBBU <${MAIL_SENDER}>`;
+
+/** Envía un correo de encuesta (texto plano) desde el buzón de la instancia. */
+function sendSurveyMail({ to, subject, text }) {
+  return sendGmail({ saKeyJson: GMAIL_SA_KEY.value(), senderUser: MAIL_SENDER, from: MAIL_FROM, to, subject, text });
+}
 
 /** Carga la encuesta abierta de un token y las respuestas previas (para editar). */
 export const getSurveyForToken = onCall(
@@ -958,7 +966,7 @@ async function loadSurveyForEmail(db, surveyId, { requireOpen = true } = {}) {
  * superadmin/People. La encuesta debe estar abierta para poder responderlo.
  */
 export const sendSurveyTestEmail = onCall(
-  { region: 'europe-west1', secrets: [RESEND_API_KEY] },
+  { region: 'europe-west1', secrets: [GMAIL_SA_KEY] },
   async (request) => {
     await assertSurveyManager(request.auth?.uid);
     const { surveyId, to } = request.data ?? {};
@@ -969,10 +977,7 @@ export const sendSurveyTestEmail = onCall(
     const token = randomBytes(18).toString('hex');
     await ref.collection('tokens').doc(token).set({ email: to, metadata: {}, used: false, test: true });
     const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token}`;
-    await sendResend({
-      apiKey: RESEND_API_KEY.value(), from: MAIL_FROM,
-      to, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
-    });
+    await sendSurveyMail({ to, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link) });
     return { ok: true, surveyOpen: survey.status === 'open' };
   },
 );
@@ -982,7 +987,7 @@ export const sendSurveyTestEmail = onCall(
  * Secuencial y tolerante a fallos (cuenta enviados/fallidos). Solo superadmin/People.
  */
 export const sendSurveyBulkEmails = onCall(
-  { region: 'europe-west1', secrets: [RESEND_API_KEY], timeoutSeconds: 540 },
+  { region: 'europe-west1', secrets: [GMAIL_SA_KEY], timeoutSeconds: 540 },
   async (request) => {
     await assertSurveyManager(request.auth?.uid);
     const { surveyId, mode = 'pending' } = request.data ?? {};
@@ -1001,10 +1006,7 @@ export const sendSurveyBulkEmails = onCall(
       const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token.id}`;
       let outcome;
       try {
-        await sendResend({
-          apiKey: RESEND_API_KEY.value(), from: MAIL_FROM,
-          to: token.data.email, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link),
-        });
+        await sendSurveyMail({ to: token.data.email, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link) });
         outcome = { sentAt: FieldValue.serverTimestamp(), sendError: FieldValue.delete() };
         sent += 1;
       } catch (err) {

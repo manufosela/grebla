@@ -31,6 +31,12 @@ describe('envío masivo de la encuesta (RMR-TSK-0643)', () => {
     expect(isQuotaError(new Error('Resend API respondió 500: boom'))).toBe(false);
   });
 
+  it('reconoce el límite diario de Gmail (RMR-TSK-0646)', () => {
+    expect(isQuotaError(new Error('Gmail API respondió 403: {"error":{"errors":[{"reason":"dailyLimitExceeded"}]}}'))).toBe(true);
+    expect(isQuotaError(new Error('Gmail API respondió 429: Daily user sending limit exceeded'))).toBe(true);
+    expect(isQuotaError(new Error('Gmail API respondió 400: Invalid To header'))).toBe(false);
+  });
+
   it('nunca más de 2 correos por segundo', () => {
     expect(SEND_INTERVAL_MS).toBeGreaterThanOrEqual(500);
   });
