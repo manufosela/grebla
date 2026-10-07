@@ -6,23 +6,23 @@ import {
 } from './agentIngest.js';
 
 describe('agentTeamView: lo único que el agente sabe del equipo (RMR-TSK-0657)', () => {
-  const emails = new Map([['u-ana', 'ana@tribbuapp.com']]);
+  const emails = new Map([['u-ana', 'ana@e2e.test']]);
   it('nombre y correo de quien está activa y es de la organización, por nombre', () => {
     const people = [
-      { name: 'Zoe', email: 'Zoe@TribbuApp.com', levelId: 'l3', notes: 'privado' },
+      { name: 'Zoe', email: 'Zoe@E2E.test', levelId: 'l3', notes: 'privado' },
       { name: 'Ana', uid: 'u-ana' },
-      { name: 'Pablo', pendingEmail: 'pablo@tribbuapp.com' },
+      { name: 'Pablo', pendingEmail: 'pablo@e2e.test' },
     ];
     expect(agentTeamView(people, emails)).toEqual([
-      { name: 'Ana', email: 'ana@tribbuapp.com' },
-      { name: 'Pablo', email: 'pablo@tribbuapp.com' },
-      { name: 'Zoe', email: 'zoe@tribbuapp.com' },
+      { name: 'Ana', email: 'ana@e2e.test' },
+      { name: 'Pablo', email: 'pablo@e2e.test' },
+      { name: 'Zoe', email: 'zoe@e2e.test' },
     ]);
   });
   it('fuera: dadas de baja, externas y sin correo conocido', () => {
     const people = [
-      { name: 'Baja', email: 'b@x.com', active: false },
-      { name: 'Externa', email: 'e@x.com', external: true },
+      { name: 'Baja', email: 'baja@e2e.test', active: false },
+      { name: 'Externa', email: 'externa@e2e.test', external: true },
       { name: 'Sin correo', uid: 'u-nadie' },
     ];
     expect(agentTeamView(people, emails)).toEqual([]);
