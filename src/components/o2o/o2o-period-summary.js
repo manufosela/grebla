@@ -8,6 +8,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
+import './o2o-session-view.js';
 import { listAllSessions } from '../../tools/o2o/application/usecases/sessions.js';
 import { listActions } from '../../tools/o2o/application/usecases/actions.js';
 import { coverageOf } from '../../tools/o2o/application/usecases/periodStats.js';
@@ -125,15 +126,16 @@ export class O2OPeriodSummary extends LitElement {
         <span class="cnt">${sessions.length} O2O</span>
         ${toggle}
       </div>
-      ${expanded ? html`<div class="drill">${sessions.map((s) => this._renderSession(s))}</div>` : null}
+      ${expanded ? html`<div class="drill">${sessions.map((s) => this._renderSession(s, person))}</div>` : null}
     </li>`;
   }
 
-  _renderSession(s) {
+  /** Cada O2O con lo que es solo tuyo y lo que ve la persona (RMR-TSK-0648). */
+  _renderSession(s, person) {
     const shared = s.sharedWithPerson ? html`<span class="tag">Compartido</span>` : null;
     return html`<div class="sess">
       <span class="date">${s.date?.slice(0, 10)}</span> ${shared}
-      ${s.summary ? html`<p class="body">${s.summary}</p>` : null}
+      <o2o-session-view .session=${s} .personName=${person.name}></o2o-session-view>
     </div>`;
   }
 }
