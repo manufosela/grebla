@@ -25,6 +25,7 @@ import {
   addDoc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -84,14 +85,18 @@ export function chunk(values, size = 30) {
 function peopleRepo(db, base, leaderUid, viewAll = false, branchLeaderUids = null) {
   const branch = Array.isArray(branchLeaderUids) ? branchLeaderUids : null;
   return {
-    async list() {
+    async list({ fromServer = false } = {}) {
+      // Con `fromServer` (RMR-BUG-0140) la lista es la del servidor o falla: sin
+      // conexión, getDocs se conforma con la copia local del navegador SIN avisar,
+      // y una baja ya borrada seguía apareciendo en la gestión.
+      const fetchDocs = fromServer ? getDocsFromServer : getDocs;
       // La self-ficha de un manager (RMR-TSK-0251) es un miembro MÁS de su equipo
       // (RMR-BUG-0041): pertenece al equipo para que el manager pueda comprobar la
       // experiencia real del resto como uno más. No se excluye del roster.
       // El superadmin (viewAll) ve TODAS las personas de la organización (las
       // reglas ya se lo permiten), para poder gestionarlas y hacerles notas/O2O.
       if (viewAll) {
-        const all = await getDocs(peopleCol(db, base));
+        const all = await fetchDocs(peopleCol(db, base));
         return all.docs.map((d) => ({ id: d.id, ...d.data() }));
       }
       // Alcance de rama (supermanager): personas de los EMs que le reportan, por
@@ -102,7 +107,7 @@ function peopleRepo(db, base, leaderUid, viewAll = false, branchLeaderUids = nul
         const batches = chunk(branch);
         if (batches.length === 0) return [];
         const snaps = await Promise.all(
-          batches.map((b) => getDocs(query(peopleCol(db, base), where('ownerLeaderUid', 'in', b)))),
+          batches.map((b) => fetchDocs(query(peopleCol(db, base), where('ownerLeaderUid', 'in', b)))),
         );
         const byId = new Map();
         for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...d.data() });
@@ -112,8 +117,8 @@ function peopleRepo(db, base, leaderUid, viewAll = false, branchLeaderUids = nul
       // compartidas con él (sharedWithUids array-contains). Firestore no hace OR
       // sobre campos distintos, así que son dos consultas + merge con dedup por id.
       const [owned, shared] = await Promise.all([
-        getDocs(query(peopleCol(db, base), where('ownerLeaderUid', '==', leaderUid))),
-        getDocs(query(peopleCol(db, base), where('sharedWithUids', 'array-contains', leaderUid))),
+        fetchDocs(query(peopleCol(db, base), where('ownerLeaderUid', '==', leaderUid))),
+        fetchDocs(query(peopleCol(db, base), where('sharedWithUids', 'array-contains', leaderUid))),
       ]);
       const byId = new Map();
       for (const d of [...owned.docs, ...shared.docs]) byId.set(d.id, { id: d.id, ...d.data() });
