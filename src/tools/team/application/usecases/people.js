@@ -84,12 +84,13 @@ export async function listActivePeople(persistence) {
 
 /**
  * Personas dadas de baja (no se borran: conservan su histórico), ordenadas por
- * fecha de baja descendente. Alimenta la sección "Bajas" y la rotación.
+ * fecha de baja descendente. Alimenta la sección "Bajas" y la rotación. Del
+ * servidor o error: es donde se borra para siempre (RMR-BUG-0140).
  * @param {PersistencePort} persistence
  * @returns {Promise<Person[]>}
  */
 export async function listDepartedPeople(persistence) {
-  const people = await persistence.people.list();
+  const people = await persistence.people.list({ fromServer: true });
   return people
     .filter((p) => !p.active)
     .map(normalizePerson)
@@ -103,7 +104,7 @@ export async function listDepartedPeople(persistence) {
  * @returns {Promise<ReturnType<typeof turnover>>}
  */
 export async function getTurnover(persistence, period) {
-  const people = await persistence.people.list();
+  const people = await persistence.people.list({ fromServer: true });
   return turnover(people, period);
 }
 

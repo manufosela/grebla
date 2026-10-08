@@ -15,6 +15,14 @@ import { listDepartedPeople, getTurnover, reactivatePerson } from '../../tools/t
 import { deletePerson } from '../../lib/people.js';
 
 const MS_YEAR = 365 * 86_400_000;
+
+/** Mensaje de un fallo al cargar Bajas; sin conexión, lo dice claro. */
+function loadErrorMessage(err) {
+  if (err?.code === 'unavailable') {
+    return 'No hay conexión con la base de datos: no se puede mostrar la lista de bajas al día. Revisa tu red y recarga.';
+  }
+  return err instanceof Error ? err.message : 'No se pudieron cargar las bajas.';
+}
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
 /** @param {string} iso */
@@ -113,7 +121,10 @@ export class TeamDepartures extends LitElement {
       this.departed = departed;
       this.turnover = turnover;
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudieron cargar las bajas.';
+      // Sin servidor no se enseña la copia local (RMR-BUG-0140): se dice.
+      this.departed = [];
+      this.turnover = null;
+      this.error = loadErrorMessage(err);
     } finally {
       this.loading = false;
     }
@@ -155,7 +166,9 @@ export class TeamDepartures extends LitElement {
       await deletePerson(person.id);
       this._confirmFor = null;
       this._confirmName = '';
-      await this._load(); // desaparece de la lista y de las estadísticas
+      // Borrada en el servidor: fuera de la lista ya, pase lo que pase al recargar.
+      this.departed = this.departed.filter((p) => p.id !== person.id);
+      await this._load(); // desaparece también de las estadísticas
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo borrar la persona.';
     } finally {

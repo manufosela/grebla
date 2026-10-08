@@ -150,6 +150,16 @@ describe('Fase 2b — casos de uso', () => {
     expect(t.departures).toBe(1);
   });
 
+  it('Bajas y su rotación se leen del servidor, no de la copia local (RMR-BUG-0140)', async () => {
+    const fresh = createMemoryPersistence();
+    const seen = [];
+    const list = fresh.people.list.bind(fresh.people);
+    fresh.people.list = (opts) => { seen.push(opts); return list(opts); };
+    await listDepartedPeople(fresh);
+    await getTurnover(fresh, { from: '2025-01-01', to: '2100-01-01' });
+    expect(seen).toEqual([{ fromServer: true }, { fromServer: true }]);
+  });
+
   it('addReading rechaza dimensión inválida', () => {
     expect(() => addReading(p, 'nope', ids.ana, {})).toThrow(/Dimensión desconocida/);
   });
