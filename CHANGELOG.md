@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.242.1] - 2026-10-08
+
+### Arreglado
+
+- **Una baja borrada ya no sigue en la lista.** En Administración de Equipo ›
+  Bajas, la lista y la rotación se leen siempre del servidor: si el navegador no
+  llega a la base de datos, lo dice en vez de enseñar su copia guardada, que
+  podía incluir personas ya borradas. Quien se borra sale de la lista al momento.
+
 ## [1.242.0] - 2026-10-07
 
 ### Añadido
