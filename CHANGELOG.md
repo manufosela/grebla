@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.249.0] - 2026-10-10
+
+### Añadido
+
+- Organigrama: al pulsar una caja de equipo se abre un modal con sus personas y su rol,
+  también en pantalla completa. Arrastrar sigue moviendo el lienzo sin abrir nada
+  (RMR-TSK-0673).
+
 ## [1.248.0] - 2026-10-09
 
 ### Cambiado
