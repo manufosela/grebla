@@ -57,7 +57,27 @@ export function createPeriod(persistence, input = {}) {
     form: input.form ?? blankForm(),
     createdAt: new Date().toISOString(),
   };
+  // A quién va este O2O (RMR-TSK-0664). Sin lista, empieza con los directos de
+  // quien lo hace (ver chosenIds en domain/forWhom.js).
+  if (input.personIds !== undefined) period.personIds = cleanPersonIds(input.personIds);
   return persistence.periods.create(period);
+}
+
+/**
+ * Cambia a quién va un O2O (pestaña «Para quién»).
+ * @param {O2OPersistence} persistence @param {string} id @param {string[]} personIds
+ * @returns {Promise<void>}
+ */
+export function savePeriodPeople(persistence, id, personIds) {
+  return persistence.periods.update(id, { personIds: cleanPersonIds(personIds), updatedAt: new Date().toISOString() });
+}
+
+/** Lista de ids de persona sin repetir; cualquier otra cosa es un error. */
+function cleanPersonIds(personIds) {
+  if (!Array.isArray(personIds) || !personIds.every((id) => typeof id === 'string' && id.trim())) {
+    throw new Error('A quién va el O2O debe ser una lista de ids de persona.');
+  }
+  return [...new Set(personIds)];
 }
 
 /**

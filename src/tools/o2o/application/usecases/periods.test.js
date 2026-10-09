@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createMemoryO2O } from '../../infrastructure/memory/index.js';
 import {
   listPeriods, getPeriod, createPeriod, renamePeriod, removePeriod,
-  savePeriodGuide, savePeriodForm, defaultPeriodName, blankGuide, blankForm,
+  savePeriodGuide, savePeriodForm, defaultPeriodName, blankGuide, blankForm, savePeriodPeople,
 } from './periods.js';
 import { createSession, listSessions } from './sessions.js';
 
@@ -25,6 +25,29 @@ describe('o2o periods usecases', () => {
     const guide = { version: 1, blocks: [{ id: 'b1', title: 'B1', questions: [{ id: 'q1', text: '¿?' }] }] };
     const id = await createPeriod(store, { name: 'X', guide });
     expect((await getPeriod(store, id)).guide.blocks).toHaveLength(1);
+  });
+
+  it('guarda a quién va el O2O al crearlo y al cambiarlo (RMR-TSK-0664)', async () => {
+    const store = p();
+    const id = await createPeriod(store, { name: 'X', personIds: ['ana', 'bea'] });
+    expect((await getPeriod(store, id)).personIds).toEqual(['ana', 'bea']);
+    await savePeriodPeople(store, id, ['bea', 'bea', 'carlos']);
+    expect((await getPeriod(store, id)).personIds).toEqual(['bea', 'carlos']);
+  });
+
+  it('rechaza lo que no es una lista de ids', async () => {
+    const store = p();
+    const id = await createPeriod(store, { name: 'X' });
+    expect(() => savePeriodPeople(store, id, 'ana')).toThrow(/lista de ids/);
+    expect(() => savePeriodPeople(store, id, ['ana', ''])).toThrow(/lista de ids/);
+    expect(() => createPeriod(store, { name: 'Y', personIds: [3] })).toThrow(/lista de ids/);
+    expect(() => createPeriod(store, { name: 'Y', personIds: null })).toThrow(/lista de ids/);
+  });
+
+  it('sin lista no guarda personIds: el O2O empieza con los directos', async () => {
+    const store = p();
+    const id = await createPeriod(store, { name: 'X' });
+    expect((await getPeriod(store, id)).personIds).toBeUndefined();
   });
 
   it('lista, renombra y borra periodos', async () => {
