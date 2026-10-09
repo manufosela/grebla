@@ -16,12 +16,13 @@ import { getFormat } from '../../tools/retro/domain/formats.js';
 import { groupNotes, summaryGroups, groupPatch, ungroupPatch, groupAuthors } from '../../tools/retro/domain/grouping.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { isColumnRevealed, areAllRevealed, canReadGroup, canReveal, revealPatch } from '../../tools/retro/domain/visibility.js';
+import { isSortedByVotes, orderGroups } from '../../tools/retro/domain/ordering.js';
 import '../app-modal.js';
 import './retro-actions.js';
 
 /** Etiqueta de una columna en el selector del composer («Viento · nos empuja»). */
 const colLabel = (col) => (col.hint ? `${col.title} · ${col.hint}` : col.title);
-import { watchRetro, watchNotes, addNote, voteNote, unvoteNote, editNote, deleteNote, setNoteGroups, setRetroReveal } from '../../lib/retros.js';
+import { watchRetro, watchNotes, addNote, voteNote, unvoteNote, editNote, deleteNote, setNoteGroups, setRetroReveal, setRetroSortByVotes } from '../../lib/retros.js';
 
 /** Emoji de cada zona del Barco. */
 const BARCO_ICON = { viento: '🌬️', ancla: '⚓', rocas: '🪨', isla: '🏝️' };
@@ -265,9 +266,7 @@ export class RetroBoard extends LitElement {
   get _open() { return this._retro?.status === 'open'; }
 
   _notesFor(columnId) {
-    return this._notes
-      .filter((n) => n.columnId === columnId)
-      .toSorted((a, b) => (b.voters?.length ?? 0) - (a.voters?.length ?? 0));
+    return this._notes.filter((n) => n.columnId === columnId);
   }
 
   /**
@@ -606,17 +605,31 @@ export class RetroBoard extends LitElement {
         facilita revele cada zona. Las tuyas las ves siempre.</p>`;
     }
     const allShown = ids.every((id) => isColumnRevealed(this._retro, id));
+    const sorted = isSortedByVotes(this._retro);
     return html`<div class="reveal-bar">
       <span class="reveal-note">Las tarjetas nacen ocultas. Revélalas por zona con su ojo, o todas de golpe.</span>
       <button class="reveal-all" @click=${() => this._setRevealed(ids, !allShown)}>
         ${allShown ? '🙈 Ocultar todas' : '👁️ Mostrar todas'}
       </button>
+      <button class="reveal-all" aria-pressed=${String(sorted)} @click=${() => this._setSortByVotes(!sorted)}>
+        ${sorted ? '🕒 Orden de llegada' : '👍 Ordenar por votos'}
+      </button>
     </div>`;
   }
 
-  /** Grupos de una columna (una tarjeta por grupo, no por nota). */
+  /** Ordena (o deja de ordenar) por votos en todas las pantallas a la vez. */
+  async _setSortByVotes(sortByVotes) {
+    try {
+      await setRetroSortByVotes(this.retroId, sortByVotes);
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo cambiar el orden.';
+    }
+  }
+
+  /** Grupos de una columna (una tarjeta por grupo, no por nota). Votar no los
+   *  mueve: se ordenan por votos solo cuando quien facilita lo pide. */
   _groupsFor(columnId) {
-    return groupNotes(this._notesFor(columnId));
+    return orderGroups(groupNotes(this._notesFor(columnId)), isSortedByVotes(this._retro));
   }
 
   _renderColumn(col) {
