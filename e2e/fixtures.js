@@ -23,6 +23,19 @@ export async function signInAs(page, role) {
   await page.waitForFunction((expected) => (window).__e2eUid?.() === expected, uid);
 }
 
+/**
+ * Marca a una persona en «Para quién» del O2O abierto (RMR-TSK-0664) y espera a
+ * que se guarde: sin marcar, no sale al registrar.
+ * @param {import('@playwright/test').Page} page @param {string} name
+ */
+export async function markForWhom(page, name) {
+  await page.locator('o2o-app').getByRole('tab', { name: 'Para quién' }).click();
+  const box = page.locator('o2o-for-whom').getByRole('checkbox', { name });
+  await box.check();
+  await expect(box).toBeChecked();
+  await expect(page.locator('o2o-app busy-overlay')).toHaveCount(0);
+}
+
 /** Texto que solo aparece en la pantalla de login: si sale, es que te expulsaron. */
 export const LOGIN_MARKER = 'Usa tu cuenta de Google';
 
