@@ -7,7 +7,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getRegionalFunctions } from './firebase.js';
 
 /**
- * @returns {Promise<import('../tools/team/domain/peoplePyramid.js').DirectoryPerson[]>}
+ * @returns {Promise<import('../tools/team/domain/orgBranchTree.js').DirectoryPerson[]>}
  */
 export async function fetchOrgDirectory() {
   const fn = httpsCallable(await getRegionalFunctions(), 'orgDirectory');
