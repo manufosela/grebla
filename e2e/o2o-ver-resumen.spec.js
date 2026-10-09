@@ -4,7 +4,7 @@
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { test, expect, signInAs, markForWhom } from './fixtures.js';
+import { test, expect, signInAs, markForWhom, hangFrom } from './fixtures.js';
 
 function db() {
   if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
@@ -19,11 +19,12 @@ test.afterEach(async () => {
   const leader = db().collection('leaders').doc('e2e-superadmin');
   for (const d of (await leader.collection('o2o').where('personId', '==', PERSON).get()).docs) await d.ref.delete();
   for (const d of (await leader.collection('o2oPeriods').where('name', '==', PERIODO).get()).docs) await d.ref.delete();
-  await db().doc(`people/${PERSON}`).delete();
+  await limpiar?.();
 });
 
+let limpiar;
 test('un O2O se despliega con lo privado del manager y lo que ve la persona', async ({ page }) => {
-  await db().doc(`people/${PERSON}`).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', o2oManagerUids: ['e2e-superadmin'], active: true });
+  limpiar = await hangFrom(db(), PERSON, { name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', active: true }, 'e2e-superadmin');
   await signInAs(page, 'superadmin');
   await page.goto('/tools/o2o');
   await page.locator('o2o-app input[type="text"]').fill(PERIODO);

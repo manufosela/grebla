@@ -8,7 +8,7 @@
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { test, expect, signInAs, markForWhom } from './fixtures.js';
+import { test, expect, signInAs, markForWhom, hangFrom } from './fixtures.js';
 
 function db() {
   if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
@@ -40,11 +40,12 @@ const FRAMEWORK = {
 async function conValoracion(byDimension, fn) {
   const previo = (await db().doc('careerFramework/engineering').get()).data() ?? null;
   await db().doc('careerFramework/engineering').set(FRAMEWORK);
-  await db().doc(PERSON).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', o2oManagerUids: ['e2e-superadmin'], active: true, levelId: 'oc-l1' });
+  const limpiar = await hangFrom(db(), PERSON.split('/')[1],
+    { name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', active: true, levelId: 'oc-l1' }, 'e2e-superadmin');
   await db().doc(`${PERSON}/careerAssessments/oc-l2`).set({ levelId: 'oc-l2', byDimension, closures: [] });
   try { await fn(); } finally {
     await db().doc(`${PERSON}/careerAssessments/oc-l2`).delete();
-    await db().doc(PERSON).delete();
+    await limpiar();
     if (previo) await db().doc('careerFramework/engineering').set(previo);
     else await db().doc('careerFramework/engineering').delete();
   }
