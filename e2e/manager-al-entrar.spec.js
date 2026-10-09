@@ -25,13 +25,11 @@ test.afterEach(async () => {
   await Promise.all([`people/${BOSS}`, `people/${REPORT}`, `leaders/${UID}`].map((p) => db().doc(p).delete().catch(() => {})));
 });
 
-test('al recibir su cuenta, la jefa del directorio pasa a líder y a manager de O2O de su equipo', async () => {
+test('al recibir su cuenta, la jefa del directorio pasa a líder y a dueña de su equipo', async () => {
   await db().doc(`people/${BOSS}`).update({ uid: UID });
 
   await expect.poll(async () => (await db().doc(`leaders/${UID}`).get()).data()?.displayName ?? null,
     { timeout: 20_000 }).toBe('Jefa del directorio');
-  await expect.poll(async () => (await db().doc(`people/${REPORT}`).get()).data()?.o2oManagerUids ?? [],
-    { timeout: 20_000 }).toEqual([UID]);
   await expect.poll(async () => (await db().doc(`people/${REPORT}`).get()).data()?.ownerLeaderUid ?? null,
     { timeout: 20_000 }).toBe(UID);
 });
@@ -41,4 +39,6 @@ test('la rama del directorio queda en cada ficha: quien cuelga de la jefa la tie
 
   await expect.poll(async () => (await db().doc(`people/${REPORT}`).get()).data()?.directoryManagerUids ?? null,
     { timeout: 20_000 }).toEqual([UID]);
+  // Ya no hay lista manual de O2O: el trigger no la rellena (RMR-TSK-0665).
+  expect((await db().doc(`people/${REPORT}`).get()).data()?.o2oManagerUids).toBeUndefined();
 });

@@ -153,26 +153,22 @@ describe('o2oSessionFrom (RMR-TSK-0649)', () => {
   });
 });
 
-describe('personIsInScope: solo personas que tienen a ESE manager de O2O (RMR-TSK-0655)', () => {
-  it('dentro: persona activa con el manager de la clave en su lista', () => {
-    expect(personIsInScope({ active: true, o2oManagerUids: ['u-em'] }, 'u-em')).toBe(true);
-    expect(personIsInScope({ o2oManagerUids: ['u-head', 'u-em'] }, 'u-em')).toBe(true); // sin `active` cuenta como activa
+describe('personIsInScope: solo la rama del directorio del manager de la clave (RMR-TSK-0665)', () => {
+  it('dentro: persona activa con el manager por encima, directo o no', () => {
+    expect(personIsInScope({ active: true, directoryManagerUids: ['u-em'] }, 'u-em')).toBe(true);
+    expect(personIsInScope({ directoryManagerUids: ['u-em', 'u-cto'] }, 'u-cto')).toBe(true); // sin `active` cuenta como activa
   });
 
-  it('dentro también quien está por encima en el directorio (RMR-TSK-0663)', () => {
-    expect(personIsInScope({ active: true, directoryManagerUids: ['u-em', 'u-cto'] }, 'u-cto')).toBe(true);
-    expect(personIsInScope({ active: false, directoryManagerUids: ['u-cto'] }, 'u-cto')).toBe(false);
-  });
-
-  it('fuera: de otro manager, aunque sea su dueño, o sin lista', () => {
-    expect(personIsInScope({ active: true, o2oManagerUids: ['u-otro'] }, 'u-em')).toBe(false);
+  it('fuera: de otro manager, aunque sea su dueño o esté en la antigua lista manual', () => {
+    expect(personIsInScope({ active: true, directoryManagerUids: ['u-otro'] }, 'u-em')).toBe(false);
     expect(personIsInScope({ active: true, ownerLeaderUid: 'u-em' }, 'u-em')).toBe(false);
-    expect(personIsInScope({ active: true, o2oManagerUids: ['u-em'] }, '')).toBe(false);
+    expect(personIsInScope({ active: true, o2oManagerUids: ['u-em'] }, 'u-em')).toBe(false);
+    expect(personIsInScope({ active: true, directoryManagerUids: ['u-em'] }, '')).toBe(false);
   });
 
   it('fuera: desactivada o externa', () => {
-    expect(personIsInScope({ active: false, o2oManagerUids: ['u-em'] }, 'u-em')).toBe(false);
-    expect(personIsInScope({ active: true, o2oManagerUids: ['u-em'], external: true }, 'u-em')).toBe(false);
+    expect(personIsInScope({ active: false, directoryManagerUids: ['u-em'] }, 'u-em')).toBe(false);
+    expect(personIsInScope({ active: true, directoryManagerUids: ['u-em'], external: true }, 'u-em')).toBe(false);
     expect(personIsInScope(null, 'u-em')).toBe(false);
   });
 });
