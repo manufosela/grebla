@@ -28,7 +28,9 @@ test.describe('reglas: managers de O2O', () => {
       await setDoc(doc(db, 'admins', 'jefa'), { name: 'Jefa' });
       await setDoc(doc(db, 'leaders', 'duena'), { name: 'Dueña' });
       await setDoc(doc(db, 'leaders', 'mario'), { name: 'Mario' });
-      await setDoc(doc(db, 'people', 'p1'), { name: 'Ana', ownerLeaderUid: 'duena', o2oManagerUids: ['mario'], active: true });
+      await setDoc(doc(db, 'people', 'p1'), {
+        name: 'Ana', ownerLeaderUid: 'duena', o2oManagerUids: ['mario'], directoryManagerUids: ['duena', 'cto'], active: true,
+      });
     });
   });
 
@@ -65,5 +67,23 @@ test.describe('reglas: managers de O2O', () => {
     const db = como(env, 'duena').firestore();
     await assertFails(setDoc(doc(db, 'people', 'p2'), { name: 'B', ownerLeaderUid: 'duena', o2oManagerUids: ['duena'] }));
     await assertSucceeds(setDoc(doc(db, 'people', 'p3'), { name: 'C', ownerLeaderUid: 'duena' }));
+  });
+
+  test('quien está por encima en el directorio lee la ficha, lleva las acciones y lee las notas (RMR-TSK-0661)', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'managerNotes', 'p1', 'entries', 'n1'), { type: 'perf-review', date: '2026-07-30', title: 'PR', content: 'x' });
+    });
+    const cto = como(env, 'cto').firestore();
+    await assertSucceeds(getDoc(doc(cto, 'people', 'p1')));
+    await assertSucceeds(setDoc(doc(cto, 'people', 'p1', 'o2oActions', 'a2'), { description: 'Hacer Y', status: 'open' }));
+    await assertSucceeds(getDoc(doc(cto, 'managerNotes', 'p1', 'entries', 'n1')));
+    // Pero la rama no le da la ficha: no edita su carrera ni sus datos.
+    await assertFails(updateDoc(doc(cto, 'people', 'p1'), { name: 'Otra' }));
+  });
+
+  test('la rama del directorio solo la escribe el trigger, nunca un líder (RMR-TSK-0661)', async () => {
+    const db = como(env, 'duena').firestore();
+    await assertFails(updateDoc(doc(db, 'people', 'p1'), { directoryManagerUids: ['duena'] }));
+    await assertFails(setDoc(doc(db, 'people', 'p4'), { name: 'D', ownerLeaderUid: 'duena', directoryManagerUids: ['duena'] }));
   });
 });

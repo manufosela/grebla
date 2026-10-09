@@ -10,6 +10,36 @@
  */
 
 /**
+ * Managers de la rama de cada ficha (RMR-TSK-0661): los uids de todos sus jefes
+ * en el directorio que tienen cuenta, del más cercano hacia arriba. Así un CTO
+ * ve y hace O2O a toda su rama sin tener que apuntarse persona a persona. Se
+ * guarda en `directoryManagerUids`, aparte de la lista manual `o2oManagerUids`,
+ * para que el trigger nunca pise lo que el superadmin decide a mano.
+ * Devuelve solo las fichas cuya lista cambia.
+ * @param {ReadonlyArray<{ id: string, uid?: string|null, reportsToPersonId?: string|null,
+ *   directoryManagerUids?: string[] }>} people
+ * @returns {Array<{ id: string, uids: string[] }>}
+ */
+export function directoryManagerPatches(people) {
+  const byId = new Map(people.map((p) => [p.id, p]));
+  const patches = [];
+  for (const person of people) {
+    const uids = [];
+    const seen = new Set([person.id]);
+    let boss = byId.get(person.reportsToPersonId ?? '');
+    while (boss && !seen.has(boss.id)) {
+      seen.add(boss.id);
+      if (boss.uid) uids.push(boss.uid);
+      boss = byId.get(boss.reportsToPersonId ?? '');
+    }
+    const current = person.directoryManagerUids ?? null;
+    const same = Array.isArray(current) && current.length === uids.length && current.every((u, i) => u === uids[i]);
+    if (!same) patches.push({ id: person.id, uids });
+  }
+  return patches;
+}
+
+/**
  * @param {string} personId  ficha que acaba de recibir uid
  * @param {string|null} uid
  * @param {ReadonlyArray<{ id: string, name?: string, reportsToPersonId?: string|null,

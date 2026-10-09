@@ -27,7 +27,7 @@ import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { bearerFrom, agentKeyId, agentKeyVerdict, agentTeamView, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
-import { managerOnboardingPlan } from './orgManagers.js';
+import { managerOnboardingPlan, directoryManagerPatches } from './orgManagers.js';
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
@@ -2594,6 +2594,11 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
     logger.info(`[org-owner] sincronizados ${writes.length} dueños desde el organigrama (${event.params.personId})`);
   }
   if (uidChanged && after.uid) await onboardDirectoryManager(db, event.params.personId, after.uid, snap.docs);
+  const branchPatches = directoryManagerPatches(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  for (const p of branchPatches) {
+    await db.doc(`people/${p.id}`).set({ directoryManagerUids: p.uids }, { merge: true });
+  }
+  if (branchPatches.length) logger.info(`[org-owner] rama del directorio recalculada en ${branchPatches.length} fichas`);
   const mirrored = await syncLeadersMirror(db, peopleById);
   if (mirrored) {
     logger.info(`[org-owner] espejo /leaders actualizado: ${mirrored} líderes (reportsTo/chain)`);
