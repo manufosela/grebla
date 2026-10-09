@@ -4,7 +4,7 @@
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { test, expect, signInAs } from './fixtures.js';
+import { test, expect, signInAs, markForWhom } from './fixtures.js';
 
 function db() {
   if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
@@ -38,8 +38,9 @@ test('un O2O se despliega con lo privado del manager y lo que ve la persona', as
     createdAt: new Date(),
   });
 
+  await markForWhom(page, NOMBRE);
   await page.locator('o2o-app').getByRole('tab', { name: /Registrar O2O/ }).click();
-  await page.locator('o2o-register').getByRole('combobox', { name: 'Persona', exact: true }).selectOption({ label: NOMBRE });
+  await page.locator('o2o-register select').first().selectOption({ label: NOMBRE });
   await page.locator('o2o-register').getByRole('button', { name: 'Ver' }).click();
 
   const vista = page.locator('o2o-session-view');

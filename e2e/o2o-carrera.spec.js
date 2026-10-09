@@ -8,7 +8,7 @@
  */
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { test, expect, signInAs } from './fixtures.js';
+import { test, expect, signInAs, markForWhom } from './fixtures.js';
 
 function db() {
   if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
@@ -55,8 +55,9 @@ async function abrirRegistro(page) {
   await page.goto('/tools/o2o');
   await page.locator('o2o-app input[type="text"]').fill('Periodo carrera E2E');
   await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+  await markForWhom(page, NOMBRE);
   await page.locator('o2o-app').getByRole('tab', { name: /Registrar O2O/ }).click();
-  await page.locator('o2o-register').getByRole('combobox', { name: 'Persona', exact: true }).selectOption({ label: NOMBRE });
+  await page.locator('o2o-register select').first().selectOption({ label: NOMBRE });
 }
 
 test('el registro muestra el sub-nivel, cuánto lleva y qué le falta, lo que más pesa primero', async ({ page }) => {

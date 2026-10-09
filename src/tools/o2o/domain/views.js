@@ -14,6 +14,9 @@
 
 /** Todas las secciones de un periodo, en orden. */
 export const O2O_VIEWS = Object.freeze([
+  // A quién va el O2O (RMR-TSK-0664): es de quien lleva equipo, no de quien
+  // solo administra las preguntas.
+  Object.freeze({ id: 'para-quien', label: 'Para quién', ready: true }),
   Object.freeze({ id: 'preparar', label: 'Preparar O2O', ready: true }),
   Object.freeze({ id: 'registrar', label: 'Registrar O2O', ready: true }),
   Object.freeze({ id: 'resumen', label: 'Resumen', ready: true }),

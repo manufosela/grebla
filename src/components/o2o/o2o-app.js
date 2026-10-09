@@ -19,15 +19,19 @@ import './o2o-actions.js';
 import './o2o-period-summary.js';
 import './o2o-evolution.js';
 import './o2o-prepare.js';
+import './o2o-for-whom.js';
 import {
-  listPeriods, getPeriod, createPeriod, removePeriod, defaultPeriodName,
+  listPeriods, getPeriod, createPeriod, removePeriod, defaultPeriodName, savePeriodPeople,
 } from '../../tools/o2o/application/usecases/periods.js';
 import { o2oViews } from '../../tools/o2o/domain/views.js';
+import { chosenIds, defaultForWhom } from '../../tools/o2o/domain/forWhom.js';
 
 export class O2OApp extends LitElement {
   static properties = {
     persistence: { attribute: false },
     people: { attribute: false },
+    /** uid de quien hace los O2O: decide quiénes son sus directos (RMR-TSK-0664). */
+    myUid: { attribute: false },
     roles: { attribute: false },
     canEdit: { attribute: false },
     /**
@@ -84,6 +88,7 @@ export class O2OApp extends LitElement {
     super();
     this.persistence = null;
     this.people = [];
+    this.myUid = '';
     this.roles = [];
     this.canEdit = false;
     /** @type {import('../../tools/o2o/domain/views.js').O2OAccess} */
@@ -129,7 +134,7 @@ export class O2OApp extends LitElement {
     this._busy = true;
     this.error = '';
     try {
-      const id = await createPeriod(this.persistence, { name });
+      const id = await createPeriod(this.persistence, { name, personIds: defaultForWhom(this.people, this.myUid) });
       this._periods = await listPeriods(this.persistence);
       await this._enter(id); // entra directo al periodo recién creado
     } catch (err) {
@@ -143,7 +148,7 @@ export class O2OApp extends LitElement {
     this.error = '';
     try {
       this._period = await getPeriod(this.persistence, id);
-      this._view = 'preparar';
+      this._view = o2oViews(this.access)[0]?.id ?? 'preparar';
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo abrir el periodo.';
     }
@@ -164,6 +169,26 @@ export class O2OApp extends LitElement {
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo borrar el periodo.';
     }
+  }
+
+  /** Guarda a quién va el O2O (pestaña «Para quién»). */
+  async _savePeople(personIds) {
+    this._busy = true;
+    this.error = '';
+    try {
+      await savePeriodPeople(this.persistence, this._period.id, personIds);
+      this._period = { ...this._period, personIds };
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'No se pudo guardar para quién es el O2O.';
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  /** Las personas marcadas en este O2O: las únicas que salen al registrar. */
+  get _chosenPeople() {
+    const ids = new Set(chosenIds(this._period, this.people, this.myUid));
+    return this.people.filter((p) => ids.has(p.id));
   }
 
   /** Refresca la guía/formulario del periodo tras editar (para que Registrar use la última). */
@@ -240,12 +265,22 @@ export class O2OApp extends LitElement {
     // Se comprueba aquí también: la pestaña oculta no basta si alguien llega a
     // fijar la vista por otro camino.
     if (!o2oViews(this.access).some((v) => v.id === this._view)) return this._renderPlaceholder();
+    if (this._view === 'para-quien') return this._renderForWhom();
     if (this._view === 'preparar') return this._renderPrepare();
     if (this._view === 'registrar') return this._renderRegister();
     if (this._view === 'acciones') return this._renderActions();
     if (this._view === 'resumen') return this._renderSummary();
     if (this._view === 'evolucion') return this._renderEvolution();
     return this._renderPlaceholder();
+  }
+
+  _renderForWhom() {
+    return html`<o2o-for-whom
+      .people=${this.people}
+      .myUid=${this.myUid}
+      .personIds=${chosenIds(this._period, this.people, this.myUid)}
+      @change=${(e) => this._savePeople(e.detail.personIds)}
+    ></o2o-for-whom>`;
   }
 
   _renderPrepare() {
@@ -264,7 +299,7 @@ export class O2OApp extends LitElement {
   _renderRegister() {
     return html`<o2o-register
       .persistence=${this.persistence}
-      .people=${this.people}
+      .people=${this._chosenPeople}
       .roles=${this.roles}
       .guide=${this._period.guide}
       .periodId=${this._period.id}
@@ -275,7 +310,7 @@ export class O2OApp extends LitElement {
   _renderActions() {
     return html`<o2o-actions
       .persistence=${this.persistence}
-      .people=${this.people}
+      .people=${this._chosenPeople}
       .periodId=${this._period.id}
     ></o2o-actions>`;
   }
@@ -283,7 +318,7 @@ export class O2OApp extends LitElement {
   _renderSummary() {
     return html`<o2o-period-summary
       .persistence=${this.persistence}
-      .people=${this.people}
+      .people=${this._chosenPeople}
       .periodId=${this._period.id}
     ></o2o-period-summary>`;
   }
