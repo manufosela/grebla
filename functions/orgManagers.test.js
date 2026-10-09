@@ -33,17 +33,16 @@ describe('directoryManagerPatches: managers de la rama de cada ficha (RMR-TSK-06
 
 const team = [
   { id: 'jefa', name: 'Jefa', uid: 'u-jefa', reportsToPersonId: null },
-  { id: 'ana', name: 'Ana', reportsToPersonId: 'jefa', o2oManagerUids: [] },
-  { id: 'luis', name: 'Luis', reportsToPersonId: 'jefa', o2oManagerUids: ['u-jefa'] },
+  { id: 'ana', name: 'Ana', reportsToPersonId: 'jefa' },
+  { id: 'luis', name: 'Luis', reportsToPersonId: 'jefa' },
   { id: 'eva', name: 'Eva', reportsToPersonId: 'jefa', active: false },
   { id: 'otro', name: 'Otro', reportsToPersonId: 'nadie' },
 ];
 
 describe('managerOnboardingPlan: quien entra con equipo en el directorio (RMR-TSK-0660)', () => {
-  it('le da el rol de líder y le añade como manager de O2O de su equipo activo', () => {
+  it('le da el rol de líder; su equipo de O2O sale de la rama (RMR-TSK-0665)', () => {
     expect(managerOnboardingPlan('jefa', 'u-jefa', team, false)).toEqual({
       leader: { uid: 'u-jefa', displayName: 'Jefa' },
-      addO2OTo: ['ana'],
     });
   });
 
@@ -52,10 +51,10 @@ describe('managerOnboardingPlan: quien entra con equipo en el directorio (RMR-TS
   });
 
   it('quien no tiene a nadie a su cargo no recibe nada', () => {
-    expect(managerOnboardingPlan('ana', 'u-ana', team, false)).toEqual({ leader: null, addO2OTo: [] });
+    expect(managerOnboardingPlan('ana', 'u-ana', team, false)).toEqual({ leader: null });
   });
 
   it('sin cuenta no hay nada que dar', () => {
-    expect(managerOnboardingPlan('jefa', null, team, false)).toEqual({ leader: null, addO2OTo: [] });
+    expect(managerOnboardingPlan('jefa', null, team, false)).toEqual({ leader: null });
   });
 });

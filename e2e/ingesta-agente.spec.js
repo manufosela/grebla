@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { test, expect } from './fixtures.js';
+import { test, expect, hangFrom } from './fixtures.js';
 
 function db() {
   if (getApps().length === 0) initializeApp({ projectId: 'demo-grebla' });
@@ -54,16 +54,19 @@ test.beforeAll(async () => {
   await db().doc(`agentKeys/${huella(CLAVE_OTRA)}`).set({ label: 'e2e-adminmgr', managerUid: 'e2e-adminmgr', managerEmail: 'adminmgr@e2e.test', active: true });
 });
 
+let limpiar;
 test.beforeEach(async () => {
-  await db().doc(PERSONA).set({ name: 'Ana Ingesta E2E', email: EMAIL, ownerLeaderUid: 'e2e-head', o2oManagerUids: ['e2e-head'], active: true });
+  // Ana cuelga del Head en el directorio (RMR-TSK-0665): es lo que la pone en su alcance.
+  limpiar = await hangFrom(db(), PERSONA.split('/')[1], { name: 'Ana Ingesta E2E', email: EMAIL, active: true }, 'e2e-head');
   await db().doc(FUERA).set({ name: 'Sin Manager E2E', email: EMAIL_FUERA, ownerLeaderUid: '', active: true });
 });
 
 test.afterEach(async () => {
   for (const ruta of [PERSONA, FUERA]) {
     await Promise.all((await o2oDe(ruta)).docs.map((d) => d.ref.delete()));
-    await db().doc(ruta).delete();
   }
+  await db().doc(FUERA).delete();
+  await limpiar();
 });
 
 test('la nota entra como O2O privado de su manager, marcado como automático', async ({ request }) => {
@@ -94,20 +97,25 @@ test('reenviar la misma nota no duplica: el relanzamiento del agente es inofensi
 });
 
 test('cada clave escribe solo en los O2O de su manager: no hay cruce (RMR-TSK-0650/0655)', async ({ request }) => {
-  // La clave de adminmgr no escribe O2O de quien no le tiene como manager de O2O.
+  // La clave de adminmgr no escribe O2O de quien no está en su rama.
   const ajena = await enviar(request, nota({ source: { system: 'matias', id: 'thread-otro' } }), CLAVE_OTRA);
   expect(ajena.status()).toBe(403);
   expect((await ajena.json()).error).toBe('not_in_scope');
-  // Con adminmgr también en su lista, entra en los O2O de adminmgr, no en los del Head.
-  await db().doc(PERSONA).update({ o2oManagerUids: ['e2e-head', 'e2e-adminmgr'] });
-  const res = await enviar(request, nota({ source: { system: 'matias', id: 'thread-otro' } }), CLAVE_OTRA);
-  expect(res.status()).toBe(200);
-  const { id } = await res.json();
-  const ref = db().doc(`leaders/e2e-adminmgr/o2o/${id}`);
+  // Con alguien de su rama, entra en los O2O de adminmgr, no en los del Head.
+  const EMAIL_ADM = 'rama.adminmgr@e2e.test';
+  const soltar = await hangFrom(db(), 'e2e-person-ingesta-adm', { name: 'Rama Adminmgr E2E', email: EMAIL_ADM, active: true }, 'e2e-adminmgr');
   try {
-    expect((await ref.get()).data()?.personId).toBe('e2e-person-ingesta');
-  } finally {
+    const res = await enviar(request, nota({ email: EMAIL_ADM, source: { system: 'matias', id: 'thread-otro' } }), CLAVE_OTRA);
+    expect(res.status()).toBe(200);
+    const { id } = await res.json();
+    const ref = db().doc(`leaders/e2e-adminmgr/o2o/${id}`);
+    expect((await ref.get()).data()?.personId).toBe('e2e-person-ingesta-adm');
     await ref.delete();
+    // Y la del Head no escribe en quien no es de su rama.
+    const delHead = await enviar(request, nota({ email: EMAIL_ADM, source: { system: 'matias', id: 'thread-otro-2' } }));
+    expect(delHead.status()).toBe(403);
+  } finally {
+    await soltar();
   }
   // Y la del Head no puede escribir a nombre de otro manager.
   const cruce = await enviar(request, nota({ managerEmail: 'adminmgr@e2e.test', source: { system: 'matias', id: 'thread-x' } }));
@@ -119,14 +127,14 @@ test('llega también a quien no tiene el email en la ficha, por su cuenta vincul
   // El caso normal en la instancia real: la ficha se ata por uid y el campo
   // `email` está vacío. Sin esto, la ingesta diría «no existe» a casi todos.
   const cuenta = await getAuth().createUser({ email: 'por.cuenta@e2e.test', emailVerified: true });
-  await db().doc(POR_UID).set({ name: 'Por Cuenta E2E', uid: cuenta.uid, ownerLeaderUid: 'e2e-head', o2oManagerUids: ['e2e-head'], active: true });
+  const soltar = await hangFrom(db(), POR_UID.split('/')[1], { name: 'Por Cuenta E2E', uid: cuenta.uid, active: true }, 'e2e-head');
   try {
     const res = await enviar(request, nota({ email: 'por.cuenta@e2e.test', source: { system: 'matias', id: 'thread-uid' } }));
     expect(res.status()).toBe(200);
     expect((await res.json()).personId).toBe('e2e-person-ingesta-uid');
   } finally {
     await Promise.all((await o2oDe(POR_UID)).docs.map((d) => d.ref.delete()));
-    await db().doc(POR_UID).delete();
+    await soltar();
     await getAuth().deleteUser(cuenta.uid);
   }
 });
@@ -164,19 +172,28 @@ test('el agente consulta el equipo de su manager: solo nombre y correo (RMR-TSK-
   expect((await pedir('clave-que-no-es')).status()).toBe(401);
 });
 
-test('quien está por encima en el directorio también recibe la nota y ve a la persona (RMR-TSK-0663)', async ({ request }) => {
-  await db().doc(PERSONA).update({ directoryManagerUids: ['e2e-head', 'e2e-adminmgr'] });
-  const res = await enviar(request, nota({ source: { system: 'matias', id: 'thread-rama' } }), CLAVE_OTRA);
-  expect(res.status()).toBe(200);
-  const ref = db().doc(`leaders/e2e-adminmgr/o2o/${(await res.json()).id}`);
+test('quien está por encima en el directorio, aunque no sea el directo, recibe la nota y ve a la persona (RMR-TSK-0663)', async ({ request }) => {
+  // adminmgr → mando intermedio → persona: adminmgr la tiene en su rama sin ser su jefe directo.
+  const MEDIO = 'people/e2e-ingesta-medio';
+  const NIETA = 'people/e2e-ingesta-nieta';
+  const EMAIL_NIETA = 'nieta.ingesta@e2e.test';
+  await db().doc(MEDIO).set({ name: 'Mando Medio E2E', uid: 'e2e-medio-uid', active: true, reportsToPersonId: 'e2e-ficha-e2e-adminmgr' });
+  await db().doc(NIETA).set({ name: 'Nieta Ingesta E2E', email: EMAIL_NIETA, active: true, reportsToPersonId: 'e2e-ingesta-medio' });
   try {
-    expect((await ref.get()).data()?.personId).toBe('e2e-person-ingesta');
-  } finally {
+    await expect.poll(async () => (await db().doc(NIETA).get()).data()?.directoryManagerUids ?? [],
+      { timeout: 20_000 }).toEqual(['e2e-medio-uid', 'e2e-adminmgr']);
+    const res = await enviar(request, nota({ email: EMAIL_NIETA, source: { system: 'matias', id: 'thread-rama' } }), CLAVE_OTRA);
+    expect(res.status()).toBe(200);
+    const ref = db().doc(`leaders/e2e-adminmgr/o2o/${(await res.json()).id}`);
+    expect((await ref.get()).data()?.personId).toBe('e2e-ingesta-nieta');
     await ref.delete();
+    const equipo = await (await request.get('http://127.0.0.1:5001/demo-grebla/europe-west1/agentTeam',
+      { headers: { Authorization: `Bearer ${CLAVE_OTRA}` } })).json();
+    expect(equipo.people).toContainEqual({ name: 'Nieta Ingesta E2E', email: EMAIL_NIETA });
+  } finally {
+    // Dar cuenta al mando medio con gente a cargo le pudo hacer líder (RMR-TSK-0660).
+    await Promise.all([NIETA, MEDIO, 'leaders/e2e-medio-uid'].map((p) => db().doc(p).delete()));
   }
-  const equipo = await (await request.get('http://127.0.0.1:5001/demo-grebla/europe-west1/agentTeam',
-    { headers: { Authorization: `Bearer ${CLAVE_OTRA}` } })).json();
-  expect(equipo.people).toContainEqual({ name: 'Ana Ingesta E2E', email: EMAIL });
 });
 
 test('el contrato de errores: 401, 400, 404 y 403 se distinguen', async ({ request }) => {

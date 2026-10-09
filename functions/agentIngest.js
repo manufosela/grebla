@@ -186,16 +186,14 @@ export function agentTeamView(people, emailByUid) {
 
 /**
  * ¿Entra esta persona en el ámbito de la ingesta de ESTE manager? Activa, de la
- * organización y con él entre sus managers de O2O (RMR-TSK-0655): una clave solo
- * escribe O2O de quien su manager lleva. Fuera de eso, el agente se guarda la
- * nota en su lado: mejor eso que dejarla donde no toca.
- * @param {{ active?: unknown, external?: unknown, o2oManagerUids?: unknown }|null|undefined} person
+ * organización y en su rama del directorio (RMR-TSK-0665): una clave solo
+ * escribe O2O de quien su manager tiene por debajo. Fuera de eso, el agente se
+ * guarda la nota en su lado: mejor eso que dejarla donde no toca.
+ * @param {{ active?: unknown, external?: unknown, directoryManagerUids?: unknown }|null|undefined} person
  * @param {string} managerUid
  */
 export function personIsInScope(person, managerUid) {
   if (!person || person.external === true) return false;
   if (person.active === false || !managerUid) return false;
-  // La lista manual o la rama del directorio (RMR-TSK-0663): lo mismo que las reglas.
-  return ['o2oManagerUids', 'directoryManagerUids']
-    .some((field) => Array.isArray(person[field]) && person[field].includes(managerUid));
+  return Array.isArray(person.directoryManagerUids) && person.directoryManagerUids.includes(managerUid);
 }

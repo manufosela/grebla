@@ -2529,8 +2529,8 @@ async function syncLeadersMirror(db, peopleById) {
 
 /**
  * Un manager del directorio entra por primera vez (RMR-TSK-0660): recibe el rol
- * de líder y queda como manager de O2O de su equipo. Va antes del espejo
- * /leaders para que su reportsTo y su chain salgan en la misma pasada.
+ * de líder. Su equipo de O2O ya sale de la rama (RMR-TSK-0665). Va antes del
+ * espejo /leaders para que su reportsTo y su chain salgan en la misma pasada.
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} personId @param {string} uid
  * @param {FirebaseFirestore.QueryDocumentSnapshot[]} docs  fichas ya leídas
@@ -2538,14 +2538,10 @@ async function syncLeadersMirror(db, peopleById) {
 async function onboardDirectoryManager(db, personId, uid, docs) {
   const people = docs.map((d) => ({ id: d.id, ...d.data() }));
   const leaderExists = (await db.doc(`leaders/${uid}`).get()).exists;
-  const { leader, addO2OTo } = managerOnboardingPlan(personId, uid, people, leaderExists);
-  if (leader) await db.doc(`leaders/${uid}`).set({ displayName: leader.displayName }, { merge: true });
-  for (const id of addO2OTo) {
-    await db.doc(`people/${id}`).set({ o2oManagerUids: FieldValue.arrayUnion(uid) }, { merge: true });
-  }
-  if (leader || addO2OTo.length) {
-    logger.info(`[org-owner] manager ${personId}: rol de líder ${leader ? 'dado' : 'ya tenía'}, O2O de ${addO2OTo.length}`);
-  }
+  const { leader } = managerOnboardingPlan(personId, uid, people, leaderExists);
+  if (!leader) return;
+  await db.doc(`leaders/${uid}`).set({ displayName: leader.displayName }, { merge: true });
+  logger.info(`[org-owner] manager ${personId}: rol de líder dado`);
 }
 
 /**
@@ -2964,10 +2960,9 @@ export const agentTeam = onRequest(
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
-    // Lista manual y rama del directorio (RMR-TSK-0663), sin repetir a nadie.
-    const snaps = await Promise.all(['o2oManagerUids', 'directoryManagerUids'].map((field) =>
-      getFirestore().collection('people').where(field, 'array-contains', verdict.managerUid).get()));
-    const people = [...new Map(snaps.flatMap((s) => s.docs).map((d) => [d.id, d.data()])).values()];
+    // Su rama del directorio (RMR-TSK-0665).
+    const snap = await getFirestore().collection('people').where('directoryManagerUids', 'array-contains', verdict.managerUid).get();
+    const people = snap.docs.map((d) => d.data());
     const uids = people.map((p) => p.uid).filter((u) => typeof u === 'string' && u);
     const emailByUid = new Map();
     for (let i = 0; i < uids.length; i += 100) {

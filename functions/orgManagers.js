@@ -5,17 +5,15 @@
  * El directorio ya dice de quién depende cada persona (`reportsToPersonId`),
  * pero el rol de líder va atado a la cuenta (/leaders/{uid}) y muchos managers
  * aún no han entrado nunca. Cuando un manager entra por primera vez y su ficha
- * recibe el uid, recibe también el rol de líder y queda como manager de O2O de
- * su equipo. Después, la lista de O2O la ajusta el superadmin a mano.
+ * recibe el uid, recibe también el rol de líder. A quién hace O2O sale de su
+ * rama (`directoryManagerUids`, RMR-TSK-0665).
  */
 
 /**
  * Managers de la rama de cada ficha (RMR-TSK-0661): los uids de todos sus jefes
  * en el directorio que tienen cuenta, del más cercano hacia arriba. Así un CTO
  * ve y hace O2O a toda su rama sin tener que apuntarse persona a persona. Se
- * guarda en `directoryManagerUids`, aparte de la lista manual `o2oManagerUids`,
- * para que el trigger nunca pise lo que el superadmin decide a mano.
- * Devuelve solo las fichas cuya lista cambia.
+ * guarda en `directoryManagerUids`. Devuelve solo las fichas cuya lista cambia.
  * @param {ReadonlyArray<{ id: string, uid?: string|null, reportsToPersonId?: string|null,
  *   directoryManagerUids?: string[] }>} people
  * @returns {Array<{ id: string, uids: string[] }>}
@@ -43,17 +41,13 @@ export function directoryManagerPatches(people) {
  * @param {string} personId  ficha que acaba de recibir uid
  * @param {string|null} uid
  * @param {ReadonlyArray<{ id: string, name?: string, reportsToPersonId?: string|null,
- *   active?: boolean, o2oManagerUids?: string[] }>} people
+ *   active?: boolean }>} people
  * @param {boolean} leaderExists  ¿existe ya /leaders/{uid}?
- * @returns {{ leader: { uid: string, displayName: string|null }|null, addO2OTo: string[] }}
+ * @returns {{ leader: { uid: string, displayName: string|null }|null }}
  */
 export function managerOnboardingPlan(personId, uid, people, leaderExists) {
-  if (!uid) return { leader: null, addO2OTo: [] };
-  const reports = people.filter((p) => p.reportsToPersonId === personId && p.active !== false);
-  if (reports.length === 0) return { leader: null, addO2OTo: [] };
+  const hasReports = people.some((p) => p.reportsToPersonId === personId && p.active !== false);
+  if (!uid || !hasReports || leaderExists) return { leader: null };
   const me = people.find((p) => p.id === personId);
-  return {
-    leader: leaderExists ? null : { uid, displayName: me?.name ?? null },
-    addO2OTo: reports.filter((p) => !(p.o2oManagerUids ?? []).includes(uid)).map((p) => p.id),
-  };
+  return { leader: { uid, displayName: me?.name ?? null } };
 }
