@@ -1,6 +1,7 @@
 /**
- * <o2o-app> — raíz de la herramienta O2O, organizada por PERIODOS (campañas, p.
- * ej. «Periodo Julio 2026»). Landing = lista de periodos + «Crear periodo». Al
+ * <o2o-app> — raíz de la herramienta O2O. En el código cada uno es un PERIODO
+ * (o2oPeriods); en la interfaz se llama «O2O» (RMR-TSK-0668): se crea cuando se
+ * quiere y para quien se quiere, no es un ciclo. Landing = «Tus O2O» + «Crear O2O». Al
  * entrar en un periodo se ven sus vistas (Guía y Formulario EDITABLES, Registrar,
  * Resumen, Acciones, Evolución) scoped a ese periodo. La guía/formulario viven en
  * el periodo; crear un periodo lo genera EN BLANCO (se rellena a mano, con .md o,
@@ -122,7 +123,7 @@ export class O2OApp extends LitElement {
       this._periods = await listPeriods(this.persistence);
       this._newName = defaultPeriodName();
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudieron cargar los periodos.';
+      this.error = err instanceof Error ? err.message : 'No se pudieron cargar los O2O.';
     } finally {
       this.loading = false;
     }
@@ -138,7 +139,7 @@ export class O2OApp extends LitElement {
       this._periods = await listPeriods(this.persistence);
       await this._enter(id); // entra directo al periodo recién creado
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo crear el periodo.';
+      this.error = err instanceof Error ? err.message : 'No se pudo crear el O2O.';
     } finally {
       this._busy = false;
     }
@@ -150,7 +151,7 @@ export class O2OApp extends LitElement {
       this._period = await getPeriod(this.persistence, id);
       this._view = o2oViews(this.access)[0]?.id ?? 'preparar';
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo abrir el periodo.';
+      this.error = err instanceof Error ? err.message : 'No se pudo abrir el O2O.';
     }
   }
 
@@ -167,7 +168,7 @@ export class O2OApp extends LitElement {
       this._confirmDelete = null;
       this._periods = await listPeriods(this.persistence);
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo borrar el periodo.';
+      this.error = err instanceof Error ? err.message : 'No se pudo borrar el O2O.';
     }
   }
 
@@ -202,7 +203,7 @@ export class O2OApp extends LitElement {
     if (this.error && !this._period) return html`<section class="panel"><p class="error">${this.error}</p></section>`;
     if (this.loading) return html`<section class="panel">${skeletonLines(5)}</section>`;
     return html`
-      ${this._busy ? html`<busy-overlay message="Guardando el periodo…"></busy-overlay>` : null}
+      ${this._busy ? html`<busy-overlay message="Guardando el O2O…"></busy-overlay>` : null}
       ${this._period ? this._renderWorkspace() : this._renderPeriodsList()}`;
   }
 
@@ -210,16 +211,16 @@ export class O2OApp extends LitElement {
   _renderPeriodsList() {
     return html`
       <section class="panel">
-        <h2>Periodos de O2O</h2>
-        <p class="lead">Cada periodo (p. ej. mensual) tiene su propia guía y formulario de preguntas. Crea uno y edítalo, o registra los O2O dentro de él.</p>
+        <h2>Tus O2O</h2>
+        <p class="lead">Cada O2O tiene a quién va, su guía y su formulario de preguntas. Crea uno cuando quieras y para quien quieras.</p>
         <div class="row">
-          <input type="text" .value=${this._newName} @input=${(e) => { this._newName = e.target.value; }} placeholder="Nombre del periodo" />
+          <input type="text" .value=${this._newName} @input=${(e) => { this._newName = e.target.value; }} placeholder="Nombre del O2O" aria-label="Nombre del O2O" />
           <button class="btn primary" ?disabled=${this._busy || !this._newName.trim()} @click=${() => this._create()}>
-            ${this._busy ? 'Creando…' : '+ Crear periodo de O2O'}
+            ${this._busy ? 'Creando…' : '+ Crear O2O'}
           </button>
         </div>
         ${this._periods.length ? html`<ul class="periods">${this._periods.map((p) => this._renderPeriodItem(p))}</ul>`
-          : html`<p class="empty">Aún no hay periodos. Crea el primero.</p>`}
+          : html`<p class="empty">Aún no hay O2O. Crea el primero.</p>`}
       </section>
     `;
   }
@@ -240,10 +241,10 @@ export class O2OApp extends LitElement {
   _renderWorkspace() {
     return html`
       <div class="head">
-        <button class="btn link" @click=${() => this._back()}>← Periodos</button>
+        <button class="btn link" @click=${() => this._back()}>← Tus O2O</button>
         <h2 style="margin:0">${this._period.name}</h2>
       </div>
-      <div class="tabs" role="tablist" aria-label="Secciones del periodo de O2O">
+      <div class="tabs" role="tablist" aria-label="Secciones del O2O">
         ${o2oViews(this.access).map((v) => this._renderTab(v))}
       </div>
       ${this.error ? html`<p class="error">${this.error}</p>` : null}
@@ -332,7 +333,7 @@ export class O2OApp extends LitElement {
 
   _renderPlaceholder() {
     const v = VIEWS.find((x) => x.id === this._view);
-    return html`<p class="placeholder">🚧 «${v?.label}» — próximamente (estadísticas y evolución por periodo).</p>`;
+    return html`<p class="placeholder">🚧 «${v?.label}» — próximamente (estadísticas y evolución entre O2O).</p>`;
   }
 }
 

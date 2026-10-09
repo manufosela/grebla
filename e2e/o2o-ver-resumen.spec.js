@@ -28,7 +28,7 @@ test('un O2O se despliega con lo privado del manager y lo que ve la persona', as
   await signInAs(page, 'superadmin');
   await page.goto('/tools/o2o');
   await page.locator('o2o-app input[type="text"]').fill(PERIODO);
-  await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+  await page.locator('o2o-app button', { hasText: 'Crear O2O' }).click();
 
   const leader = db().collection('leaders').doc('e2e-superadmin');
   await expect.poll(async () => (await leader.collection('o2oPeriods').where('name', '==', PERIODO).get()).size).toBe(1);

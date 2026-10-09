@@ -71,11 +71,11 @@ export class O2OEvolution extends LitElement {
   render() {
     if (this._loading) return skeletonBlock('200px');
     if (this._error) return html`<p class="error">${this._error}</p>`;
-    if (!this._rows.length) return html`<p class="empty">Aún no hay periodos que comparar.</p>`;
+    if (!this._rows.length) return html`<p class="empty">Aún no hay O2O que comparar.</p>`;
     return html`
-      <p class="lead">Cobertura del equipo por periodo (cuántas personas tuvieron su O2O). Sirve para ver si el ciclo se mantiene.</p>
+      <p class="lead">Cobertura del equipo en cada O2O (cuántas personas tuvieron el suyo). Sirve para ver si el ciclo se mantiene.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th>Periodo</th><th>Cobertura</th><th class="num">%</th><th class="num">Sesiones</th></tr></thead>
+        <thead><tr><th>O2O</th><th>Cobertura</th><th class="num">%</th><th class="num">Sesiones</th></tr></thead>
         <tbody>${this._rows.map((r) => this._renderRow(r))}</tbody>
       </table></div>
     `;

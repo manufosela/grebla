@@ -78,7 +78,7 @@ describe('o2o periods usecases', () => {
   });
 
   it('defaultPeriodName usa mes y año', () => {
-    expect(defaultPeriodName(new Date('2026-07-15T00:00:00Z'))).toBe('Periodo Julio 2026');
+    expect(defaultPeriodName(new Date('2026-07-15T00:00:00Z'))).toBe('O2O Julio 2026');
   });
 
   it('las sesiones se filtran por periodo', async () => {

@@ -137,7 +137,7 @@ export class O2OPrepare extends LitElement {
 
   render() {
     return html`
-      <p class="lead">Prepara el O2O de este periodo: describe el enfoque y genera con IA la guía y el formulario previo a la vez, o edítalos a mano. Cada uno se guarda por separado.</p>
+      <p class="lead">Prepara este O2O: describe el enfoque y genera con IA la guía y el formulario previo a la vez, o edítalos a mano. Cada uno se guarda por separado.</p>
       ${this._renderAi()}
       <nav class="tabs" role="tablist" aria-label="Baterías del O2O">
         <button role="tab" aria-selected=${this._tab === 'form'} @click=${() => { this._tab = 'form'; }}>Formulario previo</button>

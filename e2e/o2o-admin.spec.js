@@ -47,7 +47,7 @@ test('administrar O2O es cambiar las preguntas, no leer las respuestas', async (
     await page.goto('/tools/o2o');
     // Un periodo donde entrar; el nombre da igual, lo que importa son las pestañas.
     await page.locator('o2o-app input[type="text"]').fill('Periodo de prueba');
-    await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+    await page.locator('o2o-app button', { hasText: 'Crear O2O' }).click();
 
     await expect(tabs(page).filter({ hasText: 'Preparar O2O' })).toBeVisible();
     for (const prohibida of ['Registrar O2O', 'Resumen', 'Acciones', 'Evolución']) {
@@ -60,7 +60,7 @@ test('el manager no pierde ninguna sección', async ({ page }) => {
   await signInAs(page, 'superadmin');
   await page.goto('/tools/o2o');
   await page.locator('o2o-app input[type="text"]').fill('Periodo del manager');
-  await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+  await page.locator('o2o-app button', { hasText: 'Crear O2O' }).click();
 
   for (const seccion of ['Preparar O2O', 'Registrar O2O', 'Resumen', 'Acciones', 'Evolución']) {
     await expect(tabs(page).filter({ hasText: seccion })).toBeVisible();
