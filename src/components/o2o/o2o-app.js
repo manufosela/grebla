@@ -31,8 +31,8 @@ export class O2OApp extends LitElement {
   static properties = {
     persistence: { attribute: false },
     people: { attribute: false },
-    /** uid de quien hace los O2O: decide quiénes son sus directos (RMR-TSK-0664). */
-    myUid: { attribute: false },
+    /** Ficha de quien hace los O2O: decide quiénes son sus directos (RMR-TSK-0669). */
+    myPersonId: { attribute: false },
     roles: { attribute: false },
     canEdit: { attribute: false },
     /**
@@ -89,7 +89,7 @@ export class O2OApp extends LitElement {
     super();
     this.persistence = null;
     this.people = [];
-    this.myUid = '';
+    this.myPersonId = null;
     this.roles = [];
     this.canEdit = false;
     /** @type {import('../../tools/o2o/domain/views.js').O2OAccess} */
@@ -135,7 +135,7 @@ export class O2OApp extends LitElement {
     this._busy = true;
     this.error = '';
     try {
-      const id = await createPeriod(this.persistence, { name, personIds: defaultForWhom(this.people, this.myUid) });
+      const id = await createPeriod(this.persistence, { name, personIds: defaultForWhom(this.people, this.myPersonId) });
       this._periods = await listPeriods(this.persistence);
       await this._enter(id); // entra directo al periodo recién creado
     } catch (err) {
@@ -188,7 +188,7 @@ export class O2OApp extends LitElement {
 
   /** Las personas marcadas en este O2O: las únicas que salen al registrar. */
   get _chosenPeople() {
-    const ids = new Set(chosenIds(this._period, this.people, this.myUid));
+    const ids = new Set(chosenIds(this._period, this.people, this.myPersonId));
     return this.people.filter((p) => ids.has(p.id));
   }
 
@@ -278,8 +278,8 @@ export class O2OApp extends LitElement {
   _renderForWhom() {
     return html`<o2o-for-whom
       .people=${this.people}
-      .myUid=${this.myUid}
-      .personIds=${chosenIds(this._period, this.people, this.myUid)}
+      .myPersonId=${this.myPersonId}
+      .personIds=${chosenIds(this._period, this.people, this.myPersonId)}
       @change=${(e) => this._savePeople(e.detail.personIds)}
     ></o2o-for-whom>`;
   }

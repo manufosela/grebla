@@ -32,10 +32,10 @@ test('la lista de O2O sale del directorio, no de quién es el dueño de la ficha
 
 test('«Para quién»: la rama con los directos marcados; registrar solo ofrece a los marcados (RMR-TSK-0664)', async ({ page }) => {
   // Un directorio de verdad: el trigger calcula la rama desde reportsToPersonId.
-  // La ficha de adminmgr va inactiva para no salir en ninguna lista.
+  // La jefa no tiene cuenta: Dev sube hasta adminmgr, pero su directo es ella
+  // (RMR-TSK-0669). La ficha de adminmgr la crea el global-setup.
   const rama = [
-    ['e2e-rama-yo', { name: 'Ficha de adminmgr', uid: 'e2e-adminmgr', active: false, reportsToPersonId: null }],
-    ['e2e-rama-jefa', { name: 'Rama Jefa', uid: 'e2e-rama-jefa-uid', active: true, reportsToPersonId: 'e2e-rama-yo' }],
+    ['e2e-rama-jefa', { name: 'Rama Jefa', active: true, reportsToPersonId: 'e2e-ficha-e2e-adminmgr' }],
     ['e2e-rama-dev', { name: 'Rama Dev', active: true, reportsToPersonId: 'e2e-rama-jefa' }],
   ];
   for (const [id, data] of rama) {
@@ -43,7 +43,7 @@ test('«Para quién»: la rama con los directos marcados; registrar solo ofrece 
   }
   try {
     await expect.poll(async () => (await db().doc('people/e2e-rama-dev').get()).data()?.directoryManagerUids ?? [],
-      { timeout: 20_000 }).toEqual(['e2e-rama-jefa-uid', 'e2e-adminmgr']);
+      { timeout: 20_000 }).toEqual(['e2e-adminmgr']);
     await signInAs(page, 'adminmgr');
     await page.goto('/tools/o2o');
     await page.locator('o2o-app input[type="text"]').fill('Periodo rama E2E');
@@ -62,6 +62,12 @@ test('«Para quién»: la rama con los directos marcados; registrar solo ofrece 
     await markForWhom(page, 'Rama Dev');
     await page.locator('o2o-app').getByRole('tab', { name: /Registrar O2O/ }).click();
     await expect(options.filter({ hasText: 'Rama Dev' })).toHaveCount(1);
+
+    await page.locator('o2o-app').getByRole('tab', { name: /Para quién/ }).click();
+    await forWhom.getByRole('button', { name: 'Desmarcar todos' }).click();
+    await expect(forWhom.getByRole('checkbox', { checked: true })).toHaveCount(0);
+    await forWhom.getByRole('button', { name: 'Marcar todos', exact: true }).click();
+    await expect(forWhom.getByRole('checkbox', { checked: false })).toHaveCount(0);
   } finally {
     for (const [id] of rama) await db().doc(`people/${id}`).delete();
   }
