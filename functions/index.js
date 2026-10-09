@@ -27,6 +27,7 @@ import { upcomingFrom } from './o2oUpcoming.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { bearerFrom, agentKeyId, agentKeyVerdict, agentTeamView, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
+import { managerOnboardingPlan } from './orgManagers.js';
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
@@ -2527,6 +2528,27 @@ async function syncLeadersMirror(db, peopleById) {
 }
 
 /**
+ * Un manager del directorio entra por primera vez (RMR-TSK-0660): recibe el rol
+ * de líder y queda como manager de O2O de su equipo. Va antes del espejo
+ * /leaders para que su reportsTo y su chain salgan en la misma pasada.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} personId @param {string} uid
+ * @param {FirebaseFirestore.QueryDocumentSnapshot[]} docs  fichas ya leídas
+ */
+async function onboardDirectoryManager(db, personId, uid, docs) {
+  const people = docs.map((d) => ({ id: d.id, ...d.data() }));
+  const leaderExists = (await db.doc(`leaders/${uid}`).get()).exists;
+  const { leader, addO2OTo } = managerOnboardingPlan(personId, uid, people, leaderExists);
+  if (leader) await db.doc(`leaders/${uid}`).set({ displayName: leader.displayName }, { merge: true });
+  for (const id of addO2OTo) {
+    await db.doc(`people/${id}`).set({ o2oManagerUids: FieldValue.arrayUnion(uid) }, { merge: true });
+  }
+  if (leader || addO2OTo.length) {
+    logger.info(`[org-owner] manager ${personId}: rol de líder ${leader ? 'dado' : 'ya tenía'}, O2O de ${addO2OTo.length}`);
+  }
+}
+
+/**
  * EL ORGANIGRAMA MANDA: cuando cambia una persona, se recalcula la propiedad
  * derivada. Dos frentes:
  *  - si cambió SU reportsToPersonId → se recalcula su propio ownerLeaderUid;
@@ -2571,6 +2593,7 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
   if (writes.length) {
     logger.info(`[org-owner] sincronizados ${writes.length} dueños desde el organigrama (${event.params.personId})`);
   }
+  if (uidChanged && after.uid) await onboardDirectoryManager(db, event.params.personId, after.uid, snap.docs);
   const mirrored = await syncLeadersMirror(db, peopleById);
   if (mirrored) {
     logger.info(`[org-owner] espejo /leaders actualizado: ${mirrored} líderes (reportsTo/chain)`);
