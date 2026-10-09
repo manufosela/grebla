@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.247.2] - 2026-10-09
+
+### Corregido
+
+- O2O › «Para quién»: los directos son quienes dependen de ti en el directorio. Antes
+  subían como directos los equipos de un manager sin cuenta. Al resto se le muestra su
+  jefe real. Nuevos botones «Marcar todos» y «Desmarcar todos» (RMR-TSK-0669).
+
 ## [1.247.1] - 2026-10-09
 
 ### Cambiado
