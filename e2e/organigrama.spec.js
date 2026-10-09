@@ -48,6 +48,16 @@ test('el árbol de tu rama: los equipos arriba con su número de personas; toda 
   await expect(card('e2e-org-eng')).toHaveCount(0);
   await expect(chart.locator('[data-team="QA E2E"]')).toHaveCount(0);
 
+  // Quién hay en la caja, en un modal (RMR-TSK-0673); la baja no sale.
+  await team.click();
+  const modal = chart.locator('app-modal');
+  await expect(modal).toContainText('Ana E2E');
+  await expect(modal).toContainText('Backend Engineer');
+  await expect(modal).toContainText('Bea E2E');
+  await expect(modal).not.toContainText('Baja E2E');
+  await page.keyboard.press('Escape');
+  await expect(modal).not.toHaveAttribute('open', '');
+
   await chart.getByRole('button', { name: 'Toda la casa' }).click();
   await expect(card('e2e-org-ceo')).toContainText('Paloma E2E');
   // Invertida: el equipo arriba, el manager en medio, la CEO en la base.
