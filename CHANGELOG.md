@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.243.0] - 2026-10-09
+
+### Añadido
+
+- **En las retros votar ya no mueve las tarjetas.** Se quedan en orden de
+  llegada mientras se vota. Quien facilita las ordena por votos con un botón,
+  junto a «Mostrar todas», y puede volver al orden de llegada. El cambio se ve a
+  la vez en todas las pantallas.
+
 ## [1.242.1] - 2026-10-08
 
 ### Arreglado
