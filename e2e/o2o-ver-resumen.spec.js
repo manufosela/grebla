@@ -39,7 +39,7 @@ test('un O2O se despliega con lo privado del manager y lo que ve la persona', as
   });
 
   await page.locator('o2o-app').getByRole('tab', { name: /Registrar O2O/ }).click();
-  await page.locator('o2o-register select').first().selectOption({ label: NOMBRE });
+  await page.locator('o2o-register').getByRole('combobox', { name: 'Persona', exact: true }).selectOption({ label: NOMBRE });
   await page.locator('o2o-register').getByRole('button', { name: 'Ver' }).click();
 
   const vista = page.locator('o2o-session-view');

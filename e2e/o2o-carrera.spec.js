@@ -56,7 +56,7 @@ async function abrirRegistro(page) {
   await page.locator('o2o-app input[type="text"]').fill('Periodo carrera E2E');
   await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
   await page.locator('o2o-app').getByRole('tab', { name: /Registrar O2O/ }).click();
-  await page.locator('o2o-register select').first().selectOption({ label: NOMBRE });
+  await page.locator('o2o-register').getByRole('combobox', { name: 'Persona', exact: true }).selectOption({ label: NOMBRE });
 }
 
 test('el registro muestra el sub-nivel, cuánto lleva y qué le falta, lo que más pesa primero', async ({ page }) => {

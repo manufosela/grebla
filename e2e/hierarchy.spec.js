@@ -14,6 +14,15 @@ function admin() {
   return getFirestore();
 }
 
+// Deshace la jerarquía al terminar: con la rama del directorio (RMR-TSK-0662),
+// dejar al ingeniero como jefe le daría equipo de O2O en los tests que vienen.
+test.afterEach(async () => {
+  const db = admin();
+  await db.doc('people/e2e-person-mgr').update({ reportsToPersonId: null });
+  await expect.poll(async () => (await db.doc('people/e2e-person-mgr').get()).data()?.directoryManagerUids ?? [],
+    { timeout: 20_000 }).toEqual([]);
+});
+
 test('el superadmin asigna el superior de una persona desde el panel', async ({ page }) => {
   const db = admin();
 

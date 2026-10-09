@@ -23,6 +23,7 @@ import { getLevelAssessment } from '../../lib/careerAssessment.js';
 import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
 import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { pickerGroups, filterPicker } from '../../tools/o2o/domain/picker.js';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -35,6 +36,9 @@ export class O2ORegister extends LitElement {
     periodId: { attribute: false },
     canEdit: { attribute: false },
     _personId: { state: true },
+    /** Filtros del selector: grupo (squad/gremio) y nombre (RMR-TSK-0662). */
+    _group: { state: true },
+    _search: { state: true },
     _sessions: { state: true },
     _loadingList: { state: true },
     _draft: { state: true },
@@ -99,6 +103,8 @@ export class O2ORegister extends LitElement {
     this.periodId = null;
     this.canEdit = false;
     this._personId = '';
+    this._group = '';
+    this._search = '';
     this._sessions = [];
     this._loadingList = false;
     this._draft = null;
@@ -302,16 +308,31 @@ export class O2ORegister extends LitElement {
   }
 
   _renderPicker() {
-    const options = this.people.map(
+    const visible = filterPicker(this.people, this._group, this._search);
+    // La persona elegida sigue en la lista aunque el filtro la deje fuera.
+    const chosen = this.people.find((p) => p.id === this._personId);
+    const shown = chosen && !visible.includes(chosen) ? [chosen, ...visible] : visible;
+    const options = shown.map(
       (p) => html`<option value=${p.id} ?selected=${p.id === this._personId}>${p.name}</option>`,
     );
+    const groups = pickerGroups(this.people);
     return html`<div class="row">
+      ${groups.length ? html`<label>Grupo
+        <select .value=${this._group} @change=${(e) => { this._group = e.target.value; }}>
+          <option value="" ?selected=${!this._group}>Todas (${this.people.length})</option>
+          ${groups.map((g) => html`<option value=${g.key} ?selected=${g.key === this._group}>${g.label}</option>`)}
+        </select>
+      </label>` : null}
+      <label>Buscar
+        <input type="text" placeholder="Nombre" .value=${this._search}
+          @input=${(e) => { this._search = e.target.value; }} />
+      </label>
       <label>Persona
         <select
           .value=${this._personId}
           @change=${(e) => this._selectPerson(e.target.value)}
         >
-          <option value="">— Elige a alguien de tu equipo —</option>
+          <option value="">— Elige a alguien de tu equipo (${visible.length}) —</option>
           ${options}
         </select>
       </label>

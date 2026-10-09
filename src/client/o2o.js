@@ -8,6 +8,7 @@ import '../components/o2o/o2o-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createO2OContainer } from '../tools/o2o/composition/container.js';
 import { listMyO2OPeople } from '../lib/o2oManagers.js';
+import { listSquadsCatalog } from '../lib/squads.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { proposePrep } from '../lib/o2oAi.js';
@@ -22,12 +23,17 @@ const app = document.querySelector('o2o-app');
  * Gobernar la instancia no hace que tu equipo sea toda la organización
  * (RMR-TSK-0647), y ser dueño de una ficha tampoco: la lista la fija el superadmin.
  */
-function forSelector(people) {
+function forSelector(people, squadNames) {
   return people
     .filter((p) => p.active)
     // `levelId` viaja con la persona para el contexto de carrera del registro
     // (RMR-PCS-0044 · F4): sin él no hay contra qué nivel medir el avance.
-    .map((p) => ({ id: p.id, name: p.name, external: !!p.external, levelId: p.levelId ?? null }))
+    // Squads y gremios, para filtrar el selector (RMR-TSK-0662).
+    .map((p) => ({
+      id: p.id, name: p.name, external: !!p.external, levelId: p.levelId ?? null,
+      squads: (p.squadIds ?? []).map((id) => squadNames.get(id)).filter(Boolean),
+      guilds: p.guilds ?? [],
+    }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 
@@ -55,7 +61,8 @@ onUserChanged(async (user) => {
     // de dos, y aquí solo se vienen a cambiar las preguntas. Lo que no se pide,
     // no llega al navegador.
     const { persistence } = await createO2OContainer({ mode: 'firestore', leaderUid: uid });
-    const people = soloAdmin ? [] : forSelector(mine);
+    const squadNames = soloAdmin ? new Map() : new Map((await listSquadsCatalog()).map((s) => [s.id, s.name]));
+    const people = soloAdmin ? [] : forSelector(mine, squadNames);
     app.canEdit = true;
     app.people = people;
     app.roles = ROLES; // para mostrar el rol Role Mirror en «Registrar O2O» (RMR-TSK-0226)
