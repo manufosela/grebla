@@ -195,5 +195,7 @@ export function agentTeamView(people, emailByUid) {
 export function personIsInScope(person, managerUid) {
   if (!person || person.external === true) return false;
   if (person.active === false || !managerUid) return false;
-  return Array.isArray(person.o2oManagerUids) && person.o2oManagerUids.includes(managerUid);
+  // La lista manual o la rama del directorio (RMR-TSK-0663): lo mismo que las reglas.
+  return ['o2oManagerUids', 'directoryManagerUids']
+    .some((field) => Array.isArray(person[field]) && person[field].includes(managerUid));
 }

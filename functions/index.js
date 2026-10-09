@@ -2964,8 +2964,10 @@ export const agentTeam = onRequest(
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
-    const snap = await getFirestore().collection('people').where('o2oManagerUids', 'array-contains', verdict.managerUid).get();
-    const people = snap.docs.map((d) => d.data());
+    // Lista manual y rama del directorio (RMR-TSK-0663), sin repetir a nadie.
+    const snaps = await Promise.all(['o2oManagerUids', 'directoryManagerUids'].map((field) =>
+      getFirestore().collection('people').where(field, 'array-contains', verdict.managerUid).get()));
+    const people = [...new Map(snaps.flatMap((s) => s.docs).map((d) => [d.id, d.data()])).values()];
     const uids = people.map((p) => p.uid).filter((u) => typeof u === 'string' && u);
     const emailByUid = new Map();
     for (let i = 0; i < uids.length; i += 100) {

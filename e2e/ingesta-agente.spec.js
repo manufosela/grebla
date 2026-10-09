@@ -164,6 +164,21 @@ test('el agente consulta el equipo de su manager: solo nombre y correo (RMR-TSK-
   expect((await pedir('clave-que-no-es')).status()).toBe(401);
 });
 
+test('quien está por encima en el directorio también recibe la nota y ve a la persona (RMR-TSK-0663)', async ({ request }) => {
+  await db().doc(PERSONA).update({ directoryManagerUids: ['e2e-head', 'e2e-adminmgr'] });
+  const res = await enviar(request, nota({ source: { system: 'matias', id: 'thread-rama' } }), CLAVE_OTRA);
+  expect(res.status()).toBe(200);
+  const ref = db().doc(`leaders/e2e-adminmgr/o2o/${(await res.json()).id}`);
+  try {
+    expect((await ref.get()).data()?.personId).toBe('e2e-person-ingesta');
+  } finally {
+    await ref.delete();
+  }
+  const equipo = await (await request.get('http://127.0.0.1:5001/demo-grebla/europe-west1/agentTeam',
+    { headers: { Authorization: `Bearer ${CLAVE_OTRA}` } })).json();
+  expect(equipo.people).toContainEqual({ name: 'Ana Ingesta E2E', email: EMAIL });
+});
+
 test('el contrato de errores: 401, 400, 404 y 403 se distinguen', async ({ request }) => {
   const mala = await enviar(request, nota(), 'clave-que-no-es');
   expect(mala.status()).toBe(401);
