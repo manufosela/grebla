@@ -35,3 +35,10 @@ test('al recibir su cuenta, la jefa del directorio pasa a líder y a manager de 
   await expect.poll(async () => (await db().doc(`people/${REPORT}`).get()).data()?.ownerLeaderUid ?? null,
     { timeout: 20_000 }).toBe(UID);
 });
+
+test('la rama del directorio queda en cada ficha: quien cuelga de la jefa la tiene como manager (RMR-TSK-0661)', async () => {
+  await db().doc(`people/${BOSS}`).update({ uid: UID });
+
+  await expect.poll(async () => (await db().doc(`people/${REPORT}`).get()).data()?.directoryManagerUids ?? null,
+    { timeout: 20_000 }).toEqual([UID]);
+});

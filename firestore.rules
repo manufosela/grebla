@@ -300,18 +300,22 @@ service cloud.firestore {
       // guard 'uid' in resource.data evita romper la regla en personas sin campo.
       // Managers de O2O (RMR-TSK-0654): quien la persona tiene asignado para sus
       // O2O la lee. La lista solo la cambia el superadmin (ver create/update).
+      // directoryManagerUids (RMR-TSK-0661) lo calcula el trigger desde el
+      // directorio: ningún líder lo escribe, igual que la lista manual.
       function touchesO2OManagers() {
-        return request.resource.data.diff(resource.data).affectedKeys().hasAny(['o2oManagerUids']);
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(['o2oManagerUids', 'directoryManagerUids']);
       }
       allow read: if isSuperAdmin() || isViewer() || isOwner() || ownerReportsToMe()
         || ('sharedWithUids' in resource.data && request.auth.uid in resource.data.sharedWithUids)
         || (isSignedIn() && 'o2oManagerUids' in resource.data && request.auth.uid in resource.data.o2oManagerUids)
+        || (isSignedIn() && request.auth.uid in resource.data.get('directoryManagerUids', []))
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid);
       // El líder crea sus personas; el superadmin puede crear una persona para
       // cualquier líder (asignar un usuario a un equipo desde el panel).
       allow create: if isSuperAdmin()
         || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid
-            && !('o2oManagerUids' in request.resource.data));
+            && !('o2oManagerUids' in request.resource.data)
+            && !('directoryManagerUids' in request.resource.data));
       // Un editor compartido edita datos pero NO transfiere la propiedad. El
       // ingeniero vinculado (Person.uid == su uid) SOLO puede declarar su objetivo
       // de carrera: la última rama restringe el cambio al único campo
@@ -396,8 +400,10 @@ service cloud.firestore {
       // asignados (RMR-TSK-0655), aunque no sean dueños de la ficha. ADITIVO al
       // {document=**} de abajo; solo esta subcolección, no el resto de la ficha.
       match /o2oActions/{actionId} {
+        function o2oPerson() { return get(/databases/$(database)/documents/people/$(personId)).data; }
         allow read, write: if isSignedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/people/$(personId)).data.get('o2oManagerUids', []);
+          && (request.auth.uid in o2oPerson().get('o2oManagerUids', [])
+              || request.auth.uid in o2oPerson().get('directoryManagerUids', []));
       }
 
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
@@ -637,6 +643,8 @@ service cloud.firestore {
         return owner == request.auth.uid
           // Sus managers de O2O asignados (RMR-TSK-0655).
           || request.auth.uid in notedPerson().get('o2oManagerUids', [])
+          // Y quien está por encima en el directorio (RMR-TSK-0661).
+          || request.auth.uid in notedPerson().get('directoryManagerUids', [])
           || ((isLeader() || isSuperManager()) && owner != null && exists(ownerLeader)
               && (get(ownerLeader).data.get('reportsTo', null) == request.auth.uid
                   || request.auth.uid in get(ownerLeader).data.get('chain', [])));
