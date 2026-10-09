@@ -15,6 +15,18 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.246.0] - 2026-10-09
+
+### Añadido
+
+- **Cada O2O tiene una pestaña «Para quién».** Muestra tu rama del directorio:
+  tus directos vienen marcados y el resto, con de quién depende, se marca o
+  desmarca. Registrar, Resumen y Acciones solo ofrecen a las personas marcadas.
+
+### Quitado
+
+- El filtro por grupo y el buscador del registro de O2O de la 1.245.0.
+
 ## [1.245.0] - 2026-10-09
 
 ### Añadido
