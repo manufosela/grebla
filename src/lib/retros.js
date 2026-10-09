@@ -130,6 +130,12 @@ export function setRetroReveal(retroId, patch) {
   return updateDoc(doc(db, 'retros', retroId), patch);
 }
 
+/** Ordena por votos o por llegada en todas las pantallas (RMR-TSK-0659).
+ *  @param {string} retroId @param {boolean} sortByVotes */
+export function setRetroSortByVotes(retroId, sortByVotes) {
+  return updateDoc(doc(db, 'retros', retroId), { sortByVotes: sortByVotes === true });
+}
+
 /**
  * Retros de un líder —o de toda la rama de un supermanager—, más recientes
  * primero. La fusión de varios lotes se reordena en cliente.
