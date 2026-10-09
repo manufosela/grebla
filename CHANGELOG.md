@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.244.0] - 2026-10-09
+
+### Añadido
+
+- **Los managers del directorio reciben su equipo al entrar.** La primera vez
+  que entra en GREBLA alguien que tiene personas a su cargo en el directorio,
+  recibe el rol de líder y queda como manager de O2O de su equipo. Después, la
+  lista de O2O se sigue ajustando a mano en Administración › Personas.
+
 ## [1.243.0] - 2026-10-09
 
 ### Añadido
