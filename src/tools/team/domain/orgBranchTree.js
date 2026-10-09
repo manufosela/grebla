@@ -60,7 +60,10 @@ function teamBoxes(ics, bossOf) {
   return [...groups.values()].map((members) => {
     const parentId = bossOf(members[0]);
     const label = members[0].notion?.team ?? NO_TEAM;
-    return { id: `team:${parentId ?? ''}:${label}`, kind: 'team', parentId, label, count: members.length, branch: members[0].orgBranch ?? null };
+    return {
+      id: `team:${parentId ?? ''}:${label}`, kind: 'team', parentId, label, count: members.length,
+      branch: members[0].orgBranch ?? null, members: members.toSorted(byName),
+    };
   }).toSorted((a, b) => a.label.localeCompare(b.label, 'es'));
 }
 

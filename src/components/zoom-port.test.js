@@ -5,7 +5,27 @@
 import { describe, it, expect } from 'vitest';
 import { ZoomPort } from './zoom-port.js';
 
-const { zoomBy, fit, reset } = ZoomPort.prototype;
+const { zoomBy, fit, reset, _onPanStart, _onPanMove } = ZoomPort.prototype;
+
+describe('<zoom-port>: un clic no es un arrastre (RMR-TSK-0673)', () => {
+  const pointer = (x, y) => {
+    const captured = [];
+    const port = { setPointerCapture: (id) => captured.push(id), classList: { add: () => {} } };
+    return { e: { button: 0, clientX: x, clientY: y, pointerId: 7, currentTarget: port }, captured };
+  };
+
+  it('pulsar no captura el puntero, así el clic llega a la tarjeta; moverse unos píxeles sí arrastra', () => {
+    const ctx = { _pan: { x: 0, y: 0 } };
+    const down = pointer(100, 100);
+    _onPanStart.call(ctx, down.e);
+    _onPanMove.call(ctx, { ...down.e, clientX: 102, clientY: 101 });
+    expect(down.captured).toEqual([]);
+    expect(ctx._pan).toEqual({ x: 0, y: 0 });
+    _onPanMove.call(ctx, { ...down.e, clientX: 130, clientY: 110 });
+    expect(down.captured).toEqual([7]);
+    expect(ctx._pan).toEqual({ x: 30, y: 10 });
+  });
+});
 
 describe('<zoom-port>', () => {
   it('el zoom se queda entre 0,15 y 2,5', () => {

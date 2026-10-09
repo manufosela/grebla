@@ -14,17 +14,20 @@ import { branchColor } from '../tools/team/domain/orgRoles.js';
 import { branchTree, branchTreeLayout } from '../tools/team/domain/orgBranchTree.js';
 import { skeletonLines } from './app-skeleton.js';
 import './zoom-port.js';
+import './app-modal.js';
 
 const SIZE = { nodeWidth: 200, nodeHeight: 64, gapX: 20, rowHeight: 120 };
 const LABEL_W = 110; // margen izquierdo para el rótulo de cada banda
 const ALL = '';
 const colorVar = (color) => `--b: ${color}`;
+const peopleCount = (n) => (n === 1 ? '1 persona' : `${n} personas`);
 
 export class OrgBranchChart extends LitElement {
   static properties = {
     _people: { state: true },
     _branches: { state: true },
     _branch: { state: true },
+    _team: { state: true },
     _ready: { state: true },
     _error: { state: true },
   };
@@ -40,7 +43,10 @@ export class OrgBranchChart extends LitElement {
     .band { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--rm-border, #d1d5db); }
     .band-label { position: absolute; left: 8px; top: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--rm-muted, #5b6b7d); }
     .node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 0.1rem; padding: 0.4rem 0.7rem; border: 2px solid var(--b); border-radius: 10px; overflow: hidden; background: color-mix(in srgb, var(--b) 14%, var(--rm-surface, #fff)); }
-    .node.team { border-style: dashed; text-align: center; }
+    .node.team { border-style: dashed; text-align: center; font: inherit; color: inherit; cursor: pointer; }
+    .node.team:hover, .node.team:focus-visible { border-style: solid; }
+    .members { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+    .members li { display: flex; flex-direction: column; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--rm-border, #e5e7eb); }
     .name, .title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .name { font-weight: 800; font-size: 0.88rem; }
     .title { font-size: 0.76rem; }
@@ -54,6 +60,7 @@ export class OrgBranchChart extends LitElement {
     this._branches = [];
     this._roleLabels = new Map();
     this._branch = ALL;
+    this._team = null;
     this._ready = false;
     this._error = '';
     this._off = null;
@@ -115,6 +122,7 @@ export class OrgBranchChart extends LitElement {
           ${layout.links.map((l) => this._renderLink(l, layout.nodes))}
         </svg>
         ${layout.nodes.map((n) => this._renderNode(n))}
+        ${this._renderTeamModal()}
       </zoom-port>`;
   }
 
@@ -147,18 +155,34 @@ export class OrgBranchChart extends LitElement {
     </div>`;
   }
 
+  _titleOf(person) {
+    return person.notion?.role ?? this._roleLabels.get(person.orgRole) ?? '';
+  }
+
   _renderNode(n) {
     const box = `left:${LABEL_W + n.x - SIZE.nodeWidth / 2}px;top:${n.y - SIZE.nodeHeight / 2}px;width:${SIZE.nodeWidth}px;height:${SIZE.nodeHeight}px;--b:${this._color(n.branch)}`;
     if (n.kind === 'team') {
-      const people = n.count === 1 ? '1 persona' : `${n.count} personas`;
-      return html`<div class="node team" style=${box} data-team=${n.label}>
-        <span class="name">${n.label}</span><span class="title">${people}</span>
-      </div>`;
+      // Quién hay dentro se ve en un modal, para no cargar el árbol (RMR-TSK-0673).
+      return html`<button type="button" class="node team" style=${box} data-team=${n.label}
+        title="Ver quién hay" @click=${() => { this._team = n; }}>
+        <span class="name">${n.label}</span><span class="title">${peopleCount(n.count)}</span>
+      </button>`;
     }
-    const title = n.person.notion?.role ?? this._roleLabels.get(n.person.orgRole) ?? '';
     return html`<div class="node" style=${box} data-person-id=${n.id}>
-      <span class="name">${n.person.name}</span><span class="title">${title}</span>
+      <span class="name">${n.person.name}</span><span class="title">${this._titleOf(n.person)}</span>
     </div>`;
+  }
+
+  _renderTeamModal() {
+    const team = this._team;
+    const heading = team ? `${team.label} · ${peopleCount(team.count)}` : '';
+    return html`<app-modal slot="overlay" .open=${!!team} heading=${heading} @close=${() => { this._team = null; }}>
+      <ul class="members">${(team?.members ?? []).map((p) => this._renderMember(p))}</ul>
+    </app-modal>`;
+  }
+
+  _renderMember(person) {
+    return html`<li><span class="name">${person.name}</span><span class="title">${this._titleOf(person)}</span></li>`;
   }
 }
 

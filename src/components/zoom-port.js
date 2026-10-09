@@ -3,6 +3,9 @@
  * zoom con la rueda y con botones, arrastre para mover, «Ver todo» que encaja el
  * lienzo, «100 %» y pantalla completa. El contenido va en el slot y se mueve entero.
  *
+ * El slot `overlay` queda fuera del lienzo (sin zoom) y dentro de la pantalla
+ * completa: ahí van los modales que abre el contenido.
+ *
  * Props: width, height (tamaño natural del lienzo, px). Al cambiar, se vuelve
  * a encajar. La pantalla completa se pide sobre el propio elemento para que
  * el visor y sus botones sigan a mano (mismo criterio que el mapa de carrera).
@@ -79,7 +82,8 @@ export class ZoomPort extends LitElement {
         <div class="canvas" style="width:${this.width}px;height:${this.height}px;transform:translate(${this._pan.x}px,${this._pan.y}px) scale(${this._zoom})">
           <slot></slot>
         </div>
-      </div>`;
+      </div>
+      <slot name="overlay"></slot>`;
   }
 
   /** Zoom relativo, acotado para no perder el dibujo de vista. */
@@ -123,13 +127,21 @@ export class ZoomPort extends LitElement {
 
   _onPanStart(e) {
     if (e.button !== 0) return;
-    this._drag = { x: e.clientX - this._pan.x, y: e.clientY - this._pan.y };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    e.currentTarget.classList.add('grabbing');
+    this._drag = { x: e.clientX - this._pan.x, y: e.clientY - this._pan.y, fromX: e.clientX, fromY: e.clientY, moving: false };
   }
 
+  /**
+   * El puntero se captura solo cuando ya se arrastra (RMR-TSK-0673): capturarlo
+   * al pulsar desviaba el clic al visor y nada de dentro podía pulsarse.
+   */
   _onPanMove(e) {
     if (!this._drag) return;
+    if (!this._drag.moving) {
+      if (Math.hypot(e.clientX - this._drag.fromX, e.clientY - this._drag.fromY) < 5) return;
+      this._drag.moving = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.currentTarget.classList.add('grabbing');
+    }
     this._pan = { x: e.clientX - this._drag.x, y: e.clientY - this._drag.y };
   }
 

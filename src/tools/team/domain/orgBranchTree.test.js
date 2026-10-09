@@ -31,6 +31,11 @@ describe('branchTree (RMR-TSK-0670)', () => {
     expect(tree.nodes.some((n) => n.id === 'ana')).toBe(false);
   });
 
+  it('cada caja lleva a sus personas, por nombre (RMR-TSK-0673)', () => {
+    const backend = branchTree(people, 'tech').nodes.find((n) => n.label === 'Backend');
+    expect(backend.members.map((m) => m.personId)).toEqual(['ana', 'bea']);
+  });
+
   it('filas: C-level abajo, encima Head of, Manager, Lead y las cajas arriba del todo', () => {
     const tree = branchTree(people, 'tech');
     const row = (id) => tree.nodes.find((n) => n.id === id).row;
