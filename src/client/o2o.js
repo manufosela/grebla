@@ -26,10 +26,11 @@ function forSelector(people) {
     .filter((p) => p.active)
     // `levelId` viaja con la persona para el contexto de carrera del registro
     // (RMR-PCS-0044 · F4): sin él no hay contra qué nivel medir el avance.
-    // uid y rama, para separar directos del resto en «Para quién» (RMR-TSK-0664).
+    // De quién depende en el directorio, para separar directos del resto en
+    // «Para quién» (RMR-TSK-0669).
     .map((p) => ({
       id: p.id, name: p.name, external: !!p.external, levelId: p.levelId ?? null,
-      uid: p.uid ?? null, directoryManagerUids: p.directoryManagerUids ?? [],
+      reportsToPersonId: p.reportsToPersonId ?? null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
@@ -59,7 +60,7 @@ onUserChanged(async (user) => {
     // no llega al navegador.
     const { persistence } = await createO2OContainer({ mode: 'firestore', leaderUid: uid });
     const people = soloAdmin ? [] : forSelector(mine);
-    app.myUid = uid;
+    app.myPersonId = access.personId ?? null;
     app.canEdit = true;
     app.people = people;
     app.roles = ROLES; // para mostrar el rol Role Mirror en «Registrar O2O» (RMR-TSK-0226)
