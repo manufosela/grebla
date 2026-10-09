@@ -15,6 +15,17 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.245.0] - 2026-10-09
+
+### Añadido
+
+- **En O2O, cada manager tiene a toda su rama.** Además de la lista que asigna
+  el superadmin, un manager ve y hace O2O a todas las personas que dependen de
+  él en el directorio, directas e indirectas. Al registrar un O2O se filtra por
+  squad o gremio y se busca por nombre.
+- **La ingesta de notas de 1-1 y la consulta del equipo** desde el agente
+  cuentan también esa rama.
+
 ## [1.244.0] - 2026-10-09
 
 ### Añadido
