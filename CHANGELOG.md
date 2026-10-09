@@ -15,6 +15,16 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.248.0] - 2026-10-09
+
+### Cambiado
+
+- Organigrama: ahora es el árbol de cada rama. C-level abajo; encima Head of, Manager,
+  Lead y Team lead; arriba, cada equipo con su número de personas. Las líneas muestran
+  quién depende de quién, sin cruces. Cada rama tiene su color y se abre en la tuya;
+  se puede elegir otra o «Toda la casa». Vuelven el zoom, mover, «Ver todo» y la
+  pantalla completa. Se retira la pirámide de personas (RMR-TSK-0670, 0671 y 0672).
+
 ## [1.247.2] - 2026-10-09
 
 ### Corregido
