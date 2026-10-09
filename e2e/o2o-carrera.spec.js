@@ -55,7 +55,7 @@ async function abrirRegistro(page) {
   await signInAs(page, 'superadmin');
   await page.goto('/tools/o2o');
   await page.locator('o2o-app input[type="text"]').fill('Periodo carrera E2E');
-  await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+  await page.locator('o2o-app button', { hasText: 'Crear O2O' }).click();
   await markForWhom(page, NOMBRE);
   await page.locator('o2o-app').getByRole('tab', { name: /Registrar O2O/ }).click();
   await page.locator('o2o-register select').first().selectOption({ label: NOMBRE });

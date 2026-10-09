@@ -221,7 +221,7 @@ export class O2OQuestionsEditor extends LitElement {
     return html`
       ${this._saving ? html`<busy-overlay message="Guardando las preguntas…"></busy-overlay>` : null}
       <p class="lead">
-        Edita las preguntas de este periodo. Cada O2O puede tener preguntas propias.
+        Edita las preguntas de este O2O. Cada O2O tiene las suyas.
         Puedes escribirlas a mano o <strong>importar un .md</strong>
         (títulos <code>#</code> = ${groupWord}s, viñetas <code>-</code> = preguntas).
       </p>

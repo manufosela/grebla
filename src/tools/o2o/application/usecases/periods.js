@@ -22,7 +22,7 @@ export function blankForm() {
 export function defaultPeriodName(date = new Date()) {
   const month = new Intl.DateTimeFormat('es', { month: 'long' }).format(date);
   const capital = month.charAt(0).toUpperCase() + month.slice(1);
-  return `Periodo ${capital} ${date.getFullYear()}`;
+  return `O2O ${capital} ${date.getFullYear()}`;
 }
 
 /**

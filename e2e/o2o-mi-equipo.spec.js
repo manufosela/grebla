@@ -20,7 +20,7 @@ test('la lista de O2O sale del directorio, no de quién es el dueño de la ficha
     await signInAs(page, 'adminmgr');
     await page.goto('/tools/o2o');
     await page.locator('o2o-app input[type="text"]').fill('Periodo asignados E2E');
-    await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+    await page.locator('o2o-app button', { hasText: 'Crear O2O' }).click();
     const forWhom = page.locator('o2o-for-whom');
     await expect(forWhom.getByRole('checkbox', { name: /Asignada por superadmin/ })).toHaveCount(1);
     await expect(forWhom.getByRole('checkbox', { name: /Ya no es suya/ })).toHaveCount(0);
@@ -47,7 +47,7 @@ test('«Para quién»: la rama con los directos marcados; registrar solo ofrece 
     await signInAs(page, 'adminmgr');
     await page.goto('/tools/o2o');
     await page.locator('o2o-app input[type="text"]').fill('Periodo rama E2E');
-    await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+    await page.locator('o2o-app button', { hasText: 'Crear O2O' }).click();
 
     const forWhom = page.locator('o2o-for-whom');
     await expect(forWhom.getByRole('checkbox', { name: 'Rama Jefa', exact: true })).toBeChecked();
@@ -72,7 +72,7 @@ test('un superadmin con equipo solo ve a su gente al registrar un O2O', async ({
   await signInAs(page, 'adminmgr');
   await page.goto('/tools/o2o');
   await page.locator('o2o-app input[type="text"]').fill('Periodo mi equipo E2E');
-  await page.locator('o2o-app button', { hasText: 'Crear periodo' }).click();
+  await page.locator('o2o-app button', { hasText: 'Crear O2O' }).click();
 
   const forWhom = page.locator('o2o-for-whom');
   await expect(forWhom.getByRole('checkbox', { name: /Persona del admin-manager/ })).toHaveCount(1);
