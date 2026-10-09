@@ -2,9 +2,8 @@
 import Base from '../layouts/Base.astro';
 
 /**
- * Organigrama (RMR-PRP-0002, RMR-TSK-0617): consulta de SOLO LECTURA, en una
- * sola vista: la pirámide invertida de PERSONAS (liderazgo afectivo). Con
- * Notion, la capa es su Level; sin Notion, la de su rol. Accesible por
+ * Organigrama (RMR-PRP-0002, RMR-TSK-0671): consulta de SOLO LECTURA. El árbol
+ * invertido de cada rama (liderazgo afectivo), con zoom. Accesible por
  * cualquier empleado logado; los datos llegan por la callable orgDirectory.
  */
 ---
@@ -16,12 +15,12 @@ import Base from '../layouts/Base.astro';
     responsabilidad tiene está abajo, sosteniendo a todo el equipo.
   </p>
 
-  <org-people-pyramid></org-people-pyramid>
+  <org-branch-chart></org-branch-chart>
 </Base>
 
 <script>
   import '../components/common/tool-nav.js';
-  import '../components/org-people-pyramid.js';
+  import '../components/org-branch-chart.js';
   import { onUserChanged } from '../lib/auth.js';
   import { resolveAccess } from '../lib/access.js';
   import { canGovern } from '../lib/accessRoles.js';
@@ -33,6 +32,6 @@ import Base from '../layouts/Base.astro';
     if (!user) return;
     let isSuperadmin = false;
     try { isSuperadmin = canGovern(await resolveAccess(user)); } catch { /* sin gobierno */ }
-    await guardToolPage('organigrama', user, { isSuperadmin, appEl: document.querySelector('org-people-pyramid') });
+    await guardToolPage('organigrama', user, { isSuperadmin, appEl: document.querySelector('org-branch-chart') });
   });
 </script>
