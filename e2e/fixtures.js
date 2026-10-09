@@ -36,6 +36,35 @@ export async function markForWhom(page, name) {
   await expect(page.locator('o2o-app busy-overlay')).toHaveCount(0);
 }
 
+/**
+ * Cuelga a una persona de `bossUid` en el directorio (RMR-TSK-0665): crea la
+ * ficha de esa cuenta (inactiva, para no salir en ninguna lista) y espera a que
+ * el trigger calcule la rama. Devuelve la limpieza de las dos fichas.
+ * @param {FirebaseFirestore.Firestore} db @param {string} personId
+ * @param {Record<string, unknown>} data @param {string} bossUid
+ * @returns {Promise<() => Promise<void>>}
+ */
+export async function hangFrom(db, personId, data, bossUid) {
+  const bossId = `e2e-ficha-${bossUid}`;
+  const bossRef = db.doc(`people/${bossId}`);
+  // Puede venir ya del global-setup; entonces no es de este test y no se borra.
+  const created = !(await bossRef.get()).exists;
+  // Dar cuenta a una ficha con gente a cargo la hace líder (RMR-TSK-0660): si
+  // no lo era, se le quita al acabar, o los tests siguientes la verían líder.
+  const leaderRef = db.doc(`leaders/${bossUid}`);
+  const wasLeader = (await leaderRef.get()).exists;
+  // Su superior no existe: así el espejo /leaders respeta el reportsTo de la cuenta.
+  if (created) await bossRef.set({ name: `Ficha de ${bossUid}`, uid: bossUid, active: false, reportsToPersonId: 'e2e-sin-ficha' });
+  await db.doc(`people/${personId}`).set({ ...data, reportsToPersonId: bossId });
+  await expect.poll(async () => (await db.doc(`people/${personId}`).get()).data()?.directoryManagerUids ?? [],
+    { timeout: 20_000 }).toEqual([bossUid]);
+  return async () => {
+    await db.doc(`people/${personId}`).delete();
+    if (created) await bossRef.delete();
+    if (!wasLeader) await leaderRef.delete();
+  };
+}
+
 /** Texto que solo aparece en la pantalla de login: si sale, es que te expulsaron. */
 export const LOGIN_MARKER = 'Usa tu cuenta de Google';
 

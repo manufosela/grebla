@@ -67,21 +67,29 @@ export default async function globalSetup() {
   // Líder sin Head asignado, para el test de asignación por UI (no interfiere con
   // la exclusión: ese lo prueba OUTSIDER).
   await db.doc('leaders/e2e-unassigned').set({ displayName: 'Sin Head E2E', email: 'sinhead@e2e.test', reportsTo: null });
+  // Directorio (RMR-TSK-0665): a quién se hace O2O sale de reportsToPersonId. Las
+  // cuentas con gente a cargo tienen ficha (inactiva, para no salir en listas)
+  // con un superior que no existe, para que el espejo /leaders respete su reportsTo.
+  // La rama ya va calculada, como la dejaría el trigger, para no esperarle.
+  const ficha = (uid) => db.doc(`people/e2e-ficha-${uid}`)
+    .set({ name: `Ficha de ${uid}`, uid, active: false, reportsToPersonId: 'e2e-sin-ficha', directoryManagerUids: [] });
+  await Promise.all([ficha(MANAGER), ficha(OUTSIDER), ficha(ROLES.adminmgr)]);
+  const cuelgaDe = (uid) => ({ ownerLeaderUid: uid, reportsToPersonId: `e2e-ficha-${uid}`, directoryManagerUids: [uid] });
   await db.doc('people/e2e-person-eng').set({
-    name: 'Ingeniero E2E', uid: ROLES.engineer, ownerLeaderUid: MANAGER, o2oManagerUids: [MANAGER], active: true, orgBranch: 'engineering',
+    name: 'Ingeniero E2E', uid: ROLES.engineer, ...cuelgaDe(MANAGER), active: true, orgBranch: 'engineering',
   });
   await db.doc('people/e2e-person-mgr').set({
-    name: 'Persona del manager', uid: null, ownerLeaderUid: MANAGER, o2oManagerUids: [MANAGER], active: true, orgBranch: 'engineering',
+    name: 'Persona del manager', uid: null, ...cuelgaDe(MANAGER), active: true, orgBranch: 'engineering',
   });
   await db.doc('people/e2e-person-out').set({
-    name: 'Persona de fuera', uid: null, ownerLeaderUid: OUTSIDER, o2oManagerUids: [OUTSIDER], active: true, orgBranch: 'engineering',
+    name: 'Persona de fuera', uid: null, ...cuelgaDe(OUTSIDER), active: true, orgBranch: 'engineering',
   });
   // Admin que ADEMÁS lidera (RMR-TSK-0309): gobierna la instancia y tiene equipo
   // propio, así que puede elegir «mi equipo» vs «toda la organización».
   await db.doc(`admins/${ROLES.adminmgr}`).set({ name: 'Admin-Manager E2E' });
   await db.doc(`leaders/${ROLES.adminmgr}`).set({ displayName: 'Admin-Manager E2E', email: 'adminmgr@e2e.test', reportsTo: null });
   await db.doc('people/e2e-person-adminmgr').set({
-    name: 'Persona del admin-manager', uid: null, ownerLeaderUid: ROLES.adminmgr, o2oManagerUids: [ROLES.adminmgr], active: true, orgBranch: 'engineering',
+    name: 'Persona del admin-manager', uid: null, ...cuelgaDe(ROLES.adminmgr), active: true, orgBranch: 'engineering',
   });
   // Retros: una del manager de la rama (el Head debe verla) y otra del ajeno (no).
   // Retros con el modelo de membresía (ADR): quien la convoca está dentro y su

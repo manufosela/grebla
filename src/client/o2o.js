@@ -18,9 +18,8 @@ import { ROLES } from '../data/roles.js';
 const app = document.querySelector('o2o-app');
 
 /**
- * Personas activas a las que estás asignado como manager de O2O (RMR-TSK-0655).
- * Gobernar la instancia no hace que tu equipo sea toda la organización
- * (RMR-TSK-0647), y ser dueño de una ficha tampoco: la lista la fija el superadmin.
+ * Personas activas de tu rama del directorio (RMR-TSK-0665). Gobernar la
+ * instancia no hace que tu equipo sea toda la organización (RMR-TSK-0647).
  */
 function forSelector(people) {
   return people
@@ -47,7 +46,7 @@ onUserChanged(async (user) => {
     const mine = await listMyO2OPeople(uid);
     // Tres papeles distintos (RMR-TSK-0497): quien gobierna y quien lleva equipo
     // USAN la herramienta; quien solo la gestiona entra a cambiar las preguntas.
-    // Llevar gente asignada para O2O también es llevar equipo (RMR-TSK-0655).
+    // Tener gente en tu rama del directorio también es llevar equipo (RMR-TSK-0665).
     const quien = { governs: canGovern(access), leads: leadsTeam(access) || mine.length > 0, managesTool: gate.manage };
     if (!quien.governs && !quien.leads && !quien.managesTool) {
       app.error = 'Esta herramienta es para managers. Tu espacio de O2O está en «Mi espacio».';

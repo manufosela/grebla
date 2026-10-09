@@ -16,11 +16,12 @@ function admin() {
 
 // Deshace la jerarquía al terminar: con la rama del directorio (RMR-TSK-0662),
 // dejar al ingeniero como jefe le daría equipo de O2O en los tests que vienen.
+// Vuelve a colgar del manager, como la dejó el global-setup.
 test.afterEach(async () => {
   const db = admin();
-  await db.doc('people/e2e-person-mgr').update({ reportsToPersonId: null });
+  await db.doc('people/e2e-person-mgr').update({ reportsToPersonId: 'e2e-ficha-e2e-manager' });
   await expect.poll(async () => (await db.doc('people/e2e-person-mgr').get()).data()?.directoryManagerUids ?? [],
-    { timeout: 20_000 }).toEqual([]);
+    { timeout: 20_000 }).toEqual(['e2e-manager']);
 });
 
 test('el superadmin asigna el superior de una persona desde el panel', async ({ page }) => {
@@ -29,8 +30,8 @@ test('el superadmin asigna el superior de una persona desde el panel', async ({ 
   await signInAs(page, 'superadmin');
   await page.goto('/admin/organizacion');
 
-  // «Persona del manager» arranca sin superior; se lo asignamos por la columna
-  // «Reporta a» de su fila.
+  // «Persona del manager» cuelga del manager; le cambiamos el superior por la
+  // columna «Reporta a» de su fila.
   const select = page.getByLabel('Superior de Persona del manager');
   await expect(select).toBeVisible();
   await select.selectOption({ label: 'Ingeniero E2E' });
