@@ -15,6 +15,13 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.247.1] - 2026-10-09
+
+### Cambiado
+
+- **En O2O ya no se habla de periodos.** Se crea con «Crear O2O», la lista se
+  llama «Tus O2O» y el nombre por defecto es «O2O Mes Año».
+
 ## [1.247.0] - 2026-10-09
 
 ### Cambiado
