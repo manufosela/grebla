@@ -15,6 +15,17 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.247.0] - 2026-10-09
+
+### Cambiado
+
+- **A quién se hace O2O sale solo del directorio.** Desaparece la lista manual
+  de managers de O2O, también su columna en Administración › Organización ›
+  Usuarios. Un manager ve, hace O2O, lleva las acciones y lee las notas privadas
+  de quien tiene por debajo en el directorio, y elige a quién va cada O2O en
+  «Para quién». La ingesta de notas de 1-1 y la consulta del equipo desde el
+  agente siguen la misma regla.
+
 ## [1.246.0] - 2026-10-09
 
 ### Añadido
