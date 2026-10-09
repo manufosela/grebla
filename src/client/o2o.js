@@ -7,7 +7,8 @@
 import '../components/o2o/o2o-app.js';
 import { onUserChanged } from '../lib/auth.js';
 import { createO2OContainer } from '../tools/o2o/composition/container.js';
-import { listMyO2OPeople } from '../lib/o2oManagers.js';import { resolveAccess } from '../lib/access.js';
+import { listMyO2OPeople } from '../lib/o2oManagers.js';
+import { resolveAccess } from '../lib/access.js';
 import { canGovern, leadsTeam } from '../lib/accessRoles.js';
 import { proposePrep } from '../lib/o2oAi.js';
 import { guardToolPage } from '../lib/toolGate.js';
