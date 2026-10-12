@@ -106,6 +106,18 @@ export function slotFor(reviewers, uid, claim) {
 }
 
 /**
+ * Cuántas marcas esperan la revisión de `uid`: vivas, con su hueco aún vacío.
+ * @param {Claim[]} claims @param {Reviewers} reviewers @param {string|null} uid
+ */
+export function pendingForReviewer(claims, reviewers, uid) {
+  return (claims ?? []).filter((claim) => {
+    if (claim?.status !== 'claimed') return false;
+    const slot = slotFor(reviewers, uid, claim);
+    return !!slot && !claim.reviews?.[slot];
+  }).length;
+}
+
+/**
  * Marcas aceptadas de un nivel, en la forma que consume `levelProgressFor`.
  * @param {Claim[]} claims
  * @param {string} levelId

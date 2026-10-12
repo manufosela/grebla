@@ -26,6 +26,8 @@ import { getCurrentUser } from '../../lib/auth.js';
 import { ARCHIPELAGO_ISLANDS } from '../../tools/career/data/archipelago.js';
 import { getJourney, getPlaytime } from '../../tools/career/application/usecases.js';
 import { getPersonLevelProgress } from '../../lib/careerAssessment.js';
+import { listClaims } from '../../lib/careerClaims.js';
+import { pendingForReviewer } from '../../tools/career/domain/claims.js';
 import { subLevelFromProgress, subLevelCalcText } from '../../tools/career/domain/levelProgress.js';
 import { careerRoster } from '../../tools/career/domain/careerRoster.js';
 import { updatePerson } from '../../tools/team/application/usecases/index.js';
@@ -60,6 +62,8 @@ export class CareerTracking extends LitElement {
     _selected: { state: true },
     _tab: { state: true },
     _error: { state: true },
+    /** Marcas de expectativas que esperan MI revisión, por persona (RMR-TSK-0690). */
+    _pending: { state: true },
     _editingSub: { state: true },
     _subDraft: { state: true },
   };
@@ -168,6 +172,7 @@ export class CareerTracking extends LitElement {
         framework: this.framework,
         subLevelById: await this._subLevels(gente),
       });
+      this._pending = await this._pendingReviews(gente);
       this._rows = sortByNeglect(withCareer(partes.map((p) => p.row), logros));
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cargar el seguimiento.';
@@ -209,6 +214,22 @@ export class CareerTracking extends LitElement {
    * ajuste manual del manager prevalece sobre el cálculo. Una valoración
    * ilegible (otra rama) deja a esa persona sin chip, nada más.
    */
+  /**
+   * Cuántas marcas espera cada persona de MÍ: sin esto, para saber qué revisar
+   * habría que abrir ficha por ficha. Lo ilegible sale como raya, no como cero.
+   */
+  async _pendingReviews(gente) {
+    const uid = getCurrentUser()?.uid ?? null;
+    const counts = await Promise.all(gente.map(async (p) => {
+      try {
+        return [p.id, pendingForReviewer(await listClaims(p.id), p.careerReviewers ?? {}, uid)];
+      } catch {
+        return [p.id, null];
+      }
+    }));
+    return new Map(counts);
+  }
+
   async _subLevels(gente) {
     const niveles = this.framework?.levels ?? [];
     const progressById = new Map();
@@ -452,7 +473,7 @@ export class CareerTracking extends LitElement {
         <table>
           <thead>
             <tr>
-              <th>Persona</th><th>Nivel</th><th>Dónde va</th><th class="num">Paradas</th>
+              <th>Persona</th><th>Nivel</th><th class="num">Por revisar</th><th>Dónde va</th><th class="num">Paradas</th>
               <th class="num">Ciudadanías</th><th class="num">Certificados</th>
               <th class="num">Días activos</th><th class="num">Media/día</th><th>Última vez</th>
             </tr>
@@ -475,6 +496,7 @@ export class CareerTracking extends LitElement {
       <tr>
         <td>${row.name}</td>
         <td>${this._renderSubChip(row)}</td>
+        <td class="num">${this._pending?.get(row.personId) ?? '—'}</td>
         <td>${this._islandCell(row)}</td>
         <td class="num">${row.started ? row.visitedCount : '—'}</td>
         <td class="num">${c ? c.citizenships : '—'}</td>
