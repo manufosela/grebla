@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { claimId, validateEvidence, claimStatus, marksFromClaims, MAX_EVIDENCE_LINKS } from './claims.js';
+import {
+  claimId, validateEvidence, claimStatus, marksFromClaims, MAX_EVIDENCE_LINKS,
+  newClaim, resubmitted, reviewPatch, slotFor,
+} from './claims.js';
 
 const TWO = { firstUid: 'em', secondUid: 'head', arbiterUid: 'cto' };
 const claimed = (reviews = {}) => ({ levelId: 'l2', dimensionId: 'tech', status: 'claimed', reviews });
@@ -75,5 +78,48 @@ describe('marksFromClaims', () => {
       { ...claimed({ first: said('accept'), second: said('accept') }), levelId: 'l3', dimensionId: 'culture' },
     ];
     expect(marksFromClaims(claims, 'l2', TWO)).toEqual({ tech: true });
+  });
+});
+
+const BY = { uid: 'u-dev', name: 'Dev' };
+const EV = { text: 'ADR del cobro', links: [] };
+
+describe('newClaim y resubmitted: lo que escribe el ingeniero', () => {
+  it('una marca nueva va sin revisiones ni historial', () => {
+    expect(newClaim({ levelId: 'l2', dimensionId: 'tech', evidence: EV, by: BY, at: 't1' })).toEqual({
+      levelId: 'l2', dimensionId: 'tech', status: 'claimed', evidence: EV,
+      claimedBy: BY, claimedAt: 't1', reviews: {}, history: [], updatedAt: 't1',
+    });
+  });
+
+  it('reenviar archiva la ronda anterior y vacía las revisiones', () => {
+    const current = { ...claimed({ first: said('reject') }), evidence: EV, history: [] };
+    const next = { text: 'Ahora con el ADR enlazado', links: [] };
+    expect(resubmitted(current, { evidence: next, at: 't2' })).toEqual({
+      evidence: next, status: 'claimed', claimedAt: 't2', reviews: {}, updatedAt: 't2',
+      history: [{ evidence: EV, reviews: { first: said('reject') } }],
+    });
+  });
+
+  it('retirar también archiva la ronda y deja la expectativa abierta', () => {
+    const current = { ...claimed(), evidence: EV, history: [] };
+    expect(resubmitted(current, { evidence: EV, at: 't3', status: 'withdrawn' }).status).toBe('withdrawn');
+  });
+});
+
+describe('reviewPatch y slotFor: lo que escribe cada revisor', () => {
+  it('rechazar exige motivo; aceptar no', () => {
+    expect(() => reviewPatch('first', { decision: 'reject', reason: ' ', by: BY, at: 't' })).toThrow(/motivo/i);
+    expect(reviewPatch('first', { decision: 'accept', by: BY, at: 't' })).toEqual({
+      'reviews.first': { decision: 'accept', reason: '', by: BY, at: 't' }, updatedAt: 't',
+    });
+  });
+
+  it('a cada revisor le toca su hueco; al árbitro solo con empate', () => {
+    expect(slotFor(TWO, 'em', claimed())).toBe('first');
+    expect(slotFor(TWO, 'head', claimed())).toBe('second');
+    expect(slotFor(TWO, 'cto', claimed())).toBeNull();
+    expect(slotFor(TWO, 'cto', claimed({ first: said('accept'), second: said('reject') }))).toBe('arbiter');
+    expect(slotFor(TWO, 'otro', claimed())).toBeNull();
   });
 });
