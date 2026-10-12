@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   claimId, validateEvidence, claimStatus, marksFromClaims, MAX_EVIDENCE_LINKS,
-  newClaim, resubmitted, reviewPatch, slotFor,
+  newClaim, resubmitted, reviewPatch, slotFor, pendingForReviewer,
 } from './claims.js';
 
 const TWO = { firstUid: 'em', secondUid: 'head', arbiterUid: 'cto' };
@@ -104,6 +104,21 @@ describe('newClaim y resubmitted: lo que escribe el ingeniero', () => {
   it('retirar también archiva la ronda y deja la expectativa abierta', () => {
     const current = { ...claimed(), evidence: EV, history: [] };
     expect(resubmitted(current, { evidence: EV, at: 't3', status: 'withdrawn' }).status).toBe('withdrawn');
+  });
+});
+
+describe('pendingForReviewer: lo que me toca revisar', () => {
+  it('cuenta las marcas vivas en las que mi revisión falta, y los empates si arbitro', () => {
+    const claims = [
+      claimed(),
+      { ...claimed({ first: said('accept') }), dimensionId: 'product' },
+      { ...claimed(), status: 'withdrawn', dimensionId: 'culture' },
+      { ...claimed({ first: said('accept'), second: said('reject') }), dimensionId: 'execution' },
+    ];
+    expect(pendingForReviewer(claims, TWO, 'em')).toBe(1);
+    expect(pendingForReviewer(claims, TWO, 'head')).toBe(2);
+    expect(pendingForReviewer(claims, TWO, 'cto')).toBe(1);
+    expect(pendingForReviewer(claims, TWO, 'otro')).toBe(0);
   });
 });
 
