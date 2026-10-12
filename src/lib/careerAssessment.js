@@ -13,9 +13,11 @@
  */
 import { doc, getDoc, getDocs, collection, setDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { normalizeLevelAssessment, assertAppendOnlyClosures, marksOf, closureHistory } from '../tools/career/data/levelAssessment.js';
+import { normalizeLevelAssessment, assertAppendOnlyClosures, closureHistory } from '../tools/career/data/levelAssessment.js';
 import { levelProgressFor, subLevelFromProgress } from '../tools/career/domain/levelProgress.js';
 import { nextLevelFor } from '../tools/career/domain/subLevel.js';
+import { marksFromClaims } from '../tools/career/domain/claims.js';
+import { listClaims } from './careerClaims.js';
 
 /**
  * Referencia al documento de valoración de una persona.
@@ -104,7 +106,7 @@ export async function listLevelAssessments(personId) {
  * Sin nivel, sin siguiente o sin valoración legible → null, salvo que el manager
  * lo haya ajustado a mano, que aplica igual.
  *
- * @param {{ id: string, levelId?: string|null }} person
+ * @param {{ id: string, levelId?: string|null, careerReviewers?: import('../tools/career/domain/claims.js').Reviewers }} person
  * @param {{ levels?: any[] }|null} framework
  * @returns {Promise<ReturnType<typeof subLevelFromProgress>>}
  */
@@ -114,11 +116,13 @@ export async function getPersonSubLevel(person, framework) {
   const levelCode = levels.find((l) => l.id === person.levelId)?.code ?? null;
   const next = nextLevelFor(levels, person.levelId);
   if (!next) return subLevelFromProgress(person, null, levelCode);
-  const assessment = await getLevelAssessment(person.id, next.id);
+  // Las marcas son las expectativas ACEPTADAS (Mi carrera, RMR-TSK-0685); los
+  // cierres siguen en la valoración del nivel.
+  const [assessment, claims] = await Promise.all([getLevelAssessment(person.id, next.id), listClaims(person.id)]);
   const progress = levelProgressFor({
     person,
     framework,
-    marks: marksOf(assessment),
+    marks: marksFromClaims(claims, next.id, person.careerReviewers ?? {}),
     history: closureHistory(assessment),
   });
   return subLevelFromProgress(person, progress, levelCode);
