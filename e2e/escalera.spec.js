@@ -116,7 +116,7 @@ test('atrás y adelante devuelven a la sub-pestaña que dice el hash', async ({ 
     // #carrera es la pestaña sin sub-pestaña fijada: toca la primera. Si el
     // handler solo atendiera «mapa» y «escalera», la escalera se quedaría puesta
     // y se vería una sección que no es la que dice el hash.
-    await expect(page.getByRole('tab', { name: 'Nivel y expectativas' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Mi nivel' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('tab', { name: 'La escalera' })).toHaveAttribute('aria-selected', 'false');
   });
 });
