@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const lib = vi.hoisted(() => ({ listClaims: vi.fn(), submitClaim: vi.fn(), reviewClaim: vi.fn() }));
 vi.mock('../../lib/careerClaims.js', () => lib);
-vi.mock('../../lib/careerAssessment.js', () => ({ getLevelAssessment: vi.fn() }));
+const assess = vi.hoisted(() => ({ getLevelAssessment: vi.fn(), saveLevelAssessment: vi.fn() }));
+vi.mock('../../lib/careerAssessment.js', () => assess);
 vi.mock('../../lib/auth.js', () => ({ getCurrentUser: () => ({ uid: 'u-dev', displayName: 'Dev' }) }));
 
 const { CareerPersonPanel } = await import('./career-person-panel.js');
@@ -30,6 +31,21 @@ describe('<career-person-panel>', () => {
     const c = ctx();
     await _onClaimSubmit.call(c, { detail: { levelId: 'l2', dimensionId: 'tech', evidence: { text: 'ADR', links: [] } } });
     expect([c._dialog, c._error, c._claims]).toEqual(['claim', 'Sin permiso', []]);
+  });
+
+  it('cerrar valoración guarda un cierre con el cumplimiento de lo ACEPTADO', async () => {
+    const fw = {
+      dimensions: [{ id: 'tech', name: 'Técnica', order: 1 }, { id: 'prod', name: 'Producto', order: 2 }],
+      expectations: [{ levelId: 'l2', dimensionId: 'tech', text: 'a', weight: 3 }, { levelId: 'l2', dimensionId: 'prod', text: 'b' }],
+    };
+    const accepted = { levelId: 'l2', dimensionId: 'tech', status: 'claimed', reviews: { first: { decision: 'accept' } } };
+    const c = ctx({
+      framework: fw, _next: { id: 'l2' }, _assessment: { levelId: 'l2', byDimension: {}, closures: [] }, _claims: [accepted],
+      person: { id: 'dev', careerReviewers: { firstUid: 'u-em', secondUid: null } },
+    });
+    await CareerPersonPanel.prototype._closeAssessment.call(c);
+    const [, levelId, saved] = assess.saveLevelAssessment.mock.calls[0];
+    expect([levelId, saved.closures.length, saved.closures[0].pct]).toEqual(['l2', 1, 75]);
   });
 
   it('si la revisión falla, el diálogo sigue abierto con el error', async () => {

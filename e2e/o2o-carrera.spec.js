@@ -42,9 +42,16 @@ async function conValoracion(byDimension, fn) {
   await db().doc('careerFramework/engineering').set(FRAMEWORK);
   const limpiar = await hangFrom(db(), PERSON.split('/')[1],
     { name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-superadmin', active: true, levelId: 'oc-l1' }, 'e2e-superadmin');
-  await db().doc(`${PERSON}/careerAssessments/oc-l2`).set({ levelId: 'oc-l2', byDimension, closures: [] });
+  // Lo cumplido son las expectativas ACEPTADAS (Mi carrera, RMR-TSK-0686).
+  const aceptadas = Object.entries(byDimension).filter(([, m]) => m.meets).map(([dim]) => dim);
+  for (const dim of aceptadas) {
+    await db().doc(`${PERSON}/careerClaims/oc-l2__${dim}`).set({
+      levelId: 'oc-l2', dimensionId: dim, status: 'claimed', evidence: { text: 'E2E', links: [] },
+      reviews: { first: { decision: 'accept' } }, history: [],
+    });
+  }
   try { await fn(); } finally {
-    await db().doc(`${PERSON}/careerAssessments/oc-l2`).delete();
+    for (const dim of aceptadas) await db().doc(`${PERSON}/careerClaims/oc-l2__${dim}`).delete();
     await limpiar();
     if (previo) await db().doc('careerFramework/engineering').set(previo);
     else await db().doc('careerFramework/engineering').delete();

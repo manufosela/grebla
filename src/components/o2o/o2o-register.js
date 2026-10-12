@@ -19,10 +19,7 @@ import {
 } from '../../tools/o2o/application/usecases/sessions.js';
 import { getPersonProfile } from '../../lib/firestore.js';
 import { getFramework } from '../../lib/careerFramework.js';
-import { getLevelAssessment } from '../../lib/careerAssessment.js';
-import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
-import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
-import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { getPersonLevelProgress } from '../../lib/careerAssessment.js';
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export class O2ORegister extends LitElement {
@@ -158,18 +155,11 @@ export class O2ORegister extends LitElement {
       const persona = (this.people ?? []).find((p) => p.id === personId);
       if (!persona?.levelId) return;
       this._framework ??= await getFramework();
-      const next = nextLevelFor(this._framework?.levels ?? [], persona.levelId);
-      if (!next) return;
-      const valoracion = await getLevelAssessment(personId, next.id);
+      const progress = await getPersonLevelProgress(persona, this._framework);
       // Si mientras se cargaba se cambió de persona, esto ya no es de quien se
       // está mirando: enseñar el avance de otra sería peor que no enseñar nada.
       if (this._personId !== personId) return;
-      this._progress = levelProgressFor({
-        person: persona,
-        framework: this._framework,
-        marks: marksOf(valoracion),
-        history: closureHistory(valoracion),
-      });
+      this._progress = progress;
     } catch {
       if (this._personId === personId) this._progress = null;
     }

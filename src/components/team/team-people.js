@@ -12,10 +12,8 @@
  */
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
-import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
-import { levelProgressFor, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
-import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
-import { getLevelAssessment } from '../../lib/careerAssessment.js';
+import { subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
+import { getPersonLevelProgress } from '../../lib/careerAssessment.js';
 import { getMyPerson } from '../../lib/engineer.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { skeletonLines } from '../app-skeleton.js';
@@ -705,11 +703,7 @@ export class TeamPeople extends LitElement {
       const entries = await Promise.all(
         (this.people ?? []).map(async (p) => {
           try {
-            const next = nextLevelFor(this.framework.levels ?? [], p.levelId);
-            const valoracion = next ? await getLevelAssessment(p.id, next.id) : null;
-            const prog = valoracion
-              ? levelProgressFor({ person: p, framework: this.framework, marks: marksOf(valoracion), history: closureHistory(valoracion) })
-              : null;
+            const prog = await getPersonLevelProgress(p, this.framework);
             return [p.id, subLevelFromProgress(p, prog, levelCodeOf(p.levelId))];
           } catch {
             return [p.id, null];

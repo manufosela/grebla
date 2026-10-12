@@ -25,10 +25,8 @@ import { skeletonLines } from '../app-skeleton.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { ARCHIPELAGO_ISLANDS } from '../../tools/career/data/archipelago.js';
 import { getJourney, getPlaytime } from '../../tools/career/application/usecases.js';
-import { getLevelAssessment } from '../../lib/careerAssessment.js';
-import { marksOf, closureHistory } from '../../tools/career/data/levelAssessment.js';
-import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
-import { levelProgressFor, subLevelFromProgress, subLevelCalcText } from '../../tools/career/domain/levelProgress.js';
+import { getPersonLevelProgress } from '../../lib/careerAssessment.js';
+import { subLevelFromProgress, subLevelCalcText } from '../../tools/career/domain/levelProgress.js';
 import { careerRoster } from '../../tools/career/domain/careerRoster.js';
 import { updatePerson } from '../../tools/team/application/usecases/index.js';
 import { formatPlayMinutes } from '../../tools/career/domain/playtime.js';
@@ -215,13 +213,8 @@ export class CareerTracking extends LitElement {
     const niveles = this.framework?.levels ?? [];
     const progressById = new Map();
     await Promise.all(gente.map(async (p) => {
-      const next = nextLevelFor(niveles, p.levelId);
-      if (!next) return;
       try {
-        const valoracion = await getLevelAssessment(p.id, next.id);
-        progressById.set(p.id, levelProgressFor({
-          person: p, framework: this.framework, marks: marksOf(valoracion), history: closureHistory(valoracion),
-        }));
+        progressById.set(p.id, await getPersonLevelProgress(p, this.framework));
       } catch { /* sin valoración legible: sin chip */ }
     }));
     const codeOf = (id) => niveles.find((l) => l.id === id)?.code ?? null;

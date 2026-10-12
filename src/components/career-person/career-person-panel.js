@@ -11,11 +11,11 @@ import './career-review-dialog.js';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim } from '../../lib/careerClaims.js';
-import { getLevelAssessment } from '../../lib/careerAssessment.js';
+import { getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
-import { levelProgressFor } from '../../tools/career/domain/levelProgress.js';
+import { levelProgressFor, levelCompletion } from '../../tools/career/domain/levelProgress.js';
 import { marksFromClaims } from '../../tools/career/domain/claims.js';
-import { closureHistory, lastClosure } from '../../tools/career/data/levelAssessment.js';
+import { closureHistory, lastClosure, closeAssessment } from '../../tools/career/data/levelAssessment.js';
 
 const author = (user = getCurrentUser()) => ({ uid: user?.uid ?? '', name: user?.displayName ?? 'Usuario' });
 
@@ -37,6 +37,9 @@ export class CareerPersonPanel extends LitElement {
     .head { font-size: 1.05rem; margin: 0 0 0.3rem; color: var(--rm-text, #111827); }
     .note { font-size: 0.86rem; color: var(--rm-muted, #4b5563); margin: 0.2rem 0; max-width: 62ch; }
     .error { color: var(--rm-danger, #b91c1c); font-size: 0.86rem; }
+    button { margin-top: 0.8rem; font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 8px; padding: 0.4rem 0.85rem;
+      cursor: pointer; border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
+    button:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
   `;
 
   constructor() {
@@ -111,10 +114,28 @@ export class CareerPersonPanel extends LitElement {
       progress.readyToPromote ? `Cumple todo ${progress.nextLevelCode}: toca plantear la subida.` : '',
     ].filter(Boolean);
     const notesTpl = notes.map((n) => html`<p class="note">${n}</p>`);
+    // Cierran quienes revisan: el cierre es la prueba del .3 sostenido.
+    const { firstUid, secondUid } = this.person?.careerReviewers ?? {};
+    const uid = getCurrentUser()?.uid;
+    const canClose = !!uid && (uid === firstUid || uid === secondUid);
+    const closeBtn = canClose
+      ? html`<button type="button" ?disabled=${this._busy} @click=${this._closeAssessment}>Cerrar valoración</button>`
+      : null;
     return html`
       <p class="head"><strong>${progress.label}</strong> · ${progress.pct} % de ${progress.nextLevelCode}
         (${progress.earned} de ${progress.total} puntos aceptados)</p>
-      ${notesTpl}`;
+      ${notesTpl}
+      ${closeBtn}`;
+  }
+
+  /** Deja constancia del cumplimiento de hoy (lo aceptado); los cierres solo crecen. */
+  async _closeAssessment() {
+    const next = this._next;
+    const marks = marksFromClaims(this._claims, next.id, this.person?.careerReviewers ?? {});
+    const closed = closeAssessment(this._assessment, levelCompletion(this.framework, next.id, marks), {
+      by: author(), at: new Date().toISOString(),
+    });
+    await this._save(() => saveLevelAssessment(this.person.id, next.id, closed, author()));
   }
 
   _open(dialog, request) {
