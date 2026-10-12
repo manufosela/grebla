@@ -76,7 +76,7 @@ export class CareerExpectations extends LitElement {
     if (rows.length === 0) return html`<p class="empty">${next.code} todavía no tiene expectativas escritas.</p>`;
     return html`
       <h3>Hacia ${next.code} · ${next.title}</h3>
-      <p class="intro">Cada expectativa se marca con evidencia y cuenta cuando la aceptan las dos personas que revisan.</p>
+      <p class="intro">Cada expectativa se marca con evidencia y cuenta cuando la acepta quien revisa (si son dos, las dos).</p>
       <ul>${rows.map((row) => this._row(row))}</ul>`;
   }
 
