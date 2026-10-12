@@ -15,6 +15,27 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.250.0] - 2026-10-12
+
+### Añadido
+
+- Mi carrera: una sola página por persona, la misma en Mi espacio y en la ficha de
+  Equipo, con Plan, Expectativas, Seguimiento y (para quien es de la casa) O2O
+  (RMR-TSK-0675 a RMR-TSK-0690).
+- Expectativas: el ingeniero marca cada expectativa de su nivel siguiente con
+  evidencia obligatoria (texto y enlaces). Cuenta cuando la aceptan sus dos
+  revisores con el mismo peso: ingeniero y lead, su EM y el Head of; EM, el Head of
+  y el CTO; Head of, el CTO. Si discrepan, desempata el CTO. Rechazar exige motivo.
+- Seguimiento: el subnivel sale de lo aceptado en toda la app (seguimiento del
+  equipo, Personas, O2O y Role Mirror), y quien revisa cierra la valoración.
+- Plan: foco, lo que es suyo y lo que suelta; lo edita su cadena y la persona lo lee.
+- Seguimiento del equipo: columna «Por revisar» con las marcas que esperan tu revisión.
+
+### Cambiado
+
+- Los O2O de quien es de la casa viven en Mi carrera › O2O; los externos conservan
+  su pestaña. La ficha ya no tiene el avance que el manager marcaba a mano.
+
 ## [1.249.0] - 2026-10-10
 
 ### Añadido
