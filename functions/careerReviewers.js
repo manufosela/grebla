@@ -18,12 +18,17 @@ function rankOf(person) {
   return RANK_BY_LEVEL[level] ?? 'ic';
 }
 
-/** Jefes de la persona, del más cercano hacia arriba, sin colgarse en ciclos. */
+/** Solo Tech tiene revisores de carrera (decisión del 12-oct-2026): el resto de
+ *  departamentos se organiza de otra forma y su responsable sigue siendo el de Notion. */
+const TECH = 'engineering';
+const isTech = (p) => p?.orgBranch === TECH;
+
+/** Jefes de Tech de la persona, del más cercano hacia arriba, sin colgarse en ciclos. */
 function chainOf(person, byId) {
   const chain = [];
   const seen = new Set([person.id]);
   let boss = byId.get(person.reportsToPersonId ?? '');
-  while (boss && !seen.has(boss.id)) {
+  while (boss && isTech(boss) && !seen.has(boss.id)) {
     seen.add(boss.id);
     chain.push(boss);
     boss = byId.get(boss.reportsToPersonId ?? '');
@@ -45,6 +50,7 @@ function resolve(person, chain) {
 
 /** Revisores de una persona, con los huecos repetidos colapsados. */
 function reviewersFor(person, byId) {
+  if (!isTech(person)) return { firstUid: null, secondUid: null, arbiterUid: null };
   const chain = chainOf(person, byId);
   const byRank = resolve(person, chain);
   const fallback = !byRank[0] && rankOf(person) !== 'cto';
@@ -55,8 +61,11 @@ function reviewersFor(person, byId) {
   return { firstUid: first, secondUid, arbiterUid: secondUid ? arbiter : null };
 }
 
-const sameReviewers = (a, b) =>
-  !!a && a.firstUid === b.firstUid && a.secondUid === b.secondUid && a.arbiterUid === b.arbiterUid;
+const nobody = (r) => !r.firstUid && !r.secondUid && !r.arbiterUid;
+/** Sin campo y sin revisores es lo mismo: a quien no es de Tech no se le escribe nada. */
+const sameReviewers = (a, b) => (a
+  ? a.firstUid === b.firstUid && a.secondUid === b.secondUid && a.arbiterUid === b.arbiterUid
+  : nobody(b));
 
 /**
  * @param {ReadonlyArray<{ id: string, uid?: string|null, reportsToPersonId?: string|null,
