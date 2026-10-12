@@ -79,7 +79,8 @@ test('«Mis O2O» abre directo en los míos, sin buscar la pestaña', async ({ p
     await mios(page).click();
 
     await expect(page).toHaveURL(/\/mi-espacio#o2o/);
-    await expect(page.getByRole('heading', { name: 'Mis O2O' })).toBeVisible();
+    // Para un interno, sus O2O viven en Mi carrera › O2O (RMR-TSK-0689).
+    await expect(page.getByRole('tab', { name: 'O2O', exact: true })).toHaveAttribute('aria-selected', 'true');
   });
 });
 
