@@ -58,6 +58,7 @@ import { normalizeLevelAssessment, markDimension, marksOf, closeAssessment, clos
 import { levelProgressFor, levelCompletion } from '../../tools/career/domain/levelProgress.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { expectationWeight } from '../../tools/career/data/framework.js';
+import '../career-person/career-person-panel.js';
 import { getPersonLogbook } from '../../lib/engineer.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
@@ -175,6 +176,7 @@ const ORG_SUBTABS = [
 const CAREER_SUBTABS = [
   { id: 'nivel', label: 'Nivel' },
   { id: 'expectativas', label: 'Expectativas' },
+  { id: 'seguimiento', label: 'Seguimiento' },
   { id: 'aspiraciones', label: 'Aspiraciones' },
 ];
 
@@ -1859,7 +1861,6 @@ export class TeamPersonDetail extends LitElement {
     const nivelPanel = () => html`
       ${this._renderCareerEditor()}
       ${level ? this._renderAssessment(fw, level) : null}
-      ${level ? this._renderLevelProgress() : null}
       ${level
         ? html`
             <p class="sub">Nivel actual</p>
@@ -1877,7 +1878,11 @@ export class TeamPersonDetail extends LitElement {
           </p>`
         : null}
     `;
+    // Mi carrera (RMR-TSK-0684): la misma vista que ve el ingeniero en Mi espacio.
+    const careerPanel = (section) => html`<career-person-panel .person=${this.person} .framework=${fw}
+      section=${section}></career-person-panel>`;
     const expectativasPanel = () => html`
+      ${level ? careerPanel('expectativas') : null}
       ${level
         ? html`
             <p class="sub">Lo que se te reconoce</p>
@@ -1944,7 +1949,10 @@ export class TeamPersonDetail extends LitElement {
       ${this._renderDeclaredTarget(fw)}
       ${this._renderCompletedRoutes()}
     `;
-    const panel = { nivel: nivelPanel, expectativas: expectativasPanel, aspiraciones: aspiracionesPanel }[active] ?? nivelPanel;
+    const seguimientoPanel = () => (level ? careerPanel('seguimiento') : html`<p class="empty">Asigna el nivel en «Nivel».</p>`);
+    const panel = {
+      nivel: nivelPanel, expectativas: expectativasPanel, seguimiento: seguimientoPanel, aspiraciones: aspiracionesPanel,
+    }[active] ?? nivelPanel;
 
     return html`
       <section class="career">

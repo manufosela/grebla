@@ -51,6 +51,7 @@ import { stats } from '../tools/career/application/usecases.js';
 import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
 import { setCareerTarget, getPersonLogbook } from '../lib/engineer.js';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
+import './career-person/career-person-panel.js';
 import { membershipLabel } from '../tools/team/domain/membership.js';
 import { conversationOrigin, conversationsNewestFirst } from '../tools/team/domain/conversationOrigin.js';
 
@@ -84,12 +85,12 @@ const TAB_META = {
 };
 
 /** Sub-pestañas de «Mi carrera». Un hash desconocido cae en la primera. */
-const CAREER_SUBS = /** @type {const} */ (['nivel', 'mapa', 'escalera']);
+const CAREER_SUBS = /** @type {const} */ (['nivel', 'expectativas', 'seguimiento', 'mapa', 'escalera']);
 
 /**
  * Sub-pestaña de «Mi carrera» que corresponde a un hash.
  * @param {string} raw
- * @returns {'nivel'|'mapa'|'escalera'}
+ * @returns {typeof CAREER_SUBS[number]}
  */
 function careerSubFromHash(raw) {
   return CAREER_SUBS.includes(/** @type {any} */ (raw)) ? /** @type {any} */ (raw) : 'nivel';
@@ -608,10 +609,11 @@ export class EngineerSpace extends LitElement {
    *  (RMR-TSK-0262), el mapa/ruta (visual) y la escalera entera (RMR-TSK-0471),
    *  que antes solo se veía desde el editor del panel. */
   _renderCareerTabbed() {
-    const valid = ['mapa', 'escalera'];
-    const sub = valid.includes(this._careerSub) ? this._careerSub : 'nivel';
+    const sub = careerSubFromHash(this._careerSub);
     const subs = [
-      ['nivel', 'Nivel y expectativas'],
+      ['nivel', 'Mi nivel'],
+      ['expectativas', 'Expectativas'],
+      ['seguimiento', 'Seguimiento'],
       ['mapa', 'Mapa y ruta'],
       ['escalera', 'La escalera'],
     ];
@@ -636,6 +638,10 @@ export class EngineerSpace extends LitElement {
   _renderCareerSub(sub) {
     if (sub === 'mapa') return this._renderMap();
     if (sub === 'escalera') return this._renderLadder();
+    // Mi carrera (RMR-TSK-0684): la misma vista que ve su EM desde la ficha.
+    if (sub === 'expectativas' || sub === 'seguimiento') {
+      return html`<career-person-panel .person=${this.person} .framework=${this.framework} section=${sub}></career-person-panel>`;
+    }
     return this._renderCareer();
   }
 

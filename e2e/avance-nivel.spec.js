@@ -63,31 +63,60 @@ async function abrirCarrera(page) {
   await ficha(page).getByRole('tab', { name: 'Nivel' }).click();
 }
 
-test('sin valorar nada, el avance hacia L2 es 0 %: el nivel siguiente se gana, no se presupone', async ({ page }) => {
-  await conPersonaEnL1(async () => {
-    await abrirCarrera(page);
-    await expect(ficha(page)).toContainText('Avance hacia L2');
-    await expect(ficha(page)).toContainText('L1-1');
-    await expect(ficha(page)).toContainText('0 % (0 de 4 puntos)');
-    await expect(ficha(page)).toContainText('peso 3 · imprescindible');
-  });
-});
+/**
+ * Mi carrera (RMR-TSK-0684): el ingeniero marca con evidencia en Mi espacio y su
+ * responsable la acepta desde la ficha; el avance sale de lo ACEPTADO.
+ */
+const ENG = 'people/e2e-person-eng';
+async function conIngenieroEnL1(fn) {
+  const previo = (await db().doc('careerFramework/engineering').get()).data() ?? null;
+  const ficha0 = (await db().doc(ENG).get()).data();
+  await db().doc('careerFramework/engineering').set(FRAMEWORK);
+  // Cuelga del head en el directorio: el trigger le hace su revisor.
+  const jefe = db().doc('people/e2e-ficha-e2e-head');
+  const jefeNuevo = !(await jefe.get()).exists;
+  if (jefeNuevo) await jefe.set({ name: 'Ficha de e2e-head', uid: 'e2e-head', active: false, reportsToPersonId: 'e2e-sin-ficha' });
+  await db().doc(ENG).update({ levelId: 'av-l1', reportsToPersonId: 'e2e-ficha-e2e-head' });
+  await expect.poll(async () => (await db().doc(ENG).get()).data()?.careerReviewers?.firstUid, { timeout: 20_000 }).toBe('e2e-head');
+  try { await fn(); } finally {
+    if (jefeNuevo) await jefe.delete();
+    for (const c of (await db().collection(`${ENG}/careerClaims`).get()).docs) await c.ref.delete();
+    await db().doc(ENG).set(ficha0);
+    if (previo) await db().doc('careerFramework/engineering').set(previo);
+    else await db().doc('careerFramework/engineering').delete();
+  }
+}
 
-test('marcar la expectativa que pesa 3 sube al L1-3, que queda pendiente de sostener, y se guarda por nivel', async ({ page }) => {
-  await conPersonaEnL1(async () => {
-    await abrirCarrera(page);
-    const tech = ficha(page).locator('.assess-row', { hasText: 'Técnica' }).last();
-    await tech.getByRole('button', { name: 'Cumple' }).click();
-    // 3 de 4 puntos = 75 %: consolida, pero todavía no está a las puertas.
-    await expect(ficha(page)).toContainText('75 % (3 de 4 puntos)');
-    await expect(ficha(page)).toContainText('L1-2');
+test('el ingeniero marca con evidencia y su responsable la acepta: el avance sale de lo aceptado', async ({ page, browser }) => {
+  test.setTimeout(90_000); // dos sesiones: el ingeniero y su responsable
+  await conIngenieroEnL1(async () => {
+    await signInAs(page, 'engineer');
+    await page.goto('/mi-espacio#carrera');
+    const espacio = page.locator('engineer-space');
+    await espacio.getByRole('tab', { name: 'Expectativas' }).click();
+    const tech = espacio.locator('career-expectations li', { hasText: 'Técnica' }).first();
+    await tech.getByRole('button', { name: 'Marcar como cumplida' }).click();
+    const dialogo = espacio.locator('career-claim-dialog');
+    await dialogo.getByRole('button', { name: 'Enviar a revisión' }).click();
+    await expect(dialogo).toContainText('Falta la evidencia');
+    await dialogo.getByRole('textbox').first().fill('Diseñé entero el servicio de cobros');
+    await dialogo.getByRole('button', { name: 'Enviar a revisión' }).click();
+    await expect(tech).toContainText('Pendiente de revisión');
 
-    await ficha(page).getByRole('button', { name: 'Cerrar valoración' }).click();
-    await expect(ficha(page)).toContainText('Avance guardado.');
-    await expect.poll(async () => {
-      const d = (await db().doc(`${PERSON}/careerAssessments/av-l2`).get()).data();
-      return [d?.byDimension?.['av-tech']?.meets, d?.closures?.length, d?.closures?.[0]?.pct];
-    }).toEqual([true, 1, 75]);
+    // Su responsable, en otra sesión.
+    const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    const head = await ctx.newPage();
+    await signInAs(head, 'head');
+    await head.goto('/tools/team');
+    await head.getByRole('button', { name: 'Abrir Carrera de Ingeniero E2E' }).click();
+    await ficha(head).getByRole('tab', { name: 'Expectativas' }).click();    const fila = ficha(head).locator('career-expectations li', { hasText: 'Técnica' }).first();
+    await fila.getByRole('button', { name: 'Revisar' }).click();
+    await ficha(head).locator('career-review-dialog').getByRole('button', { name: 'Aceptar' }).click();
+    await expect(fila).toContainText('Aceptada');
+    // 3 de 4 puntos aceptados: L1-2.
+    await ficha(head).getByRole('tab', { name: 'Seguimiento' }).click();
+    await expect(ficha(head).locator('career-person-panel')).toContainText('L1-2 · 75 %');
+    await ctx.close();
   });
 });
 
@@ -129,15 +158,4 @@ test('el hash viejo de «Carrera» lleva al seguimiento, no a una pestaña que y
   await signInAs(page, 'superadmin');
   await page.goto('/tools/team#career');
   await expect(page).toHaveURL(/\/tools\/career-map\/admin/);
-});
-
-test('con el 100 % de los puntos se plantea la subida de nivel', async ({ page }) => {
-  await conPersonaEnL1(async () => {
-    await abrirCarrera(page);
-    for (const dim of ['Técnica', 'Producto']) {
-      await ficha(page).locator('.assess-row', { hasText: dim }).last().getByRole('button', { name: 'Cumple' }).click();
-    }
-    await expect(ficha(page)).toContainText('100 % (4 de 4 puntos)');
-    await expect(ficha(page)).toContainText('toca plantear la subida de nivel');
-  });
 });
