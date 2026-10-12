@@ -42,8 +42,12 @@ const FRAMEWORK = {
 async function conPersonaEnL1(fn) {
   const previo = (await db().doc('careerFramework/engineering').get()).data() ?? null;
   await db().doc('careerFramework/engineering').set(FRAMEWORK);
-  await db().doc(PERSON).set({ name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-head', active: true, levelId: 'av-l1' });
+  await db().doc(PERSON).set({
+    name: NOMBRE, uid: null, ownerLeaderUid: 'e2e-head', active: true, levelId: 'av-l1',
+    careerReviewers: { firstUid: 'e2e-head', secondUid: null, arbiterUid: null },
+  });
   try { await fn(); } finally {
+    await db().doc(`${PERSON}/careerClaims/av-l2__av-tech`).delete();
     await db().doc(`${PERSON}/careerAssessments/av-l2`).delete();
     await db().doc(`${PERSON}/career/assessment`).delete();
     await db().doc(PERSON).delete();
@@ -135,12 +139,13 @@ test('la curva de progresión se dibuja con las valoraciones cerradas (RMR-TSK-0
   });
 });
 
-test('el badge del seguimiento sale de lo VALORADO, no del avance en el mapa', async ({ page }) => {
+test('el badge del seguimiento sale de lo ACEPTADO, no del avance en el mapa', async ({ page }) => {
   await conPersonaEnL1(async () => {
-    // 3 de 4 puntos valorados. En el mapa de carrera no ha certificado ni una casa:
-    // el nivel no se mueve por formarse, y el badge lo demuestra.
-    await db().doc(`${PERSON}/careerAssessments/av-l2`).set({
-      levelId: 'av-l2', byDimension: { 'av-tech': { meets: true } }, closures: [],
+    // 3 de 4 puntos aceptados (RMR-TSK-0686). En el mapa de carrera no ha certificado
+    // ni una casa: el nivel no se mueve por formarse, y el badge lo demuestra.
+    await db().doc(`${PERSON}/careerClaims/av-l2__av-tech`).set({
+      levelId: 'av-l2', dimensionId: 'av-tech', status: 'claimed', evidence: { text: 'ADR', links: [] },
+      reviews: { first: { decision: 'accept' } }, history: [],
     });
     // El badge se mudó con la tabla: ya no hay dos, hay una (RMR-TSK-0590).
     await signInAs(page, 'superadmin');

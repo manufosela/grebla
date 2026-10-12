@@ -112,20 +112,29 @@ export async function listLevelAssessments(personId) {
  */
 export async function getPersonSubLevel(person, framework) {
   if (!person?.id || !framework) return null;
-  const levels = framework.levels ?? [];
-  const levelCode = levels.find((l) => l.id === person.levelId)?.code ?? null;
-  const next = nextLevelFor(levels, person.levelId);
-  if (!next) return subLevelFromProgress(person, null, levelCode);
-  // Las marcas son las expectativas ACEPTADAS (Mi carrera, RMR-TSK-0685); los
-  // cierres siguen en la valoración del nivel.
+  const levelCode = (framework.levels ?? []).find((l) => l.id === person.levelId)?.code ?? null;
+  return subLevelFromProgress(person, await getPersonLevelProgress(person, framework), levelCode);
+}
+
+/**
+ * Avance de una persona hacia su nivel siguiente: el ÚNICO cálculo, que leen
+ * Seguimiento, Personas, el O2O y Mi Role Mirror (RMR-TSK-0686). Las marcas son
+ * las expectativas ACEPTADAS (Mi carrera); los cierres, los de la valoración del
+ * nivel. null sin nivel siguiente o sin expectativas escritas.
+ * @param {{ id: string, levelId?: string|null, careerReviewers?: import('../tools/career/domain/claims.js').Reviewers }} person
+ * @param {{ levels?: any[] }|null} framework
+ */
+export async function getPersonLevelProgress(person, framework) {
+  if (!person?.id || !framework) return null;
+  const next = nextLevelFor(framework.levels ?? [], person.levelId);
+  if (!next) return null;
   const [assessment, claims] = await Promise.all([getLevelAssessment(person.id, next.id), listClaims(person.id)]);
-  const progress = levelProgressFor({
+  return levelProgressFor({
     person,
     framework,
     marks: marksFromClaims(claims, next.id, person.careerReviewers ?? {}),
     history: closureHistory(assessment),
   });
-  return subLevelFromProgress(person, progress, levelCode);
 }
 
 /**

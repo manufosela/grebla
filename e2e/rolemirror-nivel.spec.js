@@ -49,11 +49,18 @@ async function conPoliticaYNivel(fn, { levelId = 'rm-l1', assessment = null, per
   });
   await db().doc('careerFramework/engineering').set(FRAMEWORK);
   await db().doc(PERSON).set({ ...antes, levelId, ...person });
-  if (assessment) await db().doc(`${PERSON}/careerAssessments/rm-l2`).set(assessment);
+  // Lo cumplido son las expectativas ACEPTADAS (Mi carrera, RMR-TSK-0686).
+  const aceptadas = Object.entries(assessment?.byDimension ?? {}).filter(([, m]) => m.meets).map(([dim]) => dim);
+  for (const dim of aceptadas) {
+    await db().doc(`${PERSON}/careerClaims/rm-l2__${dim}`).set({
+      levelId: 'rm-l2', dimensionId: dim, status: 'claimed', evidence: { text: 'E2E', links: [] },
+      reviews: { first: { decision: 'accept' } }, history: [],
+    });
+  }
   try {
     await fn();
   } finally {
-    await db().doc(`${PERSON}/careerAssessments/rm-l2`).delete();
+    for (const dim of aceptadas) await db().doc(`${PERSON}/careerClaims/rm-l2__${dim}`).delete();
     await db().doc(PERSON).set(antes);
     if (marco) await db().doc('careerFramework/engineering').set(marco);
     else await db().doc('careerFramework/engineering').delete();
