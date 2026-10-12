@@ -85,7 +85,7 @@ const TAB_META = {
 };
 
 /** Sub-pestañas de «Mi carrera». Un hash desconocido cae en la primera. */
-const CAREER_SUBS = /** @type {const} */ (['nivel', 'plan', 'expectativas', 'seguimiento', 'mapa', 'escalera']);
+const CAREER_SUBS = /** @type {const} */ (['nivel', 'plan', 'expectativas', 'seguimiento', 'o2o', 'mapa', 'escalera']);
 
 /**
  * Sub-pestaña de «Mi carrera» que corresponde a un hash.
@@ -349,7 +349,7 @@ export class EngineerSpace extends LitElement {
       // atrás/adelante dejaría la sub-pestaña en la anterior y se vería una
       // sección que no corresponde al hash.
       this._careerSub = careerSubFromHash(raw);
-      const t = this._tabFromHash(raw);
+      const t = effectiveTabFor(this._tabFromHash(raw), this.person);
       if (this._visibleTabs().includes(t)) this._tab = t;
     };
   }
@@ -615,6 +615,7 @@ export class EngineerSpace extends LitElement {
       ['plan', 'Plan'],
       ['expectativas', 'Expectativas'],
       ['seguimiento', 'Seguimiento'],
+      ['o2o', 'O2O'],
       ['mapa', 'Mapa y ruta'],
       ['escalera', 'La escalera'],
     ];
@@ -639,6 +640,7 @@ export class EngineerSpace extends LitElement {
   _renderCareerSub(sub) {
     if (sub === 'mapa') return this._renderMap();
     if (sub === 'escalera') return this._renderLadder();
+    if (sub === 'o2o') return this._renderO2O();
     // Mi carrera (RMR-TSK-0684): la misma vista que ve su EM desde la ficha.
     if (sub === 'plan' || sub === 'expectativas' || sub === 'seguimiento') {
       return html`<career-person-panel .person=${this.person} .framework=${this.framework} section=${sub}></career-person-panel>`;

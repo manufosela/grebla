@@ -6,8 +6,8 @@ describe('engineer-space: pestañas por tipo de persona', () => {
     expect(visibleTabsFor({ external: true })).toEqual(['ficha', 'o2o', 'datos']);
   });
 
-  it('un interno añade su carrera y su Role Mirror', () => {
-    const internal = ['ficha', 'carrera', 'rolemirror', 'o2o', 'datos'];
+  it('un interno añade su carrera y su Role Mirror; sus O2O viven dentro de la carrera', () => {
+    const internal = ['ficha', 'carrera', 'rolemirror', 'datos'];
     expect(visibleTabsFor({ external: false })).toEqual(internal);
     expect(visibleTabsFor({})).toEqual(internal);
     expect(visibleTabsFor(null)).toEqual(internal);
@@ -28,6 +28,11 @@ describe('engineer-space: pestañas por tipo de persona', () => {
     // Los hash antiguos (#marea, #kudos) siguen circulando por ahí.
     expect(effectiveTabFor('marea', {})).toBe('ficha');
     expect(effectiveTabFor('kudos', { external: true })).toBe('ficha');
+  });
+
+  it('#o2o lleva a un interno a su carrera (Mi carrera › O2O) y a un externo a sus O2O', () => {
+    expect(effectiveTabFor('o2o', {})).toBe('carrera');
+    expect(effectiveTabFor('o2o', { external: true })).toBe('o2o');
   });
 
   it('«mapa» ya no es una pestaña de primer nivel (RMR-TSK-0262)', () => {

@@ -15,7 +15,7 @@
 export const EXTERNAL_TABS = ['ficha', 'o2o', 'datos'];
 /** Pestañas de un interno. «Carrera» integra nivel/expectativas y el mapa como
  *  sub-pestañas (RMR-TSK-0262): no hay pestaña «mapa» suelta. */
-export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror', 'o2o', 'datos'];
+export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror', 'datos'];
 
 /**
  * Pestañas visibles según el tipo de persona.
@@ -34,6 +34,8 @@ export function visibleTabsFor(person) {
  * @returns {string}
  */
 export function effectiveTabFor(tab, person) {
+  // Los O2O de un interno viven en Mi carrera › O2O (RMR-TSK-0689).
+  if (tab === 'o2o' && !person?.external) return 'carrera';
   const visible = visibleTabsFor(person);
   return visible.includes(tab) ? tab : visible[0];
 }
