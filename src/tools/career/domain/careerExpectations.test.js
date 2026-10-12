@@ -1,0 +1,32 @@
+import { describe, it, expect } from 'vitest';
+import { expectationRows, STATUS_LABEL } from './careerExpectations.js';
+
+const fw = {
+  dimensions: [{ id: 'tech', name: 'Technical Excellence', order: 1 }, { id: 'culture', name: 'Cultural Contribution', order: 2 }],
+  expectations: [
+    { levelId: 'l2', dimensionId: 'tech', text: 'Decide arquitectura', weight: 2, core: true },
+    { levelId: 'l2', dimensionId: 'culture', text: '' },
+  ],
+};
+const REVIEWERS = { firstUid: 'em', secondUid: 'head', arbiterUid: 'cto' };
+const claim = { id: 'l2__tech', levelId: 'l2', dimensionId: 'tech', status: 'claimed', reviews: { first: { decision: 'accept' } } };
+
+describe('expectationRows', () => {
+  it('una fila por expectativa escrita, con su peso, si es imprescindible y su estado', () => {
+    const [row, ...rest] = expectationRows({ framework: fw, levelId: 'l2', claims: [claim], reviewers: REVIEWERS, viewerUid: 'em' });
+    expect(rest).toEqual([]);
+    expect(row).toMatchObject({
+      dimension: { id: 'tech', name: 'Technical Excellence' }, text: 'Decide arquitectura',
+      weight: 2, core: true, status: 'pending', claim, slot: 'first',
+    });
+  });
+
+  it('sin marca, la expectativa está abierta y a nadie le toca revisar', () => {
+    const [row] = expectationRows({ framework: fw, levelId: 'l2', claims: [], reviewers: REVIEWERS, viewerUid: 'em' });
+    expect(row).toMatchObject({ status: 'open', claim: null, slot: null });
+  });
+
+  it('cada estado tiene su etiqueta para la persona', () => {
+    expect(Object.keys(STATUS_LABEL).toSorted()).toEqual(['accepted', 'open', 'pending', 'rejected', 'tie']);
+  });
+});
