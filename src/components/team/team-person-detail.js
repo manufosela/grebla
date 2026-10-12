@@ -175,6 +175,7 @@ const ORG_SUBTABS = [
 /** Sub-sub-pestañas de «Carrera»: parten el contenido para evitar un scroll largo. */
 const CAREER_SUBTABS = [
   { id: 'nivel', label: 'Nivel' },
+  { id: 'plan', label: 'Plan' },
   { id: 'expectativas', label: 'Expectativas' },
   { id: 'seguimiento', label: 'Seguimiento' },
   { id: 'aspiraciones', label: 'Aspiraciones' },
@@ -1951,7 +1952,8 @@ export class TeamPersonDetail extends LitElement {
     `;
     const seguimientoPanel = () => (level ? careerPanel('seguimiento') : html`<p class="empty">Asigna el nivel en «Nivel».</p>`);
     const panel = {
-      nivel: nivelPanel, expectativas: expectativasPanel, seguimiento: seguimientoPanel, aspiraciones: aspiracionesPanel,
+      nivel: nivelPanel, plan: () => careerPanel('plan'), expectativas: expectativasPanel, seguimiento: seguimientoPanel,
+      aspiraciones: aspiracionesPanel,
     }[active] ?? nivelPanel;
 
     return html`
