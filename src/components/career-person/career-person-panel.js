@@ -8,6 +8,7 @@ import { LitElement, html, css } from 'lit';
 import './career-expectations.js';
 import './career-claim-dialog.js';
 import './career-review-dialog.js';
+import './career-plan.js';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim } from '../../lib/careerClaims.js';
@@ -83,6 +84,7 @@ export class CareerPersonPanel extends LitElement {
 
   render() {
     const viewerUid = getCurrentUser()?.uid ?? null;
+    if (this.section === 'plan') return html`<career-plan .person=${this.person}></career-plan>`;
     return html`
       ${this.section === 'seguimiento'
         ? this._renderProgress()
