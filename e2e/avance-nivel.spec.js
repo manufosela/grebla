@@ -76,14 +76,19 @@ async function conIngenieroEnL1(fn) {
   const previo = (await db().doc('careerFramework/engineering').get()).data() ?? null;
   const ficha0 = (await db().doc(ENG).get()).data();
   await db().doc('careerFramework/engineering').set(FRAMEWORK);
-  // Cuelga del head en el directorio: el trigger le hace su revisor.
+  // Cuelga del head (de Tech) en el directorio: el trigger le hace su revisor.
   const jefe = db().doc('people/e2e-ficha-e2e-head');
-  const jefeNuevo = !(await jefe.get()).exists;
-  if (jefeNuevo) await jefe.set({ name: 'Ficha de e2e-head', uid: 'e2e-head', active: false, reportsToPersonId: 'e2e-sin-ficha' });
-  await db().doc(ENG).update({ levelId: 'av-l1', reportsToPersonId: 'e2e-ficha-e2e-head' });
-  await expect.poll(async () => (await db().doc(ENG).get()).data()?.careerReviewers?.firstUid, { timeout: 20_000 }).toBe('e2e-head');
-  try { await fn(); } finally {
-    if (jefeNuevo) await jefe.delete();
+  const jefe0 = (await jefe.get()).data() ?? null;
+  // Todo dentro del try: si algo falla a medias, la ficha del ingeniero se restaura.
+  try {
+    await jefe.set({ name: 'Ficha de e2e-head', uid: 'e2e-head', active: false, reportsToPersonId: 'e2e-sin-ficha',
+      ...jefe0, orgBranch: 'engineering' });
+    await db().doc(ENG).update({ levelId: 'av-l1', reportsToPersonId: 'e2e-ficha-e2e-head', orgBranch: 'engineering' });
+    await expect.poll(async () => (await db().doc(ENG).get()).data()?.careerReviewers?.firstUid, { timeout: 20_000 }).toBe('e2e-head');
+    await fn();
+  } finally {
+    if (jefe0) await jefe.set(jefe0);
+    else await jefe.delete();
     for (const c of (await db().collection(`${ENG}/careerClaims`).get()).docs) await c.ref.delete();
     await db().doc(ENG).set(ficha0);
     if (previo) await db().doc('careerFramework/engineering').set(previo);

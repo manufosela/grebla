@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { careerReviewersPatches } from './careerReviewers.js';
 
-const level = (l) => ({ notion: { level: l } });
+const level = (l) => ({ notion: { level: l }, orgBranch: 'engineering' });
 const org = [
   { id: 'cto', uid: 'u-cto', ...level('C-level') },
   { id: 'head', uid: 'u-head', reportsToPersonId: 'cto', ...level('Head of') },
@@ -9,7 +9,8 @@ const org = [
   { id: 'lead', uid: 'u-lead', reportsToPersonId: 'em', ...level('Lead') },
   { id: 'dev', uid: 'u-dev', reportsToPersonId: 'lead', ...level('Individual Contributor') },
 ];
-const reviewersOf = (people, id) => careerReviewersPatches(people).find((p) => p.id === id)?.reviewers;
+const NOBODY = { firstUid: null, secondUid: null, arbiterUid: null };
+const reviewersOf = (people, id) => careerReviewersPatches(people).find((p) => p.id === id)?.reviewers ?? NOBODY;
 
 describe('careerReviewersPatches: quién acepta las expectativas de cada uno', () => {
   it('ingeniero y lead: su EM y el Head of; desempata el CTO', () => {
@@ -35,11 +36,23 @@ describe('careerReviewersPatches: quién acepta las expectativas de cada uno', (
 
   it('sin rangos de Notion (demo), revisan los dos jefes con cuenta más cercanos', () => {
     const plain = [
-      { id: 'a', uid: 'u-a' },
-      { id: 'b', uid: 'u-b', reportsToPersonId: 'a' },
-      { id: 'c', uid: 'u-c', reportsToPersonId: 'b' },
+      { id: 'a', uid: 'u-a', orgBranch: 'engineering' },
+      { id: 'b', uid: 'u-b', reportsToPersonId: 'a', orgBranch: 'engineering' },
+      { id: 'c', uid: 'u-c', reportsToPersonId: 'b', orgBranch: 'engineering' },
     ];
     expect(reviewersOf(plain, 'c')).toEqual({ firstUid: 'u-b', secondUid: 'u-a', arbiterUid: null });
+  });
+
+  it('fuera de Tech nadie revisa, y en Tech solo revisan jefes de Tech', () => {
+    const otraRama = [...org, { id: 'ops', uid: 'u-ops', reportsToPersonId: 'cto', notion: { level: 'Individual Contributor' }, orgBranch: 'people' }];
+    expect(reviewersOf(otraRama, 'ops')).toEqual({ firstUid: null, secondUid: null, arbiterUid: null });
+    const jefeDeFuera = [{ id: 'ceo', uid: 'u-ceo', orgBranch: 'executive' }, { id: 'dev', uid: 'u-dev', reportsToPersonId: 'ceo', orgBranch: 'engineering' }];
+    expect(reviewersOf(jefeDeFuera, 'dev')).toEqual({ firstUid: null, secondUid: null, arbiterUid: null });
+  });
+
+  it('a quien no es de Tech y no tiene revisores no se le escribe nada', () => {
+    const ops = [{ id: 'ops', uid: 'u-ops', orgBranch: 'people' }];
+    expect(careerReviewersPatches(ops)).toEqual([]);
   });
 
   it('solo escribe las fichas que cambian', () => {
