@@ -28,6 +28,7 @@ import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIss
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { bearerFrom, agentKeyId, agentKeyVerdict, agentTeamView, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
 import { managerOnboardingPlan, directoryManagerPatches } from './orgManagers.js';
+import { careerReviewersPatches } from './careerReviewers.js';
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
@@ -2560,7 +2561,9 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
   if (!after) return; // borrados: los huérfanos se ven en el backfill, no aquí
   const reportsChanged = (before?.reportsToPersonId ?? null) !== (after.reportsToPersonId ?? null);
   const uidChanged = (before?.uid ?? null) !== (after.uid ?? null);
-  if (!reportsChanged && !uidChanged) return;
+  // El rango de Notion decide quién revisa la carrera (RMR-TSK-0676).
+  const levelChanged = (before?.notion?.level ?? null) !== (after.notion?.level ?? null);
+  if (!reportsChanged && !uidChanged && !levelChanged) return;
 
   const db = getFirestore();
   const snap = await db.collection('people').get();
@@ -2590,11 +2593,17 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
     logger.info(`[org-owner] sincronizados ${writes.length} dueños desde el organigrama (${event.params.personId})`);
   }
   if (uidChanged && after.uid) await onboardDirectoryManager(db, event.params.personId, after.uid, snap.docs);
-  const branchPatches = directoryManagerPatches(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  const directory = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const branchPatches = directoryManagerPatches(directory);
   for (const p of branchPatches) {
     await db.doc(`people/${p.id}`).set({ directoryManagerUids: p.uids }, { merge: true });
   }
   if (branchPatches.length) logger.info(`[org-owner] rama del directorio recalculada en ${branchPatches.length} fichas`);
+  const reviewerPatches = careerReviewersPatches(directory);
+  for (const p of reviewerPatches) {
+    await db.doc(`people/${p.id}`).set({ careerReviewers: p.reviewers }, { merge: true });
+  }
+  if (reviewerPatches.length) logger.info(`[org-owner] revisores de carrera recalculados en ${reviewerPatches.length} fichas`);
   const mirrored = await syncLeadersMirror(db, peopleById);
   if (mirrored) {
     logger.info(`[org-owner] espejo /leaders actualizado: ${mirrored} líderes (reportsTo/chain)`);
