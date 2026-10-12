@@ -65,6 +65,46 @@ export function claimStatus(claim, reviewers) {
   return arbiter ? verdict(arbiter) : 'tie';
 }
 
+/** Marca nueva del ingeniero: sin revisiones ni historial (las reglas lo exigen). */
+export function newClaim({ levelId, dimensionId, evidence, by, at }) {
+  return {
+    levelId, dimensionId, status: 'claimed', evidence: validateEvidence(evidence),
+    claimedBy: by, claimedAt: at, reviews: {}, history: [], updatedAt: at,
+  };
+}
+
+/**
+ * Reenvío o retirada: la ronda anterior (evidencia y revisiones) se archiva tal
+ * cual al final del historial y las revisiones vuelven a cero.
+ */
+export function resubmitted(current, { evidence, at, status = 'claimed' }) {
+  return {
+    evidence: validateEvidence(evidence), status, claimedAt: at, reviews: {}, updatedAt: at,
+    history: [...(current.history ?? []), { evidence: current.evidence, reviews: current.reviews ?? {} }],
+  };
+}
+
+/** Revisión de un hueco. Rechazar sin motivo no ayuda a nadie: se exige. */
+export function reviewPatch(slot, { decision, reason = '', by, at }) {
+  if (decision !== 'accept' && decision !== 'reject') throw new Error(`Decisión desconocida: «${decision}».`);
+  const why = typeof reason === 'string' ? reason.trim() : '';
+  if (decision === 'reject' && !why) throw new Error('Para rechazar hace falta un motivo.');
+  return { [`reviews.${slot}`]: { decision, reason: why, by, at }, updatedAt: at };
+}
+
+/**
+ * Qué revisión le toca a `uid` en esta marca: su hueco de revisor, o el de
+ * árbitro solo si hay empate. null si no le toca ninguna.
+ * @returns {'first'|'second'|'arbiter'|null}
+ */
+export function slotFor(reviewers, uid, claim) {
+  if (!uid) return null;
+  if (reviewers?.firstUid === uid) return 'first';
+  if (reviewers?.secondUid === uid) return 'second';
+  if (reviewers?.arbiterUid === uid && claimStatus(claim, reviewers) === 'tie') return 'arbiter';
+  return null;
+}
+
 /**
  * Marcas aceptadas de un nivel, en la forma que consume `levelProgressFor`.
  * @param {Claim[]} claims
