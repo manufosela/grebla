@@ -303,20 +303,26 @@ service cloud.firestore {
       function touchesDirectoryManagers() {
         return request.resource.data.diff(resource.data).affectedKeys().hasAny(['directoryManagerUids']);
       }
+      // Quién revisa la carrera (RMR-TSK-0676) solo lo escribe el servidor: ni el
+      // superadmin, o podría ponerse de revisor y aceptar marcas.
+      function touchesCareerReviewers() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(['careerReviewers']);
+      }
       allow read: if isSuperAdmin() || isViewer() || isOwner() || ownerReportsToMe()
         || ('sharedWithUids' in resource.data && request.auth.uid in resource.data.sharedWithUids)
         || (isSignedIn() && request.auth.uid in resource.data.get('directoryManagerUids', []))
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid);
       // El líder crea sus personas; el superadmin puede crear una persona para
       // cualquier líder (asignar un usuario a un equipo desde el panel).
-      allow create: if isSuperAdmin()
+      allow create: if !('careerReviewers' in request.resource.data) && (isSuperAdmin()
         || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid
-            && !('directoryManagerUids' in request.resource.data));
+            && !('directoryManagerUids' in request.resource.data)));
       // Un editor compartido edita datos pero NO transfiere la propiedad. El
       // ingeniero vinculado (Person.uid == su uid) SOLO puede declarar su objetivo
       // de carrera: la última rama restringe el cambio al único campo
       // `careerTargetLevelId` (hasOnly), sin poder tocar ningún otro dato de su ficha.
-      allow update: if !updatesNotionFields() && (isSuperAdmin() || !touchesDirectoryManagers())
+      allow update: if !updatesNotionFields() && !touchesCareerReviewers()
+        && (isSuperAdmin() || !touchesDirectoryManagers())
         && (isSuperAdmin() || isOwner()
         || (ownerReportsToMe()
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
@@ -400,6 +406,70 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/people/$(personId)).data.get('directoryManagerUids', []);
       }
 
+      // Marcas de expectativas (Mi carrera, RMR-TSK-0677). El ingeniero marca con
+      // evidencia y nunca se acepta; cada revisor (careerReviewers, lo calcula el
+      // servidor) escribe SOLO su revisión; el árbitro solo con empate. El
+      // comodín de abajo NO escribe aquí: si no, el dueño reescribiría la evidencia.
+      match /careerClaims/{claimId} {
+        function owner() {
+          return get(/databases/$(database)/documents/people/$(personId)).data;
+        }
+        function isEngineer() {
+          return isSignedIn() && owner().get('uid', null) == request.auth.uid;
+        }
+        // Nadie revisa sus propias marcas, aunque por un error de datos fuese revisor.
+        function isSlot(slot) {
+          return isSignedIn() && !isEngineer()
+            && owner().get('careerReviewers', {}).get(slot + 'Uid', null) == request.auth.uid;
+        }
+        function validEvidence(d) {
+          return d.evidence is map && d.evidence.keys().hasOnly(['text', 'links'])
+            && d.evidence.text is string && d.evidence.text.size() >= 1 && d.evidence.text.size() <= 1000
+            && d.evidence.get('links', []) is list && d.evidence.get('links', []).size() <= 5;
+        }
+        function validReview(r) {
+          return r is map && r.keys().hasOnly(['decision', 'reason', 'by', 'at'])
+            && r.decision in ['accept', 'reject'] && r.by.uid == request.auth.uid
+            && (r.decision == 'accept' || (r.get('reason', '') is string && r.get('reason', '').size() >= 1));
+        }
+        function writesOnlyReview(slot) {
+          return resource.data.status == 'claimed'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviews', 'updatedAt'])
+            && request.resource.data.reviews.diff(resource.data.reviews).affectedKeys().hasOnly([slot])
+            && validReview(request.resource.data.reviews[slot]);
+        }
+        // La ronda archivada es exactamente la evidencia y las revisiones de antes.
+        function archivesRound(round) {
+          return round.keys().hasOnly(['evidence', 'reviews'])
+            && round.evidence == resource.data.evidence && round.reviews == resource.data.reviews;
+        }
+        function isTie() {
+          return 'first' in resource.data.reviews && 'second' in resource.data.reviews
+            && resource.data.reviews.first.decision != resource.data.reviews.second.decision;
+        }
+        allow read: if isEngineer() || isSlot('first') || isSlot('second') || isSlot('arbiter');
+        allow create: if isEngineer()
+          && claimId == request.resource.data.levelId + '__' + request.resource.data.dimensionId
+          && request.resource.data.keys().hasOnly(['levelId', 'dimensionId', 'status', 'evidence',
+               'claimedBy', 'claimedAt', 'reviews', 'history', 'updatedAt'])
+          && request.resource.data.status == 'claimed' && request.resource.data.claimedBy.uid == request.auth.uid
+          && validEvidence(request.resource.data) && request.resource.data.reviews == {}
+          && request.resource.data.get('history', []).size() == 0;
+        allow update: if (isEngineer()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['evidence', 'status', 'claimedAt', 'reviews', 'history', 'updatedAt'])
+            && request.resource.data.status in ['claimed', 'withdrawn']
+            && validEvidence(request.resource.data) && request.resource.data.reviews == {}
+            && request.resource.data.history.size() == resource.data.history.size() + 1
+            && (resource.data.history.size() == 0
+                || request.resource.data.history[0:resource.data.history.size()] == resource.data.history)
+            && archivesRound(request.resource.data.history[resource.data.history.size()]))
+          || (isSlot('first') && writesOnlyReview('first'))
+          || (isSlot('second') && writesOnlyReview('second'))
+          || (isSlot('arbiter') && isTie() && writesOnlyReview('arbiter'));
+        allow delete: if false;
+      }
+
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
       match /{document=**} {
@@ -450,7 +520,9 @@ service cloud.firestore {
             && resource != null && request.resource != null;
         }
         allow read: if canView();
-        allow write: if canEdit() && !(isPersonDocUpdate() && updatesNotionFields())
+        allow write: if canEdit() && document[0] != 'careerClaims'
+          && !(isPersonDocUpdate() && updatesNotionFields())
+          && !(isPersonDocUpdate() && touchesCareerReviewers())
           && !(isPersonDocUpdate() && touchesDirectoryManagers() && !isSuperAdmin());
       }
     }
