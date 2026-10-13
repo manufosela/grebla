@@ -23,21 +23,21 @@ test.afterEach(async () => {
   await db().doc(`people/${PERSONA}`).delete();
 });
 
-test('el manager añade la performance review de su persona y la ve en Privado', async ({ page }) => {
+test('el manager añade la performance review de su persona y la ve en su pestaña (RMR-TSK-0694)', async ({ page }) => {
   await signInAs(page, 'head');
   await page.goto('/tools/team');
   await page.getByRole('button', { name: 'Abrir ficha de Bea Privado E2E' }).click().catch(async () => {
     await page.getByText('Bea Privado E2E').first().click();
   });
   const ficha = page.locator('team-person-detail');
-  await ficha.getByRole('tab', { name: 'O2O' }).click();
-  await ficha.getByRole('tab', { name: 'Privado' }).click();
+  await ficha.getByRole('tab', { name: 'Performance Review' }).click();
+  await expect(ficha.getByRole('tab', { name: 'Notas' })).toHaveCount(0);
 
   const notas = ficha.locator('manager-notes');
-  await expect(notas.getByText('Aún no hay notas privadas.')).toBeVisible();
+  await expect(notas.getByText('Aún no hay performance reviews.')).toBeVisible();
   await notas.getByLabel('Fecha en que se hizo').fill('2026-06-30');
   await notas.getByLabel('Contenido').fill('Semestre muy sólido; siguiente paso, liderar el diseño.');
-  await notas.getByRole('button', { name: 'Añadir nota' }).click();
+  await notas.getByRole('button', { name: 'Añadir performance review' }).click();
 
   // Sin título se guarda con el del tipo, y se lista con su fecha.
   await expect(notas.locator('summary')).toHaveText(/^Performance review · Performance review · 2026-06-30$/);

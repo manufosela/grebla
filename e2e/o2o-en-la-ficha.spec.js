@@ -38,7 +38,6 @@ test('el O2O registrado se ve en la ficha, con lo privado y lo que ve la persona
   });
   const ficha = page.locator('team-person-detail');
   await ficha.getByRole('tab', { name: 'O2O', exact: true }).click();
-  await expect(ficha.getByRole('tab', { name: 'O2O hechos' })).toHaveAttribute('aria-selected', 'true');
 
   const o2o = ficha.locator('person-o2o');
   await expect(o2o.getByText('2026-10-07')).toBeVisible();

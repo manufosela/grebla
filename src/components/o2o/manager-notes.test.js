@@ -47,6 +47,6 @@ describe('<manager-notes> — notas privadas del manager', () => {
     const c = ctx();
     lib.listManagerNotes.mockRejectedValue(new Error('Missing or insufficient permissions.'));
     await _load.call(c);
-    expect(c._error).toMatch(/No se pudieron cargar las notas privadas/);
+    expect(c._error).toMatch(/No se pudieron cargar las performance reviews/);
   });
 });
