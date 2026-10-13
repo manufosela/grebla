@@ -223,6 +223,8 @@ export class TeamPersonDetail extends LitElement {
     /** Subnivel efectivo (cálculo + ajuste del manager), el mismo de toda la app. */
     _subLevel: { state: true },
     _subLevelError: { state: true },
+    /** Borrador del ajuste manual del subnivel; null si no se está ajustando. */
+    _subDraft: { state: true },
     /** Todas las valoraciones por nivel, para la curva (RMR-TSK-0556). */
     _levelAssessments: { state: true },
     _progressDraft: { state: true },
@@ -600,6 +602,9 @@ export class TeamPersonDetail extends LitElement {
       this._dimSubtab = 'seniority';
       this._orgSubtab = 'gremios';
       this._careerSubtab = 'nivel';
+      // Ni el subnivel ni su ajuste a medias son de la persona nueva.
+      this._subLevel = null;
+      this._subDraft = null;
       if (this.initialSubtab) {
         if (DIM_SUBTABS.some((t) => t.id === this.initialSubtab)) {
           // Deep-link a una dimensión concreta: abre el grupo «Dimensiones» en ella.
@@ -827,7 +832,42 @@ export class TeamPersonDetail extends LitElement {
     if (!s) return null;
     const note = s.note ? `: ${s.note}` : '';
     const why = s.source === 'manual' ? ` · ajustado por el manager${note}` : '';
-    return html`<p class="suggest"><strong>${s.label}</strong> <span class="note">${subLevelCalcText(s)}${why}</span></p>`;
+    // Ajusta quien lleva a la persona (las reglas mandan); uno mismo, no.
+    const isSelf = Boolean(this.person?.uid) && this.person.uid === this.currentUid;
+    const adjust = !isSelf && !this._subDraft
+      ? html` <button type="button" class="link" @click=${() => { this._subDraft = { value: s.sub, note: s.note ?? '' }; }}>Ajustar</button>`
+      : null;
+    return html`<p class="suggest"><strong>${s.label}</strong> <span class="note">${subLevelCalcText(s)}${why}</span>${adjust}</p>
+      ${this._subDraft ? this._renderSubLevelEditor(s) : null}`;
+  }
+
+  /** Ajuste manual del subnivel (RMR-TSK-0696): el mismo dato que se ajustaba en el seguimiento del mapa. */
+  _renderSubLevelEditor(s) {
+    const d = this._subDraft;
+    const opts = [1, 2, 3].map((v) => html`<option value=${v} ?selected=${d.value === v}>.${v}</option>`);
+    return html`<div class="row">
+      <label class="fld">Subnivel
+        <select @change=${(e) => { this._subDraft = { ...d, value: Number(e.target.value) }; }}>${opts}</select></label>
+      <label class="fld">Por qué
+        <input type="text" .value=${d.note} @input=${(e) => { this._subDraft = { ...d, note: e.target.value }; }} /></label>
+      <button type="button" class="primary" @click=${() => this._saveSubOverride(d)}>Guardar</button>
+      ${s.source === 'manual' ? html`<button type="button" @click=${() => this._saveSubOverride(null)}>Volver al automático</button>` : null}
+      <button type="button" @click=${() => { this._subDraft = null; }}>Cancelar</button>
+    </div>`;
+  }
+
+  async _saveSubOverride(draft) {
+    const override = draft
+      ? { value: draft.value, note: draft.note.trim() || null, byUid: getCurrentUser()?.uid ?? null, at: new Date().toISOString() }
+      : null;
+    try {
+      await updatePerson(this.persistence, this.person.id, { subLevelOverride: override });
+      this.person = { ...this.person, subLevelOverride: override };
+      this._subDraft = null;
+      this._subLevel = await getPersonSubLevel(this.person, this.framework);
+    } catch (err) {
+      this._subLevelError = `No se pudo guardar el ajuste: ${err instanceof Error ? err.message : err}`;
+    }
   }
 
   async _loadLevelProgress() {
@@ -2555,7 +2595,9 @@ export class TeamPersonDetail extends LitElement {
 
   render() {
     if (!this.person) return null;
-    const title = composeTitle(this.framework, this.person.levelId, this.person.disciplines);
+    // El subnivel delante del título, el mismo de Personas y Seguimiento (RMR-TSK-0696).
+    const baseTitle = composeTitle(this.framework, this.person.levelId, this.person.disciplines);
+    const title = this._subLevel?.label && baseTitle ? `${this._subLevel.label} · ${baseTitle}` : baseTitle;
     const disciplineNames = (this.framework?.disciplines ?? [])
       .filter((d) => (this.person.disciplines ?? []).includes(d.id))
       .map((d) => d.name);
