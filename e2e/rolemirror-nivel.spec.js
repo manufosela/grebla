@@ -77,7 +77,7 @@ test('un ingeniero con nivel y valoración ve su L1-2 y cuánto lleva cumplido',
     // 3 de 4 puntos = 75 %: consolida el nivel, todavía no está a las puertas.
     await expect(page.locator('#rm-level-badge')).toHaveText('L1-2');
     await expect(page.locator('#rm-level-text'))
-      .toHaveText('75% del nivel siguiente cumplido (3 de 4 puntos valorados)');
+      .toHaveText('75% del nivel siguiente cumplido (3 de 4 puntos aceptados)');
   }, { assessment: { levelId: 'rm-l2', byDimension: { 'rm-tech': { meets: true } }, closures: [] } });
 });
 

@@ -198,7 +198,7 @@ export function subLevelFromProgress(person, progress, levelCode) {
 
 /**
  * El CÁLCULO dicho en palabras: cuánto del nivel siguiente lleva cumplido. Son
- * puntos valorados —pesos de expectativas—, no paradas del mapa: la formación no
+ * puntos aceptados —pesos de expectativas—, no paradas del mapa: la formación no
  * mueve el nivel.
  * @param {ReturnType<typeof subLevelFromProgress>} subLevel
  * @returns {string} Siempre una frase: «sin valorar» también es información.
@@ -206,7 +206,7 @@ export function subLevelFromProgress(person, progress, levelCode) {
 export function subLevelCalcText(subLevel) {
   return subLevel?.pct === null || subLevel == null
     ? 'sin valorar todavía frente al nivel siguiente'
-    : `${subLevel.pct}% del nivel siguiente cumplido (${subLevel.done} de ${subLevel.total} puntos valorados)`;
+    : `${subLevel.pct}% del nivel siguiente cumplido (${subLevel.done} de ${subLevel.total} puntos aceptados)`;
 }
 
 /**

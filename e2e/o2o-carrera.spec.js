@@ -73,7 +73,7 @@ test('el registro muestra el sub-nivel, cuánto lleva y qué le falta, lo que m�
     await abrirRegistro(page);
     const registro = page.locator('o2o-register');
     // 1 de 4 puntos: todavía en L1-1, y lo que falta empieza por la que pesa 3.
-    await expect(registro).toContainText('L1-1 · 25 % hacia L2 (1 de 4 puntos)');
+    await expect(registro).toContainText('L1-1 · 25 % hacia L2 (1 de 4 puntos aceptados)');
     await expect(registro).toContainText('Falta: Técnica (imprescindible)');
   });
 });
@@ -82,7 +82,7 @@ test('con el 80 % alcanzado avisa de que el .3 hay que sostenerlo', async ({ pag
   await conValoracion({ 'oc-tech': { meets: true } }, async () => {
     await abrirRegistro(page);
     const registro = page.locator('o2o-register');
-    await expect(registro).toContainText('75 % hacia L2 (3 de 4 puntos)');
+    await expect(registro).toContainText('75 % hacia L2 (3 de 4 puntos aceptados)');
     await expect(registro).toContainText('Falta: Producto');
   });
 });

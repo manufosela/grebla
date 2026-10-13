@@ -1,12 +1,13 @@
 /**
  * <career-progression-chart> — la curva de maduración del sub-nivel (épica
- * RMR-PCS-0037 · F2): SVG puro pintado desde `progressionSeries` (puntos %
- * contra la ruta del siguiente nivel vigente + hitos de promoción). Componente
+ * RMR-PCS-0037 · F2): SVG puro pintado desde `assessmentProgressionSeries`
+ * (cierres de valoración + hitos de promoción). Componente
  * TONTO: recibe la serie ya derivada, no carga nada. Sin puntos no renderiza
  * nada (la vista no inventa gráfica). Altura fija: cero layout shift.
  */
 import { LitElement, html, svg, css } from 'lit';
-import { SUB_LEVEL_THRESHOLDS } from '../../tools/career/domain/subLevel.js';
+import { PROGRESS_THRESHOLDS } from '../../tools/career/domain/levelProgress.js';
+import { subLevelLabel } from '../../tools/career/domain/subLevel.js';
 
 /** Geometría fija del lienzo (viewBox: escala con el ancho del contenedor). */
 const W = 640;
@@ -70,10 +71,10 @@ export class CareerProgressionChart extends LitElement {
       .join(' ');
     const inRange = (m) => Date.parse(m.at) >= Date.parse(first.at) && Date.parse(m.at) <= Date.parse(last.at);
     const label = `Curva de progresión del sub-nivel: ${points.length} eventos desde ${first.at.slice(0, 10)}, ` +
-      `de ${first.levelCode}.${first.sub} a ${last.levelCode}.${last.sub} (${last.pct}% hacia el siguiente nivel).`;
+      `de ${subLevelLabel(first.levelCode, first.sub)} a ${subLevelLabel(last.levelCode, last.sub)} (${last.pct}% hacia el siguiente nivel).`;
     return html`
       <svg viewBox="0 0 ${W} ${H}" role="img" aria-label=${label}>
-        ${[0, SUB_LEVEL_THRESHOLDS.consolidating, SUB_LEVEL_THRESHOLDS.atTheGates, 100].map(
+        ${[0, PROGRESS_THRESHOLDS.consolidating, PROGRESS_THRESHOLDS.atTheGates, 100].map(
           (pct) => svg`
             <line class=${pct === 0 ? 'axis' : 'grid'} x1=${M.left} x2=${W - M.right} y1=${this._y(pct)} y2=${this._y(pct)}></line>
             <text class="tick" x=${M.left - 6} y=${this._y(pct) + 3} text-anchor="end">${pct}%</text>
@@ -91,7 +92,7 @@ export class CareerProgressionChart extends LitElement {
         ${points.map(
           (p) => svg`
             <circle class="dot" cx=${x(p.at)} cy=${this._y(p.pct)} r="3.2">
-              <title>${p.at.slice(0, 10)} · ${p.levelCode}.${p.sub} · ${p.pct}%</title>
+              <title>${p.at.slice(0, 10)} · ${subLevelLabel(p.levelCode, p.sub)} · ${p.pct}%</title>
             </circle>
           `,
         )}

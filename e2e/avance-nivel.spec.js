@@ -171,7 +171,7 @@ test('el badge del seguimiento sale de lo ACEPTADO, no del avance en el mapa', a
 
     const fila = page.locator('career-tracking tr', { hasText: NOMBRE });
     await expect(fila.locator('.lvl.sub')).toHaveText('L1-2');
-    await expect(fila.locator('.lvl.sub')).toHaveAttribute('title', /3 de 4 puntos valorados/);
+    await expect(fila.locator('.lvl.sub')).toHaveAttribute('title', /3 de 4 puntos aceptados/);
   });
 });
 
