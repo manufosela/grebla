@@ -21,9 +21,7 @@ import {
   listAreas,
   registerConversation,
   listConversations,
-  addSupportNote,
   listSupportNotes,
-  removeSupportNote,
   updatePerson,
   listLabels,
   listGuilds,
@@ -142,13 +140,7 @@ const SUBTABS = [
   { id: 'carrera', label: 'Carrera' },
   { id: 'dimensiones', label: 'Dimensiones' },
   { id: 'conversations', label: 'O2O' },
-  { id: 'notes', label: 'Notas' },
-];
-
-/** Dentro de «O2O»: los O2O hechos (RMR-TSK-0649) y las notas privadas del manager (RMR-TSK-0636). */
-const O2O_SUBTABS = [
-  { id: 'conversaciones', label: 'O2O hechos' },
-  { id: 'privado', label: 'Privado' },
+  { id: 'perf', label: 'Performance Review' },
 ];
 
 /**
@@ -201,7 +193,6 @@ export class TeamPersonDetail extends LitElement {
     _dimSubtab: { state: true },
     _orgSubtab: { state: true },
     _careerSubtab: { state: true },
-    _o2oSubtab: { state: true },
     _form: { state: true },
     _know: { state: true },
     _contrib: { state: true },
@@ -209,8 +200,6 @@ export class TeamPersonDetail extends LitElement {
      *  a cada conducta marcada (RMR-TSK-0494). */
     _belbinAnswers: { state: true },
     _conv: { state: true },
-    _noteText: { state: true },
-    _confirmNote: { state: true },
     _career: { state: true },
     _logbook: { state: true },
     _routes: { state: true },
@@ -532,8 +521,6 @@ export class TeamPersonDetail extends LitElement {
     this._orgSubtab = 'gremios';
     /** @type {string} sub-sub-pestaña activa dentro de «Carrera» */
     this._careerSubtab = 'nivel';
-    /** @type {string} sub-sub-pestaña activa dentro de «O2O» */
-    this._o2oSubtab = 'conversaciones';
     /** @type {{ levelId: string, disciplines: string[], note: string }} edición inline de carrera (nivel + disciplinas + nota del cambio de nivel) */
     this._career = { levelId: '', disciplines: [], note: '' };
     /** @type {boolean} guardado de carrera en curso */
@@ -597,9 +584,6 @@ export class TeamPersonDetail extends LitElement {
      *  el camino para llegar a una propuesta, no un dato de la persona. */
     this._belbinAnswers = {};
     this._conv = { type: 'o2o', date: '', notes: '' };
-    this._noteText = '';
-    /** @type {string|null} */
-    this._confirmNote = null;
     this._loadedFor = null;
   }
 
@@ -613,7 +597,6 @@ export class TeamPersonDetail extends LitElement {
       this._dimSubtab = 'seniority';
       this._orgSubtab = 'gremios';
       this._careerSubtab = 'nivel';
-      this._o2oSubtab = 'conversaciones';
       if (this.initialSubtab) {
         if (DIM_SUBTABS.some((t) => t.id === this.initialSubtab)) {
           // Deep-link a una dimensión concreta: abre el grupo «Dimensiones» en ella.
@@ -664,7 +647,10 @@ export class TeamPersonDetail extends LitElement {
   _visibleSubtabs() {
     // «Permisos» (matriz de herramientas): superadmin siempre; manager/head sobre
     // la gente que gestionan (RMR-PCS-0027 · F8b).
-    const base = this._canManagePerms() ? [...SUBTABS, { id: 'permisos', label: 'Permisos' }] : SUBTABS;
+    const perms = this._canManagePerms() ? [...SUBTABS, { id: 'permisos', label: 'Permisos' }] : SUBTABS;
+    // Las performance reviews solo las ven sus managers: quien mira su propia ficha, no.
+    const isSelf = Boolean(this.person?.uid) && this.person.uid === this.currentUid;
+    const base = isSelf ? perms.filter((t) => t.id !== 'perf') : perms;
     if (!this.person?.external) return base;
     return base.map((t) => (t.id === 'carrera' ? { ...t, label: 'Nivel' } : t));
   }
@@ -1289,28 +1275,6 @@ export class TeamPersonDetail extends LitElement {
     }
   }
 
-  async _saveNote() {
-    if (!this._noteText.trim()) return;
-    this.error = '';
-    try {
-      await addSupportNote(this.persistence, this.person.id, this._noteText.trim(), currentAuthor());
-      this._noteText = '';
-      await this._reload();
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo guardar la nota.';
-    }
-  }
-
-  async _deleteNote(id) {
-    this._confirmNote = null;
-    try {
-      await removeSupportNote(this.persistence, this.person.id, id);
-      await this._reload();
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo borrar la nota.';
-    }
-  }
-
   _patchForm(dim, patch) {
     this._form = { ...this._form, [dim]: { ...this._form[dim], ...patch } };
   }
@@ -1673,20 +1637,13 @@ export class TeamPersonDetail extends LitElement {
   }
 
   /**
-   * «O2O» (RMR-TSK-0649): los O2O hechos —los mismos de la herramienta O2O— y,
-   * para sus managers, las notas privadas. Quien mira su propia ficha no ve «Privado».
+   * «O2O» (RMR-TSK-0649): los O2O hechos, los mismos de la herramienta O2O. Las
+   * performance reviews tienen su propia pestaña (RMR-TSK-0694).
    */
   _renderO2O() {
-    const isSelf = Boolean(this.person?.uid) && this.person.uid === this.currentUid;
     // Un O2O es de quien lo hace: aquí, TUS O2O con esta persona (los de tu herramienta O2O).
-    const done = html`<person-o2o .personId=${this.person.id} .leaderUid=${this.currentUid ?? null}
+    return html`<person-o2o .personId=${this.person.id} .leaderUid=${this.currentUid ?? null}
       .personName=${this.person.name ?? ''}></person-o2o>`;
-    if (isSelf) return done;
-    const active = this._o2oSubtab;
-    const panel = active === 'privado' ? html`<manager-notes person-id=${this.person.id}></manager-notes>` : done;
-    return html`
-      ${this._renderNestedTabs(O2O_SUBTABS, active, 'po2o', 'Secciones de O2O', (id) => { this._o2oSubtab = id; })}
-      <div id="po2opanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="po2o-${active}" tabindex="0">${panel}</div>`;
   }
 
   _renderConversations() {
@@ -1758,53 +1715,6 @@ export class TeamPersonDetail extends LitElement {
     const url = String(source?.url ?? '');
     if (!/^https?:\/\//i.test(url)) return null;
     return html`<a class="auto-src" href=${url} target="_blank" rel="noopener noreferrer">ver origen</a>`;
-  }
-
-  _renderNotes() {
-    return html`
-      <section class="support">
-        <h3>Notas de acompañamiento</h3>
-        <p class="disclaimer">
-          Espacio sensible y <strong>no diagnóstico</strong>, separado de la dimensión Emocional.
-          No tiene nivel y nunca se incluye en exports ni en agregados.
-        </p>
-        <div class="form">
-          <label class="fld">Nueva nota
-            <textarea
-              .value=${this._noteText}
-              @input=${(e) => { this._noteText = e.target.value; }}
-              placeholder="Acompañamiento, contexto personal relevante para tu apoyo…"
-            ></textarea>
-          </label>
-          <div class="row">
-            <button class="primary" ?disabled=${!this._noteText.trim()} @click=${this._saveNote}>Guardar nota</button>
-          </div>
-        </div>
-        ${this.notes.length === 0
-          ? html`<p class="empty">Sin notas.</p>`
-          : html`
-              <ul class="hist">
-                ${this.notes.map(
-                  (n) => html`
-                    <li>
-                      <div class="meta">
-                        <span class="when">${authorLine(n)}</span>
-                        <span class="del">
-                        ${this._confirmNote === n.id
-                          ? html`¿Borrar?
-                              <button class="link yes" @click=${() => this._deleteNote(n.id)}>Sí</button>
-                              <button class="link" @click=${() => { this._confirmNote = null; }}>No</button>`
-                          : html`<button class="link" @click=${() => { this._confirmNote = n.id; }}>Borrar</button>`}
-                        </span>
-                      </div>
-                      <span class="note">${n.text}</span>
-                    </li>
-                  `,
-                )}
-              </ul>
-            `}
-      </section>
-    `;
   }
 
   /**
@@ -2691,7 +2601,7 @@ export class TeamPersonDetail extends LitElement {
       carrera: () => this._renderCareer(),
       dimensiones: () => this._renderDimensions(),
       conversations: () => this._renderO2O(),
-      notes: () => this._renderNotes(),
+      perf: () => html`<manager-notes person-id=${this.person.id}></manager-notes>`,
       permisos: () => this._renderPermisos(),
     }[this._subtab] ?? (() => this._renderDatos());
     return panel();

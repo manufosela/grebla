@@ -1,8 +1,8 @@
 /**
- * <manager-notes> — notas PRIVADAS del manager sobre una persona (RMR-TSK-0636):
- * sus performance reviews y cualquier texto que dé contexto, con la fecha en que
- * se hicieron. Vive como sub-pestaña «Privado» de sus O2O; la persona no lo ve
- * nunca (lo garantizan las reglas de /managerNotes, no esta pantalla).
+ * <manager-notes> — las performance reviews de una persona (RMR-TSK-0636,
+ * RMR-TSK-0694): la lista y, debajo, el formulario para añadir otra. Es la
+ * pestaña «Performance Review» de su ficha; la persona no lo ve nunca (lo
+ * garantizan las reglas de /managerNotes, no esta pantalla).
  */
 import { LitElement, html, css } from 'lit';
 import { skeletonLines } from '../app-skeleton.js';
@@ -10,7 +10,9 @@ import '../common/busy-overlay.js';
 import { NOTE_TYPES, noteErrors } from '../../tools/o2o/domain/managerNotes.js';
 import { listManagerNotes, addManagerNote, updateManagerNote, deleteManagerNote } from '../../lib/managerNotes.js';
 
-const EMPTY_DRAFT = Object.freeze({ type: 'perf-review', date: '', title: '', content: '' });
+/** Aquí solo hay performance reviews (RMR-TSK-0694): nada de notas privadas de otro tipo. */
+const PERF_REVIEW = 'perf-review';
+const EMPTY_DRAFT = Object.freeze({ type: PERF_REVIEW, date: '', title: '', content: '' });
 const typeLabel = (id) => NOTE_TYPES.find((t) => t.id === id)?.label ?? id;
 
 export class ManagerNotes extends LitElement {
@@ -91,7 +93,7 @@ export class ManagerNotes extends LitElement {
       const notes = await listManagerNotes(personId);
       if (personId === this.personId) this._notes = notes;
     } catch (err) {
-      if (personId === this.personId) this._error = `No se pudieron cargar las notas privadas: ${err.message}`;
+      if (personId === this.personId) this._error = `No se pudieron cargar las performance reviews: ${err.message}`;
     } finally {
       if (personId === this.personId) this._loading = false;
     }
@@ -110,7 +112,7 @@ export class ManagerNotes extends LitElement {
   async _save() {
     const [problem] = noteErrors(this._draft);
     if (problem) { this._error = problem; return; }
-    await this._write('Guardando la nota…', async () => {
+    await this._write('Guardando la performance review…', async () => {
       if (this._editingId) await updateManagerNote(this.personId, this._editingId, this._draft);
       else await addManagerNote(this.personId, this._draft);
       this._cancel();
@@ -118,7 +120,7 @@ export class ManagerNotes extends LitElement {
   }
 
   async _delete(note) {
-    await this._write('Borrando la nota…', async () => {
+    await this._write('Borrando la performance review…', async () => {
       await deleteManagerNote(this.personId, note.id);
       this._confirmDelete = null;
     });
@@ -141,21 +143,16 @@ export class ManagerNotes extends LitElement {
   render() {
     return html`
       ${this._busy ? html`<busy-overlay message=${this._busy}></busy-overlay>` : null}
-      <p class="lead">Solo lo ven sus managers. La persona no tiene acceso a estas notas.</p>
-      ${this._renderForm()}
+      <p class="lead">Solo lo ven sus managers.</p>
+      ${this._renderList()}
       ${this._error ? html`<p class="error" role="alert">${this._error}</p>` : null}
-      ${this._renderList()}`;
+      ${this._renderForm()}`;
   }
 
   _renderForm() {
     const d = this._draft;
     return html`<div class="form">
       <div class="row">
-        <label>Tipo
-          <select @change=${(e) => this._set('type', e.target.value)}>
-            ${NOTE_TYPES.map((t) => html`<option value=${t.id} ?selected=${t.id === d.type}>${t.label}</option>`)}
-          </select>
-        </label>
         <label>Fecha en que se hizo
           <input type="date" .value=${d.date} @input=${(e) => this._set('date', e.target.value)} />
         </label>
@@ -167,7 +164,7 @@ export class ManagerNotes extends LitElement {
         <textarea .value=${d.content} @input=${(e) => this._set('content', e.target.value)}></textarea>
       </label>
       <div class="actions">
-        <button class="btn primary" @click=${() => this._save()}>${this._editingId ? 'Guardar cambios' : 'Añadir nota'}</button>
+        <button class="btn primary" @click=${() => this._save()}>${this._editingId ? 'Guardar cambios' : 'Añadir performance review'}</button>
         ${this._editingId ? html`<button class="btn" @click=${() => this._cancel()}>Cancelar</button>` : null}
       </div>
     </div>`;
@@ -175,8 +172,9 @@ export class ManagerNotes extends LitElement {
 
   _renderList() {
     if (this._loading) return skeletonLines(3);
-    if (!this._notes.length) return html`<p class="empty">Aún no hay notas privadas.</p>`;
-    return html`<ul class="list">${this._notes.map((n) => this._renderNote(n))}</ul>`;
+    const reviews = this._notes.filter((n) => n.type === PERF_REVIEW);
+    if (!reviews.length) return html`<p class="empty">Aún no hay performance reviews.</p>`;
+    return html`<ul class="list">${reviews.map((n) => this._renderNote(n))}</ul>`;
   }
 
   _renderNote(n) {
