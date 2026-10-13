@@ -15,6 +15,23 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.251.0] - 2026-10-13
+
+### Añadido
+
+- Ficha › Nivel: el manager ajusta a mano el subnivel (y puede volver al
+  automático); la cabecera de la ficha lo muestra como «L2-3 · título»
+  (RMR-TSK-0696).
+- Ficha: pestaña «Performance Review» en primer nivel; desaparece la pestaña de
+  notas de acompañamiento (RMR-TSK-0694).
+
+### Cambiado
+
+- Un solo subnivel en toda la app, también en Mi espacio: sale de las expectativas
+  aceptadas más el ajuste manual, con el formato «L2-3» (RMR-TSK-0693, RMR-TSK-0695).
+- Mi espacio: fuera «Mis datos»; email, GitHub, ubicación y gremio principal están
+  en «Mi ficha» (RMR-TSK-0697).
+
 ## [1.250.0] - 2026-10-12
 
 ### Añadido
