@@ -36,6 +36,7 @@ import { subLevelCalcText } from '../tools/career/domain/levelProgress.js';
 import { levelHistoryView } from '../tools/team/domain/levelHistory.js';
 import { assessmentProgressionSeries } from '../tools/career/domain/progression.js';
 import { listLevelAssessments, getPersonSubLevel } from '../lib/careerAssessment.js';
+import { getCurrentUser } from '../lib/auth.js';
 import './career/career-progression-chart.js';
 import './role-result.js';
 import './role-questionnaire.js';
@@ -59,10 +60,10 @@ import { conversationOrigin, conversationsNewestFirst } from '../tools/team/doma
  * (#carrera / #rolemirror) para conservar la pestaña activa al recargar o navegar
  * atrás/adelante, igual que el patrón de <superadmin-panel>. El mapa vive como
  * sub-pestaña dentro de «carrera» (RMR-TSK-0262); el hash legado `#mapa` sigue
- * aterrizando ahí. `datos` solo la ven los EXTERNOS (no tienen carrera/rolemirror).
- * @type {ReadonlyArray<'ficha'|'carrera'|'rolemirror'|'motivadores'|'o2o'|'datos'|'marea'|'retros'|'kudos'>}
+ * aterrizando ahí. «Mis datos» ya no existe: todo está en «Mi ficha» (RMR-TSK-0697).
+ * @type {ReadonlyArray<'ficha'|'carrera'|'rolemirror'|'motivadores'|'o2o'|'marea'|'retros'|'kudos'>}
  */
-const TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'datos', 'marea', 'retros', 'kudos'];
+const TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros', 'kudos'];
 /** Búsqueda O(1) de existencia (validar el hash de la URL). */
 const TAB_SET = new Set(TABS);
 
@@ -77,7 +78,6 @@ const TAB_META = {
   rolemirror: { label: 'Mi Role Mirror', heading: 'Mi Role Mirror', cls: 'rolemirror' },
   motivadores: { label: 'Motivadores', heading: 'Motivadores', cls: 'motivadores' },
   o2o: { label: 'Mis O2O', heading: 'Mis O2O', cls: 'o2o' },
-  datos: { label: 'Mis datos', heading: 'Mis datos', cls: 'datos' },
   marea: { label: 'Marea', heading: 'Marea', cls: 'marea' },
   retros: { label: 'Retros', heading: 'Retros', cls: 'retros' },
   kudos: { label: 'Kudos', heading: 'Kudos', cls: 'kudos' },
@@ -1031,7 +1031,6 @@ export class EngineerSpace extends LitElement {
       rolemirror: () => this._renderRoleMirror(),
       motivadores: () => this._renderMotivadores(),
       o2o: () => this._renderO2O(),
-      datos: () => this._renderDatos(),
       marea: () => this._renderMarea(),
       retros: () => this._renderRetros(),
       kudos: () => this._renderKudos(),
@@ -1122,24 +1121,30 @@ export class EngineerSpace extends LitElement {
   /** Pestaña «Mi ficha» (RMR-TSK-0260): datos de la persona; si es su propia
    *  ficha, el editor debajo para cambiarlos. Un externo ve sus datos básicos. */
   _renderFicha() {
+    // Todos tus datos en un solo sitio (RMR-TSK-0697), los mismos que ve tu manager en tu ficha.
     const p = this.person ?? {};
-    if (p.external) return this._renderDatos();
     const fw = this.framework;
-    const title = fw ? composeTitle(fw, p.levelId, p.disciplines) : '';
+    const internal = !p.external;
+    const title = internal && fw ? composeTitle(fw, p.levelId, p.disciplines) : '';
     const discNames = (p.disciplines ?? []).map((id) => fw?.disciplines?.find((d) => d.id === id)?.name ?? id);
-    const subText = this._subLevelText();
+    const guilds = (p.guilds ?? []).map((g) => (g === p.primaryGuild ? `${g} (principal)` : g));
     const rows = [
       ['Nombre', p.name],
       ['Título', title || null],
-      ['Progresión', subText],
+      ['Progresión', internal ? this._subLevelText() : null],
       ['Disciplinas', discNames.join(', ') || null],
       ['Fecha de alta', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(`${p.startDate}T00:00:00`)) : null],
-      ['Gremios', (p.guilds ?? []).join(', ') || null],
+      ['Gremios', guilds.join(', ') || null],
       // A qué pertenece: el DOMINIO (su producto). El squad ya no se enseña: la
       // transición terminó y nadie tiene squad sin dominio (ADR de dominios, F5).
       ['Dominio', membershipLabel(p, this.domains)],
+      ['Ubicación', p.location],
+      ['Email', p.email ?? getCurrentUser()?.email ?? null],
+      ['GitHub', p.githubLogin],
     ].filter(([, v]) => v);
+    const note = internal ? null : html`<p class="datos-note">Eres una persona externa: aquí ves tus datos básicos y, en «Mis O2O», lo que tu responsable comparta contigo.</p>`;
     return html`
+      ${note}
       <dl class="datos-dl">
         ${rows.map(([k, v]) => html`<div class="datos-row"><dt>${k}</dt><dd>${v}</dd></div>`)}
       </dl>
@@ -1161,26 +1166,6 @@ export class EngineerSpace extends LitElement {
           <span class="mot-text"><strong>Affective Motivators</strong><small>Qué necesitas sentir en tu equipo</small></span>
         </a>
       </div>
-    `;
-  }
-
-  /** Datos básicos del externo (solo lectura): sin carrera ni nivel. */
-  _renderDatos() {
-    const p = this.person ?? {};
-    const rows = [
-      ['Nombre', p.name],
-      ['Desde', p.startDate ? new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(p.startDate)) : null],
-      ['Ubicación', p.location],
-      ['Gremios', (p.guilds ?? []).join(', ') || null],
-      // A qué pertenece: el DOMINIO (su producto). El squad ya no se enseña: la
-      // transición terminó y nadie tiene squad sin dominio (ADR de dominios, F5).
-      ['Dominio', membershipLabel(p, this.domains)],
-    ].filter(([, v]) => v);
-    return html`
-      <p class="datos-note">Eres una persona externa: aquí ves tus datos básicos y, en «Mis O2O», los resúmenes que tu responsable comparta contigo.</p>
-      <dl class="datos-dl">
-        ${rows.map(([k, v]) => html`<div class="datos-row"><dt>${k}</dt><dd>${v}</dd></div>`)}
-      </dl>
     `;
   }
 }
