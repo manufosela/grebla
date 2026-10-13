@@ -140,6 +140,19 @@ test('el subnivel ajustado por el manager se ve igual en Nivel y en Seguimiento 
   });
 });
 
+test('el manager ajusta el subnivel desde la ficha y se ve en la cabecera (RMR-TSK-0696)', async ({ page }) => {
+  await conPersonaEnL1(async () => {
+    await abrirCarrera(page);
+    await ficha(page).getByRole('button', { name: 'Ajustar' }).click();
+    await ficha(page).getByRole('combobox', { name: 'Subnivel' }).selectOption('3');
+    await ficha(page).getByRole('textbox', { name: 'Por qué' }).fill('lidera el diseño');
+    await ficha(page).getByRole('button', { name: 'Guardar', exact: true }).click();
+    await expect(ficha(page).locator('.head .title')).toContainText('L1-3');
+    await expect(ficha(page)).toContainText('ajustado por el manager: lidera el diseño');
+    await expect.poll(async () => (await db().doc(PERSON).get()).data()?.subLevelOverride?.value).toBe(3);
+  });
+});
+
 test('la curva de progresión se dibuja con las valoraciones cerradas (RMR-TSK-0556)', async ({ page }) => {
   await conPersonaEnL1(async () => {
     await db().doc(`${PERSON}/careerAssessments/av-l2`).set({
