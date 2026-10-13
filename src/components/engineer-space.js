@@ -32,11 +32,10 @@
  * @typedef {import('../tools/career/domain/types.js').Journey} Journey
  */
 import { LitElement, html, css } from 'lit';
-import { listCareerRoutes } from '../lib/careerMap.js';
-import { subLevelForPerson, effectiveSubLevel } from '../tools/career/domain/subLevel.js';
+import { subLevelCalcText } from '../tools/career/domain/levelProgress.js';
 import { levelHistoryView } from '../tools/team/domain/levelHistory.js';
 import { assessmentProgressionSeries } from '../tools/career/domain/progression.js';
-import { listLevelAssessments } from '../lib/careerAssessment.js';
+import { listLevelAssessments, getPersonSubLevel } from '../lib/careerAssessment.js';
 import './career/career-progression-chart.js';
 import './role-result.js';
 import './role-questionnaire.js';
@@ -117,6 +116,9 @@ export class EngineerSpace extends LitElement {
     /** Catálogo de dominios: a lo que pertenece de verdad (ADR de dominios). */
     domains: { attribute: false },
     _tab: { state: true },
+    /** Subnivel efectivo, el mismo que ve su manager (RMR-TSK-0695). */
+    _subLevel: { state: true },
+    _subLevelError: { state: true },
     _careerSub: { state: true },
     _targetError: { state: true },
     _targetSaving: { state: true },
@@ -682,7 +684,8 @@ export class EngineerSpace extends LitElement {
       ${level
         ? html`
             <div class="now">
-              <p><span class="code">${level.code}</span> · ${level.title}</p>
+              <p><span class="code">${this._subLevel?.label ?? level.code}</span> · ${level.title}</p>
+              ${this._subLevelLine()}
               ${level.description ? html`<p class="desc">${level.description}</p>` : null}
               ${level.typicalProfile ? html`<p class="profile">Perfil típico: ${level.typicalProfile}</p>` : null}
             </div>
@@ -1067,15 +1070,6 @@ export class EngineerSpace extends LitElement {
     } catch { /* sin curva */ }
   }
 
-  async _ensureCareerRoutes() {
-    if (this._careerRoutes !== undefined) return;
-    this._careerRoutes = null;
-    try {
-      this._careerRoutes = await listCareerRoutes();
-      this.requestUpdate();
-    } catch { /* sin badges */ }
-  }
-
   /** Bitácora propia para la curva de progresión (RMR-PCS-0037 · F2): carga
    *  perezosa y tolerante — sin bitácora, la gráfica simplemente no sale. */
   async _ensureLogbook() {
@@ -1100,6 +1094,31 @@ export class EngineerSpace extends LitElement {
       .authorName=${this.person?.name ?? ''}></retro-app>`;
   }
 
+  /** El subnivel, de la MISMA función que ve su manager (RMR-TSK-0695): expectativas
+   *  aceptadas con el ajuste del manager encima. El mapa es formación y no lo mueve. */
+  updated(changed) {
+    if (!(changed.has('person') || changed.has('framework')) || !this.person?.id || !this.framework) return;
+    const id = this.person.id;
+    getPersonSubLevel(this.person, this.framework)
+      .then((s) => { if (this.person?.id === id) Object.assign(this, { _subLevel: s, _subLevelError: '' }); })
+      .catch((err) => { if (this.person?.id === id) this._subLevelError = `No se pudo calcular tu subnivel: ${err.message}`; });
+  }
+
+  /** «L2-3 — 75% de L3 cumplido (…) — ajustado por tu manager: «…»», igual en todas partes. */
+  _subLevelText() {
+    const s = this._subLevel;
+    if (this._subLevelError) return this._subLevelError;
+    if (!s) return null;
+    const note = s.note ? `: «${s.note}»` : '';
+    const manual = s.source === 'manual' ? `ajustado por tu manager${note}` : null;
+    return [s.label, subLevelCalcText(s), manual].filter(Boolean).join(' — ');
+  }
+
+  _subLevelLine() {
+    const text = this._subLevelText();
+    return text ? html`<p class="profile">${text}</p>` : null;
+  }
+
   /** Pestaña «Mi ficha» (RMR-TSK-0260): datos de la persona; si es su propia
    *  ficha, el editor debajo para cambiarlos. Un externo ve sus datos básicos. */
   _renderFicha() {
@@ -1108,20 +1127,7 @@ export class EngineerSpace extends LitElement {
     const fw = this.framework;
     const title = fw ? composeTitle(fw, p.levelId, p.disciplines) : '';
     const discNames = (p.disciplines ?? []).map((id) => fw?.disciplines?.find((d) => d.id === id)?.name ?? id);
-    this._ensureCareerRoutes();
-    const levelCode = fw?.levels?.find((l) => l.id === p.levelId)?.code ?? null;
-    const subLevel = effectiveSubLevel(
-      p,
-      subLevelForPerson({ person: p, framework: fw, routes: this._careerRoutes ?? [], journey: this.journey }),
-      levelCode,
-    );
-    const subText = subLevel
-      ? [
-          subLevel.label,
-          subLevel.pct === null ? null : `${subLevel.pct}% del camino al siguiente nivel (${subLevel.done}/${subLevel.total} paradas certificadas)`,
-          subLevel.source === 'manual' ? `ajustado por tu manager${subLevel.note ? `: «${subLevel.note}»` : ''}` : null,
-        ].filter(Boolean).join(' — ')
-      : null;
+    const subText = this._subLevelText();
     const rows = [
       ['Nombre', p.name],
       ['Título', title || null],

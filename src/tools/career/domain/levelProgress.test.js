@@ -171,7 +171,7 @@ describe('levelProgressFor', () => {
 describe('subLevelFromProgress — el badge que comparten las tres pantallas (RMR-TSK-0605)', () => {
   const progreso = { sub: 2, earned: 3, total: 6, pct: 50, label: 'L1-2' };
 
-  it('traduce la progresión al badge, con puntos valorados y no paradas', () => {
+  it('traduce la progresión al badge, con puntos aceptados y no paradas', () => {
     expect(subLevelFromProgress({}, progreso, 'L1')).toEqual({
       sub: 2, done: 3, total: 6, pct: 50, label: 'L1-2', source: 'auto', note: null,
     });
@@ -192,8 +192,8 @@ describe('subLevelFromProgress — el badge que comparten las tres pantallas (RM
 describe('cómo se dice el sub-nivel', () => {
   const auto = { sub: 2, done: 3, total: 6, pct: 50, label: 'L1-2', source: 'auto', note: null };
 
-  it('el cálculo habla de puntos valorados del nivel siguiente', () => {
-    expect(subLevelCalcText(auto)).toBe('50% del nivel siguiente cumplido (3 de 6 puntos valorados)');
+  it('el cálculo habla de puntos aceptados del nivel siguiente', () => {
+    expect(subLevelCalcText(auto)).toBe('50% del nivel siguiente cumplido (3 de 6 puntos aceptados)');
   });
 
   it('sin valorar todavía también es información, no un hueco', () => {
@@ -202,14 +202,14 @@ describe('cómo se dice el sub-nivel', () => {
   });
 
   it('el detalle no repite la etiqueta: se pinta como badge aparte', () => {
-    expect(subLevelDetail(auto)).toBe('50% del nivel siguiente cumplido (3 de 6 puntos valorados)');
+    expect(subLevelDetail(auto)).toBe('50% del nivel siguiente cumplido (3 de 6 puntos aceptados)');
     expect(subLevelDetail(auto)).not.toContain('L1-2');
   });
 
   it('si lo ajustó el manager, lo dice con su nota y deja ver el cálculo', () => {
     const manual = { ...auto, source: 'manual', note: 'lidera de facto', label: 'L1-3' };
     expect(subLevelDetail(manual))
-      .toBe('ajustado por tu manager: «lidera de facto» · cálculo: 50% del nivel siguiente cumplido (3 de 6 puntos valorados)');
+      .toBe('ajustado por tu manager: «lidera de facto» · cálculo: 50% del nivel siguiente cumplido (3 de 6 puntos aceptados)');
   });
 
   it('sin sub-nivel no hay detalle', () => {

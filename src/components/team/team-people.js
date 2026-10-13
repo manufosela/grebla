@@ -12,7 +12,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
-import { subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
+import { subLevelFromProgress, subLevelCalcText } from '../../tools/career/domain/levelProgress.js';
 import { getPersonLevelProgress } from '../../lib/careerAssessment.js';
 import { getMyPerson } from '../../lib/engineer.js';
 import { getCurrentUser } from '../../lib/auth.js';
@@ -716,13 +716,11 @@ export class TeamPeople extends LitElement {
     }
   }
 
-  /** Chip LX.Y junto al título de carrera (mismo lenguaje que Equipo→Carrera). */
+  /** Chip L1-2 junto al título de carrera; el texto del cálculo es el mismo de toda la app. */
   _renderSubLevelChip(p) {
     const s = this._subLevels?.get?.(p.id) ?? null;
     if (!s) return null;
-    const auto = s.pct === null
-      ? 'sin valorar frente al nivel siguiente'
-      : `${s.pct}% del nivel siguiente cumplido (${s.done} de ${s.total} puntos valorados)`;
+    const auto = subLevelCalcText(s);
     const tip = s.source === 'manual'
       ? `Ajustado por el manager${s.note ? `: ${s.note}` : ''} · cálculo: ${auto}`
       : auto;

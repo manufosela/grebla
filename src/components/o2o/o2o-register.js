@@ -20,6 +20,7 @@ import {
 import { getPersonProfile } from '../../lib/firestore.js';
 import { getFramework } from '../../lib/careerFramework.js';
 import { getPersonLevelProgress } from '../../lib/careerAssessment.js';
+import { subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export class O2ORegister extends LitElement {
@@ -178,8 +179,11 @@ export class O2ORegister extends LitElement {
     let aviso = '';
     if (p.readyToPromote) aviso = ' Cumple el 100 %: toca plantear la subida de nivel.';
     else if (p.pendingSub === 3) aviso = ` Para el ${p.levelCode}-3 hace falta mantener el 80 % en otra valoración.`;
+    // La etiqueta, la de toda la app: el cálculo con el ajuste del manager encima.
+    const persona = (this.people ?? []).find((x) => x.id === this._personId);
+    const label = subLevelFromProgress(persona, p, p.levelCode)?.label ?? p.label;
     return html`<p class="rm-context">
-      🧭 <strong>Carrera:</strong> ${p.label} · ${p.pct} % hacia ${p.nextLevelCode} (${p.earned} de ${p.total} puntos).
+      🧭 <strong>Carrera:</strong> ${label} · ${p.pct} % hacia ${p.nextLevelCode} (${p.earned} de ${p.total} puntos aceptados).
       ${pendientes}${aviso}
     </p>`;
   }
