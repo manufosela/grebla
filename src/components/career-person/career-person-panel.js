@@ -14,7 +14,7 @@ import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim } from '../../lib/careerClaims.js';
 import { getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
-import { levelProgressFor, levelCompletion } from '../../tools/career/domain/levelProgress.js';
+import { levelProgressFor, levelCompletion, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 import { marksFromClaims } from '../../tools/career/domain/claims.js';
 import { closureHistory, lastClosure, closeAssessment } from '../../tools/career/data/levelAssessment.js';
 
@@ -110,7 +110,12 @@ export class CareerPersonPanel extends LitElement {
     });
     if (!progress) return html`<p class="note">${next.code} todavía no tiene expectativas escritas.</p>`;
     const last = lastClosure(this._assessment);
+    // La etiqueta es la misma de toda la app: el cálculo con el ajuste del manager encima.
+    const sub = subLevelFromProgress(this.person, progress, progress.levelCode);
+    const why = sub?.note ? `: ${sub.note}` : '';
+    const manual = `Ajustado por el manager${why}. El cálculo daría ${progress.label}.`;
     const notes = [
+      sub?.source === 'manual' ? manual : '',
       last ? `Última valoración cerrada: ${last.pct} %.` : 'Todavía no se ha cerrado ninguna valoración.',
       progress.pendingSub === 3 ? 'Llega al 80 %; el .3 pide mantenerlo en otra valoración cerrada.' : '',
       progress.readyToPromote ? `Cumple todo ${progress.nextLevelCode}: toca plantear la subida.` : '',
@@ -124,7 +129,7 @@ export class CareerPersonPanel extends LitElement {
       ? html`<button type="button" ?disabled=${this._busy} @click=${this._closeAssessment}>Cerrar valoración</button>`
       : null;
     return html`
-      <p class="head"><strong>${progress.label}</strong> · ${progress.pct} % de ${progress.nextLevelCode}
+      <p class="head"><strong>${sub?.label ?? progress.label}</strong> · ${progress.pct} % de ${progress.nextLevelCode}
         (${progress.earned} de ${progress.total} puntos aceptados)</p>
       ${notesTpl}
       ${closeBtn}`;

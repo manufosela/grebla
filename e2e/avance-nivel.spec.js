@@ -129,6 +129,17 @@ test('el ingeniero marca con evidencia y su responsable la acepta: el avance sal
   });
 });
 
+test('el subnivel ajustado por el manager se ve igual en Nivel y en Seguimiento (RMR-TSK-0693)', async ({ page }) => {
+  await conPersonaEnL1(async () => {
+    await db().doc(PERSON).update({ subLevelOverride: { value: 3, note: 'lidera de facto' } });
+    await abrirCarrera(page);
+    await expect(ficha(page)).toContainText('L1-3');
+    await ficha(page).getByRole('tab', { name: 'Seguimiento' }).click();
+    await expect(ficha(page).locator('career-person-panel')).toContainText('L1-3');
+    await expect(ficha(page).locator('career-person-panel')).toContainText('lidera de facto');
+  });
+});
+
 test('la curva de progresión se dibuja con las valoraciones cerradas (RMR-TSK-0556)', async ({ page }) => {
   await conPersonaEnL1(async () => {
     await db().doc(`${PERSON}/careerAssessments/av-l2`).set({

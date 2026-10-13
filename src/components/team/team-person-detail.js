@@ -53,9 +53,9 @@ import {
   improvementPoints,
   careerSuggestion,
 } from '../../tools/career/data/assessment.js';
-import { getCareerAssessment, saveCareerAssessment, getLevelAssessment, saveLevelAssessment, listLevelAssessments } from '../../lib/careerAssessment.js';
+import { getCareerAssessment, saveCareerAssessment, getLevelAssessment, saveLevelAssessment, listLevelAssessments, getPersonSubLevel } from '../../lib/careerAssessment.js';
 import { normalizeLevelAssessment, markDimension, marksOf, closeAssessment, closureHistory, lastClosure } from '../../tools/career/data/levelAssessment.js';
-import { levelProgressFor, levelCompletion } from '../../tools/career/domain/levelProgress.js';
+import { levelProgressFor, levelCompletion, subLevelCalcText } from '../../tools/career/domain/levelProgress.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { expectationWeight } from '../../tools/career/data/framework.js';
 import '../career-person/career-person-panel.js';
@@ -231,6 +231,9 @@ export class TeamPersonDetail extends LitElement {
     _assessment: { state: true },
     /** Valoración contra el nivel SIGUIENTE (RMR-PCS-0044): lo guardado y el borrador. */
     _nextAssessment: { state: true },
+    /** Subnivel efectivo (cálculo + ajuste del manager), el mismo de toda la app. */
+    _subLevel: { state: true },
+    _subLevelError: { state: true },
     /** Todas las valoraciones por nivel, para la curva (RMR-TSK-0556). */
     _levelAssessments: { state: true },
     _progressDraft: { state: true },
@@ -831,7 +834,26 @@ export class TeamPersonDetail extends LitElement {
   }
 
   /** Carga la valoración del nivel siguiente. Sin nivel siguiente no hay nada que cargar. */
+  /** Nivel y subnivel efectivos, igual que en Personas y Seguimiento (RMR-TSK-0693). */
+  _renderSubLevelLine() {
+    if (this._subLevelError) return html`<p class="error" role="alert">${this._subLevelError}</p>`;
+    const s = this._subLevel;
+    if (!s) return null;
+    const note = s.note ? `: ${s.note}` : '';
+    const why = s.source === 'manual' ? ` · ajustado por el manager${note}` : '';
+    return html`<p class="suggest"><strong>${s.label}</strong> <span class="note">${subLevelCalcText(s)}${why}</span></p>`;
+  }
+
   async _loadLevelProgress() {
+    // El subnivel, de la MISMA función que Personas y Seguimiento (RMR-TSK-0693),
+    // también sin nivel siguiente: el ajuste del manager aplica igual.
+    try {
+      this._subLevel = await getPersonSubLevel(this.person, this.framework);
+      this._subLevelError = '';
+    } catch (err) {
+      this._subLevel = null;
+      this._subLevelError = `No se pudo calcular el subnivel: ${err instanceof Error ? err.message : err}`;
+    }
     const next = this._nextLevel;
     if (!next) {
       this._nextAssessment = null;
@@ -1860,6 +1882,7 @@ export class TeamPersonDetail extends LitElement {
 
     const active = this._careerSubtab;
     const nivelPanel = () => html`
+      ${this._renderSubLevelLine()}
       ${this._renderCareerEditor()}
       ${level ? this._renderAssessment(fw, level) : null}
       ${level
