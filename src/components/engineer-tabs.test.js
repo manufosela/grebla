@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 
 describe('engineer-space: pestañas por tipo de persona', () => {
-  it('un externo ve solo lo suyo: ficha, O2O y datos', () => {
-    expect(visibleTabsFor({ external: true })).toEqual(['ficha', 'o2o', 'datos']);
+  it('un externo ve solo lo suyo: su ficha y sus O2O', () => {
+    expect(visibleTabsFor({ external: true })).toEqual(['ficha', 'o2o']);
   });
 
   it('un interno añade su carrera y su Role Mirror; sus O2O viven dentro de la carrera', () => {
-    const internal = ['ficha', 'carrera', 'rolemirror', 'datos'];
+    const internal = ['ficha', 'carrera', 'rolemirror'];
     expect(visibleTabsFor({ external: false })).toEqual(internal);
     expect(visibleTabsFor({})).toEqual(internal);
     expect(visibleTabsFor(null)).toEqual(internal);
@@ -52,6 +52,10 @@ describe('engineer-space: pestañas por tipo de persona', () => {
   it('effectiveTabFor respeta una pestaña que sí es visible', () => {
     expect(effectiveTabFor('o2o', { external: true })).toBe('o2o');
     expect(effectiveTabFor('carrera', { external: false })).toBe('carrera');
-    expect(effectiveTabFor('datos', { external: true })).toBe('datos');
+  });
+
+  it('«Mis datos» ya no es pestaña: todos tus datos están en «Mi ficha» (RMR-TSK-0697)', () => {
+    expect(effectiveTabFor('datos', { external: true })).toBe('ficha');
+    expect(effectiveTabFor('datos', {})).toBe('ficha');
   });
 });

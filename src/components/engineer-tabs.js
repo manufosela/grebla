@@ -12,10 +12,10 @@
    estar en otra aplicación. */
 
 /** Pestañas de un externo: no tiene carrera ni Role Mirror, solo sus datos y sus O2O. */
-export const EXTERNAL_TABS = ['ficha', 'o2o', 'datos'];
+export const EXTERNAL_TABS = ['ficha', 'o2o'];
 /** Pestañas de un interno. «Carrera» integra nivel/expectativas y el mapa como
  *  sub-pestañas (RMR-TSK-0262): no hay pestaña «mapa» suelta. */
-export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror', 'datos'];
+export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror'];
 
 /**
  * Pestañas visibles según el tipo de persona.
