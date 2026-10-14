@@ -120,7 +120,12 @@ test('el ingeniero marca con evidencia y su responsable la acepta: el avance sal
     await head.getByRole('button', { name: 'Abrir Carrera de Ingeniero E2E' }).click();
     await ficha(head).getByRole('tab', { name: 'Expectativas' }).click();    const fila = ficha(head).locator('career-expectations li', { hasText: 'Técnica' }).first();
     await fila.getByRole('button', { name: 'Revisar' }).click();
-    await ficha(head).locator('career-review-dialog').getByRole('button', { name: 'Aceptar' }).click();
+    const revision = ficha(head).locator('career-review-dialog');
+    // Aceptar también pide motivo (RMR-TSK-0703).
+    await revision.getByRole('button', { name: 'Aceptar' }).click();
+    await expect(revision).toContainText('Para aceptar hace falta un motivo');
+    await revision.getByRole('textbox').fill('El diseño del servicio de cobros lo demuestra');
+    await revision.getByRole('button', { name: 'Aceptar' }).click();
     await expect(fila).toContainText('Aceptada');
     // 3 de 4 puntos aceptados: L1-2.
     await ficha(head).getByRole('tab', { name: 'Seguimiento' }).click();

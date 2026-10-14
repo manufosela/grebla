@@ -123,10 +123,11 @@ describe('pendingForReviewer: lo que me toca revisar', () => {
 });
 
 describe('reviewPatch y slotFor: lo que escribe cada revisor', () => {
-  it('rechazar exige motivo; aceptar no', () => {
+  it('aceptar y rechazar exigen motivo: el ingeniero siempre ve el porqué (RMR-TSK-0703)', () => {
     expect(() => reviewPatch('first', { decision: 'reject', reason: ' ', by: BY, at: 't' })).toThrow(/motivo/i);
-    expect(reviewPatch('first', { decision: 'accept', by: BY, at: 't' })).toEqual({
-      'reviews.first': { decision: 'accept', reason: '', by: BY, at: 't' }, updatedAt: 't',
+    expect(() => reviewPatch('first', { decision: 'accept', by: BY, at: 't' })).toThrow(/motivo/i);
+    expect(reviewPatch('first', { decision: 'accept', reason: ' Visto en el ADR ', by: BY, at: 't' })).toEqual({
+      'reviews.first': { decision: 'accept', reason: 'Visto en el ADR', by: BY, at: 't' }, updatedAt: 't',
     });
   });
 

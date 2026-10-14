@@ -430,7 +430,7 @@ service cloud.firestore {
         function validReview(r) {
           return r is map && r.keys().hasOnly(['decision', 'reason', 'by', 'at'])
             && r.decision in ['accept', 'reject'] && r.by.uid == request.auth.uid
-            && (r.decision == 'accept' || (r.get('reason', '') is string && r.get('reason', '').size() >= 1));
+            && r.get('reason', '') is string && r.get('reason', '').size() >= 1;
         }
         function writesOnlyReview(slot) {
           return resource.data.status == 'claimed'

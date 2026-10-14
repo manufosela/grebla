@@ -59,16 +59,18 @@ test.describe('reglas: marcas de expectativas', () => {
     await assertFails(updateDoc(doc(as('u-em'), CLAIM), { 'reviews.second': review('u-em', 'accept') }));
     await assertFails(updateDoc(doc(as('u-em'), CLAIM), { 'reviews.first': review('u-head', 'accept') }));
     await assertFails(updateDoc(doc(as('u-em'), CLAIM), { 'reviews.first': review('u-em', 'reject') }));
-    await assertSucceeds(updateDoc(doc(as('u-em'), CLAIM), { 'reviews.first': review('u-em', 'accept') }));
+    // Aceptar también exige motivo (RMR-TSK-0703).
+    await assertFails(updateDoc(doc(as('u-em'), CLAIM), { 'reviews.first': review('u-em', 'accept') }));
+    await assertSucceeds(updateDoc(doc(as('u-em'), CLAIM), { 'reviews.first': review('u-em', 'accept', 'Visto en el ADR') }));
     await assertSucceeds(updateDoc(doc(as('u-head'), CLAIM), { 'reviews.second': review('u-head', 'reject', 'Falta el RFC') }));
     await assertSucceeds(getDoc(doc(as('u-head'), CLAIM)));
   });
 
   test('el árbitro solo decide cuando hay empate', async () => {
-    await prepara(env, claim({ first: review('u-em', 'accept'), second: review('u-head', 'accept') }));
+    await prepara(env, claim({ first: review('u-em', 'accept', 'Sí'), second: review('u-head', 'accept', 'Sí') }));
     await assertFails(updateDoc(doc(as('u-cto'), CLAIM), { 'reviews.arbiter': review('u-cto', 'reject', 'No') }));
-    await prepara(env, claim({ first: review('u-em', 'accept'), second: review('u-head', 'reject', 'No') }));
-    await assertSucceeds(updateDoc(doc(as('u-cto'), CLAIM), { 'reviews.arbiter': review('u-cto', 'accept') }));
+    await prepara(env, claim({ first: review('u-em', 'accept', 'Sí'), second: review('u-head', 'reject', 'No') }));
+    await assertSucceeds(updateDoc(doc(as('u-cto'), CLAIM), { 'reviews.arbiter': review('u-cto', 'accept', 'Lo he visto') }));
   });
 
   test('al reenviar, el ingeniero archiva la ronda y las revisiones vuelven a cero', async () => {
