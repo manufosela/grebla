@@ -84,11 +84,14 @@ export function resubmitted(current, { evidence, at, status = 'claimed' }) {
   };
 }
 
-/** Revisión de un hueco. Rechazar sin motivo no ayuda a nadie: se exige. */
+/**
+ * Revisión de un hueco. Aceptar o rechazar, siempre con motivo: el ingeniero ve
+ * por qué cuenta o por qué no (RMR-TSK-0703).
+ */
 export function reviewPatch(slot, { decision, reason = '', by, at }) {
   if (decision !== 'accept' && decision !== 'reject') throw new Error(`Decisión desconocida: «${decision}».`);
   const why = typeof reason === 'string' ? reason.trim() : '';
-  if (decision === 'reject' && !why) throw new Error('Para rechazar hace falta un motivo.');
+  if (!why) throw new Error(decision === 'reject' ? 'Para rechazar hace falta un motivo.' : 'Para aceptar hace falta un motivo.');
   return { [`reviews.${slot}`]: { decision, reason: why, by, at }, updatedAt: at };
 }
 

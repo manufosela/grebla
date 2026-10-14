@@ -1,5 +1,5 @@
 /**
- * <career-review-dialog>: rechazar sin motivo no sale; aceptar sí, y el evento
+ * <career-review-dialog>: sin motivo no sale ni aceptar ni rechazar, y el evento
  * lleva el hueco del revisor. Métodos reales del prototipo sobre un `this` mínimo.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -16,6 +16,13 @@ describe('<career-review-dialog>', () => {
   it('rechazar sin motivo no sale y dice por qué', () => {
     const c = ctx();
     _decide.call(c, 'reject');
+    expect(c.dispatchEvent).not.toHaveBeenCalled();
+    expect(c._invalid).toMatch(/motivo/i);
+  });
+
+  it('aceptar sin motivo tampoco sale (RMR-TSK-0703)', () => {
+    const c = ctx({ _reason: '  ' });
+    _decide.call(c, 'accept');
     expect(c.dispatchEvent).not.toHaveBeenCalled();
     expect(c._invalid).toMatch(/motivo/i);
   });

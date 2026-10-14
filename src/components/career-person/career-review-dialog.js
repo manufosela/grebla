@@ -1,7 +1,7 @@
 /**
  * <career-review-dialog>: quien revisa ve la evidencia y acepta o rechaza en su
- * hueco (RMR-TSK-0681). Rechazar exige motivo: la persona tiene que saber qué
- * le falta. Emite `review-submit`; guardar es cosa de la página (`busy`, `error`).
+ * hueco (RMR-TSK-0681). Las dos cosas exigen motivo (RMR-TSK-0703): la persona
+ * tiene que saber por qué cuenta o qué le falta. Emite `review-submit`; guardar es cosa de la página (`busy`, `error`).
  */
 import { LitElement, html, css } from 'lit';
 import '../app-modal.js';
@@ -60,7 +60,7 @@ export class CareerReviewDialog extends LitElement {
         <p class="who">Marcada por ${claim?.claimedBy?.name ?? 'la persona'}.</p>
         <p class="evidence">${claim?.evidence?.text ?? ''}</p>
         ${links.length ? html`<p class="evidence">${links.map(linkTpl)}</p>` : null}
-        <label>Motivo (obligatorio si rechazas)
+        <label>Motivo (obligatorio: la persona lo verá)
           <textarea rows="3" .value=${this._reason} @input=${(e) => { this._reason = e.target.value; }}></textarea>
         </label>
         <div class="row">
@@ -75,8 +75,8 @@ export class CareerReviewDialog extends LitElement {
 
   _decide(decision) {
     const reason = this._reason.trim();
-    if (decision === 'reject' && !reason) {
-      this._invalid = 'Para rechazar hace falta un motivo.';
+    if (!reason) {
+      this._invalid = decision === 'reject' ? 'Para rechazar hace falta un motivo.' : 'Para aceptar hace falta un motivo.';
       return;
     }
     this._invalid = '';
