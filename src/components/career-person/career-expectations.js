@@ -1,12 +1,13 @@
 /**
- * <career-expectations>: lo que se espera para el nivel siguiente y el estado de cada marca
- * (RMR-TSK-0679). Solo pinta; las acciones salen como eventos `claim-request` (el
- * ingeniero marca) y `review-request` (le toca revisar en `slot`), y las resuelve la página.
+ * <career-expectations>: lo que se espera para un nivel (por defecto el siguiente) y el
+ * estado de cada marca (RMR-TSK-0679). Solo pinta; las acciones salen como eventos
+ * `claim-request` (el ingeniero marca), `review-request` (le toca revisar en `slot`) y
+ * `mark-request` (un revisor marca directamente, RMR-TSK-0705); las resuelve la página.
  */
 import { LitElement, html, css } from 'lit';
 import { getLevel } from '../../tools/career/data/framework.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
-import { expectationRows, STATUS_LABEL } from '../../tools/career/domain/careerExpectations.js';
+import { expectationRows, STATUS_LABEL, rowActions } from '../../tools/career/domain/careerExpectations.js';
 
 const DECISION = { accept: 'aceptó', reject: 'rechazó' };
 
@@ -19,7 +20,6 @@ const reviewLine = (r) => {
   const why = r.reason ? `: ${r.reason}` : '';
   return `${r.by?.name ?? 'Alguien'} ${DECISION[r.decision] ?? ''}${why}`;
 };
-const SLOT_ACTION = { first: 'Revisar', second: 'Revisar', arbiter: 'Desempatar' };
 
 export class CareerExpectations extends LitElement {
   static properties = {
@@ -27,6 +27,8 @@ export class CareerExpectations extends LitElement {
     framework: { attribute: false },
     claims: { attribute: false },
     viewerUid: { attribute: false },
+    /** Nivel que se pinta; sin él, el siguiente al de la persona. */
+    levelId: { attribute: false },
   };
 
   static styles = css`
@@ -56,7 +58,8 @@ export class CareerExpectations extends LitElement {
     button:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
   `;
 
-  get _next() {
+  get _level() {
+    if (this.levelId) return getLevel(this.framework, this.levelId);
     return nextLevelFor(this.framework?.levels ?? [], this.person?.levelId);
   }
 
@@ -65,7 +68,7 @@ export class CareerExpectations extends LitElement {
   }
 
   render() {
-    const next = this._next;
+    const next = this._level;
     const current = getLevel(this.framework, this.person?.levelId);
     if (!current) return html`<p class="empty">Todavía no hay un nivel asignado.</p>`;
     if (!next) return html`<p class="empty">${current.code} es el último nivel de su itinerario.</p>`;
@@ -76,7 +79,8 @@ export class CareerExpectations extends LitElement {
     if (rows.length === 0) return html`<p class="empty">${next.code} todavía no tiene expectativas escritas.</p>`;
     return html`
       <h3>Hacia ${next.code} · ${next.title}</h3>
-      <p class="intro">Cada expectativa se marca con evidencia y cuenta cuando la acepta quien revisa (si son dos, las dos).</p>
+      <p class="intro">Cada expectativa se marca con evidencia, o la marca directamente quien revisa con su motivo.
+        Cuenta cuando la aceptan quienes revisan (si son dos, los dos).</p>
       <ul>${rows.map((row) => this._row(row))}</ul>`;
   }
 
@@ -99,6 +103,8 @@ export class CareerExpectations extends LitElement {
     const reviews = ['first', 'second', 'arbiter'].map((s) => claim.reviews?.[s]).filter(Boolean);
     const items = reviews.map((r) => html`<li>${reviewLine(r)}</li>`);
     const list = reviews.length ? html`<ul class="reviews">${items}</ul>` : null;
+    // Marca del revisor (RMR-TSK-0705): su motivo ya sale en su revisión.
+    if (claim.claimedBy?.uid && claim.claimedBy.uid !== this.person?.uid) return list;
     return html`
       <p class="evidence"><strong>Evidencia:</strong> ${claim.evidence?.text}
         ${links.map(linkTpl)}</p>
@@ -106,19 +112,20 @@ export class CareerExpectations extends LitElement {
   }
 
   _actions(row) {
-    const canClaim = this._isSelf && (row.status === 'open' || row.status === 'rejected');
-    const label = row.status === 'rejected' ? 'Volver a marcar' : 'Marcar como cumplida';
-    const review = row.slot && !row.claim?.reviews?.[row.slot];
-    if (!canClaim && !review) return null;
+    const { claim, review, markSlot } = rowActions(row, {
+      isSelf: this._isSelf, viewerUid: this.viewerUid ?? null, reviewers: this.person?.careerReviewers ?? {},
+    });
+    if (!claim && !review && !markSlot) return null;
     return html`<div class="actions">
-      ${canClaim ? html`<button type="button" @click=${() => this._emit('claim-request', row)}>${label}</button>` : null}
-      ${review ? html`<button type="button" @click=${() => this._emit('review-request', row)}>${SLOT_ACTION[row.slot]}</button>` : null}
+      ${claim ? html`<button type="button" @click=${() => this._emit('claim-request', row)}>${claim}</button>` : null}
+      ${review ? html`<button type="button" @click=${() => this._emit('review-request', row)}>${review}</button>` : null}
+      ${markSlot ? html`<button type="button" @click=${() => this._emit('mark-request', row, markSlot)}>Marcar</button>` : null}
     </div>`;
   }
 
-  _emit(type, row) {
+  _emit(type, row, slot = row.slot) {
     this.dispatchEvent(new CustomEvent(type, {
-      detail: { dimensionId: row.dimension.id, levelId: this._next?.id, claim: row.claim, slot: row.slot, text: row.text },
+      detail: { dimensionId: row.dimension.id, levelId: this._level?.id, claim: row.claim, slot, text: row.text },
       bubbles: true, composed: true,
     }));
   }

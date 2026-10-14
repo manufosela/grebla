@@ -53,20 +53,25 @@ export class CareerReviewDialog extends LitElement {
   render() {
     const claim = this.request?.claim;
     const links = (claim?.evidence?.links ?? []).filter((l) => isWebUrl(l.url));
-    const heading = this.request?.slot === 'arbiter' ? 'Desempatar' : 'Revisar la marca';
+    // Marcar (RMR-TSK-0705): el revisor decide sin marca previa; no hay evidencia que mostrar.
+    const marking = this.request?.mode === 'mark';
+    const headings = { mark: 'Marcar la expectativa', arbiter: 'Desempatar' };
+    const heading = headings[marking ? 'mark' : this.request?.slot] ?? 'Revisar la marca';
+    const marked = html`
+      <p class="who">Marcada por ${claim?.claimedBy?.name ?? 'la persona'}.</p>
+      <p class="evidence">${claim?.evidence?.text ?? ''}</p>
+      ${links.length ? html`<p class="evidence">${links.map(linkTpl)}</p>` : null}`;
     return html`
       <app-modal .open=${this.open} heading=${heading} @close=${this._close}>
         <p class="expect">${this.request?.text ?? ''}</p>
-        <p class="who">Marcada por ${claim?.claimedBy?.name ?? 'la persona'}.</p>
-        <p class="evidence">${claim?.evidence?.text ?? ''}</p>
-        ${links.length ? html`<p class="evidence">${links.map(linkTpl)}</p>` : null}
+        ${marking ? null : marked}
         <label>Motivo (obligatorio: la persona lo verá)
-          <textarea rows="3" .value=${this._reason} @input=${(e) => { this._reason = e.target.value; }}></textarea>
+          <textarea rows="3" .value=${this._reason} @input=${(e) => { this._reason = e.target.value; this._invalid = ''; }}></textarea>
         </label>
         <div class="row">
           <button type="button" @click=${this._close}>Cancelar</button>
-          <button type="button" class="reject" ?disabled=${this.busy} @click=${() => this._decide('reject')}>Rechazar</button>
-          <button type="button" class="accept" ?disabled=${this.busy} @click=${() => this._decide('accept')}>Aceptar</button>
+          <button type="button" class="reject" ?disabled=${this.busy} @click=${() => this._decide('reject')}>${marking ? 'No llega' : 'Rechazar'}</button>
+          <button type="button" class="accept" ?disabled=${this.busy} @click=${() => this._decide('accept')}>${marking ? 'Cumple' : 'Aceptar'}</button>
         </div>
         ${this._invalid || this.error ? html`<p class="error" role="alert">${this._invalid || this.error}</p>` : null}
         ${this.busy ? html`<busy-overlay message="Guardando la revisión…"></busy-overlay>` : null}

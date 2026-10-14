@@ -1,7 +1,7 @@
 /** <career-person-panel>: guarda, recarga y lo que falla se queda en el diálogo (prototipo sobre un `this` mínimo). */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const lib = vi.hoisted(() => ({ listClaims: vi.fn(), submitClaim: vi.fn(), reviewClaim: vi.fn() }));
+const lib = vi.hoisted(() => ({ listClaims: vi.fn(), submitClaim: vi.fn(), reviewClaim: vi.fn(), markAsReviewer: vi.fn() }));
 vi.mock('../../lib/careerClaims.js', () => lib);
 const assess = vi.hoisted(() => ({ getLevelAssessment: vi.fn(), saveLevelAssessment: vi.fn() }));
 vi.mock('../../lib/careerAssessment.js', () => assess);
@@ -46,6 +46,18 @@ describe('<career-person-panel>', () => {
     await CareerPersonPanel.prototype._closeAssessment.call(c);
     const [, levelId, saved] = assess.saveLevelAssessment.mock.calls[0];
     expect([levelId, saved.closures.length, saved.closures[0].pct]).toEqual(['l2', 1, 75]);
+  });
+
+  it('marcar como revisor guarda la marca directa, no una revisión (RMR-TSK-0705)', async () => {
+    const c = ctx({ _dialog: 'review' });
+    await _onReviewSubmit.call(c, { detail: {
+      mode: 'mark', levelId: 'l2', dimensionId: 'tech', claim: null, slot: 'first', decision: 'accept', reason: 'Lideró el rediseño',
+    } });
+    expect(lib.markAsReviewer).toHaveBeenCalledWith('dev', {
+      levelId: 'l2', dimensionId: 'tech', slot: 'first', decision: 'accept', reason: 'Lideró el rediseño', by: { uid: 'u-dev', name: 'Dev' },
+    });
+    expect(lib.reviewClaim).not.toHaveBeenCalled();
+    expect(c._dialog).toBeNull();
   });
 
   it('si la revisión falla, el diálogo sigue abierto con el error', async () => {
