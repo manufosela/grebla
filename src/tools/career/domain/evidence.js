@@ -84,6 +84,33 @@ export function entriesFromLegacyAssessment(assessment, { levelId, by, at }) {
   });
 }
 
+const DECISION_KIND = { accept: 'meets', reject: 'misses' };
+const SLOT_ORDER = ['arbiter', 'second', 'first'];
+
+/** Una ronda de marca como entradas: revisiones (la última primero) y la evidencia. */
+function roundEntries({ evidence, reviews }, author, at) {
+  const decided = SLOT_ORDER.map((s) => reviews?.[s]).filter(Boolean)
+    .map((r) => ({ kind: DECISION_KIND[r.decision], text: r.reason ?? '', links: [], by: r.by ?? null, at: r.at ?? null }));
+  // En la marca de un revisor su motivo hace de evidencia: no se repite.
+  const repeated = decided.some((d) => d.by?.uid && d.by.uid === author?.uid && d.text === evidence?.text);
+  const proof = evidence?.text && !repeated ? [{ kind: 'proof', text: evidence.text, links: evidence.links ?? [], by: author, at }] : [];
+  return [...decided, ...proof];
+}
+
+/**
+ * Una marca de nivel superior leída como historial (RMR-TSK-0714): la ronda
+ * viva primero y después las archivadas, de la más reciente a la más antigua.
+ * Las rondas archivadas no guardan quién aportó la evidencia: va sin autor.
+ * @param {object|null} claim
+ * @returns {Array<{ kind: EntryKind, text: string, links: object[], by: Author|null, at: string|null }>}
+ */
+export function claimTimeline(claim) {
+  if (!claim) return [];
+  const live = claim.status === 'claimed' ? roundEntries(claim, claim.claimedBy ?? null, claim.claimedAt ?? null) : [];
+  const archived = (claim.history ?? []).toReversed().flatMap((round) => roundEntries(round, null, null));
+  return [...live, ...archived];
+}
+
 const isOf = (levelId, dimensionId) => (e) => e?.levelId === levelId && e?.dimensionId === dimensionId;
 const newestFirst = (a, b) => Date.parse(b.at) - Date.parse(a.at);
 
