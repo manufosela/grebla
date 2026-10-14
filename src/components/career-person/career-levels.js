@@ -1,0 +1,116 @@
+/**
+ * <career-levels>: las expectativas de TODO el camino de la persona, una pestaña
+ * por nivel (RMR-TSK-0706). Los inferiores se dan por superados; el actual lleva
+ * su valoración (cumple / no llega, con la nota de quien valora); los superiores
+ * se ganan marcando, y eso lo pinta <career-expectations>, cuyos eventos suben tal
+ * cual a la página.
+ */
+import { LitElement, html, css } from 'lit';
+import './career-expectations.js';
+import { levelPath, defaultLevelTab } from '../../tools/career/domain/levelPath.js';
+import { expectationsForLevel } from '../../tools/career/data/framework.js';
+import { assessmentRows } from '../../tools/career/data/assessment.js';
+
+const STATE_NOTE = { below: 'superado', current: 'nivel actual' };
+
+export class CareerLevels extends LitElement {
+  static properties = {
+    person: { attribute: false },
+    framework: { attribute: false },
+    claims: { attribute: false },
+    /** Valoración del nivel actual: { byDimension: { [dimId]: { meets, note } } }. */
+    assessment: { attribute: false },
+    viewerUid: { attribute: false },
+    _tab: { state: true },
+  };
+
+  static styles = css`
+    :host { display: block; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.9rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
+    .tab { font: inherit; font-size: 0.86rem; font-weight: 600; padding: 0.35rem 0.75rem; cursor: pointer; border: 0;
+      border-bottom: 3px solid transparent; background: none; color: var(--rm-muted, #4b5563); }
+    .tab.active { color: var(--rm-accent-strong, #1d6f65); border-bottom-color: var(--rm-accent, #2a9d8f); }
+    .tab .here { font-weight: 400; font-size: 0.78rem; }
+    .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    h3 { margin: 0 0 0.6rem; font-size: 1rem; color: var(--rm-text, #111827); }
+    .empty { color: var(--rm-muted, #4b5563); font-size: 0.88rem; }
+    ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+    li { border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; padding: 0.75rem 0.9rem; background: var(--rm-surface, #fff); }
+    .head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between; }
+    .dim { font-weight: 700; color: var(--rm-text, #111827); }
+    .chip { font-size: 0.78rem; font-weight: 700; border-radius: 999px; padding: 0.1rem 0.6rem; border: 1px solid; }
+    .chip.ok { color: #0b5d52; background: #dff3ef; border-color: #2a9d8f; }
+    .chip.bad { color: #8a1c1c; background: #fde8e8; border-color: #d96a6a; }
+    .chip.done { color: var(--rm-muted, #4b5563); border-color: var(--rm-border, #cbd5e1); }
+    details { margin: 0.45rem 0 0; font-size: 0.88rem; color: var(--rm-text, #111827); }
+    summary { cursor: pointer; color: var(--rm-muted, #4b5563); }
+    .note { margin: 0.45rem 0 0; font-size: 0.86rem; color: var(--rm-text, #111827); }
+  `;
+
+  willUpdate(changed) {
+    if (!changed.has('person') && !changed.has('framework')) return;
+    const steps = this._steps;
+    // Al cambiar de persona, la pestaña vuelve a su nivel siguiente.
+    if (changed.has('person') || !steps.some((s) => s.level.id === this._tab)) this._tab = defaultLevelTab(steps);
+  }
+
+  get _steps() {
+    return levelPath(this.framework, this.person?.levelId);
+  }
+
+  render() {
+    const steps = this._steps;
+    if (steps.length === 0) return html`<p class="empty">Todavía no hay un nivel asignado.</p>`;
+    const step = steps.find((s) => s.level.id === this._tab) ?? steps[0];
+    return html`
+      <div class="tabs" role="tablist" aria-label="Niveles del camino" @keydown=${(e) => this._keydown(e, steps)}>
+        ${steps.map((s) => this._tabButton(s, s === step))}
+      </div>
+      <div id="lvlpanel-${step.level.id}" role="tabpanel" aria-labelledby="lvl-${step.level.id}" tabindex="0">
+        ${this._panel(step)}
+      </div>`;
+  }
+
+  _tabButton(s, selected) {
+    const here = s.state === 'current' ? html` <span class="here">· actual</span>` : null;
+    return html`<button id="lvl-${s.level.id}" class="tab ${selected ? 'active' : ''}" type="button" role="tab"
+      aria-selected=${selected ? 'true' : 'false'} aria-controls="lvlpanel-${s.level.id}" tabindex=${selected ? '0' : '-1'}
+      @click=${() => { this._tab = s.level.id; }}>${s.level.code}${here}</button>`;
+  }
+
+  _keydown(e, steps) {
+    const ids = steps.map((s) => s.level.id);
+    const i = ids.indexOf(this._tab);
+    const moves = { ArrowLeft: (i - 1 + ids.length) % ids.length, ArrowRight: (i + 1) % ids.length, Home: 0, End: ids.length - 1 };
+    if (!(e.key in moves)) return;
+    e.preventDefault();
+    this._tab = ids[moves[e.key]];
+    this.updateComplete.then(() => this.renderRoot.querySelector(`#lvl-${this._tab}`)?.focus());
+  }
+
+  _panel({ level, state }) {
+    if (state === 'above') {
+      return html`<career-expectations .person=${this.person} .framework=${this.framework} .claims=${this.claims ?? []}
+        .viewerUid=${this.viewerUid} .levelId=${level.id}></career-expectations>`;
+    }
+    const title = html`<h3>${level.code} · ${level.title} <span class="here">(${STATE_NOTE[state]})</span></h3>`;
+    if (state === 'below') {
+      const rows = expectationsForLevel(this.framework, level.id).filter((r) => r.text);
+      return html`${title}<ul>${rows.map((r) => this._row(r.dimension.name, r.text, html`<span class="chip done">Superado</span>`))}</ul>`;
+    }
+    const rows = assessmentRows(this.framework, level.id, this.assessment).filter((r) => r.hasExpectation);
+    return html`${title}<ul>${rows.map((r) => this._row(r.dimension.name, r.text,
+      html`<span class="chip ${r.meets ? 'ok' : 'bad'}">${r.meets ? 'Cumple' : 'No llega'}</span>`,
+      r.note ? html`<p class="note"><strong>Por qué:</strong> ${r.note}</p>` : null))}</ul>`;
+  }
+
+  _row(name, text, chip, extra = null) {
+    return html`<li>
+      <div class="head"><span class="dim">${name}</span>${chip}</div>
+      <details><summary>Qué se espera</summary><p>${text}</p></details>
+      ${extra}
+    </li>`;
+  }
+}
+
+customElements.define('career-levels', CareerLevels);

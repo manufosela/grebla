@@ -211,6 +211,21 @@ test('el responsable marca directamente una expectativa con su motivo (RMR-TSK-0
   });
 });
 
+test('Expectativas tiene una pestaña por nivel: abre en el siguiente y el actual lleva su valoración (RMR-TSK-0706)', async ({ page }) => {
+  await conPersonaEnL1(async () => {
+    await db().doc(`${PERSON}/career/assessment`).set({
+      byDimension: { 'av-tech': { meets: false, note: 'Aún le cuesta que otros lean su código' } },
+    });
+    await abrirCarrera(page);
+    await ficha(page).getByRole('tab', { name: 'Expectativas' }).click();
+    const niveles = ficha(page).locator('career-levels');
+    await expect(niveles.getByRole('tab', { name: 'L2' })).toHaveAttribute('aria-selected', 'true');
+    await expect(niveles.locator('career-expectations')).toContainText('Diseña un servicio entero');
+    await niveles.getByRole('tab', { name: /L1/ }).click();
+    await expect(niveles).toContainText('No llega');
+    await expect(niveles).toContainText('Aún le cuesta que otros lean su código');  });
+});
+
 test('el hash viejo de «Carrera» lleva al seguimiento, no a una pestaña que ya no existe', async ({ page }) => {
   await signInAs(page, 'superadmin');
   await page.goto('/tools/team#career');
