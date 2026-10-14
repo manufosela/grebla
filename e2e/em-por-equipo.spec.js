@@ -28,14 +28,17 @@ test('asignar el EM de un equipo lo hace jefe efectivo, sin tocar Notion (RMR-TS
     await db().doc('people/e2e-teq-other').set(tech('Manager', 'Backend', 'e2e-teq-cto', 'e2e-teq-u-other'));
     await db().doc('people/e2e-teq-dev').set(tech('Individual Contributor', 'E2E-IA', 'e2e-teq-other', null));
     const dev = () => db().doc('people/e2e-teq-dev').get().then((s) => s.data());
-    await expect.poll(async () => (await dev())?.careerReviewers?.firstUid, { timeout: 20_000 }).toBe('e2e-teq-u-other');
+    // Cada disparo del trigger recalcula los revisores de todos, pero el dueño solo
+    // de los afectados: se espera a los tres a la vez, no a uno y se leen los demás.
+    const derived = async () => {
+      const d = await dev();
+      return [d?.ownerLeaderUid ?? null, d?.directoryManagerUids?.[0] ?? null, d?.careerReviewers?.firstUid ?? null];
+    };
+    await expect.poll(derived, { timeout: 30_000 }).toEqual(['e2e-teq-u-other', 'e2e-teq-u-other', 'e2e-teq-u-other']);
 
     await config.set({ teamEms: { 'E2E-IA': 'e2e-teq-em' } }, { merge: true });
-    await expect.poll(async () => (await dev())?.careerReviewers?.firstUid, { timeout: 20_000 }).toBe('e2e-teq-u-em');
-    const after = await dev();
-    expect(after.ownerLeaderUid).toBe('e2e-teq-u-em');
-    expect(after.directoryManagerUids[0]).toBe('e2e-teq-u-em');
-    expect(after.reportsToPersonId).toBe('e2e-teq-other');
+    await expect.poll(derived, { timeout: 30_000 }).toEqual(['e2e-teq-u-em', 'e2e-teq-u-em', 'e2e-teq-u-em']);
+    expect((await dev()).reportsToPersonId).toBe('e2e-teq-other');
   } finally {
     await config.set({ teamEms: previo ?? FieldValue.delete() }, { merge: true });
     for (const id of IDS) await db().doc(`people/${id}`).delete();
