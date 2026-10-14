@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { newEntry, expectationState, timelineFor, ENTRY_KINDS } from './evidence.js';
+import { newEntry, expectationState, timelineFor, ENTRY_KINDS, entryKindsFor } from './evidence.js';
+
+describe('entryKindsFor: qué puede añadir quien mira (RMR-TSK-0712)', () => {
+  it('quien lleva a la persona añade cualquier tipo; la persona, pruebas; el resto, nada', () => {
+    expect(entryKindsFor({ isSelf: false, leads: true })).toEqual(['meets', 'misses', 'proof']);
+    expect(entryKindsFor({ isSelf: true, leads: false })).toEqual(['proof']);
+    expect(entryKindsFor({ isSelf: true, leads: true })).toEqual(['proof']);
+    expect(entryKindsFor({ isSelf: false, leads: false })).toEqual([]);
+  });
+});
 
 const EM = { uid: 'em', name: 'EM' };
 const DEV = { uid: 'dev', name: 'Dev' };

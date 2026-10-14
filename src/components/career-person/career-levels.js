@@ -1,7 +1,7 @@
 /**
  * <career-levels>: las expectativas de TODO el camino de la persona, una pestaña
  * por nivel (RMR-TSK-0706). Los inferiores se dan por superados; el actual lleva
- * su valoración (cumple / no llega, con la nota de quien valora); los superiores
+ * el estado y el historial de cada expectativa (RMR-TSK-0712); los superiores
  * se ganan marcando, y eso lo pinta <career-expectations>, cuyos eventos suben tal
  * cual a la página.
  */
@@ -9,19 +9,25 @@ import { LitElement, html, css } from 'lit';
 import './career-expectations.js';
 import { levelPath, defaultLevelTab } from '../../tools/career/domain/levelPath.js';
 import { expectationsForLevel, aspirationalLevels } from '../../tools/career/data/framework.js';
-import { assessmentRows, careerSuggestion } from '../../tools/career/data/assessment.js';
+import { careerSuggestion } from '../../tools/career/data/assessment.js';
+import { expectationState, timelineFor, entryKindsFor } from '../../tools/career/domain/evidence.js';
 
 const STATE_NOTE = { below: 'superado', current: 'nivel actual' };
+const STATE_LABEL = { meets: 'Llega', misses: 'No llega' };
+const ENTRY_LABEL = { meets: 'Llega', misses: 'No llega', proof: 'Prueba' };
+const isWebUrl = (url) => typeof url === 'string' && /^https?:\/\/\S+$/i.test(url);
+const DAY = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const formatDay = (iso) => (Number.isNaN(Date.parse(iso)) ? '' : DAY.format(new Date(iso)));
 
 export class CareerLevels extends LitElement {
   static properties = {
     person: { attribute: false },
     framework: { attribute: false },
     claims: { attribute: false },
-    /** Valoración del nivel actual: { byDimension: { [dimId]: { meets, note } } }. */
-    assessment: { attribute: false },
+    /** Historial de expectativas de la persona (RMR-TSK-0712). */
+    entries: { attribute: false },
     viewerUid: { attribute: false },
-    /** Quien mira valora el nivel actual (su manager desde la ficha), RMR-TSK-0707. */
+    /** Quien mira lleva a la persona (su manager desde la ficha): pone el estado. */
     canAssess: { type: Boolean },
     _tab: { state: true },
   };
@@ -48,6 +54,14 @@ export class CareerLevels extends LitElement {
     summary { cursor: pointer; color: var(--rm-muted, #4b5563); }
     .note { margin: 0.45rem 0 0; font-size: 0.86rem; color: var(--rm-text, #111827); }
     h3 + .note { margin: 0 0 0.8rem; }
+    .timeline { list-style: none; margin: 0.55rem 0 0; padding: 0 0 0 0.75rem; display: grid; gap: 0.45rem;
+      border-left: 2px solid var(--rm-border, #cbd5e1); }
+    .timeline li { border: 0; border-radius: 0; padding: 0; background: none; }
+    .timeline .meta { font-size: 0.78rem; font-weight: 600; color: var(--rm-muted, #4b5563); }
+    .timeline li.meets .meta { color: #0b5d52; }
+    .timeline li.misses .meta { color: #8a1c1c; }
+    .timeline p { margin: 0.1rem 0 0; font-size: 0.86rem; color: var(--rm-text, #111827); }
+    .timeline a { color: var(--rm-accent-strong, #1d6f65); }
     .actions { margin-top: 0.55rem; }
     .actions button { font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 8px; padding: 0.35rem 0.8rem;
       cursor: pointer; border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
@@ -105,26 +119,41 @@ export class CareerLevels extends LitElement {
       const rows = expectationsForLevel(this.framework, level.id).filter((r) => r.text);
       return html`${title}<ul>${rows.map((r) => this._row(r.dimension.name, r.text, html`<span class="chip done">Superado</span>`))}</ul>`;
     }
-    const rows = assessmentRows(this.framework, level.id, this.assessment).filter((r) => r.hasExpectation);
-    const assess = this.canAssess && !(this.viewerUid && this.viewerUid === this.person?.uid);
-    return html`${title}${assess ? this._suggestion(rows, level.id) : null}
+    // Nivel actual (RMR-TSK-0712): cada expectativa con su estado y su historial.
+    const isSelf = !!this.viewerUid && this.viewerUid === this.person?.uid;
+    const kinds = entryKindsFor({ isSelf, leads: !!this.canAssess });
+    const entries = this.entries ?? [];
+    const rows = expectationsForLevel(this.framework, level.id).filter((r) => r.text)
+      .map((r) => ({ ...r, state: expectationState(entries, level.id, r.dimension.id, 'meets') }));
+    return html`${title}${kinds.length > 1 ? this._suggestion(rows, level.id) : null}
       <ul>${rows.map((r) => this._row(r.dimension.name, r.text,
-        html`<span class="chip ${r.meets ? 'ok' : 'bad'}">${r.meets ? 'Cumple' : 'No llega'}</span>`,
-        html`${r.note ? html`<p class="note"><strong>Por qué:</strong> ${r.note}</p>` : null}
-          ${assess ? html`<div class="actions"><button type="button" @click=${() => this._assess(level.id, r)}>Valorar</button></div>` : null}`))}</ul>`;
+        html`<span class="chip ${r.state === 'meets' ? 'ok' : 'bad'}">${STATE_LABEL[r.state]}</span>`,
+        html`${this._timeline(timelineFor(entries, level.id, r.dimension.id))}
+          ${kinds.length ? html`<div class="actions"><button type="button"
+            @click=${() => this._requestEntry(level.id, r, kinds)}>Añadir</button></div>` : null}`))}</ul>`;
+  }
+
+  /** La evolución de una expectativa: de lo más reciente a lo más antiguo. */
+  _timeline(items) {
+    if (items.length === 0) return null;
+    return html`<ol class="timeline">${items.map((e) => html`<li class=${e.kind}>
+      <span class="meta">${formatDay(e.at)} · ${e.by?.name ?? 'Alguien'} · ${ENTRY_LABEL[e.kind]}</span>
+      <p>${e.text}${(e.links ?? []).filter((l) => isWebUrl(l.url)).map((l) => html` · <a href=${l.url}
+        target="_blank" rel="noopener noreferrer">${String(l.kind).toUpperCase()}</a>`)}</p>
+    </li>`)}</ol>`;
   }
 
   /** La sugerencia de rol que sale de los «no llega» (antes, en «Nivel»). */
   _suggestion(rows, levelId) {
-    const reds = rows.filter((r) => !r.meets).length;
+    const reds = rows.filter((r) => r.state === 'misses').length;
     const aspirationalCodes = aspirationalLevels(this.framework, levelId).map((l) => l.code);
     const text = careerSuggestion({ reds, total: rows.length, aspirationalCodes });
     return text ? html`<p class="note">${text}</p>` : null;
   }
 
-  _assess(levelId, row) {
-    this.dispatchEvent(new CustomEvent('assess-request', {
-      detail: { levelId, dimensionId: row.dimension.id, text: row.text, meets: row.meets, note: row.note },
+  _requestEntry(levelId, row, kinds) {
+    this.dispatchEvent(new CustomEvent('evidence-request', {
+      detail: { mode: 'entry', kinds, levelId, dimensionId: row.dimension.id, text: row.text },
       bubbles: true, composed: true,
     }));
   }
