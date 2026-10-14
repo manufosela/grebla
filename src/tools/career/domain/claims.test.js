@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   claimId, validateEvidence, claimStatus, marksFromClaims, MAX_EVIDENCE_LINKS,
-  newClaim, resubmitted, reviewPatch, slotFor, pendingForReviewer,
+  newClaim, resubmitted, reviewPatch, slotFor, pendingForReviewer, reviewerClaim, reviewerRemark,
 } from './claims.js';
 
 const TWO = { firstUid: 'em', secondUid: 'head', arbiterUid: 'cto' };
@@ -101,6 +101,12 @@ describe('newClaim y resubmitted: lo que escribe el ingeniero', () => {
     });
   });
 
+  it('si el ingeniero reenvía una marca que hizo su revisor, pasa a ser suya (RMR-TSK-0704)', () => {
+    const current = { ...claimed({ first: said('reject') }), evidence: EV, history: [], claimedBy: { uid: 'em', name: 'EM' } };
+    expect(resubmitted(current, { evidence: EV, at: 't2', by: BY }).claimedBy).toEqual(BY);
+    expect(resubmitted(current, { evidence: EV, at: 't2' })).not.toHaveProperty('claimedBy');
+  });
+
   it('retirar también archiva la ronda y deja la expectativa abierta', () => {
     const current = { ...claimed(), evidence: EV, history: [] };
     expect(resubmitted(current, { evidence: EV, at: 't3', status: 'withdrawn' }).status).toBe('withdrawn');
@@ -137,5 +143,42 @@ describe('reviewPatch y slotFor: lo que escribe cada revisor', () => {
     expect(slotFor(TWO, 'cto', claimed())).toBeNull();
     expect(slotFor(TWO, 'cto', claimed({ first: said('accept'), second: said('reject') }))).toBe('arbiter');
     expect(slotFor(TWO, 'otro', claimed())).toBeNull();
+  });
+});
+
+describe('reviewerClaim y reviewerRemark: el revisor marca directamente (RMR-TSK-0704)', () => {
+  const EM = { uid: 'em', name: 'EM' };
+
+  it('la marca nace con la revisión de quien la hace y su motivo como evidencia', () => {
+    const claim = reviewerClaim({ levelId: 'l3', dimensionId: 'tech', slot: 'first', decision: 'accept', reason: ' Lideró el rediseño ', by: EM, at: 't' });
+    expect(claim).toEqual({
+      levelId: 'l3', dimensionId: 'tech', status: 'claimed',
+      evidence: { text: 'Lideró el rediseño', links: [] },
+      claimedBy: EM, claimedAt: 't', history: [], updatedAt: 't',
+      reviews: { first: { decision: 'accept', reason: 'Lideró el rediseño', by: EM, at: 't' } },
+    });
+  });
+
+  it('cuenta como su revisión: con dos revisores falta la del otro', () => {
+    const claim = reviewerClaim({ levelId: 'l3', dimensionId: 'tech', slot: 'first', decision: 'accept', reason: 'Sí', by: EM, at: 't' });
+    expect(claimStatus(claim, TWO)).toBe('pending');
+    expect(claimStatus(claim, { firstUid: 'em', secondUid: null, arbiterUid: null })).toBe('accepted');
+  });
+
+  it('sin motivo no hay marca, y solo marcan los dos revisores, no el árbitro', () => {
+    expect(() => reviewerClaim({ levelId: 'l3', dimensionId: 'tech', slot: 'first', decision: 'accept', reason: '', by: EM, at: 't' })).toThrow(/motivo/i);
+    expect(() => reviewerClaim({ levelId: 'l3', dimensionId: 'tech', slot: 'arbiter', decision: 'accept', reason: 'x', by: EM, at: 't' })).toThrow(/revisor/i);
+    expect(() => reviewerClaim({ levelId: 'l3', dimensionId: 'tech', slot: 'first', decision: 'accept', reason: 'a'.repeat(1001), by: EM, at: 't' })).toThrow(/1000/);
+  });
+
+  it('sobre una marca retirada, archiva la ronda anterior y empieza otra con su revisión', () => {
+    const withdrawn = { ...claimed(), status: 'withdrawn', evidence: { text: 'antes', links: [] }, reviews: {}, history: [] };
+    const patch = reviewerRemark(withdrawn, { slot: 'second', decision: 'reject', reason: 'Aún no', by: EM, at: 't2' });
+    expect(patch).toEqual({
+      status: 'claimed', evidence: { text: 'Aún no', links: [] },
+      claimedBy: EM, claimedAt: 't2', updatedAt: 't2',
+      reviews: { second: { decision: 'reject', reason: 'Aún no', by: EM, at: 't2' } },
+      history: [{ evidence: { text: 'antes', links: [] }, reviews: {} }],
+    });
   });
 });

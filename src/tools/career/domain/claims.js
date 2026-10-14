@@ -75,11 +75,13 @@ export function newClaim({ levelId, dimensionId, evidence, by, at }) {
 
 /**
  * Reenvío o retirada: la ronda anterior (evidencia y revisiones) se archiva tal
- * cual al final del historial y las revisiones vuelven a cero.
+ * cual al final del historial y las revisiones vuelven a cero. Con `by`, la
+ * marca pasa a ser de quien reenvía (la pudo hacer su revisor, RMR-TSK-0704).
  */
-export function resubmitted(current, { evidence, at, status = 'claimed' }) {
+export function resubmitted(current, { evidence, at, status = 'claimed', by }) {
   return {
     evidence: validateEvidence(evidence), status, claimedAt: at, reviews: {}, updatedAt: at,
+    ...(by ? { claimedBy: by } : {}),
     history: [...(current.history ?? []), { evidence: current.evidence, reviews: current.reviews ?? {} }],
   };
 }
@@ -93,6 +95,38 @@ export function reviewPatch(slot, { decision, reason = '', by, at }) {
   const why = typeof reason === 'string' ? reason.trim() : '';
   if (!why) throw new Error(decision === 'reject' ? 'Para rechazar hace falta un motivo.' : 'Para aceptar hace falta un motivo.');
   return { [`reviews.${slot}`]: { decision, reason: why, by, at }, updatedAt: at };
+}
+
+/** Revisión con la que nace una marca del revisor: solo los dos revisores marcan. */
+function reviewerReview({ slot, decision, reason, by, at }) {
+  if (slot !== 'first' && slot !== 'second') throw new Error('Solo los dos revisores pueden marcar directamente.');
+  const review = reviewPatch(slot, { decision, reason, by, at })[`reviews.${slot}`];
+  if (review.reason.length > MAX_EVIDENCE_TEXT) throw new Error(`El motivo no puede pasar de ${MAX_EVIDENCE_TEXT} caracteres.`);
+  return review;
+}
+
+/**
+ * Marca hecha directamente por un revisor (RMR-TSK-0704): su decisión y su
+ * motivo, que hace de evidencia. Cuenta como su revisión; si hay segundo
+ * revisor, falta la suya.
+ */
+export function reviewerClaim({ levelId, dimensionId, slot, decision, reason, by, at }) {
+  const review = reviewerReview({ slot, decision, reason, by, at });
+  return {
+    levelId, dimensionId, status: 'claimed',
+    evidence: { text: review.reason, links: [] },
+    claimedBy: by, claimedAt: at, reviews: { [slot]: review }, history: [], updatedAt: at,
+  };
+}
+
+/** Marca del revisor sobre una retirada: la ronda anterior se archiva tal cual. */
+export function reviewerRemark(current, { slot, decision, reason, by, at }) {
+  const review = reviewerReview({ slot, decision, reason, by, at });
+  return {
+    status: 'claimed', evidence: { text: review.reason, links: [] },
+    claimedBy: by, claimedAt: at, reviews: { [slot]: review }, updatedAt: at,
+    history: [...(current.history ?? []), { evidence: current.evidence, reviews: current.reviews ?? {} }],
+  };
 }
 
 /**

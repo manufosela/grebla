@@ -443,27 +443,50 @@ service cloud.firestore {
           return round.keys().hasOnly(['evidence', 'reviews'])
             && round.evidence == resource.data.evidence && round.reviews == resource.data.reviews;
         }
+        // Marca directa de un revisor (RMR-TSK-0704): nace con SU revisión, y su
+        // motivo hace de evidencia. Solo los dos revisores; el árbitro desempata.
+        function reviewerMarks(slot) {
+          return request.resource.data.status == 'claimed'
+            && request.resource.data.claimedBy.uid == request.auth.uid
+            && validEvidence(request.resource.data)
+            && request.resource.data.reviews.keys().hasOnly([slot])
+            && validReview(request.resource.data.reviews[slot]);
+        }
+        function isReviewerMark() {
+          return (isSlot('first') && reviewerMarks('first')) || (isSlot('second') && reviewerMarks('second'));
+        }
+        // El historial crece en una ronda, y esa ronda es exactamente la de antes.
+        function appendsRound() {
+          return request.resource.data.history.size() == resource.data.history.size() + 1
+            && (resource.data.history.size() == 0
+                || request.resource.data.history[0:resource.data.history.size()] == resource.data.history)
+            && archivesRound(request.resource.data.history[resource.data.history.size()]);
+        }
         function isTie() {
           return 'first' in resource.data.reviews && 'second' in resource.data.reviews
             && resource.data.reviews.first.decision != resource.data.reviews.second.decision;
         }
         allow read: if isEngineer() || isSlot('first') || isSlot('second') || isSlot('arbiter');
-        allow create: if isEngineer()
-          && claimId == request.resource.data.levelId + '__' + request.resource.data.dimensionId
+        allow create: if claimId == request.resource.data.levelId + '__' + request.resource.data.dimensionId
           && request.resource.data.keys().hasOnly(['levelId', 'dimensionId', 'status', 'evidence',
                'claimedBy', 'claimedAt', 'reviews', 'history', 'updatedAt'])
-          && request.resource.data.status == 'claimed' && request.resource.data.claimedBy.uid == request.auth.uid
-          && validEvidence(request.resource.data) && request.resource.data.reviews == {}
-          && request.resource.data.get('history', []).size() == 0;
+          && request.resource.data.get('history', []).size() == 0
+          && ((isEngineer()
+                && request.resource.data.status == 'claimed' && request.resource.data.claimedBy.uid == request.auth.uid
+                && validEvidence(request.resource.data) && request.resource.data.reviews == {})
+              || isReviewerMark());
+        // Al reenviar, la marca pasa a ser de quien la reenvía (la pudo hacer su revisor).
         allow update: if (isEngineer()
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['evidence', 'status', 'claimedAt', 'reviews', 'history', 'updatedAt'])
-            && request.resource.data.status in ['claimed', 'withdrawn']
+                 .hasOnly(['evidence', 'status', 'claimedAt', 'claimedBy', 'reviews', 'history', 'updatedAt'])
+            && ((request.resource.data.status == 'claimed' && request.resource.data.claimedBy.uid == request.auth.uid)
+                || (request.resource.data.status == 'withdrawn' && request.resource.data.claimedBy == resource.data.claimedBy))
             && validEvidence(request.resource.data) && request.resource.data.reviews == {}
-            && request.resource.data.history.size() == resource.data.history.size() + 1
-            && (resource.data.history.size() == 0
-                || request.resource.data.history[0:resource.data.history.size()] == resource.data.history)
-            && archivesRound(request.resource.data.history[resource.data.history.size()]))
+            && appendsRound())
+          || (resource.data.status == 'withdrawn' && isReviewerMark()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['evidence', 'status', 'claimedAt', 'claimedBy', 'reviews', 'history', 'updatedAt'])
+            && appendsRound())
           || (isSlot('first') && writesOnlyReview('first'))
           || (isSlot('second') && writesOnlyReview('second'))
           || (isSlot('arbiter') && isTie() && writesOnlyReview('arbiter'));

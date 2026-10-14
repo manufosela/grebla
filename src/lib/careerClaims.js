@@ -9,7 +9,9 @@
  */
 import { collection, doc, getDocs, updateDoc, runTransaction } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { claimId, newClaim, resubmitted, reviewPatch } from '../tools/career/domain/claims.js';
+import {
+  claimId, newClaim, resubmitted, reviewPatch, reviewerClaim, reviewerRemark,
+} from '../tools/career/domain/claims.js';
 
 const claimsOf = (personId) => collection(db, 'people', personId, 'careerClaims');
 const claimDoc = (personId, id) => doc(db, 'people', personId, 'careerClaims', id);
@@ -37,7 +39,7 @@ export async function submitClaim(personId, { levelId, dimensionId, evidence, by
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const at = now();
-    if (snap.exists()) tx.update(ref, resubmitted(snap.data(), { evidence, at }));
+    if (snap.exists()) tx.update(ref, resubmitted(snap.data(), { evidence, at, by }));
     else tx.set(ref, newClaim({ levelId, dimensionId, evidence, by, at }));
   });
 }
@@ -67,4 +69,25 @@ export async function withdrawClaim(personId, id) {
  */
 export async function reviewClaim(personId, id, slot, { decision, reason, by }) {
   await updateDoc(claimDoc(personId, id), reviewPatch(slot, { decision, reason, by, at: now() }));
+}
+
+/**
+ * Un revisor marca directamente una expectativa sin marca viva (RMR-TSK-0704).
+ * Si la persona ya la marcó, lo que toca es revisarla (`reviewClaim`).
+ * @param {string} personId
+ * @param {{ levelId: string, dimensionId: string, slot: 'first'|'second',
+ *   decision: 'accept'|'reject', reason: string, by: Author }} input
+ */
+export async function markAsReviewer(personId, { levelId, dimensionId, slot, decision, reason, by }) {
+  const ref = claimDoc(personId, claimId(levelId, dimensionId));
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const at = now();
+    if (!snap.exists()) {
+      tx.set(ref, reviewerClaim({ levelId, dimensionId, slot, decision, reason, by, at }));
+      return;
+    }
+    if (snap.data().status === 'claimed') throw new Error('Esa expectativa ya está marcada: revísala en lugar de marcarla.');
+    tx.update(ref, reviewerRemark(snap.data(), { slot, decision, reason, by, at }));
+  });
 }

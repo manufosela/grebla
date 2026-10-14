@@ -94,6 +94,46 @@ test.describe('reglas: marcas de expectativas', () => {
     }));
   });
 
+  test('un revisor marca directamente con su revisión y su motivo; el árbitro no (RMR-TSK-0704)', async () => {
+    await prepara(env);
+    const byReviewer = (uid, slot, decision, reason) => ({
+      ...claim({ [slot]: review(uid, decision, reason) }),
+      evidence: { text: reason || 'x', links: [] }, claimedBy: { uid, name: uid },
+    });
+    await assertFails(setDoc(doc(as('u-em'), CLAIM), byReviewer('u-em', 'first', 'accept', '')));
+    await assertFails(setDoc(doc(as('u-em'), CLAIM), byReviewer('u-em', 'second', 'accept', 'Sí')));
+    await assertFails(setDoc(doc(as('u-em'), CLAIM), { ...byReviewer('u-em', 'first', 'accept', 'Sí'), claimedBy: { uid: 'u-dev', name: 'Dev' } }));
+    await assertFails(setDoc(doc(as('u-cto'), CLAIM), byReviewer('u-cto', 'arbiter', 'accept', 'Sí')));
+    await assertFails(setDoc(doc(as('u-otro'), CLAIM), byReviewer('u-otro', 'first', 'accept', 'Sí')));
+    await assertSucceeds(setDoc(doc(as('u-em'), CLAIM), byReviewer('u-em', 'first', 'accept', 'Lideró el rediseño')));
+    await assertSucceeds(updateDoc(doc(as('u-head'), CLAIM), { 'reviews.second': review('u-head', 'accept', 'De acuerdo') }));
+  });
+
+  test('sobre una marca retirada, el revisor archiva la ronda y marca de nuevo (RMR-TSK-0704)', async () => {
+    const old = { ...claim(), status: 'withdrawn' };
+    await prepara(env, old);
+    const round = { evidence: old.evidence, reviews: old.reviews };
+    const remark = (history) => ({
+      status: 'claimed', evidence: { text: 'Aún no', links: [] }, claimedBy: { uid: 'u-em', name: 'u-em' },
+      claimedAt: '2026-10-14', reviews: { first: review('u-em', 'reject', 'Aún no') }, history,
+    });
+    await assertFails(updateDoc(doc(as('u-em'), CLAIM), remark([])));
+    await assertSucceeds(updateDoc(doc(as('u-em'), CLAIM), remark([round])));
+  });
+
+  test('el ingeniero reenvía una marca de su revisor y pasa a ser suya, no de otro (RMR-TSK-0704)', async () => {
+    const byEm = { ...claim({ first: review('u-em', 'reject', 'Aún no') }), claimedBy: { uid: 'u-em', name: 'EM' } };
+    await prepara(env, byEm);
+    const round = { evidence: byEm.evidence, reviews: byEm.reviews };
+    const resend = (uid) => ({
+      evidence: { text: 'Ya está el ADR', links: [] }, reviews: {}, history: [round], claimedBy: { uid, name: uid },
+    });
+    await assertFails(updateDoc(doc(as('u-dev'), CLAIM), resend('u-head')));
+    // Reenviar dejándola a nombre del revisor tampoco: la marca pasa a quien la reenvía.
+    await assertFails(updateDoc(doc(as('u-dev'), CLAIM), { ...resend('u-em'), claimedBy: byEm.claimedBy }));
+    await assertSucceeds(updateDoc(doc(as('u-dev'), CLAIM), resend('u-dev')));
+  });
+
   test('nadie cambia los revisores desde el cliente, ni el superadmin', async () => {
     await prepara(env);
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'admins', 'u-admin'), { name: 'Admin' }));
