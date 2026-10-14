@@ -1,5 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import { newEntry, expectationState, timelineFor, ENTRY_KINDS, entryKindsFor, entriesFromLegacyAssessment } from './evidence.js';
+import { newEntry, expectationState, timelineFor, ENTRY_KINDS, entryKindsFor, entriesFromLegacyAssessment, claimTimeline } from './evidence.js';
+
+describe('claimTimeline: una marca de nivel superior leída como historial (RMR-TSK-0714)', () => {
+  const DEVB = { uid: 'dev', name: 'Dev' };
+  const EMB = { uid: 'em', name: 'EM' };
+
+  it('ronda actual primero (revisiones y luego la evidencia), después las anteriores', () => {
+    const claim = {
+      status: 'claimed', claimedBy: DEVB, claimedAt: '2026-10-10T00:00:00.000Z',
+      evidence: { text: 'Ahora con ADR', links: [{ kind: 'adr', url: 'https://x.dev/adr' }] },
+      reviews: { first: { decision: 'accept', reason: 'Visto', by: EMB, at: '2026-10-12T00:00:00.000Z' } },
+      history: [{ evidence: { text: 'Primera', links: [] }, reviews: { first: { decision: 'reject', reason: 'Falta ADR', by: EMB, at: '2026-09-01T00:00:00.000Z' } } }],
+    };
+    expect(claimTimeline(claim).map((e) => [e.kind, e.text, e.by?.name ?? null])).toEqual([
+      ['meets', 'Visto', 'EM'],
+      ['proof', 'Ahora con ADR', 'Dev'],
+      ['misses', 'Falta ADR', 'EM'],
+      ['proof', 'Primera', null],
+    ]);
+  });
+
+  it('en la marca de un revisor su motivo no sale dos veces', () => {
+    const byReviewer = {
+      status: 'claimed', claimedBy: EMB, claimedAt: 't', evidence: { text: 'Lideró el rediseño', links: [] },
+      reviews: { first: { decision: 'accept', reason: 'Lideró el rediseño', by: EMB, at: 't' } }, history: [],
+    };
+    expect(claimTimeline(byReviewer).map((e) => e.kind)).toEqual(['meets']);
+  });
+
+  it('sin marca no hay historial; retirada, solo lo archivado', () => {
+    expect(claimTimeline(null)).toEqual([]);
+    const withdrawn = { status: 'withdrawn', evidence: { text: 'x', links: [] }, reviews: {}, history: [{ evidence: { text: 'Antes', links: [] }, reviews: {} }] };
+    expect(claimTimeline(withdrawn).map((e) => e.text)).toEqual(['Antes']);
+  });
+});
 
 describe('entriesFromLegacyAssessment: las valoraciones con nota pasan al historial (RMR-TSK-0713)', () => {
   const by = { uid: 'em', name: 'EM' };

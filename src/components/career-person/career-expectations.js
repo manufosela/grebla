@@ -8,18 +8,8 @@ import { LitElement, html, css } from 'lit';
 import { getLevel } from '../../tools/career/data/framework.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { expectationRows, STATUS_LABEL, rowActions } from '../../tools/career/domain/careerExpectations.js';
-
-const DECISION = { accept: 'aceptó', reject: 'rechazó' };
-
-/** Solo se enlaza lo que es http(s): la evidencia la escribe una persona. */
-const isWebUrl = (url) => typeof url === 'string' && /^https?:\/\/\S+$/i.test(url);
-const linkTpl = (l) => (isWebUrl(l.url)
-  ? html` · <a href=${l.url} target="_blank" rel="noopener noreferrer">${String(l.kind).toUpperCase()}</a>`
-  : null);
-const reviewLine = (r) => {
-  const why = r.reason ? `: ${r.reason}` : '';
-  return `${r.by?.name ?? 'Alguien'} ${DECISION[r.decision] ?? ''}${why}`;
-};
+import { claimTimeline } from '../../tools/career/domain/evidence.js';
+import { timelineTemplate, timelineStyles } from './career-timeline.js';
 
 export class CareerExpectations extends LitElement {
   static properties = {
@@ -31,7 +21,7 @@ export class CareerExpectations extends LitElement {
     levelId: { attribute: false },
   };
 
-  static styles = css`
+  static styles = [timelineStyles, css`
     :host { display: block; }
     h3 { margin: 0 0 0.3rem; font-size: 1rem; color: var(--rm-text, #111827); }
     .intro, .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.88rem; margin: 0 0 0.9rem; max-width: 62ch; }
@@ -48,15 +38,11 @@ export class CareerExpectations extends LitElement {
     .chip.rejected { color: #8a1c1c; background: #fde8e8; border-color: #d96a6a; }
     details { margin: 0.45rem 0 0; font-size: 0.88rem; color: var(--rm-text, #111827); }
     summary { cursor: pointer; color: var(--rm-muted, #5b6b7d); }
-    .evidence { margin: 0.55rem 0 0; font-size: 0.86rem; color: var(--rm-text, #111827); }
-    .evidence a { color: var(--rm-accent-strong, #1d6f65); }
-    .reviews { margin: 0.4rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.2rem; font-size: 0.82rem; }
-    .reviews li { border: 0; padding: 0; background: none; color: var(--rm-muted, #4b5563); }
     .actions { margin-top: 0.55rem; display: flex; gap: 0.5rem; }
     button { font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 8px; padding: 0.35rem 0.8rem; cursor: pointer;
       border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     button:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
-  `;
+  `];
 
   get _level() {
     if (this.levelId) return getLevel(this.framework, this.levelId);
@@ -93,22 +79,9 @@ export class CareerExpectations extends LitElement {
           <span class="chip ${row.status}">${STATUS_LABEL[row.status]}</span>
         </div>
         <details><summary>Qué se espera</summary><p>${row.text}</p></details>
-        ${row.claim && row.status !== 'open' ? this._claim(row.claim) : null}
+        ${timelineTemplate(claimTimeline(row.claim))}
         ${this._actions(row)}
       </li>`;
-  }
-
-  _claim(claim) {
-    const links = claim.evidence?.links ?? [];
-    const reviews = ['first', 'second', 'arbiter'].map((s) => claim.reviews?.[s]).filter(Boolean);
-    const items = reviews.map((r) => html`<li>${reviewLine(r)}</li>`);
-    const list = reviews.length ? html`<ul class="reviews">${items}</ul>` : null;
-    // Marca del revisor (RMR-TSK-0705): su motivo ya sale en su revisión.
-    if (claim.claimedBy?.uid && claim.claimedBy.uid !== this.person?.uid) return list;
-    return html`
-      <p class="evidence"><strong>Evidencia:</strong> ${claim.evidence?.text}
-        ${links.map(linkTpl)}</p>
-      ${list}`;
   }
 
   _actions(row) {

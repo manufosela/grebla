@@ -11,13 +11,10 @@ import { levelPath, defaultLevelTab } from '../../tools/career/domain/levelPath.
 import { expectationsForLevel, aspirationalLevels } from '../../tools/career/data/framework.js';
 import { careerSuggestion } from '../../tools/career/data/assessment.js';
 import { expectationState, timelineFor, entryKindsFor } from '../../tools/career/domain/evidence.js';
+import { timelineTemplate, timelineStyles } from './career-timeline.js';
 
 const STATE_NOTE = { below: 'superado', current: 'nivel actual' };
 const STATE_LABEL = { meets: 'Llega', misses: 'No llega' };
-const ENTRY_LABEL = { meets: 'Llega', misses: 'No llega', proof: 'Prueba' };
-const isWebUrl = (url) => typeof url === 'string' && /^https?:\/\/\S+$/i.test(url);
-const DAY = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-const formatDay = (iso) => (Number.isNaN(Date.parse(iso)) ? '' : DAY.format(new Date(iso)));
 
 export class CareerLevels extends LitElement {
   static properties = {
@@ -32,7 +29,7 @@ export class CareerLevels extends LitElement {
     _tab: { state: true },
   };
 
-  static styles = css`
+  static styles = [timelineStyles, css`
     :host { display: block; }
     .tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.9rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
     .tab { font: inherit; font-size: 0.86rem; font-weight: 600; padding: 0.35rem 0.75rem; cursor: pointer; border: 0;
@@ -54,19 +51,11 @@ export class CareerLevels extends LitElement {
     summary { cursor: pointer; color: var(--rm-muted, #4b5563); }
     .note { margin: 0.45rem 0 0; font-size: 0.86rem; color: var(--rm-text, #111827); }
     h3 + .note { margin: 0 0 0.8rem; }
-    .timeline { list-style: none; margin: 0.55rem 0 0; padding: 0 0 0 0.75rem; display: grid; gap: 0.45rem;
-      border-left: 2px solid var(--rm-border, #cbd5e1); }
-    .timeline li { border: 0; border-radius: 0; padding: 0; background: none; }
-    .timeline .meta { font-size: 0.78rem; font-weight: 600; color: var(--rm-muted, #4b5563); }
-    .timeline li.meets .meta { color: #0b5d52; }
-    .timeline li.misses .meta { color: #8a1c1c; }
-    .timeline p { margin: 0.1rem 0 0; font-size: 0.86rem; color: var(--rm-text, #111827); }
-    .timeline a { color: var(--rm-accent-strong, #1d6f65); }
     .actions { margin-top: 0.55rem; }
     .actions button { font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 8px; padding: 0.35rem 0.8rem;
       cursor: pointer; border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .actions button:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
-  `;
+  `];
 
   willUpdate(changed) {
     if (!changed.has('person') && !changed.has('framework')) return;
@@ -128,19 +117,9 @@ export class CareerLevels extends LitElement {
     return html`${title}${kinds.length > 1 ? this._suggestion(rows, level.id) : null}
       <ul>${rows.map((r) => this._row(r.dimension.name, r.text,
         html`<span class="chip ${r.state === 'meets' ? 'ok' : 'bad'}">${STATE_LABEL[r.state]}</span>`,
-        html`${this._timeline(timelineFor(entries, level.id, r.dimension.id))}
+        html`${timelineTemplate(timelineFor(entries, level.id, r.dimension.id))}
           ${kinds.length ? html`<div class="actions"><button type="button"
             @click=${() => this._requestEntry(level.id, r, kinds)}>Añadir</button></div>` : null}`))}</ul>`;
-  }
-
-  /** La evolución de una expectativa: de lo más reciente a lo más antiguo. */
-  _timeline(items) {
-    if (items.length === 0) return null;
-    return html`<ol class="timeline">${items.map((e) => html`<li class=${e.kind}>
-      <span class="meta">${formatDay(e.at)} · ${e.by?.name ?? 'Alguien'} · ${ENTRY_LABEL[e.kind]}</span>
-      <p>${e.text}${(e.links ?? []).filter((l) => isWebUrl(l.url)).map((l) => html` · <a href=${l.url}
-        target="_blank" rel="noopener noreferrer">${String(l.kind).toUpperCase()}</a>`)}</p>
-    </li>`)}</ol>`;
   }
 
   /** La sugerencia de rol que sale de los «no llega» (antes, en «Nivel»). */
