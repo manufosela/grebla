@@ -15,6 +15,7 @@
 import { LitElement, html, css } from 'lit';
 import { noteStyles } from './common/note-styles.js';
 import './common/busy-overlay.js';
+import './team-ems-editor.js';
 import { repeat } from 'lit/directives/repeat.js';
 import './app-modal.js';
 import './admin/game-editor.js';
@@ -2546,10 +2547,20 @@ export class SuperadminPanel extends LitElement {
           <button class="subtab ${sub === 'editor' ? 'active' : ''}" @click=${() => this._openOrgSubtab('editor')}>Roles</button>
           <button class="subtab ${sub === 'ramas' ? 'active' : ''}" @click=${() => this._openOrgSubtab('ramas')}>Ramas</button>
           <button class="subtab ${sub === 'vista' ? 'active' : ''}" @click=${() => this._openOrgSubtab('vista')}>Vista (pirámide invertida)</button>
+          <button class="subtab ${sub === 'ems' ? 'active' : ''}" @click=${() => this._openOrgSubtab('ems')}>EM por equipo</button>
         </div>
-        ${sub === 'vista' ? this._renderOrgPyramid() : sub === 'ramas' ? this._renderOrgBranches() : this._renderOrgEditor()}
+        ${this._renderOrgSub(sub)}
       </section>
     `;
+  }
+
+  /** Contenido de cada sub-pestaña del organigrama. */
+  _renderOrgSub(sub) {
+    if (sub === 'vista') return this._renderOrgPyramid();
+    if (sub === 'ramas') return this._renderOrgBranches();
+    // EM de cada equipo de Tech en GREBLA (RMR-TSK-0717).
+    if (sub === 'ems') return html`<team-ems-editor ?readOnly=${this.readOnly}></team-ems-editor>`;
+    return this._renderOrgEditor();
   }
 
   _renderOrgEditor() {
