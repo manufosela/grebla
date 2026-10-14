@@ -64,6 +64,26 @@ export function entryKindsFor({ isSelf, leads }) {
   return leads ? [...ENTRY_KINDS] : [];
 }
 
+/**
+ * Valoración antigua (/career/assessment, una nota por dimensión) convertida en
+ * entradas del historial (RMR-TSK-0713). «No llega» siempre pasa: es información;
+ * «cumple» solo si tenía nota, porque sin ella es el punto de partida. Ids fijos
+ * por dimensión para que migrar dos veces no duplique.
+ * @param {{ byDimension?: Record<string, { meets?: boolean, note?: string }> }|null} assessment
+ * @param {{ levelId: string|null, by: Author, at: string }} context
+ * @returns {Array<{ id: string, kind: EntryKind, entry: EvidenceEntry }>}
+ */
+export function entriesFromLegacyAssessment(assessment, { levelId, by, at }) {
+  if (!levelId) return [];
+  return Object.entries(assessment?.byDimension ?? {}).flatMap(([dimensionId, mark]) => {
+    const note = String(mark?.note ?? '').trim();
+    const kind = mark?.meets === false ? 'misses' : 'meets';
+    if (kind === 'meets' && !note) return [];
+    const text = note || 'Valoración anterior al historial, sin motivo escrito.';
+    return [{ id: `legacy-${dimensionId}`, kind, entry: newEntry({ levelId, dimensionId, kind, text, by, at }) }];
+  });
+}
+
 const isOf = (levelId, dimensionId) => (e) => e?.levelId === levelId && e?.dimensionId === dimensionId;
 const newestFirst = (a, b) => Date.parse(b.at) - Date.parse(a.at);
 
