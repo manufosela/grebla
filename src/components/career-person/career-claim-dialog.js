@@ -1,6 +1,8 @@
 /**
  * <career-claim-dialog>: el ingeniero marca una expectativa como cumplida con su
- * evidencia (RMR-TSK-0680). Valida aquí con las mismas reglas que el dominio y
+ * evidencia (RMR-TSK-0680). En modo `entry` (RMR-TSK-0711) añade una entrada al
+ * historial de la expectativa: tipo (de los que `request.kinds` permite), texto y
+ * enlaces; el evento lleva además `kind`. Valida aquí con las mismas reglas que el dominio y
  * emite `claim-submit` con la evidencia; guardar es cosa de la página, que
  * pasa `busy` y, si falla, `error`. `close` cuando se cancela.
  */
@@ -10,6 +12,8 @@ import '../common/busy-overlay.js';
 import { validateEvidence, LINK_KINDS, MAX_EVIDENCE_LINKS, MAX_EVIDENCE_TEXT } from '../../tools/career/domain/claims.js';
 
 const KIND_LABEL = { pr: 'PR', adr: 'ADR', rfc: 'RFC', doc: 'Documento', otro: 'Otro' };
+/** Tipos de entrada del historial (RMR-TSK-0711). */
+const ENTRY_LABEL = { meets: 'Llega', misses: 'No llega', proof: 'Prueba' };
 
 export class CareerClaimDialog extends LitElement {
   static properties = {
@@ -20,6 +24,7 @@ export class CareerClaimDialog extends LitElement {
     error: { type: String },
     _text: { state: true },
     _links: { state: true },
+    _kind: { state: true },
     _invalid: { state: true },
   };
 
@@ -36,6 +41,9 @@ export class CareerClaimDialog extends LitElement {
     button:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     .error { color: var(--rm-danger, #b91c1c); font-size: 0.85rem; margin: 0.6rem 0 0; }
     .hint { font-size: 0.78rem; color: var(--rm-muted, #4b5563); font-weight: 400; }
+    .kinds { border: 0; margin: 0 0 0.8rem; padding: 0; display: flex; gap: 1rem; flex-wrap: wrap; }
+    .kinds legend { font-size: 0.85rem; font-weight: 600; color: var(--rm-text, #111827); margin-bottom: 0.3rem; }
+    .kind { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 400; }
   `;
 
   constructor() {
@@ -48,6 +56,9 @@ export class CareerClaimDialog extends LitElement {
       const prev = this.request.claim?.evidence;
       this._text = prev?.text ?? '';
       this._links = (prev?.links ?? []).map((l) => ({ ...l }));
+      // Con un solo tipo posible (el ingeniero aporta pruebas), va elegido.
+      const kinds = this.request.kinds ?? [];
+      this._kind = kinds.length === 1 ? kinds[0] : '';
       this._invalid = '';
     }
   }
@@ -55,15 +66,23 @@ export class CareerClaimDialog extends LitElement {
   _reset() {
     this._text = '';
     this._links = [];
+    this._kind = '';
     this._invalid = '';
   }
 
+  get _isEntry() {
+    return this.request?.mode === 'entry';
+  }
+
   render() {
+    const entry = this._isEntry;
     return html`
-      <app-modal .open=${this.open} heading="Marcar como cumplida" @close=${this._close}>
+      <app-modal .open=${this.open} heading=${entry ? 'Añadir al historial' : 'Marcar como cumplida'} @close=${this._close}>
         <p class="expect">${this.request?.text ?? ''}</p>
+        ${entry ? this._kindPicker() : null}
         <label>Evidencia
-          <span class="hint">Qué has hecho que lo demuestra. Obligatoria, hasta ${MAX_EVIDENCE_TEXT} caracteres.</span>
+          <span class="hint">${entry ? 'Qué lo demuestra o qué falta.' : 'Qué has hecho que lo demuestra.'}
+            Obligatoria, hasta ${MAX_EVIDENCE_TEXT} caracteres.</span>
           <textarea rows="4" maxlength=${MAX_EVIDENCE_TEXT} .value=${this._text}
             @input=${(e) => { this._text = e.target.value; }}></textarea>
         </label>
@@ -73,11 +92,21 @@ export class CareerClaimDialog extends LitElement {
             ? html`<button type="button" @click=${this._addLink}>Añadir enlace</button>`
             : null}
           <button type="button" @click=${this._close}>Cancelar</button>
-          <button type="button" class="primary" ?disabled=${this.busy} @click=${this._submit}>Enviar a revisión</button>
+          <button type="button" class="primary" ?disabled=${this.busy} @click=${this._submit}>${entry ? 'Guardar' : 'Enviar a revisión'}</button>
         </div>
         ${this._invalid || this.error ? html`<p class="error" role="alert">${this._invalid || this.error}</p>` : null}
-        ${this.busy ? html`<busy-overlay message="Enviando la marca…"></busy-overlay>` : null}
+        ${this.busy ? html`<busy-overlay message=${entry ? 'Guardando…' : 'Enviando la marca…'}></busy-overlay>` : null}
       </app-modal>`;
+  }
+
+  /** Tipo de entrada; solo se elige si quien escribe tiene más de uno. */
+  _kindPicker() {
+    const kinds = this.request?.kinds ?? [];
+    if (kinds.length < 2) return null;
+    return html`<fieldset class="kinds"><legend>Tipo</legend>
+      ${kinds.map((k) => html`<label class="kind"><input type="radio" name="kind" .checked=${this._kind === k}
+        @change=${() => { this._kind = k; this._invalid = ''; }} /> ${ENTRY_LABEL[k]}</label>`)}
+    </fieldset>`;
   }
 
   _linkRow(link, i) {
@@ -101,9 +130,12 @@ export class CareerClaimDialog extends LitElement {
 
   _submit() {
     try {
+      const entry = this.request?.mode === 'entry';
+      if (entry && !(this.request.kinds ?? []).includes(this._kind)) throw new Error('Elige el tipo: llega, no llega o prueba.');
       const evidence = validateEvidence({ text: this._text, links: this._links.filter((l) => l.url.trim()) });
       this._invalid = '';
-      this.dispatchEvent(new CustomEvent('claim-submit', { detail: { ...this.request, evidence }, bubbles: true, composed: true }));
+      const detail = { ...this.request, evidence, ...(entry ? { kind: this._kind } : {}) };
+      this.dispatchEvent(new CustomEvent('claim-submit', { detail, bubbles: true, composed: true }));
     } catch (err) {
       this._invalid = err.message;
     }
