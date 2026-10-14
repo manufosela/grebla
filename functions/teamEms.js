@@ -30,6 +30,17 @@ export function validTeamEms(raw) {
 }
 
 /**
+ * Equipos cuyo EM cambió entre dos versiones del mapa: los que hay que recalcular.
+ * @param {Record<string, string>|null|undefined} before
+ * @param {Record<string, string>|null|undefined} after
+ * @returns {string[]}
+ */
+export function teamsWithChangedEm(before, after) {
+  const teams = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+  return [...teams].filter((t) => (before?.[t] ?? null) !== (after?.[t] ?? null));
+}
+
+/**
  * Directorio con el jefe efectivo de cada persona. Devuelve copias: las fichas
  * originales no se modifican.
  * @template {{ id: string, reportsToPersonId?: string|null, orgBranch?: string, notion?: { level?: string, team?: string } }} P
