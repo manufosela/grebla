@@ -12,7 +12,8 @@ import './career-plan.js';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim, markAsReviewer } from '../../lib/careerClaims.js';
-import { getLevelAssessment, saveLevelAssessment, getCareerAssessment } from '../../lib/careerAssessment.js';
+import { getLevelAssessment, saveLevelAssessment, getCareerAssessment, saveCareerAssessment } from '../../lib/careerAssessment.js';
+import { assessmentMark } from '../../tools/career/data/assessment.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { levelProgressFor, levelCompletion, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 import { marksFromClaims } from '../../tools/career/domain/claims.js';
@@ -25,6 +26,8 @@ export class CareerPersonPanel extends LitElement {
     person: { attribute: false },
     framework: { attribute: false },
     section: { type: String },
+    /** La ficha deja valorar el nivel actual; Mi espacio, no (RMR-TSK-0707). */
+    canAssess: { type: Boolean },
     _claims: { state: true },
     _assessment: { state: true },
     /** Valoración del nivel actual (RMR-TSK-0706). */
@@ -48,6 +51,7 @@ export class CareerPersonPanel extends LitElement {
   constructor() {
     super();
     this.section = 'expectativas';
+    this.canAssess = false;
     this._claims = [];
     this._assessment = null;
     this._current = null;
@@ -92,7 +96,8 @@ export class CareerPersonPanel extends LitElement {
       ${this.section === 'seguimiento'
         ? this._renderProgress()
         : html`<career-levels .person=${this.person} .framework=${this.framework} .claims=${this._claims}
-            .assessment=${this._current} .viewerUid=${viewerUid}
+            .assessment=${this._current} .viewerUid=${viewerUid} ?canAssess=${this.canAssess}
+            @assess-request=${(e) => this._open('review', { ...e.detail, mode: 'assess' })}
             @claim-request=${(e) => this._open('claim', e.detail)}
             @review-request=${(e) => this._open('review', e.detail)}
             @mark-request=${(e) => this._open('review', { ...e.detail, mode: 'mark' })}></career-levels>`}
@@ -182,6 +187,15 @@ export class CareerPersonPanel extends LitElement {
     const { claim, slot, decision, reason, mode, levelId, dimensionId } = e.detail;
     if (mode === 'mark') {
       await this._save(() => markAsReviewer(this.person.id, { levelId, dimensionId, slot, decision, reason, by: author() }));
+      return;
+    }
+    if (mode === 'assess') {
+      // Se escribe la valoración entera: el resto de marcas no se toca (RMR-TSK-0707).
+      await this._save(() => {
+        const mark = assessmentMark({ meets: decision === 'accept', note: reason, by: author(), at: new Date().toISOString() });
+        const byDimension = { ...this._current?.byDimension, [dimensionId]: mark };
+        return saveCareerAssessment(this.person.id, byDimension, author());
+      });
       return;
     }
     await this._save(() => reviewClaim(this.person.id, claim.id, slot, { decision, reason, by: author() }));

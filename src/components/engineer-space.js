@@ -586,7 +586,7 @@ export class EngineerSpace extends LitElement {
 
   /**
    * Metas del nivel objetivo: sus expectativas por dimensión, plegadas como
-   * `<details>` (mismo patrón summary/detalle que «Lo que se te reconoce»).
+   * `<details>` (mismo patrón summary/detalle que el enfoque por disciplina).
    * @param {CareerFramework|null} fw
    * @param {string} levelId  id del nivel objetivo
    * @returns {import('lit').TemplateResult}
@@ -602,8 +602,9 @@ export class EngineerSpace extends LitElement {
   }
 
   /**
-   * Sección «Mi carrera»: nivel actual, lo que se te reconoce (expectativas),
-   * enfoque por disciplina (addendums) y a qué aspirar. Espejo del marcado de la
+   * Sección «Mi carrera»: nivel actual, enfoque por disciplina (addendums) y a
+   * qué aspirar. Las expectativas de cada nivel, con su valoración, están en
+   * «Expectativas» (RMR-TSK-0707). Espejo del marcado de la
    * sección «Carrera» de <team-person-detail>, con los mismos helpers puros.
    * @returns {import('lit').TemplateResult|null}
    */
@@ -675,7 +676,6 @@ export class EngineerSpace extends LitElement {
       return html`<p class="empty">Aún no tienes un nivel de carrera asignado.</p>`;
     }
 
-    const expectations = level ? expectationsForLevel(fw, person.levelId) : [];
     const addendums = addendumsForDisciplines(fw, disciplineIds);
     const addendumsByDiscipline = Object.groupBy(addendums, (a) => a.discipline.id);
 
@@ -694,15 +694,6 @@ export class EngineerSpace extends LitElement {
 
       ${this._renderLevelTimeline(fw)}
       ${this._renderProgressionChart(fw)}
-
-      ${level
-        ? html`
-            <p class="sub">Lo que se te reconoce</p>
-            <div class="expect">
-              ${expectations.map((row) => this._fold(row.dimension.name, row.text))}
-            </div>
-          `
-        : null}
 
       ${addendums.length > 0
         ? html`

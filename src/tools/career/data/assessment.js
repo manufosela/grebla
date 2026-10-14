@@ -53,6 +53,20 @@ export function assessmentRows(framework, levelId, assessment) {
   });
 }
 
+const MAX_NOTE = 1000;
+
+/**
+ * Marca de una expectativa del nivel actual (RMR-TSK-0707): cumple o no llega,
+ * siempre con el porqué, que la persona ve. Lleva quién y cuándo.
+ * @param {{ meets: boolean, note: unknown, by: { uid: string, name: string }, at: string }} input
+ */
+export function assessmentMark({ meets, note, by, at }) {
+  const why = typeof note === 'string' ? note.trim() : '';
+  if (!why) throw new Error('Falta el por qué: la persona tiene que saberlo.');
+  if (why.length > MAX_NOTE) throw new Error(`El por qué no puede pasar de ${MAX_NOTE} caracteres.`);
+  return { meets: meets === true, note: why, by, at };
+}
+
 /**
  * Puntos de mejora: las filas marcadas como «no llega» (`meets === false`).
  * Preservan dimensión, texto de la expectativa y nota para poder listarlos.
