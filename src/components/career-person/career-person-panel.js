@@ -11,7 +11,7 @@ import './career-review-dialog.js';
 import './career-plan.js';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
-import { listClaims, submitClaim, reviewClaim } from '../../lib/careerClaims.js';
+import { listClaims, submitClaim, reviewClaim, markAsReviewer } from '../../lib/careerClaims.js';
 import { getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { levelProgressFor, levelCompletion, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
@@ -91,7 +91,8 @@ export class CareerPersonPanel extends LitElement {
         : html`<career-expectations .person=${this.person} .framework=${this.framework} .claims=${this._claims}
             .viewerUid=${viewerUid}
             @claim-request=${(e) => this._open('claim', e.detail)}
-            @review-request=${(e) => this._open('review', e.detail)}></career-expectations>`}
+            @review-request=${(e) => this._open('review', e.detail)}
+            @mark-request=${(e) => this._open('review', { ...e.detail, mode: 'mark' })}></career-expectations>`}
       ${this._error && !this._dialog ? html`<p class="error" role="alert">${this._error}</p>` : null}
       ${this._busy && !this._dialog ? html`<busy-overlay message="Guardando…"></busy-overlay>` : null}
       <career-claim-dialog .open=${this._dialog === 'claim'} .request=${this._request} ?busy=${this._busy}
@@ -175,7 +176,11 @@ export class CareerPersonPanel extends LitElement {
   }
 
   async _onReviewSubmit(e) {
-    const { claim, slot, decision, reason } = e.detail;
+    const { claim, slot, decision, reason, mode, levelId, dimensionId } = e.detail;
+    if (mode === 'mark') {
+      await this._save(() => markAsReviewer(this.person.id, { levelId, dimensionId, slot, decision, reason, by: author() }));
+      return;
+    }
     await this._save(() => reviewClaim(this.person.id, claim.id, slot, { decision, reason, by: author() }));
   }
 }

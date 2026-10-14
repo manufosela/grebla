@@ -15,6 +15,32 @@ export const STATUS_LABEL = Object.freeze({
   tie: 'Pendiente de desempate',
 });
 
+const SLOT_ACTION = Object.freeze({ first: 'Revisar', second: 'Revisar', arbiter: 'Desempatar' });
+
+/**
+ * Qué puede hacer quien mira en una fila (RMR-TSK-0705): el ingeniero marca con
+ * evidencia; un revisor revisa lo marcado o marca directamente lo que nadie ha
+ * marcado, en su hueco. El árbitro solo desempata.
+ * @param {{ status: string, claim: object|null, slot: string|null }} row
+ * @param {{ isSelf: boolean, viewerUid: string|null, reviewers: import('./claims.js').Reviewers }} viewer
+ * @returns {{ claim: string|null, review: string|null, markSlot: 'first'|'second'|null }}
+ */
+export function rowActions(row, { isSelf, viewerUid, reviewers }) {
+  const claimable = isSelf && (row.status === 'open' || row.status === 'rejected');
+  const claimLabel = row.status === 'rejected' ? 'Volver a marcar' : 'Marcar como cumplida';
+  const reviewable = !!row.slot && !row.claim?.reviews?.[row.slot];
+  let markSlot = null;
+  if (!isSelf && viewerUid && row.status === 'open') {
+    if (reviewers?.firstUid === viewerUid) markSlot = 'first';
+    else if (reviewers?.secondUid === viewerUid) markSlot = 'second';
+  }
+  return {
+    claim: claimable ? claimLabel : null,
+    review: reviewable ? SLOT_ACTION[row.slot] : null,
+    markSlot,
+  };
+}
+
 /**
  * @param {{ framework: object, levelId: string, claims: Array<object>,
  *   reviewers: import('./claims.js').Reviewers, viewerUid: string|null }} input

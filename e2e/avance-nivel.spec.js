@@ -48,6 +48,7 @@ async function conPersonaEnL1(fn) {
   });
   try { await fn(); } finally {
     await db().doc(`${PERSON}/careerClaims/av-l2__av-tech`).delete();
+    await db().doc(`${PERSON}/careerClaims/av-l2__av-product`).delete();
     await db().doc(`${PERSON}/careerAssessments/av-l2`).delete();
     await db().doc(`${PERSON}/career/assessment`).delete();
     await db().doc(PERSON).delete();
@@ -190,6 +191,23 @@ test('el badge del seguimiento sale de lo ACEPTADO, no del avance en el mapa', a
     const fila = page.locator('career-tracking tr', { hasText: NOMBRE });
     await expect(fila.locator('.lvl.sub')).toHaveText('L1-2');
     await expect(fila.locator('.lvl.sub')).toHaveAttribute('title', /3 de 4 puntos aceptados/);
+  });
+});
+
+test('el responsable marca directamente una expectativa con su motivo (RMR-TSK-0705)', async ({ page }) => {
+  await conPersonaEnL1(async () => {
+    await abrirCarrera(page);
+    await ficha(page).getByRole('tab', { name: 'Expectativas' }).click();
+    const fila = ficha(page).locator('career-expectations li', { hasText: 'Producto' }).first();
+    await fila.getByRole('button', { name: 'Marcar' }).click();
+    const dialogo = ficha(page).locator('career-review-dialog');
+    await dialogo.getByRole('button', { name: 'Cumple' }).click();
+    await expect(dialogo).toContainText('Para aceptar hace falta un motivo');
+    await dialogo.getByRole('textbox').fill('Negoció el alcance del checkout con producto');
+    await dialogo.getByRole('button', { name: 'Cumple' }).click();
+    // Es su único revisor: con su marca, ya cuenta.
+    await expect(fila).toContainText('Aceptada');
+    await expect(fila).toContainText('Negoció el alcance del checkout con producto');
   });
 });
 
