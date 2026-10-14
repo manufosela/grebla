@@ -8,8 +8,8 @@
 import { LitElement, html, css } from 'lit';
 import './career-expectations.js';
 import { levelPath, defaultLevelTab } from '../../tools/career/domain/levelPath.js';
-import { expectationsForLevel } from '../../tools/career/data/framework.js';
-import { assessmentRows } from '../../tools/career/data/assessment.js';
+import { expectationsForLevel, aspirationalLevels } from '../../tools/career/data/framework.js';
+import { assessmentRows, careerSuggestion } from '../../tools/career/data/assessment.js';
 
 const STATE_NOTE = { below: 'superado', current: 'nivel actual' };
 
@@ -21,6 +21,8 @@ export class CareerLevels extends LitElement {
     /** Valoración del nivel actual: { byDimension: { [dimId]: { meets, note } } }. */
     assessment: { attribute: false },
     viewerUid: { attribute: false },
+    /** Quien mira valora el nivel actual (su manager desde la ficha), RMR-TSK-0707. */
+    canAssess: { type: Boolean },
     _tab: { state: true },
   };
 
@@ -45,6 +47,11 @@ export class CareerLevels extends LitElement {
     details { margin: 0.45rem 0 0; font-size: 0.88rem; color: var(--rm-text, #111827); }
     summary { cursor: pointer; color: var(--rm-muted, #4b5563); }
     .note { margin: 0.45rem 0 0; font-size: 0.86rem; color: var(--rm-text, #111827); }
+    h3 + .note { margin: 0 0 0.8rem; }
+    .actions { margin-top: 0.55rem; }
+    .actions button { font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 8px; padding: 0.35rem 0.8rem;
+      cursor: pointer; border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
+    .actions button:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
   `;
 
   willUpdate(changed) {
@@ -99,9 +106,27 @@ export class CareerLevels extends LitElement {
       return html`${title}<ul>${rows.map((r) => this._row(r.dimension.name, r.text, html`<span class="chip done">Superado</span>`))}</ul>`;
     }
     const rows = assessmentRows(this.framework, level.id, this.assessment).filter((r) => r.hasExpectation);
-    return html`${title}<ul>${rows.map((r) => this._row(r.dimension.name, r.text,
-      html`<span class="chip ${r.meets ? 'ok' : 'bad'}">${r.meets ? 'Cumple' : 'No llega'}</span>`,
-      r.note ? html`<p class="note"><strong>Por qué:</strong> ${r.note}</p>` : null))}</ul>`;
+    const assess = this.canAssess && !(this.viewerUid && this.viewerUid === this.person?.uid);
+    return html`${title}${assess ? this._suggestion(rows, level.id) : null}
+      <ul>${rows.map((r) => this._row(r.dimension.name, r.text,
+        html`<span class="chip ${r.meets ? 'ok' : 'bad'}">${r.meets ? 'Cumple' : 'No llega'}</span>`,
+        html`${r.note ? html`<p class="note"><strong>Por qué:</strong> ${r.note}</p>` : null}
+          ${assess ? html`<div class="actions"><button type="button" @click=${() => this._assess(level.id, r)}>Valorar</button></div>` : null}`))}</ul>`;
+  }
+
+  /** La sugerencia de rol que sale de los «no llega» (antes, en «Nivel»). */
+  _suggestion(rows, levelId) {
+    const reds = rows.filter((r) => !r.meets).length;
+    const aspirationalCodes = aspirationalLevels(this.framework, levelId).map((l) => l.code);
+    const text = careerSuggestion({ reds, total: rows.length, aspirationalCodes });
+    return text ? html`<p class="note">${text}</p>` : null;
+  }
+
+  _assess(levelId, row) {
+    this.dispatchEvent(new CustomEvent('assess-request', {
+      detail: { levelId, dimensionId: row.dimension.id, text: row.text, meets: row.meets, note: row.note },
+      bubbles: true, composed: true,
+    }));
   }
 
   _row(name, text, chip, extra = null) {

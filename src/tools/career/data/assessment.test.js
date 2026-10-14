@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { assessmentRows, improvementPoints, careerSuggestion } from './assessment.js';
+import { assessmentRows, improvementPoints, careerSuggestion, assessmentMark } from './assessment.js';
+
+describe('career — assessmentMark (RMR-TSK-0707)', () => {
+  const BY = { uid: 'em', name: 'EM' };
+
+  it('cumple o no llega, siempre con el porqué, quién y cuándo', () => {
+    expect(assessmentMark({ meets: false, note: '  Le falta documentar  ', by: BY, at: 't' }))
+      .toEqual({ meets: false, note: 'Le falta documentar', by: BY, at: 't' });
+    expect(assessmentMark({ meets: true, note: 'Lo demuestra cada sprint', by: BY, at: 't' }).meets).toBe(true);
+  });
+
+  it('sin razón no hay marca, tanto si cumple como si no', () => {
+    expect(() => assessmentMark({ meets: true, note: ' ', by: BY, at: 't' })).toThrow(/por qué/i);
+    expect(() => assessmentMark({ meets: false, note: '', by: BY, at: 't' })).toThrow(/por qué/i);
+  });
+
+  it('la razón tiene tope', () => {
+    expect(() => assessmentMark({ meets: true, note: 'a'.repeat(1001), by: BY, at: 't' })).toThrow(/1000/);
+  });
+});
 
 /**
  * Framework mínimo con dos dimensiones y una expectativa para 'l1' en la

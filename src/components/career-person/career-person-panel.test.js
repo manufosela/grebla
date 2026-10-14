@@ -3,7 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const lib = vi.hoisted(() => ({ listClaims: vi.fn(), submitClaim: vi.fn(), reviewClaim: vi.fn(), markAsReviewer: vi.fn() }));
 vi.mock('../../lib/careerClaims.js', () => lib);
-const assess = vi.hoisted(() => ({ getLevelAssessment: vi.fn(), saveLevelAssessment: vi.fn(), getCareerAssessment: vi.fn() }));
+const assess = vi.hoisted(() => ({
+  getLevelAssessment: vi.fn(), saveLevelAssessment: vi.fn(), getCareerAssessment: vi.fn(), saveCareerAssessment: vi.fn(),
+}));
 vi.mock('../../lib/careerAssessment.js', () => assess);
 vi.mock('../../lib/auth.js', () => ({ getCurrentUser: () => ({ uid: 'u-dev', displayName: 'Dev' }) }));
 
@@ -58,6 +60,24 @@ describe('<career-person-panel>', () => {
     });
     expect(lib.reviewClaim).not.toHaveBeenCalled();
     expect(c._dialog).toBeNull();
+  });
+
+  it('valorar el nivel actual guarda la marca con su porqué sin pisar las demás (RMR-TSK-0707)', async () => {
+    const otra = { meets: true, note: 'Bien', by: { uid: 'x', name: 'X' }, at: 't0' };
+    const c = ctx({ _dialog: 'review', _current: { byDimension: { prod: otra } } });
+    await _onReviewSubmit.call(c, { detail: { mode: 'assess', dimensionId: 'tech', decision: 'reject', reason: ' Le falta documentar ' } });
+    const [personId, byDimension, by] = assess.saveCareerAssessment.mock.calls[0];
+    expect([personId, by]).toEqual(['dev', { uid: 'u-dev', name: 'Dev' }]);
+    expect(byDimension.prod).toEqual(otra);
+    expect(byDimension.tech).toMatchObject({ meets: false, note: 'Le falta documentar', by: { uid: 'u-dev', name: 'Dev' } });
+    expect(c._dialog).toBeNull();
+  });
+
+  it('valorar sin porqué no guarda y el diálogo sigue abierto', async () => {
+    const c = ctx({ _dialog: 'review', _current: { byDimension: {} } });
+    await _onReviewSubmit.call(c, { detail: { mode: 'assess', dimensionId: 'tech', decision: 'accept', reason: '' } });
+    expect(assess.saveCareerAssessment).not.toHaveBeenCalled();
+    expect([c._dialog, c._error]).toEqual(['review', expect.stringMatching(/por qué/i)]);
   });
 
   it('si la revisión falla, el diálogo sigue abierto con el error', async () => {

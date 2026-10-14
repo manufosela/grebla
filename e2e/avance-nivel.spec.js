@@ -91,6 +91,7 @@ async function conIngenieroEnL1(fn) {
     if (jefe0) await jefe.set(jefe0);
     else await jefe.delete();
     for (const c of (await db().collection(`${ENG}/careerClaims`).get()).docs) await c.ref.delete();
+    await db().doc(`${ENG}/career/assessment`).delete();
     await db().doc(ENG).set(ficha0);
     if (previo) await db().doc('careerFramework/engineering').set(previo);
     else await db().doc('careerFramework/engineering').delete();
@@ -224,6 +225,40 @@ test('Expectativas tiene una pestaña por nivel: abre en el siguiente y el actua
     await niveles.getByRole('tab', { name: /L1/ }).click();
     await expect(niveles).toContainText('No llega');
     await expect(niveles).toContainText('Aún le cuesta que otros lean su código');  });
+});
+
+test('el responsable valora el nivel actual con su porqué y el ingeniero lo ve (RMR-TSK-0707)', async ({ page, browser }) => {
+  test.setTimeout(90_000); // dos sesiones: el responsable y el ingeniero
+  await conIngenieroEnL1(async () => {
+    await signInAs(page, 'head');
+    await page.goto('/tools/team');
+    await page.getByRole('button', { name: 'Abrir Carrera de Ingeniero E2E' }).click();
+    await ficha(page).getByRole('tab', { name: 'Expectativas' }).click();
+    const niveles = ficha(page).locator('career-levels');
+    await niveles.getByRole('tab', { name: /L1/ }).click();
+    const tech = niveles.locator('li', { hasText: 'Técnica' }).first();
+    await tech.getByRole('button', { name: 'Valorar' }).click();
+    const dialogo = ficha(page).locator('career-review-dialog');
+    await dialogo.getByRole('button', { name: 'No llega' }).click();
+    await expect(dialogo).toContainText('hace falta un motivo');
+    await dialogo.getByRole('textbox').fill('Sus PR aún necesitan muchas rondas');
+    await dialogo.getByRole('button', { name: 'No llega' }).click();
+    await expect(tech).toContainText('No llega');
+    await expect(tech).toContainText('Sus PR aún necesitan muchas rondas');
+
+    // El ingeniero lo ve en su Mi espacio, sin poder valorarse.
+    const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL });
+    const eng = await ctx.newPage();
+    await signInAs(eng, 'engineer');
+    await eng.goto('/mi-espacio#carrera');
+    const espacio = eng.locator('engineer-space');
+    await espacio.getByRole('tab', { name: 'Expectativas' }).click();
+    await espacio.locator('career-levels').getByRole('tab', { name: /L1/ }).click();
+    const suya = espacio.locator('career-levels li', { hasText: 'Técnica' }).first();
+    await expect(suya).toContainText('Sus PR aún necesitan muchas rondas');
+    await expect(suya.getByRole('button', { name: 'Valorar' })).toHaveCount(0);
+    await ctx.close();
+  });
 });
 
 test('el hash viejo de «Carrera» lleva al seguimiento, no a una pestaña que ya no existe', async ({ page }) => {
