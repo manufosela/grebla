@@ -29,4 +29,21 @@ describe('<career-claim-dialog>', () => {
       dimensionId: 'tech', evidence: { text: 'ADR del cobro', links: [{ kind: 'adr', url: 'https://x.dev/7' }] },
     });
   });
+
+  it('en modo entrada sale el tipo elegido con la evidencia (RMR-TSK-0711)', () => {
+    const c = ctx({ request: { mode: 'entry', kinds: ['meets', 'misses', 'proof'], levelId: 'l2', dimensionId: 'tech' },
+      _kind: 'misses', _text: 'Sus PR necesitan rondas' });
+    _submit.call(c);
+    expect(c.dispatchEvent.mock.calls[0][0].detail).toMatchObject({ kind: 'misses', evidence: { text: 'Sus PR necesitan rondas' } });
+  });
+
+  it('en modo entrada no sale sin tipo, ni con uno que no le toca a quien escribe', () => {
+    const sinTipo = ctx({ request: { mode: 'entry', kinds: ['meets', 'misses', 'proof'] }, _kind: '', _text: 'x' });
+    _submit.call(sinTipo);
+    expect(sinTipo.dispatchEvent).not.toHaveBeenCalled();
+    expect(sinTipo._invalid).toMatch(/tipo/i);
+    const ingeniero = ctx({ request: { mode: 'entry', kinds: ['proof'] }, _kind: 'meets', _text: 'x' });
+    _submit.call(ingeniero);
+    expect(ingeniero.dispatchEvent).not.toHaveBeenCalled();
+  });
 });
