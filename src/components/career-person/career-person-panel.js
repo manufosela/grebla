@@ -5,14 +5,14 @@
  * 'seguimiento' (el subnivel que sale de las marcas ACEPTADAS y sus cierres).
  */
 import { LitElement, html, css } from 'lit';
-import './career-expectations.js';
+import './career-levels.js';
 import './career-claim-dialog.js';
 import './career-review-dialog.js';
 import './career-plan.js';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim, markAsReviewer } from '../../lib/careerClaims.js';
-import { getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
+import { getLevelAssessment, saveLevelAssessment, getCareerAssessment } from '../../lib/careerAssessment.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { levelProgressFor, levelCompletion, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 import { marksFromClaims } from '../../tools/career/domain/claims.js';
@@ -27,6 +27,8 @@ export class CareerPersonPanel extends LitElement {
     section: { type: String },
     _claims: { state: true },
     _assessment: { state: true },
+    /** Valoración del nivel actual (RMR-TSK-0706). */
+    _current: { state: true },
     _dialog: { state: true },
     _request: { state: true },
     _busy: { state: true },
@@ -48,6 +50,7 @@ export class CareerPersonPanel extends LitElement {
     this.section = 'expectativas';
     this._claims = [];
     this._assessment = null;
+    this._current = null;
     this._dialog = null;
     this._busy = false;
     this._error = '';
@@ -56,7 +59,7 @@ export class CareerPersonPanel extends LitElement {
   updated(changed) {
     if (!(changed.has('person') || changed.has('framework')) || !this.person?.id) return;
     // Lo de la persona anterior no se queda a la vista mientras se lee la nueva.
-    if (changed.has('person')) Object.assign(this, { _claims: [], _assessment: null });
+    if (changed.has('person')) Object.assign(this, { _claims: [], _assessment: null, _current: null });
     this._load();
   }
 
@@ -70,14 +73,14 @@ export class CareerPersonPanel extends LitElement {
     const personId = this.person.id;
     const next = this._next;
     try {
-      const [claims, assessment] = await Promise.all([
-        listClaims(personId), next ? getLevelAssessment(personId, next.id) : null,
+      const [claims, assessment, current] = await Promise.all([
+        listClaims(personId), next ? getLevelAssessment(personId, next.id) : null, getCareerAssessment(personId),
       ]);
       if (token !== this._loadToken) return false;
-      Object.assign(this, { _error: '', _claims: claims, _assessment: assessment });
+      Object.assign(this, { _error: '', _claims: claims, _assessment: assessment, _current: current });
       return true;
     } catch (err) {
-      if (token === this._loadToken) Object.assign(this, { _error: err.message, _claims: [], _assessment: null });
+      if (token === this._loadToken) Object.assign(this, { _error: err.message, _claims: [], _assessment: null, _current: null });
       return false;
     }
   }
@@ -88,11 +91,11 @@ export class CareerPersonPanel extends LitElement {
     return html`
       ${this.section === 'seguimiento'
         ? this._renderProgress()
-        : html`<career-expectations .person=${this.person} .framework=${this.framework} .claims=${this._claims}
-            .viewerUid=${viewerUid}
+        : html`<career-levels .person=${this.person} .framework=${this.framework} .claims=${this._claims}
+            .assessment=${this._current} .viewerUid=${viewerUid}
             @claim-request=${(e) => this._open('claim', e.detail)}
             @review-request=${(e) => this._open('review', e.detail)}
-            @mark-request=${(e) => this._open('review', { ...e.detail, mode: 'mark' })}></career-expectations>`}
+            @mark-request=${(e) => this._open('review', { ...e.detail, mode: 'mark' })}></career-levels>`}
       ${this._error && !this._dialog ? html`<p class="error" role="alert">${this._error}</p>` : null}
       ${this._busy && !this._dialog ? html`<busy-overlay message="Guardando…"></busy-overlay>` : null}
       <career-claim-dialog .open=${this._dialog === 'claim'} .request=${this._request} ?busy=${this._busy}

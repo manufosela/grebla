@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const lib = vi.hoisted(() => ({ listClaims: vi.fn(), submitClaim: vi.fn(), reviewClaim: vi.fn(), markAsReviewer: vi.fn() }));
 vi.mock('../../lib/careerClaims.js', () => lib);
-const assess = vi.hoisted(() => ({ getLevelAssessment: vi.fn(), saveLevelAssessment: vi.fn() }));
+const assess = vi.hoisted(() => ({ getLevelAssessment: vi.fn(), saveLevelAssessment: vi.fn(), getCareerAssessment: vi.fn() }));
 vi.mock('../../lib/careerAssessment.js', () => assess);
 vi.mock('../../lib/auth.js', () => ({ getCurrentUser: () => ({ uid: 'u-dev', displayName: 'Dev' }) }));
 

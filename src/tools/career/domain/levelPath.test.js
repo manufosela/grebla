@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { levelPath } from './levelPath.js';
+import { levelPath, defaultLevelTab } from './levelPath.js';
 import { seedFramework } from '../data/framework.js';
 
 const fw = seedFramework();
@@ -28,6 +28,12 @@ describe('levelPath: las pestañas de nivel de una persona (RMR-TSK-0702)', () =
     expect(levelPath(fw, null)).toEqual([]);
     expect(levelPath(fw, 'l9')).toEqual([]);
     expect(levelPath(null, 'l2')).toEqual([]);
+  });
+
+  it('la pestaña que se abre es el nivel siguiente; en el último, el actual (RMR-TSK-0706)', () => {
+    expect(defaultLevelTab(levelPath(fw, 'l2'))).toBe('l3');
+    expect(defaultLevelTab(levelPath(fw, 'l5'))).toBe('l5');
+    expect(defaultLevelTab([])).toBeNull();
   });
 
   it('un track sin rama declarada no arrastra niveles de otro', () => {

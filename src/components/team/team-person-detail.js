@@ -1825,7 +1825,6 @@ export class TeamPersonDetail extends LitElement {
     const level = getLevel(fw, this.person.levelId);
 
     const trackName = (trackId) => (fw?.tracks ?? []).find((t) => t.id === trackId)?.name ?? '';
-    const expectations = level ? expectationsForLevel(fw, this.person.levelId) : [];
     const addendums = addendumsForDisciplines(fw, disciplineIds);
     const addendumsByDiscipline = Object.groupBy(addendums, (a) => a.discipline.id);
     const aspirations = level ? aspirationalLevels(fw, this.person.levelId) : [];
@@ -1857,23 +1856,6 @@ export class TeamPersonDetail extends LitElement {
       section=${section}></career-person-panel>`;
     const expectativasPanel = () => html`
       ${level ? careerPanel('expectativas') : null}
-      ${level
-        ? html`
-            <p class="sub">Lo que se te reconoce</p>
-            <ul class="expect">
-              ${expectations.map(
-                (row) => html`
-                  <li>
-                    <span class="dim">${row.dimension.name}</span>:
-                    ${row.text
-                      ? html`<span class="txt">${row.text}</span>`
-                      : html`<span class="todo">pendiente de definir</span>`}
-                  </li>
-                `,
-              )}
-            </ul>
-          `
-        : null}
       ${addendums.length > 0
         ? html`
             <p class="sub">Enfoque por disciplina</p>

@@ -37,3 +37,14 @@ export function levelPath(framework, levelId) {
   };
   return steps.map((level, i) => ({ level, state: stateOf(i) }));
 }
+
+/**
+ * Pestaña que se abre: el nivel siguiente, que es donde se trabaja; si ya está
+ * en el último, el actual (RMR-TSK-0706).
+ * @param {PathStep[]} steps
+ * @returns {string|null}
+ */
+export function defaultLevelTab(steps) {
+  const step = steps.find((s) => s.state === 'above') ?? steps.find((s) => s.state === 'current');
+  return step?.level.id ?? null;
+}
