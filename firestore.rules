@@ -493,6 +493,55 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Historial de expectativas (RMR-TSK-0710): solo se añade, la evolución no
+      // se reescribe. El ingeniero aporta pruebas suyas; quien lo lleva (dueño de
+      // la ficha, sus revisores, su directorio, el superadmin) añade cualquier
+      // tipo. El comodín de abajo NO escribe aquí: si no, se podría editar o borrar.
+      match /careerEvidence/{entryId} {
+        function subject() {
+          return get(/databases/$(database)/documents/people/$(personId)).data;
+        }
+        function isSubject() {
+          return isSignedIn() && subject().get('uid', null) == request.auth.uid;
+        }
+        function reviewers() {
+          return subject().get('careerReviewers', {});
+        }
+        function leadsSubject() {
+          return isSignedIn() && !isSubject() && (isSuperAdmin()
+            || subject().get('ownerLeaderUid', null) == request.auth.uid
+            || request.auth.uid in subject().get('directoryManagerUids', [])
+            || reviewers().get('firstUid', null) == request.auth.uid
+            || reviewers().get('secondUid', null) == request.auth.uid);
+        }
+        function validLink(l) {
+          return l is map && l.keys().hasOnly(['kind', 'url']) && l.kind in ['pr', 'adr', 'rfc', 'doc', 'otro']
+            && l.url is string && l.url.matches('^https?://\\S+$');
+        }
+        // Hasta cinco enlaces, uno a uno (las reglas no iteran listas).
+        function validLinks(ls) {
+          return ls is list && ls.size() <= 5
+            && (ls.size() < 1 || validLink(ls[0])) && (ls.size() < 2 || validLink(ls[1]))
+            && (ls.size() < 3 || validLink(ls[2])) && (ls.size() < 4 || validLink(ls[3]))
+            && (ls.size() < 5 || validLink(ls[4]));
+        }
+        function validEntry(d) {
+          return d.keys().hasOnly(['levelId', 'dimensionId', 'kind', 'text', 'links', 'by', 'at'])
+            && d.levelId is string && d.levelId.size() > 0 && d.dimensionId is string && d.dimensionId.size() > 0
+            && d.kind in ['meets', 'misses', 'proof']
+            && d.text is string && d.text.size() >= 1 && d.text.size() <= 1000
+            && validLinks(d.links)
+            && d.by is map && d.by.keys().hasOnly(['uid', 'name']) && d.by.uid == request.auth.uid
+            && d.by.name is string && d.by.name.size() >= 1 && d.by.name.size() <= 200
+            && d.at is string;
+        }
+        allow read: if isSubject() || leadsSubject()
+          || (isSignedIn() && reviewers().get('arbiterUid', null) == request.auth.uid);
+        allow create: if validEntry(request.resource.data)
+          && (leadsSubject() || (isSubject() && request.resource.data.kind == 'proof'));
+        allow update, delete: if false;
+      }
+
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
       match /{document=**} {
@@ -543,7 +592,7 @@ service cloud.firestore {
             && resource != null && request.resource != null;
         }
         allow read: if canView();
-        allow write: if canEdit() && document[0] != 'careerClaims'
+        allow write: if canEdit() && document[0] != 'careerClaims' && document[0] != 'careerEvidence'
           && !(isPersonDocUpdate() && updatesNotionFields())
           && !(isPersonDocUpdate() && touchesCareerReviewers())
           && !(isPersonDocUpdate() && touchesDirectoryManagers() && !isSuperAdmin());
