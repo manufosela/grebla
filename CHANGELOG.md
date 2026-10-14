@@ -15,6 +15,26 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.252.0] - 2026-10-14
+
+### Añadido
+
+- Expectativas con una pestaña por nivel del camino de la persona (IC entero; TL y EM,
+  los niveles IC hasta su rama y después los de su track). Los inferiores salen como
+  superados, el actual con su valoración y los superiores con sus marcas. Se abre en el
+  nivel siguiente (RMR-TSK-0702, RMR-TSK-0706).
+- El revisor marca directamente una expectativa con «Cumple» o «No llega» y su motivo,
+  sin esperar a que la persona la proponga. Cuenta como su revisión; si hay segundo
+  revisor, falta la suya (RMR-TSK-0704, RMR-TSK-0705).
+- El manager valora el nivel actual desde su pestaña, expectativa a expectativa, y la
+  persona ve el porqué en su Mi espacio (RMR-TSK-0707).
+
+### Cambiado
+
+- Aceptar una marca también exige motivo, igual que rechazarla (RMR-TSK-0703).
+- La valoración del nivel actual sale de la pestaña «Nivel» y «Lo que se te reconoce»
+  sale de Mi nivel: todo vive en Expectativas (RMR-TSK-0706, RMR-TSK-0707).
+
 ## [1.251.0] - 2026-10-13
 
 ### Añadido
