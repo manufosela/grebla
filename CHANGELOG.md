@@ -15,6 +15,24 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.253.0] - 2026-10-14
+
+### Añadido
+
+- Historial de cada expectativa: en lugar de una nota que se sobrescribe, entradas
+  con su tipo (llega, no llega o prueba), texto, enlaces, autor y fecha. La última con
+  estado dice dónde está; el historial es la evolución. Quien lleva a la persona pone
+  el estado; la persona aporta pruebas. Solo se añade, nada se edita ni se borra
+  (RMR-TSK-0709 a RMR-TSK-0712).
+- Los niveles superiores se leen con el mismo historial: evidencia, revisiones y
+  rondas anteriores (RMR-TSK-0714).
+- EM por equipo: el superadmin elige en Organigrama › EM por equipo qué manager es EM
+  de cada equipo de Tech. Para todo lo de EM (ficha en Mi equipo, O2O, revisar la
+  carrera) pasa a ser el jefe de los ICs y leads del equipo; el organigrama oficial
+  sigue siendo el de Notion (RMR-TSK-0715 a RMR-TSK-0718).
+- Script para pasar las valoraciones antiguas al historial, con simulación por
+  defecto (RMR-TSK-0713).
+
 ## [1.252.0] - 2026-10-14
 
 ### Añadido
