@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { newEntry, expectationState, timelineFor, ENTRY_KINDS, entryKindsFor } from './evidence.js';
+import { newEntry, expectationState, timelineFor, ENTRY_KINDS, entryKindsFor, entriesFromLegacyAssessment } from './evidence.js';
+
+describe('entriesFromLegacyAssessment: las valoraciones con nota pasan al historial (RMR-TSK-0713)', () => {
+  const by = { uid: 'em', name: 'EM' };
+  const at = '2026-10-01T08:00:00.000Z';
+
+  it('«no llega» siempre; «cumple» solo si tenía nota (sin ella no aporta nada al historial)', () => {
+    const byDimension = {
+      tech: { meets: false, note: 'Sus PR necesitan rondas' },
+      product: { meets: false, note: '' },
+      culture: { meets: true, note: 'Cuida el listón' },
+      reliability: { meets: true, note: '' },
+    };
+    const entries = entriesFromLegacyAssessment({ byDimension }, { levelId: 'l2', by, at });
+    expect(entries.map((e) => [e.id, e.kind])).toEqual([['legacy-tech', 'misses'], ['legacy-product', 'misses'], ['legacy-culture', 'meets']]);
+    expect(entries[0].entry).toEqual({ levelId: 'l2', dimensionId: 'tech', kind: 'misses', text: 'Sus PR necesitan rondas', links: [], by, at });
+    expect(entries[1].entry.text).toMatch(/sin motivo/i);
+  });
+
+  it('sin valoración o sin nivel no hay nada que migrar', () => {
+    expect(entriesFromLegacyAssessment(null, { levelId: 'l2', by, at })).toEqual([]);
+    expect(entriesFromLegacyAssessment({ byDimension: { tech: { meets: false } } }, { levelId: null, by, at })).toEqual([]);
+  });
+});
 
 describe('entryKindsFor: qué puede añadir quien mira (RMR-TSK-0712)', () => {
   it('quien lleva a la persona añade cualquier tipo; la persona, pruebas; el resto, nada', () => {
