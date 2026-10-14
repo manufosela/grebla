@@ -52,6 +52,18 @@ function canonicalInstant(at) {
   return iso;
 }
 
+/**
+ * Tipos que puede añadir quien mira: quien lleva a la persona, cualquiera; la
+ * propia persona, solo pruebas (el estado no se lo pone ella). Mismo reparto
+ * que las reglas.
+ * @param {{ isSelf: boolean, leads: boolean }} viewer
+ * @returns {EntryKind[]}
+ */
+export function entryKindsFor({ isSelf, leads }) {
+  if (isSelf) return ['proof'];
+  return leads ? [...ENTRY_KINDS] : [];
+}
+
 const isOf = (levelId, dimensionId) => (e) => e?.levelId === levelId && e?.dimensionId === dimensionId;
 const newestFirst = (a, b) => Date.parse(b.at) - Date.parse(a.at);
 

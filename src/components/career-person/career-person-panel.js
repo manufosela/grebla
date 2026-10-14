@@ -12,8 +12,8 @@ import './career-plan.js';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim, markAsReviewer } from '../../lib/careerClaims.js';
-import { getLevelAssessment, saveLevelAssessment, getCareerAssessment, saveCareerAssessment } from '../../lib/careerAssessment.js';
-import { assessmentMark } from '../../tools/career/data/assessment.js';
+import { getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
+import { listEvidence, addEvidence } from '../../lib/careerEvidence.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { levelProgressFor, levelCompletion, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 import { marksFromClaims } from '../../tools/career/domain/claims.js';
@@ -26,12 +26,12 @@ export class CareerPersonPanel extends LitElement {
     person: { attribute: false },
     framework: { attribute: false },
     section: { type: String },
-    /** La ficha deja valorar el nivel actual; Mi espacio, no (RMR-TSK-0707). */
+    /** La ficha pone el estado del nivel actual; Mi espacio aporta pruebas (RMR-TSK-0712). */
     canAssess: { type: Boolean },
     _claims: { state: true },
     _assessment: { state: true },
-    /** Valoración del nivel actual (RMR-TSK-0706). */
-    _current: { state: true },
+    /** Historial de expectativas (RMR-TSK-0712). */
+    _entries: { state: true },
     _dialog: { state: true },
     _request: { state: true },
     _busy: { state: true },
@@ -54,7 +54,7 @@ export class CareerPersonPanel extends LitElement {
     this.canAssess = false;
     this._claims = [];
     this._assessment = null;
-    this._current = null;
+    this._entries = [];
     this._dialog = null;
     this._busy = false;
     this._error = '';
@@ -63,7 +63,7 @@ export class CareerPersonPanel extends LitElement {
   updated(changed) {
     if (!(changed.has('person') || changed.has('framework')) || !this.person?.id) return;
     // Lo de la persona anterior no se queda a la vista mientras se lee la nueva.
-    if (changed.has('person')) Object.assign(this, { _claims: [], _assessment: null, _current: null });
+    if (changed.has('person')) Object.assign(this, { _claims: [], _assessment: null, _entries: [] });
     this._load();
   }
 
@@ -77,14 +77,14 @@ export class CareerPersonPanel extends LitElement {
     const personId = this.person.id;
     const next = this._next;
     try {
-      const [claims, assessment, current] = await Promise.all([
-        listClaims(personId), next ? getLevelAssessment(personId, next.id) : null, getCareerAssessment(personId),
+      const [claims, assessment, entries] = await Promise.all([
+        listClaims(personId), next ? getLevelAssessment(personId, next.id) : null, listEvidence(personId),
       ]);
       if (token !== this._loadToken) return false;
-      Object.assign(this, { _error: '', _claims: claims, _assessment: assessment, _current: current });
+      Object.assign(this, { _error: '', _claims: claims, _assessment: assessment, _entries: entries });
       return true;
     } catch (err) {
-      if (token === this._loadToken) Object.assign(this, { _error: err.message, _claims: [], _assessment: null, _current: null });
+      if (token === this._loadToken) Object.assign(this, { _error: err.message, _claims: [], _assessment: null, _entries: [] });
       return false;
     }
   }
@@ -96,8 +96,8 @@ export class CareerPersonPanel extends LitElement {
       ${this.section === 'seguimiento'
         ? this._renderProgress()
         : html`<career-levels .person=${this.person} .framework=${this.framework} .claims=${this._claims}
-            .assessment=${this._current} .viewerUid=${viewerUid} ?canAssess=${this.canAssess}
-            @assess-request=${(e) => this._open('review', { ...e.detail, mode: 'assess' })}
+            .entries=${this._entries} .viewerUid=${viewerUid} ?canAssess=${this.canAssess}
+            @evidence-request=${(e) => this._open('claim', e.detail)}
             @claim-request=${(e) => this._open('claim', e.detail)}
             @review-request=${(e) => this._open('review', e.detail)}
             @mark-request=${(e) => this._open('review', { ...e.detail, mode: 'mark' })}></career-levels>`}
@@ -179,7 +179,12 @@ export class CareerPersonPanel extends LitElement {
   }
 
   async _onClaimSubmit(e) {
-    const { levelId, dimensionId, evidence } = e.detail;
+    const { levelId, dimensionId, evidence, mode, kind } = e.detail;
+    if (mode === 'entry') {
+      // Una entrada más en el historial de la expectativa (RMR-TSK-0712).
+      await this._save(() => addEvidence(this.person.id, { levelId, dimensionId, kind, ...evidence, by: author() }));
+      return;
+    }
     await this._save(() => submitClaim(this.person.id, { levelId, dimensionId, evidence, by: author() }));
   }
 
@@ -187,15 +192,6 @@ export class CareerPersonPanel extends LitElement {
     const { claim, slot, decision, reason, mode, levelId, dimensionId } = e.detail;
     if (mode === 'mark') {
       await this._save(() => markAsReviewer(this.person.id, { levelId, dimensionId, slot, decision, reason, by: author() }));
-      return;
-    }
-    if (mode === 'assess') {
-      // Se escribe la valoración entera: el resto de marcas no se toca (RMR-TSK-0707).
-      await this._save(() => {
-        const mark = assessmentMark({ meets: decision === 'accept', note: reason, by: author(), at: new Date().toISOString() });
-        const byDimension = { ...this._current?.byDimension, [dimensionId]: mark };
-        return saveCareerAssessment(this.person.id, byDimension, author());
-      });
       return;
     }
     await this._save(() => reviewClaim(this.person.id, claim.id, slot, { decision, reason, by: author() }));

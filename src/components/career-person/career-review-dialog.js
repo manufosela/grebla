@@ -45,8 +45,7 @@ export class CareerReviewDialog extends LitElement {
 
   willUpdate(changed) {
     if (changed.has('request')) {
-      // Al revalorar, se parte del porqué que ya había.
-      this._reason = this.request?.note ?? '';
+      this._reason = '';
       this._invalid = '';
     }
   }
@@ -54,12 +53,10 @@ export class CareerReviewDialog extends LitElement {
   render() {
     const claim = this.request?.claim;
     const links = (claim?.evidence?.links ?? []).filter((l) => isWebUrl(l.url));
-    // Marcar (RMR-TSK-0705) o valorar el nivel actual (RMR-TSK-0707): se decide sin
-    // marca previa, así que no hay evidencia que mostrar.
-    const mode = this.request?.mode;
-    const marking = mode === 'mark' || mode === 'assess';
-    const headings = { mark: 'Marcar la expectativa', assess: 'Valorar la expectativa', arbiter: 'Desempatar' };
-    const heading = headings[marking ? mode : this.request?.slot] ?? 'Revisar la marca';
+    // Marcar (RMR-TSK-0705): el revisor decide sin marca previa; no hay evidencia que mostrar.
+    const marking = this.request?.mode === 'mark';
+    const headings = { mark: 'Marcar la expectativa', arbiter: 'Desempatar' };
+    const heading = headings[marking ? 'mark' : this.request?.slot] ?? 'Revisar la marca';
     const marked = html`
       <p class="who">Marcada por ${claim?.claimedBy?.name ?? 'la persona'}.</p>
       <p class="evidence">${claim?.evidence?.text ?? ''}</p>

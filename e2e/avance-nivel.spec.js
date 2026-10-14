@@ -51,6 +51,7 @@ async function conPersonaEnL1(fn) {
     await db().doc(`${PERSON}/careerClaims/av-l2__av-product`).delete();
     await db().doc(`${PERSON}/careerAssessments/av-l2`).delete();
     await db().doc(`${PERSON}/career/assessment`).delete();
+    for (const e of (await db().collection(`${PERSON}/careerEvidence`).get()).docs) await e.ref.delete();
     await db().doc(PERSON).delete();
     if (previo) await db().doc('careerFramework/engineering').set(previo);
     else await db().doc('careerFramework/engineering').delete();
@@ -91,7 +92,7 @@ async function conIngenieroEnL1(fn) {
     if (jefe0) await jefe.set(jefe0);
     else await jefe.delete();
     for (const c of (await db().collection(`${ENG}/careerClaims`).get()).docs) await c.ref.delete();
-    await db().doc(`${ENG}/career/assessment`).delete();
+    for (const e of (await db().collection(`${ENG}/careerEvidence`).get()).docs) await e.ref.delete();
     await db().doc(ENG).set(ficha0);
     if (previo) await db().doc('careerFramework/engineering').set(previo);
     else await db().doc('careerFramework/engineering').delete();
@@ -214,8 +215,9 @@ test('el responsable marca directamente una expectativa con su motivo (RMR-TSK-0
 
 test('Expectativas tiene una pestaña por nivel: abre en el siguiente y el actual lleva su valoración (RMR-TSK-0706)', async ({ page }) => {
   await conPersonaEnL1(async () => {
-    await db().doc(`${PERSON}/career/assessment`).set({
-      byDimension: { 'av-tech': { meets: false, note: 'Aún le cuesta que otros lean su código' } },
+    await db().collection(`${PERSON}/careerEvidence`).add({
+      levelId: 'av-l1', dimensionId: 'av-tech', kind: 'misses', text: 'Aún le cuesta que otros lean su código',
+      links: [], by: { uid: 'e2e-head', name: 'Head' }, at: '2026-10-14T09:00:00.000Z',
     });
     await abrirCarrera(page);
     await ficha(page).getByRole('tab', { name: 'Expectativas' }).click();
@@ -227,7 +229,7 @@ test('Expectativas tiene una pestaña por nivel: abre en el siguiente y el actua
     await expect(niveles).toContainText('Aún le cuesta que otros lean su código');  });
 });
 
-test('el responsable valora el nivel actual con su porqué y el ingeniero lo ve (RMR-TSK-0707)', async ({ page, browser }) => {
+test('el historial del nivel actual: el responsable pone el estado, el ingeniero aporta pruebas (RMR-TSK-0712)', async ({ page, browser }) => {
   test.setTimeout(90_000); // dos sesiones: el responsable y el ingeniero
   await conIngenieroEnL1(async () => {
     await signInAs(page, 'head');
@@ -237,16 +239,17 @@ test('el responsable valora el nivel actual con su porqué y el ingeniero lo ve 
     const niveles = ficha(page).locator('career-levels');
     await niveles.getByRole('tab', { name: /L1/ }).click();
     const tech = niveles.locator('li', { hasText: 'Técnica' }).first();
-    await tech.getByRole('button', { name: 'Valorar' }).click();
-    const dialogo = ficha(page).locator('career-review-dialog');
-    await dialogo.getByRole('button', { name: 'No llega' }).click();
-    await expect(dialogo).toContainText('hace falta un motivo');
-    await dialogo.getByRole('textbox').fill('Sus PR aún necesitan muchas rondas');
-    await dialogo.getByRole('button', { name: 'No llega' }).click();
-    await expect(tech).toContainText('No llega');
+    await tech.getByRole('button', { name: 'Añadir' }).click();
+    const dialogo = ficha(page).locator('career-claim-dialog');
+    await dialogo.getByRole('button', { name: 'Guardar' }).click();
+    await expect(dialogo).toContainText('Elige el tipo');
+    await dialogo.getByRole('radio', { name: 'No llega' }).check();
+    await dialogo.getByRole('textbox').first().fill('Sus PR aún necesitan muchas rondas');
+    await dialogo.getByRole('button', { name: 'Guardar' }).click();
+    await expect(tech.locator('.chip')).toHaveText('No llega');
     await expect(tech).toContainText('Sus PR aún necesitan muchas rondas');
 
-    // El ingeniero lo ve en su Mi espacio, sin poder valorarse.
+    // El ingeniero lo ve en su Mi espacio y aporta una prueba, sin poder cambiar el estado.
     const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL });
     const eng = await ctx.newPage();
     await signInAs(eng, 'engineer');
@@ -256,8 +259,13 @@ test('el responsable valora el nivel actual con su porqué y el ingeniero lo ve 
     await espacio.locator('career-levels').getByRole('tab', { name: /L1/ }).click();
     const suya = espacio.locator('career-levels li', { hasText: 'Técnica' }).first();
     await expect(suya).toContainText('Sus PR aún necesitan muchas rondas');
-    await expect(suya.getByRole('button', { name: 'Valorar' })).toHaveCount(0);
-    await ctx.close();
+    await suya.getByRole('button', { name: 'Añadir' }).click();
+    const suyo = espacio.locator('career-claim-dialog');
+    await expect(suyo.getByRole('radio')).toHaveCount(0);
+    await suyo.getByRole('textbox').first().fill('Esta semana: PR del cobro aprobado a la primera');
+    await suyo.getByRole('button', { name: 'Guardar' }).click();
+    await expect(suya).toContainText('Esta semana: PR del cobro aprobado a la primera');
+    await expect(suya.locator('.chip')).toHaveText('No llega');    await ctx.close();
   });
 });
 
