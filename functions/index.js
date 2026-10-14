@@ -29,6 +29,7 @@ import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHe
 import { bearerFrom, agentKeyId, agentKeyVerdict, agentTeamView, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
 import { managerOnboardingPlan, directoryManagerPatches } from './orgManagers.js';
 import { careerReviewersPatches } from './careerReviewers.js';
+import { effectiveDirectory, validTeamEms, teamsWithChangedEm } from './teamEms.js';
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
@@ -2545,55 +2546,32 @@ async function onboardDirectoryManager(db, personId, uid, docs) {
   logger.info(`[org-owner] manager ${personId}: rol de líder dado`);
 }
 
+/** EM de cada equipo en GREBLA (RMR-TSK-0701): /config/org.teamEms. */
+async function readTeamEms(db) {
+  return validTeamEms((await db.doc('config/org').get()).data()?.teamEms);
+}
+
 /**
- * EL ORGANIGRAMA MANDA: cuando cambia una persona, se recalcula la propiedad
- * derivada. Dos frentes:
- *  - si cambió SU reportsToPersonId → se recalcula su propio ownerLeaderUid;
- *  - si cambió SU uid (p. ej. sellado del primer login) → se recalcula el de
- *    quienes le reportan (ahora su jefe tiene cuenta).
- * Además mantiene el ESPEJO /leaders (reportsTo + chain, RMR-TSK-0421) con el
- * que las reglas autorizan la visibilidad transitiva del subárbol.
- * Idempotente: solo escribe cuando el valor difiere (sin bucles de trigger).
+ * Recalcula lo que deriva del organigrama con el jefe EFECTIVO (Notion + EM de
+ * equipo, RMR-TSK-0716): dueño de las fichas indicadas y, para todas, el
+ * directorio de O2O, los revisores de carrera y el espejo /leaders.
+ * Idempotente: solo escribe lo que difiere.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {FirebaseFirestore.QueryDocumentSnapshot[]} docs  fichas ya leídas
+ * @param {(person: { id: string }) => boolean} ownerScope  a quién recalcular el dueño
+ * @param {string} label  para el log
  */
-export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (event) => {
-  const before = event.data?.before?.exists ? event.data.before.data() : null;
-  const after = event.data?.after?.exists ? event.data.after.data() : null;
-  if (!after) return; // borrados: los huérfanos se ven en el backfill, no aquí
-  const reportsChanged = (before?.reportsToPersonId ?? null) !== (after.reportsToPersonId ?? null);
-  const uidChanged = (before?.uid ?? null) !== (after.uid ?? null);
-  // El rango de Notion decide quién revisa la carrera (RMR-TSK-0676).
-  const levelChanged = (before?.notion?.level ?? null) !== (after.notion?.level ?? null);
-  if (!reportsChanged && !uidChanged && !levelChanged) return;
-
-  const db = getFirestore();
-  const snap = await db.collection('people').get();
-  const peopleById = new Map(snap.docs.map((d) => [d.id, d.data()]));
-  const writes = [];
-
-  if (reportsChanged) {
-    const { ownerUid } = orgOwnerUidFor(after, peopleById);
-    if (ownerUid !== undefined && (after.ownerLeaderUid ?? null) !== ownerUid) {
-      writes.push({ id: event.params.personId, ownerUid });
-    }
+async function recomputeOrg(db, docs, ownerScope, label) {
+  const directory = effectiveDirectory(docs.map((d) => ({ id: d.id, ...d.data() })), await readTeamEms(db));
+  const peopleById = new Map(directory.map((p) => [p.id, p]));
+  let owners = 0;
+  for (const p of directory.filter(ownerScope)) {
+    const { ownerUid } = orgOwnerUidFor(p, peopleById);
+    if (ownerUid === undefined || (p.ownerLeaderUid ?? null) === ownerUid) continue;
+    await db.doc(`people/${p.id}`).set({ ownerLeaderUid: ownerUid }, { merge: true });
+    owners += 1;
   }
-  if (uidChanged) {
-    for (const d of snap.docs) {
-      const p = d.data();
-      if ((p.reportsToPersonId ?? null) !== event.params.personId) continue;
-      const { ownerUid } = orgOwnerUidFor(p, peopleById);
-      if (ownerUid !== undefined && (p.ownerLeaderUid ?? null) !== ownerUid) {
-        writes.push({ id: d.id, ownerUid });
-      }
-    }
-  }
-  for (const w of writes) {
-    await db.doc(`people/${w.id}`).set({ ownerLeaderUid: w.ownerUid }, { merge: true });
-  }
-  if (writes.length) {
-    logger.info(`[org-owner] sincronizados ${writes.length} dueños desde el organigrama (${event.params.personId})`);
-  }
-  if (uidChanged && after.uid) await onboardDirectoryManager(db, event.params.personId, after.uid, snap.docs);
-  const directory = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (owners) logger.info(`[org-owner] sincronizados ${owners} dueños desde el organigrama (${label})`);
   const branchPatches = directoryManagerPatches(directory);
   for (const p of branchPatches) {
     await db.doc(`people/${p.id}`).set({ directoryManagerUids: p.uids }, { merge: true });
@@ -2608,6 +2586,56 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
   if (mirrored) {
     logger.info(`[org-owner] espejo /leaders actualizado: ${mirrored} líderes (reportsTo/chain)`);
   }
+}
+
+/**
+ * EL ORGANIGRAMA MANDA: cuando cambia una persona, se recalcula la propiedad
+ * derivada. Dos frentes:
+ *  - si cambió SU jefe (o su rango o equipo, que mueven el jefe efectivo) → se
+ *    recalcula su propio ownerLeaderUid;
+ *  - si cambió SU uid (p. ej. sellado del primer login) → se recalcula el de
+ *    quienes le reportan (ahora su jefe tiene cuenta).
+ * Además mantiene el ESPEJO /leaders (reportsTo + chain, RMR-TSK-0421) con el
+ * que las reglas autorizan la visibilidad transitiva del subárbol.
+ * Idempotente: solo escribe cuando el valor difiere (sin bucles de trigger).
+ */
+export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (event) => {
+  const before = event.data?.before?.exists ? event.data.before.data() : null;
+  const after = event.data?.after?.exists ? event.data.after.data() : null;
+  if (!after) return; // borrados: los huérfanos se ven en el backfill, no aquí
+  const id = event.params.personId;
+  const reportsChanged = (before?.reportsToPersonId ?? null) !== (after.reportsToPersonId ?? null);
+  const uidChanged = (before?.uid ?? null) !== (after.uid ?? null);
+  // El rango de Notion decide quién revisa la carrera (RMR-TSK-0676).
+  const levelChanged = (before?.notion?.level ?? null) !== (after.notion?.level ?? null);
+  // El equipo decide si tiene EM en GREBLA (RMR-TSK-0716).
+  const teamChanged = (before?.notion?.team ?? null) !== (after.notion?.team ?? null);
+  if (!reportsChanged && !uidChanged && !levelChanged && !teamChanged) return;
+
+  const db = getFirestore();
+  const snap = await db.collection('people').get();
+  if (uidChanged && after.uid) await onboardDirectoryManager(db, id, after.uid, snap.docs);
+  // Dueño: la propia ficha si cambió su jefe; si solo cambió su rango o equipo,
+  // únicamente cuando tiene jefe (sin él, su dueño puede estar puesto a mano).
+  // Y quienes cuelgan de ella si acaba de tener cuenta.
+  const isSelf = (p) => p.id === id && (reportsChanged || ((levelChanged || teamChanged) && !!p.reportsToPersonId));
+  await recomputeOrg(db, snap.docs, (p) => isSelf(p) || (uidChanged && p.reportsToPersonId === id), id);
+});
+
+/**
+ * Cambia el EM de algún equipo (RMR-TSK-0716): se recalcula el dueño de quienes
+ * están en esos equipos, y el resto de lo derivado para todos.
+ */
+export const syncTeamEms = onDocumentWritten('config/org', async (event) => {
+  const before = event.data?.before?.exists ? event.data.before.data()?.teamEms : null;
+  const after = event.data?.after?.exists ? event.data.after.data()?.teamEms : null;
+  const teams = new Set(teamsWithChangedEm(before, after));
+  if (teams.size === 0) return;
+  const db = getFirestore();
+  const snap = await db.collection('people').get();
+  // Sin jefe no hay nada que derivar: su dueño puede estar puesto a mano.
+  const inTeams = (p) => teams.has(p.notion?.team ?? '') && !!p.reportsToPersonId;
+  await recomputeOrg(db, snap.docs, inTeams, `teamEms: ${[...teams].join(', ')}`);
 });
 
 

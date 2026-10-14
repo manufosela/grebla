@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { effectiveDirectory, validTeamEms } from './teamEms.js';
+import { effectiveDirectory, validTeamEms, teamsWithChangedEm } from './teamEms.js';
+
+describe('teamsWithChangedEm: qué equipos recalcular (RMR-TSK-0716)', () => {
+  it('los que ganan, pierden o cambian de EM; los iguales no', () => {
+    expect(teamsWithChangedEm({ IA: 'nico', Backend: 'mario' }, { IA: 'otro', Platform: 'mario', Backend: 'mario' }).toSorted())
+      .toEqual(['IA', 'Platform']);
+    expect(teamsWithChangedEm({ IA: 'nico' }, {})).toEqual(['IA']);
+    expect(teamsWithChangedEm(null, null)).toEqual([]);
+  });
+});
 
 const tech = (id, level, team, reportsToPersonId, extra = {}) => ({
   id, uid: `u-${id}`, reportsToPersonId, orgBranch: 'engineering', notion: { level, team }, ...extra,
