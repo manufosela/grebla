@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.254.0] - 2026-10-16
+
+### Añadido
+
+- El historial de expectativas avisa de quién lo ve. En Mi equipo: la persona lo
+  leerá todo, y lo personal o delicado va a Performance Review, que es privado (con
+  enlace directo). En Mi espacio: lo ven tú, tu manager y quien revisa tu carrera. El
+  diálogo de añadir repite el aviso (RMR-TSK-0723).
+
 ## [1.253.0] - 2026-10-14
 
 ### Añadido
