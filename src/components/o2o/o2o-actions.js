@@ -20,6 +20,8 @@ export class O2OActions extends LitElement {
     persistence: { attribute: false },
     people: { attribute: false },
     periodId: { attribute: false },
+    /** Persona fija (ficha › O2O, RMR-TSK-0728): sin selector, sus acciones directamente. */
+    personId: { attribute: false },
     _personId: { state: true },
     _actions: { state: true },
     _loading: { state: true },
@@ -64,6 +66,7 @@ export class O2OActions extends LitElement {
     this.persistence = null;
     this.people = [];
     this.periodId = null;
+    this.personId = null;
     this._personId = '';
     this._actions = [];
     this._loading = false;
@@ -72,6 +75,10 @@ export class O2OActions extends LitElement {
     this._saving = false;
     this._error = '';
     this._confirmDelete = '';
+  }
+
+  updated(changed) {
+    if (changed.has('personId') && this.personId) this._selectPerson(this.personId);
   }
 
   get _personName() {
@@ -148,6 +155,7 @@ export class O2OActions extends LitElement {
   }
 
   _renderPicker() {
+    if (this.personId) return null;
     const options = this.people.map(
       (p) => html`<option value=${p.id} ?selected=${p.id === this._personId}>${p.name}</option>`,
     );
