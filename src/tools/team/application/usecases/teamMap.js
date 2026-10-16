@@ -25,6 +25,9 @@ function identity(person) {
     // no se lee aquí: vive en su propio subárbol, fuera de este puerto.
     levelId: person.levelId ?? null,
     external: person.external === true,
+    // Para el subnivel efectivo, el mismo cálculo que la ficha (RMR-TSK-0731).
+    subLevelOverride: person.subLevelOverride ?? null,
+    careerReviewers: person.careerReviewers ?? null,
   };
 }
 

@@ -58,15 +58,19 @@ async function conSuPersona(fn, extra = {}) {
  * Como `conSuPersona`, pero con el framework de carrera sembrado y el nivel
  * puesto. Devuelve el framework como estaba: otros specs siembran el suyo.
  */
-async function conCarrera(fn, { assessment = null } = {}) {
+async function conCarrera(fn, { misses = [] } = {}) {
   const previo = (await db().doc('careerFramework/engineering').get()).data() ?? null;
   await db().doc('careerFramework/engineering').set(FRAMEWORK);
   try {
     await conSuPersona(async () => {
-      if (assessment) {
-        await db().doc(`${PERSON}/career/assessment`).set({ byDimension: assessment });
+      // El historial de expectativas, como lo escribe la ficha (RMR-TSK-0731).
+      for (const dimensionId of misses) {
+        await db().collection(`${PERSON}/careerEvidence`).add({ levelId: 'mapa-l2', dimensionId, kind: 'misses',
+          text: 'Aún no', links: [], by: { uid: 'e2e-head', name: 'Head' }, at: '2026-10-14T09:00:00.000Z' });
       }
-      await fn();
+      try { await fn(); } finally {
+        for (const e of (await db().collection(`${PERSON}/careerEvidence`).get()).docs) await e.ref.delete();
+      }
     }, { levelId: 'mapa-l2' });
   } finally {
     if (previo) await db().doc('careerFramework/engineering').set(previo);
@@ -114,15 +118,14 @@ test('quien entra por la lista de personas vuelve a la lista', async ({ page }) 
   });
 });
 
-test('el mapa dice el nivel y que nadie ha valorado todavía', async ({ page }) => {
+test('el mapa dice el nivel y, sin «no llega», que cumple: lo mismo que la ficha', async ({ page }) => {
   await conCarrera(async () => {
     await signInAs(page, 'head');
     await page.goto('/tools/team');
 
     const fila = page.getByRole('row', { name: new RegExp(NOMBRE) });
-    await expect(fila).toContainText('L2 · Senior');
-    // Sin valorar NO puede leerse como «cumple»: nadie la ha mirado aún.
-    await expect(fila).toContainText('Sin valorar');
+    await expect(fila).toContainText('Senior');
+    await expect(fila).toContainText('Cumple las 2');
   });
 });
 
@@ -133,7 +136,7 @@ test('valorada, el mapa cuenta las expectativas que no llega', async ({ page }) 
 
     const fila = page.getByRole('row', { name: new RegExp(NOMBRE) });
     await expect(fila).toContainText('No llega en 1 expectativa de 2');
-  }, { assessment: { 'mapa-d1': { meets: false, note: '' }, 'mapa-d2': { meets: true, note: '' } } });
+  }, { misses: ['mapa-d1'] });
 });
 
 test('la celda de carrera abre la ficha en Expectativas, lista para valorar', async ({ page }) => {
