@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createMemoryO2O } from '../../infrastructure/memory/index.js';
 import {
   listActions, createAction, updateAction, toggleAction, removeAction,
@@ -16,6 +16,14 @@ describe('o2o actions usecases', () => {
     expect(a.status).toBe('open');
     expect(a.doneAt).toBeNull();
     expect(a.createdAt).toBeTruthy();
+  });
+
+  it('sin fecha límite no lleva el campo: Firestore rechaza undefined (RMR-TSK-0729)', async () => {
+    const create = vi.fn().mockResolvedValue('a1');
+    await createAction({ actions: { create } }, 'ana', { description: 'Preparar demo' });
+    expect(create.mock.calls[0][1]).not.toHaveProperty('dueDate');
+    await createAction({ actions: { create } }, 'ana', { description: 'Con fecha', dueDate: '2026-11-01' });
+    expect(create.mock.calls[1][1].dueDate).toBe('2026-11-01');
   });
 
   it('exige descripción y persona', async () => {
