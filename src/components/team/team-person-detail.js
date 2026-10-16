@@ -64,6 +64,11 @@ import { listOrgBranches } from '../../lib/orgBranches.js';
 import { departmentHasGuilds } from '../../tools/team/domain/guildScope.js';
 import '../o2o/manager-notes.js';
 import '../o2o/person-o2o-panel.js';
+import '../rm-person.js';
+import { getOrgConfig } from '../../lib/firestore.js';
+import { withRoleMirrorTab } from '../../tools/team/domain/roleMirrorScope.js';
+import { ITEMS, DIMENSIONS as RM_DIMENSIONS } from '../../data/items.js';
+import { ROLES } from '../../data/roles.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -176,6 +181,8 @@ export class TeamPersonDetail extends LitElement {
     _belbinAnswers: { state: true },
     /** Su mapa de carrera, leído al abrir Carrera › Mapa: { personId, data|error } (RMR-TSK-0736). */
     _careerMap: { state: true },
+    /** Configuración de la organización para Role Mirror; undefined = sin leer (RMR-TSK-0734). */
+    _orgConfig: { state: true },
     _career: { state: true },
     _logbook: { state: true },
     _routes: { state: true },
@@ -610,7 +617,7 @@ export class TeamPersonDetail extends LitElement {
     const perms = this._canManagePerms() ? [...SUBTABS, { id: 'permisos', label: 'Permisos' }] : SUBTABS;
     // Las performance reviews solo las ven sus managers: quien mira su propia ficha, no.
     const isSelf = Boolean(this.person?.uid) && this.person.uid === this.currentUid;
-    const base = isSelf ? perms.filter((t) => t.id !== 'perf') : perms;
+    const base = withRoleMirrorTab(isSelf ? perms.filter((t) => t.id !== 'perf') : perms, { person: this.person, isSelf });
     if (!this.person?.external) return base;
     return base.map((t) => (t.id === 'carrera' ? { ...t, label: 'Nivel' } : t));
   }
@@ -2352,6 +2359,18 @@ export class TeamPersonDetail extends LitElement {
     this.person = { ...this.person, toolOverrides };
   }
 
+  /** La fase de la organización ajusta el perfil ideal: se lee al abrir la pestaña, una vez. */
+  _renderRoleMirror() {
+    if (this._orgConfig === undefined) {
+      this._orgConfigReq ??= getOrgConfig()
+        .catch((err) => { console.warn('Role Mirror · sin configuración de la organización', err); return null; })
+        .then((config) => { this._orgConfig = config; });
+      return skeletonLines(6);
+    }
+    return html`<rm-person .person=${this.person} .items=${ITEMS} .roles=${ROLES}
+      .dimensions=${RM_DIMENSIONS} .orgConfig=${this._orgConfig}></rm-person>`;
+  }
+
   _renderActivePanel() {
     const panel = {
       datos: () => this._renderDatos(),
@@ -2360,6 +2379,8 @@ export class TeamPersonDetail extends LitElement {
       dimensiones: () => this._renderDimensions(),
       conversations: () => this._renderO2O(),
       perf: () => html`<manager-notes person-id=${this.person.id}></manager-notes>`,
+      // El mismo Role Mirror de la herramienta (RMR-TSK-0734): perfil, propuesta e histórico.
+      rolemirror: () => this._renderRoleMirror(),
       permisos: () => this._renderPermisos(),
     }[this._subtab] ?? (() => this._renderDatos());
     return panel();

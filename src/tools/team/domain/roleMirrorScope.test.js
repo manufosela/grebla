@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { ROLE_MIRROR_BRANCHES, inRoleMirrorScope, roleMirrorPeople } from './roleMirrorScope.js';
+import { ROLE_MIRROR_BRANCHES, inRoleMirrorScope, roleMirrorPeople, withRoleMirrorTab } from './roleMirrorScope.js';
+
+describe('withRoleMirrorTab: la pestaña Role Mirror de la ficha (RMR-TSK-0734)', () => {
+  const tabs = [{ id: 'datos' }, { id: 'carrera' }, { id: 'o2o' }];
+  it('a quien entra en Role Mirror se le añade tras Carrera', () => {
+    expect(withRoleMirrorTab(tabs, { person: { orgBranch: 'engineering' }, isSelf: false }).map((t) => t.id))
+      .toEqual(['datos', 'carrera', 'rolemirror', 'o2o']);
+  });
+  it('ni en la propia ficha, ni a externos, ni fuera de ingeniería', () => {
+    expect(withRoleMirrorTab(tabs, { person: { orgBranch: 'engineering' }, isSelf: true })).toEqual(tabs);
+    expect(withRoleMirrorTab(tabs, { person: { orgBranch: 'engineering', external: true }, isSelf: false })).toEqual(tabs);
+    expect(withRoleMirrorTab(tabs, { person: { orgBranch: 'product' }, isSelf: false })).toEqual(tabs);
+  });
+});
 
 /**
  * Role Mirror es de ingeniería (RMR-TSK-0560): su marco de roles habla de cómo
