@@ -38,7 +38,8 @@ function indexPeople(people) {
 
 /** Lo que Notion dice de una persona, en campos de la ficha. */
 function desiredFields(entry, ctx) {
-  const set = { name: entry.name, external: entry.type === 'Contractor', notion: notionBlock(entry) };
+  // El email también lo manda Notion: la ficha lo enseña y las encuestas lo usan (RMR-TSK-0725).
+  const set = { name: entry.name, email: norm(entry.email), external: entry.type === 'Contractor', notion: notionBlock(entry) };
   const branch = ctx.branchByLabel.get((entry.department ?? '').trim().toLowerCase());
   if (branch) set.orgBranch = branch;
   else if (entry.department) ctx.skipped.push({ name: entry.name, reason: `departamento «${entry.department}» sin rama en el catálogo` });

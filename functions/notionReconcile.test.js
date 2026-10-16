@@ -20,7 +20,7 @@ describe('planNotionSync — casado y campos que manda Notion', () => {
     expect(updates).toEqual([{
       personId: 'p1', name: 'Ana Pérez',
       set: {
-        name: 'Ana Pérez', orgBranch: 'engineering', startDate: '2024-01-15', external: false,
+        name: 'Ana Pérez', email: 'ana@example.com', orgBranch: 'engineering', startDate: '2024-01-15', external: false,
         notion: { id: 'n1', role: 'Backend Engineer', level: 'IC', department: 'Tech', team: 'Backend', type: 'Employee', status: 'Active' },
       },
     }]);
@@ -33,6 +33,14 @@ describe('planNotionSync — casado y campos que manda Notion', () => {
     ];
     const { updates } = plan([entry(), entry({ id: 'n2', name: 'Bea', email: 'Bea@example.com' })], people);
     expect(updates.map((u) => u.personId)).toEqual(['p1', 'p2']);
+  });
+
+  it('el email de Notion pasa a la ficha, en minúsculas, aunque tuviera otro (RMR-TSK-0725)', () => {
+    const people = [person('p1', { name: 'Ana Pérez', notion: { id: 'n1' }, email: 'vieja@example.com' })];
+    const { updates } = plan([entry({ email: ' Ana@Example.com ' })], people);
+    expect(updates[0].set.email).toBe('ana@example.com');
+    const { creates } = plan([entry({ email: 'Nueva@Example.com' })], []);
+    expect(creates[0].data).toMatchObject({ email: 'nueva@example.com', pendingEmail: 'nueva@example.com' });
   });
 
   it('el manager se traduce a la ficha casada; contractor es externo', () => {
@@ -51,7 +59,7 @@ describe('planNotionSync — casado y campos que manda Notion', () => {
   });
 
   it('lo que ya coincide no se reescribe: sin cambios, sin update', () => {
-    const synced = { name: 'Ana Pérez', orgBranch: 'engineering', startDate: '2024-01-15', external: false, reportsToPersonId: null,
+    const synced = { name: 'Ana Pérez', email: 'ana@example.com', orgBranch: 'engineering', startDate: '2024-01-15', external: false, reportsToPersonId: null,
       notion: { id: 'n1', role: 'Backend Engineer', level: 'IC', department: 'Tech', team: 'Backend', type: 'Employee', status: 'Active' } };
     expect(plan([entry()], [person('p1', synced, 'ana@example.com')]).updates).toEqual([]);
   });
