@@ -15,9 +15,23 @@
  * @returns {Promise<MyO2O>}
  */
 export async function getMyO2O() {
+  return callO2O('getMyO2O');
+}
+
+/**
+ * Lo mismo que la persona ve en Mi espacio, para sus managers en su ficha
+ * (RMR-TSK-0727). Las sesiones dicen de qué manager son (`leaderUid`).
+ * @param {string} personId
+ * @returns {Promise<MyO2O & { sessions: Array<{ date: string, sharedSummary: string, leaderUid: string }> }>}
+ */
+export async function getPersonO2O(personId) {
+  return callO2O('getPersonO2O', { personId });
+}
+
+async function callO2O(name, data) {
   const { getRegionalFunctions } = await import('./firebase.js');
   const { httpsCallable } = await import('firebase/functions');
   const fns = await getRegionalFunctions();
-  const res = await httpsCallable(fns, 'getMyO2O')();
+  const res = await httpsCallable(fns, name)(data);
   return /** @type {MyO2O} */ (res.data);
 }
