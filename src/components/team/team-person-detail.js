@@ -19,9 +19,6 @@ import {
   addReading,
   getPersonTimeline,
   listAreas,
-  registerConversation,
-  listConversations,
-  listSupportNotes,
   updatePerson,
   listLabels,
   listGuilds,
@@ -73,11 +70,6 @@ const CONTRIB_STATES = [
   { value: 'primary', label: 'Primario' },
 ];
 
-const CONVERSATION_TYPES = [
-  { value: 'o2o', label: '1:1 (O2O)' },
-  { value: 'catchup', label: 'Catch-up' },
-];
-
 const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
 /** @param {string} iso */
@@ -97,18 +89,6 @@ function currentAuthor() {
   const user = getCurrentUser();
   if (!user?.uid) return undefined;
   return { uid: user.uid, name: user.displayName ?? user.email ?? 'Usuario' };
-}
-
-/**
- * Línea de autoría/fecha de una entrada (nota o conversación). Con autor muestra
- * «por {nombre} · {fecha}»; sin autor (registros antiguos) solo la fecha.
- * @param {{ date: string, createdBy?: { name: string } }} entry
- * @returns {string}
- */
-function authorLine(entry) {
-  const date = formatDate(entry.date);
-  const name = entry.createdBy?.name;
-  return name ? `por ${name} · ${date}` : date;
 }
 
 const DIMENSIONS = [
@@ -180,8 +160,6 @@ export class TeamPersonDetail extends LitElement {
     _leaderUids: { state: true },
     timeline: { state: true },
     areas: { state: true },
-    conversations: { state: true },
-    notes: { state: true },
     loading: { state: true },
     error: { state: true },
     _subtab: { state: true },
@@ -194,7 +172,6 @@ export class TeamPersonDetail extends LitElement {
     /** Respuestas del cuestionario de apoyo: reactivo, la propuesta se repinta
      *  a cada conducta marcada (RMR-TSK-0494). */
     _belbinAnswers: { state: true },
-    _conv: { state: true },
     _career: { state: true },
     _logbook: { state: true },
     _routes: { state: true },
@@ -261,10 +238,6 @@ export class TeamPersonDetail extends LitElement {
     .hist .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
     .hist .when { color: var(--rm-muted, #5b6b7d); }
     .hist .lvl { font-weight: 600; }
-    /* Conversación traída por un agente (RMR-TSK-0549): se ve que no la escribió el manager. */
-    .hist .auto { white-space: nowrap; font-size: 0.75rem; font-weight: 700; padding: 0.05rem 0.45rem; border-radius: 999px;
-      color: #78350f; background: #fdf1d6; border: 1px solid #b45309; cursor: help; }
-    .hist .auto-src { font-size: 0.75rem; white-space: nowrap; color: var(--rm-accent, #2a9d8f); }
     /* El texto, en su propia linea y a ancho completo: es lo que se viene a leer,
        no un resto que compite por el hueco que quede. */
     .hist .note { display: block; margin: 0.25rem 0 0; color: var(--rm-text, #111827); line-height: 1.5; white-space: pre-wrap; }
@@ -553,10 +526,6 @@ export class TeamPersonDetail extends LitElement {
     this.timeline = { seniority: [], emotional: [], knowledge: [], contribution: [] };
     /** @type {import('../../tools/team/domain/types.js').Area[]} */
     this.areas = [];
-    /** @type {import('../../tools/team/domain/types.js').Conversation[]} */
-    this.conversations = [];
-    /** @type {import('../../tools/team/domain/types.js').SupportNote[]} */
-    this.notes = [];
     this.loading = true;
     this.error = '';
     this._form = {
@@ -568,7 +537,6 @@ export class TeamPersonDetail extends LitElement {
     /** Respuestas del cuestionario de apoyo (RMR-TSK-0494). No se guardan: son
      *  el camino para llegar a una propuesta, no un dato de la persona. */
     this._belbinAnswers = {};
-    this._conv = { type: 'o2o', date: '', notes: '' };
     this._loadedFor = null;
   }
 
@@ -1056,12 +1024,10 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, conversations, notes, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat, notionSync, branchesCat] =
+      const [timeline, areas, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat, notionSync, branchesCat] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
-          listConversations(this.persistence, this.person.id),
-          listSupportNotes(this.persistence, this.person.id),
           // Historial de rutas completadas (F3): best-effort, no debe tumbar la
           // ficha si falla (p. ej. sin permiso o sin bitácora aún).
           getPersonLogbook(this.person.id).catch(() => ({ entries: [] })),
@@ -1092,8 +1058,6 @@ export class TeamPersonDetail extends LitElement {
       this._branchesCat = branchesCat;
       this.timeline = timeline;
       this.areas = areas;
-      this.conversations = conversations;
-      this.notes = notes;
       this._logbook = logbook;
       this._labelsCat = labelsCat;
       this._guildsCat = guildsCat;
@@ -1223,27 +1187,6 @@ export class TeamPersonDetail extends LitElement {
       await this._reload();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar la contribución.';
-    }
-  }
-
-  async _saveConversation() {
-    const c = this._conv;
-    if (!c.notes.trim()) {
-      this.error = 'Escribe las notas de la conversación.';
-      return;
-    }
-    this.error = '';
-    try {
-      await registerConversation(this.persistence, this.person.id, {
-        type: c.type,
-        date: c.date || new Date().toISOString(),
-        notes: c.notes.trim(),
-        createdBy: currentAuthor(),
-      });
-      this._conv = { type: 'o2o', date: '', notes: '' };
-      await this._reload();
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'No se pudo guardar la conversación.';
     }
   }
 
@@ -1616,77 +1559,6 @@ export class TeamPersonDetail extends LitElement {
     // Un O2O es de quien lo hace: aquí, TUS O2O con esta persona (los de tu herramienta O2O).
     return html`<person-o2o .personId=${this.person.id} .leaderUid=${this.currentUid ?? null}
       .personName=${this.person.name ?? ''}></person-o2o>`;
-  }
-
-  _renderConversations() {
-    const c = this._conv;
-    const typeLabel = (t) => CONVERSATION_TYPES.find((x) => x.value === t)?.label ?? t;
-    return html`
-      <section>
-        <h3>Conversaciones</h3>
-        <div class="form">
-          <div class="row">
-            <label class="fld">Tipo
-              <select .value=${c.type} @change=${(e) => { this._conv = { ...this._conv, type: e.target.value }; }}>
-                ${CONVERSATION_TYPES.map((t) => html`<option value=${t.value} ?selected=${t.value === c.type}>${t.label}</option>`)}
-              </select>
-            </label>
-            <label class="fld">Fecha
-              <input type="date" .value=${c.date} @input=${(e) => { this._conv = { ...this._conv, date: e.target.value }; }} />
-            </label>
-          </div>
-          <label class="fld">Notas
-            <textarea
-              .value=${c.notes}
-              @input=${(e) => { this._conv = { ...this._conv, notes: e.target.value }; }}
-              placeholder="Qué se habló, acuerdos, comportamientos observados…"
-            ></textarea>
-          </label>
-          <div class="row">
-            <button class="primary" ?disabled=${!c.notes.trim()} @click=${this._saveConversation}>Registrar conversación</button>
-          </div>
-        </div>
-        ${this.conversations.length === 0
-          ? html`<p class="empty">Sin conversaciones registradas.</p>`
-          : html`
-              <ul class="hist">
-                ${this.conversations.map((cv) => this._renderConversation(cv, typeLabel))}
-              </ul>
-            `}
-      </section>
-    `;
-  }
-
-  /**
-   * Una conversación de la lista. Las que trae un agente externo
-   * (RMR-TSK-0549) se marcan: es un borrador de una máquina, no algo que haya
-   * escrito ni revisado el manager, y se dice de dónde salió para poder ir al
-   * original. El enlace solo se pinta si es una dirección web.
-   * @param {{ type: string, notes?: string, automated?: boolean, source?: {system?: string, url?: string} }} cv
-   * @param {(t: string) => string} typeLabel
-   */
-  _renderConversation(cv, typeLabel) {
-    const origen = cv.automated
-      ? html`<span class="auto" title="La trajo un agente automático; revísala y edítala si hace falta">
-          🤖 automática${cv.source?.system ? ` · ${cv.source.system}` : ''}
-        </span>${this._renderSourceLink(cv.source)}`
-      : null;
-    return html`
-      <li>
-        <div class="meta">
-          <span class="when">${authorLine(cv)}</span>
-          <span class="lvl">${typeLabel(cv.type)}</span>
-          ${origen}
-        </div>
-        <span class="note">${cv.notes}</span>
-      </li>`;
-  }
-
-  /** El enlace al origen, solo si es http(s): lo demás no se pinta como enlace. */
-  _renderSourceLink(source) {
-    const url = String(source?.url ?? '');
-    if (!/^https?:\/\//i.test(url)) return null;
-    return html`<a class="auto-src" href=${url} target="_blank" rel="noopener noreferrer">ver origen</a>`;
   }
 
   /**
