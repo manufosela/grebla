@@ -31,7 +31,8 @@ export async function createAction(persistence, personId, input) {
     status: 'open',
     periodId: input.periodId ?? null,
     originSessionId: input.originSessionId ?? null,
-    dueDate: input.dueDate,
+    // Sin fecha, sin campo: Firestore rechaza undefined (RMR-TSK-0729).
+    ...(input.dueDate ? { dueDate: input.dueDate } : {}),
     createdAt: new Date().toISOString(),
     doneAt: null,
   };
