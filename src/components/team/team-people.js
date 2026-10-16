@@ -692,7 +692,7 @@ export class TeamPeople extends LitElement {
     return html`<span class="chips">${list.map((x) => this._chipEl(x, catalog ? this._catalogColor(x, catalog) : ''))}</span>`;
   }
 
-  /** Badges LX.Y de la tabla (RMR-TSK-0429): salen de las EXPECTATIVAS cumplidas
+  /** Badges «L1-2» de la tabla (RMR-TSK-0429): salen de las EXPECTATIVAS cumplidas
    * del nivel siguiente, con el ajuste del manager encima — no del avance en el
    * mapa, que cuenta otra historia (RMR-PCS-0044). Carga perezosa y tolerante:
    * sin valoraciones legibles, la tabla sale sin badges. */

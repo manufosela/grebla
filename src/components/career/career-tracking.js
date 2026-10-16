@@ -363,7 +363,7 @@ export class CareerTracking extends LitElement {
   }
 
   /**
-   * Nivel ACTUAL con el sub-nivel efectivo (RMR-PCS-0034): «L1.2» con el porqué
+   * Nivel ACTUAL con el sub-nivel efectivo (RMR-PCS-0034): «L1-2» con el porqué
    * en el tooltip. El ✏️ solo aparece si esta pantalla tiene con qué escribir:
    * sin persistencia de Equipo, un lápiz que no guarda es una trampa.
    */
