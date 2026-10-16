@@ -33,3 +33,21 @@ test('Mi espacio enseña mi mapa: casa actual, dominadas y mi ruta', async ({ pa
     await db().doc(JOURNEY).delete();
   }
 });
+
+test('su manager ve el mismo mapa en la ficha › Carrera › Mapa, sin jugarlo (RMR-TSK-0736)', async ({ page }) => {
+  await db().doc(JOURNEY).set({ currentCity: primera.id, visitedCities: [primera.id], plannedRoute: [segunda.id] });
+  try {
+    await signInAs(page, 'head');
+    await page.goto('/tools/team');
+    await page.getByRole('button', { name: 'Abrir Carrera de Ingeniero E2E' }).click();
+    const ficha = page.locator('team-person-detail');
+    await ficha.getByRole('tab', { name: 'Mapa' }).click();
+    const mapa = ficha.locator('career-map-summary');
+    await expect(mapa).toContainText('Su isla actual');
+    await expect(mapa).toContainText('Su ruta');
+    await expect(mapa.locator('ol.route')).toContainText(segunda.name);
+    await expect(mapa.getByRole('link', { name: /jugar/ })).toHaveCount(0);
+  } finally {
+    await db().doc(JOURNEY).delete();
+  }
+});

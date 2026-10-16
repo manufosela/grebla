@@ -49,7 +49,8 @@ import { levelProgressFor, levelCompletion, subLevelCalcText } from '../../tools
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { expectationWeight } from '../../tools/career/data/framework.js';
 import '../career-person/career-person-panel.js';
-import { getPersonLogbook } from '../../lib/engineer.js';
+import { getPersonLogbook, getMyCareerMap } from '../../lib/engineer.js';
+import '../career/career-map-summary.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
 import { toggleDomain } from '../../tools/team/domain/membership.js';
@@ -150,6 +151,7 @@ const CAREER_SUBTABS = [
   { id: 'plan', label: 'Plan' },
   { id: 'expectativas', label: 'Expectativas' },
   { id: 'seguimiento', label: 'Seguimiento' },
+  { id: 'mapa', label: 'Mapa' },
   { id: 'aspiraciones', label: 'Aspiraciones' },
 ];
 
@@ -177,6 +179,8 @@ export class TeamPersonDetail extends LitElement {
     /** Respuestas del cuestionario de apoyo: reactivo, la propuesta se repinta
      *  a cada conducta marcada (RMR-TSK-0494). */
     _belbinAnswers: { state: true },
+    /** Su mapa de carrera, leído al abrir Carrera › Mapa: { personId, data|error } (RMR-TSK-0736). */
+    _careerMap: { state: true },
     /** Configuración de la organización para Role Mirror; undefined = sin leer (RMR-TSK-0734). */
     _orgConfig: { state: true },
     _career: { state: true },
@@ -1697,7 +1701,7 @@ export class TeamPersonDetail extends LitElement {
     const seguimientoPanel = () => (level ? careerPanel('seguimiento') : html`<p class="empty">Asigna el nivel en «Nivel».</p>`);
     const panel = {
       nivel: nivelPanel, plan: () => careerPanel('plan'), expectativas: expectativasPanel, seguimiento: seguimientoPanel,
-      aspiraciones: aspiracionesPanel,
+      mapa: () => this._renderCareerMap(), aspiraciones: aspiracionesPanel,
     }[active] ?? nivelPanel;
 
     return html`
@@ -1709,6 +1713,28 @@ export class TeamPersonDetail extends LitElement {
         </div>
       </section>
     `;
+  }
+
+  /**
+   * Su mapa de carrera, como lo ve en Mi espacio pero en tercera persona y sin
+   * jugar (RMR-TSK-0736): nadie juega el mapa de otro. Se lee al abrir la pestaña.
+   */
+  _renderCareerMap() {
+    const personId = this.person.id;
+    if (this._careerMap?.personId !== personId) {
+      if (this._careerMapReq !== personId) {
+        this._careerMapReq = personId;
+        getMyCareerMap(personId)
+          .then((data) => { if (this.person?.id === personId) this._careerMap = { personId, data }; })
+          .catch((err) => { if (this.person?.id === personId) this._careerMap = { personId, error: err.message }; });
+      }
+      return skeletonLines(6);
+    }
+    if (this._careerMap.error) return html`<p class="error" role="alert">No se pudo cargar su mapa: ${this._careerMap.error}</p>`;
+    const m = this._careerMap.data;
+    return html`<career-map-summary .person=${this.person} .island=${m.island} .journey=${m.journey}
+      .archipelago=${m.archipelago} .achievements=${m.achievements} .endorsements=${m.endorsements}
+      .questions=${m.questions}></career-map-summary>`;
   }
 
   /**
