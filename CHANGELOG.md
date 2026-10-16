@@ -15,6 +15,30 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.255.0] - 2026-10-16
+
+### Añadido
+
+- Ficha › O2O con tres sub-pestañas: «Próximo» (el O2O que viene y los temas que
+  la persona tiene para pensar), «Hechos» (tus O2O enteros y, de los demás
+  managers, solo lo compartido) y «Acciones» (se añaden y se marcan ahí mismo). El
+  head ve así lo compartido de los O2O de su rama, nunca las notas privadas de cada
+  EM (RMR-TSK-0727, RMR-TSK-0728, RMR-TSK-0730).
+
+### Corregido
+
+- Añadir una acción de O2O sin fecha fallaba al guardar (RMR-TSK-0729).
+- El próximo O2O solo enseña periodos en los que la persona está en «Para quién»
+  (RMR-TSK-0727).
+- El importador de Notion guarda el email en la ficha (RMR-TSK-0725).
+- Equipo › Mapa › Carrera lee lo mismo que la ficha: el historial de expectativas y
+  el subnivel «L2-3» (RMR-TSK-0731).
+
+### Quitado
+
+- El formulario suelto de «Conversaciones» de la ficha, desconectado desde la
+  1.240.0 (RMR-TSK-0726).
+
 ## [1.254.0] - 2026-10-16
 
 ### Añadido
