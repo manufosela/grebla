@@ -62,7 +62,7 @@ import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
 import { listOrgBranches } from '../../lib/orgBranches.js';
 import { departmentHasGuilds } from '../../tools/team/domain/guildScope.js';
 import '../o2o/manager-notes.js';
-import '../o2o/person-o2o.js';
+import '../o2o/person-o2o-panel.js';
 
 const CONTRIB_STATES = [
   { value: '', label: '—' },
@@ -1556,9 +1556,10 @@ export class TeamPersonDetail extends LitElement {
    * performance reviews tienen su propia pestaña (RMR-TSK-0694).
    */
   _renderO2O() {
-    // Un O2O es de quien lo hace: aquí, TUS O2O con esta persona (los de tu herramienta O2O).
-    return html`<person-o2o .personId=${this.person.id} .leaderUid=${this.currentUid ?? null}
-      .personName=${this.person.name ?? ''}></person-o2o>`;
+    // Lo que ella ve en Mi espacio, más tus O2O enteros (RMR-TSK-0728).
+    const nameOf = (uid) => this._usersCat.find((u) => u.uid === uid)?.displayName ?? null;
+    return html`<person-o2o-panel .person=${this.person} .viewerUid=${this.currentUid ?? null}
+      .nameOf=${nameOf}></person-o2o-panel>`;
   }
 
   /**
