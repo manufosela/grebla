@@ -40,15 +40,12 @@ import { getCurrentUser } from '../lib/auth.js';
 import './career/career-progression-chart.js';
 import './role-result.js';
 import './role-questionnaire.js';
-import './career/career-map.js';
+import './career/career-map-summary.js';
 import './career/career-ladder.js';
-import './career/player-card.js';
 import './marea/marea-app.js';
 import './kudos/kudos-app.js';
 import './retro/retro-app.js';
 import { getLevel, expectationsForLevel, addendumsForDisciplines, aspirationalLevels, composeTitle } from '../tools/career/data/framework.js';
-import { stats } from '../tools/career/application/usecases.js';
-import { archipelagoProgress } from '../tools/career/domain/citizenship.js';
 import { setCareerTarget, getPersonLogbook } from '../lib/engineer.js';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 import './career-person/career-person-panel.js';
@@ -212,7 +209,6 @@ export class EngineerSpace extends LitElement {
     .mot-text small { color: var(--rm-muted, #5b6b7d); font-size: 0.82rem; }
     .playlink { color: var(--rm-accent, #2a9d8f); font-weight: 700; text-decoration: none; margin-left: 0.35rem; }
     .playlink:hover { text-decoration: underline; }
-    .map-cta { margin: 0.4rem 0 1.1rem; font-size: 0.88rem; }
     .topmost { color: var(--rm-accent, #2a9d8f); font-size: 0.9rem; font-weight: 600; margin: 0.2rem 0 0; }
 
     /* ── Sección Carrera (marcado espejo de <team-person-detail>) ── */
@@ -288,19 +284,6 @@ export class EngineerSpace extends LitElement {
     .target-current .code { font-weight: 800; }
     .target-error { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--rm-coral, #c2410c); }
 
-    /* ── Sección Mapa de carrera (resumen read-only) ── */
-    .map-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.4rem; }
-    .map-head .lvl { font-weight: 800; color: var(--rm-accent, #2a9d8f); }
-    .map-head .pts { font-size: 0.85rem; color: var(--rm-muted, #5b6b7d); font-variant-numeric: tabular-nums; }
-    .progress { height: 8px; background: var(--rm-track, #e9f0f2); border-radius: 999px; overflow: hidden; margin-bottom: 1rem; }
-    .progress span { display: block; height: 100%; background: var(--rm-accent, #2a9d8f); border-radius: 999px; }
-    .now-city { margin: 0; font-weight: 700; }
-    .by-area { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem 1.25rem; }
-    .by-area .area-name { font-weight: 700; font-size: 0.85rem; margin: 0 0 0.2rem; }
-    .by-area .cities { list-style: none; margin: 0; padding: 0; font-size: 0.83rem; }
-    .by-area .cities li { padding: 0.15rem 0; color: var(--rm-text, #111827); }
-    .route { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; }
-    .route li { padding: 0.15rem 0; }
   `;
 
   constructor() {
@@ -789,119 +772,14 @@ export class EngineerSpace extends LitElement {
   }
 
   /**
-   * Bloque «Mi ficha de ciudadanía» (MC-21): el MISMO <player-card> del juego,
-   * en solo lectura, con la progresión derivada del journey + índice del
-   * archipiélago y los logros registrados (fechas). Sin índice o sin journey
-   * todavía no se pinta (el resto de la pestaña ya comunica el estado vacío).
-   * @returns {import('lit').TemplateResult|null}
-   */
-  _renderCitizenshipCard() {
-    if (!this.archipelago || !this.journey) return null;
-    const progress = archipelagoProgress(this.journey, this.archipelago.islands);
-    return html`
-      <p class="sub">Mi ficha de ciudadanía</p>
-      <player-card
-        .playerName=${this.person?.name ?? ''}
-        .progress=${progress}
-        .achievements=${this.achievements}
-        .endorsements=${this.endorsements}
-        .visitedIslands=${this.journey.visitedIslands ?? []}
-        .questions=${this.questions ?? []}
-      ></player-card>
-    `;
-  }
-
-  /**
-   * Sección «Mi mapa de carrera»: la ficha de ciudadanía (MC-21) y el resumen
-   * de solo lectura del journey sobre la isla. Muestra la isla (visual, sin
-   * acciones), progreso, ciudad actual, ciudades dominadas agrupadas por
-   * comarca y la ruta marcada. Sin botones ni escritura: <career-map> es
-   * presentacional y su evento `select-city` no se enlaza a nada.
+   * Sección «Mi mapa de carrera»: el mismo resumen que ve su manager en la ficha
+   * (RMR-TSK-0735), en primera persona y con la puerta al juego.
    * @returns {import('lit').TemplateResult}
    */
   _renderMap() {
-    const island = this.island;
-    const journey = this.journey;
-    const hasJourney = Boolean(
-      journey &&
-        (journey.currentCity ||
-          (journey.visitedCities?.length ?? 0) > 0 ||
-          (journey.plannedRoute?.length ?? 0) > 0),
-    );
-    if (!island || !hasJourney) {
-      // El ingeniero JUEGA (JG-1): sin plan trazado, la salida natural es ir
-      // al juego a trazarlo con su propia cuenta.
-      return html`<p class="empty">
-        Aún no tienes un mapa de carrera trazado.
-        <a class="playlink" href="/tools/career-map">🎮 Empieza a jugar tu mapa</a>
-      </p>`;
-    }
-
-    const s = stats(island, journey);
-    const cityById = new Map(island.cities.map((c) => [c.id, c]));
-    const cityName = (id) => cityById.get(id)?.name ?? id;
-    const current = journey.currentCity ? cityById.get(journey.currentCity) : null;
-    const visited = journey.visitedCities ?? [];
-    const route = journey.plannedRoute ?? [];
-
-    // Ciudades dominadas agrupadas por comarca (solo comarcas con visitadas).
-    const dominatedByArea = (island.areas ?? [])
-      .map((area) => ({
-        area,
-        cities: visited.map((id) => cityById.get(id)).filter((c) => c?.area === area.id),
-      }))
-      .filter((group) => group.cities.length > 0);
-
-    return html`
-      ${this._renderCitizenshipCard()}
-      <p class="sub">Mi isla actual</p>
-      <div class="map-head">
-        <span class="lvl">${s.level}</span>
-        <span class="pts">${s.points}/${s.total} pts · ${s.pct}%</span>
-      </div>
-      <div class="progress"><span style=${`width:${s.pct}%`}></span></div>
-
-      <career-map
-        .map=${island}
-        .journey=${journey}
-        .selected=${null}
-      ></career-map>
-      <p class="map-cta">
-        <a class="playlink" href="/tools/career-map">🕹️ Ver mapa completo y jugar en 3D si quieres</a>
-      </p>
-
-      <p class="sub">Casa actual</p>
-      ${current
-        ? html`<p class="now-city">${current.name}</p>`
-        : html`<p class="empty">Sin casa actual marcada.</p>`}
-
-      <p class="sub">Casas dominadas (${visited.length})</p>
-      ${dominatedByArea.length === 0
-        ? html`<p class="empty">Aún no has dominado ninguna casa.</p>`
-        : html`
-            <div class="by-area">
-              ${dominatedByArea.map(
-                (group) => html`
-                  <div class="area">
-                    <p class="area-name">${group.area.name}</p>
-                    <ul class="cities">
-                      ${group.cities.map((c) => html`<li>${c.name}</li>`)}
-                    </ul>
-                  </div>
-                `,
-              )}
-            </div>
-          `}
-
-      ${route.length > 0
-        ? html`
-            <p class="sub">Tu ruta</p>
-            <ol class="route">
-              ${route.map((id) => html`<li>${cityName(id)}</li>`)}
-            </ol>
-          `
-        : null}
-    `;
+    return html`<career-map-summary self .person=${this.person} .island=${this.island} .journey=${this.journey}
+      .archipelago=${this.archipelago} .achievements=${this.achievements} .endorsements=${this.endorsements}
+      .questions=${this.questions}></career-map-summary>`;
   }
 
   /**
