@@ -192,6 +192,7 @@ import './career-list.js';
 import './seabed-view.js';
 import './career-island-3d.js';
 import './player-card.js';
+import './career-recommendations-inbox.js';
 import './game-dialog.js';
 import './city-references.js';
 import { readStoredMuted, writeStoredMuted } from './islandAudio.js';
@@ -4162,10 +4163,26 @@ export class CareerApp extends LitElement {
           ? html`<p class="ruta-lead">Sigues el reto <strong>${this._challenge?.name ?? ''}</strong>: sus paradas en orden. Para editar tu propio camino, vuelve a «Mi propia ruta».</p>`
           : null}
         ${this.routeError ? html`<p class="error">${this.routeError}</p>` : null}
+        ${editable ? this._renderRecommendations() : null}
         ${this._renderRouteStops(stops, editable)}
         ${this._renderCompletedRoutes()}
       </section>
     </div>`;
+  }
+
+  /**
+   * Lo que te recomienda tu manager (RMR-TSK-0742), encima de tu ruta: la misma
+   * bandeja que en Mi espacio. Aceptar añade sus casas y la lista se rehace.
+   */
+  _renderRecommendations() {
+    // La misma referencia mientras no cambie la persona: si no, cada render la recargaría.
+    if (this._recoPerson?.id !== this.personId) this._recoPerson = { id: this.personId };
+    const onRoute = (e) => {
+      this.journey = { ...this.journey, plannedRoute: e.detail.plannedRoute };
+      this._refreshRouteView();
+    };
+    return html`<career-recommendations-inbox .person=${this._recoPerson} .journey=${this.journey}
+      @route-changed=${onRoute}></career-recommendations-inbox>`;
   }
 
   /**

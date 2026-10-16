@@ -80,6 +80,26 @@ test('quien la lleva le recomienda una casa con su nota y la retira mientras no 
   }
 });
 
+test('en el juego, «Mi ruta» enseña lo recomendado y aceptarlo lo suma a la ruta (RMR-TSK-0742)', async ({ page }) => {
+  const recos = db().collection('people/e2e-person-eng/careerRecommendations');
+  await db().doc(JOURNEY).set({ currentCity: primera.id, visitedCities: [primera.id], plannedRoute: [] });
+  await recos.doc('juego').set({ kind: 'city', routeId: null, cityIds: [segunda.id], label: segunda.name, note: 'Para el juego',
+    by: { uid: 'e2e-head', name: 'Head E2E' }, at: '2026-10-16T09:00:00.000Z', status: 'open', decidedAt: null });
+  try {
+    await signInAs(page, 'engineer');
+    await page.goto('/tools/career-map');
+    const app = page.locator('career-app');
+    await app.getByRole('button', { name: /Mi ruta/ }).click();
+    const ruta = app.getByRole('dialog', { name: 'Mi ruta libre' });
+    await ruta.locator('career-recommendations-inbox').getByRole('button', { name: 'Añadir a mi ruta' }).click();
+    await expect(ruta).toContainText(segunda.name);
+    await expect.poll(async () => (await db().doc(JOURNEY).get()).data()?.plannedRoute).toEqual([segunda.id]);
+  } finally {
+    await db().doc(JOURNEY).delete();
+    for (const r of (await recos.get()).docs) await r.ref.delete();
+  }
+});
+
 test('la persona decide: añade a su ruta lo recomendado o lo descarta (RMR-TSK-0741)', async ({ page }) => {
   const recos = db().collection('people/e2e-person-eng/careerRecommendations');
   const base = { kind: 'city', routeId: null, note: 'Te vendrá bien', by: { uid: 'e2e-head', name: 'Head E2E' },
