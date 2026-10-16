@@ -41,6 +41,7 @@ import './career/career-progression-chart.js';
 import './role-result.js';
 import './role-questionnaire.js';
 import './career/career-map-summary.js';
+import './career/career-recommendations-inbox.js';
 import './career/career-ladder.js';
 import './marea/marea-app.js';
 import './kudos/kudos-app.js';
@@ -777,7 +778,11 @@ export class EngineerSpace extends LitElement {
    * @returns {import('lit').TemplateResult}
    */
   _renderMap() {
-    return html`<career-map-summary self .person=${this.person} .island=${this.island} .journey=${this.journey}
+    // Lo que te recomienda tu manager va primero: es lo que tienes que decidir (RMR-TSK-0741).
+    const onRoute = (e) => { this.journey = { ...this.journey, plannedRoute: e.detail.plannedRoute }; };
+    return html`<career-recommendations-inbox .person=${this.person} .journey=${this.journey}
+      @route-changed=${onRoute}></career-recommendations-inbox>
+    <career-map-summary self .person=${this.person} .island=${this.island} .journey=${this.journey}
       .archipelago=${this.archipelago} .achievements=${this.achievements} .endorsements=${this.endorsements}
       .questions=${this.questions}></career-map-summary>`;
   }
