@@ -33,3 +33,18 @@ export function inRoleMirrorScope(person) {
 export function roleMirrorPeople(people) {
   return (people ?? []).filter((p) => inRoleMirrorScope(p));
 }
+
+/**
+ * Las pestañas de la ficha con «Role Mirror» tras «Carrera» (RMR-TSK-0734), si
+ * la persona entra en la herramienta. Ni en la propia ficha (lo tuyo se propone
+ * desde Mi espacio) ni a externos (no tienen plan de crecimiento).
+ * @template {{ id: string }} T
+ * @param {T[]} tabs
+ * @param {{ person: { orgBranch?: unknown, external?: boolean }|null, isSelf: boolean }} who
+ * @returns {Array<T|{ id: 'rolemirror', label: string }>}
+ */
+export function withRoleMirrorTab(tabs, { person, isSelf }) {
+  if (isSelf || person?.external || !inRoleMirrorScope(person)) return tabs;
+  const at = tabs.findIndex((t) => t.id === 'carrera') + 1;
+  return [...tabs.slice(0, at), { id: 'rolemirror', label: 'Role Mirror' }, ...tabs.slice(at)];
+}
