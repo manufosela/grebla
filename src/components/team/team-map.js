@@ -23,24 +23,29 @@ import { skeletonBlock } from '../app-skeleton.js';
 import { getTeamMap, listAreas } from '../../tools/team/application/usecases/index.js';
 import { LEVELS, LEVEL_BY_ORDER, levelLabel } from '../../tools/team/domain/levels.js';
 import { careerStatus } from '../../tools/career/domain/careerStatus.js';
-import { getCareerAssessment } from '../../lib/careerAssessment.js';
+import { getPersonSubLevel } from '../../lib/careerAssessment.js';
+import { listEvidence } from '../../lib/careerEvidence.js';
 
 /**
- * Valoraciones de carrera de las personas del mapa, en paralelo. Una lectura que
- * falle (permisos, red) NO se cuenta como «sin valorar»: la persona se queda
- * fuera del mapa y su celda lo dice, porque decir «sin valorar» de alguien a
- * quien no hemos podido leer es inventarse el dato.
+ * Carrera de las personas del mapa, en paralelo y con LO MISMO que la ficha
+ * (RMR-TSK-0731): su historial de expectativas y su subnivel. Una lectura que
+ * falle (permisos, red) deja a la persona fuera y su celda lo dice: inventarse
+ * su estado sería peor que no darlo.
  * @param {Array<{ id: string, external: boolean }>} rows
- * @returns {Promise<Map<string, import('../../tools/career/data/assessment.js').CareerAssessment>>}
+ * @param {object|null} framework
+ * @returns {Promise<Map<string, { entries: Array<object>, subLevel: { label?: string }|null }>>}
  */
-async function loadAssessments(rows) {
+async function loadCareer(rows, framework) {
   // Los externos no tienen plan de carrera: ni se pregunta por ellos.
-  const ids = rows.filter((r) => !r.external).map((r) => r.id);
-  const results = await Promise.allSettled(ids.map((id) => getCareerAssessment(id)));
+  const people = rows.filter((r) => !r.external);
+  const results = await Promise.allSettled(people.map(async (p) => {
+    const [entries, subLevel] = await Promise.all([listEvidence(p.id), getPersonSubLevel(p, framework)]);
+    return { entries, subLevel };
+  }));
   const byPerson = new Map();
   results.forEach((res, i) => {
-    if (res.status === 'fulfilled') byPerson.set(ids[i], res.value);
-    else console.warn(`Mapa · no se pudo leer la valoración de ${ids[i]}`, res.reason);
+    if (res.status === 'fulfilled') byPerson.set(people[i].id, res.value);
+    else console.warn(`Mapa · no se pudo leer la carrera de ${people[i].id}`, res.reason);
   });
   return byPerson;
 }
@@ -51,7 +56,6 @@ const CAREER_TEXT = {
   'no-level': 'Sin nivel asignado',
   'unknown-level': 'Nivel fuera del framework',
   'no-expectations': 'Nivel sin expectativas',
-  unassessed: 'Sin valorar',
 };
 
 export class TeamMap extends LitElement {
@@ -154,7 +158,7 @@ export class TeamMap extends LitElement {
         listAreas(this.persistence),
       ]);
       this._areaName = new Map(areas.map((a) => [a.id, a.name]));
-      this._assessments = await loadAssessments(rows);
+      this._assessments = await loadCareer(rows, this.framework);
       // La tabla se pinta con todo listo: aparecer primero sin la columna de
       // carrera y rellenarla después movería las filas bajo el cursor.
       this.rows = rows;
@@ -219,7 +223,8 @@ export class TeamMap extends LitElement {
     if (!row.external && !this._assessments.has(row.id)) {
       return html`<span class="muted" title="No se ha podido leer su valoración">—</span>`;
     }
-    const estado = careerStatus(this.framework, row, this._assessments.get(row.id));
+    const career = this._assessments.get(row.id);
+    const estado = careerStatus(this.framework, row, career?.entries, career?.subLevel);
     const nivel = estado.levelName
       ? html`<span class="level">${estado.levelName}</span>`
       : null;

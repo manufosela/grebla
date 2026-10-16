@@ -25,55 +25,49 @@ const framework = {
 };
 
 const persona = (extra = {}) => ({ id: 'p1', name: 'Persona', levelId: 'l3', ...extra });
+const entry = (dimensionId, kind, day, levelId = 'l3') => ({ levelId, dimensionId, kind, text: kind, links: [],
+  by: { uid: 'em', name: 'EM' }, at: `${day}T09:00:00.000Z` });
 
 describe('careerStatus', () => {
   it('una persona externa no tiene plan de carrera que valorar', () => {
-    const estado = careerStatus(framework, persona({ external: true }), { byDimension: {} });
+    const estado = careerStatus(framework, persona({ external: true }), []);
     expect(estado.kind).toBe('external');
   });
 
   it('sin nivel asignado no hay nada contra lo que valorar', () => {
-    expect(careerStatus(framework, persona({ levelId: null }), { byDimension: {} }).kind).toBe('no-level');
+    expect(careerStatus(framework, persona({ levelId: null }), []).kind).toBe('no-level');
     expect(careerStatus(framework, persona({ levelId: '' }), null).kind).toBe('no-level');
   });
 
   it('un nivel que el framework ya no conoce se dice, no se disfraza de «sin nivel»', () => {
-    const estado = careerStatus(framework, persona({ levelId: 'l-borrado' }), { byDimension: {} });
+    const estado = careerStatus(framework, persona({ levelId: 'l-borrado' }), []);
     expect(estado.kind).toBe('unknown-level');
     expect(estado.levelName).toBe('l-borrado');
   });
 
-  it('sin valorar NO es «cumple todo»: la marca ausente vale true por defecto', () => {
-    // Éste es el riesgo del dato: assessmentRows asume «cumple» mientras nadie
-    // diga lo contrario, así que contar rojos sobre un documento vacío daría
-    // cero y el Mapa afirmaría que la persona cumple sin que nadie la haya mirado.
-    const estado = careerStatus(framework, persona(), { byDimension: {} });
-    expect(estado.kind).toBe('unassessed');
-    expect(estado.total).toBe(2);
-    expect(estado.levelName).toBe('L3 · Mid');
-  });
-
-  it('valorada y sin rojos: cumple las expectativas de su nivel', () => {
-    const assessment = { byDimension: { d1: { meets: true }, d2: { meets: true } } };
-    const estado = careerStatus(framework, persona(), assessment);
+  it('el nivel actual cumple por defecto, como en la ficha (RMR-TSK-0731)', () => {
+    const estado = careerStatus(framework, persona(), []);
     expect(estado).toMatchObject({ kind: 'meets', reds: 0, total: 2, levelName: 'L3 · Mid' });
   });
 
-  it('valorada con rojos: cuenta cuántas expectativas no llega', () => {
-    const assessment = { byDimension: { d1: { meets: false }, d2: { meets: true } } };
-    const estado = careerStatus(framework, persona(), assessment);
-    expect(estado).toMatchObject({ kind: 'gaps', reds: 1, total: 2 });
+  it('cuenta los «no llega» según la ÚLTIMA entrada con estado de cada expectativa', () => {
+    const entries = [
+      entry('d1', 'misses', '2026-10-01'), entry('d1', 'meets', '2026-10-10'),
+      entry('d2', 'misses', '2026-10-05'), entry('d2', 'proof', '2026-10-12'),
+    ];
+    expect(careerStatus(framework, persona(), entries)).toMatchObject({ kind: 'gaps', reds: 1, total: 2 });
   });
 
-  it('una valoración a medias ya cuenta como valorada', () => {
-    // El líder marcó una dimensión y dejó la otra: eso es una valoración en
-    // curso, no una persona sin mirar.
-    const estado = careerStatus(framework, persona(), { byDimension: { d1: { meets: false } } });
-    expect(estado).toMatchObject({ kind: 'gaps', reds: 1, total: 2 });
+  it('lo de otro nivel no cuenta en el suyo', () => {
+    expect(careerStatus(framework, persona(), [entry('d1', 'misses', '2026-10-01', 'l2')]).kind).toBe('meets');
+  });
+
+  it('con subnivel, el nivel se nombra como la cabecera de la ficha', () => {
+    expect(careerStatus(framework, persona(), [], { label: 'L3-2' }).levelName).toBe('L3-2 · Mid');
   });
 
   it('un nivel sin expectativas definidas no se puede valorar', () => {
-    const estado = careerStatus(framework, persona({ levelId: 'l9' }), { byDimension: {} });
+    const estado = careerStatus(framework, persona({ levelId: 'l9' }), []);
     expect(estado.kind).toBe('no-expectations');
     expect(estado.levelName).toBe('L9 · Sin expectativas');
   });
@@ -85,21 +79,8 @@ describe('careerStatus', () => {
       ...framework,
       expectations: [{ levelId: 'l2', dimensionId: 'd1', text: 'Resuelve con apoyo' }],
     };
-    const assessment = { byDimension: { d1: { meets: true }, d2: { meets: false } } };
-    const estado = careerStatus(parcial, persona({ levelId: 'l2' }), assessment);
+    const estado = careerStatus(parcial, persona({ levelId: 'l2' }), [entry('d2', 'misses', '2026-10-01', 'l2')]);
     expect(estado).toMatchObject({ kind: 'meets', reds: 0, total: 1 });
-  });
-
-  it('una marca de una dimensión que este nivel no valora no la da por valorada', () => {
-    // Marca heredada de otro nivel: d2 no tiene expectativa en L2. Contarla
-    // como valoración dejaría a d1 «cumplida por defecto» y el Mapa diría que
-    // cumple sin que nadie haya mirado lo que sí se valora aquí.
-    const parcial = {
-      ...framework,
-      expectations: [{ levelId: 'l2', dimensionId: 'd1', text: 'Resuelve con apoyo' }],
-    };
-    const estado = careerStatus(parcial, persona({ levelId: 'l2' }), { byDimension: { d2: { meets: true } } });
-    expect(estado).toMatchObject({ kind: 'unassessed', total: 1 });
   });
 
   it('nombra el nivel como la ficha, y aguanta que falte el código o el título', () => {
@@ -108,11 +89,11 @@ describe('careerStatus', () => {
       levels: [{ id: 'lc', code: 'L4', title: '', trackId: 'ic', order: 4 }],
       expectations: [{ levelId: 'lc', dimensionId: 'd1', text: 'algo' }],
     };
-    const estado = careerStatus(raro, persona({ levelId: 'lc' }), { byDimension: {} });
+    const estado = careerStatus(raro, persona({ levelId: 'lc' }), []);
     expect(estado.levelName).toBe('L4');
   });
 
   it('sin framework cargado no inventa un estado', () => {
-    expect(careerStatus(null, persona(), { byDimension: {} }).kind).toBe('unknown-level');
+    expect(careerStatus(null, persona(), []).kind).toBe('unknown-level');
   });
 });

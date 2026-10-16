@@ -6,25 +6,22 @@
  * para que quepa en la foto del equipo, junto a las cuatro dimensiones de
  * GREBLA. Las dos familias se miran juntas o no se miran.
  *
- * CUIDADO CON EL DATO: `assessmentRows` da por cumplida toda dimensión que
- * nadie haya marcado —es lo correcto en la ficha, donde el líder va marcando
- * los rojos—, así que contar rojos sobre una valoración vacía daría cero y el
- * Mapa diría que la persona cumple sin que nadie la haya mirado. Por eso «sin
- * valorar» es un estado propio y no se mezcla con «cumple».
+ * Lee LO MISMO que la ficha (RMR-TSK-0731): el historial de expectativas
+ * (careerEvidence) y el subnivel efectivo. El nivel actual cumple por defecto
+ * y cada «no llega» lo pone una entrada del historial.
  *
- * Función PURA: no toca Firebase. La lectura vive en src/lib/careerAssessment.js.
+ * Función PURA: no toca Firebase.
  *
  * @typedef {import('../data/framework.js').CareerFramework} CareerFramework
- * @typedef {import('../data/assessment.js').CareerAssessment} CareerAssessment
  *
  * @typedef {Object} CareerStatus
- * @property {'external'|'no-level'|'unknown-level'|'no-expectations'|'unassessed'|'meets'|'gaps'} kind
+ * @property {'external'|'no-level'|'unknown-level'|'no-expectations'|'meets'|'gaps'} kind
  * @property {string} levelName  nombre del nivel ('' si no hay ninguno)
  * @property {number} reds       expectativas que no llega (0 si no aplica)
  * @property {number} total      expectativas valorables del nivel (0 si no aplica)
  */
-import { getLevel } from '../data/framework.js';
-import { assessmentRows, improvementPoints } from '../data/assessment.js';
+import { getLevel, expectationsForLevel } from '../data/framework.js';
+import { expectationState } from './evidence.js';
 
 /**
  * Nombre visible de un nivel: código y título, como en la ficha de la persona.
@@ -41,10 +38,11 @@ function levelTitle(level) {
 /**
  * @param {CareerFramework|null|undefined} framework
  * @param {{ levelId?: string|null, external?: boolean }|null|undefined} person
- * @param {CareerAssessment|null|undefined} assessment
+ * @param {Array<object>|null|undefined} entries  su historial de expectativas
+ * @param {{ label?: string }|null} [subLevel]  el subnivel efectivo («L2-3»), si lo hay
  * @returns {CareerStatus}
  */
-export function careerStatus(framework, person, assessment) {
+export function careerStatus(framework, person, entries, subLevel = null) {
   const base = { levelName: '', reds: 0, total: 0 };
   // Los externos se clasifican por nivel para saber la composición del equipo,
   // pero no tienen plan de carrera: valorarles expectativas no significa nada.
@@ -60,23 +58,18 @@ export function careerStatus(framework, person, assessment) {
 
   // El nivel se nombra como en la ficha: «L2 · Senior Engineer». El código solo
   // no dice nada a quien no se lo sabe, y el título solo se repite entre tracks.
-  const levelName = levelTitle(level);
+  // Con subnivel, como la cabecera de la ficha: «L2-3 · Senior Engineer».
+  const levelName = levelTitle(subLevel?.label ? { ...level, code: subLevel.label } : level);
   // Solo cuentan las dimensiones con expectativa ESCRITA para ese nivel: una
   // celda vacía del framework no es algo que la persona cumpla o deje de
   // cumplir, y meterla en el total diluiría los rojos («1 de 7» cuando solo 3
   // están definidas dice menos de lo que parece).
-  const rows = assessmentRows(framework, levelId, assessment).filter((row) => row.hasExpectation);
+  const rows = expectationsForLevel(framework, levelId).filter((row) => row.text);
   if (rows.length === 0) return { ...base, kind: 'no-expectations', levelName };
 
-  // «Valorada» se mide SOBRE LAS FILAS QUE CUENTAN, no sobre el documento
-  // entero: una marca que quedó de otro nivel (una dimensión que aquí no tiene
-  // expectativa) la daría por mirada, y como lo no marcado se asume cumplido,
-  // saldría «cumple» sin que nadie haya valorado nada de este nivel.
-  const byDimension = assessment?.byDimension ?? {};
-  const marcadas = rows.filter((row) => byDimension[row.dimension.id] !== undefined);
-  if (marcadas.length === 0) return { ...base, kind: 'unassessed', levelName, total: rows.length };
-
-  const reds = improvementPoints(rows).length;
+  // El estado de cada expectativa sale de su historial, como en la ficha: el
+  // nivel actual cumple mientras nadie diga lo contrario (RMR-TSK-0731).
+  const reds = rows.filter((row) => expectationState(entries ?? [], levelId, row.dimension.id, 'meets') === 'misses').length;
   return {
     kind: reds === 0 ? 'meets' : 'gaps',
     levelName,
