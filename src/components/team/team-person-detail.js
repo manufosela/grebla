@@ -51,6 +51,7 @@ import { expectationWeight } from '../../tools/career/data/framework.js';
 import '../career-person/career-person-panel.js';
 import { getPersonLogbook, getMyCareerMap } from '../../lib/engineer.js';
 import '../career/career-map-summary.js';
+import '../career/career-recommend.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
 import { toggleDomain } from '../../tools/team/domain/membership.js';
@@ -1734,7 +1735,14 @@ export class TeamPersonDetail extends LitElement {
     const m = this._careerMap.data;
     return html`<career-map-summary .person=${this.person} .island=${m.island} .journey=${m.journey}
       .archipelago=${m.archipelago} .achievements=${m.achievements} .endorsements=${m.endorsements}
-      .questions=${m.questions}></career-map-summary>`;
+      .questions=${m.questions}></career-map-summary>
+      ${this._isOwnFicha() ? null : html`<career-recommend .person=${this.person} .island=${m.island}
+        .viewer=${currentAuthor()}></career-recommend>`}`;
+  }
+
+  /** La propia ficha: lo tuyo no te lo recomiendas (RMR-TSK-0739). */
+  _isOwnFicha() {
+    return Boolean(this.person?.uid) && this.person.uid === this.currentUid;
   }
 
   /**
