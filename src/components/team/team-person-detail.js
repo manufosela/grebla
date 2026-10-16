@@ -1762,7 +1762,7 @@ export class TeamPersonDetail extends LitElement {
     `;
     // Mi carrera (RMR-TSK-0684): la misma vista que ve el ingeniero en Mi espacio.
     const careerPanel = (section) => html`<career-person-panel .person=${this.person} .framework=${fw}
-      section=${section} canAssess></career-person-panel>`;
+      section=${section} canAssess @private-notes-request=${() => { this._subtab = 'perf'; }}></career-person-panel>`;
     const expectativasPanel = () => html`
       ${level ? careerPanel('expectativas') : null}
       ${addendums.length > 0

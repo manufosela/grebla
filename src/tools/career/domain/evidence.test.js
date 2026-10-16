@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newEntry, expectationState, timelineFor, ENTRY_KINDS, entryKindsFor, entriesFromLegacyAssessment, claimTimeline } from './evidence.js';
+import { newEntry, expectationState, timelineFor, ENTRY_KINDS, entryKindsFor, entriesFromLegacyAssessment, claimTimeline, visibilityNotice } from './evidence.js';
 
 describe('claimTimeline: una marca de nivel superior leída como historial (RMR-TSK-0714)', () => {
   const DEVB = { uid: 'dev', name: 'Dev' };
@@ -64,6 +64,21 @@ describe('entryKindsFor: qué puede añadir quien mira (RMR-TSK-0712)', () => {
     expect(entryKindsFor({ isSelf: true, leads: false })).toEqual(['proof']);
     expect(entryKindsFor({ isSelf: true, leads: true })).toEqual(['proof']);
     expect(entryKindsFor({ isSelf: false, leads: false })).toEqual([]);
+  });
+});
+
+describe('visibilityNotice: quién ve el historial, dicho antes de escribir (RMR-TSK-0723)', () => {
+  it('a quien lleva a la persona: lo verá ella, y lo delicado va a las notas privadas', () => {
+    expect(visibilityNotice({ isSelf: false, leads: true, personName: 'Sergio' }))
+      .toEqual({ text: 'Sergio ve todo este historial: lo que escribas aquí lo leerá.', privateNotes: true });
+  });
+  it('a la persona: lo ve su manager y quien revisa su carrera', () => {
+    expect(visibilityNotice({ isSelf: true, leads: false, personName: 'Sergio' }))
+      .toEqual({ text: 'Este historial lo ves tú, tu manager y quien revisa tu carrera.', privateNotes: false });
+  });
+  it('sin nombre, la persona; y quien solo lee no ve el enlace a notas privadas', () => {
+    expect(visibilityNotice({ isSelf: false, leads: false, personName: '' }))
+      .toEqual({ text: 'La persona ve todo este historial.', privateNotes: false });
   });
 });
 

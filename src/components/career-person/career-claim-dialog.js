@@ -44,6 +44,8 @@ export class CareerClaimDialog extends LitElement {
     .kinds { border: 0; margin: 0 0 0.8rem; padding: 0; display: flex; gap: 1rem; flex-wrap: wrap; }
     .kinds legend { font-size: 0.85rem; font-weight: 600; color: var(--rm-text, #111827); margin-bottom: 0.3rem; }
     .kind { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 400; }
+    .notice { margin: 0 0 0.9rem; padding: 0.45rem 0.7rem; border-radius: 8px; font-size: 0.85rem;
+      border: 1px solid #b45309; background: #fef3c7; color: #5c2d06; }
   `;
 
   constructor() {
@@ -79,6 +81,7 @@ export class CareerClaimDialog extends LitElement {
     return html`
       <app-modal .open=${this.open} heading=${entry ? 'Añadir al historial' : 'Marcar como cumplida'} @close=${this._close}>
         <p class="expect">${this.request?.text ?? ''}</p>
+        ${entry && this.request?.notice ? html`<p class="notice" role="note">👁 ${this.request.notice}</p>` : null}
         ${entry ? this._kindPicker() : null}
         <label>Evidencia
           <span class="hint">${entry ? 'Qué lo demuestra o qué falta.' : 'Qué has hecho que lo demuestra.'}
