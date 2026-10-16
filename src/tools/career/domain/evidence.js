@@ -65,6 +65,20 @@ export function entryKindsFor({ isSelf, leads }) {
 }
 
 /**
+ * Quién ve el historial, para decirlo antes de escribir (RMR-TSK-0723). Todo lo
+ * que hay aquí es compartido con la persona: lo personal o delicado no se mezcla,
+ * va a las notas privadas del manager (/managerNotes), que ella no lee.
+ * @param {{ isSelf: boolean, leads: boolean, personName?: string }} viewer
+ * @returns {{ text: string, privateNotes: boolean }}
+ */
+export function visibilityNotice({ isSelf, leads, personName }) {
+  if (isSelf) return { text: 'Este historial lo ves tú, tu manager y quien revisa tu carrera.', privateNotes: false };
+  const name = personName?.trim();
+  if (!leads) return { text: `${name || 'La persona'} ve todo este historial.`, privateNotes: false };
+  return { text: `${name || 'La persona'} ve todo este historial: lo que escribas aquí lo leerá.`, privateNotes: true };
+}
+
+/**
  * Valoración antigua (/career/assessment, una nota por dimensión) convertida en
  * entradas del historial (RMR-TSK-0713). «No llega» siempre pasa: es información;
  * «cumple» solo si tenía nota, porque sin ella es el punto de partida. Ids fijos

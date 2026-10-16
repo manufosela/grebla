@@ -10,7 +10,7 @@ import './career-expectations.js';
 import { levelPath, defaultLevelTab } from '../../tools/career/domain/levelPath.js';
 import { expectationsForLevel, aspirationalLevels } from '../../tools/career/data/framework.js';
 import { careerSuggestion } from '../../tools/career/data/assessment.js';
-import { expectationState, timelineFor, entryKindsFor } from '../../tools/career/domain/evidence.js';
+import { expectationState, timelineFor, entryKindsFor, visibilityNotice } from '../../tools/career/domain/evidence.js';
 import { timelineTemplate, timelineStyles } from './career-timeline.js';
 
 const STATE_NOTE = { below: 'superado', current: 'nivel actual' };
@@ -55,6 +55,11 @@ export class CareerLevels extends LitElement {
     .actions button { font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 8px; padding: 0.35rem 0.8rem;
       cursor: pointer; border: 1px solid var(--rm-accent, #2a9d8f); background: var(--rm-accent, #2a9d8f); color: var(--rm-on-accent, #fff); }
     .actions button:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
+    .visibility { margin: 0 0 0.9rem; padding: 0.55rem 0.8rem; border-radius: 10px; font-size: 0.86rem;
+      border: 1px solid #b45309; background: #fef3c7; color: #5c2d06; }
+    .visibility button { font: inherit; font-weight: 700; padding: 0; border: 0; background: none; cursor: pointer;
+      color: #5c2d06; text-decoration: underline; }
+    .visibility button:focus-visible { outline: 2px solid #b45309; outline-offset: 2px; }
   `];
 
   willUpdate(changed) {
@@ -72,13 +77,31 @@ export class CareerLevels extends LitElement {
     const steps = this._steps;
     if (steps.length === 0) return html`<p class="empty">Todavía no hay un nivel asignado.</p>`;
     const step = steps.find((s) => s.level.id === this._tab) ?? steps[0];
-    return html`
+    return html`${this._visibility()}
       <div class="tabs" role="tablist" aria-label="Niveles del camino" @keydown=${(e) => this._keydown(e, steps)}>
         ${steps.map((s) => this._tabButton(s, s === step))}
       </div>
       <div id="lvlpanel-${step.level.id}" role="tabpanel" aria-labelledby="lvl-${step.level.id}" tabindex="0">
         ${this._panel(step)}
       </div>`;
+  }
+
+  /** Quién ve el historial, siempre a la vista (RMR-TSK-0723): nada de sustos al escribir. */
+  _notice() {
+    const isSelf = !!this.viewerUid && this.viewerUid === this.person?.uid;
+    return visibilityNotice({ isSelf, leads: !!this.canAssess, personName: this.person?.name });
+  }
+
+  _visibility() {
+    const notice = this._notice();
+    return html`<p class="visibility" role="note">👁 ${notice.text} ${notice.privateNotes ? this._privateHint() : null}</p>`;
+  }
+
+  /** Lo delicado va a las notas privadas del manager, que la persona no lee. */
+  _privateHint() {
+    const toPrivate = () => this.dispatchEvent(new CustomEvent('private-notes-request', { bubbles: true, composed: true }));
+    return html`Lo personal o delicado no va aquí: <button type="button" @click=${toPrivate}>anótalo
+      en Performance Review</button>, que es privado.`;
   }
 
   _tabButton(s, selected) {
@@ -132,7 +155,7 @@ export class CareerLevels extends LitElement {
 
   _requestEntry(levelId, row, kinds) {
     this.dispatchEvent(new CustomEvent('evidence-request', {
-      detail: { mode: 'entry', kinds, levelId, dimensionId: row.dimension.id, text: row.text },
+      detail: { mode: 'entry', kinds, levelId, dimensionId: row.dimension.id, text: row.text, notice: this._notice().text },
       bubbles: true, composed: true,
     }));
   }

@@ -238,10 +238,12 @@ test('el historial del nivel actual: el responsable pone el estado, el ingeniero
     await ficha(page).getByRole('tab', { name: 'Expectativas' }).click();
     const niveles = ficha(page).locator('career-levels');
     await niveles.getByRole('tab', { name: /L1/ }).click();
+    // Quién lo ve, antes de escribir (RMR-TSK-0723).
+    await expect(niveles.locator('.visibility')).toContainText('Ingeniero E2E ve todo este historial');
     const tech = niveles.locator('li', { hasText: 'Técnica' }).first();
     await tech.getByRole('button', { name: 'Añadir' }).click();
     const dialogo = ficha(page).locator('career-claim-dialog');
-    await dialogo.getByRole('button', { name: 'Guardar' }).click();
+    await expect(dialogo.locator('.notice')).toContainText('lo que escribas aquí lo leerá');    await dialogo.getByRole('button', { name: 'Guardar' }).click();
     await expect(dialogo).toContainText('Elige el tipo');
     await dialogo.getByRole('radio', { name: 'No llega' }).check();
     await dialogo.getByRole('textbox').first().fill('Sus PR aún necesitan muchas rondas');
@@ -257,6 +259,8 @@ test('el historial del nivel actual: el responsable pone el estado, el ingeniero
     const espacio = eng.locator('engineer-space');
     await espacio.getByRole('tab', { name: 'Expectativas' }).click();
     await espacio.locator('career-levels').getByRole('tab', { name: /L1/ }).click();
+    await expect(espacio.locator('career-levels .visibility')).toHaveText(/lo ves tú, tu manager/);
+    await expect(espacio.getByRole('button', { name: /Performance Review/ })).toHaveCount(0);
     const suya = espacio.locator('career-levels li', { hasText: 'Técnica' }).first();
     await expect(suya).toContainText('Sus PR aún necesitan muchas rondas');
     await suya.getByRole('button', { name: 'Añadir' }).click();
@@ -266,6 +270,10 @@ test('el historial del nivel actual: el responsable pone el estado, el ingeniero
     await suyo.getByRole('button', { name: 'Guardar' }).click();
     await expect(suya).toContainText('Esta semana: PR del cobro aprobado a la primera');
     await expect(suya.locator('.chip')).toHaveText('No llega');    await ctx.close();
+
+    // Lo delicado no va al historial: el enlace lleva a las notas privadas.
+    await niveles.getByRole('button', { name: /Performance Review/ }).click();
+    await expect(ficha(page).getByRole('tab', { name: 'Performance Review' })).toHaveAttribute('aria-selected', 'true');
   });
 });
 
