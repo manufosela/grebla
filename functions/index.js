@@ -24,6 +24,7 @@ import { sign, coinsKmsKeyName } from './signer.js';
 import { computePulseAggregate, departmentOf, sanitizePulseMinCount } from './pulseAggregate.js';
 import { storagePathOf as docStoragePath, sanitizeFolder as docFolder } from './docsPaths.js';
 import { upcomingFrom } from './o2oUpcoming.js';
+import { o2oLeadersOf, sharedSessions, canReadPersonO2O, periodsForPerson } from './o2oProjection.js';
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { bearerFrom, agentKeyId, agentKeyVerdict, agentTeamView, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
@@ -610,21 +611,37 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
   const personSnap = await db.collection('people').where('uid', '==', caller.uid).limit(1).get();
   const personDoc = personSnap.docs.at(0);
   if (!personDoc) throw new HttpsError('not-found', 'No hay ninguna persona vinculada a tu cuenta.');
-  const personId = personDoc.id;
-  const person = personDoc.data();
+  return personO2OProjection(db, personDoc.id, personDoc.data());
+});
 
-  const leaderUids = [...new Set([person.ownerLeaderUid, ...(person.sharedWithUids ?? [])].filter(Boolean))];
+/**
+ * getPersonO2O (RMR-TSK-0727): lo MISMO que la persona ve en Mi espacio, para sus
+ * managers del directorio (EM, head…) en su ficha. Así el head ve lo compartido
+ * de los O2O de su rama sin abrir lo que cada EM escribió solo para sí.
+ */
+export const getPersonO2O = onCall({ region: 'europe-west1' }, async (request) => {
+  const caller = request.auth;
+  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
+  const personId = typeof request.data?.personId === 'string' ? request.data.personId.trim() : '';
+  if (!personId || personId.includes('/')) throw new HttpsError('invalid-argument', 'Falta la persona.');
+  const db = getFirestore();
+  const snap = await db.doc(`people/${personId}`).get();
+  const person = snap.exists ? snap.data() : null;
+  if (!canReadPersonO2O({ callerUid: caller.uid, person, isSuperAdmin: await isAdmin(caller.uid) })) {
+    throw new HttpsError('permission-denied', 'Solo sus managers ven los O2O de esta persona.');
+  }
+  return personO2OProjection(db, personId, person);
+});
+
+/** Resúmenes compartidos, acciones y O2O que viene de una persona (getMyO2O y getPersonO2O). */
+async function personO2OProjection(db, personId, person) {
+  const leaderUids = o2oLeadersOf(person);
   const perLeader = await Promise.all(
     leaderUids.map((luid) =>
       db.collection('leaders').doc(luid).collection('o2o').where('personId', '==', personId).get(),
     ),
   );
-  const sessions = perLeader
-    .flatMap((snap) => snap.docs)
-    .map((d) => d.data())
-    .filter((s) => s.sharedWithPerson && s.sharedSummary)
-    .map((s) => ({ date: s.date, sharedSummary: s.sharedSummary }))
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  const sessions = sharedSessions(perLeader.map((snap, i) => ({ leaderUid: leaderUids[i], sessions: snap.docs.map((d) => d.data()) })));
 
   const actionsSnap = await db.collection('people').doc(personId).collection('o2oActions').get();
   const actions = actionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -638,11 +655,12 @@ export const getMyO2O = onCall({ region: 'europe-west1' }, async (request) => {
     leaderUids.map((luid) => db.collection('leaders').doc(luid).collection('o2oPeriods').get()),
   );
   const upcoming = periodsPerLeader
-    .map((snap, i) => upcomingFrom(leaderUids[i], snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+    .map((snap, i) => upcomingFrom(leaderUids[i], periodsForPerson(snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      { personId, person, leaderUid: leaderUids[i] })))
     .filter(Boolean);
 
   return { sessions, actions, upcoming };
-});
+}
 
 // ── Encuestas anónimas: respuesta por token SIN login (RMR-PCS-0026) ─────────
 // La página de respuesta es PÚBLICA (sin auth): el token largo aleatorio del link
