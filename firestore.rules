@@ -542,6 +542,46 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Recomendaciones del mapa (RMR-TSK-0738): quien lleva a la persona
+      // recomienda una ruta o una casa, y retira la suya mientras esté abierta;
+      // la persona decide una vez (aceptar o descartar) y no toca nada más. Fuera
+      // del comodín de abajo: si no, el dueño de la ficha decidiría por ella.
+      match /careerRecommendations/{recId} {
+        function subjectOf() {
+          return get(/databases/$(database)/documents/people/$(personId)).data;
+        }
+        function isTheSubject() {
+          return isSignedIn() && subjectOf().get('uid', null) == request.auth.uid;
+        }
+        function leadsTheSubject() {
+          return isSignedIn() && !isTheSubject() && (isSuperAdmin()
+            || subjectOf().get('ownerLeaderUid', null) == request.auth.uid
+            || request.auth.uid in subjectOf().get('directoryManagerUids', [])
+            || subjectOf().get('careerReviewers', {}).get('firstUid', null) == request.auth.uid
+            || subjectOf().get('careerReviewers', {}).get('secondUid', null) == request.auth.uid);
+        }
+        function validReco(d) {
+          return d.keys().hasOnly(['kind', 'routeId', 'cityIds', 'label', 'note', 'by', 'at', 'status', 'decidedAt'])
+            && d.kind in ['route', 'city']
+            && (d.kind == 'route' ? (d.routeId is string && d.routeId.size() > 0) : d.routeId == null)
+            && d.cityIds is list && d.cityIds.size() >= 1 && d.cityIds.size() <= 60
+            && (d.kind == 'route' || d.cityIds.size() == 1)
+            && d.label is string && d.label.size() >= 1 && d.label.size() <= 200
+            && d.note is string && d.note.size() <= 500
+            && d.by is map && d.by.keys().hasOnly(['uid', 'name']) && d.by.uid == request.auth.uid
+            && d.by.name is string && d.by.name.size() >= 1 && d.by.name.size() <= 200
+            && d.at is string && d.status == 'open' && d.decidedAt == null;
+        }
+        allow read: if isTheSubject() || leadsTheSubject();
+        allow create: if leadsTheSubject() && validReco(request.resource.data);
+        allow update: if isTheSubject() && resource.data.status == 'open'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt'])
+          && request.resource.data.status in ['accepted', 'dismissed']
+          && request.resource.data.decidedAt is string;
+        allow delete: if leadsTheSubject() && resource.data.status == 'open'
+          && resource.data.by.uid == request.auth.uid;
+      }
+
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
       match /{document=**} {
@@ -593,6 +633,7 @@ service cloud.firestore {
         }
         allow read: if canView();
         allow write: if canEdit() && document[0] != 'careerClaims' && document[0] != 'careerEvidence'
+          && document[0] != 'careerRecommendations'
           && !(isPersonDocUpdate() && updatesNotionFields())
           && !(isPersonDocUpdate() && touchesCareerReviewers())
           && !(isPersonDocUpdate() && touchesDirectoryManagers() && !isSuperAdmin());
