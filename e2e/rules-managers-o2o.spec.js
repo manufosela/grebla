@@ -57,8 +57,8 @@ test.describe('reglas: managers de O2O', () => {
     await assertSucceeds(getDoc(doc(cto, 'people', 'p1')));
     await assertSucceeds(setDoc(doc(cto, 'people', 'p1', 'o2oActions', 'a2'), { description: 'Hacer Y', status: 'open' }));
     await assertSucceeds(getDoc(doc(cto, 'managerNotes', 'p1', 'entries', 'n1')));
-    // Pero la rama no le da la ficha: no edita su carrera ni sus datos.
-    await assertFails(updateDoc(doc(cto, 'people', 'p1'), { name: 'Otra' }));
+    // Y edita la ficha, como en Mi equipo (RMR-TSK-0762); su mapa, no: es suyo.
+    await assertSucceeds(updateDoc(doc(cto, 'people', 'p1'), { name: 'Otra' }));
     await assertFails(setDoc(doc(cto, 'people', 'p1', 'career', 'journey'), { x: 1 }));
     const otro = como(env, 'otro').firestore();
     await assertFails(getDoc(doc(otro, 'people', 'p1')));
