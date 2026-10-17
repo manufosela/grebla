@@ -15,18 +15,20 @@ function db() {
 const NOMBRE = 'Sesión acuerdo por gremio E2E';
 const GREMIOS = { 'e2e-ag-qa': 'QA', 'e2e-ag-php': 'Backend PHP' };
 const ING = 'people/e2e-person-eng';
-const HEAD = 'people/e2e-person-head-poker';
+// La ficha del Head ya la siembra el global-setup (su sitio en el organigrama):
+// una segunda con el mismo uid haría que su gremio dependiera de cuál se lea.
+const HEAD = 'people/e2e-ficha-e2e-head';
 
 test.beforeEach(async () => {
   for (const [id, name] of Object.entries(GREMIOS)) await db().doc(`guilds/${id}`).set({ name });
   await db().doc(ING).update({ guilds: ['Backend PHP'] });
-  await db().doc(HEAD).set({ name: 'Head E2E', uid: 'e2e-head', ownerLeaderUid: 'e2e-head', self: true, active: true, guilds: ['QA'] });
+  await db().doc(HEAD).update({ guilds: ['QA'] });
 });
 
 test.afterEach(async () => {
   for (const id of Object.keys(GREMIOS)) await db().doc(`guilds/${id}`).delete();
   await db().doc(ING).update({ guilds: FieldValue.delete() });
-  await db().doc(HEAD).delete();
+  await db().doc(HEAD).update({ guilds: FieldValue.delete() });
   const snap = await db().collection('pokerSessions').where('name', '==', NOMBRE).get();
   for (const d of snap.docs) {
     for (const sub of ['players', 'votes']) {
