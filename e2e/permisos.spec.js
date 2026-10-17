@@ -35,7 +35,8 @@ test('la ficha y el panel enseñan la misma matriz de permisos', async ({ page }
 
     await abrirPermisosDeLaFicha(page, 'Persona del manager');
     const enLaFicha = page.locator('person-permissions tr', { hasText: 'Marea' });
-    await expect(enLaFicha.getByLabel('Ve o usa')).toContainText('Heredar (sí)');
+    // Solo Sí o No (RMR-TSK-0758): enseña lo que tiene, que por su rol es sí.
+    await expect(enLaFicha.getByLabel('Ve o usa')).toHaveValue('yes');
     await expect(enLaFicha.getByLabel('Gestiona')).toBeVisible();
 
     // Se le quita desde la ficha…
@@ -55,13 +56,13 @@ test('la ficha y el panel enseñan la misma matriz de permisos', async ({ page }
   }
 });
 
-test('«heredar» borra la excepción en vez de dejar escrito un «no»', async ({ page }) => {
+test('volver a lo que da el rol borra la excepción en vez de dejar escrito un «sí»', async ({ page }) => {
   await db().doc('toolPolicies/marea').set({ label: 'Marea', audience: { everyone: true }, managedBy: {} });
   await db().doc('people/e2e-person-mgr').update({ toolOverrides: { marea: { use: false } } });
   try {
     await signInAs(page, 'superadmin');
     await abrirPermisosDeLaFicha(page, 'Persona del manager');
-    await page.locator('person-permissions tr', { hasText: 'Marea' }).getByLabel('Ve o usa').selectOption('inherit');
+    await page.locator('person-permissions tr', { hasText: 'Marea' }).getByLabel('Ve o usa').selectOption('yes');
 
     // La herramienta desaparece del mapa: si quedara un `false` escrito, la
     // puerta seguiría cerrada aunque su rol se la abriera más adelante.

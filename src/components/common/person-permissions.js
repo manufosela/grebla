@@ -16,7 +16,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { noteStyles } from './note-styles.js';
-import { effectiveToolAccess, applyOverride, overrideMode } from '../../tools/team/domain/toolAccess.js';
+import { effectiveToolAccess, applyOverride, overrideMode, choiceToMode } from '../../tools/team/domain/toolAccess.js';
 
 export class PersonPermissions extends LitElement {
   static properties = {
@@ -102,14 +102,17 @@ export class PersonPermissions extends LitElement {
     }
   }
 
-  /** Celda tri-estado. La etiqueta de «heredar» dice qué pasa si no tocas nada. */
+  /**
+   * Solo Sí o No, con lo que tiene de verdad (RMR-TSK-0758). Elegir lo que ya
+   * le da su rol no guarda excepción: la tabla dice lo que hay, sin «heredar».
+   */
   _cell(toolId, dim, heredado) {
     const mode = overrideMode(this._draft, toolId, dim);
+    const yes = mode === 'inherit' ? heredado : mode === 'yes';
     return html`<select ?disabled=${this.readOnly} aria-label="${dim === 'use' ? 'Ve o usa' : 'Gestiona'}"
-      @change=${(e) => this._set(toolId, dim, e.target.value)}>
-      <option value="inherit" ?selected=${mode === 'inherit'}>Heredar (${heredado ? 'sí' : 'no'})</option>
-      <option value="yes" ?selected=${mode === 'yes'}>Sí</option>
-      <option value="no" ?selected=${mode === 'no'}>No</option>
+      @change=${(e) => this._set(toolId, dim, choiceToMode(e.target.value, heredado))}>
+      <option value="yes" ?selected=${yes}>Sí</option>
+      <option value="no" ?selected=${!yes}>No</option>
     </select>`;
   }
 
@@ -121,9 +124,8 @@ export class PersonPermissions extends LitElement {
     const roleRef = this._roleRef;
     return html`
       <p class="info-note">
-        Qué <strong>ve</strong> y qué <strong>gestiona</strong> esta persona. Por defecto hereda de su
-        rol${p.orgRole ? html` (<strong>${p.orgRole}</strong>)` : ''}; aquí se fuerza una excepción solo
-        para ella —por ejemplo, dejarle ver algo de otra área sin moverla de sitio en el organigrama—.
+        Qué <strong>ve</strong> y qué <strong>gestiona</strong> esta persona. Cambia lo que haga falta:
+        por ejemplo, dejarle ver algo de otra área sin moverla de sitio en el organigrama.
       </p>
       ${this._error ? html`<p class="error" role="alert">${this._error}</p>` : null}
       ${this._saved ? html`<p class="saved">Guardado.</p>` : null}

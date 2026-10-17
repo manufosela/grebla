@@ -91,21 +91,21 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
   await page.getByLabel('Persona').selectOption({ label: 'Persona del manager' });
   const fila = page.locator('person-permissions tr', { hasText: 'Entrega' });
   const ve = fila.getByLabel('Ve o usa');
-  // La etiqueta de «heredar» dice qué pasa si no tocas nada: esta persona es de
-  // ingeniería, así que Entrega le llega por su rama sin ninguna excepción.
-  await expect(ve).toContainText('Heredar (sí)');
+  // Solo Sí o No (RMR-TSK-0758): esta persona es de ingeniería, así que
+  // Entrega le llega por su rama sin ninguna excepción.
+  await expect(ve).toHaveValue('yes');
   // Y la misma matriz que la ficha: también se decide quién la GESTIONA.
   await expect(fila.getByLabel('Gestiona')).toBeVisible();
 
-  // Dársela sin tocar su rol: queda como excepción en su ficha.
-  await ve.selectOption('yes');
+  // Quitársela sin tocar su rol: queda como excepción en su ficha.
+  await ve.selectOption('no');
   await expect.poll(async () => {
     const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
     return snap.docs[0]?.data()?.toolOverrides?.entrega?.use ?? null;
-  }, { timeout: 15_000 }).toBe(true);
+  }, { timeout: 15_000 }).toBe(false);
 
-  // Y «heredar» la retira, en vez de dejar un «no» escrito que nadie entiende.
-  await ve.selectOption('inherit');
+  // Y volver a lo que da su rol la retira, en vez de dejar un «sí» escrito.
+  await ve.selectOption('yes');
   await expect.poll(async () => {
     const snap = await db().collection('people').where('name', '==', 'Persona del manager').get();
     return snap.docs[0]?.data()?.toolOverrides?.entrega ?? null;
