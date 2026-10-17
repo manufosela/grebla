@@ -15,8 +15,24 @@ import { buildPersonRef } from '../lib/toolGate.js';
 import { getEmployeeDomain } from '../lib/orgConfig.js';
 import { groupsWithCards } from '../lib/hubGroups.js';
 import { isEmployeeOf, hubDestination, needsEmployeePerson, managesSomeTool } from './hubBoot.js';
+import { hasPeopleBelow } from '../lib/myTeam.js';
 
 const VIEW_FLAG = 'grebla-view';
+
+/**
+ * Si no se puede comprobar, la tarjeta se enseña y lo avisa la consola: cada
+ * herramienta vuelve a validar al entrar, y esconderla dejaría a un manager sin
+ * su equipo por un fallo de red.
+ * @param {string} uid
+ */
+async function leadsAnyone(uid) {
+  try {
+    return await hasPeopleBelow(uid);
+  } catch (err) {
+    console.warn('Hub · no se pudo comprobar si tienes a alguien a cargo.', err);
+    return true;
+  }
+}
 /** Pestaña que se estaba mirando, mientras dure la sesión. */
 /** ¿Se está previsualizando el hub como otro rol? */
 const esSimulada = () => ['leader', 'engineer', 'empleado'].includes(sessionStorage.getItem(VIEW_FLAG));
@@ -101,9 +117,11 @@ onUserChanged(async (user) => {
 
     // Vista elegida en el conmutador: cambia QUÉ se ve, nunca a dónde se va ni
     // qué se puede. Los permisos reales no se tocan y cada herramienta valida.
+    // Liderar es tener a alguien a cargo (RMR-TSK-0747), no solo el rol: un
+    // líder sin nadie debajo no tiene equipo que gestionar.
     const vista = hubAsView(sessionStorage.getItem(VIEW_FLAG), {
       isSuperadmin: canGovern(access),
-      isLeaderish: canGovern(access) || leadsTeam(access),
+      isLeaderish: canGovern(access) || (leadsTeam(access) && await leadsAnyone(user.uid)),
     });
     await showTools({
       personRef: vista.generic ? buildPersonRef(null) : buildPersonRef(person),
