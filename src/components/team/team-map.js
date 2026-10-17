@@ -93,13 +93,11 @@ export class TeamMap extends LitElement {
     .failed-cell { color: var(--rm-text, #111827); font-size: 0.88rem; }
     .profile { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--rm-track, #e9f0f2); font-weight: 700; font-size: 0.78rem; }
     .areas { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
-    /* Contribución en dos líneas (RMR-TSK-0755), con ancho para que quepan. */
-    td.contrib { min-width: 13rem; }
-    .belbin { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; font-weight: 600; }
-    .brow { line-height: 1.35; }
+    /* Contribución en dos columnas (RMR-TSK-0757): siglas en rejilla de tres. */
+    th.group { text-align: center; border-bottom: 0; padding-bottom: 0; }
+    th.sub { font-size: 0.78rem; }
+    .belbin { display: grid; grid-template-columns: repeat(3, max-content); gap: 0.15rem 0.6rem; font-size: 0.8rem; font-weight: 600; }
     .belbin abbr { text-decoration: none; cursor: help; }
-    .bk { display: inline-block; min-width: 5.6rem; font-size: 0.72rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
-    .bk.p { color: var(--rm-text, #111827); }
     .legend { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .legend .lvl { gap: 0.3rem; }
     .empty { color: var(--rm-muted, #5b6b7d); }
@@ -189,7 +187,7 @@ export class TeamMap extends LitElement {
           <button type="button" class="link" @click=${() => this._open(r.id)} aria-label=${`Abrir ficha de ${r.name}`}>${r.name}</button>
           ${(r.guilds ?? []).length ? html`<span class="roles">${r.guilds.join(' · ')}</span>` : null}
         </td>
-        <td colspan="5" class="failed-cell">
+        <td colspan="6" class="failed-cell">
           ⚠️ No se han podido leer sus lecturas. Lo que tenga sigue ahí; lo que falla es traerlo.
         </td>
       </tr>`;
@@ -254,18 +252,24 @@ export class TeamMap extends LitElement {
   }
 
   /**
-   * Dos líneas, primarios y secundarios (RMR-TSK-0755): un chip por rol hacía
-   * que quien tiene los 9 marcados ocupara media pantalla. El nombre del rol va
-   * en el `title` de cada sigla.
+   * Contribución en dos columnas, principal y secundaria (RMR-TSK-0757): un
+   * chip por rol hacía que quien tiene los 9 marcados ocupara media pantalla.
+   * Las siglas van en rejilla de tres, alineadas; el nombre, en su `title`.
    */
-  _contributionCell(roles) {
-    const { primary, secondary } = contributionGroups(roles);
-    if (!primary.length && !secondary.length) return html`<span class="muted">—</span>`;
-    const siglas = (list) => list.map((s, i) => html`${i ? ' · ' : ''}<abbr title=${BELBIN_BY_SIGLA[s].name}>${s}</abbr>`);
-    return html`<span class="belbin">
-      ${primary.length ? html`<span class="brow"><span class="bk p">Principal</span> ${siglas(primary)}</span>` : null}
-      ${secondary.length ? html`<span class="brow"><span class="bk">Secundario</span> ${siglas(secondary)}</span>` : null}
-    </span>`;
+  _contributionCells(row) {
+    const { primary, secondary } = contributionGroups(row.contribution);
+    return html`${this._contributionCell(row, primary, 'Contribución principal')}${
+      this._contributionCell(row, secondary, 'Contribución secundaria')}`;
+  }
+
+  _contributionCell(row, siglas, label) {
+    const content = siglas.length ? this._belbinGrid(siglas) : html`<span class="muted">—</span>`;
+    return html`<td>${this._dimButton(row, 'contribution', label, content)}</td>`;
+  }
+
+  _belbinGrid(siglas) {
+    const items = siglas.map((s) => html`<abbr title=${BELBIN_BY_SIGLA[s].name}>${s}</abbr>`);
+    return html`<span class="belbin">${items}</span>`;
   }
 
   /**
@@ -336,8 +340,10 @@ export class TeamMap extends LitElement {
                 <div class="table-wrap"><table>
                   <thead>
                     <tr>
-                      <th>Persona</th><th>Seniority</th><th>Emocional</th><th>Conocimiento</th><th>Contribución</th><th>Carrera</th>
+                      <th rowspan="2">Persona</th><th rowspan="2">Seniority</th><th rowspan="2">Emocional</th>
+                      <th rowspan="2">Conocimiento</th><th colspan="2" class="group">Contribución</th><th rowspan="2">Carrera</th>
                     </tr>
+                    <tr><th class="sub">Principal</th><th class="sub">Secundaria</th></tr>
                   </thead>
                   <tbody>
                     ${this.rows.map((r) => (r.failed ? this._renderFailedRow(r) : html`
@@ -349,7 +355,7 @@ export class TeamMap extends LitElement {
                           <td>${this._dimButton(r, 'seniority', 'Seniority', this._levelCell(r.seniority))}</td>
                           <td>${this._dimButton(r, 'emotional', 'Emocional', this._levelCell(r.emotional))}</td>
                           <td>${this._dimButton(r, 'knowledge', 'Conocimiento', this._knowledgeCell(r.knowledge))}</td>
-                          <td class="contrib">${this._dimButton(r, 'contribution', 'Contribución', this._contributionCell(r.contribution))}</td>
+                          ${this._contributionCells(r)}
                           <td>${this._dimButton(r, 'expectativas', 'Carrera', this._careerCell(r))}</td>
                         </tr>
                       `))}
