@@ -33,6 +33,8 @@ describe('people.list({ fromServer })', () => {
     await createFirestorePersistence({}, 'l1', { viewAll: true }).people.list({ fromServer: true });
     await createFirestorePersistence({}, 'l1', { leaderUids: ['a'] }).people.list({ fromServer: true });
     await createFirestorePersistence({}, 'l1').people.list({ fromServer: true });
-    expect(calls).toEqual({ getDocs: 0, getDocsFromServer: 4 });
+    // Todos: 1. Rama: organigrama + 1 trozo. Propias: organigrama + suyas +
+    // compartidas (RMR-TSK-0747).
+    expect(calls).toEqual({ getDocs: 0, getDocsFromServer: 6 });
   });
 });
