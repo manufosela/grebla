@@ -46,6 +46,7 @@ import { getLevelAssessment, saveLevelAssessment, listLevelAssessments, getPerso
 import { normalizeLevelAssessment, markDimension, marksOf, closeAssessment, closureHistory, lastClosure } from '../../tools/career/data/levelAssessment.js';
 import { levelProgressFor, levelCompletion, subLevelCalcText } from '../../tools/career/domain/levelProgress.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
+import { atTopOfLadder } from '../../tools/career/domain/ladderTop.js';
 import { expectationWeight } from '../../tools/career/data/framework.js';
 import '../career-person/career-person-panel.js';
 import { getPersonLogbook, getMyCareerMap } from '../../lib/engineer.js';
@@ -60,6 +61,7 @@ import { proposeRoles, evidenceFor } from '../../tools/team/domain/belbinSurvey.
 import { isNotionSynced } from '../../lib/notionSync.js';
 import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
 import { listOrgBranches } from '../../lib/orgBranches.js';
+import { listOrgRoles } from '../../lib/orgRoles.js';
 import { departmentHasGuilds } from '../../tools/team/domain/guildScope.js';
 import '../o2o/manager-notes.js';
 import '../o2o/person-o2o-panel.js';
@@ -136,6 +138,9 @@ const DIM_SUBTABS = [
   { id: 'contribution', label: 'Contribución' },
 ];
 
+/** Lo que sobra a quien está en el tope de su vía (RMR-TSK-0761). */
+const TOP_HIDDEN = new Set(['seguimiento', 'aspiraciones']);
+
 /** Sub-sub-pestañas de «Carrera»: parten el contenido para evitar un scroll largo. */
 const CAREER_SUBTABS = [
   { id: 'nivel', label: 'Nivel' },
@@ -178,6 +183,8 @@ export class TeamPersonDetail extends LitElement {
     _routes: { state: true },
     _datos: { state: true },
     _guildsCat: { state: true },
+    /** Roles del organigrama: la cabecera dice el rol de la persona (RMR-TSK-0761). */
+    _rolesCat: { state: true },
     _usersCat: { state: true },
     _datosSaving: { state: true },
     _datosError: { state: true },
@@ -208,6 +215,7 @@ export class TeamPersonDetail extends LitElement {
     .head { margin-bottom: 1rem; }
     .head h2 { margin: 0; font-size: 1.3rem; }
     .head .title { margin: 0.3rem 0 0; font-size: 0.95rem; font-weight: 600; color: var(--rm-text, #111827); }
+    .head .role { margin: 0.2rem 0 0; font-size: 0.95rem; font-weight: 700; color: var(--rm-text, #111827); }
     .head .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
     .chip { background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
     section {
@@ -293,6 +301,11 @@ export class TeamPersonDetail extends LitElement {
     .career .target-declared { margin: 0.2rem 0 0; font-size: 0.9rem; font-weight: 700; color: var(--rm-accent, #2a9d8f); }
     .career .target-declared .code { font-weight: 800; }
     .career .target-none { margin: 0.2rem 0 0; font-size: 0.83rem; color: var(--rm-muted, #5b6b7d); font-style: italic; }
+    .career .top-note { margin: 0 0 0.8rem; padding: 0.5rem 0.75rem; border-radius: 10px; font-size: 0.86rem;
+      border: 1px solid var(--rm-border, #cbd5e1); color: var(--rm-text, #111827); background: var(--rm-surface, #fff); }
+    .career .target-edit { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
+    .career .target-edit select { font: inherit; font-size: 0.85rem; padding: 0.3rem 0.5rem; border-radius: 8px;
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     .career .routes-done { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
     .career .route-done-row { display: flex; flex-direction: column; gap: 0.05rem; padding: 0.4rem 0.55rem; border-radius: 8px; background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 8%, transparent); }
     .career .route-done-row .rd-name { font-weight: 700; font-size: 0.85rem; color: var(--rm-text, #111827); }
@@ -505,6 +518,7 @@ export class TeamPersonDetail extends LitElement {
     this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], primaryGuild: null, labels: [], squadIds: [], domainKeys: [], uid: '' };
     /** Catálogos de gremios (Carrera) y de cuentas (Datos). */
     this._guildsCat = [];
+    this._rolesCat = [];
     this._usersCat = [];
     this._datosSaving = false;
     this._datosError = '';
@@ -998,7 +1012,7 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, logbook, guildsCat, usersCat, toolPolicies, leaderUids, routes, notionSync, branchesCat] =
+      const [timeline, areas, logbook, guildsCat, usersCat, toolPolicies, leaderUids, routes, notionSync, branchesCat, rolesCat] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
@@ -1024,7 +1038,11 @@ export class TeamPersonDetail extends LitElement {
           isNotionSynced(),
           // Catálogo de departamentos: dice cuáles tienen gremios (RMR-TSK-0593).
           listOrgBranches(),
+          // Catálogo de roles, para decir en la cabecera qué es (RMR-TSK-0761).
+          // Sin catch: una cabecera sin rol por un fallo callado engañaría.
+          listOrgRoles(),
         ]);
+      this._rolesCat = rolesCat;
       this._notionSync = notionSync;
       this._branchesCat = branchesCat;
       this.timeline = timeline;
@@ -1657,16 +1675,23 @@ export class TeamPersonDetail extends LitElement {
       ${this._renderCompletedRoutes()}
     `;
     const seguimientoPanel = () => (level ? careerPanel('seguimiento') : html`<p class="empty">Asigna el nivel en «Nivel».</p>`);
+    // En el tope de su vía (RMR-TSK-0761) no hay avance ni aspiraciones hacia
+    // otro nivel: esas pestañas sobran y se dice cómo se le valora.
+    const top = atTopOfLadder(fw?.levels, this.person.levelId);
+    const tabs = top ? CAREER_SUBTABS.filter((t) => !TOP_HIDDEN.has(t.id)) : CAREER_SUBTABS;
+    const shown = tabs.some((t) => t.id === active) ? active : 'nivel';
     const panel = {
       nivel: nivelPanel, plan: () => careerPanel('plan'), expectativas: expectativasPanel, seguimiento: seguimientoPanel,
       mapa: () => this._renderCareerMap(), aspiraciones: aspiracionesPanel,
-    }[active] ?? nivelPanel;
+    }[shown] ?? nivelPanel;
 
     return html`
       <section class="career">
         <h3>Carrera</h3>
-        ${this._renderNestedTabs(CAREER_SUBTABS, active, 'pcar', 'Secciones de carrera', (id) => { this._careerSubtab = id; })}
-        <div id="pcarpanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="pcar-${active}" tabindex="0">
+        ${top ? html`<p class="top-note">Está en el tope de su itinerario: no hay un nivel por encima al que avanzar.
+          Se le valora por las expectativas de su nivel y por sus objetivos (en «Expectativas y objetivos»).</p>` : null}
+        ${this._renderNestedTabs(tabs, shown, 'pcar', 'Secciones de carrera', (id) => { this._careerSubtab = id; })}
+        <div id="pcarpanel-${shown}" class="subpanel" role="tabpanel" aria-labelledby="pcar-${shown}" tabindex="0">
           ${panel()}
         </div>
       </section>
@@ -1902,12 +1927,38 @@ export class TeamPersonDetail extends LitElement {
    */
   _renderDeclaredTarget(fw) {
     const target = getLevel(fw, this.person.careerTargetLevelId);
+    // A qué nivel quiere llegar (RMR-TSK-0761). Lo fija la persona en Mi espacio
+    // o, si lo habláis, su responsable aquí: los dos ven y editan lo mismo.
+    const options = aspirationalLevels(fw, this.person.levelId);
     return html`
       <p class="sub">Objetivo de carrera</p>
       ${target
-        ? html`<p class="target-declared">Declarado por la persona: <span class="code">${target.code}</span> · ${target.title}</p>`
-        : html`<p class="target-none">Sin objetivo de carrera declarado.</p>`}
+        ? html`<p class="target-declared"><span class="code">${target.code}</span> · ${target.title}</p>`
+        : html`<p class="target-none">Sin objetivo de carrera: lo marca la persona en Mi espacio o su responsable aquí.</p>`}
+      ${options.length ? html`<div class="target-edit">
+        <label>Fijar objetivo
+          <select @change=${(e) => this._saveTarget(e.target.value || null)} ?disabled=${this._careerSaving}>
+            <option value="" ?selected=${!target}>Sin objetivo</option>
+            ${options.map((l) => html`<option value=${l.id} ?selected=${l.id === target?.id}>${l.code} · ${l.title}</option>`)}
+          </select>
+        </label>
+      </div>` : null}
+      ${this._careerError ? html`<p class="error" role="alert">${this._careerError}</p>` : null}
     `;
+  }
+
+  /** @param {string|null} levelId */
+  async _saveTarget(levelId) {
+    this._careerError = '';
+    this._careerSaving = true;
+    try {
+      await updatePerson(this.persistence, this.person.id, { careerTargetLevelId: levelId });
+      this.person = { ...this.person, careerTargetLevelId: levelId };
+    } catch (err) {
+      this._careerError = err instanceof Error ? err.message : 'No se pudo guardar el objetivo de carrera.';
+    } finally {
+      this._careerSaving = false;
+    }
   }
 
   /**
@@ -2201,9 +2252,11 @@ export class TeamPersonDetail extends LitElement {
       .filter((d) => (this.person.disciplines ?? []).includes(d.id))
       .map((d) => d.name);
     const guilds = this.person.guilds ?? [];
+    const role = (this._rolesCat ?? []).find((r) => r.id === this.person.orgRole)?.label ?? null;
     return html`
       <div class="head">
         <h2>${this.person.name}</h2>
+        ${role ? html`<p class="role">${role}</p>` : null}
         ${title ? html`<p class="title">${title}</p>` : null}
         ${disciplineNames.length > 0
           ? html`<span class="chips">${disciplineNames.map((n) => html`<span class="chip">${n}</span>`)}</span>`

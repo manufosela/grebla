@@ -122,7 +122,10 @@ export class CareerPersonPanel extends LitElement {
 
   _renderProgress() {
     const next = this._next;
-    if (!next) return html`<p class="note">No hay nivel siguiente en su itinerario.</p>`;
+    if (!next) {
+      return html`<p class="note">Está en el tope de su itinerario: no hay avance hacia otro nivel. Se valora por las
+        expectativas de su nivel y por sus objetivos.</p>`;
+    }
     const progress = levelProgressFor({
       person: this.person, framework: this.framework,
       marks: marksFromClaims(this._claims, next.id, this.person?.careerReviewers ?? {}),
@@ -151,6 +154,9 @@ export class CareerPersonPanel extends LitElement {
     return html`
       <p class="head"><strong>${sub?.label ?? progress.label}</strong> · ${progress.pct} % de ${progress.nextLevelCode}
         (${progress.earned} de ${progress.total} puntos aceptados)</p>
+      <p class="note">De dónde sale: cada expectativa de ${progress.nextLevelCode} vale unos puntos según su peso, y
+        cuentan las que tiene <strong>aceptadas</strong> en «Expectativas y objetivos». Con el 50 % pasa a .2; con
+        el 80 %, a .3 cuando se mantiene en otra valoración cerrada.</p>
       ${notesTpl}
       ${closeBtn}`;
   }
