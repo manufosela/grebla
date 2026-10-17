@@ -9,11 +9,13 @@ import './career-levels.js';
 import './career-claim-dialog.js';
 import './career-review-dialog.js';
 import './career-plan.js';
+import './career-objective-dialog.js';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim, markAsReviewer } from '../../lib/careerClaims.js';
 import { getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
 import { listEvidence, addEvidence } from '../../lib/careerEvidence.js';
+import { listObjectives, addObjective, closeObjectiveFor } from '../../lib/careerObjectives.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { levelProgressFor, levelCompletion, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 import { marksFromClaims } from '../../tools/career/domain/claims.js';
@@ -32,6 +34,8 @@ export class CareerPersonPanel extends LitElement {
     _assessment: { state: true },
     /** Historial de expectativas (RMR-TSK-0712). */
     _entries: { state: true },
+    /** Objetivos medibles (RMR-TSK-0752). */
+    _objectives: { state: true },
     _dialog: { state: true },
     _request: { state: true },
     _busy: { state: true },
@@ -55,6 +59,7 @@ export class CareerPersonPanel extends LitElement {
     this._claims = [];
     this._assessment = null;
     this._entries = [];
+    this._objectives = [];
     this._dialog = null;
     this._busy = false;
     this._error = '';
@@ -63,7 +68,7 @@ export class CareerPersonPanel extends LitElement {
   updated(changed) {
     if (!(changed.has('person') || changed.has('framework')) || !this.person?.id) return;
     // Lo de la persona anterior no se queda a la vista mientras se lee la nueva.
-    if (changed.has('person')) Object.assign(this, { _claims: [], _assessment: null, _entries: [] });
+    if (changed.has('person')) Object.assign(this, { _claims: [], _assessment: null, _entries: [], _objectives: [] });
     this._load();
   }
 
@@ -77,14 +82,17 @@ export class CareerPersonPanel extends LitElement {
     const personId = this.person.id;
     const next = this._next;
     try {
-      const [claims, assessment, entries] = await Promise.all([
+      const [claims, assessment, entries, objectives] = await Promise.all([
         listClaims(personId), next ? getLevelAssessment(personId, next.id) : null, listEvidence(personId),
+        listObjectives(personId),
       ]);
       if (token !== this._loadToken) return false;
-      Object.assign(this, { _error: '', _claims: claims, _assessment: assessment, _entries: entries });
+      Object.assign(this, { _error: '', _claims: claims, _assessment: assessment, _entries: entries, _objectives: objectives });
       return true;
     } catch (err) {
-      if (token === this._loadToken) Object.assign(this, { _error: err.message, _claims: [], _assessment: null, _entries: [] });
+      if (token === this._loadToken) {
+        Object.assign(this, { _error: err.message, _claims: [], _assessment: null, _entries: [], _objectives: [] });
+      }
       return false;
     }
   }
@@ -96,7 +104,8 @@ export class CareerPersonPanel extends LitElement {
       ${this.section === 'seguimiento'
         ? this._renderProgress()
         : html`<career-levels .person=${this.person} .framework=${this.framework} .claims=${this._claims}
-            .entries=${this._entries} .viewerUid=${viewerUid} ?canAssess=${this.canAssess}
+            .entries=${this._entries} .objectives=${this._objectives} .viewerUid=${viewerUid} ?canAssess=${this.canAssess}
+            @objective-request=${(e) => this._open('objective', e.detail)}
             @evidence-request=${(e) => this._open('claim', e.detail)}
             @claim-request=${(e) => this._open('claim', e.detail)}
             @review-request=${(e) => this._open('review', e.detail)}
@@ -106,7 +115,9 @@ export class CareerPersonPanel extends LitElement {
       <career-claim-dialog .open=${this._dialog === 'claim'} .request=${this._request} ?busy=${this._busy}
         .error=${this._error} @claim-submit=${this._onClaimSubmit} @close=${this._closeDialog}></career-claim-dialog>
       <career-review-dialog .open=${this._dialog === 'review'} .request=${this._request} ?busy=${this._busy}
-        .error=${this._error} @review-submit=${this._onReviewSubmit} @close=${this._closeDialog}></career-review-dialog>`;
+        .error=${this._error} @review-submit=${this._onReviewSubmit} @close=${this._closeDialog}></career-review-dialog>
+      <career-objective-dialog .open=${this._dialog === 'objective'} .request=${this._request} ?busy=${this._busy}
+        .error=${this._error} @objective-submit=${this._onObjectiveSubmit} @close=${this._closeDialog}></career-objective-dialog>`;
   }
 
   _renderProgress() {
@@ -186,6 +197,15 @@ export class CareerPersonPanel extends LitElement {
       return;
     }
     await this._save(() => submitClaim(this.person.id, { levelId, dimensionId, evidence, by: author() }));
+  }
+
+  async _onObjectiveSubmit(e) {
+    const { mode, objectiveId, status, note, ...input } = e.detail;
+    if (mode === 'close') {
+      await this._save(() => closeObjectiveFor(this.person.id, objectiveId, status, note));
+      return;
+    }
+    await this._save(() => addObjective(this.person.id, { ...input, by: author() }));
   }
 
   async _onReviewSubmit(e) {

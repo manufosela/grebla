@@ -150,7 +150,7 @@ const ORG_SUBTABS = [
 const CAREER_SUBTABS = [
   { id: 'nivel', label: 'Nivel' },
   { id: 'plan', label: 'Plan' },
-  { id: 'expectativas', label: 'Expectativas' },
+  { id: 'expectativas', label: 'Expectativas y objetivos' },
   { id: 'seguimiento', label: 'Seguimiento' },
   { id: 'mapa', label: 'Mapa' },
   { id: 'aspiraciones', label: 'Aspiraciones' },
