@@ -22,6 +22,7 @@ import { tableStyles } from '../common/table-styles.js';
 import { skeletonBlock } from '../app-skeleton.js';
 import { getTeamMap, listAreas } from '../../tools/team/application/usecases/index.js';
 import { LEVELS, LEVEL_BY_ORDER, levelLabel } from '../../tools/team/domain/levels.js';
+import { contributionGroups, BELBIN_BY_SIGLA } from '../../tools/team/domain/belbin.js';
 import { careerStatus } from '../../tools/career/domain/careerStatus.js';
 import { getPersonSubLevel } from '../../lib/careerAssessment.js';
 import { listEvidence } from '../../lib/careerEvidence.js';
@@ -92,9 +93,13 @@ export class TeamMap extends LitElement {
     .failed-cell { color: var(--rm-text, #111827); font-size: 0.88rem; }
     .profile { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--rm-track, #e9f0f2); font-weight: 700; font-size: 0.78rem; }
     .areas { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
-    .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-    .chip { background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.75rem; font-weight: 600; }
-    .chip.p { background: color-mix(in srgb, var(--rm-accent, #2a9d8f) 22%, transparent); }
+    /* Contribución en dos líneas (RMR-TSK-0755), con ancho para que quepan. */
+    td.contrib { min-width: 13rem; }
+    .belbin { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; font-weight: 600; }
+    .brow { line-height: 1.35; }
+    .belbin abbr { text-decoration: none; cursor: help; }
+    .bk { display: inline-block; min-width: 5.6rem; font-size: 0.72rem; font-weight: 600; color: var(--rm-muted, #5b6b7d); }
+    .bk.p { color: var(--rm-text, #111827); }
     .legend { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .legend .lvl { gap: 0.3rem; }
     .empty { color: var(--rm-muted, #5b6b7d); }
@@ -248,12 +253,18 @@ export class TeamMap extends LitElement {
     return html`<span class="state pending">${CAREER_TEXT[estado.kind]}</span>`;
   }
 
+  /**
+   * Dos líneas, primarios y secundarios (RMR-TSK-0755): un chip por rol hacía
+   * que quien tiene los 9 marcados ocupara media pantalla. El nombre del rol va
+   * en el `title` de cada sigla.
+   */
   _contributionCell(roles) {
-    if (!roles || Object.keys(roles).length === 0) return html`<span class="muted">—</span>`;
-    return html`<span class="chips">
-      ${Object.entries(roles).map(
-        ([sigla, kind]) => html`<span class="chip ${kind === 'primary' ? 'p' : ''}">${sigla} ${kind === 'primary' ? '(P)' : '(S)'}</span>`,
-      )}
+    const { primary, secondary } = contributionGroups(roles);
+    if (!primary.length && !secondary.length) return html`<span class="muted">—</span>`;
+    const siglas = (list) => list.map((s, i) => html`${i ? ' · ' : ''}<abbr title=${BELBIN_BY_SIGLA[s].name}>${s}</abbr>`);
+    return html`<span class="belbin">
+      ${primary.length ? html`<span class="brow"><span class="bk p">Principal</span> ${siglas(primary)}</span>` : null}
+      ${secondary.length ? html`<span class="brow"><span class="bk">Secundario</span> ${siglas(secondary)}</span>` : null}
     </span>`;
   }
 
@@ -338,7 +349,7 @@ export class TeamMap extends LitElement {
                           <td>${this._dimButton(r, 'seniority', 'Seniority', this._levelCell(r.seniority))}</td>
                           <td>${this._dimButton(r, 'emotional', 'Emocional', this._levelCell(r.emotional))}</td>
                           <td>${this._dimButton(r, 'knowledge', 'Conocimiento', this._knowledgeCell(r.knowledge))}</td>
-                          <td>${this._dimButton(r, 'contribution', 'Contribución', this._contributionCell(r.contribution))}</td>
+                          <td class="contrib">${this._dimButton(r, 'contribution', 'Contribución', this._contributionCell(r.contribution))}</td>
                           <td>${this._dimButton(r, 'expectativas', 'Carrera', this._careerCell(r))}</td>
                         </tr>
                       `))}
