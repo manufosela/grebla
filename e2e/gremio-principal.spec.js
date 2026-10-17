@@ -35,15 +35,32 @@ async function conDosGremios(fn, { guilds = [] } = {}) {
   }
 }
 
-/** Abre la ficha de la persona sembrada en Organización › Gremios. */
+/** Abre la ficha de la persona sembrada en Carrera › Nivel, donde viven los gremios (RMR-TSK-0760). */
 async function abrirGremios(page) {
   await signInAs(page, 'head');
   await page.goto('/tools/team');
   await page.getByRole('button', { name: 'Personas' }).first().click();
   await page.getByRole('row', { name: /Persona de gremios E2E/ }).getByRole('button', { name: 'Editar' }).click();
-  await page.getByRole('tab', { name: 'Organización' }).click();
-  await page.getByRole('tab', { name: 'Gremios' }).click();
+  await page.getByRole('tab', { name: 'Carrera', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Gremios' })).toBeVisible();
 }
+
+test('ya no hay pestaña Organización: los gremios están en Carrera', async ({ page }) => {
+  await conDosGremios(async () => {
+    await abrirGremios(page);
+    await expect(page.getByRole('tab', { name: 'Organización' })).toHaveCount(0);
+  }, { guilds: ['E2E Frontend'] });
+});
+
+test('la disciplina no se marca: sale del gremio al guardar', async ({ page }) => {
+  await conDosGremios(async (suya) => {
+    await db().doc('guilds/e2e-g-front').update({ disciplineId: 'web' });
+    await abrirGremios(page);
+    await page.getByRole('checkbox', { name: 'E2E Frontend' }).check();
+    await page.getByRole('button', { name: 'Guardar carrera' }).click();
+    await expect.poll(async () => (await suya.get()).data()?.disciplines ?? null, { timeout: 15_000 }).toEqual(['web']);
+  });
+});
 
 test('con un solo gremio no se pregunta cuál es el principal', async ({ page }) => {
   await conDosGremios(async () => {
