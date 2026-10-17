@@ -6678,7 +6678,7 @@ export class CareerApp extends LitElement {
       ${isle
         ? html`<div
             class="isle-stat"
-            title=${`Nivel de viaje: ${s.level} · ${s.points}/${s.total} pts (${s.pct}%)`}
+            title=${`Rango de viaje: ${s.level} · ${s.points}/${s.total} pts (${s.pct}%)`}
           >
             <span class="isle-here">${isle.name}</span>
             <div

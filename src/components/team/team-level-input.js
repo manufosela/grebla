@@ -63,7 +63,7 @@ export class TeamLevelInput extends LitElement {
   render() {
     const atMax = this.level >= MAX_LEVEL;
     return html`
-      <div class="levels" role="radiogroup" aria-label="Nivel">
+      <div class="levels" role="radiogroup" aria-label="Grado">
         ${LEVELS.map(
           (l) => html`
             <button

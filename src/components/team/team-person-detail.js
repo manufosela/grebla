@@ -1315,7 +1315,7 @@ export class TeamPersonDetail extends LitElement {
                     <thead>
                       <tr>
                         <th scope="col">Fecha</th>
-                        <th scope="col">Nivel</th>
+                        <th scope="col">Grado</th>
                         <th scope="col">Nota</th>
                       </tr>
                     </thead>
@@ -1353,7 +1353,7 @@ export class TeamPersonDetail extends LitElement {
       return html`<p class="chart-empty">Sin lecturas para graficar.</p>`;
     }
     return html`
-      <ul class="bars" role="img" aria-label="Nivel actual de conocimiento por área">
+      <ul class="bars" role="img" aria-label="Grado actual de conocimiento por área">
         ${rows.map(([id, r]) => {
           const value = levelToNumber(r.level, r.toNext);
           const pct = Math.round((value / SPARK_MAX) * 100);
@@ -1432,7 +1432,7 @@ export class TeamPersonDetail extends LitElement {
                             <tr>
                               <th scope="col">Fecha</th>
                               <th scope="col">Área</th>
-                              <th scope="col">Nivel</th>
+                              <th scope="col">Grado</th>
                               <th scope="col">Nota</th>
                             </tr>
                           </thead>
