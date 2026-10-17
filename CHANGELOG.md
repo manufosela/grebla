@@ -15,6 +15,23 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.257.0] - 2026-10-17
+
+### Añadido
+
+- Objetivos medibles: la pestaña de carrera pasa a «Expectativas y objetivos», en
+  la ficha y en Mi espacio. Las expectativas son lo que pide el nivel; los
+  objetivos, compromisos de la persona con cómo se miden y para cuándo. Pueden
+  ir sueltos o bajo la expectativa a la que ayudan. Quien lleva a la persona los
+  pone y los cierra con lo medido; la persona los ve (RMR-TSK-0748 a RMR-TSK-0753).
+
+### Cambiado
+
+- Mi equipo sigue el organigrama: sale quien tiene al manager por encima, y deja
+  de salir quien está en el organigrama bajo otra persona aunque su ficha la
+  creara él. Quien no tiene a nadie a cargo no ve la herramienta (RMR-TSK-0747).
+- El Mapa del equipo sale por orden alfabético (RMR-TSK-0746).
+
 ## [1.256.0] - 2026-10-17
 
 ### Añadido
