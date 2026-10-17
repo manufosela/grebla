@@ -79,31 +79,3 @@ test('la tabla de equipo lista el DOMINIO de cada persona, no su squad', async (
   });
 });
 
-test('en la ficha se elige DOMINIO, y se guarda por su clave', async ({ page }) => {
-  // La prueba SIEMBRA su propia persona en vez de editar una de las fixtures:
-  // qué gente ve el head depende de lo que hayan dejado otros specs, y antes
-  // esto pasaba en solitario y fallaba con la suite entera.
-  const suya = db().doc('people/e2e-person-dominio');
-  await suya.set({ name: 'Persona de dominios E2E', uid: null, ownerLeaderUid: 'e2e-head', active: true });
-  try {
-  await conDominios(async () => {
-    await signInAs(page, 'head');
-    await page.goto('/tools/team');
-    await page.getByRole('button', { name: 'Personas' }).first().click();
-    await page.getByRole('row', { name: /Persona de dominios E2E/ }).getByRole('button', { name: 'Editar' }).click();
-    await page.getByRole('tab', { name: 'Organización' }).click();
-    await page.getByRole('tab', { name: 'Dominios' }).click();
-
-    await page.getByRole('checkbox', { name: 'E2E Plataforma' }).check();
-    await page.getByRole('button', { name: /Guardar/ }).first().click();
-
-    // Se guarda la CLAVE, no el id ni el nombre: así renombrar el dominio no
-    // obliga a tocar la ficha de nadie.
-    await expect.poll(async () => {
-      return (await suya.get()).data()?.domainKeys ?? [];
-    }, { timeout: 15_000 }).toContain('e2e-plataforma');
-  });
-  } finally {
-    await suya.delete();
-  }
-});

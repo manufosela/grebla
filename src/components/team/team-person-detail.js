@@ -20,7 +20,6 @@ import {
   getPersonTimeline,
   listAreas,
   updatePerson,
-  listLabels,
   listGuilds,
   normalizeInviteEmail,
 } from '../../tools/team/application/usecases/index.js';
@@ -54,11 +53,10 @@ import '../career/career-map-summary.js';
 import '../career/career-recommend.js';
 import { completedRoutes, formatDuration } from '../../tools/career/domain/logbook.js';
 import { formatAchievedAt } from '../../tools/career/domain/achievements.js';
-import { toggleDomain } from '../../tools/team/domain/membership.js';
+import { disciplinesForGuilds } from '../../tools/team/domain/guildDisciplines.js';
 import { normalizePrimaryGuild } from '../../tools/team/domain/primaryGuild.js';
 import { BELBIN_ITEMS, BELBIN_SCALE } from '../../tools/team/data/belbinItems.js';
 import { proposeRoles, evidenceFor } from '../../tools/team/domain/belbinSurvey.js';
-import { listDomains } from '../../lib/domains.js';
 import { isNotionSynced } from '../../lib/notionSync.js';
 import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
 import { listOrgBranches } from '../../lib/orgBranches.js';
@@ -118,7 +116,6 @@ const DIMENSIONS = [
  */
 const SUBTABS = [
   { id: 'datos', label: 'Datos' },
-  { id: 'organizacion', label: 'Organización' },
   { id: 'carrera', label: 'Carrera' },
   { id: 'dimensiones', label: 'Dimensiones' },
   { id: 'conversations', label: 'O2O' },
@@ -137,13 +134,6 @@ const DIM_SUBTABS = [
   { id: 'emotional', label: 'Emocional' },
   { id: 'knowledge', label: 'Conocimiento' },
   { id: 'contribution', label: 'Contribución' },
-];
-
-/** Sub-sub-pestañas de «Organización»: cada clasificación con espacio propio. */
-const ORG_SUBTABS = [
-  { id: 'gremios', label: 'Gremios' },
-  { id: 'labels', label: 'Labels' },
-  { id: 'dominios', label: 'Dominios' },
 ];
 
 /** Sub-sub-pestañas de «Carrera»: parten el contenido para evitar un scroll largo. */
@@ -172,7 +162,6 @@ export class TeamPersonDetail extends LitElement {
     error: { state: true },
     _subtab: { state: true },
     _dimSubtab: { state: true },
-    _orgSubtab: { state: true },
     _careerSubtab: { state: true },
     _form: { state: true },
     _know: { state: true },
@@ -189,9 +178,6 @@ export class TeamPersonDetail extends LitElement {
     _routes: { state: true },
     _datos: { state: true },
     _guildsCat: { state: true },
-    _labelsCat: { state: true },
-    /** Catálogo de DOMINIOS: a lo que pertenece la persona (ADR de dominios). */
-    _domainsCat: { state: true },
     _usersCat: { state: true },
     _datosSaving: { state: true },
     _datosError: { state: true },
@@ -345,8 +331,6 @@ export class TeamPersonDetail extends LitElement {
 
     /* ── Subtab Organización: opciones grandes en rejilla (RMR-TSK-0369) ── */
     /* Sin fieldset/legend: el subtab ya nombra la categoría (no repetir). */
-    .org-section { display: flex; flex-direction: column; gap: 1.1rem; }
-    .org-section .empty { color: var(--rm-muted, #5b6b7d); font-size: 0.9rem; margin: 0; }
     .org-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: 0.6rem; }
     .org-checks .chk { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.9rem; border: 1px solid var(--rm-border, #e5e7eb); border-radius: 12px; font-size: 0.95rem; color: var(--rm-text, #111827); cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
     .org-checks .chk:hover { border-color: var(--rm-accent, #2a9d8f); }
@@ -497,8 +481,6 @@ export class TeamPersonDetail extends LitElement {
     this._subtab = 'datos';
     /** @type {string} sub-sub-pestaña activa dentro de «Dimensiones» */
     this._dimSubtab = 'seniority';
-    /** @type {string} sub-sub-pestaña activa dentro de «Organización» */
-    this._orgSubtab = 'gremios';
     /** @type {string} sub-sub-pestaña activa dentro de «Carrera» */
     this._careerSubtab = 'nivel';
     /** @type {{ levelId: string, disciplines: string[], note: string }} edición inline de carrera (nivel + disciplinas + nota del cambio de nivel) */
@@ -521,11 +503,8 @@ export class TeamPersonDetail extends LitElement {
     /** Borrador editable de la pestaña «Datos» (RMR-TSK-0173). Se siembra desde
      * la persona al abrirla. @type {{ name: string, githubLogin: string, startDate: string, guilds: string[], labels: string[], uid: string }} */
     this._datos = { name: '', githubLogin: '', startDate: '', guilds: [], primaryGuild: null, labels: [], squadIds: [], domainKeys: [], uid: '' };
-    /** Catálogos para los selectores de Datos (gremios, labels, cuentas). */
+    /** Catálogos de gremios (Carrera) y de cuentas (Datos). */
     this._guildsCat = [];
-    this._labelsCat = [];
-    /** Catálogo de squads de la organización (RMR-TSK-0275). */
-    this._domainsCat = [];
     this._usersCat = [];
     this._datosSaving = false;
     this._datosError = '';
@@ -560,7 +539,6 @@ export class TeamPersonDetail extends LitElement {
       // pulsada en el Mapa), para no arrastrar la pestaña de la persona anterior.
       this._subtab = 'datos';
       this._dimSubtab = 'seniority';
-      this._orgSubtab = 'gremios';
       this._careerSubtab = 'nivel';
       // Ni el subnivel ni su ajuste a medias son de la persona nueva.
       this._subLevel = null;
@@ -630,17 +608,6 @@ export class TeamPersonDetail extends LitElement {
       name: p?.name ?? '',
       githubLogin: p?.githubLogin ?? '',
       startDate: p?.startDate ?? '',
-      guilds: [...(p?.guilds ?? [])],
-      // Gremio PRINCIPAL (RMR-TSK-0594): el que cuenta cuando se corta por
-      // gremio. Se siembra normalizado, así que uno que ya no esté entre sus
-      // gremios no llega al borrador.
-      primaryGuild: normalizePrimaryGuild(p?.guilds, p?.primaryGuild),
-      labels: [...(p?.labels ?? [])],
-      // Se arrastra sin editarse a propósito: ya no hay UI de squads (F5 del ADR
-      // de dominios), pero el dato guardado se conserva para no cerrar la puerta
-      // a volver atrás. Si se dejara fuera, guardar la ficha lo borraría.
-      squadIds: [...(p?.squadIds ?? [])],
-      domainKeys: [...(p?.domainKeys ?? [])],
       uid: p?.uid ?? '',
       pendingEmail: p?.pendingEmail ?? '',
       location: p?.location ?? '',
@@ -658,7 +625,10 @@ export class TeamPersonDetail extends LitElement {
   _seedCareer() {
     this._career = {
       levelId: this.person.levelId ?? '',
-      disciplines: [...(this.person.disciplines ?? [])],
+      guilds: [...(this.person.guilds ?? [])],
+      // Gremio PRINCIPAL (RMR-TSK-0594): se siembra normalizado, así que uno que
+      // ya no esté entre sus gremios no llega al borrador.
+      primaryGuild: normalizePrimaryGuild(this.person.guilds, this.person.primaryGuild),
       note: '',
     };
     this._careerError = '';
@@ -712,31 +682,23 @@ export class TeamPersonDetail extends LitElement {
   }
 
   /**
-   * Marca/desmarca una disciplina en el formulario inline de carrera.
-   * @param {string} id  id de la disciplina
-   * @param {boolean} checked
-   * @returns {void}
-   */
-  _toggleCareerDiscipline(id, checked) {
-    const disciplines = checked
-      ? [...this._career.disciplines, id]
-      : this._career.disciplines.filter((d) => d !== id);
-    this._career = { ...this._career, disciplines };
-  }
-
-  /**
-   * Guarda el nivel y las disciplinas de la persona (la asignación que hace el
-   * manager). Reutiliza `updatePerson`, el mismo caso de uso que la sección Personas,
-   * y refresca `this.person` reasignando un objeto nuevo para re-renderizar.
+   * Guarda el nivel y los gremios de la persona (la asignación que hace el
+   * manager). Las disciplinas del framework ya no se marcan: salen de los
+   * gremios (RMR-TSK-0760), así que no pueden contradecirse. Reutiliza
+   * `updatePerson` y refresca `this.person` con un objeto nuevo.
    * @returns {Promise<void>}
    */
   async _saveCareer() {
     this._careerError = '';
     this._careerSaving = true;
     const levelId = this._career.levelId || null;
-    const disciplines = [...this._career.disciplines];
+    const guilds = [...this._career.guilds];
     try {
-      const patch = { levelId, disciplines };
+      const patch = {
+        levelId, guilds,
+        primaryGuild: normalizePrimaryGuild(guilds, this._career.primaryGuild),
+        disciplines: disciplinesForGuilds(guilds, this._guildsCat),
+      };
       // Historial de nivel (RMR-PCS-0037 · F1): si el nivel cambia, el relato se
       // añade solo — de dónde a dónde, cuándo, quién y la nota opcional del momento.
       if (levelId && levelId !== (this.person.levelId ?? null)) {
@@ -1036,15 +998,14 @@ export class TeamPersonDetail extends LitElement {
     this.loading = true;
     this.error = '';
     try {
-      const [timeline, areas, logbook, labelsCat, guildsCat, usersCat, toolPolicies, leaderUids, routes, domainsCat, notionSync, branchesCat] =
+      const [timeline, areas, logbook, guildsCat, usersCat, toolPolicies, leaderUids, routes, notionSync, branchesCat] =
         await Promise.all([
           getPersonTimeline(this.persistence, this.person.id),
           listAreas(this.persistence),
           // Historial de rutas completadas (F3): best-effort, no debe tumbar la
           // ficha si falla (p. ej. sin permiso o sin bitácora aún).
           getPersonLogbook(this.person.id).catch(() => ({ entries: [] })),
-          // Catálogos de la pestaña Datos (RMR-TSK-0173), best-effort.
-          listLabels(this.persistence).catch(() => []),
+          // Catálogos de gremios (Carrera) y cuentas (Datos), best-effort.
           listGuilds(this.persistence).catch(() => []),
           listUsers().catch(() => []),
           // Políticas de herramientas para la matriz de permisos (F8b). Se cargan
@@ -1058,8 +1019,6 @@ export class TeamPersonDetail extends LitElement {
           // Rutas publicadas para la curva de progresión (F2): best-effort — sin
           // rutas la gráfica simplemente no sale.
           listCareerRoutes().catch(() => []),
-          // Catálogo de dominios: a qué pertenece la persona (ADR de dominios).
-          listDomains().catch(() => []),
           // ¿Manda Notion en esta instancia? (RMR-TSK-0588) SIN catch a propósito:
           // decidir «no» por un fallo dejaría editable lo que no lo es.
           isNotionSynced(),
@@ -1071,10 +1030,8 @@ export class TeamPersonDetail extends LitElement {
       this.timeline = timeline;
       this.areas = areas;
       this._logbook = logbook;
-      this._labelsCat = labelsCat;
       this._guildsCat = guildsCat;
       this._usersCat = usersCat;
-      this._domainsCat = domainsCat;
       this._toolPolicies = toolPolicies;
       this._leaderUids = leaderUids;
       this._routes = routes;
@@ -1839,14 +1796,13 @@ export class TeamPersonDetail extends LitElement {
     const fw = this.framework;
     const tracks = fw?.tracks ?? [];
     const levels = fw?.levels ?? [];
-    const disciplines = fw?.disciplines ?? [];
     const groups = tracks
       .map((t) => ({ track: t, levels: levels.filter((l) => l.trackId === t.id) }))
       .filter((g) => g.levels.length > 0);
     const selected = this._career;
     return html`
       <div class="career-editor">
-        <p class="edit-hint">Asigna el nivel y las disciplinas de esta persona.</p>
+        <p class="edit-hint">Asigna el nivel y los gremios de esta persona.</p>
         <label class="fld">Nivel
           <select
             .value=${selected.levelId}
@@ -1875,25 +1831,7 @@ export class TeamPersonDetail extends LitElement {
               />
             </label>`
           : null}
-        <fieldset class="disc">
-          <legend>Disciplinas</legend>
-          ${disciplines.length === 0
-            ? html`<span class="empty">No hay disciplinas en el framework de carrera.</span>`
-            : html`<div class="disc-checks">
-                ${disciplines.map(
-                  (d) => html`
-                    <label class="disc-check">
-                      <input
-                        type="checkbox"
-                        .checked=${selected.disciplines.includes(d.id)}
-                        @change=${(e) => this._toggleCareerDiscipline(d.id, e.target.checked)}
-                      />
-                      <span>${d.name}</span>
-                    </label>
-                  `,
-                )}
-              </div>`}
-        </fieldset>
+        ${this._renderCareerGuilds(selected)}
         ${this._careerError ? html`<p class="error">${this._careerError}</p>` : null}
         <div class="row">
           <button class="primary" ?disabled=${this._careerSaving} @click=${this._saveCareer}>
@@ -2005,56 +1943,44 @@ export class TeamPersonDetail extends LitElement {
     return start ? `Del ${start} al ${end}${dur}` : `Completada el ${end}${dur}`;
   }
 
-  // ---- Pestaña «Datos» (identidad de la persona, RMR-TSK-0173) --------------
+  // ---- Gremios, en Carrera (RMR-TSK-0760) ------------------------------------
+
+  /**
+   * Gremios de la persona, una sola lista (RMR-TSK-0760): antes había gremios en
+   * Organización y disciplinas aquí, y podían no casar. La disciplina del
+   * framework sale de cada gremio y se enseña para que se vea de dónde viene.
+   * Solo en los departamentos que tienen gremios (hoy Tech, RMR-TSK-0593).
+   */
+  _renderCareerGuilds(d) {
+    if (!departmentHasGuilds(this.person?.orgBranch, this._branchesCat)) return null;
+    const names = new Map((this.framework?.disciplines ?? []).map((x) => [x.id, x.name]));
+    const derived = disciplinesForGuilds(d.guilds, this._guildsCat).map((id) => names.get(id) ?? id);
+    return html`<fieldset class="disc">
+      <legend>Gremios</legend>
+      ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleCareerGuild(n, c))}
+      <p class="edit-hint">Disciplina en el framework: ${derived.length ? derived.join(', ') : 'ninguna'}.</p>
+    </fieldset>
+    ${this._renderPrimaryGuild(d)}`;
+  }
 
   /** @param {string} name @param {boolean} checked */
-  _toggleDatosGuild(name, checked) {
-    const guilds = checked ? [...this._datos.guilds, name] : this._datos.guilds.filter((g) => g !== name);
+  _toggleCareerGuild(name, checked) {
+    const guilds = checked ? [...this._career.guilds, name] : this._career.guilds.filter((g) => g !== name);
     // El principal se recalcula con la lista nueva: al quitarle el gremio que
     // era principal, deja de serlo en el momento — no al guardar.
-    this._datos = { ...this._datos, guilds, primaryGuild: normalizePrimaryGuild(guilds, this._datos.primaryGuild) };
+    this._career = { ...this._career, guilds, primaryGuild: normalizePrimaryGuild(guilds, this._career.primaryGuild) };
   }
 
   /** @param {string} name */
   _pickPrimaryGuild(name) {
-    this._datos = { ...this._datos, primaryGuild: normalizePrimaryGuild(this._datos.guilds, name) };
+    this._career = { ...this._career, primaryGuild: normalizePrimaryGuild(this._career.guilds, name) };
   }
 
-  /**
-   * A qué DOMINIO pertenece (ADR de dominios, F4). Se elige el producto, no el
-   * subdominio: la gente fluye entre los subdominios de su producto, y fijarla a
-   * uno es justo lo que se abandona.
-   *
-   * Se guarda la CLAVE del dominio, no su id ni su nombre: así renombrarlo no
-   * obliga a tocar la ficha de nadie.
-   */
-  _renderDatosDomains(selected) {
-    const cat = this._domainsCat ?? [];
-    if (cat.length === 0) {
-      return html`<p class="empty">Aún no hay dominios (los crea el superadmin en Administración › Dominios).</p>`;
-    }
-    return html`<div class="org-checks">
-      ${cat.map((d) => html`<label class="chk">
-        <input type="checkbox" .checked=${selected.includes(d.key)}
-          @change=${(e) => this._toggleDatosDomain(d.key, e.target.checked)} />
-        <span>${d.name}</span>
-      </label>`)}
-    </div>`;
-  }
+  // ---- Pestaña «Datos» (identidad de la persona, RMR-TSK-0173) --------------
 
-  /** @param {string} key @param {boolean} checked */
-  _toggleDatosDomain(key, checked) {
-    this._datos = { ...this._datos, domainKeys: toggleDomain(this._datos.domainKeys, key, checked) };
-  }
-
-  /** @param {string} name @param {boolean} checked */
-  _toggleDatosLabel(name, checked) {
-    const labels = checked ? [...this._datos.labels, name] : this._datos.labels.filter((l) => l !== name);
-    this._datos = { ...this._datos, labels };
-  }
-
-  /** Guarda los datos personales (nombre, github, fecha de alta, gremios, labels).
-   * No toca uid/pendingEmail (eso es la acción «Invitar», aparte). */
+  /** Guarda los datos personales (nombre, github, fecha de alta, ubicación).
+   * No toca uid/pendingEmail (eso es la acción «Invitar», aparte), ni los
+   * gremios, que se guardan con la carrera (RMR-TSK-0760). */
   async _saveDatos() {
     if (!this.persistence || !this.person) return;
     const name = this._datos.name.trim();
@@ -2070,11 +1996,6 @@ export class TeamPersonDetail extends LitElement {
         name,
         githubLogin: this._datos.githubLogin.trim() || null,
         startDate: this._datos.startDate || null,
-        guilds: [...this._datos.guilds],
-        primaryGuild: normalizePrimaryGuild(this._datos.guilds, this._datos.primaryGuild),
-        labels: [...this._datos.labels],
-        squadIds: [...this._datos.squadIds],
-        domainKeys: [...this._datos.domainKeys],
         location: this._datos.location.trim() || null,
         external: !!this._datos.external,
       };
@@ -2271,36 +2192,6 @@ export class TeamPersonDetail extends LitElement {
       </dl>`;
   }
 
-  /** Pestaña «Organización»: clasificación de la persona por gremios, labels y
-   * squads. Comparte el borrador `this._datos` y el guardado con «Datos». */
-  _renderOrganizacion() {
-    const d = this._datos;
-    // Gremios solo en los departamentos que los tienen (hoy Tech, RMR-TSK-0593).
-    const withGuilds = departmentHasGuilds(this.person?.orgBranch, this._branchesCat);
-    const subtabs = withGuilds ? ORG_SUBTABS : ORG_SUBTABS.filter((t) => t.id !== 'gremios');
-    const active = subtabs.some((t) => t.id === this._orgSubtab) ? this._orgSubtab : subtabs[0].id;
-    const panel = {
-      gremios: () => html`
-        ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
-        ${this._renderPrimaryGuild(d)}
-      `,
-      labels: () => this._renderDatosChecks('Labels', this._labelsCat, d.labels, (n, c) => this._toggleDatosLabel(n, c)),
-      dominios: () => this._renderDatosDomains(d.domainKeys ?? []),
-    }[active] ?? (() => html`
-      ${this._renderDatosChecks('Gremios', this._guildsCat, d.guilds, (n, c) => this._toggleDatosGuild(n, c))}
-      ${this._renderPrimaryGuild(d)}
-    `);
-    return html`
-      <section class="org-section">
-        ${this._renderNestedTabs(subtabs, active, 'porg', 'Clasificación de la persona', (id) => { this._orgSubtab = id; })}
-        <div id="porgpanel-${active}" class="subpanel" role="tabpanel" aria-labelledby="porg-${active}" tabindex="0">
-          ${panel()}
-        </div>
-        ${this._renderDatosActions('Guardar organización')}
-      </section>
-    `;
-  }
-
   render() {
     if (!this.person) return null;
     // El subnivel delante del título, el mismo de Personas y Seguimiento (RMR-TSK-0696).
@@ -2382,7 +2273,6 @@ export class TeamPersonDetail extends LitElement {
   _renderActivePanel() {
     const panel = {
       datos: () => this._renderDatos(),
-      organizacion: () => this._renderOrganizacion(),
       carrera: () => this._renderCareer(),
       dimensiones: () => this._renderDimensions(),
       conversations: () => this._renderO2O(),
