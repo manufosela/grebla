@@ -18,6 +18,7 @@ import { LitElement, html, css } from 'lit';
 import {
   listCatalog, addCatalog, renameCatalog, removeCatalog, promoteCatalog, updateCatalogMeta,
 } from '../tools/team/application/usecases/catalog.js';
+import { getFramework } from '../lib/careerFramework.js';
 
 export class CatalogManager extends LitElement {
   static properties = {
@@ -31,6 +32,8 @@ export class CatalogManager extends LitElement {
     title: { type: String },
     placeholder: { type: String },
     _items: { state: true },
+    /** Disciplinas del framework, para decir a cuál pertenece cada gremio (RMR-TSK-0759). */
+    _disciplines: { state: true },
     _loading: { state: true },
     _error: { state: true },
     _new: { state: true },
@@ -68,6 +71,8 @@ export class CatalogManager extends LitElement {
     .sublabel { font-size: 0.72rem; color: var(--rm-muted, #5b6b7d); }
     .color-in { width: 2.2rem; height: 2rem; padding: 0.1rem; border: 1px solid var(--rm-border, #d1d5db); border-radius: 8px; background: var(--rm-surface, #fff); cursor: pointer; }
     .toolbar .sub-in { min-width: 12rem; }
+    .disc-in { font: inherit; font-size: 0.82rem; padding: 0.25rem 0.45rem; border-radius: 8px;
+      border: 1px solid var(--rm-border, #d1d5db); background: var(--rm-field, #eef2f6); color: var(--rm-text, #111827); }
     .badge { font-size: 0.68rem; border-radius: 999px; padding: 0.05rem 0.45rem; background: var(--rm-chip, #eef2f7); color: var(--rm-navy, #1e3a5f); }
     .owner { font-size: 0.75rem; color: var(--rm-muted, #5b6b7d); }
     .spacer { flex: 1; }
@@ -88,6 +93,7 @@ export class CatalogManager extends LitElement {
     this.title = '';
     this.placeholder = 'Nuevo…';
     this._items = [];
+    this._disciplines = [];
     this._loading = false;
     this._error = '';
     this._new = '';
@@ -113,7 +119,12 @@ export class CatalogManager extends LitElement {
     this._loading = true;
     this._error = '';
     try {
-      this._items = await listCatalog(this.persistence, this.kind);
+      const [items, framework] = await Promise.all([
+        listCatalog(this.persistence, this.kind),
+        this.kind === 'guilds' ? getFramework() : null,
+      ]);
+      this._items = items;
+      this._disciplines = framework?.disciplines ?? [];
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'No se pudo cargar el catálogo.';
     } finally {
@@ -284,9 +295,33 @@ export class CatalogManager extends LitElement {
       </span>
       ${isPersonal ? null : html`<span class="badge">Global</span>`}
       ${owner}
+      ${this.kind === 'guilds' ? this._renderDiscipline(item) : null}
       <span class="spacer"></span>
       <div class="actions">${this._renderActions(item, isPersonal)}</div>
     </li>`;
+  }
+
+  /**
+   * A qué disciplina del framework pertenece el gremio (RMR-TSK-0759): de aquí
+   * salen las disciplinas de cada persona, que ya no se marcan aparte.
+   */
+  _renderDiscipline(item) {
+    const label = `Disciplina de ${item.name}`;
+    return html`<select class="disc-in" aria-label=${label} title=${label} ?disabled=${!this._canManage(item)}
+      @change=${(e) => this._setDiscipline(item.id, e.target.value)}>
+      <option value="" ?selected=${!item.disciplineId}>Sin disciplina</option>
+      ${this._disciplines.map((d) => html`<option value=${d.id} ?selected=${d.id === item.disciplineId}>${d.name}</option>`)}
+    </select>`;
+  }
+
+  async _setDiscipline(id, disciplineId) {
+    this._error = '';
+    try {
+      await updateCatalogMeta(this.persistence, this.kind, id, { disciplineId });
+      await this._load();
+    } catch (err) {
+      this._error = err instanceof Error ? err.message : 'No se pudo guardar la disciplina.';
+    }
   }
 
   _renderActions(item, isPersonal) {
