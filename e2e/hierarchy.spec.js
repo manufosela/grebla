@@ -21,7 +21,7 @@ test.afterEach(async () => {
   const db = admin();
   await db.doc('people/e2e-person-mgr').update({ reportsToPersonId: 'e2e-ficha-e2e-manager' });
   await expect.poll(async () => (await db.doc('people/e2e-person-mgr').get()).data()?.directoryManagerUids ?? [],
-    { timeout: 20_000 }).toEqual(['e2e-manager']);
+    { timeout: 20_000 }).toEqual(['e2e-manager', 'e2e-head']);
 });
 
 test('el superadmin asigna el superior de una persona desde el panel', async ({ page }) => {

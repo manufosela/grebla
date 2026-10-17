@@ -14,6 +14,7 @@ import { getFramework } from '../lib/careerFramework.js';
 import { createCareerContainer } from '../tools/career/composition/container.js';
 import { teamHeading } from '../tools/team/domain/teamNaming.js';
 import { getOrgIdentity } from '../lib/orgConfig.js';
+import { hasPeopleBelow } from '../lib/myTeam.js';
 
 const app = document.querySelector('team-app');
 
@@ -41,6 +42,11 @@ onUserChanged(async (user) => {
     const access = await resolveAccess(user);
     if (!hasAccess(access)) {
       app.error = 'No tienes acceso. Pide a un superadmin que te dé de alta como manager.';
+      return;
+    }
+    // Mi equipo es para quien tiene a alguien a cargo (RMR-TSK-0747).
+    if (!canGovern(access) && !(await hasPeopleBelow(user.uid))) {
+      app.error = 'Mi equipo es para managers: en el organigrama no tienes a nadie a tu cargo.';
       return;
     }
     // Los managers de la instancia se necesitan tanto para el selector de

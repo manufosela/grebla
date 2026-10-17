@@ -38,6 +38,7 @@ import {
   deleteField,
 } from 'firebase/firestore';
 import { DIMENSIONS, DEFAULT_SETTINGS } from '../../domain/types.js';
+import { inMyTeam } from '../../domain/teamScope.js';
 
 // `base` = raíz de la instancia: []. Las personas viven aquí (no bajo el líder)
 // y se distinguen por ownerLeaderUid.
@@ -99,30 +100,26 @@ function peopleRepo(db, base, leaderUid, viewAll = false, branchLeaderUids = nul
         const all = await fetchDocs(peopleCol(db, base));
         return all.docs.map((d) => ({ id: d.id, ...d.data() }));
       }
-      // Alcance de rama (supermanager): personas de los EMs que le reportan, por
-      // PROPIEDAD (ownerLeaderUid `in` rama). Firestore limita el `in` a 30, se
-      // trocea; merge con dedup por id. Va por propiedad para casar con las reglas
-      // (autorizan por leaders/$(ownerLeaderUid).reportsTo == uid). Rama vacía → [].
-      if (branch) {
-        const batches = chunk(branch);
-        if (batches.length === 0) return [];
-        const snaps = await Promise.all(
-          batches.map((b) => fetchDocs(query(peopleCol(db, base), where('ownerLeaderUid', 'in', b)))),
-        );
-        const byId = new Map();
-        for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...d.data() });
-        return [...byId.values()];
-      }
-      // Las personas visibles para este líder: las suyas (ownerLeaderUid) + las
-      // compartidas con él (sharedWithUids array-contains). Firestore no hace OR
-      // sobre campos distintos, así que son dos consultas + merge con dedup por id.
-      const [owned, shared] = await Promise.all([
-        fetchDocs(query(peopleCol(db, base), where('ownerLeaderUid', '==', leaderUid))),
-        fetchDocs(query(peopleCol(db, base), where('sharedWithUids', 'array-contains', leaderUid))),
-      ]);
+      // Mi equipo es el organigrama (RMR-TSK-0747): quien tiene sitio en él
+      // sale a todos sus jefes (directoryManagerUids). Las consultas de
+      // propiedad siguen para quien NO está en el organigrama; inMyTeam decide.
+      // Rama (supermanager): por PROPIEDAD (ownerLeaderUid `in` rama, troceado a
+      // 30) para casar con las reglas. Sin rama: las suyas + las compartidas.
+      // Firestore no hace OR sobre campos distintos: consultas + dedup por id.
+      const byOwnership = branch
+        ? chunk(branch).map((b) => query(peopleCol(db, base), where('ownerLeaderUid', 'in', b)))
+        : [
+          query(peopleCol(db, base), where('ownerLeaderUid', '==', leaderUid)),
+          query(peopleCol(db, base), where('sharedWithUids', 'array-contains', leaderUid)),
+        ];
+      const queries = [
+        query(peopleCol(db, base), where('directoryManagerUids', 'array-contains', leaderUid)),
+        ...byOwnership,
+      ];
+      const snaps = await Promise.all(queries.map((q) => fetchDocs(q)));
       const byId = new Map();
-      for (const d of [...owned.docs, ...shared.docs]) byId.set(d.id, { id: d.id, ...d.data() });
-      return [...byId.values()];
+      for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, { id: d.id, ...d.data() });
+      return [...byId.values()].filter((p) => inMyTeam(p, leaderUid, branch));
     },
     async getById(id) {
       const d = await getDoc(personDoc(db, base, id));
