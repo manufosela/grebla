@@ -71,10 +71,15 @@ export default async function globalSetup() {
   // cuentas con gente a cargo tienen ficha (inactiva, para no salir en listas)
   // con un superior que no existe, para que el espejo /leaders respete su reportsTo.
   // La rama ya va calculada, como la dejaría el trigger, para no esperarle.
-  const ficha = (uid) => db.doc(`people/e2e-ficha-${uid}`)
-    .set({ name: `Ficha de ${uid}`, uid, active: false, reportsToPersonId: 'e2e-sin-ficha', directoryManagerUids: [] });
-  await Promise.all([ficha(MANAGER), ficha(OUTSIDER), ficha(ROLES.adminmgr)]);
-  const cuelgaDe = (uid) => ({ ownerLeaderUid: uid, reportsToPersonId: `e2e-ficha-${uid}`, directoryManagerUids: [uid] });
+  // El manager cuelga del Head también en el organigrama, como en producción:
+  // Mi equipo sale de ahí (RMR-TSK-0747), no del reportsTo de /leaders.
+  const ficha = (uid, boss = null) => db.doc(`people/e2e-ficha-${uid}`).set({
+    name: `Ficha de ${uid}`, uid, active: false,
+    reportsToPersonId: boss ? `e2e-ficha-${boss}` : 'e2e-sin-ficha', directoryManagerUids: boss ? [boss] : [],
+  });
+  await Promise.all([ficha(ROLES.head), ficha(MANAGER, ROLES.head), ficha(OUTSIDER), ficha(ROLES.adminmgr)]);
+  const bossesOf = { [MANAGER]: [MANAGER, ROLES.head] };
+  const cuelgaDe = (uid) => ({ ownerLeaderUid: uid, reportsToPersonId: `e2e-ficha-${uid}`, directoryManagerUids: bossesOf[uid] ?? [uid] });
   await db.doc('people/e2e-person-eng').set({
     name: 'Ingeniero E2E', uid: ROLES.engineer, ...cuelgaDe(MANAGER), active: true, orgBranch: 'engineering',
   });
