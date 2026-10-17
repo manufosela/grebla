@@ -600,7 +600,7 @@ export class EngineerSpace extends LitElement {
     const subs = [
       ['nivel', 'Mi nivel'],
       ['plan', 'Plan'],
-      ['expectativas', 'Expectativas'],
+      ['expectativas', 'Expectativas y objetivos'],
       ['seguimiento', 'Seguimiento'],
       ['o2o', 'O2O'],
       ['mapa', 'Mapa y ruta'],

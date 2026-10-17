@@ -12,6 +12,8 @@ import { expectationsForLevel, aspirationalLevels } from '../../tools/career/dat
 import { careerSuggestion } from '../../tools/career/data/assessment.js';
 import { expectationState, timelineFor, entryKindsFor, visibilityNotice } from '../../tools/career/domain/evidence.js';
 import { timelineTemplate, timelineStyles } from './career-timeline.js';
+import { objectivesTemplate, objectivesStyles } from './career-objectives.js';
+import { objectivesFor, looseObjectives } from '../../tools/career/domain/objectives.js';
 
 const STATE_NOTE = { below: 'superado', current: 'nivel actual' };
 const STATE_LABEL = { meets: 'Llega', misses: 'No llega' };
@@ -23,13 +25,19 @@ export class CareerLevels extends LitElement {
     claims: { attribute: false },
     /** Historial de expectativas de la persona (RMR-TSK-0712). */
     entries: { attribute: false },
+    /** Objetivos medibles de la persona (RMR-TSK-0752). */
+    objectives: { attribute: false },
     viewerUid: { attribute: false },
     /** Quien mira lleva a la persona (su manager desde la ficha): pone el estado. */
     canAssess: { type: Boolean },
     _tab: { state: true },
   };
 
-  static styles = [timelineStyles, css`
+  static styles = [timelineStyles, objectivesStyles, css`
+    .goals { margin: 0 0 1rem; padding: 0.7rem 0.9rem; border-radius: 12px; border: 1px solid var(--rm-border, #e5e7eb);
+      background: var(--rm-surface, #fff); }
+    .goals h3 { margin: 0 0 0.3rem; }
+    .goals .note { margin: 0; }
     :host { display: block; }
     .tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.9rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
     .tab { font: inherit; font-size: 0.86rem; font-weight: 600; padding: 0.35rem 0.75rem; cursor: pointer; border: 0;
@@ -75,15 +83,48 @@ export class CareerLevels extends LitElement {
 
   render() {
     const steps = this._steps;
-    if (steps.length === 0) return html`<p class="empty">Todavía no hay un nivel asignado.</p>`;
+    const current = steps.find((s) => s.state === 'current')?.level ?? null;
+    if (steps.length === 0) return html`${this._goals(null)}<p class="empty">Todavía no hay un nivel asignado.</p>`;
     const step = steps.find((s) => s.level.id === this._tab) ?? steps[0];
-    return html`${this._visibility()}
+    return html`${this._visibility()}${this._goals(current)}
       <div class="tabs" role="tablist" aria-label="Niveles del camino" @keydown=${(e) => this._keydown(e, steps)}>
         ${steps.map((s) => this._tabButton(s, s === step))}
       </div>
       <div id="lvlpanel-${step.level.id}" role="tabpanel" aria-labelledby="lvl-${step.level.id}" tabindex="0">
         ${this._panel(step)}
       </div>`;
+  }
+
+  /**
+   * Objetivos (RMR-TSK-0752), separados de las expectativas y explicando la
+   * diferencia: que no se lean como lo mismo ni como algo contradictorio.
+   * Aquí van los sueltos y los de otro nivel; los enganchados, bajo su expectativa.
+   */
+  _goals(level) {
+    const loose = looseObjectives(this.objectives ?? [], level?.id ?? '');
+    const add = this.canAssess ? html`<div class="actions"><button type="button"
+      @click=${() => this._requestObjective(level, '')}>Nuevo objetivo</button></div>` : null;
+    if (!loose.length && !add) return null;
+    return html`<section class="goals" aria-label="Objetivos">
+      <h3>Objetivos</h3>
+      <p class="note">Las <strong>expectativas</strong> son lo que pide el nivel, iguales para todos. Los
+        <strong>objetivos</strong> son compromisos de esta persona, con cómo se miden y para cuándo; si ayudan a
+        una expectativa, aparecen debajo de ella.</p>
+      ${objectivesTemplate(loose, { canAssess: this.canAssess, onClose: (o) => this._closeObjective(o) })}
+      ${add}
+    </section>`;
+  }
+
+  _requestObjective(level, dimensionId) {
+    const options = level ? expectationsForLevel(this.framework, level.id).filter((r) => r.text)
+      .map((r) => ({ dimensionId: r.dimension.id, name: r.dimension.name })) : [];
+    this.dispatchEvent(new CustomEvent('objective-request', {
+      detail: { mode: 'new', levelId: level?.id ?? null, options, dimensionId }, bubbles: true, composed: true,
+    }));
+  }
+
+  _closeObjective(objective) {
+    this.dispatchEvent(new CustomEvent('objective-request', { detail: { mode: 'close', objective }, bubbles: true, composed: true }));
   }
 
   /** Quién ve el historial, siempre a la vista (RMR-TSK-0723): nada de sustos al escribir. */
@@ -141,8 +182,11 @@ export class CareerLevels extends LitElement {
       <ul>${rows.map((r) => this._row(r.dimension.name, r.text,
         html`<span class="chip ${r.state === 'meets' ? 'ok' : 'bad'}">${STATE_LABEL[r.state]}</span>`,
         html`${timelineTemplate(timelineFor(entries, level.id, r.dimension.id))}
+          ${objectivesTemplate(objectivesFor(this.objectives ?? [], level.id, r.dimension.id),
+            { canAssess: this.canAssess, onClose: (o) => this._closeObjective(o) })}
           ${kinds.length ? html`<div class="actions"><button type="button"
-            @click=${() => this._requestEntry(level.id, r, kinds)}>Añadir</button></div>` : null}`))}</ul>`;
+            @click=${() => this._requestEntry(level.id, r, kinds)}>Añadir</button>${this.canAssess ? html` <button
+            type="button" @click=${() => this._requestObjective(level, r.dimension.id)}>Nuevo objetivo</button>` : null}</div>` : null}`))}</ul>`;
   }
 
   /** La sugerencia de rol que sale de los «no llega» (antes, en «Nivel»). */
