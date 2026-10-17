@@ -151,6 +151,17 @@ export function applyOverride(overrides, toolId, dim, mode) {
 }
 
 /**
+ * De lo que se elige en pantalla (solo Sí o No, RMR-TSK-0758) al modo que se
+ * guarda: si coincide con lo que da el rol, no es una excepción.
+ * @param {'yes'|'no'} choice
+ * @param {boolean} inherited  lo que tendría sin excepción
+ * @returns {'yes'|'no'|'inherit'}
+ */
+export function choiceToMode(choice, inherited) {
+  return (choice === 'yes') === inherited ? 'inherit' : choice;
+}
+
+/**
  * Modo (yes/no/inherit) que muestra el selector para una dimensión.
  * @param {Record<string, ToolOverride>} overrides
  * @param {string} toolId

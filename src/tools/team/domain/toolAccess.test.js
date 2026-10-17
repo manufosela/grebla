@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { matchesGrant, canUseTool, canManageTool, visibleToolIds, effectiveToolAccess, applyOverride, overrideMode } from './toolAccess.js';
+import { matchesGrant, canUseTool, canManageTool, visibleToolIds, effectiveToolAccess, applyOverride, overrideMode,
+  choiceToMode } from './toolAccess.js';
+
+/**
+ * Permisos solo con Sí o No (RMR-TSK-0758): «Heredar» no aportaba nada a la
+ * vista. Elegir lo mismo que da el rol no guarda excepción; lo contrario, sí.
+ */
+describe('choiceToMode', () => {
+  it('lo mismo que el rol no es una excepción', () => {
+    expect(choiceToMode('yes', true)).toBe('inherit');
+    expect(choiceToMode('no', false)).toBe('inherit');
+  });
+
+  it('lo contrario al rol, sí', () => {
+    expect(choiceToMode('yes', false)).toBe('yes');
+    expect(choiceToMode('no', true)).toBe('no');
+  });
+});
 
 const engineer = { personId: 'p1', branch: 'engineering', roleId: 'engineer' };
 const pm = { personId: 'p2', branch: 'product', roleId: 'pm' };
