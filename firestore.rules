@@ -582,6 +582,54 @@ service cloud.firestore {
           && resource.data.by.uid == request.auth.uid;
       }
 
+      // Objetivos medibles (RMR-TSK-0749): quien lleva a la persona los pone,
+      // los ajusta en curso y los cierra una vez; la persona los lee. Nadie los
+      // borra: lo que ya no aplica se cierra como descartado. Fuera del comodín.
+      match /careerObjectives/{objectiveId} {
+        function objSubject() {
+          return get(/databases/$(database)/documents/people/$(personId)).data;
+        }
+        function isObjSubject() {
+          return isSignedIn() && objSubject().get('uid', null) == request.auth.uid;
+        }
+        function leadsObjSubject() {
+          return isSignedIn() && !isObjSubject() && (isSuperAdmin()
+            || objSubject().get('ownerLeaderUid', null) == request.auth.uid
+            || request.auth.uid in objSubject().get('directoryManagerUids', [])
+            || objSubject().get('careerReviewers', {}).get('firstUid', null) == request.auth.uid
+            || objSubject().get('careerReviewers', {}).get('secondUid', null) == request.auth.uid);
+        }
+        function validObjective(d) {
+          return d.keys().hasOnly(['title', 'measure', 'dueDate', 'levelId', 'dimensionId', 'status',
+              'closingNote', 'closedAt', 'by', 'at'])
+            && d.title is string && d.title.size() >= 1 && d.title.size() <= 200
+            && d.measure is string && d.measure.size() >= 1 && d.measure.size() <= 500
+            && (d.dueDate == null || (d.dueDate is string && d.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+            && ((d.levelId == null && d.dimensionId == null)
+              || (d.levelId is string && d.levelId.size() > 0 && d.dimensionId is string && d.dimensionId.size() > 0))
+            && d.closingNote is string && d.closingNote.size() <= 1000
+            && d.by is map && d.by.keys().hasOnly(['uid', 'name'])
+            && d.by.name is string && d.by.name.size() >= 1 && d.by.name.size() <= 200
+            && d.at is string;
+        }
+        function stillOpen(d) {
+          return d.status == 'open' && d.closingNote == '' && d.closedAt == null;
+        }
+        allow read: if isObjSubject() || leadsObjSubject();
+        allow create: if leadsObjSubject() && validObjective(request.resource.data)
+          && stillOpen(request.resource.data) && request.resource.data.by.uid == request.auth.uid;
+        // En curso se ajusta (sin tocar autor ni fecha de alta) o se cierra: o
+        // sigue abierto entero, o cambia SOLO el cierre y con estado final.
+        allow update: if leadsObjSubject() && resource.data.status == 'open'
+          && validObjective(request.resource.data)
+          && request.resource.data.by == resource.data.by && request.resource.data.at == resource.data.at
+          && (stillOpen(request.resource.data)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closingNote', 'closedAt'])
+              && request.resource.data.status in ['achieved', 'missed', 'dropped']
+              && request.resource.data.closedAt is string));
+        allow delete: if false;
+      }
+
       // Subárbol de la persona (lecturas por dimensión, conversaciones, notas,
       // resumen/sesiones de Role Mirror): hereda el acceso de la persona.
       match /{document=**} {
@@ -633,7 +681,7 @@ service cloud.firestore {
         }
         allow read: if canView();
         allow write: if canEdit() && document[0] != 'careerClaims' && document[0] != 'careerEvidence'
-          && document[0] != 'careerRecommendations'
+          && document[0] != 'careerRecommendations' && document[0] != 'careerObjectives'
           && !(isPersonDocUpdate() && updatesNotionFields())
           && !(isPersonDocUpdate() && touchesCareerReviewers())
           && !(isPersonDocUpdate() && touchesDirectoryManagers() && !isSuperAdmin());
