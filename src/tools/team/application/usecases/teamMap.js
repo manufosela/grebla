@@ -88,8 +88,9 @@ async function rowFor(persistence, person) {
  * Firestore y el Mapa tardaba en abrirse una eternidad. Las lecturas son
  * independientes entre sí, así que no hay ninguna razón para encadenarlas.
  *
- * El orden de las filas es el del roster, no el de llegada: `Promise.all`
- * preserva el orden de entrada, y la tabla se lee de arriba abajo.
+ * El orden de las filas es alfabético por nombre (RMR-TSK-0746), no el de
+ * llegada: `Promise.all` preserva el orden de entrada, y la tabla se lee de
+ * arriba abajo buscando a alguien por su nombre.
  *
  * Y una persona que falle NO se lleva el mapa por delante (HU-0003): su fila
  * sale marcada y las demás salen enteras. Antes, un permiso mal puesto sobre
@@ -100,7 +101,8 @@ async function rowFor(persistence, person) {
  * @returns {Promise<Array<object>>}
  */
 export async function getTeamMap(persistence) {
-  const people = await listActivePeople(persistence);
+  const people = (await listActivePeople(persistence))
+    .toSorted((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'es', { sensitivity: 'base' }));
   return Promise.all(
     people.map((person) => rowFor(persistence, person).catch(() => failedRow(person))),
   );
