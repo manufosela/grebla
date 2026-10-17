@@ -149,3 +149,12 @@ describe('lo que el Mapa devuelve no cambia', () => {
     expect(fila.knowledge.areas).toEqual([]);
   });
 });
+
+describe('el Mapa sale por orden alfabético (RMR-TSK-0746)', () => {
+  it('ordena por nombre en español, sin mirar mayúsculas ni tildes', async () => {
+    const nombres = ['Zoe', 'álvaro', 'Ismael', 'Ana', 'Óscar'];
+    const p = fakePersistence(nombres.map((name, i) => ({ ...gente(1)[0], id: `p${i}`, name })));
+    const filas = await getTeamMap(p);
+    expect(filas.map((f) => f.name)).toEqual(['álvaro', 'Ana', 'Ismael', 'Óscar', 'Zoe']);
+  });
+});
