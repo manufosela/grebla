@@ -29,5 +29,16 @@ export const BELBIN_SIGLAS = BELBIN_ROLES.map((r) => r.sigla);
 /** @type {Readonly<Record<string, BelbinRole>>} */
 export const BELBIN_BY_SIGLA = Object.freeze(Object.fromEntries(BELBIN_ROLES.map((r) => [r.sigla, r])));
 
+/**
+ * Roles de una lectura agrupados por cómo se ejercen, en el orden del catálogo
+ * (RMR-TSK-0755): así el Mapa los enseña en dos líneas y no en un chip por rol.
+ * @param {Record<string, string>|null|undefined} roles  sigla → 'primary'|'secondary'
+ * @returns {{ primary: string[], secondary: string[] }}
+ */
+export function contributionGroups(roles) {
+  const of = (kind) => BELBIN_SIGLAS.filter((s) => roles?.[s] === kind);
+  return { primary: of('primary'), secondary: of('secondary') };
+}
+
 /** Pesos de cobertura por tipo de ejercicio del rol (R9a). */
 export const COVERAGE_WEIGHT = Object.freeze({ primary: 1.0, secondary: 0.5 });
