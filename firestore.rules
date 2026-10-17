@@ -326,6 +326,12 @@ service cloud.firestore {
         && (isSuperAdmin() || isOwner()
         || (ownerReportsToMe()
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
+        // Quien la tiene por encima en el organigrama la lleva (RMR-TSK-0761):
+        // es su Mi equipo. Edita como el dueño, sin poder quedársela. Lo que
+        // calcula el servidor (directoryManagerUids, careerReviewers) y lo de
+        // Notion ya lo vetan para todos las tres condiciones de arriba.
+        || (isSignedIn() && request.auth.uid in resource.data.get('directoryManagerUids', [])
+            && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
         || (sharedPerm(resource.data) == 'edit'
             && request.resource.data.ownerLeaderUid == resource.data.ownerLeaderUid)
         // Head ajusta SOLO los permisos de un manager de su rama (RMR-PCS-0027 · F8d).
