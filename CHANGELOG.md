@@ -15,6 +15,26 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.256.0] - 2026-10-17
+
+### Añadido
+
+- Recomendaciones del mapa de carrera: desde Ficha › Carrera › Mapa el manager
+  recomienda una ruta prehecha o una casa, con una nota, y ve en qué quedó cada
+  una (puede retirar las suyas mientras estén abiertas). La persona las ve en Mi
+  espacio y en «🧭 Mi ruta» del juego, y decide: las añade a su ruta o las
+  descarta (RMR-TSK-0737 a RMR-TSK-0742).
+- Ficha › Carrera › Mapa: el mismo resumen del mapa que la persona ve en Mi
+  espacio, en solo lectura (RMR-TSK-0735, RMR-TSK-0736).
+- Pestaña «Role Mirror» en la ficha: perfil que cuenta, propuesta pendiente para
+  aceptar o rechazar e histórico, con el mismo componente que la herramienta
+  (RMR-TSK-0733, RMR-TSK-0734).
+
+### Cambiado
+
+- «Nivel» nombra solo la carrera: la escala de las dimensiones de GREBLA pasa a
+  llamarse «Grado» y la del mapa, «Rango de viaje» (RMR-TSK-0744).
+
 ## [1.255.0] - 2026-10-16
 
 ### Añadido
