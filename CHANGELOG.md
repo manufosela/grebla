@@ -15,6 +15,25 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.258.0] - 2026-10-18
+
+### Cambiado
+
+- La ficha ya no tiene pestaña «Organización». Los gremios se eligen en Carrera ›
+  Nivel y las disciplinas del framework salen de ellos: cada gremio del catálogo
+  dice a qué disciplina pertenece. Labels y dominios salen de la ficha
+  (RMR-TSK-0759, RMR-TSK-0760).
+- Permisos solo con «Sí» o «No», con lo que la persona tiene de verdad; elegir
+  lo que ya le da su rol no guarda excepción (RMR-TSK-0758).
+- Quien está en el tope de su vía (p. ej. un Head en L5-EM) no ve Seguimiento ni
+  Aspiraciones: se explica que se le valora por las expectativas de su nivel y
+  sus objetivos. Seguimiento dice de dónde sale el %. El responsable puede fijar
+  el objetivo de carrera desde la ficha, y la cabecera enseña el rol (RMR-TSK-0761).
+- Quien tiene a la persona por encima en el organigrama edita su ficha, igual
+  que el dueño (RMR-TSK-0762).
+- Mapa del equipo: la contribución en dos columnas, principal y secundaria
+  (RMR-TSK-0757).
+
 ## [1.257.1] - 2026-10-17
 
 ### Arreglado
