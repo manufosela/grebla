@@ -79,3 +79,29 @@ test('quien la lleva le recomienda una casa con su nota y la retira mientras no 
     await limpiar();
   }
 });
+
+test('la persona decide: añade a su ruta lo recomendado o lo descarta (RMR-TSK-0741)', async ({ page }) => {
+  const recos = db().collection('people/e2e-person-eng/careerRecommendations');
+  const base = { kind: 'city', routeId: null, note: 'Te vendrá bien', by: { uid: 'e2e-head', name: 'Head E2E' },
+    at: '2026-10-16T09:00:00.000Z', status: 'open', decidedAt: null };
+  await db().doc(JOURNEY).set({ currentCity: primera.id, visitedCities: [primera.id], plannedRoute: [] });
+  await recos.doc('si').set({ ...base, cityIds: [segunda.id], label: segunda.name });
+  await recos.doc('no').set({ ...base, cityIds: [primera.id], label: 'Descartable E2E' });
+  try {
+    await signInAs(page, 'engineer');
+    await page.goto('/mi-espacio#carrera');
+    const espacio = page.locator('engineer-space');
+    await espacio.getByRole('tab', { name: 'Mapa' }).click();
+    const inbox = espacio.locator('career-recommendations-inbox');
+    await expect(inbox).toContainText('Recomendado por tu manager');
+    await inbox.locator('li', { hasText: segunda.name }).getByRole('button', { name: 'Añadir a mi ruta' }).click();
+    await expect(espacio.locator('career-map-summary ol.route')).toContainText(segunda.name);
+    await inbox.locator('li', { hasText: 'Descartable E2E' }).getByRole('button', { name: 'Descartar' }).click();
+    await expect(inbox).toHaveText('');
+    await expect.poll(async () => (await recos.doc('no').get()).data()?.status).toBe('dismissed');
+    expect((await db().doc(JOURNEY).get()).data()?.plannedRoute).toEqual([segunda.id]);
+  } finally {
+    await db().doc(JOURNEY).delete();
+    for (const r of (await recos.get()).docs) await r.ref.delete();
+  }
+});
