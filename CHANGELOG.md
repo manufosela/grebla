@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.257.1] - 2026-10-17
+
+### Arreglado
+
+- Mapa del equipo: la contribución se lee en dos líneas, principal y secundario,
+  en vez de un chip por rol. Con los nueve roles marcados, la fila de esa persona
+  ocupaba media pantalla (RMR-TSK-0755).
+
 ## [1.257.0] - 2026-10-17
 
 ### Añadido
