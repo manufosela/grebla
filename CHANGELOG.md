@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.260.1] - 2026-10-18
+
+### Arreglado
+
+- Registrar una lectura (Seniority, Emocional, Conocimiento, Contribución) ya no
+  recarga la ficha ni la devuelve a «Datos»: solo se refresca su historial y se
+  sigue en la pestaña en la que se estaba (RMR-TSK-0769).
+
 ## [1.260.0] - 2026-10-18
 
 ### Añadido
