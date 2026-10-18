@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.261.1] - 2026-10-18
+
+### Arreglado
+
+- Entrega ya no enseña como foto una semana que llega vacía del portal («0
+  despliegues» sin serlo): usa la anterior. Y si el portal lleva más de dos días
+  sin actualizar, lo avisa arriba (RMR-TSK-0776).
+
 ## [1.261.0] - 2026-10-18
 
 ### Añadido
