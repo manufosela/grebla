@@ -89,7 +89,7 @@ async function commitInBatches(db, ops) {
  * @param {{ db: any, auth: any, fetchPages: () => Promise<Array<Record<string, any>>>, apply: boolean, now: Date }} deps
  * @returns {Promise<Record<string, any>>} el informe (también queda en /config/notionSync)
  */
-export async function runNotionSync({ db, auth, fetchPages, apply, now }) {
+export async function runNotionSync({ db, auth, fetchPages, apply, now, employeeDomain = null }) {
   const directory = directoryFromPages(await fetchPages());
   const [peopleSnap, branchesSnap] = await Promise.all([db.collection('people').get(), db.collection('orgBranches').get()]);
   const people = peopleSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
@@ -100,6 +100,7 @@ export async function runNotionSync({ db, auth, fetchPages, apply, now }) {
     branches: branchesSnap.docs.map((d) => ({ id: d.id, label: d.data().label ?? d.id })),
     newId: () => db.collection('people').doc().id,
     today: now.toISOString().slice(0, 10),
+    employeeDomain,
   });
 
   const current = new Map(people.map((p) => [p.id, p.data]));

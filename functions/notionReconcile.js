@@ -39,7 +39,8 @@ function indexPeople(people) {
 /** Lo que Notion dice de una persona, en campos de la ficha. */
 function desiredFields(entry, ctx) {
   // El email también lo manda Notion: la ficha lo enseña y las encuestas lo usan (RMR-TSK-0725).
-  const set = { name: entry.name, email: norm(entry.email), external: entry.type === 'Contractor', notion: notionBlock(entry) };
+  // Solo si es de la organización (RMR-TSK-0773): el de la empresa de un externo no se guarda.
+  const set = { name: entry.name, email: ctx.ownEmail(entry.email), external: entry.type === 'Contractor', notion: notionBlock(entry) };
   const branch = ctx.branchByLabel.get((entry.department ?? '').trim().toLowerCase());
   if (branch) set.orgBranch = branch;
   else if (entry.department) ctx.skipped.push({ name: entry.name, reason: `departamento «${entry.department}» sin rama en el catálogo` });
@@ -85,8 +86,9 @@ function diff(current, desired) {
  * @param {{ directory: Array<Record<string, any>>, people: Array<{ id: string, data: Record<string, any>, authEmail?: string|null }>,
  *   branches: Array<{ id: string, label: string }>, newId: () => string, today: string }} input
  *   `newId` da el personId de cada ficha nueva; `today` (AAAA-MM-DD) es su alta si Notion no trae Join Date.
+ *   `employeeDomain` (opcional): solo los emails de ese dominio pasan a la ficha (RMR-TSK-0773).
  */
-export function planNotionSync({ directory, people, branches, newId, today }) {
+export function planNotionSync({ directory, people, branches, newId, today, employeeDomain = null }) {
   if (typeof newId !== 'function') throw new TypeError('planNotionSync: newId debe ser una función');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(today ?? '')) throw new TypeError('planNotionSync: today debe ser AAAA-MM-DD');
   const errors = [];
@@ -126,8 +128,13 @@ export function planNotionSync({ directory, people, branches, newId, today }) {
     else toCreate.set(e.id, newId());
   }
 
+  const domain = norm(employeeDomain)?.replace(/^@/, '') ?? null;
   const ctx = {
     skipped,
+    ownEmail: (email) => {
+      const e = norm(email);
+      return e && (!domain || e.endsWith(`@${domain}`)) ? e : null;
+    },
     branchByLabel: new Map(branches.map((b) => [b.label.trim().toLowerCase(), b.id])),
     personByNotionId: new Map([...[...matches].map(([nid, p]) => [nid, p.id]), ...toCreate]),
   };
@@ -136,10 +143,13 @@ export function planNotionSync({ directory, people, branches, newId, today }) {
   for (const e of directory) {
     const p = matches.get(e.id);
     if (p) {
-      const set = diff(p.data, desiredFields(e, ctx));
+      // El email de invitación sobra si ya tiene cuenta, y no vale si es de fuera
+      // de la organización (RMR-TSK-0773): así no queda un gmail en una ficha.
+      const pendingEmail = p.data?.uid ? null : ctx.ownEmail(p.data?.pendingEmail);
+      const set = diff(p.data, { ...desiredFields(e, ctx), pendingEmail });
       if (Object.keys(set).length) updates.push({ personId: p.id, name: e.name, set });
     } else if (toCreate.has(e.id)) {
-      const data = { pendingEmail: norm(e.email), orgRole: 'generico', orgBranch: 'generico', active: true,
+      const data = { pendingEmail: ctx.ownEmail(e.email), orgRole: 'generico', orgBranch: 'generico', active: true,
         startDate: today, guilds: [], disciplines: [], labels: [], ...desiredFields(e, ctx) };
       creates.push({ personId: toCreate.get(e.id), name: e.name, data });
     }

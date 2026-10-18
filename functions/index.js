@@ -2325,7 +2325,9 @@ export const notionSync = onCall({ region: 'europe-west1', secrets: [NOTION_TOKE
   const token = NOTION_TOKEN.value();
   const fetchPages = () => queryAllPages({ token, urls: [databaseQueryUrl(databaseId)] });
   try {
-    const report = await runNotionSync({ db, auth: getAuth(), fetchPages, apply: request.data?.apply === true, now: new Date() });
+    // Solo emails de la organización en las fichas (RMR-TSK-0773).
+    const report = await runNotionSync({ db, auth: getAuth(), fetchPages, apply: request.data?.apply === true, now: new Date(),
+      employeeDomain: org.employeeDomain ?? null });
     logger.info(`[notionSync] ${report.applied ? 'aplicado' : 'simulado'}: ${JSON.stringify(report.counts)} · errores ${report.errors.length}`);
     return report;
   } catch (err) {
