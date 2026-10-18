@@ -403,3 +403,20 @@ describe('careerLadder: la escalera completa (RMR-TSK-0471)', () => {
     expect(m1.expectations).toEqual([]);
   });
 });
+
+describe('vía Management: Head y EM se complementan (RMR-TSK-0784)', () => {
+  const em = ENGINEERING_FRAMEWORK.tracks.find((t) => t.id === 'em');
+  const level = (id) => getLevel(ENGINEERING_FRAMEWORK, id);
+
+  it('la vía dice que el EM se centra en personas y el Head en lo técnico, sin competir', () => {
+    expect(em.description).toMatch(/complementan/);
+    expect(em.description).toMatch(/EM se centra en las personas/);
+    expect(em.description).toMatch(/Head, en lo técnico/);
+  });
+
+  it('cada nivel de EM y de Head lo recuerda en su descripción', () => {
+    expect(level('l3em').description).toMatch(/apoyo técnico/);
+    expect(level('l4em').description).toMatch(/complementan/);
+    expect(level('l5em').description).toMatch(/apoyo a las personas/);
+  });
+});
