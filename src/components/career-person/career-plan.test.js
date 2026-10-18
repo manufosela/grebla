@@ -43,4 +43,9 @@ describe('<career-plan>', () => {
     expect(canEdit.call(ctx())).toBe(true);
     expect(canEdit.call(ctx({ person: { id: 'dev', uid: 'u-em', directoryManagerUids: ['u-em'] } }))).toBe(false);
   });
+
+  it('también su responsable fuera del organigrama, como en un externo (RMR-TSK-0764)', () => {
+    expect(canEdit.call(ctx({ person: { id: 'ext', uid: null, ownerLeaderUid: 'u-em', external: true } }))).toBe(true);
+    expect(canEdit.call(ctx({ person: { id: 'ext', uid: null, ownerLeaderUid: 'u-otro', external: true } }))).toBe(false);
+  });
 });

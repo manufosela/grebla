@@ -30,6 +30,8 @@ export class CareerLevels extends LitElement {
     viewerUid: { attribute: false },
     /** Quien mira lleva a la persona (su manager desde la ficha): pone el estado. */
     canAssess: { type: Boolean },
+    /** Solo los objetivos, sin expectativas: personas externas (RMR-TSK-0764). */
+    goalsOnly: { type: Boolean },
     _tab: { state: true },
   };
 
@@ -82,6 +84,7 @@ export class CareerLevels extends LitElement {
   }
 
   render() {
+    if (this.goalsOnly) return this._goals(null) ?? html`<p class="empty">Sin objetivos todavía.</p>`;
     const steps = this._steps;
     const current = steps.find((s) => s.state === 'current')?.level ?? null;
     if (steps.length === 0) return html`${this._goals(null)}<p class="empty">Todavía no hay un nivel asignado.</p>`;
@@ -107,9 +110,12 @@ export class CareerLevels extends LitElement {
     if (!loose.length && !add) return null;
     return html`<section class="goals" aria-label="Objetivos">
       <h3>Objetivos</h3>
-      <p class="note">Las <strong>expectativas</strong> son lo que pide el nivel, iguales para todos. Los
-        <strong>objetivos</strong> son compromisos de esta persona, con cómo se miden y para cuándo; si ayudan a
-        una expectativa, aparecen debajo de ella.</p>
+      ${this.goalsOnly
+        ? html`<p class="note">Lo que se espera que aporte a TRIBBU, con cómo se mide y para cuándo. Su crecimiento
+          profesional lo lleva su empresa.</p>`
+        : html`<p class="note">Las <strong>expectativas</strong> son lo que pide el nivel, iguales para todos. Los
+          <strong>objetivos</strong> son compromisos de esta persona, con cómo se miden y para cuándo; si ayudan a
+          una expectativa, aparecen debajo de ella.</p>`}
       ${objectivesTemplate(loose, { canAssess: this.canAssess, onClose: (o) => this._closeObjective(o) })}
       ${add}
     </section>`;

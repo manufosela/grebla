@@ -64,7 +64,10 @@ export class CareerPlan extends LitElement {
     const uid = getCurrentUser()?.uid;
     if (!uid || uid === this.person?.uid) return false;
     const reviewers = Object.values(this.person?.careerReviewers ?? {});
-    return (this.person?.directoryManagerUids ?? []).includes(uid) || reviewers.includes(uid);
+    // El dueño de la ficha también: un externo sin sitio en el organigrama solo
+    // tiene a quien lo lleva (RMR-TSK-0764).
+    return (this.person?.directoryManagerUids ?? []).includes(uid) || reviewers.includes(uid)
+      || this.person?.ownerLeaderUid === uid;
   }
 
   render() {

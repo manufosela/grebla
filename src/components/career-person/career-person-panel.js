@@ -100,11 +100,14 @@ export class CareerPersonPanel extends LitElement {
   render() {
     const viewerUid = getCurrentUser()?.uid ?? null;
     if (this.section === 'plan') return html`<career-plan .person=${this.person}></career-plan>`;
+    // Externos (RMR-TSK-0764): objetivos sí, expectativas de carrera no.
+    const goalsOnly = this.section === 'objetivos';
     return html`
       ${this.section === 'seguimiento'
         ? this._renderProgress()
         : html`<career-levels .person=${this.person} .framework=${this.framework} .claims=${this._claims}
             .entries=${this._entries} .objectives=${this._objectives} .viewerUid=${viewerUid} ?canAssess=${this.canAssess}
+            ?goalsOnly=${goalsOnly}
             @objective-request=${(e) => this._open('objective', e.detail)}
             @evidence-request=${(e) => this._open('claim', e.detail)}
             @claim-request=${(e) => this._open('claim', e.detail)}

@@ -138,6 +138,13 @@ const DIM_SUBTABS = [
   { id: 'contribution', label: 'Contribución' },
 ];
 
+/** Carrera de una persona externa: nivel, plan y objetivos (RMR-TSK-0764). */
+const EXTERNAL_SUBTABS = [
+  { id: 'nivel', label: 'Nivel' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'objetivos', label: 'Objetivos' },
+];
+
 /** Lo que sobra a quien está en el tope de su vía (RMR-TSK-0761). */
 const TOP_HIDDEN = new Set(['seguimiento', 'aspiraciones']);
 
@@ -578,12 +585,6 @@ export class TeamPersonDetail extends LitElement {
   }
 
   /**
-   * Sub-pestañas visibles: los externos no tienen plan de carrera (journey,
-   * expectativas, aspiraciones), pero SÍ se clasifican por nivel — para saber
-   * la composición de niveles del equipo — así que la pestaña se relabela
-   * «Nivel» en vez de ocultarse (RMR-BUG-0030).
-   */
-  /**
    * ¿Puede el editor gestionar los permisos de ESTA persona? (RMR-PCS-0027 · F8b/F8d)
    * Cada caso está RESPALDADO por una regla de Firestore, así el guardado nunca
    * choca con las reglas:
@@ -604,15 +605,18 @@ export class TeamPersonDetail extends LitElement {
     return this.currentUid != null && p.ownerLeaderUid === this.currentUid;
   }
 
+  /**
+   * Sub-pestañas visibles. Los externos no tienen expectativas ni aspiraciones,
+   * pero sí nivel (composición del equipo, RMR-BUG-0030), plan y objetivos.
+   */
   _visibleSubtabs() {
     // «Permisos» (matriz de herramientas): superadmin siempre; manager/head sobre
     // la gente que gestionan (RMR-PCS-0027 · F8b).
     const perms = this._canManagePerms() ? [...SUBTABS, { id: 'permisos', label: 'Permisos' }] : SUBTABS;
     // Las performance reviews solo las ven sus managers: quien mira su propia ficha, no.
     const isSelf = Boolean(this.person?.uid) && this.person.uid === this.currentUid;
-    const base = withRoleMirrorTab(isSelf ? perms.filter((t) => t.id !== 'perf') : perms, { person: this.person, isSelf });
-    if (!this.person?.external) return base;
-    return base.map((t) => (t.id === 'carrera' ? { ...t, label: 'Nivel' } : t));
+    // Externos: la pestaña sigue siendo «Carrera»; dentro, nivel, plan y objetivos (RMR-TSK-0764).
+    return withRoleMirrorTab(isSelf ? perms.filter((t) => t.id !== 'perf') : perms, { person: this.person, isSelf });
   }
 
   /** Siembra el borrador de «Datos» desde la persona (RMR-TSK-0173). */
@@ -1559,12 +1563,24 @@ export class TeamPersonDetail extends LitElement {
    */
   _renderExternalLevel(fw) {
     const level = getLevel(fw, this.person.levelId);
-    return html`
-      <section class="career">
-        <h3>Nivel</h3>
+    // Externos (RMR-TSK-0764): sin expectativas ni aspiraciones, pero con su
+    // plan y sus objetivos, que también hay que acordar con ellos.
+    const shown = EXTERNAL_SUBTABS.some((t) => t.id === this._careerSubtab) ? this._careerSubtab : 'nivel';
+    const panel = {
+      nivel: () => html`
         <p class="lead">Las personas externas no siguen el plan de carrera (sin expectativas ni aspiraciones), pero se pueden clasificar por nivel para conocer la composición del equipo.</p>
         ${this._renderCareerEditor()}
-        ${level ? this._renderExternalLevelNow(level) : null}
+        ${level ? this._renderExternalLevelNow(level) : null}`,
+      plan: () => html`<career-person-panel .person=${this.person} .framework=${fw} section="plan" canAssess></career-person-panel>`,
+      objetivos: () => html`<career-person-panel .person=${this.person} .framework=${fw} section="objetivos" canAssess></career-person-panel>`,
+    }[shown];
+    return html`
+      <section class="career">
+        <h3>Carrera</h3>
+        ${this._renderNestedTabs(EXTERNAL_SUBTABS, shown, 'pcar', 'Secciones de carrera', (id) => { this._careerSubtab = id; })}
+        <div id="pcarpanel-${shown}" class="subpanel" role="tabpanel" aria-labelledby="pcar-${shown}" tabindex="0">
+          ${panel()}
+        </div>
       </section>
     `;
   }
