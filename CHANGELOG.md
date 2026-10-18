@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.263.0] - 2026-10-18
+
+### Cambiado
+
+- El plan de carrera se lee mejor: «Lo que es suyo» pasa a «De qué te encargas» y
+  «Lo que suelta» a «No es tu foco». Nueva sección «Lo que se espera de ti». Una
+  línea que acaba en dos puntos abre un apartado, y los guiones al principio de
+  línea sobran: cada línea ya es un punto de la lista.
+
 ## [1.262.0] - 2026-10-18
 
 ### Añadido
