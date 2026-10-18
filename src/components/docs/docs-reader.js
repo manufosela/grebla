@@ -27,6 +27,7 @@ import { LitElement, html, css } from 'lit';
 import { listDocs, openDocView, downloadDocUrl } from '../../lib/docs.js';
 import { groupByFolder } from '../../tools/docs/domain/paths.js';
 import { skeletonLines } from '../app-skeleton.js';
+import './docs-links.js';
 
 export class DocsReader extends LitElement {
   static properties = {
@@ -39,10 +40,16 @@ export class DocsReader extends LitElement {
     _viewing: { state: true },
     _src: { state: true },
     _error: { state: true },
+    _tab: { state: true },
   };
 
   static styles = css`
     :host { display: block; }
+    .tabs { display: flex; gap: 0.3rem; margin: 0 0 1.1rem; border-bottom: 1px solid var(--rm-border, #e5e7eb); }
+    .tab { font: inherit; font-size: 0.9rem; font-weight: 600; padding: 0.4rem 0.9rem; cursor: pointer; border: 0;
+      border-bottom: 3px solid transparent; background: none; color: var(--rm-muted, #4b5563); }
+    .tab.on { color: var(--rm-accent-strong, #1d6f65); border-bottom-color: var(--rm-accent, #2a9d8f); }
+    .tab:focus-visible { outline: 2px solid var(--rm-accent, #2a9d8f); outline-offset: 2px; }
     .folder { margin-bottom: 1.6rem; }
     .folder h2 { margin: 0 0 0.6rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--rm-muted, #5b6b7d); }
     .docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1rem; }
@@ -97,6 +104,7 @@ export class DocsReader extends LitElement {
     this._viewing = null;
     this._src = '';
     this._error = '';
+    this._tab = 'docs';
   }
 
   updated(changed) {
@@ -226,9 +234,27 @@ export class DocsReader extends LitElement {
     return html`<p class="empty">Todavía no hay documentación publicada.${subir}</p>`;
   }
 
+  /** Documentos y enlaces, en pestañas (RMR-TSK-0778): dos cosas, dos pestañas. */
   render() {
-    if (this._loading) return skeletonLines(4);
     if (this._viewing) return this._renderViewer();
+    return html`
+      <div class="tabs" role="tablist" aria-label="Documentación">${this._tabButton('docs', 'Documentos')}${this._tabButton('links', 'Enlaces')}</div>
+      ${this._renderTabContent()}`;
+  }
+
+  _tabButton(id, label) {
+    const on = this._tab === id;
+    return html`<button type="button" role="tab" class="tab ${on ? 'on' : ''}" aria-selected=${on ? 'true' : 'false'}
+      @click=${() => { this._tab = id; }}>${label}</button>`;
+  }
+
+  _renderTabContent() {
+    if (this._tab === 'links') return html`<docs-links ?canManage=${this.canManage}></docs-links>`;
+    return this._renderDocs();
+  }
+
+  _renderDocs() {
+    if (this._loading) return skeletonLines(4);
     const { root, folders } = groupByFolder(this._docs);
     // El error va SIEMPRE primero: si la lectura falló, decir «no hay
     // documentación» sería contar como vacío lo que es una avería.
