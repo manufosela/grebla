@@ -23,6 +23,8 @@ function checkInstant(at) {
 }
 
 const cleanId = (v) => (typeof v === 'string' && v && v === v.trim() && !v.includes('/') ? v : null);
+/** Las casas se llaman «isla/casa» (RMR-TSK-0772): tramos no vacíos unidos por «/». */
+const cleanCityId = (v) => (typeof v === 'string' && v === v.trim() && v.split('/').every(Boolean) ? v : null);
 
 /**
  * Recomendación nueva, validada.
@@ -30,7 +32,7 @@ const cleanId = (v) => (typeof v === 'string' && v && v === v.trim() && !v.inclu
  */
 export function newRecommendation({ kind, routeId = null, cityIds, label, note = '', by, at }) {
   if (!KINDS.includes(kind)) throw new Error(`Tipo de recomendación desconocido: «${kind}».`);
-  const ids = Array.isArray(cityIds) ? cityIds.map(cleanId) : [];
+  const ids = Array.isArray(cityIds) ? cityIds.map(cleanCityId) : [];
   if (ids.length === 0 || ids.includes(null) || ids.length > CITIES_MAX) throw new Error('La recomendación necesita las casas que propone.');
   if (new Set(ids).size !== ids.length) throw new Error('La recomendación lleva una casa repetida.');
   if (kind === 'city' && ids.length !== 1) throw new Error('Una casa es una casa: recomienda una casa cada vez.');

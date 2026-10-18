@@ -11,6 +11,15 @@ describe('newRecommendation: el manager recomienda una ruta o una casa (RMR-TSK-
       note: 'Para tu próximo paso', by: EM, at: AT, status: 'open', decidedAt: null });
   });
 
+  it('las casas reales llevan su isla delante («isla/casa») y valen (RMR-TSK-0772)', () => {
+    const rec = newRecommendation({ kind: 'route', routeId: 'engineering-manager--veteranus',
+      cityIds: ['bases/pensar-con-ia', 'em/one-on-ones'], label: 'Engineering Manager · Corsario', by: EM, at: AT });
+    expect(rec.cityIds).toEqual(['bases/pensar-con-ia', 'em/one-on-ones']);
+    const base = { kind: 'city', label: 'Colas', by: EM, at: AT };
+    expect(() => newRecommendation({ ...base, cityIds: ['/casa'] })).toThrow(/casas/);
+    expect(() => newRecommendation({ ...base, cityIds: ['isla//casa'] })).toThrow(/casas/);
+  });
+
   it('una casa suelta va sin ruta', () => {
     const rec = newRecommendation({ kind: 'city', cityIds: ['c3'], label: 'Colas', note: '', by: EM, at: AT });
     expect(rec).toMatchObject({ kind: 'city', routeId: null, cityIds: ['c3'], note: '' });
