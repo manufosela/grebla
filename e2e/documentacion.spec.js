@@ -70,6 +70,26 @@ test('la lista agrupa por carpeta y dice qué es cada documento', async ({ page 
   expect(carpetas).toEqual(['tech']);
 });
 
+test('la pestaña Enlaces agrupa y abre fuera, sin dar acceso a la nuestra (RMR-TSK-0778)', async ({ page }) => {
+  await db().doc('docLinks/e2e-wiki').set({ group: 'tribbu', title: 'Wiki E2E', url: 'https://wiki.example/tribbu',
+    description: 'La wiki', order: 1 });
+  await db().doc('docLinks/e2e-sre').set({ group: 'abiertas', title: 'SRE E2E', url: 'https://sre.example/books', description: '', order: 1 });
+  try {
+    await signInAs(page, 'engineer');
+    await page.goto('/documentacion');
+    await page.getByRole('tab', { name: 'Enlaces' }).click();
+    const wiki = page.getByRole('link', { name: /Wiki E2E/ });
+    await expect(wiki).toHaveAttribute('href', 'https://wiki.example/tribbu');
+    await expect(wiki).toHaveAttribute('target', '_blank');
+    await expect(wiki).toHaveAttribute('rel', /noopener/);
+    await expect(page.getByRole('region', { name: 'TRIBBU' })).toContainText('La wiki');
+    await expect(page.getByRole('region', { name: 'Wikis y referencias abiertas' })).toContainText('SRE E2E');
+  } finally {
+    await db().doc('docLinks/e2e-wiki').delete();
+    await db().doc('docLinks/e2e-sre').delete();
+  }
+});
+
 test('sin sesión no se llega a la lista', async ({ page }) => {
   await page.goto('/documentacion');
   await expect(page.locator('body')).toContainText('Usa tu cuenta de Google');
