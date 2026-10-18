@@ -25,6 +25,22 @@ export function appendLevelChange(history, { from = null, to, at, byUid = null, 
 }
 
 /**
+ * Corrige el nivel SIN escribir historia (RMR-TSK-0766): corregir un dato mal
+ * puesto no es una promoción. Sin histórico no se crea ninguno; con histórico,
+ * la última entrada pasa a llevar al nivel correcto, y si así queda sin cambio
+ * real (de X a X) se quita.
+ * @param {ReadonlyArray<object>|null|undefined} history
+ * @param {string} levelId  nivel correcto
+ * @returns {Array<object>}
+ */
+export function correctLevel(history, levelId) {
+  const list = normalizeLevelHistory(history);
+  if (list.length === 0) return [];
+  const last = { ...list.at(-1), to: levelId };
+  return last.from === levelId ? list.slice(0, -1) : [...list.slice(0, -1), last];
+}
+
+/**
  * Lectura tolerante del historial guardado: basura → []; entradas sin destino
  * o sin fecha se descartan (visibles solo las íntegras).
  * @param {unknown} raw
