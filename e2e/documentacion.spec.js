@@ -90,6 +90,48 @@ test('la pestaña Enlaces agrupa y abre fuera, sin dar acceso a la nuestra (RMR-
   }
 });
 
+test('quien gestiona añade, edita y quita enlaces; quien no, no ve los botones (RMR-TSK-0780)', async ({ page }) => {
+  try {
+    await signInAs(page, 'superadmin');
+    await page.goto('/documentacion');
+    await page.getByRole('tab', { name: 'Enlaces' }).click();
+    await page.getByRole('button', { name: 'Añadir enlace' }).click();
+    await page.getByLabel('Título').fill('Docs E2E');
+    await page.getByLabel(/Dirección/).fill('https://docs.example/e2e');
+    await page.getByRole('button', { name: 'Añadir', exact: true }).click();
+    const tarjeta = page.locator('docs-links .card', { hasText: 'Docs E2E' });
+    await expect(tarjeta).toBeVisible();
+
+    await tarjeta.getByRole('button', { name: 'Editar' }).click();
+    await page.getByLabel('Título').fill('Docs E2E editado');
+    await page.getByRole('button', { name: 'Guardar cambios' }).click();
+    const editada = page.locator('docs-links .card', { hasText: 'Docs E2E editado' });
+    await expect(editada).toBeVisible();
+
+    await editada.getByRole('button', { name: 'Quitar' }).click();
+    await editada.getByRole('button', { name: 'Confirmar' }).click();
+    await expect(page.locator('docs-links .card', { hasText: 'Docs E2E' })).toHaveCount(0);
+  } finally {
+    // Solo lo que creó esta prueba: los demás enlaces no son suyos.
+    const suyos = await db().collection('docLinks').where('url', '==', 'https://docs.example/e2e').get();
+    for (const d of suyos.docs) await d.ref.delete();
+  }
+});
+
+test('un ingeniero ve los enlaces pero no los gestiona', async ({ page }) => {
+  await db().doc('docLinks/e2e-ver').set({ group: 'notion', title: 'Notion E2E', url: 'https://notion.example', description: '', order: 1 });
+  try {
+    await signInAs(page, 'engineer');
+    await page.goto('/documentacion');
+    await page.getByRole('tab', { name: 'Enlaces' }).click();
+    await expect(page.getByRole('link', { name: /Notion E2E/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Añadir enlace' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Editar' })).toHaveCount(0);
+  } finally {
+    await db().doc('docLinks/e2e-ver').delete();
+  }
+});
+
 test('sin sesión no se llega a la lista', async ({ page }) => {
   await page.goto('/documentacion');
   await expect(page.locator('body')).toContainText('Usa tu cuenta de Google');
