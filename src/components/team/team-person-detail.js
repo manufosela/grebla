@@ -62,6 +62,8 @@ import { isNotionSynced } from '../../lib/notionSync.js';
 import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
 import { listOrgBranches } from '../../lib/orgBranches.js';
 import { listOrgRoles } from '../../lib/orgRoles.js';
+import { getEmployeeDomain } from '../../lib/orgConfig.js';
+import { inviteDomainError } from '../../tools/team/domain/inviteDomain.js';
 import { departmentHasGuilds } from '../../tools/team/domain/guildScope.js';
 import '../o2o/manager-notes.js';
 import '../o2o/person-o2o-panel.js';
@@ -2083,6 +2085,9 @@ export class TeamPersonDetail extends LitElement {
       // al primer login). Si ya tiene cuenta, su email es el de su login (no se toca).
       if (!this.person.uid) {
         patch.pendingEmail = normalizeInviteEmail(this._datos.pendingEmail);
+        // Solo emails de la organización (RMR-TSK-0774); las reglas lo imponen igual.
+        const outside = inviteDomainError(patch.pendingEmail, await getEmployeeDomain());
+        if (outside) throw new Error(outside);
       }
       // Con Notion conectado, lo suyo no viaja: lo escribe el importador (RMR-TSK-0588).
       const allowed = withoutNotionFields(patch, this._notionSync);
