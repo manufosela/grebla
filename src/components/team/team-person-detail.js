@@ -28,7 +28,7 @@ import { listToolPolicies } from '../../lib/toolPolicies.js';
 import { listLeaders } from '../../lib/leaders.js';
 import '../common/person-permissions.js';
 import { levelLabel, levelToNumber } from '../../tools/team/domain/levels.js';
-import { appendLevelChange, normalizeLevelHistory, levelHistoryView } from '../../tools/team/domain/levelHistory.js';
+import { appendLevelChange, normalizeLevelHistory, levelHistoryView, correctLevel } from '../../tools/team/domain/levelHistory.js';
 import { assessmentProgressionSeries } from '../../tools/career/domain/progression.js';
 import { listCareerRoutes } from '../../lib/careerMap.js';
 import '../career/career-progression-chart.js';
@@ -648,6 +648,8 @@ export class TeamPersonDetail extends LitElement {
       // ya no esté entre sus gremios no llega al borrador.
       primaryGuild: normalizePrimaryGuild(this.person.guilds, this.person.primaryGuild),
       note: '',
+      // Corrección de un nivel mal puesto: no escribe historia (RMR-TSK-0766).
+      correction: false,
     };
     this._careerError = '';
   }
@@ -719,7 +721,10 @@ export class TeamPersonDetail extends LitElement {
       };
       // Historial de nivel (RMR-PCS-0037 · F1): si el nivel cambia, el relato se
       // añade solo — de dónde a dónde, cuándo, quién y la nota opcional del momento.
-      if (levelId && levelId !== (this.person.levelId ?? null)) {
+      // Una corrección (RMR-TSK-0766) no es una promoción: no escribe historia.
+      if (levelId && levelId !== (this.person.levelId ?? null) && this._career.correction) {
+        patch.levelHistory = correctLevel(this.person.levelHistory, levelId);
+      } else if (levelId && levelId !== (this.person.levelId ?? null)) {
         patch.levelHistory = appendLevelChange(normalizeLevelHistory(this.person.levelHistory), {
           from: this.person.levelId ?? null,
           to: levelId,
@@ -730,7 +735,7 @@ export class TeamPersonDetail extends LitElement {
       }
       await updatePerson(this.persistence, this.person.id, patch);
       this.person = { ...this.person, ...patch };
-      this._career = { ...this._career, note: '' };
+      this._career = { ...this._career, note: '', correction: false };
     } catch (err) {
       this._careerError = err instanceof Error ? err.message : 'No se pudo guardar la carrera.';
     } finally {
@@ -1862,7 +1867,12 @@ export class TeamPersonDetail extends LitElement {
           </select>
         </label>
         ${selected.levelId && selected.levelId !== (this.person?.levelId ?? '')
-          ? html`<label class="fld">Nota del cambio de nivel (opcional)
+          ? html`<label class="fld chk-ext">
+              <input type="checkbox" .checked=${!!selected.correction}
+                @change=${(e) => { this._career = { ...this._career, correction: e.target.checked }; }} />
+              Es una corrección, no un cambio de nivel (no deja histórico)
+            </label>
+            ${selected.correction ? null : html`<label class="fld">Nota del cambio de nivel (opcional)
               <input
                 type="text"
                 maxlength="200"
@@ -1870,7 +1880,7 @@ export class TeamPersonDetail extends LitElement {
                 .value=${selected.note}
                 @input=${(e) => { this._career = { ...this._career, note: e.target.value }; }}
               />
-            </label>`
+            </label>`}`
           : null}
         ${this._renderCareerGuilds(selected)}
         ${this._careerError ? html`<p class="error">${this._careerError}</p>` : null}

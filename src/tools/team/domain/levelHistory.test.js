@@ -1,5 +1,32 @@
 import { describe, it, expect } from 'vitest';
-import { appendLevelChange, normalizeLevelHistory, levelHistoryView } from './levelHistory.js';
+import { appendLevelChange, normalizeLevelHistory, levelHistoryView, correctLevel } from './levelHistory.js';
+
+/**
+ * Corregir no es cambiar (RMR-TSK-0766): quien se incorpora o tenía mal puesto
+ * el nivel no debe estrenar un histórico de «promociones» que nunca pasaron.
+ */
+describe('correctLevel', () => {
+  it('sin histórico, la corrección no crea ninguno', () => {
+    expect(correctLevel([], 'l5em')).toEqual([]);
+    expect(correctLevel(null, 'l5em')).toEqual([]);
+  });
+
+  it('con histórico, corrige el destino de la última entrada en vez de añadir otra', () => {
+    const history = [
+      { from: null, to: 'l1', at: '2026-01-01', byUid: 'm', note: null },
+      { from: 'l1', to: 'l3', at: '2026-06-01', byUid: 'm', note: 'promoción' },
+    ];
+    expect(correctLevel(history, 'l2')).toEqual([
+      history[0],
+      { from: 'l1', to: 'l2', at: '2026-06-01', byUid: 'm', note: 'promoción' },
+    ]);
+  });
+
+  it('si la corrección deja la última entrada sin cambio real, desaparece', () => {
+    const history = [{ from: 'l1', to: 'l3', at: '2026-06-01', byUid: 'm', note: null }];
+    expect(correctLevel(history, 'l1')).toEqual([]);
+  });
+});
 
 describe('appendLevelChange — el relato de promociones (RMR-PCS-0037)', () => {
   it('añade la entrada sin mutar el historial anterior', () => {
