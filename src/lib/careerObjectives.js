@@ -8,7 +8,7 @@
  */
 import { collection, getDocs, addDoc, doc, runTransaction } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { newObjective, closeObjective } from '../tools/career/domain/objectives.js';
+import { newObjective, closeObjective, editObjective } from '../tools/career/domain/objectives.js';
 
 const objectivesOf = (personId) => collection(db, 'people', personId, 'careerObjectives');
 
@@ -28,6 +28,22 @@ export async function listObjectives(personId) {
  */
 export async function addObjective(personId, input) {
   await addDoc(objectivesOf(personId), newObjective({ ...input, at: new Date().toISOString() }));
+}
+
+/**
+ * Edita un objetivo en curso sobre lo GUARDADO (RMR-TSK-0771): si ya se cerró
+ * en otra pantalla, falla en vez de reescribirlo.
+ * @param {string} personId
+ * @param {string} objectiveId
+ * @param {{ title: string, measure: string, dueDate?: string|null, levelId?: string|null, dimensionId?: string|null }} input
+ */
+export async function updateObjectiveFor(personId, objectiveId, input) {
+  const ref = doc(objectivesOf(personId), objectiveId);
+  await runTransaction(db, async (tx) => {
+    const stored = await tx.get(ref);
+    if (!stored.exists()) throw new Error('Este objetivo ya no existe.');
+    tx.update(ref, editObjective(stored.data(), input));
+  });
 }
 
 /**

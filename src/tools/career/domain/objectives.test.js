@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newObjective, closeObjective, objectivesFor, looseObjectives, OBJECTIVE_STATUS } from './objectives.js';
+import { newObjective, closeObjective, editObjective, objectivesFor, looseObjectives, OBJECTIVE_STATUS } from './objectives.js';
 
 const BY = { uid: 'em', name: 'Manager' };
 const AT = '2026-10-17T10:00:00.000Z';
@@ -28,6 +28,23 @@ describe('newObjective', () => {
     expect(() => newObjective({ ...base, dueDate: '31/12/2026' })).toThrow(/fecha/);
     expect(() => newObjective({ ...base, levelId: 'l2' })).toThrow(/expectativa/);
     expect(() => newObjective({ ...base, by: { uid: '', name: '' } })).toThrow(/autor/);
+  });
+});
+
+describe('editObjective (RMR-TSK-0771): en curso se ajusta; cerrado, no', () => {
+  const open = newObjective(base);
+
+  it('devuelve solo lo editable, validado', () => {
+    expect(editObjective(open, { title: ' Medir mejor ', measure: 'Ahorro ≥ 25 %', dueDate: '2027-01-31', levelId: 'l2', dimensionId: 'tech' }))
+      .toEqual({ title: 'Medir mejor', measure: 'Ahorro ≥ 25 %', dueDate: '2027-01-31', levelId: 'l2', dimensionId: 'tech' });
+  });
+
+  it('con las mismas reglas que al crearlo', () => {
+    expect(() => editObjective(open, { ...base, measure: '' })).toThrow(/cómo se mide/);
+  });
+
+  it('un objetivo cerrado no se reescribe', () => {
+    expect(() => editObjective({ ...open, status: 'achieved' }, base)).toThrow(/cerrado/);
   });
 });
 

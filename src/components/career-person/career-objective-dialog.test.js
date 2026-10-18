@@ -36,6 +36,14 @@ describe('<career-objective-dialog>', () => {
     expect(c.dispatchEvent.mock.calls[0][0].detail).toMatchObject({ dueDate: null, levelId: null, dimensionId: null });
   });
 
+  it('al editar sale con su id y lo cambiado (RMR-TSK-0771)', () => {
+    const request = { mode: 'edit', levelId: 'l2', objective: { id: 'o1', title: 'Viejo' }, options: [] };
+    const c = ctx({ request, _title: 'Nuevo título', _measure: 'Otra medida', _due: '', _dimensionId: '' });
+    _submit.call(c);
+    expect(c.dispatchEvent.mock.calls[0][0].detail).toEqual({ mode: 'edit', objectiveId: 'o1', title: 'Nuevo título',
+      measure: 'Otra medida', dueDate: null, levelId: null, dimensionId: null });
+  });
+
   it('al cerrar hay que decir cómo acabó', () => {
     const request = { mode: 'close', objective: { id: 'o1', title: 'Medir la IA' } };
     const sin = ctx({ request });

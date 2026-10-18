@@ -52,6 +52,9 @@ export class CareerObjectiveDialog extends LitElement {
     if (changed.has('request') && this.request) {
       this._reset();
       this._dimensionId = this.request.dimensionId ?? '';
+      // Editar (RMR-TSK-0771): el formulario sale con lo que ya tiene.
+      const o = this.request.mode === 'edit' ? this.request.objective : null;
+      if (o) Object.assign(this, { _title: o.title, _measure: o.measure, _due: o.dueDate ?? '', _dimensionId: o.dimensionId ?? '' });
     }
   }
 
@@ -61,8 +64,9 @@ export class CareerObjectiveDialog extends LitElement {
 
   render() {
     const closing = this.request?.mode === 'close';
+    const heading = { close: 'Cerrar objetivo', edit: 'Editar objetivo' }[this.request?.mode] ?? 'Nuevo objetivo';
     return html`
-      <app-modal .open=${this.open} heading=${closing ? 'Cerrar objetivo' : 'Nuevo objetivo'} @close=${this._close}>
+      <app-modal .open=${this.open} heading=${heading} @close=${this._close}>
         ${closing ? this._closeForm() : this._newForm()}
         <div class="row">
           <button type="button" @click=${this._close}>Cancelar</button>
@@ -116,8 +120,10 @@ export class CareerObjectiveDialog extends LitElement {
       if (!this._title.trim()) { this._invalid = 'Falta el objetivo.'; return; }
       if (!this._measure.trim()) { this._invalid = 'Falta cómo se mide: sin medida es un deseo, no un objetivo.'; return; }
       const linked = !!this._dimensionId;
-      detail = { mode: 'new', title: this._title.trim(), measure: this._measure.trim(), dueDate: this._due || null,
-        levelId: linked ? request.levelId : null, dimensionId: linked ? this._dimensionId : null };
+      const editing = request.mode === 'edit';
+      detail = { mode: editing ? 'edit' : 'new', title: this._title.trim(), measure: this._measure.trim(), dueDate: this._due || null,
+        levelId: linked ? request.levelId : null, dimensionId: linked ? this._dimensionId : null,
+        ...(editing ? { objectiveId: request.objective.id } : {}) };
     }
     this._invalid = '';
     this.dispatchEvent(new CustomEvent('objective-submit', { detail, bubbles: true, composed: true }));

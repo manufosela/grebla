@@ -116,7 +116,8 @@ export class CareerLevels extends LitElement {
         : html`<p class="note">Las <strong>expectativas</strong> son lo que pide el nivel, iguales para todos. Los
           <strong>objetivos</strong> son compromisos de esta persona, con cómo se miden y para cuándo; si ayudan a
           una expectativa, aparecen debajo de ella.</p>`}
-      ${objectivesTemplate(loose, { canAssess: this.canAssess, onClose: (o) => this._closeObjective(o) })}
+      ${objectivesTemplate(loose, { canAssess: this.canAssess, onClose: (o) => this._closeObjective(o),
+        onEdit: (o) => this._editObjective(o) })}
       ${add}
     </section>`;
   }
@@ -126,6 +127,16 @@ export class CareerLevels extends LitElement {
       .map((r) => ({ dimensionId: r.dimension.id, name: r.dimension.name })) : [];
     this.dispatchEvent(new CustomEvent('objective-request', {
       detail: { mode: 'new', levelId: level?.id ?? null, options, dimensionId }, bubbles: true, composed: true,
+    }));
+  }
+
+  /** Editar (RMR-TSK-0771): las expectativas que ofrece son las de su nivel, o las del actual. */
+  _editObjective(objective) {
+    const levelId = objective.levelId ?? this._steps.find((s) => s.state === 'current')?.level.id ?? null;
+    const options = levelId && !this.goalsOnly ? expectationsForLevel(this.framework, levelId).filter((r) => r.text)
+      .map((r) => ({ dimensionId: r.dimension.id, name: r.dimension.name })) : [];
+    this.dispatchEvent(new CustomEvent('objective-request', {
+      detail: { mode: 'edit', objective, levelId, options }, bubbles: true, composed: true,
     }));
   }
 
@@ -189,7 +200,7 @@ export class CareerLevels extends LitElement {
         html`<span class="chip ${r.state === 'meets' ? 'ok' : 'bad'}">${STATE_LABEL[r.state]}</span>`,
         html`${timelineTemplate(timelineFor(entries, level.id, r.dimension.id))}
           ${objectivesTemplate(objectivesFor(this.objectives ?? [], level.id, r.dimension.id),
-            { canAssess: this.canAssess, onClose: (o) => this._closeObjective(o) })}
+            { canAssess: this.canAssess, onClose: (o) => this._closeObjective(o), onEdit: (o) => this._editObjective(o) })}
           ${kinds.length ? html`<div class="actions"><button type="button"
             @click=${() => this._requestEntry(level.id, r, kinds)}>Añadir</button>${this.canAssess ? html` <button
             type="button" @click=${() => this._requestObjective(level, r.dimension.id)}>Nuevo objetivo</button>` : null}</div>` : null}`))}</ul>`;

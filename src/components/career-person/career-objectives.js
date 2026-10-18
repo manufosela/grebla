@@ -12,15 +12,17 @@ const formatDay = (day) => (typeof day === 'string' && !Number.isNaN(Date.parse(
 
 /**
  * @param {Array<import('../../tools/career/domain/objectives.js').Objective & { id: string }>} list
- * @param {{ canAssess?: boolean, onClose?: (objective: object) => void }} [opts]
+ * @param {{ canAssess?: boolean, onClose?: (objective: object) => void, onEdit?: (objective: object) => void }} [opts]
  */
-export function objectivesTemplate(list, { canAssess = false, onClose } = {}) {
+export function objectivesTemplate(list, { canAssess = false, onClose, onEdit } = {}) {
   if (!list?.length) return null;
   return html`<ul class="objectives">${list.map((o) => html`<li class="objective ${o.status}">
     <div class="ohead"><span class="otitle">🎯 ${o.title}</span>
       <span class="ostatus ${o.status}">${OBJECTIVE_STATUS[o.status] ?? o.status}</span></div>
     <p class="omeasure"><strong>Cómo se mide:</strong> ${o.measure}${o.dueDate ? html` · <strong>para</strong> ${formatDay(o.dueDate)}` : null}</p>
     ${o.status !== 'open' && o.closingNote ? html`<p class="omeasure"><strong>Resultado:</strong> ${o.closingNote}</p>` : null}
+    ${canAssess && o.status === 'open' && onEdit
+      ? html`<button type="button" class="oclose" @click=${() => onEdit(o)}>Editar</button>` : null}
     ${canAssess && o.status === 'open' && onClose
       ? html`<button type="button" class="oclose" @click=${() => onClose(o)}>Cerrar objetivo</button>` : null}
   </li>`)}</ul>`;
