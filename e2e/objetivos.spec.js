@@ -58,6 +58,13 @@ test('el responsable pone un objetivo medible bajo una expectativa y lo cierra c
 
       const objetivo = fila.locator('.objective', { hasText: 'Medir el impacto de la IA' });
       await expect(objetivo).toContainText('En curso');
+
+      // Se edita en curso, con lo que ya tenía relleno (RMR-TSK-0771).
+      await objetivo.getByRole('button', { name: 'Editar' }).click();
+      await expect(dialogo.getByLabel(/Cómo se mide/)).toHaveValue('Ahorro de esfuerzo ≥ 20 % frente a la línea base');
+      await dialogo.getByLabel(/Cómo se mide/).fill('Ahorro de esfuerzo ≥ 25 % frente a la línea base');
+      await dialogo.getByRole('button', { name: 'Guardar' }).click();
+      await expect(objetivo).toContainText('≥ 25 %');
       await objetivo.getByRole('button', { name: 'Cerrar objetivo' }).click();
       await dialogo.getByLabel('Cómo acabó').selectOption('achieved');
       await dialogo.getByLabel(/Nota/).fill('Medido: 23 %');

@@ -15,7 +15,7 @@ import { getCurrentUser } from '../../lib/auth.js';
 import { listClaims, submitClaim, reviewClaim, markAsReviewer } from '../../lib/careerClaims.js';
 import { getLevelAssessment, saveLevelAssessment } from '../../lib/careerAssessment.js';
 import { listEvidence, addEvidence } from '../../lib/careerEvidence.js';
-import { listObjectives, addObjective, closeObjectiveFor } from '../../lib/careerObjectives.js';
+import { listObjectives, addObjective, closeObjectiveFor, updateObjectiveFor } from '../../lib/careerObjectives.js';
 import { nextLevelFor } from '../../tools/career/domain/subLevel.js';
 import { levelProgressFor, levelCompletion, subLevelFromProgress } from '../../tools/career/domain/levelProgress.js';
 import { marksFromClaims } from '../../tools/career/domain/claims.js';
@@ -212,6 +212,10 @@ export class CareerPersonPanel extends LitElement {
     const { mode, objectiveId, status, note, ...input } = e.detail;
     if (mode === 'close') {
       await this._save(() => closeObjectiveFor(this.person.id, objectiveId, status, note));
+      return;
+    }
+    if (mode === 'edit') {
+      await this._save(() => updateObjectiveFor(this.person.id, objectiveId, input));
       return;
     }
     await this._save(() => addObjective(this.person.id, { ...input, by: author() }));

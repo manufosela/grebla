@@ -59,6 +59,19 @@ export function newObjective({ title, measure, dueDate = null, levelId = null, d
 }
 
 /**
+ * Lo que cambia al editarlo (RMR-TSK-0771): título, medida, fecha y expectativa,
+ * con las mismas reglas que al crearlo. Solo en curso: el resultado de uno
+ * cerrado no se reescribe.
+ * @param {{ status: ObjectiveStatus, by: { uid: string, name: string }, at: string }} objective
+ * @param {{ title: string, measure: string, dueDate?: string|null, levelId?: string|null, dimensionId?: string|null }} input
+ */
+export function editObjective(objective, input) {
+  if (objective?.status !== 'open') throw new Error('Este objetivo ya está cerrado: no se edita.');
+  const { title, measure, dueDate, levelId, dimensionId } = newObjective({ ...input, by: objective.by, at: objective.at });
+  return { title, measure, dueDate, levelId, dimensionId };
+}
+
+/**
  * Lo que cambia al cerrarlo. Se cierra una vez: el resultado no se reescribe.
  * @param {{ status: ObjectiveStatus }} objective
  * @param {ObjectiveStatus} status
