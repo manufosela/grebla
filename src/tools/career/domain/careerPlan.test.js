@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePlan, planGroups, MAX_PLAN_ITEMS, MAX_PLAN_TEXT } from './careerPlan.js';
+import { normalizePlan, planGroups, MAX_PLAN_TEXT } from './careerPlan.js';
 
 describe('normalizePlan: el plan de la persona (foco, de qué se encarga, lo que se espera, lo que no es su foco)', () => {
   it('sin documento, un plan vacío', () => {
@@ -16,11 +16,11 @@ describe('normalizePlan: el plan de la persona (foco, de qué se encarga, lo que
       .toEqual(['Delegar', 'Escalar a tiempo', 'Sin guion']);
   });
 
-  it('descarta lo que no es texto y pone topes', () => {
-    const many = Array.from({ length: MAX_PLAN_ITEMS + 3 }, (_, i) => `R${i}`);
+  it('descarta lo que no es texto, recorta cada texto y guarda todas las líneas', () => {
+    const many = Array.from({ length: 100 }, (_, i) => `R${i}`);
     const plan = normalizePlan({ focus: 'a'.repeat(MAX_PLAN_TEXT + 10), responsibilities: [...many, 42, {}], lettingGo: 'no es lista' });
     expect(plan.focus).toHaveLength(MAX_PLAN_TEXT);
-    expect(plan.responsibilities).toHaveLength(MAX_PLAN_ITEMS);
+    expect(plan.responsibilities).toEqual(many);
     expect(plan.lettingGo).toEqual([]);
   });
 });

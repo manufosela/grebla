@@ -15,6 +15,13 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.263.1] - 2026-10-18
+
+### Arreglado
+
+- El plan de carrera ya no limita el número de líneas: antes, al pasar el tope, se
+  perdían las últimas sin avisar.
+
 ## [1.263.0] - 2026-10-18
 
 ### Cambiado

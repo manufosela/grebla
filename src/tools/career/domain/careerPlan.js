@@ -9,12 +9,11 @@
  */
 
 export const MAX_PLAN_TEXT = 600;
-export const MAX_PLAN_ITEMS = 30;
 
 const text = (v) => (typeof v === 'string' ? v.trim().slice(0, MAX_PLAN_TEXT) : '');
 // Cada línea ya se pinta como elemento de lista: un guion delante sobra.
 const item = (v) => text(v).replace(/^-\s*/, '');
-const items = (v) => (Array.isArray(v) ? v.map(item).filter(Boolean).slice(0, MAX_PLAN_ITEMS) : []);
+const items = (v) => (Array.isArray(v) ? v.map(item).filter(Boolean) : []);
 
 /**
  * @param {unknown} data  documento de Firestore (o el borrador del formulario)
