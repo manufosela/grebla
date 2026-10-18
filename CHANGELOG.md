@@ -15,6 +15,20 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.260.0] - 2026-10-18
+
+### Añadido
+
+- Corregir un nivel sin dejar histórico: al cambiarlo en la ficha, la casilla «Es
+  una corrección» no escribe una promoción que nunca pasó; si ya había histórico,
+  corrige su última entrada (RMR-TSK-0766).
+
+### Cambiado
+
+- La vía de gestión pasa a llamarse Management, con sufijo «-M»: L3-M Engineering
+  Manager, L4-M Manager, L5-M Head of Engineering y L6-M CTO, fuera de bandas y con
+  sus expectativas. Así un Head o el CTO no aparecen como EM (RMR-TSK-0767).
+
 ## [1.259.0] - 2026-10-18
 
 ### Añadido
