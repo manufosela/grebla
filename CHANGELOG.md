@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.259.0] - 2026-10-18
+
+### Añadido
+
+- Personas externas: su ficha tiene Nivel, Plan y Objetivos, sin expectativas de
+  carrera. Los objetivos dicen lo que aportan a TRIBBU; su crecimiento lo lleva
+  su empresa. El responsable fuera del organigrama también edita el plan
+  (RMR-TSK-0764).
+
 ## [1.258.0] - 2026-10-18
 
 ### Cambiado
