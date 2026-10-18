@@ -816,6 +816,22 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() || managesToolByPolicy('docs');
     }
 
+    // Enlaces de Documentación (RMR-TSK-0778): Notion, la wiki de TRIBBU y wikis
+    // abiertas. Los lee cualquiera con sesión y los gestiona quien gestiona
+    // Documentación. Solo https: los pinta un <a> y un `javascript:` sería un agujero.
+    match /docLinks/{linkId} {
+      allow read: if isSignedIn();
+      allow create, update: if (isSuperAdmin() || managesToolByPolicy('docs'))
+        && request.resource.data.keys().hasOnly(['group', 'title', 'url', 'description', 'order'])
+        && request.resource.data.group in ['tribbu', 'notion', 'abiertas']
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.url is string && request.resource.data.url.matches('https://[^ ]+')
+        && request.resource.data.description is string && request.resource.data.description.size() <= 300
+        && request.resource.data.order is number;
+      allow delete: if isSuperAdmin() || managesToolByPolicy('docs');
+    }
+
     // Ajustes de cada herramienta (RMR-TSK-0496): valores que quien la gestiona
     // cambia sin desplegar. Hoy solo el umbral de anonimato de Marea.
     //
