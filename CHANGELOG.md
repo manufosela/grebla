@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.262.0] - 2026-10-18
+
+### Añadido
+
+- Documentación tiene pestañas «Documentos» y «Enlaces». Los enlaces (Notion, la
+  wiki de TRIBBU y wikis abiertas) salen agrupados, se abren en otra pestaña y
+  quien gestiona Documentación los añade, edita y quita ahí mismo. Solo https
+  (RMR-TSK-0778 a RMR-TSK-0780).
+
 ## [1.261.1] - 2026-10-18
 
 ### Arreglado
