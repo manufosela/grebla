@@ -21,7 +21,7 @@
 import { LitElement, html, css } from 'lit';
 import { tableStyles } from '../common/table-styles.js';
 import { skeletonLines } from '../app-skeleton.js';
-import { deliverySummary, repoRowFor, sparkPoints, currentWeek, ROW_STATES } from '../../tools/metrics/domain/deliverySummary.js';
+import { deliverySummary, repoRowFor, sparkPoints, currentWeek, staleSince, ROW_STATES } from '../../tools/metrics/domain/deliverySummary.js';
 import { reposSinSenal } from '../../tools/metrics/domain/portalMetrics.js';
 // El dominio da horas crudas porque elegir entre «h» y «d» es presentación, y
 // eso se decide aquí. `formatHours` devuelve null sin medida, no «0 h».
@@ -91,6 +91,8 @@ export class DeliveryApp extends LitElement {
     .error { margin: 0; padding: 0.9rem 1rem; border-radius: 10px; max-width: 60ch; line-height: 1.55;
       border: 1px solid var(--rm-danger, #dc2626); background: color-mix(in srgb, var(--rm-danger, #dc2626) 8%, transparent); }
     .error strong { display: block; margin-bottom: 0.3rem; }
+    .stale { margin: 0 0 1rem; padding: 0.55rem 0.8rem; border-radius: 10px; font-size: 0.88rem;
+      border: 1px solid #b45309; background: #fef3c7; color: #5c2d06; max-width: 70ch; }
     .foot { margin: 1.4rem 0 0; font-size: 0.8rem; color: var(--rm-muted, #5b6b7d); line-height: 1.5; max-width: 60ch; }
     .muted { color: var(--rm-muted, #5b6b7d); }
 
@@ -129,7 +131,11 @@ export class DeliveryApp extends LitElement {
     // unos ceros se leerían como «no entregamos».
     if (this.error) return this._renderError();
     if (!this.metrics) return skeletonLines(8);
+    // Portal parado (RMR-TSK-0776): se dice arriba, no solo al pie.
+    const stale = staleSince(this.metrics.dataUpdatedAt, new Date());
     return html`
+      ${stale ? html`<p class="stale" role="status">⚠ El portal no actualiza las métricas desde el ${stale}: lo que
+        ves llega hasta ese día. Hay que revisar el cálculo del portal.</p>` : null}
       <div class="tabs" role="tablist" aria-label="Entrega">
         ${this._renderTab('global', 'Global')}
         ${this._renderTab('repos', 'Por repositorio')}

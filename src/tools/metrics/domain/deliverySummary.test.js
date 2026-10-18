@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { PORTAL_SAMPLE } from '../data/portalSample.js';
 import { readPortalMetrics } from './portalMetrics.js';
 import {
-  deliverySummary, repoRowFor, sparkPoints, currentWeek, ROW_STATES,
+  deliverySummary, repoRowFor, sparkPoints, currentWeek, staleSince, ROW_STATES,
 } from './deliverySummary.js';
 
 const metrics = () => readPortalMetrics(PORTAL_SAMPLE);
@@ -11,6 +11,22 @@ const fila = (label) => deliverySummary(metrics()).find((f) => f.label === label
 describe('la foto de entrega', () => {
   it('mira la ÚLTIMA semana, que es la que la gente lee', () => {
     expect(currentWeek(metrics()).periodStart).toBe('2026-09-21');
+  });
+
+  it('una semana en curso VACÍA (sin días contados) no es la foto: la de antes sí (RMR-TSK-0776)', () => {
+    // El portal dejó de calcular y la semana nueva llegó como hueco: 0
+    // despliegues y nada más. Enseñarla decía «no desplegamos» sin ser verdad.
+    const m = metrics();
+    const anterior = currentWeek(m).periodStart;
+    m.series = [...m.series, { periodStart: '2026-09-28', parcial: true, days: undefined, deploys: 0, wip: null, throughput: null }];
+    expect(currentWeek(m).periodStart).toBe(anterior);
+  });
+
+  it('avisa cuando el portal lleva más de dos días sin actualizar (RMR-TSK-0776)', () => {
+    const now = new Date('2026-10-18T20:00:00.000Z');
+    expect(staleSince('2026-10-11T04:39:26.249Z', now)).toBe('2026-10-11');
+    expect(staleSince('2026-10-17T04:00:00.000Z', now)).toBeNull();
+    expect(staleSince(null, now)).toBeNull();
   });
 
   it('los despliegues salen como el número que son', () => {
