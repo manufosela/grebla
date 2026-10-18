@@ -47,16 +47,16 @@ describe('planNotionSync — casado y campos que manda Notion', () => {
     const conDominio = (directory, people) => planNotionSync({ directory, people, branches, newId: () => 'new1',
       today: '2026-10-18', employeeDomain: 'example.com' });
     // Un externo con el email de su empresa casa por él, pero no se le guarda.
-    const people = [person('p1', { name: 'Ana Pérez', email: null }, 'ana@example.com'), person('p2', { name: 'Ext', pendingEmail: 'ext@otra.es' })];
-    const { updates } = conDominio([entry(), entry({ id: 'n2', name: 'Ext', email: 'ext@otra.es', type: 'Contractor' })], people);
+    const people = [person('p1', { name: 'Ana Pérez', email: null }, 'ana@example.com'), person('p2', { name: 'Ext', pendingEmail: 'ext@proveedor.example' })];
+    const { updates } = conDominio([entry(), entry({ id: 'n2', name: 'Ext', email: 'ext@proveedor.example', type: 'Contractor' })], people);
     expect(updates.find((u) => u.personId === 'p1').set.email).toBe('ana@example.com');
     expect(updates.find((u) => u.personId === 'p2').set).not.toHaveProperty('email');
     // Su email de invitación de fuera tampoco se queda.
     expect(updates.find((u) => u.personId === 'p2').set.pendingEmail).toBeNull();
     // Y con cuenta ya vinculada, el de invitación sobra aunque fuera un gmail.
-    const vinculada = [person('p3', { name: 'Ana Pérez', uid: 'u-ana', pendingEmail: 'ana.vieja@gmail.com' }, 'ana@example.com')];
+    const vinculada = [person('p3', { name: 'Ana Pérez', uid: 'u-ana', pendingEmail: 'ana.vieja@personal.example' }, 'ana@example.com')];
     expect(conDominio([entry()], vinculada).updates[0].set.pendingEmail).toBeNull();
-    const { creates } = conDominio([entry({ email: 'nuevo@otra.es' })], []);
+    const { creates } = conDominio([entry({ email: 'nuevo@proveedor.example' })], []);
     expect(creates[0].data).toMatchObject({ email: null, pendingEmail: null });
   });
 
