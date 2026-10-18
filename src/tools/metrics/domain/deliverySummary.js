@@ -35,11 +35,33 @@ function row(label, state, { value = null, note = null, help = null } = {}) {
 
 /**
  * La última semana de la serie es la foto: es la que la gente mira. Se devuelve
- * junto a las filas para poder decir si está a medias.
+ * junto a las filas para poder decir si está a medias. Una semana sin ningún día
+ * contado es un hueco, no una medida (RMR-TSK-0776): si el portal deja de
+ * calcular, la nueva llega vacía y enseñaba «0 despliegues»; entonces manda la anterior.
  * @param {{series: any[]}} metrics
  */
 export function currentWeek(metrics) {
-  return (metrics?.series ?? []).at(-1) ?? null;
+  const series = metrics?.series ?? [];
+  const last = series.at(-1) ?? null;
+  const empty = last && !(last.days > 0);
+  return (empty && series.length > 1 ? series.at(-2) : last) ?? null;
+}
+
+/** Más de esto sin actualizar y el portal está parado, no recalculando. */
+const STALE_MS = 2 * 24 * 60 * 60 * 1000;
+
+/**
+ * Desde qué día está parado el portal, o null si está al día (RMR-TSK-0776).
+ * Dicho al pie y en pequeño pasaba desapercibido: el 0 de arriba se leía como
+ * «no hemos desplegado» y era «el portal no ha contado».
+ * @param {string|null|undefined} dataUpdatedAt  ISO
+ * @param {Date} now
+ * @returns {string|null}  AAAA-MM-DD
+ */
+export function staleSince(dataUpdatedAt, now) {
+  const at = Date.parse(dataUpdatedAt ?? '');
+  if (Number.isNaN(at) || now.getTime() - at <= STALE_MS) return null;
+  return new Date(at).toISOString().slice(0, 10);
 }
 
 /**
