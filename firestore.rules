@@ -303,6 +303,17 @@ service cloud.firestore {
       function touchesDirectoryManagers() {
         return request.resource.data.diff(resource.data).affectedKeys().hasAny(['directoryManagerUids']);
       }
+      // Solo se invita con emails de la organización (RMR-TSK-0774): con dominio
+      // de empleados configurado, el email de invitación es de ese dominio o
+      // ninguno. Sin dominio (la demo), cualquiera, como siempre.
+      function inviteInDomain() {
+        let d = request.resource.data;
+        let orgPath = /databases/$(database)/documents/config/org;
+        let domain = exists(orgPath) ? get(orgPath).data.get('employeeDomain', '') : '';
+        return !('pendingEmail' in d) || d.pendingEmail == null || domain == ''
+          || (d.pendingEmail is string && d.pendingEmail.split('@').size() == 2
+              && d.pendingEmail.split('@')[1].lower() == domain.lower());
+      }
       // Quién revisa la carrera (RMR-TSK-0676) solo lo escribe el servidor: ni el
       // superadmin, o podría ponerse de revisor y aceptar marcas.
       function touchesCareerReviewers() {
@@ -314,14 +325,14 @@ service cloud.firestore {
         || (isSignedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid);
       // El líder crea sus personas; el superadmin puede crear una persona para
       // cualquier líder (asignar un usuario a un equipo desde el panel).
-      allow create: if !('careerReviewers' in request.resource.data) && (isSuperAdmin()
+      allow create: if !('careerReviewers' in request.resource.data) && inviteInDomain() && (isSuperAdmin()
         || (isLeader() && request.resource.data.ownerLeaderUid == request.auth.uid
             && !('directoryManagerUids' in request.resource.data)));
       // Un editor compartido edita datos pero NO transfiere la propiedad. El
       // ingeniero vinculado (Person.uid == su uid) SOLO puede declarar su objetivo
       // de carrera: la última rama restringe el cambio al único campo
       // `careerTargetLevelId` (hasOnly), sin poder tocar ningún otro dato de su ficha.
-      allow update: if !updatesNotionFields() && !touchesCareerReviewers()
+      allow update: if !updatesNotionFields() && !touchesCareerReviewers() && inviteInDomain()
         && (isSuperAdmin() || !touchesDirectoryManagers())
         && (isSuperAdmin() || isOwner()
         || (ownerReportsToMe()
@@ -689,6 +700,7 @@ service cloud.firestore {
         allow write: if canEdit() && document[0] != 'careerClaims' && document[0] != 'careerEvidence'
           && document[0] != 'careerRecommendations' && document[0] != 'careerObjectives'
           && !(isPersonDocUpdate() && updatesNotionFields())
+          && !(isPersonDocUpdate() && !inviteInDomain())
           && !(isPersonDocUpdate() && touchesCareerReviewers())
           && !(isPersonDocUpdate() && touchesDirectoryManagers() && !isSuperAdmin());
       }

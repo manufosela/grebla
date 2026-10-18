@@ -39,7 +39,9 @@ import { expectationWeight } from '../tools/career/data/framework.js';
 /** Tope del peso de una expectativa: más allá, el número deja de decir nada. */
 const MAX_EXPECTATION_WEIGHT = 9;
 import { listOrgRoles, saveOrgRole, setOrgRoleReportsTo, deleteOrgRole } from '../lib/orgRoles.js';
-import { getOrgIdentity, saveOrgIdentity, getOrgLogo, saveOrgLogo, getOrgLogoDark, saveOrgLogoDark, getBrandColors, saveBrandColors } from '../lib/orgConfig.js';
+import { getOrgIdentity, saveOrgIdentity, getOrgLogo, saveOrgLogo, getOrgLogoDark, saveOrgLogoDark, getBrandColors, saveBrandColors,
+  getEmployeeDomain } from '../lib/orgConfig.js';
+import { inviteDomainError } from '../tools/team/domain/inviteDomain.js';
 import './admin/brand-colors-editor.js';
 import { listOrgBranches, saveOrgBranch, deleteOrgBranch } from '../lib/orgBranches.js';
 import { listJds, saveJd, publishJd, unpublishJd, deleteJd, polishJdRequirements } from '../lib/jobDescriptions.js';
@@ -1159,6 +1161,8 @@ export class SuperadminPanel extends LitElement {
     const roleId = this._newPersonRole || 'generico';
     const branch = this._orgRoles.find((r) => r.id === roleId)?.branch ?? 'generico';
     const email = this._newPersonEmail.trim().toLowerCase();
+    const outside = inviteDomainError(email, await getEmployeeDomain());
+    if (outside) { this._peopleError = outside; return; }
     try {
       await this.persistence.people.create({
         name, orgRole: roleId, orgBranch: branch, active: true,
@@ -1188,6 +1192,8 @@ export class SuperadminPanel extends LitElement {
       this._peopleError = 'Ese email no parece válido.';
       return;
     }
+    const outside = inviteDomainError(email, await getEmployeeDomain());
+    if (outside) { this._peopleError = outside; return; }
     try {
       await this.persistence.people.update(personId, { pendingEmail: email || null });
       this._peopleList = this._peopleList.map((p) => (p.id === personId ? { ...p, pendingEmail: email || null } : p));
