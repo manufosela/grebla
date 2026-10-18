@@ -15,6 +15,26 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.261.0] - 2026-10-18
+
+### Añadido
+
+- Los objetivos en curso se pueden editar: título, cómo se mide, fecha y
+  expectativa (RMR-TSK-0771).
+
+### Cambiado
+
+- Valorar expectativas con textos claros: «Sin valorar», «Valorar si la cumple»
+  y una explicación de cómo cuenta cada una (RMR-TSK-0771).
+- Solo emails de la organización: la sincronización con Notion no guarda emails
+  de fuera y borra los de invitación que sobran, y las reglas impiden invitar o
+  dar de alta con un email de fuera (RMR-TSK-0773, RMR-TSK-0774).
+
+### Arreglado
+
+- Recomendar una ruta prehecha o una casa fallaba con «La recomendación necesita
+  las casas que propone» (RMR-TSK-0772).
+
 ## [1.260.1] - 2026-10-18
 
 ### Arreglado
