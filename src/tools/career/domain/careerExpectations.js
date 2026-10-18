@@ -8,7 +8,7 @@ import { claimStatus, slotFor } from './claims.js';
 
 /** Cómo se dice cada estado a la persona. */
 export const STATUS_LABEL = Object.freeze({
-  open: 'Sin marcar',
+  open: 'Sin valorar',
   pending: 'Pendiente de revisión',
   accepted: 'Aceptada',
   rejected: 'Rechazada',

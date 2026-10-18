@@ -65,8 +65,9 @@ export class CareerExpectations extends LitElement {
     if (rows.length === 0) return html`<p class="empty">${next.code} todavía no tiene expectativas escritas.</p>`;
     return html`
       <h3>Hacia ${next.code} · ${next.title}</h3>
-      <p class="intro">Cada expectativa se marca con evidencia, o la marca directamente quien revisa con su motivo.
-        Cuenta cuando la aceptan quienes revisan (si son dos, los dos).</p>
+      <p class="intro">Para avanzar a ${next.code} cuenta cada expectativa que se acepte como cumplida. La persona
+        puede pedirlo con su evidencia («Marcar como cumplida») o quien revisa valorarla directamente con su motivo
+        («Valorar si la cumple»). Cuenta cuando la aceptan quienes revisan (si son dos, los dos).</p>
       <ul>${rows.map((row) => this._row(row))}</ul>`;
   }
 
@@ -92,7 +93,7 @@ export class CareerExpectations extends LitElement {
     return html`<div class="actions">
       ${claim ? html`<button type="button" @click=${() => this._emit('claim-request', row)}>${claim}</button>` : null}
       ${review ? html`<button type="button" @click=${() => this._emit('review-request', row)}>${review}</button>` : null}
-      ${markSlot ? html`<button type="button" @click=${() => this._emit('mark-request', row, markSlot)}>Marcar</button>` : null}
+      ${markSlot ? html`<button type="button" @click=${() => this._emit('mark-request', row, markSlot)}>Valorar si la cumple</button>` : null}
     </div>`;
   }
 
