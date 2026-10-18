@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.264.0] - 2026-10-19
+
+### Cambiado
+
+- La vía Management de Carrera deja escrito que el EM y el Head no compiten, se
+  complementan: el EM se centra en las personas con apoyo técnico y el Head en lo
+  técnico con apoyo a las personas. Lo recuerdan también L3-M, L4-M y L5-M.
+
 ## [1.263.1] - 2026-10-18
 
 ### Arreglado

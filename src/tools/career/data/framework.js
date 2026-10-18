@@ -67,7 +67,7 @@ export const ENGINEERING_FRAMEWORK = {
     { id: 'tl', name: 'Tech Lead / Architect', order: 2, description: 'Liderazgo técnico de un equipo o dominio, sin gestión de personas.' },
     // Vía de gestión (RMR-TSK-0767): «-M» y no «-EM», porque un Head o el CTO
     // no son Engineering Managers. La banda la da el número, como en las bandas.
-    { id: 'em', name: 'Management', order: 3, description: 'Gestión de personas y equipos: de Engineering Manager a CTO.' },
+    { id: 'em', name: 'Management', order: 3, description: 'Gestión de personas y equipos: de Engineering Manager a CTO. El EM y el Head no compiten, se complementan: el EM se centra en las personas, con apoyo técnico; el Head, en lo técnico, con apoyo a las personas.' },
   ],
   levels: [
     { id: 'l1', code: 'L1', title: 'Engineer', trackId: 'ic', order: 1, description: 'Trabaja de forma independiente en features bien definidas dentro de un código establecido.', typicalProfile: '2–5 años', branchesFrom: null },
@@ -77,10 +77,10 @@ export const ENGINEERING_FRAMEWORK = {
     { id: 'l5', code: 'L5', title: 'Principal Engineer', trackId: 'ic', order: 5, description: 'Una de las voces técnicas más senior de la empresa; su influencia va más allá de su disciplina.', typicalProfile: '10+ años', branchesFrom: null },
     { id: 'l3tl', code: 'L3-TL', title: 'Tech Lead', trackId: 'tl', order: 3, description: 'Liderazgo técnico de un equipo: calidad y arquitectura del trabajo del equipo, design reviews y desarrollo de los ingenieros. No es people manager.', typicalProfile: '', branchesFrom: 'l3' },
     { id: 'l4tl', code: 'L4-TL', title: 'Architect', trackId: 'tl', order: 4, description: 'Dirección técnica a largo plazo de un dominio; define principios y estándares de arquitectura.', typicalProfile: '', branchesFrom: 'l3' },
-    { id: 'l3em', code: 'L3-M', title: 'Engineering Manager', trackId: 'em', order: 3, description: 'Responsable de un equipo (4–8 personas): crecimiento, desempeño, contratación y dinámica.', typicalProfile: '', branchesFrom: 'l3' },
-    { id: 'l4em', code: 'L4-M', title: 'Manager', trackId: 'em', order: 4, description: 'Lleva varios equipos o un área (EM senior o Head de área): salud organizativa, desarrollo de managers y resultados del área.', typicalProfile: '', branchesFrom: null },
+    { id: 'l3em', code: 'L3-M', title: 'Engineering Manager', trackId: 'em', order: 3, description: 'Responsable de las personas de un equipo (4–8): crecimiento, desempeño, contratación y dinámica. Se centra en las personas y aporta apoyo técnico; lo técnico lo lleva el Head.', typicalProfile: '', branchesFrom: 'l3' },
+    { id: 'l4em', code: 'L4-M', title: 'Manager', trackId: 'em', order: 4, description: 'Lleva varios equipos o un área (EM senior o Head de área): salud organizativa, desarrollo de managers y resultados del área. El EM se centra en las personas y el Head en lo técnico: se complementan, cada uno con apoyo en lo del otro.', typicalProfile: '', branchesFrom: null },
     { id: 'l5tl', code: 'L5-TL', title: 'Distinguished Architect', trackId: 'tl', order: 5, description: 'Autoridad técnica de referencia en varios dominios: define la arquitectura y los principios que adopta toda la ingeniería e influye más allá de ella. Equivalente en la vía técnica a un Principal Engineer.', typicalProfile: '', branchesFrom: null },
-    { id: 'l5em', code: 'L5-M', title: 'Head of Engineering', trackId: 'em', order: 5, description: 'Dirige la ingeniería: desarrolla a los managers, alinea la ejecución con la estrategia y responde de los resultados técnicos.', typicalProfile: '', branchesFrom: null },
+    { id: 'l5em', code: 'L5-M', title: 'Head of Engineering', trackId: 'em', order: 5, description: 'Dirige la ingeniería: desarrolla a los managers, alinea la ejecución con la estrategia y responde de los resultados técnicos, con apoyo a las personas, que cuidan los EMs.', typicalProfile: '', branchesFrom: null },
     { id: 'l6em', code: 'L6-M', title: 'CTO', trackId: 'em', order: 6, description: 'Dirección de la tecnología de la compañía. Fuera de las bandas salariales, que acaban en L5.', typicalProfile: '', branchesFrom: null },
   ],
   disciplines: [
