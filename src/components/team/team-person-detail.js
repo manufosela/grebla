@@ -1070,10 +1070,13 @@ export class TeamPersonDetail extends LitElement {
     }
   }
 
-  async _reload() {
-    this._loadedFor = null;
-    await this._load();
-    this._loadedFor = this.person.id;
+  /**
+   * Tras guardar una lectura solo cambia su historial, así que solo se trae eso
+   * (RMR-TSK-0769). Antes se recargaba la ficha entera: salía el esqueleto de
+   * carga y, al tomarla por una persona nueva, volvía a «Datos» a mitad de trabajo.
+   */
+  async _refreshTimeline() {
+    this.timeline = await getPersonTimeline(this.persistence, this.person.id);
   }
 
   async _saveKnowledge() {
@@ -1090,7 +1093,7 @@ export class TeamPersonDetail extends LitElement {
         date: k.date || new Date().toISOString(),
       });
       this._know = { areaId: '', level: 0, toNext: false, note: '', date: '' };
-      await this._reload();
+      await this._refreshTimeline();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar el conocimiento.';
     }
@@ -1180,7 +1183,7 @@ export class TeamPersonDetail extends LitElement {
         date: c.date || new Date().toISOString(),
       });
       this._contrib = { roles: {}, note: '', date: '' };
-      await this._reload();
+      await this._refreshTimeline();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar la contribución.';
     }
@@ -1205,7 +1208,7 @@ export class TeamPersonDetail extends LitElement {
         date: f.date || new Date().toISOString(),
       });
       this._patchForm(dim, { level: 0, toNext: false, note: '', date: '' });
-      await this._reload();
+      await this._refreshTimeline();
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'No se pudo guardar la lectura.';
     }
