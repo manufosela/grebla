@@ -16,7 +16,8 @@ describe('levelPath: las pestañas de nivel de una persona (RMR-TSK-0702)', () =
   });
 
   it('un EM igual, por su track: no ve los niveles de TL ni los IC de su altura', () => {
-    expect(path('l3em')).toEqual(['l1:below', 'l2:below', 'l3em:current', 'l4em:above', 'l5em:above']);
+    // La vía de gestión llega hasta el CTO (L6-M, RMR-TSK-0767).
+    expect(path('l3em')).toEqual(['l1:below', 'l2:below', 'l3em:current', 'l4em:above', 'l5em:above', 'l6em:above']);
   });
 
   it('cada paso lleva el nivel completo para pintar la pestaña', () => {

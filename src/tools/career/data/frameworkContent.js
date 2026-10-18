@@ -70,13 +70,21 @@ export const EXPECTATIONS = [
   { levelId: 'l5tl', dimensionId: 'leadership', text: 'Desarrolla a Architects y Staff Engineers y representa la ingeniería de la empresa externamente; reta y eleva el criterio técnico de toda la función.' },
   { levelId: 'l5tl', dimensionId: 'culture', text: 'Protege y representa la cultura técnica en toda la organización de ingeniería.' },
 
-  // ── Director de Ingeniería (L5-EM): cima de la vía de gestión ───────────────
+  // ── Head of Engineering (L5-M); por encima solo el CTO (L6-M) ───────────────
   { levelId: 'l5em', dimensionId: 'tech', text: 'Mantiene criterio técnico suficiente para guiar decisiones de inversión y arquitectura de su área, apoyándose en sus Architects y Staff; su foco es organizativo, no de implementación.' },
   { levelId: 'l5em', dimensionId: 'reliability', text: 'Responde de la fiabilidad y el rendimiento de su área a nivel organizativo: presupuestos, prioridades y cultura operativa entre equipos.' },
   { levelId: 'l5em', dimensionId: 'product', text: 'Alinea el roadmap técnico de varios equipos con la estrategia de negocio; equilibra inversión, entrega y salud del equipo.' },
   { levelId: 'l5em', dimensionId: 'execution', text: 'Garantiza la entrega fiable de varios equipos: estructura, dependencias y procesos; elimina bloqueos organizativos antes de que afecten.' },
   { levelId: 'l5em', dimensionId: 'leadership', text: 'Desarrolla Engineering Managers y hace crecer líderes; responde del desempeño, la contratación y el bienestar de su área.' },
   { levelId: 'l5em', dimensionId: 'culture', text: 'Protege y representa la cultura en toda su organización; contrata y desarrolla para reforzarla.' },
+
+  // ── CTO (L6-M, RMR-TSK-0767): la tecnología de toda la compañía ──────────────
+  { levelId: 'l6em', dimensionId: 'tech', text: 'Fija la visión y la estrategia tecnológica de la compañía y las grandes decisiones de arquitectura e inversión, apoyándose en sus Heads y Principals.' },
+  { levelId: 'l6em', dimensionId: 'reliability', text: 'Responde ante la dirección de la fiabilidad, la seguridad y el coste de la tecnología de la compañía.' },
+  { levelId: 'l6em', dimensionId: 'product', text: 'Es socio de la dirección en la estrategia de negocio: traduce objetivos de empresa en prioridades tecnológicas y viceversa.' },
+  { levelId: 'l6em', dimensionId: 'execution', text: 'Diseña la organización de ingeniería y su presupuesto para que la compañía entregue lo que necesita, de forma sostenible.' },
+  { levelId: 'l6em', dimensionId: 'leadership', text: 'Desarrolla a los Heads y al equipo de dirección técnica; responde del talento, la contratación y el desempeño de toda la ingeniería.' },
+  { levelId: 'l6em', dimensionId: 'culture', text: 'Define y encarna la cultura de ingeniería de la compañía y la representa fuera de ella.' },
 
   // ── Orquestación y juicio (RMR-PCS-0028 · F1: eje transversal para la era de los agentes) ──
   { levelId: 'l1', dimensionId: 'orchestration', text: 'Usa agentes de IA para tareas acotadas dándoles el contexto suficiente. No acepta su output a ciegas: lo lee, lo prueba y detecta los errores evidentes antes de integrarlo. Reconoce cuándo un problema es demasiado ambiguo para delegarlo y pide ayuda.' },
@@ -88,6 +96,7 @@ export const EXPECTATIONS = [
   { levelId: 'l4tl', dimensionId: 'orchestration', text: 'Define los principios y guardarraíles con los que su dominio usa agentes de IA: dónde encajan en la arquitectura, cómo se verifica su output y qué decisiones no se delegan. Garantiza que la orquestación no erosiona el criterio técnico del dominio.' },
   { levelId: 'l5tl', dimensionId: 'orchestration', text: 'Fija a nivel de empresa cómo la ingeniería integra agentes con criterio e institucionaliza la disciplina de verificación. Interviene en las decisiones más ambiguas y de mayor riesgo sobre qué delegar y qué mantener bajo juicio humano.' },
   { levelId: 'l5em', dimensionId: 'orchestration', text: 'Responde a nivel organizativo del uso de agentes con criterio: capacidades, prácticas de verificación y cultura. Equilibra el apalancamiento de la IA con la protección del juicio y de la atención de las personas de su área.' },
+  { levelId: 'l6em', dimensionId: 'orchestration', text: 'Fija la estrategia de IA de la compañía y responde de su impacto real (resultado y coste, no uso), protegiendo el juicio humano en las decisiones que importan.' },
 ];
 
 /** @type {Addendum[]} — foco técnico por disciplina (sección 10), sobre la dimensión Technical Excellence. */

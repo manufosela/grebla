@@ -305,20 +305,20 @@ describe('career — framework de carrera (helpers puros)', () => {
       expect(rows[0]).toMatchObject({ code: 'L3', title: 'Senior Engineer II' });
     });
 
-    it('desde L3 (IC): progresión IC (L4,L5) + laterales equivalentes (L3-TL,L3-EM) + rama L4-TL; no L4-EM', () => {
+    it('desde L3 (IC): progresión IC (L4,L5) + laterales equivalentes (L3-TL,L3-M) + rama L4-TL; no L4-M', () => {
       const rows = aspirationalLevels(fw, 'l3');
       const ids = rows.map((r) => r.id);
       // progresión del track (order>3), luego laterales de otros tracks al mismo
       // order (l3tl, l3em), y por último las ramas branchesFrom l3 (l4tl).
       expect(ids).toEqual(['l4', 'l5', 'l3tl', 'l3em', 'l4tl']);
       expect(ids).not.toContain('l4em'); // order 4, no equivalente ni rama de l3
-      expect(rows.map((r) => r.code)).toEqual(['L4', 'L5', 'L3-TL', 'L3-EM', 'L4-TL']);
+      expect(rows.map((r) => r.code)).toEqual(['L4', 'L5', 'L3-TL', 'L3-M', 'L4-TL']);
     });
 
-    it('desde L4 (Staff): progresión (L5) + laterales equivalentes L4-TL/L4-EM', () => {
+    it('desde L4 (Staff): progresión (L5) + laterales equivalentes L4-TL/L4-M', () => {
       const rows = aspirationalLevels(fw, 'l4');
       expect(rows.map((r) => r.id)).toEqual(['l5', 'l4tl', 'l4em']);
-      expect(rows.map((r) => r.code)).toEqual(['L5', 'L4-TL', 'L4-EM']);
+      expect(rows.map((r) => r.code)).toEqual(['L5', 'L4-TL', 'L4-M']);
     });
 
     it('devuelve el subconjunto de campos esperado', () => {
@@ -332,10 +332,10 @@ describe('career — framework de carrera (helpers puros)', () => {
       expect(aspirationalLevels(null, 'l3')).toEqual([]);
     });
 
-    it('desde L5 (Principal): laterales a los peldaños L5 de TL/EM (Distinguished Architect, Director)', () => {
+    it('desde L5 (Principal): laterales a los peldaños L5 de TL/Management (Distinguished Architect, Head of Engineering)', () => {
       const rows = aspirationalLevels(fw, 'l5');
       expect(rows.map((r) => r.id)).toEqual(['l5tl', 'l5em']);
-      expect(rows.map((r) => r.code)).toEqual(['L5-TL', 'L5-EM']);
+      expect(rows.map((r) => r.code)).toEqual(['L5-TL', 'L5-M']);
     });
 
     it('un nivel realmente terminal (sin progresión, laterales ni ramas) → []', () => {
