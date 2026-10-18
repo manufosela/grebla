@@ -10,7 +10,7 @@ const { _save, canEdit } = { _save: CareerPlan.prototype._save, canEdit: Object.
 
 const ctx = (extra = {}) => ({
   person: { id: 'dev', uid: 'u-dev', directoryManagerUids: ['u-em'] }, _plan: null, _editing: true, _busy: false, _error: '',
-  _draft: { focus: ' Backend al 4 de diciembre ', responsibilities: 'Ownership de backend\n\nDelegar', lettingGo: 'Postmortems' }, ...extra,
+  _draft: { focus: ' Backend al 4 de diciembre ', responsibilities: 'Ownership de backend\n\nDelegar', expectations: 'Criterio técnico', lettingGo: 'Postmortems' }, ...extra,
 });
 
 describe('<career-plan>', () => {
@@ -20,7 +20,7 @@ describe('<career-plan>', () => {
     const c = ctx();
     await _save.call(c);
     expect(lib.saveCareerPlan).toHaveBeenCalledWith('dev', {
-      focus: ' Backend al 4 de diciembre ', responsibilities: ['Ownership de backend', '', 'Delegar'], lettingGo: ['Postmortems'],
+      focus: ' Backend al 4 de diciembre ', responsibilities: ['Ownership de backend', '', 'Delegar'], expectations: ['Criterio técnico'], lettingGo: ['Postmortems'],
     }, { uid: 'u-em', name: 'EM' });
     expect([c._editing, c._busy, c._plan.responsibilities]).toEqual([false, false, ['Ownership de backend', 'Delegar']]);
   });

@@ -1,18 +1,20 @@
 /**
- * <career-plan>: el plan de una persona (Mi carrera, RMR-TSK-0688). Foco, lo que
- * es suyo y lo que suelta. Lo edita su cadena de managers en el sitio; la persona
+ * <career-plan>: el plan de una persona (Mi carrera, RMR-TSK-0688). Foco, de qué
+ * se encarga, qué se espera de ella y qué no es su foco. Lo edita su cadena de managers en el sitio; la persona
  * lo lee. Las reglas del subárbol son las que mandan: si no deja, se dice.
  */
 import { LitElement, html, css } from 'lit';
 import '../common/busy-overlay.js';
 import { getCurrentUser } from '../../lib/auth.js';
 import { getCareerPlan, saveCareerPlan } from '../../lib/careerPlan.js';
-import { normalizePlan } from '../../tools/career/domain/careerPlan.js';
+import { normalizePlan, planGroups } from '../../tools/career/domain/careerPlan.js';
 
 const lines = (text) => String(text ?? '').split('\n');
-const SECTIONS = [['responsibilities', 'Lo que es suyo'], ['lettingGo', 'Lo que suelta']];
+const SECTIONS = [['responsibilities', 'De qué te encargas'], ['expectations', 'Lo que se espera de ti'], ['lettingGo', 'No es tu foco']];
 const itemTpl = (item) => html`<li>${item}</li>`;
-const listTpl = (title, items) => html`<h3>${title}</h3><ul>${items.map(itemTpl)}</ul>`;
+const headingTpl = (title) => (title ? html`<h4>${title}</h4>` : null);
+const groupTpl = ({ title, items }) => html`${headingTpl(title)}<ul>${items.map(itemTpl)}</ul>`;
+const listTpl = (title, items) => html`<h3>${title}</h3>${planGroups(items).map(groupTpl)}`;
 const focusTpl = (focus) => (focus ? html`<p>${focus}</p>` : html`<p class="empty">Sin foco escrito todavía.</p>`);
 
 export class CareerPlan extends LitElement {
@@ -28,6 +30,7 @@ export class CareerPlan extends LitElement {
   static styles = css`
     :host { display: block; }
     h3 { margin: 1rem 0 0.35rem; font-size: 0.95rem; color: var(--rm-text, #111827); }
+    h4 { margin: 0.6rem 0 0.2rem; font-size: 0.88rem; color: var(--rm-text, #111827); }
     p, li { font-size: 0.9rem; color: var(--rm-text, #111827); max-width: 70ch; }
     .empty, .hint { color: var(--rm-muted, #4b5563); font-size: 0.86rem; }
     label { display: grid; gap: 0.3rem; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600; color: var(--rm-text, #111827); }
@@ -76,9 +79,8 @@ export class CareerPlan extends LitElement {
   }
 
   _renderView() {
-    const { focus, responsibilities, lettingGo } = this._plan;
-    const empty = !focus && responsibilities.length === 0 && lettingGo.length === 0;
-    const plan = { responsibilities, lettingGo };
+    const { focus, ...plan } = this._plan;
+    const empty = !focus && SECTIONS.every(([key]) => plan[key].length === 0);
     const hint = empty && !this._canEdit ? html`<p class="hint">Tu responsable aún no ha escrito tu plan.</p>` : null;
     const editBtn = html`<div class="row"><button type="button" @click=${this._edit}>Editar el plan</button></div>`;
     return html`
@@ -113,13 +115,13 @@ export class CareerPlan extends LitElement {
 
   _edit() {
     const p = this._plan;
-    this._draft = { focus: p.focus, responsibilities: p.responsibilities.join('\n'), lettingGo: p.lettingGo.join('\n') };
+    this._draft = { focus: p.focus, ...Object.fromEntries(SECTIONS.map(([key]) => [key, p[key].join('\n')])) };
     this._editing = true;
   }
 
   async _save() {
     const d = this._draft;
-    const plan = { focus: d.focus, responsibilities: lines(d.responsibilities), lettingGo: lines(d.lettingGo) };
+    const plan = { focus: d.focus, ...Object.fromEntries(SECTIONS.map(([key]) => [key, lines(d[key])])) };
     const user = getCurrentUser();
     const id = this.person.id;
     this._busy = true;
