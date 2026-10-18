@@ -201,7 +201,7 @@ test('el responsable marca directamente una expectativa con su motivo (RMR-TSK-0
     await abrirCarrera(page);
     await ficha(page).getByRole('tab', { name: 'Expectativas' }).click();
     const fila = ficha(page).locator('career-expectations li', { hasText: 'Producto' }).first();
-    await fila.getByRole('button', { name: 'Marcar' }).click();
+    await fila.getByRole('button', { name: 'Valorar si la cumple' }).click();
     const dialogo = ficha(page).locator('career-review-dialog');
     await dialogo.getByRole('button', { name: 'Cumple' }).click();
     await expect(dialogo).toContainText('Para aceptar hace falta un motivo');
