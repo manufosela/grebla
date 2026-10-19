@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { NOTION_FIELDS, withoutNotionFields, isNotionField } from './notionFields.js';
+import { NOTION_FIELDS, withoutNotionFields, isNotionField, tribbuProfile } from './notionFields.js';
+
+describe('tribbuProfile: apodo y Experience de Notion, aparte del nivel de carrera (RMR-TSK-0785)', () => {
+  it('junta lo que haya, en una línea', () => {
+    expect(tribbuProfile({ nickname: 'Ximo', experience: 'Senior' })).toBe('Apodo: Ximo · Experience en TRIBBU: Senior');
+    expect(tribbuProfile({ experience: 'Junior' })).toBe('Experience en TRIBBU: Junior');
+    expect(tribbuProfile({ nickname: ' Mike ' })).toBe('Apodo: Mike');
+  });
+
+  it('sin datos de Notion, nada', () => {
+    expect(tribbuProfile(undefined)).toBe('');
+    expect(tribbuProfile({ nickname: null, experience: '' })).toBe('');
+  });
+});
 
 describe('campos que vienen de Notion (RMR-TSK-0588)', () => {
   it('son los mismos que bloquean las reglas', () => {

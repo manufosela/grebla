@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.265.0] - 2026-10-19
+
+### Añadido
+
+- La sincronización con Notion trae el apodo (Nickname) y la Experience de cada
+  persona, y la ficha los enseña bajo el rol. Experience es la escala general de
+  TRIBBU (Senior, Mid-level, Junior, Intern): complementa al nivel de carrera, no
+  lo sustituye.
+
 ## [1.264.0] - 2026-10-19
 
 ### Cambiado
