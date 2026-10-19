@@ -21,6 +21,7 @@ const norm = (email) => (typeof email === 'string' && email.trim() ? email.trim(
 const notionBlock = (e) => ({
   id: e.id, role: e.role ?? null, level: e.level ?? null, department: e.department ?? null,
   team: e.team ?? null, type: e.type ?? null, status: e.status ?? null,
+  experience: e.experience ?? null, nickname: e.nickname ?? null,
 });
 
 /** Índice de fichas por notion.id y por cada email que tengan (propio, pendiente o de Auth). */

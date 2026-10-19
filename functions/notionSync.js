@@ -8,7 +8,7 @@
  * en /config/notionSync y no toca ninguna ficha. Con errores en el plan (email
  * repetido, ciclo de managers) tampoco se aplica nada aunque se pida.
  */
-import { buildPeople, ORG_EXCLUDED_STATUSES, selectName, stripDashes } from './notionPeople.js';
+import { buildPeople, ORG_EXCLUDED_STATUSES, plainText, selectName, stripDashes } from './notionPeople.js';
 import { planNotionSync } from './notionReconcile.js';
 
 /**
@@ -31,14 +31,17 @@ export function notionDatabaseIdOf(org) {
 const BATCH_SIZE = 400;
 
 /**
- * Personas del directorio con lo que el módulo vendorizado no lee: Status y
- * Join Date (para no tocar la copia del portal).
+ * Personas del directorio con lo que el módulo vendorizado no lee: Status,
+ * Join Date, Experience y Nickname (para no tocar la copia del portal).
  * @param {Array<Record<string, any>>} pages
  */
 export function directoryFromPages(pages) {
   const extras = new Map(pages.map((p) => [stripDashes(p.id), {
     status: selectName(p.properties.Status),
     joinDate: p.properties['Join Date']?.date?.start ?? null,
+    // Experience es la escala general de TRIBBU (Senior, Mid-level…): complementa al nivel de carrera, no lo sustituye.
+    experience: selectName(p.properties.Experience),
+    nickname: plainText(p.properties.Nickname),
   }]));
   return buildPeople(pages, ORG_EXCLUDED_STATUSES).map((p) => ({ ...p, ...extras.get(p.id) }));
 }

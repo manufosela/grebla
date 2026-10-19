@@ -49,6 +49,15 @@ describe('directoryFromPages', () => {
     const dir = directoryFromPages([page('a-1', 'Ana', 'ana@example.com', 'Active', '2024-01-15'), page('b-2', 'Baja', 'b@example.com', 'Inactive')]);
     expect(dir).toEqual([expect.objectContaining({ id: 'a1', name: 'Ana', status: 'Active', joinDate: '2024-01-15' })]);
   });
+
+  it('añade Experience y Nickname, que complementan al nivel de carrera (RMR-TSK-0785)', () => {
+    const p = page('a-1', 'Joaquín', 'j@example.com');
+    p.properties.Experience = { select: { name: 'Senior' } };
+    p.properties.Nickname = { rich_text: [{ plain_text: 'Ximo' }] };
+    const [withBoth, without] = directoryFromPages([p, page('b-2', 'Bea', 'b@example.com')]);
+    expect(withBoth).toMatchObject({ experience: 'Senior', nickname: 'Ximo' });
+    expect(without).toMatchObject({ experience: null, nickname: null });
+  });
 });
 
 describe('runNotionSync', () => {

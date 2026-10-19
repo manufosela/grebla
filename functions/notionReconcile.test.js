@@ -5,7 +5,7 @@ const branches = [{ id: 'engineering', label: 'Tech' }, { id: 'product', label: 
 const entry = (over = {}) => ({
   id: 'n1', name: 'Ana Pérez', email: 'ana@example.com', department: 'Tech', team: 'Backend',
   role: 'Backend Engineer', level: 'IC', type: 'Employee', status: 'Active', joinDate: '2024-01-15',
-  managerId: null, ...over,
+  experience: 'Senior', nickname: 'Anita', managerId: null, ...over,
 });
 const person = (id, data, authEmail = null) => ({ id, data: { active: true, ...data }, authEmail });
 const plan = (directory, people) => {
@@ -21,9 +21,16 @@ describe('planNotionSync — casado y campos que manda Notion', () => {
       personId: 'p1', name: 'Ana Pérez',
       set: {
         name: 'Ana Pérez', email: 'ana@example.com', orgBranch: 'engineering', startDate: '2024-01-15', external: false,
-        notion: { id: 'n1', role: 'Backend Engineer', level: 'IC', department: 'Tech', team: 'Backend', type: 'Employee', status: 'Active' },
+        notion: { id: 'n1', role: 'Backend Engineer', level: 'IC', department: 'Tech', team: 'Backend', type: 'Employee', status: 'Active',
+          experience: 'Senior', nickname: 'Anita' },
       },
     }]);
+  });
+
+  it('Experience y Nickname complementan, no sustituyen: el nivel de carrera no se toca (RMR-TSK-0785)', () => {
+    const { updates } = plan([entry()], [person('p1', { name: 'Ana Pérez', levelId: 'l2' }, 'ana@example.com')]);
+    expect(updates[0].set).not.toHaveProperty('levelId');
+    expect(updates[0].set.notion).toMatchObject({ experience: 'Senior', nickname: 'Anita' });
   });
 
   it('casa por notion.id antes que por email, y por email propio o pendiente', () => {
@@ -77,7 +84,8 @@ describe('planNotionSync — casado y campos que manda Notion', () => {
 
   it('lo que ya coincide no se reescribe: sin cambios, sin update', () => {
     const synced = { name: 'Ana Pérez', email: 'ana@example.com', orgBranch: 'engineering', startDate: '2024-01-15', external: false, reportsToPersonId: null,
-      notion: { id: 'n1', role: 'Backend Engineer', level: 'IC', department: 'Tech', team: 'Backend', type: 'Employee', status: 'Active' } };
+      notion: { id: 'n1', role: 'Backend Engineer', level: 'IC', department: 'Tech', team: 'Backend', type: 'Employee', status: 'Active',
+        experience: 'Senior', nickname: 'Anita' } };
     expect(plan([entry()], [person('p1', synced, 'ana@example.com')]).updates).toEqual([]);
   });
 

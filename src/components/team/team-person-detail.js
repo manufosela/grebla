@@ -59,7 +59,7 @@ import { normalizePrimaryGuild } from '../../tools/team/domain/primaryGuild.js';
 import { BELBIN_ITEMS, BELBIN_SCALE } from '../../tools/team/data/belbinItems.js';
 import { proposeRoles, evidenceFor } from '../../tools/team/domain/belbinSurvey.js';
 import { isNotionSynced } from '../../lib/notionSync.js';
-import { withoutNotionFields } from '../../tools/team/domain/notionFields.js';
+import { withoutNotionFields, tribbuProfile } from '../../tools/team/domain/notionFields.js';
 import { listOrgBranches } from '../../lib/orgBranches.js';
 import { listOrgRoles } from '../../lib/orgRoles.js';
 import { getEmployeeDomain } from '../../lib/orgConfig.js';
@@ -225,6 +225,7 @@ export class TeamPersonDetail extends LitElement {
     .head h2 { margin: 0; font-size: 1.3rem; }
     .head .title { margin: 0.3rem 0 0; font-size: 0.95rem; font-weight: 600; color: var(--rm-text, #111827); }
     .head .role { margin: 0.2rem 0 0; font-size: 0.95rem; font-weight: 700; color: var(--rm-text, #111827); }
+    .head .tribbu { margin: 0.15rem 0 0; font-size: 0.85rem; color: var(--rm-muted, #4b5563); }
     .head .chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
     .chip { background: var(--rm-track, #e9f0f2); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 600; }
     section {
@@ -2287,10 +2288,12 @@ export class TeamPersonDetail extends LitElement {
       .map((d) => d.name);
     const guilds = this.person.guilds ?? [];
     const role = (this._rolesCat ?? []).find((r) => r.id === this.person.orgRole)?.label ?? null;
+    const profile = tribbuProfile(this.person.notion);
     return html`
       <div class="head">
         <h2>${this.person.name}</h2>
         ${role ? html`<p class="role">${role}</p>` : null}
+        ${profile ? html`<p class="tribbu">${profile}</p>` : null}
         ${title ? html`<p class="title">${title}</p>` : null}
         ${disciplineNames.length > 0
           ? html`<span class="chips">${disciplineNames.map((n) => html`<span class="chip">${n}</span>`)}</span>`

@@ -12,6 +12,7 @@ const FIELD_LABELS = {
   'notion.id': 'Id (Notion)', 'notion.role': 'Rol (Notion)', 'notion.level': 'Nivel (Notion)',
   'notion.department': 'Departamento (Notion)', 'notion.team': 'Equipo (Notion)',
   'notion.type': 'Tipo (Notion)', 'notion.status': 'Estado (Notion)',
+  'notion.experience': 'Experience (Notion)', 'notion.nickname': 'Apodo (Notion)',
 };
 
 /** @param {string} field @param {unknown} value @param {(id: string) => string} nameOf */

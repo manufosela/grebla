@@ -12,6 +12,17 @@ export const NOTION_FIELDS = Object.freeze([
 export const isNotionField = (field) => NOTION_FIELDS.includes(field);
 
 /**
+ * Apodo y Experience que trae Notion (RMR-TSK-0785), en una línea para la ficha.
+ * Experience es la escala general de TRIBBU: complementa al nivel de carrera, no lo sustituye.
+ * @param {{ nickname?: string|null, experience?: string|null }|undefined} notion
+ */
+export function tribbuProfile(notion) {
+  const nickname = notion?.nickname?.trim();
+  const experience = notion?.experience?.trim();
+  return [nickname && `Apodo: ${nickname}`, experience && `Experience en TRIBBU: ${experience}`].filter(Boolean).join(' · ');
+}
+
+/**
  * El parche sin los campos de Notion si la instancia está conectada; tal cual si no.
  * @template {Record<string, unknown>} T
  * @param {T} patch @param {boolean} notionSync
