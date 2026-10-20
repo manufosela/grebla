@@ -31,6 +31,43 @@ describe('directoryManagerPatches: managers de la rama de cada ficha (RMR-TSK-06
   });
 });
 
+describe('directoryManagerPatches: el Head of Tech ve a todo su departamento (RMR-TSK-0786)', () => {
+  // En el organigrama oficial los EMs dependen del CTO y el Head no tiene a nadie;
+  // en GREBLA Head y EM están al mismo nivel, y el Head ve a todo su departamento.
+  const tech = [
+    { id: 'cto', uid: 'u-cto', orgBranch: 'engineering', orgRole: 'cto', reportsToPersonId: null },
+    { id: 'head', uid: 'u-head', orgBranch: 'engineering', orgRole: 'head-of-tech', reportsToPersonId: 'cto' },
+    { id: 'em', uid: 'u-em', orgBranch: 'engineering', orgRole: 'engineer-manager-back', reportsToPersonId: 'cto' },
+    { id: 'tl', uid: 'u-tl', orgBranch: 'engineering', orgRole: 'back-engineer', reportsToPersonId: 'em' },
+    { id: 'dev', uid: 'u-dev', orgBranch: 'engineering', reportsToPersonId: 'em' },
+    { id: 'baja', uid: 'u-baja', orgBranch: 'engineering', reportsToPersonId: 'em', active: false },
+    { id: 'pm', uid: 'u-pm', orgBranch: 'product', reportsToPersonId: null },
+  ];
+  const uidsOf = (people) => new Map(directoryManagerPatches(people).map((p) => [p.id, p.uids]));
+
+  it('se añade tras la cadena del organigrama en cada ficha activa de su departamento', () => {
+    const uids = uidsOf(tech);
+    expect(uids.get('em')).toEqual(['u-cto', 'u-head']);
+    expect(uids.get('tl')).toEqual(['u-em', 'u-cto', 'u-head']);
+    expect(uids.get('dev')).toEqual(['u-em', 'u-cto', 'u-head']);
+  });
+
+  it('ni a sí mismo, ni a las bajas, ni a otros departamentos; y los TLs no ganan a nadie', () => {
+    const uids = uidsOf(tech);
+    expect(uids.get('head')).toEqual(['u-cto']);
+    expect(uids.get('baja')).toEqual(['u-em', 'u-cto']);
+    expect(uids.get('pm')).toEqual([]);
+    expect([...uids.values()].some((list) => list.includes('u-tl'))).toBe(false);
+  });
+
+  it('un Head sin cuenta, o dado de baja, no añade nada', () => {
+    const sinCuenta = tech.map((p) => (p.id === 'head' ? { ...p, uid: null } : p));
+    const deBaja = tech.map((p) => (p.id === 'head' ? { ...p, active: false } : p));
+    expect(uidsOf(sinCuenta).get('dev')).toEqual(['u-em', 'u-cto']);
+    expect(uidsOf(deBaja).get('dev')).toEqual(['u-em', 'u-cto']);
+  });
+});
+
 const team = [
   { id: 'jefa', name: 'Jefa', uid: 'u-jefa', reportsToPersonId: null },
   { id: 'ana', name: 'Ana', reportsToPersonId: 'jefa' },

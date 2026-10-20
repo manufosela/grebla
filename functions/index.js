@@ -2630,7 +2630,9 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
   const levelChanged = (before?.notion?.level ?? null) !== (after.notion?.level ?? null);
   // El equipo decide si tiene EM en GREBLA (RMR-TSK-0716).
   const teamChanged = (before?.notion?.team ?? null) !== (after.notion?.team ?? null);
-  if (!reportsChanged && !uidChanged && !levelChanged && !teamChanged) return;
+  // Rol, departamento y baja deciden si es Head de su departamento (RMR-TSK-0786).
+  const headChanged = ['orgRole', 'orgBranch', 'active'].some((k) => (before?.[k] ?? null) !== (after[k] ?? null));
+  if (!reportsChanged && !uidChanged && !levelChanged && !teamChanged && !headChanged) return;
 
   const db = getFirestore();
   const snap = await db.collection('people').get();

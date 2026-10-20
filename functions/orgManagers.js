@@ -10,16 +10,36 @@
  */
 
 /**
+ * Roles que ven a todo su departamento (RMR-TSK-0786). En el organigrama oficial
+ * los EMs dependen del CTO y el Head of Tech no tiene a nadie; en GREBLA Head y
+ * EM están al mismo nivel (uno lo técnico, otro las personas), así que el Head
+ * entra en la rama de cada ficha de su departamento, venga como venga Notion.
+ */
+export const DEPARTMENT_HEAD_ROLES = Object.freeze(['head-of-tech']);
+
+/** uids de los Heads activos con cuenta, por departamento. */
+function headsByBranch(people) {
+  const heads = new Map();
+  for (const p of people) {
+    if (!p.uid || p.active === false || !p.orgBranch || !DEPARTMENT_HEAD_ROLES.includes(p.orgRole)) continue;
+    heads.set(p.orgBranch, [...(heads.get(p.orgBranch) ?? []), p.uid]);
+  }
+  return heads;
+}
+
+/**
  * Managers de la rama de cada ficha (RMR-TSK-0661): los uids de todos sus jefes
  * en el directorio que tienen cuenta, del más cercano hacia arriba. Así un CTO
- * ve y hace O2O a toda su rama sin tener que apuntarse persona a persona. Se
- * guarda en `directoryManagerUids`. Devuelve solo las fichas cuya lista cambia.
+ * ve y hace O2O a toda su rama sin tener que apuntarse persona a persona. Tras
+ * la cadena, el Head de su departamento si la ficha está activa (RMR-TSK-0786).
+ * Se guarda en `directoryManagerUids`. Devuelve solo las fichas cuya lista cambia.
  * @param {ReadonlyArray<{ id: string, uid?: string|null, reportsToPersonId?: string|null,
- *   directoryManagerUids?: string[] }>} people
+ *   orgBranch?: string|null, orgRole?: string|null, active?: boolean, directoryManagerUids?: string[] }>} people
  * @returns {Array<{ id: string, uids: string[] }>}
  */
 export function directoryManagerPatches(people) {
   const byId = new Map(people.map((p) => [p.id, p]));
+  const heads = headsByBranch(people);
   const patches = [];
   for (const person of people) {
     const uids = [];
@@ -29,6 +49,9 @@ export function directoryManagerPatches(people) {
       seen.add(boss.id);
       if (boss.uid) uids.push(boss.uid);
       boss = byId.get(boss.reportsToPersonId ?? '');
+    }
+    if (person.active !== false) {
+      for (const uid of heads.get(person.orgBranch) ?? []) if (uid !== person.uid && !uids.includes(uid)) uids.push(uid);
     }
     const current = person.directoryManagerUids ?? null;
     const same = Array.isArray(current) && current.length === uids.length && current.every((u, i) => u === uids[i]);
