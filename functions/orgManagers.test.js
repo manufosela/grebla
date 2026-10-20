@@ -1,5 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { managerOnboardingPlan, directoryManagerPatches } from './orgManagers.js';
+import { managerOnboardingPlan, directoryManagerPatches, headScopeChanged } from './orgManagers.js';
+
+describe('headScopeChanged: cuándo un cambio de ficha mueve el alcance del Head (RMR-TSK-0786)', () => {
+  const dev = { orgRole: 'back-engineer', orgBranch: 'engineering', active: true };
+  const head = { orgRole: 'head-of-tech', orgBranch: 'engineering', active: true };
+
+  it('dar o quitar el rol de Head, o tocar la ficha de un Head, recalcula', () => {
+    expect(headScopeChanged(dev, { ...dev, orgRole: 'head-of-tech' })).toBe(true);
+    expect(headScopeChanged(head, { ...head, orgRole: 'cto' })).toBe(true);
+    expect(headScopeChanged(head, { ...head, active: false })).toBe(true);
+    expect(headScopeChanged(null, head)).toBe(true);
+  });
+
+  it('cambiar de departamento o darse de baja una ficha que ya existía, también', () => {
+    expect(headScopeChanged(dev, { ...dev, orgBranch: 'product' })).toBe(true);
+    expect(headScopeChanged(dev, { ...dev, active: false })).toBe(true);
+  });
+
+  it('crear una ficha normal o tocar otros campos, no', () => {
+    expect(headScopeChanged(null, dev)).toBe(false);
+    expect(headScopeChanged(dev, { ...dev, levelId: 'l2' })).toBe(false);
+  });
+});
 
 describe('directoryManagerPatches: managers de la rama de cada ficha (RMR-TSK-0661)', () => {
   const org = [

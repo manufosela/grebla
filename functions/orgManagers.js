@@ -17,6 +17,21 @@
  */
 export const DEPARTMENT_HEAD_ROLES = Object.freeze(['head-of-tech']);
 
+const isHead = (p) => !!p && DEPARTMENT_HEAD_ROLES.includes(p.orgRole);
+
+/**
+ * ¿El cambio de esta ficha mueve el alcance de algún Head? Si la ficha es o era
+ * de un Head, o si una ficha que ya existía cambia de departamento o de baja.
+ * Crear una ficha normal no (su jefe la recalcula al cambiar reportsToPersonId).
+ * @param {Record<string, any>|null} before @param {Record<string, any>} after
+ */
+export function headScopeChanged(before, after) {
+  if (isHead(before) || isHead(after)) {
+    return !before || ['orgRole', 'orgBranch', 'active'].some((k) => (before[k] ?? null) !== (after[k] ?? null));
+  }
+  return !!before && ['orgBranch', 'active'].some((k) => (before[k] ?? null) !== (after[k] ?? null));
+}
+
 /** uids de los Heads activos con cuenta, por departamento. */
 function headsByBranch(people) {
   const heads = new Map();
