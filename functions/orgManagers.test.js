@@ -74,6 +74,10 @@ describe('directoryManagerPatches: el Head of Tech ve a todo su departamento (RM
     expect(uids.get('dev')).toEqual(['u-em', 'u-cto', 'u-head']);
   });
 
+  it('no entra en la rama de sus propios jefes: el Head no ve al CTO (RMR-TSK-0787)', () => {
+    expect(uidsOf(tech).get('cto')).toEqual([]);
+  });
+
   it('ni a sí mismo, ni a las bajas, ni a otros departamentos; y los TLs no ganan a nadie', () => {
     const uids = uidsOf(tech);
     expect(uids.get('head')).toEqual(['u-cto']);

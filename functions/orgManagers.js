@@ -32,12 +32,29 @@ export function headScopeChanged(before, after) {
   return !!before && ['orgBranch', 'active'].some((k) => (before[k] ?? null) !== (after[k] ?? null));
 }
 
-/** uids de los Heads activos con cuenta, por departamento. */
-function headsByBranch(people) {
+/** Jefes de una ficha en el directorio, del más cercano hacia arriba (corta los ciclos). */
+function bossesOf(person, byId) {
+  const bosses = [];
+  const seen = new Set([person.id]);
+  let boss = byId.get(person.reportsToPersonId ?? '');
+  while (boss && !seen.has(boss.id)) {
+    seen.add(boss.id);
+    bosses.push(boss);
+    boss = byId.get(boss.reportsToPersonId ?? '');
+  }
+  return bosses;
+}
+
+/**
+ * Heads activos con cuenta, por departamento, con los ids de sus propios jefes:
+ * un Head no entra en la rama de quien está por encima de él (RMR-TSK-0787).
+ */
+function headsByBranch(people, byId) {
   const heads = new Map();
   for (const p of people) {
-    if (!p.uid || p.active === false || !p.orgBranch || !DEPARTMENT_HEAD_ROLES.includes(p.orgRole)) continue;
-    heads.set(p.orgBranch, [...(heads.get(p.orgBranch) ?? []), p.uid]);
+    if (!p.uid || p.active === false || !p.orgBranch || !isHead(p)) continue;
+    const head = { uid: p.uid, aboveIds: new Set(bossesOf(p, byId).map((b) => b.id)) };
+    heads.set(p.orgBranch, [...(heads.get(p.orgBranch) ?? []), head]);
   }
   return heads;
 }
@@ -54,19 +71,14 @@ function headsByBranch(people) {
  */
 export function directoryManagerPatches(people) {
   const byId = new Map(people.map((p) => [p.id, p]));
-  const heads = headsByBranch(people);
+  const heads = headsByBranch(people, byId);
   const patches = [];
   for (const person of people) {
-    const uids = [];
-    const seen = new Set([person.id]);
-    let boss = byId.get(person.reportsToPersonId ?? '');
-    while (boss && !seen.has(boss.id)) {
-      seen.add(boss.id);
-      if (boss.uid) uids.push(boss.uid);
-      boss = byId.get(boss.reportsToPersonId ?? '');
-    }
+    const uids = bossesOf(person, byId).map((b) => b.uid).filter(Boolean);
     if (person.active !== false) {
-      for (const uid of heads.get(person.orgBranch) ?? []) if (uid !== person.uid && !uids.includes(uid)) uids.push(uid);
+      for (const head of heads.get(person.orgBranch) ?? []) {
+        if (head.uid !== person.uid && !head.aboveIds.has(person.id) && !uids.includes(head.uid)) uids.push(head.uid);
+      }
     }
     const current = person.directoryManagerUids ?? null;
     const same = Array.isArray(current) && current.length === uids.length && current.every((u, i) => u === uids[i]);

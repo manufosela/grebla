@@ -15,6 +15,13 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.266.1] - 2026-10-20
+
+### Arreglado
+
+- El Head of Tech no entra en la rama de quien está por encima de él en el
+  organigrama: ve a su departamento, pero no al CTO.
+
 ## [1.266.0] - 2026-10-20
 
 ### Añadido
