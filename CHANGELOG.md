@@ -15,6 +15,15 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.266.0] - 2026-10-20
+
+### Añadido
+
+- Quien tiene el rol Head of Tech ve a todo su departamento en «Mi equipo»,
+  venga como venga el organigrama de Notion: en GREBLA Head y EM están al mismo
+  nivel. De los O2O ve lo compartido, como el resto de su rama. Los TLs siguen sin
+  contar como managers.
+
 ## [1.265.0] - 2026-10-19
 
 ### Añadido

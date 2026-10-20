@@ -28,7 +28,7 @@ import { o2oLeadersOf, sharedSessions, canReadPersonO2O, periodsForPerson } from
 import { fetchLinearIssue, pushGuildEstimates, LINEAR_REF_RE } from './linearIssue.js';
 import { DOC_TOKEN_TTL_MS, tokenFromPath, tokenIsLive, viewerHeaders, downloadHeaders } from './docTokens.js';
 import { bearerFrom, agentKeyId, agentKeyVerdict, agentTeamView, normalizeIngest, conversationIdFor, o2oSessionFrom, personIsInScope } from './agentIngest.js';
-import { managerOnboardingPlan, directoryManagerPatches } from './orgManagers.js';
+import { managerOnboardingPlan, directoryManagerPatches, headScopeChanged } from './orgManagers.js';
 import { careerReviewersPatches } from './careerReviewers.js';
 import { effectiveDirectory, validTeamEms, teamsWithChangedEm } from './teamEms.js';
 import { projectDirectory } from './orgDirectory.js';
@@ -2630,7 +2630,9 @@ export const syncOrgOwnership = onDocumentWritten('people/{personId}', async (ev
   const levelChanged = (before?.notion?.level ?? null) !== (after.notion?.level ?? null);
   // El equipo decide si tiene EM en GREBLA (RMR-TSK-0716).
   const teamChanged = (before?.notion?.team ?? null) !== (after.notion?.team ?? null);
-  if (!reportsChanged && !uidChanged && !levelChanged && !teamChanged) return;
+  // Rol, departamento y baja deciden el alcance del Head de su departamento (RMR-TSK-0786).
+  const headChanged = headScopeChanged(before, after);
+  if (!reportsChanged && !uidChanged && !levelChanged && !teamChanged && !headChanged) return;
 
   const db = getFirestore();
   const snap = await db.collection('people').get();
