@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateResponses, sanitizeResponses, tenureBucket, ageBucket, bucketMetadata, answerId, sanitizeParticipantMeta } from './survey.js';
+import { validateResponses, sanitizeResponses, tenureBucket, ageBucket, bucketMetadata, answerId, sanitizeParticipantMeta, anonymousAnswer, tokenResponded, responseRefDate } from './survey.js';
 
 const enps = { id: 'enps', type: 'scale', min: 1, max: 10, required: true };
 const reason = { id: 'reason', type: 'text' };
@@ -106,5 +106,20 @@ describe('ejes custom declarados (RMR-TSK-0355)', () => {
     expect(out).toEqual({ department: 'Eng', genero: 'Otro' });
     const sinEjes = sanitizeParticipantMeta({ genero: 'Otro' });
     expect(sinEjes).toEqual({});
+  });
+});
+
+describe('sin hora que cruce enlace y respuesta', () => {
+  it('la respuesta anónima no lleva ninguna marca de tiempo', () => {
+    const doc = anonymousAnswer({ enps: 9 }, { department: 'Eng' }, false);
+    expect(doc).toEqual({ answers: { enps: 9 }, metadata: { department: 'Eng' }, test: false });
+  });
+  it('el enlace guarda solo el día de respuesta', () => {
+    expect(tokenResponded('2026-10-21T13:47:12.345Z')).toEqual({ used: true, respondedOn: '2026-10-21' });
+  });
+  it('el día del enlace sirve de referencia para los tramos', () => {
+    expect(tenureBucket('2025-10-22', responseRefDate({ respondedOn: '2026-10-21' }))).toBe('<1');
+    expect(responseRefDate({ respondedAt: '2026-10-21T13:47:12.345Z' })).toBe('2026-10-21');
+    expect(responseRefDate({})).toBeNull();
   });
 });

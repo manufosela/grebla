@@ -838,7 +838,7 @@ export class SurveyAdmin extends LitElement {
           ? html`<p class="muted">No hay respuestas de prueba todavía.</p>`
           : this._testAnswers.map(
               (a) => html`<div class="test-answer">
-                <p class="muted">Prueba · ${a.updatedAt ? new Date(a.updatedAt).toLocaleString('es-ES') : 'sin fecha'} — no cuenta en los resultados</p>
+                <p class="muted">Prueba — no cuenta en los resultados</p>
                 <ul>
                   ${Object.entries(a.answers ?? {}).map(
                     ([qid, value]) => html`<li><strong>${labelOf(qid)}:</strong> ${this._fmtAnswer(value)}</li>`,
