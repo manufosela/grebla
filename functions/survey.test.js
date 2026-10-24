@@ -117,6 +117,10 @@ describe('sin hora que cruce enlace y respuesta', () => {
   it('el enlace guarda solo el día de respuesta', () => {
     expect(tokenResponded('2026-10-21T13:47:12.345Z')).toEqual({ used: true, respondedOn: '2026-10-21' });
   });
+  it('el día es el de Madrid, no el de UTC', () => {
+    expect(tokenResponded('2026-10-24T22:30:00.000Z').respondedOn).toBe('2026-10-25'); // 00:30 en verano
+    expect(tokenResponded('2026-12-31T23:30:00.000Z').respondedOn).toBe('2027-01-01'); // 00:30 en invierno
+  });
   it('el día del enlace sirve de referencia para los tramos', () => {
     expect(tenureBucket('2025-10-22', responseRefDate({ respondedOn: '2026-10-21' }))).toBe('<1');
     expect(responseRefDate({ respondedAt: '2026-10-21T13:47:12.345Z' })).toBe('2026-10-21');

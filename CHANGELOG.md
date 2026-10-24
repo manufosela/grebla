@@ -15,6 +15,13 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.266.3] - 2026-10-25
+
+### Arreglado
+
+- Encuestas: el día de respuesta del enlace se guarda en hora de Madrid. Antes,
+  una respuesta enviada entre las 00:00 y las 02:00 constaba con el día anterior.
+
 ## [1.266.2] - 2026-10-24
 
 ### Arreglado
