@@ -41,7 +41,7 @@ import { canSeeRetro, participantRows } from './retroParticipants.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
-import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody, sanitizeParticipantMeta } from './survey.js';
+import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody, sanitizeParticipantMeta, anonymousAnswer, tokenResponded, responseRefDate } from './survey.js';
 import { sendGmail } from './gmail.js';
 
 initializeApp();
@@ -735,18 +735,15 @@ export const submitSurveyResponse = onCall(
 
     const nowIso = new Date().toISOString();
     const answerRef = db.doc(`surveys/${surveyId}/answers/${answerId(token, SURVEY_SALT.value())}`);
-    const prev = await answerRef.get();
-    // Respuesta ANÓNIMA: sin token ni email; metadatos en tramos. Reenviar
-    // sobrescribe la misma (editable) preservando la fecha de la primera vez.
-    await answerRef.set({
-      answers: clean,
-      metadata: bucketMetadata(tokenSnap.data().metadata ?? {}, nowIso, await declaredAxisIds(db)),
-      test: tokenSnap.data().test === true, // respuesta de PRUEBA: se excluye de los agregados
-      createdAt: prev.exists ? (prev.data().createdAt ?? nowIso) : nowIso,
-      updatedAt: nowIso,
-    });
+    // Respuesta ANÓNIMA: sin token, email ni hora; metadatos en tramos. Reenviar
+    // sobrescribe la misma (editable). La prueba (`test`) se excluye de los agregados.
+    await answerRef.set(anonymousAnswer(
+      clean,
+      bucketMetadata(tokenSnap.data().metadata ?? {}, nowIso, await declaredAxisIds(db)),
+      tokenSnap.data().test === true,
+    ));
     // Participación (para el % por departamento), sin ligar el token a la respuesta.
-    await tokenRef.set({ used: true, respondedAt: nowIso }, { merge: true });
+    await tokenRef.set(tokenResponded(nowIso), { merge: true });
     return { ok: true };
   },
 );
@@ -863,7 +860,7 @@ export const updateSurveyParticipant = onCall(
     if (tokenSnap.data().used === true) {
       // Los tramos (edad/antigüedad) se recalculan respecto a la fecha ORIGINAL de
       // la respuesta, no a la de esta edición, para no alterar el histórico.
-      const refIso = tokenSnap.data().respondedAt || new Date().toISOString();
+      const refIso = responseRefDate(tokenSnap.data()) ?? new Date().toISOString();
       const answerRef = surveyRef.collection('answers').doc(answerId(token, SURVEY_SALT.value()));
       if ((await answerRef.get()).exists) {
         await answerRef.set({ metadata: bucketMetadata(cleanMeta, refIso, axisIds) }, { merge: true });
@@ -935,7 +932,7 @@ export const resetSurveyResponses = onCall(
       const batch = db.batch();
       for (const op of ops.slice(i, i + 400)) {
         if (op.kind === 'del') batch.delete(op.ref);
-        else batch.update(op.ref, { used: false, respondedAt: FieldValue.delete() });
+        else batch.update(op.ref, { used: false, respondedAt: FieldValue.delete(), respondedOn: FieldValue.delete() });
       }
       await batch.commit();
     }

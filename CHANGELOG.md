@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.266.2] - 2026-10-24
+
+### Arreglado
+
+- Encuestas: la respuesta anónima ya no guarda la hora, y el enlace personal
+  solo guarda el día en que se respondió. Antes, ambos guardaban la misma hora
+  exacta y se podían casar.
+
 ## [1.266.1] - 2026-10-20
 
 ### Arreglado

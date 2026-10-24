@@ -141,6 +141,26 @@ export function answerId(token, salt) {
   return createHmac('sha256', String(salt)).update(String(token)).digest('hex');
 }
 
+/**
+ * Documento de la respuesta ANÓNIMA. Sin ninguna marca de tiempo: si la
+ * respuesta y el enlace (que lleva el email) guardaran la misma hora, quien lea
+ * ambas colecciones podría casarlas (RMR-TSK-0788).
+ */
+export function anonymousAnswer(answers, metadata, test) {
+  return { answers, metadata, test };
+}
+
+/** Marca de participación del enlace: solo el DÍA, que basta para los tramos. */
+export function tokenResponded(nowIso) {
+  return { used: true, respondedOn: nowIso.slice(0, 10) };
+}
+
+/** Fecha de referencia de los tramos de un enlace ya respondido (o null). */
+export function responseRefDate(tokenData) {
+  const day = tokenData?.respondedOn ?? tokenData?.respondedAt?.slice(0, 10);
+  return day ?? null;
+}
+
 /** Marcador del enlace en la plantilla de correo (espejo del dominio email.js). */
 export const LINK_PLACEHOLDER = '{{enlace}}';
 
