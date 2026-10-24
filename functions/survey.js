@@ -150,15 +150,18 @@ export function anonymousAnswer(answers, metadata, test) {
   return { answers, metadata, test };
 }
 
+/** Día `YYYY-MM-DD` de un instante en hora de Madrid (las functions corren en UTC). */
+const madridDay = (iso) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid' }).format(new Date(iso));
+
 /** Marca de participación del enlace: solo el DÍA, que basta para los tramos. */
 export function tokenResponded(nowIso) {
-  return { used: true, respondedOn: nowIso.slice(0, 10) };
+  return { used: true, respondedOn: madridDay(nowIso) };
 }
 
 /** Fecha de referencia de los tramos de un enlace ya respondido (o null). */
 export function responseRefDate(tokenData) {
-  const day = tokenData?.respondedOn ?? tokenData?.respondedAt?.slice(0, 10);
-  return day ?? null;
+  if (tokenData?.respondedOn) return tokenData.respondedOn;
+  return tokenData?.respondedAt ? madridDay(tokenData.respondedAt) : null;
 }
 
 /** Marcador del enlace en la plantilla de correo (espejo del dominio email.js). */
