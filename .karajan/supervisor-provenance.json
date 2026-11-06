@@ -1,11 +1,10 @@
 {
-  "kj_version": "4.52.0",
-  "generated_at": "2026-10-15T16:28:27.588Z",
+  "kj_version": "5.6.0",
+  "generated_at": "2026-11-06T08:21:51.386Z",
   "generation": {
     "profile": "standard",
     "cmds": {},
-    "baseBranch": "main",
-    "globalHooksDir": "$HOME/.git-hooks"
+    "baseBranch": "main"
   },
   "who": {
     "gh": "manufosela",
@@ -14,84 +13,105 @@
   },
   "files": [
     {
-      "file": ".karajan/harness/posttooluse.mjs",
-      "sha256": "732a2b07ade700ba347f2ff703f0ff45a863be6befbe3e003dc30c890bf6f9ac"
+      "file": ".claude/settings.json",
+      "sha256": "327739a6b9816cb83d3097e41aa8acb28aa4f93237e2f5a0c9201737e7ec0971",
+      "local": true
     },
     {
-      "file": ".karajan/harness/pretooluse-rules.mjs",
-      "sha256": "f1948a95ed80f94c58d709b589a8b1e1ae60d1f1eb35d75ca7d83839250cd9b8"
+      "file": ".github/workflows/e2e.yml",
+      "sha256": "20153102664527d531b95a5e717eed6be4d7dd2ba4ba095e9db7c3b194371b1e"
     },
     {
-      "file": ".karajan/harness/pretooluse-sentinel.mjs",
-      "sha256": "c35e722cf3a82f3f0e239f4563ad1765b7c12e9dd4cabdef4e0a334b51e67934"
+      "file": ".github/workflows/kj-no-ai-attribution.yml",
+      "sha256": "e01c40dbd0f4a98432a205bacdd54711096572db31ccf28422ac167144121445"
     },
     {
-      "file": ".karajan/harness/pretooluse.mjs",
-      "sha256": "468f30932ead7dd9332707dc2b8dd6054f1a82b64e46203ae8cf56c96690771c"
+      "file": ".github/workflows/kj-quality.yml",
+      "sha256": "c83e637fd96c80af2c08998ed5fff25c6a558ceabe2be8763a487af9b326867f"
     },
     {
-      "file": ".karajan/harness/sentinel-bash-write.mjs",
-      "sha256": "5a5d4beb3bf4e36d1bf0fe79b525c906990695e5be4c65b095a2d0e94602b342"
-    },
-    {
-      "file": ".karajan/harness/sentinel-discard.mjs",
-      "sha256": "d27cacf0900c9fc6e7990e456bea2caff6b4e553083ce8844f0dcf71758f9d9f"
-    },
-    {
-      "file": ".karajan/harness/sentinel-lib.mjs",
-      "sha256": "0b0f1e98e4114543148aba7cb4be19a7abe41b408fa937bc6ff4e0697ca12c9e"
-    },
-    {
-      "file": ".karajan/harness/sentinel-reminders.mjs",
-      "sha256": "8ff651803d925b0f73fda7103d27416b07bd067e91c2db6e7274a689d422e8ea"
-    },
-    {
-      "file": ".karajan/harness/sentinel-rules.mjs",
-      "sha256": "82d324f20ead19883a45a96f9dc0da08b1b1a969735afabb164235df39951d79"
-    },
-    {
-      "file": ".karajan/harness/sentinel-shell.mjs",
-      "sha256": "fe82826d7018d849abf6b4c1ef6bdd021ecae6a3d050e07ed31ba05f1871de96"
-    },
-    {
-      "file": ".karajan/harness/sessionstart.mjs",
-      "sha256": "2d119cac5c9b4432badf7d7c905371d351acccb9899b51a8aadb5c5c83a83472"
-    },
-    {
-      "file": ".karajan/harness/stop.mjs",
-      "sha256": "4c2d4f7c0e8650be562d04f03477e40243d28cf98246937f31f192e744f77011"
+      "file": ".github/workflows/no-ai-attribution.yml",
+      "sha256": "5dfa5c7daa94ceb1f0af1ca4a070912508e0ad9a9400d8bba590cb477e5833e9"
     },
     {
       "file": ".karajan/hooks/commit-msg",
-      "sha256": "7be3ae11b0bcd1029d70009bc1a9e0649695b4db343f8c83654a4936bbd2953e"
+      "sha256": "780f60672b18fcfd7756c0ea86f66f46997999f11d61d78b18978b777b39d4c3"
     },
     {
       "file": ".karajan/hooks/post-merge",
-      "sha256": "3debc2a7239bb758ecaad5db145ff2c139e4bd504abfeecd4405d7ebcc98ee58"
+      "sha256": "a069100da9cb037badd40289494c4e64de761208e3f0c8b4fe536e2d0a5bed50"
     },
     {
       "file": ".karajan/hooks/pre-commit",
-      "sha256": "119573cf90ebf9f4b8369b8616fac87f2b5877d97452503b9d918ea186162c73"
+      "sha256": "cd03a3e720c80b10ea66200bed2338026e60a2f2603f2d60c8ea4b527d7c43d0"
     },
     {
       "file": ".karajan/hooks/pre-push",
-      "sha256": "0d9a86d0117b437884074ffdfb92d9cd46a99f0a7e6d87dd147cc9eff726c1dc"
+      "sha256": "2ea25b2286af4b75843247d0fa8a24d48c1e1863c03a1e82f8c3d91361cbaa10"
     },
     {
       "file": ".karajan/hooks/prepare-commit-msg",
-      "sha256": "4850712b985d9c2470fbaf55f84019ff739370ad3fd0d941aaefcbdebe6537f9"
+      "sha256": "ba046aefffc8f36b4d6af733e8f7a273bdbfe938746dbda18014a3dfee74ff96"
+    },
+    {
+      "file": ".karajan/harness/posttooluse.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/pretooluse-rules.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/pretooluse-sentinel.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/pretooluse.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/sentinel-bash-write.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/sentinel-discard.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/sentinel-lib.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/sentinel-reminders.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/sentinel-rules.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/sentinel-shell.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/sessionstart.mjs",
+      "deleted": true
+    },
+    {
+      "file": ".karajan/harness/stop.mjs",
+      "deleted": true
     }
   ],
   "signature": {
-    "cid": "ac10966909121f16c5c7de9ebfd7b8f1",
-    "nonce": "7b10b0798b6e41b344211f101ae9e683",
+    "cid": "1790fe6e3badc5a7e05494eb7f66fad1",
+    "nonce": "1b7014589dd2e4aa6c5ad08697a07dd3",
     "project": "grebla-app",
-    "filesHash": "17ee80e4ad32d7e4b79cd2feb12f4579b54e10407a473a74aa1cd1382fa2f01a",
+    "filesHash": "e85cb827b4ae638c8f308874d0afdaf2d97d87f59ad95c685284849f938f2526",
     "v": 2,
-    "kjVersion": "4.52.0",
-    "issuedMs": 1792081696633,
-    "expiresMs": 1792081756633,
+    "kjVersion": "5.6.0",
+    "issuedMs": 1793953301042,
+    "expiresMs": 1793953451042,
     "signer": "EgMc2b95g5nUh8e6LDCeLjv7G69cQaszUCIy+3aLpPQ=",
-    "signature": "5iA+rU3PHDOTpDt9wiYCltGfl1KCWDLhLC+ha6lNxCvrQB02sKR0GHvlmByB3E3bnYFzWh0IvxZYZfej7Un1Dg=="
+    "signature": "n+w9nJtCzRyx+A6aaTpqinnCbITtAL229Er+ZrdL0rQuAbUun0vsHHKhXnIND+gzpIrb/8eTG96N2iU7CDmMAw=="
   }
 }
