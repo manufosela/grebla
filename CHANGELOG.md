@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.266.4] - 2026-11-06
+
+### Arreglado
+
+- Sincronización con Notion: Department y Team pasaron a ser enlaces a las bases
+  de Áreas y Subáreas. El importador lee los dos formatos y, si no puede resolver
+  un enlace, falla con un error en vez de dejar a la gente sin departamento.
+
 ## [1.266.3] - 2026-10-25
 
 ### Arreglado

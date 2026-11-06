@@ -30,6 +30,7 @@ function fakeDb(collections) {
 }
 const fakeAuth = (emails) => ({ getUsers: async (ids) => ({ users: ids.filter((i) => emails[i.uid]).map((i) => ({ uid: i.uid, email: emails[i.uid] })) }) });
 const fetchPages = (pages) => async () => pages;
+const noNames = async () => new Map();
 const now = new Date('2026-10-03T08:00:00Z');
 
 describe('notionDatabaseIdOf — la base de Notion es de cada instancia', () => {
@@ -58,6 +59,14 @@ describe('directoryFromPages', () => {
     expect(withBoth).toMatchObject({ experience: 'Senior', nickname: 'Ximo' });
     expect(without).toMatchObject({ experience: null, nickname: null });
   });
+
+  it('resuelve Department y Team como relation con el mapa de nombres (RMR-TSK-0543)', () => {
+    const p = page('a-1', 'Ana', 'ana@example.com');
+    p.properties.Department = { relation: [{ id: 'dd-01' }] };
+    p.properties.Team = { relation: [{ id: 'tt-01' }] };
+    const [ana] = directoryFromPages([p], new Map([['dd01', 'Tech'], ['tt01', 'IA']]));
+    expect(ana).toMatchObject({ department: 'Tech', team: 'IA' });
+  });
 });
 
 describe('runNotionSync', () => {
@@ -68,7 +77,7 @@ describe('runNotionSync', () => {
 
   it('en seco: informa y no toca /people, pero guarda el informe', async () => {
     const db = setup();
-    const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchPages: fetchPages([page('a-1', 'Ana Pérez', 'ana@example.com')]), apply: false, now });
+    const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchNames: noNames, fetchPages: fetchPages([page('a-1', 'Ana Pérez', 'ana@example.com')]), apply: false, now });
     expect(report).toMatchObject({ at: '2026-10-03T08:00:00.000Z', applied: false, errors: [], counts: { updates: 1, creates: 0 } });
     expect(report.updates[0]).toEqual({
       personId: 'p1', name: 'Ana Pérez', fields: ['name', 'email', 'external', 'notion', 'orgBranch'],
@@ -84,17 +93,17 @@ describe('runNotionSync', () => {
   it('el bloque de Notion se informa dato a dato: un cambio solo ahí no queda invisible (RMR-TSK-0633)', async () => {
     const base = { name: 'Ana', email: 'ana@example.com', active: true, uid: 'u1', external: false, orgBranch: 'engineering', reportsToPersonId: null };
     const first = setup();
-    await runNotionSync({ db: first, auth: fakeAuth({ u1: 'ana@example.com' }), fetchPages: fetchPages([page('a-1', 'Ana', 'ana@example.com')]), apply: true, now });
+    await runNotionSync({ db: first, auth: fakeAuth({ u1: 'ana@example.com' }), fetchNames: noNames, fetchPages: fetchPages([page('a-1', 'Ana', 'ana@example.com')]), apply: true, now });
     const notion = first.writes.find((w) => w.path === 'people/p1').data.notion;
     const db = fakeDb({ people: { p1: { ...base, notion: { ...notion, role: 'Rol viejo' } } }, orgBranches: { engineering: { label: 'Tech' } } });
-    const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchPages: fetchPages([page('a-1', 'Ana', 'ana@example.com')]), apply: false, now });
+    const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchNames: noNames, fetchPages: fetchPages([page('a-1', 'Ana', 'ana@example.com')]), apply: false, now });
     expect(report.updates[0].changes).toEqual({ 'notion.role': { from: 'Rol viejo', to: notion.role } });
   });
 
   it('aplicando: actualiza, crea y guarda el informe', async () => {
     const db = setup();
     const pages = [page('a-1', 'Ana Pérez', 'ana@example.com'), page('b-2', 'Bea Nueva', 'bea@example.com')];
-    const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchPages: fetchPages(pages), apply: true, now });
+    const report = await runNotionSync({ db, auth: fakeAuth({ u1: 'ana@example.com' }), fetchNames: noNames, fetchPages: fetchPages(pages), apply: true, now });
     expect(report.applied).toBe(true);
     expect(db.writes.map((w) => `${w.op} ${w.path}`)).toEqual(['update people/p1', 'set people/nuevo1', 'set config/notionSync']);
     expect(db.writes[1].data).toMatchObject({ name: 'Bea Nueva', pendingEmail: 'bea@example.com', startDate: '2026-10-03' });
@@ -103,7 +112,7 @@ describe('runNotionSync', () => {
   it('con errores en el plan no escribe ninguna ficha aunque se pida aplicar', async () => {
     const db = setup();
     const pages = [page('a-1', 'Ana', 'ana@example.com'), page('b-2', 'Otra', 'ANA@example.com')];
-    const report = await runNotionSync({ db, auth: fakeAuth({}), fetchPages: fetchPages(pages), apply: true, now });
+    const report = await runNotionSync({ db, auth: fakeAuth({}), fetchNames: noNames, fetchPages: fetchPages(pages), apply: true, now });
     expect(report.applied).toBe(false);
     expect(report.errors).toEqual(['email repetido en Notion: ana@example.com']);
     expect(db.writes.map((w) => w.path)).toEqual(['config/notionSync']);

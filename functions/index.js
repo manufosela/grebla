@@ -32,7 +32,7 @@ import { managerOnboardingPlan, directoryManagerPatches, headScopeChanged } from
 import { careerReviewersPatches } from './careerReviewers.js';
 import { effectiveDirectory, validTeamEms, teamsWithChangedEm } from './teamEms.js';
 import { projectDirectory } from './orgDirectory.js';
-import { queryAllPages, databaseQueryUrl } from './notionPeople.js';
+import { queryAllPages, databaseQueryUrl, fetchRelationNames } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
 import { directoryPadronRows, padronUpsertPlan } from './directoryPadron.js';
 import { managesSurveys } from './surveyManager.js';
@@ -2321,9 +2321,11 @@ export const notionSync = onCall({ region: 'europe-west1', secrets: [NOTION_TOKE
   }
   const token = NOTION_TOKEN.value();
   const fetchPages = () => queryAllPages({ token, urls: [databaseQueryUrl(databaseId)] });
+  // Department y Team son relation desde nov-2026: sin acceso a Áreas/Subáreas falla en alto (RMR-TSK-0543).
+  const fetchNames = () => fetchRelationNames({ token });
   try {
     // Solo emails de la organización en las fichas (RMR-TSK-0773).
-    const report = await runNotionSync({ db, auth: getAuth(), fetchPages, apply: request.data?.apply === true, now: new Date(),
+    const report = await runNotionSync({ db, auth: getAuth(), fetchPages, fetchNames, apply: request.data?.apply === true, now: new Date(),
       employeeDomain: org.employeeDomain ?? null });
     logger.info(`[notionSync] ${report.applied ? 'aplicado' : 'simulado'}: ${JSON.stringify(report.counts)} · errores ${report.errors.length}`);
     return report;

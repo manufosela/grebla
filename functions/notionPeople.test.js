@@ -6,9 +6,10 @@ import {
   dataSourceQueryUrl,
   databaseQueryUrl,
   emailValue,
-  firstMultiSelect,
-  hasMultipleValues,
+  fetchRelationNames,
+  namesOf,
   notionHeaders,
+  pageTitle,
   pageToPerson,
   plainText,
   queryAllPages,
@@ -26,13 +27,25 @@ describe("helpers de propiedades de Notion", () => {
     expect(selectName(undefined)).toBeNull();
   });
 
-  it("firstMultiSelect y hasMultipleValues leen el multi_select", () => {
-    const two = { multi_select: [{ name: "Tech" }, { name: "Data" }] };
-    expect(firstMultiSelect(two)).toBe("Tech");
-    expect(hasMultipleValues(two)).toBe(true);
-    expect(firstMultiSelect({ multi_select: [] })).toBeNull();
-    expect(hasMultipleValues({ multi_select: [{ name: "Tech" }] })).toBe(false);
-    expect(hasMultipleValues(undefined)).toBe(false);
+  it("namesOf lee select y multi_select (formato antiguo)", () => {
+    expect(namesOf({ multi_select: [{ name: "Tech" }, { name: "Data" }] })).toEqual(["Tech", "Data"]);
+    expect(namesOf({ multi_select: [] })).toEqual([]);
+    expect(namesOf({ select: { name: "Tech" } })).toEqual(["Tech"]);
+    expect(namesOf({ select: null })).toEqual([]);
+    expect(namesOf(undefined)).toEqual([]);
+  });
+
+  it("namesOf resuelve la relation con el mapa y falla con un id sin nombre", () => {
+    const names = new Map([["aaaa1111", "Tech"], ["bbbb2222", "Data"]]);
+    expect(namesOf({ relation: [{ id: "aaaa-1111" }, { id: "bbbb-2222" }] }, names)).toEqual(["Tech", "Data"]);
+    expect(namesOf({ relation: [] }, names)).toEqual([]);
+    expect(() => namesOf({ relation: [{ id: "cccc-3333" }] }, names)).toThrow("cccc3333");
+    expect(() => namesOf({ relation: [{ id: "aaaa-1111" }] })).toThrow("aaaa1111");
+  });
+
+  it("pageTitle coge la propiedad de título se llame como se llame", () => {
+    expect(pageTitle({ properties: { Team: { type: "title", title: [{ plain_text: "IA" }] } } })).toBe("IA");
+    expect(pageTitle({ properties: {} })).toBe("");
   });
 
   it("titleText concatena fragmentos y recorta espacios", () => {
@@ -100,6 +113,15 @@ describe("pageToPerson", () => {
     });
   });
 
+  it("con Department y Team como relation, saca los nombres del mapa", () => {
+    const page = notionPage("aaaa-1111", "Ana");
+    page.properties.Department = { relation: [{ id: "dddd-0001" }] };
+    page.properties.Team = { relation: [{ id: "tttt-0001" }, { id: "tttt-0002" }] };
+    const names = new Map([["dddd0001", "Tech"], ["tttt0001", "IA"], ["tttt0002", "Mobile"]]);
+    const p = pageToPerson(page, names);
+    expect([p.department, p.team, p.multiTeam]).toEqual(["Tech", "IA", true]);
+  });
+
   it("sin manager ni tipo deja null (email y slackId también)", () => {
     const p = pageToPerson(notionPage("cccc-3333", "Solo"));
     expect(p.managerId).toBeNull();
@@ -156,6 +178,19 @@ describe("queryAllPages", () => {
     expect(calls[0].body).toEqual({ page_size: 100 });
     expect(calls[3].url).toBe("https://api.notion.com/v1/databases/x/query");
     expect(calls[3].body.start_cursor).toBe("c2");
+  });
+
+  it("fetchRelationNames arma el mapa id→título de las DB indicadas", async () => {
+    const row = (id, prop, name) => ({ id, properties: { [prop]: { type: "title", title: [{ plain_text: name }] } } });
+    const fetchImpl = async (url) =>
+      fakeResponse({ json: { results: url.includes("/a/") ? [row("aa-01", "Department", "Tech")] : [row("bb-01", "Team", "IA")], has_more: false } });
+    const names = await fetchRelationNames({ token: "t", dbIds: ["a", "b"], fetchImpl });
+    expect([...names]).toEqual([["aa01", "Tech"], ["bb01", "IA"]]);
+  });
+
+  it("fetchRelationNames falla si la integración no ve una de las DB", async () => {
+    const fetchImpl = async () => fakeResponse({ ok: false, status: 404, text: "object_not_found" });
+    await expect(fetchRelationNames({ token: "t", fetchImpl })).rejects.toThrow("Notion 404");
   });
 
   it("falla con el status del último endpoint cuando ninguno responde ok", async () => {

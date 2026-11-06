@@ -34,8 +34,9 @@ const BATCH_SIZE = 400;
  * Personas del directorio con lo que el módulo vendorizado no lee: Status,
  * Join Date, Experience y Nickname (para no tocar la copia del portal).
  * @param {Array<Record<string, any>>} pages
+ * @param {Map<string, string>} [names] id→nombre de Áreas y Subáreas (fetchRelationNames)
  */
-export function directoryFromPages(pages) {
+export function directoryFromPages(pages, names) {
   const extras = new Map(pages.map((p) => [stripDashes(p.id), {
     status: selectName(p.properties.Status),
     joinDate: p.properties['Join Date']?.date?.start ?? null,
@@ -43,7 +44,7 @@ export function directoryFromPages(pages) {
     experience: selectName(p.properties.Experience),
     nickname: plainText(p.properties.Nickname),
   }]));
-  return buildPeople(pages, ORG_EXCLUDED_STATUSES).map((p) => ({ ...p, ...extras.get(p.id) }));
+  return buildPeople(pages, ORG_EXCLUDED_STATUSES, names).map((p) => ({ ...p, ...extras.get(p.id) }));
 }
 
 /** Email de la cuenta de cada ficha con uid (Auth, de 100 en 100). */
@@ -89,11 +90,12 @@ async function commitInBatches(db, ops) {
 }
 
 /**
- * @param {{ db: any, auth: any, fetchPages: () => Promise<Array<Record<string, any>>>, apply: boolean, now: Date }} deps
+ * @param {{ db: any, auth: any, fetchPages: () => Promise<Array<Record<string, any>>>, fetchNames: () => Promise<Map<string, string>>, apply: boolean, now: Date }} deps
  * @returns {Promise<Record<string, any>>} el informe (también queda en /config/notionSync)
  */
-export async function runNotionSync({ db, auth, fetchPages, apply, now, employeeDomain = null }) {
-  const directory = directoryFromPages(await fetchPages());
+export async function runNotionSync({ db, auth, fetchPages, fetchNames, apply, now, employeeDomain = null }) {
+  const [pages, names] = await Promise.all([fetchPages(), fetchNames()]);
+  const directory = directoryFromPages(pages, names);
   const [peopleSnap, branchesSnap] = await Promise.all([db.collection('people').get(), db.collection('orgBranches').get()]);
   const people = peopleSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
   const emails = await authEmails(auth, people);
