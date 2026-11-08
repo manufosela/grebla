@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.266.5] - 2026-11-08
+
+### Cambiado
+
+- Sincronización con Notion: Department y Team solo se leen como enlaces a Áreas
+  y Subáreas. Si alguna columna volviera a ser una lista de opciones, la
+  sincronización falla con un error en vez de leer un dato que ya no se mantiene.
+
 ## [1.266.4] - 2026-11-06
 
 ### Arreglado

@@ -1,7 +1,7 @@
 /**
  * VENDORIZADO (ADR -P1XxVvQPrufU13Bd4RF, opción C · RMR-TSK-0620): copia literal
  * de `functions/organigrama/notion-people.js` del portal (tribbu-repos-info),
- * tomada el 2026-11-06 (portal aa0454c, PR #529). No editar aquí: si el esquema de Notion cambia, se
+ * tomada el 2026-11-08 (portal 62dc768, PR #535). No editar aquí: si el esquema de Notion cambia, se
  * actualiza en el portal y se vuelve a copiar. `notionPeople.test.js` fija el
  * contrato del mapeo para que la deriva se note. Lo que GREBLA necesita además
  * (Status, Join Date) se lee en notionReconcile.js, no aquí.
@@ -35,12 +35,14 @@ export const pageTitle = (page) =>
   titleText(Object.values(page?.properties || {}).find((p) => p?.type === "title" || p?.title));
 
 /**
- * Los nombres de Department o Team, vengan como vengan.
+ * Los nombres de Department o Team, que son relation a dos DB propias (Áreas y
+ * Subáreas) desde noviembre de 2026.
  *
- * En noviembre de 2026 dejaron de ser select y multi_select y pasaron a ser
- * relation a dos DB propias. Esto lee los dos formatos porque GREBLA y BBOARD
- * copian este lector y no todos despliegan el mismo día; cuando los tres estén
- * al día, el camino de select y multi_select se puede quitar.
+ * SELECT Y MULTI_SELECT YA NO SE LEEN. Fueron el formato hasta ese cambio, y
+ * este lector entendió los dos mientras el portal, GREBLA y BBOARD no tenían
+ * desplegada la misma versión; los tres la tienen desde el 2026-11-08. Si una
+ * de las dos columnas volviera a ser un select, devolver su nombre sería leer
+ * un dato que ya nadie mantiene, y nadie se enteraría.
  *
  * UN ID SIN NOMBRE ES UN ERROR, NO UN null. Es la única manera de enterarse de
  * que la integración no tiene acceso a las DB de destino: sin acceso, Notion
@@ -49,17 +51,18 @@ export const pageTitle = (page) =>
  * esa persona no tiene departamento, y es mentira.
  */
 export const namesOf = (p, names = new Map()) => {
-  if (p?.relation) {
-    return p.relation.map((r) => {
-      const id = stripDashes(r.id);
-      const nombre = names.get(id);
-      if (!nombre) throw new Error(`Notion: la relación ${id} no tiene nombre en Áreas ni Subáreas`);
-      return nombre;
-    });
+  if (!p) return [];
+  if (!p.relation) {
+    throw new Error(
+      `Notion: Department y Team se leen como relation, y esta columna llega como ${p.type || "otra cosa"}`
+    );
   }
-  if (p?.multi_select) return p.multi_select.map((o) => o.name).filter(Boolean);
-  const uno = selectName(p);
-  return uno ? [uno] : [];
+  return p.relation.map((r) => {
+    const id = stripDashes(r.id);
+    const nombre = names.get(id);
+    if (!nombre) throw new Error(`Notion: la relación ${id} no tiene nombre en Áreas ni Subáreas`);
+    return nombre;
+  });
 };
 
 export const dataSourceQueryUrl = (id) => `https://api.notion.com/v1/data_sources/${id}/query`;

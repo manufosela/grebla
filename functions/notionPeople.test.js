@@ -18,7 +18,7 @@ import {
   stripDashes,
   titleText,
 } from "./notionPeople.js";
-import { fakeResponse, notionPage, samplePages } from "./notionPeople.fixtures.js";
+import { fakeResponse, notionPage, relationNames, samplePages } from "./notionPeople.fixtures.js";
 
 describe("helpers de propiedades de Notion", () => {
   it("selectName devuelve el nombre o null", () => {
@@ -27,11 +27,9 @@ describe("helpers de propiedades de Notion", () => {
     expect(selectName(undefined)).toBeNull();
   });
 
-  it("namesOf lee select y multi_select (formato antiguo)", () => {
-    expect(namesOf({ multi_select: [{ name: "Tech" }, { name: "Data" }] })).toEqual(["Tech", "Data"]);
-    expect(namesOf({ multi_select: [] })).toEqual([]);
-    expect(namesOf({ select: { name: "Tech" } })).toEqual(["Tech"]);
-    expect(namesOf({ select: null })).toEqual([]);
+  it("namesOf ya no lee select ni multi_select: falla en alto (HU-0010)", () => {
+    expect(() => namesOf({ type: "multi_select", multi_select: [{ name: "Tech" }] })).toThrow("multi_select");
+    expect(() => namesOf({ type: "select", select: { name: "Tech" } })).toThrow("select");
     expect(namesOf(undefined)).toEqual([]);
   });
 
@@ -96,7 +94,7 @@ describe("pageToPerson", () => {
       "Activo",
       "bbbb-2222"
     );
-    expect(pageToPerson(page)).toEqual({
+    expect(pageToPerson(page, relationNames())).toEqual({
       id: "aaaa1111",
       name: "Ana Root",
       role: "CEO",
@@ -123,7 +121,7 @@ describe("pageToPerson", () => {
   });
 
   it("sin manager ni tipo deja null (email y slackId también)", () => {
-    const p = pageToPerson(notionPage("cccc-3333", "Solo"));
+    const p = pageToPerson(notionPage("cccc-3333", "Solo"), relationNames());
     expect(p.managerId).toBeNull();
     expect(p.type).toBeNull();
     expect(p.founder).toBeNull();
@@ -135,14 +133,14 @@ describe("pageToPerson", () => {
 
 describe("buildPeople", () => {
   it("excluye los Status indicados y las páginas sin nombre, en orden", () => {
-    const snapshot = buildPeople(samplePages(), ["Baja"]);
+    const snapshot = buildPeople(samplePages(), ["Baja"], relationNames());
     expect(snapshot.map((p) => p.id)).toEqual(["aaaa1111", "bbbb2222", "dddd4444", "ffff6666"]);
-    const live = buildPeople(samplePages(), ["Baja", "Inactive"]);
+    const live = buildPeople(samplePages(), ["Baja", "Inactive"], relationNames());
     expect(live.map((p) => p.id)).toEqual(["aaaa1111", "bbbb2222", "ffff6666"]);
   });
 
   it("anula managerId cuando el manager no está entre las personas resultantes", () => {
-    const people = buildPeople(samplePages(), ["Baja"]);
+    const people = buildPeople(samplePages(), ["Baja"], relationNames());
     const byId = Object.fromEntries(people.map((p) => [p.id, p]));
     expect(byId.bbbb2222.managerId).toBe("aaaa1111");
     expect(byId.dddd4444.managerId).toBeNull(); // su manager está de baja
