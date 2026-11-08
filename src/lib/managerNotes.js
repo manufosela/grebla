@@ -1,9 +1,9 @@
 /**
  * Notas privadas del manager sobre una persona (RMR-TSK-0636). Viven en
  * /managerNotes/{personId}/entries, fuera de la ficha: las reglas dejan entrar
- * a su manager y su cadena, y nunca a la propia persona.
+ * a su manager y su cadena; la propia persona solo lee sus performance reviews.
  */
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
 import { noteErrors, cleanNote, sortNotes } from '../tools/o2o/domain/managerNotes.js';
 
@@ -12,6 +12,15 @@ const entries = (personId) => collection(db, 'managerNotes', personId, 'entries'
 /** Todas las notas de una persona, de la más reciente a la más antigua. */
 export async function listManagerNotes(personId) {
   const snap = await getDocs(entries(personId));
+  return sortNotes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+}
+
+/**
+ * Las performance reviews de la propia persona (RMR-TSK-0544). La consulta filtra
+ * por tipo porque las reglas solo le dejan leer esas: sin el filtro, se le niega.
+ */
+export async function listOwnPerfReviews(personId) {
+  const snap = await getDocs(query(entries(personId), where('type', '==', 'perf-review')));
   return sortNotes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
 }
 

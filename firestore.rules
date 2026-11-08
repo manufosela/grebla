@@ -916,7 +916,11 @@ service cloud.firestore {
           && d.title is string && d.title.size() <= 200
           && d.content is string && d.content.size() <= 200000;
       }
-      allow read, delete: if isSignedIn() && !isNotedPerson() && (isSuperAdmin() || managesNotedPerson());
+      // La persona lee SUS performance reviews (RMR-TSK-0544); el contexto sigue siendo del manager.
+      allow read: if isSignedIn() && (
+        (!isNotedPerson() && (isSuperAdmin() || managesNotedPerson()))
+        || (isNotedPerson() && resource.data.type == 'perf-review'));
+      allow delete: if isSignedIn() && !isNotedPerson() && (isSuperAdmin() || managesNotedPerson());
       allow create, update: if isSignedIn() && !isNotedPerson() && (isSuperAdmin() || managesNotedPerson()) && isValidEntry();
     }
 
