@@ -8,7 +8,6 @@
  */
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { defineSecret } from 'firebase-functions/params';
 import { fetchPortalMetrics, PortalError, PORTAL_ERRORS } from './portalMetrics.js';
@@ -34,15 +33,10 @@ import { effectiveDirectory, validTeamEms, teamsWithChangedEm } from './teamEms.
 import { projectDirectory } from './orgDirectory.js';
 import { queryAllPages, databaseQueryUrl, fetchRelationNames } from './notionPeople.js';
 import { runNotionSync, notionDatabaseIdOf } from './notionSync.js';
-import { directoryPadronRows, padronUpsertPlan } from './directoryPadron.js';
-import { managesSurveys } from './surveyManager.js';
-import { sendTargets, isQuotaError, SEND_INTERVAL_MS } from './surveySend.js';
 import { canSeeRetro, participantRows } from './retroParticipants.js';
 import {
   MOTIVATOR_DECK_IDS, MOTIVATOR_DECK_SIZE, MOT_MIN_RESPONDENTS, motComputeAggregates,
 } from './motivatorsAggregate.js';
-import { validateResponses, sanitizeResponses, bucketMetadata, answerId, emailTemplateErrors, renderEmailBody, sanitizeParticipantMeta, anonymousAnswer, tokenResponded, responseRefDate } from './survey.js';
-import { sendGmail } from './gmail.js';
 
 initializeApp();
 
@@ -50,11 +44,6 @@ initializeApp();
 async function isAdmin(uid) {
   const snap = await getFirestore().doc(`admins/${uid}`).get();
   return snap.exists;
-}
-
-/** Gestor de encuestas (People): por política o legacy, como las reglas. @param {string} uid */
-function isSurveyAdmin(uid) {
-  return managesSurveys(getFirestore(), uid);
 }
 
 export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => {
@@ -104,7 +93,7 @@ export const grantAdmin = onCall({ region: 'europe-west1' }, async (request) => 
 });
 
 // ── Accesos (líderes y viewers) ──────────────────────────────────────────────
-const ACCESS_COLLECTION = { leader: 'leaders', viewer: 'viewers', surveyAdmin: 'surveyAdmins' };
+const ACCESS_COLLECTION = { leader: 'leaders', viewer: 'viewers' };
 
 /**
  * Gestiona los accesos de la instancia: líderes (gestionan sus personas) y
@@ -120,7 +109,8 @@ export const manageAccess = onCall({ region: 'europe-west1' }, async (request) =
     throw new HttpsError('permission-denied', 'Solo un superadmin puede gestionar accesos.');
   }
   const action = request.data?.action === 'remove' ? 'remove' : 'add';
-  const role = ['viewer', 'surveyAdmin'].includes(request.data?.role) ? request.data.role : 'leader';
+  const role = request.data?.role ?? 'leader';
+  if (!Object.hasOwn(ACCESS_COLLECTION, role)) throw new HttpsError('invalid-argument', `Rol desconocido: ${role}.`);
   const collectionName = ACCESS_COLLECTION[role];
   const email = typeof request.data?.email === 'string' ? request.data.email.trim() : '';
   if (!email) throw new HttpsError('invalid-argument', 'Falta el email.');
@@ -566,36 +556,6 @@ export const deletePerson = onCall({ region: 'europe-west1' }, async (request) =
 });
 
 /**
- * Borra una encuesta COMPLETA (doc + subcolecciones `tokens` y `answers`) con
- * `recursiveDelete` del Admin SDK — el cliente Web no puede borrar subcolecciones
- * ni el propio doc (reglas: `delete` a false). Solo un superadmin.
- */
-export const deleteSurvey = onCall({ region: 'europe-west1' }, async (request) => {
-  const caller = request.auth;
-  if (!caller) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
-  if (!(await isAdmin(caller.uid))) {
-    throw new HttpsError('permission-denied', 'Solo un superadmin puede borrar encuestas.');
-  }
-  const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
-  if (!surveyId) throw new HttpsError('invalid-argument', 'Falta el surveyId a borrar.');
-
-  const db = getFirestore();
-  const ref = db.doc(`surveys/${surveyId}`);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', `Encuesta ${surveyId} no encontrada.`);
-
-  // No se borra una encuesta CON respuestas: primero se reinicia (evita tirar datos
-  // por error). La UI también deshabilita el botón, pero se valida aquí (server-side).
-  const anAnswer = await ref.collection('answers').limit(1).get();
-  if (!anAnswer.empty) {
-    throw new HttpsError('failed-precondition', 'La encuesta tiene respuestas. Reiníciala antes de borrarla.');
-  }
-
-  await db.recursiveDelete(ref); // borra el doc y sus subcolecciones (tokens, answers)
-  return { ok: true, deletedSurveyId: surveyId };
-});
-
-/**
  * getMyO2O: proyección COMPARTIDA de los O2O de la persona vinculada al llamante.
  * Deriva el personId de su uid (no lo acepta como input, para que solo obtenga lo
  * suyo), busca las sesiones en los líderes que le corresponden (dueño + líderes
@@ -661,384 +621,6 @@ async function personO2OProjection(db, personId, person) {
 
   return { sessions, actions, upcoming };
 }
-
-// ── Encuestas anónimas: respuesta por token SIN login (RMR-PCS-0026) ─────────
-// La página de respuesta es PÚBLICA (sin auth): el token largo aleatorio del link
-// es la única credencial. TODA la escritura vive aquí (Admin SDK); las reglas
-// deniegan que el cliente escriba respuestas/tokens. El SALT (Secret Manager) hace
-// answerId = HMAC(salt, token), así se edita la MISMA respuesta sin guardar el
-// mapeo token→respuesta (un admin con la BBDD no puede reidentificar por ahí).
-const SURVEY_SALT = defineSecret('SURVEY_SALT');
-// Los correos de encuestas salen por la API de Gmail (RMR-TSK-0646): Resend tenía
-// un cupo de 100 al día que se quedaba corto. La cuenta de servicio (clave en
-// GMAIL_SA_KEY) envía como el buzón MAIL_SENDER por delegación de dominio, con el
-// único permiso gmail.send. Debe definirse ANTES de las CF que la usan (TDZ).
-const GMAIL_SA_KEY = defineSecret('GMAIL_SA_KEY');
-const MAIL_SENDER = 'noreply@tribbuapp.com';
-const MAIL_FROM = `Encuestas TRIBBU <${MAIL_SENDER}>`;
-
-/** Envía un correo de encuesta (texto plano) desde el buzón de la instancia. */
-function sendSurveyMail({ to, subject, text }) {
-  return sendGmail({ saKeyJson: GMAIL_SA_KEY.value(), senderUser: MAIL_SENDER, from: MAIL_FROM, to, subject, text });
-}
-
-/** Carga la encuesta abierta de un token y las respuestas previas (para editar). */
-export const getSurveyForToken = onCall(
-  { region: 'europe-west1', secrets: [SURVEY_SALT] },
-  async (request) => {
-    const { surveyId, token } = request.data ?? {};
-    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
-    const db = getFirestore();
-    const surveySnap = await db.doc(`surveys/${surveyId}`).get();
-    if (!surveySnap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
-    const survey = surveySnap.data();
-    const tokenSnap = await db.doc(`surveys/${surveyId}/tokens/${token}`).get();
-    if (!tokenSnap.exists) throw new HttpsError('permission-denied', 'Enlace no válido.');
-    // El token de PRUEBA puede responder también en borrador (RMR-TSK-0425):
-    // su respuesta va marcada test y NUNCA cuenta en los agregados.
-    const isTest = tokenSnap.data().test === true;
-    if (survey.status !== 'open' && !isTest) {
-      throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
-    }
-    const ansSnap = await db.doc(`surveys/${surveyId}/answers/${answerId(token, SURVEY_SALT.value())}`).get();
-    return {
-      survey: { title: survey.title ?? '', questions: survey.questions ?? [], thanksMessage: survey.thanksMessage ?? '' },
-      responses: ansSnap.exists ? (ansSnap.data().answers ?? null) : null,
-      isTest,
-    };
-  },
-);
-
-/** Guarda/sobrescribe la respuesta ANÓNIMA y marca el token usado. Editable hasta el cierre. */
-export const submitSurveyResponse = onCall(
-  { region: 'europe-west1', secrets: [SURVEY_SALT] },
-  async (request) => {
-    const { surveyId, token, responses } = request.data ?? {};
-    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
-    const db = getFirestore();
-    const surveySnap = await db.doc(`surveys/${surveyId}`).get();
-    if (!surveySnap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
-    const survey = surveySnap.data();
-    const tokenRef = db.doc(`surveys/${surveyId}/tokens/${token}`);
-    const tokenSnap = await tokenRef.get();
-    if (!tokenSnap.exists) throw new HttpsError('permission-denied', 'Enlace no válido.');
-    // Token de PRUEBA: puede responder en borrador (respuesta marcada test,
-    // excluida siempre de los agregados). El resto exige encuesta abierta.
-    if (survey.status !== 'open' && tokenSnap.data().test !== true) {
-      throw new HttpsError('failed-precondition', 'La encuesta no está abierta.');
-    }
-    // Solo se guardan respuestas a preguntas de la encuesta: un token válido no
-    // debe poder inyectar campos extra en el documento.
-    const clean = sanitizeResponses(survey.questions ?? [], responses ?? {});
-    const { valid, errors } = validateResponses(survey.questions ?? [], clean);
-    if (!valid) throw new HttpsError('invalid-argument', 'Respuestas no válidas.', { errors });
-
-    const nowIso = new Date().toISOString();
-    const answerRef = db.doc(`surveys/${surveyId}/answers/${answerId(token, SURVEY_SALT.value())}`);
-    // Respuesta ANÓNIMA: sin token, email ni hora; metadatos en tramos. Reenviar
-    // sobrescribe la misma (editable). La prueba (`test`) se excluye de los agregados.
-    await answerRef.set(anonymousAnswer(
-      clean,
-      bucketMetadata(tokenSnap.data().metadata ?? {}, nowIso, await declaredAxisIds(db)),
-      tokenSnap.data().test === true,
-    ));
-    // Participación (para el % por departamento), sin ligar el token a la respuesta.
-    await tokenRef.set(tokenResponded(nowIso), { merge: true });
-    return { ok: true };
-  },
-);
-
-/**
- * Genera un token único por participante de una encuesta (padrón). Solo
- * superadmin (People). Reutiliza el token existente por email para no duplicar al
- * re-ejecutar. Escribe /surveys/{id}/tokens/{token} = { email, metadata, used }.
- * Devuelve [{ email, token }]; el cliente compone el enlace con su origin.
- */
-export const createSurveyTokens = onCall({ region: 'europe-west1' }, async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
-  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
-    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede generar enlaces.');
-  }
-  const { surveyId, participants } = request.data ?? {};
-  if (!surveyId || !Array.isArray(participants)) throw new HttpsError('invalid-argument', 'Faltan surveyId o participants.');
-
-  const db = getFirestore();
-  const surveyRef = db.doc(`surveys/${surveyId}`);
-  if (!(await surveyRef.get()).exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
-
-  try {
-    // Tokens ya emitidos, indexados por email, para no duplicar.
-    const existing = await surveyRef.collection('tokens').get();
-    const tokenByEmail = new Map();
-    existing.docs.forEach((d) => {
-      const email = d.data().email;
-      if (email) tokenByEmail.set(String(email).toLowerCase(), d.id);
-    });
-
-    const results = [];
-    let batch = db.batch();
-    let pending = 0;
-    // Lista blanca server-side (RMR-TSK-0355): fijos + ejes declarados; el
-    // cliente no puede colar campos arbitrarios en los tokens.
-    const axisIds = await declaredAxisIds(db);
-    for (const p of participants) {
-      const email = String(p?.email ?? '').trim();
-      if (!email || !email.includes('@')) continue;
-      const key = email.toLowerCase();
-      const cleanMeta = sanitizeParticipantMeta(p?.metadata ?? {}, axisIds);
-      let token = tokenByEmail.get(key);
-      if (!token) {
-        token = randomBytes(18).toString('hex');
-        tokenByEmail.set(key, token);
-        batch.set(surveyRef.collection('tokens').doc(token), { email, metadata: cleanMeta, used: false });
-        pending += 1;
-        if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
-      } else if (Object.keys(cleanMeta).length > 0) {
-        // El enlace ya existe: re-subir el padrón ACTUALIZA sus campos de segmentación
-        // (merge, sin duplicar el token). No borra los que no vengan en esta subida.
-        batch.set(surveyRef.collection('tokens').doc(token), { metadata: cleanMeta }, { merge: true });
-        pending += 1;
-        if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
-      }
-      results.push({ email, token });
-    }
-    if (pending > 0) await batch.commit();
-    return { tokens: results };
-  } catch (err) {
-    // Diagnóstico: el detalle SOLO al log del servidor (no al cliente, para no
-    // filtrar internos); el cliente recibe un mensaje genérico.
-    logger.error('createSurveyTokens failed', { message: err?.message, stack: err?.stack, count: Array.isArray(participants) ? participants.length : 0 });
-    throw new HttpsError('internal', 'No se pudieron generar los enlaces. Inténtalo de nuevo; si persiste, avisa.');
-  }
-});
-
-/**
- * Ejes de segmentación a medida DECLARADOS (RMR-TSK-0355): ids del doc
- * /padron/_axes. Es la LISTA BLANCA server-side de campos custom que pueden
- * viajar en tokens y respuestas — lo no declarado nunca sale del padrón.
- * Best-effort: sin doc (o ilegible) no hay ejes custom, nunca revienta.
- * @param {FirebaseFirestore.Firestore} db
- * @returns {Promise<string[]>}
- */
-async function declaredAxisIds(db) {
-  try {
-    const snap = await db.doc('padron/_axes').get();
-    const axes = snap.exists ? snap.data().axes : null;
-    return Array.isArray(axes) ? axes.map((a) => String(a?.id ?? '')).filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Actualiza los campos de segmentación (metadata) de UN participante ya creado,
- * localizado por su token, sin regenerar el enlace. Solo superadmin/People. La
- * metadata se sanea a las claves conocidas + los ejes declarados (nada de
- * campos arbitrarios).
- */
-export const updateSurveyParticipant = onCall(
-  { region: 'europe-west1', secrets: [SURVEY_SALT] },
-  async (request) => {
-    await assertSurveyManager(request.auth?.uid);
-    const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
-    const token = typeof request.data?.token === 'string' ? request.data.token.trim() : '';
-    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
-
-    const db = getFirestore();
-    const surveyRef = db.doc(`surveys/${surveyId}`);
-    const tokenRef = surveyRef.collection('tokens').doc(token);
-    const tokenSnap = await tokenRef.get();
-    if (!tokenSnap.exists) throw new HttpsError('not-found', 'Participante no encontrado.');
-
-    const axisIds = await declaredAxisIds(db);
-    const cleanMeta = sanitizeParticipantMeta(request.data?.metadata ?? {}, axisIds);
-    await tokenRef.set({ metadata: cleanMeta }, { merge: true });
-
-    // Si ya respondió, re-bucketizar su respuesta anónima para que los resultados
-    // segmentados usen los nuevos campos y no queden buckets obsoletos.
-    if (tokenSnap.data().used === true) {
-      // Los tramos (edad/antigüedad) se recalculan respecto a la fecha ORIGINAL de
-      // la respuesta, no a la de esta edición, para no alterar el histórico.
-      const refIso = responseRefDate(tokenSnap.data()) ?? new Date().toISOString();
-      const answerRef = surveyRef.collection('answers').doc(answerId(token, SURVEY_SALT.value()));
-      if ((await answerRef.get()).exists) {
-        await answerRef.set({ metadata: bucketMetadata(cleanMeta, refIso, axisIds) }, { merge: true });
-      }
-    }
-    return { ok: true };
-  },
-);
-
-/**
- * Borra UN participante (su token) y su respuesta anónima si la hubiera. El
- * answerId es HMAC del token con el SALT (secreto), así que se recalcula aquí.
- * Solo superadmin/People.
- */
-export const deleteSurveyParticipant = onCall(
-  { region: 'europe-west1', secrets: [SURVEY_SALT] },
-  async (request) => {
-    await assertSurveyManager(request.auth?.uid);
-    const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
-    const token = typeof request.data?.token === 'string' ? request.data.token.trim() : '';
-    if (!surveyId || !token) throw new HttpsError('invalid-argument', 'Faltan surveyId o token.');
-
-    const db = getFirestore();
-    const surveyRef = db.doc(`surveys/${surveyId}`);
-    // Token y respuesta son documentos hoja (sin subcolecciones): delete directo.
-    await surveyRef.collection('answers').doc(answerId(token, SURVEY_SALT.value())).delete();
-    await surveyRef.collection('tokens').doc(token).delete();
-    return { ok: true };
-  },
-);
-
-/**
- * Reinicia las respuestas de una encuesta para volver a lanzarla tras un cambio:
- * borra las respuestas y marca los tokens como NO usados, MANTENIENDO los mismos
- * enlaces (la misma gente vuelve a poder contestar desde cero). Con `onlyTest`,
- * solo afecta a los tokens de prueba (deja intactas las respuestas reales).
- * Solo superadmin o People (assertSurveyManager). El cliente no puede tocar las
- * subcolecciones (reglas), así que esto va por Admin SDK.
- */
-export const resetSurveyResponses = onCall(
-  { region: 'europe-west1', secrets: [SURVEY_SALT] },
-  async (request) => {
-    await assertSurveyManager(request.auth?.uid);
-    const surveyId = typeof request.data?.surveyId === 'string' ? request.data.surveyId.trim() : '';
-    if (!surveyId) throw new HttpsError('invalid-argument', 'Falta el surveyId.');
-    const onlyTest = request.data?.onlyTest === true;
-
-    const db = getFirestore();
-    const surveyRef = db.doc(`surveys/${surveyId}`);
-    if (!(await surveyRef.get()).exists) throw new HttpsError('not-found', `Encuesta ${surveyId} no encontrada.`);
-
-    const salt = SURVEY_SALT.value();
-    const tokensSnap = await surveyRef.collection('tokens').get();
-    const targetTokens = onlyTest ? tokensSnap.docs.filter((d) => d.data().test === true) : tokensSnap.docs;
-
-    // Respuestas a borrar: con onlyTest, solo las de los tokens de prueba ya usados
-    // (su answerId es HMAC del token); sin onlyTest, TODAS las respuestas.
-    const answerRefs = onlyTest
-      ? targetTokens.filter((d) => d.data().used === true).map((d) => surveyRef.collection('answers').doc(answerId(d.id, salt)))
-      : (await surveyRef.collection('answers').get()).docs.map((d) => d.ref);
-
-    // Ops: borrar respuestas + resetear tokens. Se commitea en lotes de 400
-    // (el batch de Firestore admite hasta 500 operaciones).
-    const ops = [
-      ...answerRefs.map((ref) => ({ kind: 'del', ref })),
-      ...targetTokens.map((d) => ({ kind: 'reset', ref: d.ref })),
-    ];
-    for (let i = 0; i < ops.length; i += 400) {
-      const batch = db.batch();
-      for (const op of ops.slice(i, i + 400)) {
-        if (op.kind === 'del') batch.delete(op.ref);
-        else batch.update(op.ref, { used: false, respondedAt: FieldValue.delete(), respondedOn: FieldValue.delete() });
-      }
-      await batch.commit();
-    }
-    return { ok: true, cleared: answerRefs.length, tokensReset: targetTokens.length, onlyTest };
-  },
-);
-
-/** Verifica que el llamante es superadmin o gestor de encuestas; si no, lanza. */
-async function assertSurveyManager(uid) {
-  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
-  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
-    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede enviar correos.');
-  }
-}
-
-/**
- * Base pública de la instancia, derivada del proyecto EN EL SERVIDOR. Nunca se usa
- * un `origin` del cliente para componer los enlaces (evita convertir el envío en
- * un vector de phishing hacia un dominio arbitrario).
- */
-function appBaseUrl() {
-  const projectId = process.env.GCLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT ?? '';
-  return `https://${projectId}.web.app`;
-}
-
-/**
- * Lee la encuesta, valida que esté ABIERTA (para que el enlace se pueda responder)
- * y que su plantilla de correo esté completa; devuelve sus datos.
- */
-async function loadSurveyForEmail(db, surveyId, { requireOpen = true } = {}) {
-  const ref = db.doc(`surveys/${surveyId}`);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Encuesta no encontrada.');
-  const survey = snap.data();
-  // El envío MASIVO exige encuesta abierta; la PRUEBA no (RMR-TSK-0424): sirve
-  // para verificar entrega y aspecto antes de abrir. La plantilla se valida
-  // siempre.
-  if (requireOpen && survey.status !== 'open') {
-    throw new HttpsError('failed-precondition', 'Abre la encuesta antes de enviar los correos.');
-  }
-  const errors = emailTemplateErrors(survey.email ?? {});
-  if (errors.length) throw new HttpsError('failed-precondition', errors[0]);
-  return { ref, survey };
-}
-
-/**
- * Envía un correo de PRUEBA a un destinatario con un enlace de prueba (token
- * `test`): se puede rellenar, pero su respuesta NO cuenta en los agregados. Solo
- * superadmin/People. La encuesta debe estar abierta para poder responderlo.
- */
-export const sendSurveyTestEmail = onCall(
-  { region: 'europe-west1', secrets: [GMAIL_SA_KEY] },
-  async (request) => {
-    await assertSurveyManager(request.auth?.uid);
-    const { surveyId, to } = request.data ?? {};
-    if (!surveyId || !to) throw new HttpsError('invalid-argument', 'Faltan surveyId o to.');
-    if (!String(to).includes('@')) throw new HttpsError('invalid-argument', 'El email de prueba no es válido.');
-    const db = getFirestore();
-    const { ref, survey } = await loadSurveyForEmail(db, surveyId, { requireOpen: false });
-    const token = randomBytes(18).toString('hex');
-    await ref.collection('tokens').doc(token).set({ email: to, metadata: {}, used: false, test: true });
-    const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token}`;
-    await sendSurveyMail({ to, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link) });
-    return { ok: true, surveyOpen: survey.status === 'open' };
-  },
-);
-
-/**
- * Envío MASIVO: manda a cada participante (token no de prueba) su enlace personal.
- * Secuencial y tolerante a fallos (cuenta enviados/fallidos). Solo superadmin/People.
- */
-export const sendSurveyBulkEmails = onCall(
-  { region: 'europe-west1', secrets: [GMAIL_SA_KEY], timeoutSeconds: 540 },
-  async (request) => {
-    await assertSurveyManager(request.auth?.uid);
-    const { surveyId, mode = 'pending' } = request.data ?? {};
-    if (!surveyId) throw new HttpsError('invalid-argument', 'Falta surveyId.');
-    if (mode !== 'pending' && mode !== 'reminder') throw new HttpsError('invalid-argument', 'Modo de envío desconocido.');
-    const db = getFirestore();
-    const { ref, survey } = await loadSurveyForEmail(db, surveyId);
-    const targets = sendTargets((await ref.collection('tokens').get()).docs.map((d) => ({ id: d.id, ref: d.ref, data: d.data() })), mode);
-    // Cada enlace apunta si se le envió (RMR-TSK-0643): sin eso, al pasarse del
-    // cupo de Resend nadie sabía a quién le había llegado.
-    let sent = 0;
-    let failed = 0;
-    let quotaReached = false;
-    for (const [i, token] of targets.entries()) {
-      if (i > 0) await new Promise((resolve) => { setTimeout(resolve, SEND_INTERVAL_MS); });
-      const link = `${appBaseUrl()}/encuesta?s=${surveyId}&t=${token.id}`;
-      let outcome;
-      try {
-        await sendSurveyMail({ to: token.data.email, subject: survey.email.subject, text: renderEmailBody(survey.email.body, link) });
-        outcome = { sentAt: FieldValue.serverTimestamp(), sendError: FieldValue.delete() };
-        sent += 1;
-      } catch (err) {
-        if (isQuotaError(err)) { quotaReached = true; break; }
-        outcome = { sendError: String(err?.message ?? err).slice(0, 300) };
-        failed += 1;
-      }
-      // Anotarlo va aparte del envío: si falla la anotación, el correo salió igual
-      // y no se cuenta como fallido; se registra para poder reconstruirlo.
-      await token.ref.update(outcome).catch((err) => logger.error('[encuestas] no se pudo anotar el envío', { surveyId, token: token.id, err: String(err) }));
-    }
-    return { sent, failed, pending: targets.length - sent - failed, quotaReached };
-  },
-);
 
 /**
  * Propuesta de preguntas para un periodo de O2O con IA. El cliente manda las
@@ -2217,80 +1799,6 @@ export const orgDirectory = onCall({ region: 'europe-west1' }, async (request) =
   if (!request.auth) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
   const snap = await getFirestore().collection('people').get();
   return { people: projectDirectory(snap.docs.map((d) => ({ id: d.id, data: d.data() }))) };
-});
-
-/**
- * Las filas del padrón que salen del censo (RMR-TSK-0629): personas activas con
- * su email (ficha, invitación o cuenta). Quien gestiona encuestas no lee
- * /people; solo salen nombre, email, departamento y alta.
- */
-async function readDirectoryRows(db) {
-  const [peopleSnap, branchesSnap] = await Promise.all([db.collection('people').get(), db.collection('orgBranches').get()]);
-  const people = peopleSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
-  const uids = people.map((p) => p.data.uid).filter((u) => typeof u === 'string' && u);
-  const authEmail = new Map();
-  for (let i = 0; i < uids.length; i += 100) {
-    const { users } = await getAuth().getUsers(uids.slice(i, i + 100).map((u) => ({ uid: u })));
-    for (const u of users) authEmail.set(u.uid, u.email ?? null);
-  }
-  const labels = new Map(branchesSnap.docs.map((d) => [d.id, d.data().label ?? d.id]));
-  return directoryPadronRows(people.map((p) => ({ ...p, authEmail: authEmail.get(p.data.uid) ?? null })), labels);
-}
-
-/**
- * Deja /padron al día con el directorio (RMR-TSK-0631) y anota cuándo en
- * /padron/_sync, para que las encuestas lean el padrón al instante en vez de
- * esperar a cargarlo. Corre cada noche y bajo demanda (botón «Actualizar»).
- */
-async function syncPadronFromDirectory() {
-  const db = getFirestore();
-  const lock = db.doc('padron/_syncLock');
-  const owner = randomBytes(12).toString('hex');
-  await db.runTransaction(async (tx) => {
-    const held = await tx.get(lock);
-    if (held.exists && Date.now() - held.data().startedAt < PADRON_SYNC_LOCK_MS) {
-      throw new HttpsError('aborted', 'Ya hay una actualización del padrón en curso; prueba en un minuto.');
-    }
-    tx.set(lock, { startedAt: Date.now(), owner });
-  });
-  try {
-    return await writePadronFromDirectory(db);
-  } finally {
-    // Solo suelta SU cerrojo: si caducó y otra ejecución lo tomó, es de ella.
-    await db.runTransaction(async (tx) => {
-      const held = await tx.get(lock);
-      if (held.exists && held.data().owner === owner) tx.delete(lock);
-    });
-  }
-}
-
-/** Un cerrojo más viejo que esto es de una ejecución que murió sin soltarlo. */
-const PADRON_SYNC_LOCK_MS = 10 * 60 * 1000;
-
-async function writePadronFromDirectory(db) {
-  const [directory, padronSnap] = await Promise.all([readDirectoryRows(db), db.collection('padron').get()]);
-  const { updates, adds } = padronUpsertPlan(padronSnap.docs.map((d) => ({ id: d.id, ...d.data() })), directory);
-  const writer = db.bulkWriter();
-  for (const { id, patch } of updates) writer.update(db.doc(`padron/${id}`), patch);
-  for (const person of adds) writer.create(db.collection('padron').doc(), person);
-  const summary = { at: FieldValue.serverTimestamp(), added: adds.length, updated: updates.length };
-  writer.set(db.doc('padron/_sync'), summary);
-  await writer.close();
-  return { added: adds.length, updated: updates.length };
-}
-
-export const syncPadron = onCall({ region: 'europe-west1' }, async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Necesitas iniciar sesión.');
-  if (!(await isAdmin(uid)) && !(await isSurveyAdmin(uid))) {
-    throw new HttpsError('permission-denied', 'Solo un superadmin o gestor de encuestas puede actualizar el padrón.');
-  }
-  return syncPadronFromDirectory();
-});
-
-export const syncPadronNightly = onSchedule({ region: 'europe-west1', schedule: 'every day 03:00', timeZone: 'Europe/Madrid' }, async () => {
-  const result = await syncPadronFromDirectory();
-  logger.info('padrón sincronizado con el directorio', result);
 });
 
 const NOTION_TOKEN = defineSecret('NOTION_TOKEN');

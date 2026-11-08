@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { HUB_TOOLS, TOOL_ID, ADMIN_CARDS } from './hubCards.js';
 import { GROUP_IDS } from '../lib/hubGroups.js';
+import { TOOLS } from '../tools/team/data/tools.js';
 
 describe('las tarjetas del inicio', () => {
   it('hay unas cuantas', () => {
@@ -37,6 +38,10 @@ describe('las tarjetas del inicio', () => {
   it('Encuestas ya no está: la herramienta vive en el portal (HU-0014)', () => {
     expect(HUB_TOOLS.map((t) => t.href)).not.toContain('/tools/encuestas');
     expect(ADMIN_CARDS.map((c) => c.id)).not.toContain('surveys');
+  });
+
+  it('ni en el catálogo de permisos: no se ofrece conceder lo que no existe (HU-0016)', () => {
+    expect(TOOLS.map((t) => t.toolId)).not.toContain('surveys');
   });
 
   it('ninguna se queda en el grupo de cola: el de cola es para despistes, no un destino', () => {

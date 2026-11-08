@@ -1,14 +1,7 @@
 /**
- * Tests de las REGLAS de gestión de encuestas (RMR-TSK-0476).
- *
- * Gestionar encuestas era un rol aparte (/surveyAdmins), creado antes de que
- * existiera el sistema de permisos. Es exactamente «puede gestionar la
- * herramienta Encuestas», así que pasa a concederse como permiso, materializado
- * en /toolManagers — el mismo espejo que usan las demás herramientas.
- *
- * Lo que se comprueba aquí es que el cambio es ADITIVO: quien tiene el permiso
- * nuevo entra, quien sigue con el rol antiguo también, y quien no tiene ninguno
- * de los dos sigue fuera. Sin esa última parte, «funciona» no significaría nada.
+ * Encuestas salió de GREBLA (HU-0016). Sus datos siguen en la base, pero ya
+ * ningún cliente los lee ni los escribe: ni quien tenía el permiso, ni quien
+ * tenía el rol antiguo, ni el superadmin. Lo único que los toca es el Admin SDK.
  */
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
@@ -39,33 +32,26 @@ test.describe('reglas de /surveys', () => {
       await setDoc(doc(db, 'toolManagers', 'surveys--conPermiso'), { toolId: 'surveys', uid: 'conPermiso' });
       // Con el rol antiguo, aún sin migrar.
       await setDoc(doc(db, 'surveyAdmins', 'conRolViejo'), { addedAt: 'legacy' });
+      await setDoc(doc(db, 'admins', 'jefa'), { email: 'jefa@tribbuapp.com' });
+      await setDoc(doc(db, 'padron', 'p1'), { email: 'ana@tribbuapp.com' });
     });
   });
 
   test.afterAll(async () => { await env?.cleanup(); });
 
-  test('quien tiene el permiso de la herramienta gestiona las encuestas', async () => {
-    const db = comoEmpleado(env, 'conPermiso').firestore();
-    await assertSucceeds(getDoc(doc(db, 'surveys', 'clima-1')));
-    await assertSucceeds(setDoc(doc(db, 'surveys', 'clima-2'), { title: 'Nueva' }));
-  });
-
-  test('quien aún tiene el rol antiguo sigue entrando: la migración no deja a nadie fuera', async () => {
-    const db = comoEmpleado(env, 'conRolViejo').firestore();
-    await assertSucceeds(getDoc(doc(db, 'surveys', 'clima-1')));
-  });
-
-  test('sin permiso ni rol no se entra, aunque se tenga correo del dominio', async () => {
-    const db = comoEmpleado(env, 'cualquiera').firestore();
-    await assertFails(getDoc(doc(db, 'surveys', 'clima-1')));
-    await assertFails(setDoc(doc(db, 'surveys', 'clima-3'), { title: 'No' }));
-  });
-
-  test('el permiso de OTRA herramienta no abre las encuestas', async () => {
-    await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'toolManagers', 'dora--soloDora'), { toolId: 'dora', uid: 'soloDora' });
+  for (const quien of ['conPermiso', 'conRolViejo', 'jefa', 'cualquiera']) {
+    test(`${quien} ya no lee ni escribe encuestas, padrón ni gestores`, async () => {
+      const db = comoEmpleado(env, quien).firestore();
+      await assertFails(getDoc(doc(db, 'surveys', 'clima-1')));
+      await assertFails(setDoc(doc(db, 'surveys', 'clima-2'), { title: 'Nueva' }));
+      await assertFails(getDoc(doc(db, 'padron', 'p1')));
+      await assertFails(getDoc(doc(db, 'surveyAdmins', 'conRolViejo')));
     });
-    const db = comoEmpleado(env, 'soloDora').firestore();
-    await assertFails(getDoc(doc(db, 'surveys', 'clima-1')));
+  }
+
+  test('los datos siguen ahí: solo se cierra el acceso, no se borra nada', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await assertSucceeds(getDoc(doc(ctx.firestore(), 'surveys', 'clima-1')));
+    });
   });
 });

@@ -213,18 +213,17 @@ describe('mergeAccessUsers', () => {
     });
     expect(result).toEqual([{
       uid: 'seed', displayName: 'Seed', email: 'seed@x.com', lastLogin: null,
-      role: 'leader', teamRole: 'leader', isAdmin: false, isSurveyAdmin: false,
+      role: 'leader', teamRole: 'leader', isAdmin: false,
     }]);
   });
 
-  it('expone el gestor de encuestas (isSurveyAdmin) como eje ortogonal', () => {
+  it('el gestor de encuestas ya no es un rol: GREBLA no tiene encuestas (HU-0016)', () => {
     const [u] = mergeAccessUsers({
       users: [{ id: 'p', displayName: 'P', email: 'p@x.com' }],
       surveyAdmin: [{ id: 'p' }],
     });
-    expect(u.isSurveyAdmin).toBe(true);
-    expect(u.isAdmin).toBe(false);
-    expect(u.teamRole).toBe('none');
+    expect(u).not.toHaveProperty('isSurveyAdmin');
+    expect(u.role).toBe('none');
   });
 
   it('expone los dos ejes por separado: isAdmin (gobierno) y teamRole (equipo)', () => {
@@ -437,7 +436,6 @@ describe('classifyAccountWithoutPerson: qué es una cuenta sin ficha (RMR-TSK-04
       { role: 'viewer', lastLogin: haceDias(400) },
       { role: 'leader', lastLogin: null },
       { role: 'none', isAdmin: true, lastLogin: null },
-      { role: 'none', isSurveyAdmin: true, lastLogin: haceDias(999) },
     ]) {
       expect(classifyAccountWithoutPerson(quien, { ahora: HOY })).toBe('acceso');
     }

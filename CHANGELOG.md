@@ -15,6 +15,16 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.269.1] - 2026-11-08
+
+### Quitado
+
+- Desaparece el rol «gestor de encuestas» y Encuestas deja de salir en la matriz
+  de permisos.
+- Se retiran las funciones de servidor de Encuestas y del padrón (incluida la
+  sincronización nocturna) y sus reglas: ningún cliente lee ni escribe ya esas
+  colecciones. Los datos siguen guardados.
+
 ## [1.269.0] - 2026-11-08
 
 ### Quitado

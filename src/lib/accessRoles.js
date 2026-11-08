@@ -56,7 +56,6 @@ export function mergeAccessUsers(groups) {
       role: /** @type {UserRole} */ ('none'),
       teamRole: /** @type {TeamRole} */ ('none'),
       isAdmin: false,
-      isSurveyAdmin: false,
     });
   }
   // Aplica los roles de menor a mayor prioridad (gana el último = mayor). El
@@ -65,7 +64,7 @@ export function mergeAccessUsers(groups) {
     for (const item of groups[role] ?? []) {
       const existing = byUid.get(item.id) ?? {
         uid: item.id, displayName: null, email: null, lastLogin: null,
-        role: 'none', teamRole: 'none', isAdmin: false, isSurveyAdmin: false,
+        role: 'none', teamRole: 'none', isAdmin: false,
       };
       const next = {
         ...existing,
@@ -78,19 +77,6 @@ export function mergeAccessUsers(groups) {
       else next.teamRole = /** @type {TeamRole} */ (role);
       byUid.set(item.id, next);
     }
-  }
-  // Gestor de encuestas (People): eje ortogonal, como el gobierno (isAdmin).
-  for (const item of groups.surveyAdmin ?? []) {
-    const existing = byUid.get(item.id) ?? {
-      uid: item.id, displayName: null, email: null, lastLogin: null,
-      role: 'none', teamRole: 'none', isAdmin: false, isSurveyAdmin: false,
-    };
-    byUid.set(item.id, {
-      ...existing, uid: item.id,
-      displayName: existing.displayName ?? item.displayName ?? null,
-      email: existing.email ?? item.email ?? null,
-      isSurveyAdmin: true,
-    });
   }
   return [...byUid.values()].sort((a, b) => toMs(b.lastLogin) - toMs(a.lastLogin));
 }
@@ -197,13 +183,13 @@ export function hubAsView(flag, real) {
  *               se le ha hecho la ficha.
  *  - `residuo`  sin rol y sin rastro de actividad: candidata a retirar.
  *
- * @param {{ role?: string, isAdmin?: boolean, isSurveyAdmin?: boolean, lastLogin?: unknown }} user
+ * @param {{ role?: string, isAdmin?: boolean, lastLogin?: unknown }} user
  * @param {{ ahora?: number, diasInactiva?: number }} [opts] `ahora` en ms; por
  *   defecto 90 días sin entrar para considerarla residuo.
  * @returns {'acceso'|'reciente'|'residuo'}
  */
 export function classifyAccountWithoutPerson(user, { ahora = 0, diasInactiva = 90 } = {}) {
-  const tieneAcceso = (user?.role && user.role !== 'none') || user?.isAdmin === true || user?.isSurveyAdmin === true;
+  const tieneAcceso = (user?.role && user.role !== 'none') || user?.isAdmin === true;
   if (tieneAcceso) return 'acceso';
   const ultimo = toMillis(user?.lastLogin);
   if (ultimo === null) return 'residuo';
