@@ -1,12 +1,12 @@
 /**
- * Notas PRIVADAS del manager sobre una persona (RMR-TSK-0636): performance
- * reviews y contexto. A diferencia de /people/{id}/conversations, la propia
- * persona NO las lee: por eso viven fuera de su ficha, en /managerNotes. La
- * promesa solo vale si la cumplen las reglas, así que se prueba contra ellas.
+ * Notas del manager sobre una persona (RMR-TSK-0636): performance reviews y
+ * contexto. Viven fuera de su ficha, en /managerNotes. La persona lee sus
+ * performance reviews (RMR-TSK-0544), pero el contexto sigue siendo privado del
+ * manager. La promesa solo vale si la cumplen las reglas: se prueba contra ellas.
  */
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { test } from '@playwright/test';
 
 const PROJECT = 'demo-grebla-notas-privadas';
@@ -17,6 +17,7 @@ const HEAD = 'uid-head';
 const VISOR = 'uid-visor';
 const OTRA = 'uid-otra';
 const ENTRY = ['managerNotes', PERSONA, 'entries', 'e1'];
+const CONTEXTO = ['managerNotes', PERSONA, 'entries', 'c1'];
 const VALIDA = { type: 'perf-review', date: '2026-06-30', title: 'Review H1', content: 'Muy buen semestre.' };
 
 async function testEnv() {
@@ -42,6 +43,7 @@ test.describe('reglas de /managerNotes/{personId}/entries', () => {
       await setDoc(doc(db, 'viewers', VISOR), { at: 'x' });
       await setDoc(doc(db, 'people', PERSONA), { name: 'Ana', uid: ANA, ownerLeaderUid: MANAGER, active: true });
       await setDoc(doc(db, ...ENTRY), VALIDA);
+      await setDoc(doc(db, ...CONTEXTO), { ...VALIDA, type: 'contexto' });
     });
   });
 
@@ -57,10 +59,19 @@ test.describe('reglas de /managerNotes/{personId}/entries', () => {
     await assertSucceeds(getDoc(doc(como(env, HEAD), ...ENTRY)));
   });
 
-  test('LA PROPIA PERSONA no las lee ni las escribe, aunque también sea líder', async () => {
+  test('la propia persona LEE sus performance reviews, pero no las escribe (RMR-TSK-0544)', async () => {
     const db = como(env, ANA);
-    await assertFails(getDoc(doc(db, ...ENTRY)));
+    await assertSucceeds(getDoc(doc(db, ...ENTRY)));
+    await assertSucceeds(getDocs(query(collection(db, 'managerNotes', PERSONA, 'entries'), where('type', '==', 'perf-review'))));
     await assertFails(setDoc(doc(db, 'managerNotes', PERSONA, 'entries', 'e3'), VALIDA));
+    await assertFails(updateDoc(doc(db, ...ENTRY), { title: 'Me la cambio' }));
+    await assertFails(deleteDoc(doc(db, ...ENTRY)));
+  });
+
+  test('las notas de CONTEXTO siguen siendo solo del manager, aunque la persona también sea líder', async () => {
+    const db = como(env, ANA);
+    await assertFails(getDoc(doc(db, ...CONTEXTO)));
+    await assertFails(getDocs(collection(db, 'managerNotes', PERSONA, 'entries')));
   });
 
   test('ni el visor global ni alguien de fuera', async () => {
