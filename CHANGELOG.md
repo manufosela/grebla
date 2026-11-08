@@ -15,6 +15,13 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.268.0] - 2026-11-08
+
+### Quitado
+
+- Encuestas desaparece del inicio y del panel de Administración: la herramienta
+  vive ahora en el portal de TRIBBU.
+
 ## [1.267.0] - 2026-11-08
 
 ### Añadido

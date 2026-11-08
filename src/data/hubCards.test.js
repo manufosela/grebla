@@ -34,6 +34,11 @@ describe('las tarjetas del inicio', () => {
     expect(fuera).toEqual([]);
   });
 
+  it('Encuestas ya no está: la herramienta vive en el portal (HU-0014)', () => {
+    expect(HUB_TOOLS.map((t) => t.href)).not.toContain('/tools/encuestas');
+    expect(ADMIN_CARDS.map((c) => c.id)).not.toContain('surveys');
+  });
+
   it('ninguna se queda en el grupo de cola: el de cola es para despistes, no un destino', () => {
     const enCola = HUB_TOOLS.filter((t) => t.group === 'otras').map((t) => t.name);
     expect(enCola).toEqual([]);
