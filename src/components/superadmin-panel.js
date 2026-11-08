@@ -95,7 +95,7 @@ const GOVERNANCE = /** @type {const} */ ([
 
 const ROLE_LABEL = { superadmin: 'Superadmin', supermanager: 'Head', viewer: 'Viewer', leader: 'Manager', none: 'Sin rol' };
 // El violeta del Head contrasta AA sobre el texto blanco del badge, igual que los demás.
-const ROLE_COLOR = { superadmin: '#dc2626', supermanager: '#6d28d9', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af', surveyAdmin: '#0d9488' };
+const ROLE_COLOR = { superadmin: '#dc2626', supermanager: '#6d28d9', viewer: '#6b7280', leader: '#3b82f6', none: '#9ca3af' };
 const loginFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeStyle: 'short' });
 /** @param {unknown} ts Firestore Timestamp | number | null */
 function formatLogin(ts) {
