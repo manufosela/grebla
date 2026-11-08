@@ -116,47 +116,14 @@ test('los permisos por persona se gestionan desde su propia sección del panel',
   }
 });
 
-/** La política de Encuestas, con audiencia igual a quien la gestiona. */
-async function conPoliticaDeEncuestas(fn) {
-  await db().doc('toolPolicies/surveys').set({
-    label: 'Encuestas de clima',
-    audience: { branches: ['people'] },
-    managedBy: { branches: ['people'] },
-  });
-  try { await fn(); } finally { await db().doc('toolPolicies/surveys').delete(); }
-}
+test('Encuestas ya no está en el inicio ni en Administración: se fue al portal (HU-0014)', async ({ page }) => {
+  await signInAs(page, 'superadmin');
+  await page.goto('/');
+  // El hub ha cargado (se ve alguna card), pero la de encuestas no está.
+  await expect(page.locator('[data-tool-id="kudos"]:not([hidden])')).toBeVisible();
+  await expect(page.locator('a[href="/tools/encuestas"]')).toHaveCount(0);
 
-test('Encuestas se rige por su política, sin marcador propio', async ({ page }) => {
-  // Antes llevaba `data-survey-tool` y se filtraba aparte, herencia de cuando
-  // People era un rol suelto (RMR-TSK-0477). Ahora es una card como las demás.
-  await conPoliticaDeEncuestas(async () => {
-    await signInAs(page, 'superadmin');
-    await page.goto('/');
-    await expect(page.locator('[data-tool-id="surveys"]:not([hidden])')).toBeVisible();
-    await expect(page.locator('[data-survey-tool]')).toHaveCount(0);
-  });
-});
-
-test('quien no está en la audiencia de Encuestas no ve su card', async ({ page }) => {
-  await conPoliticaDeEncuestas(async () => {
-    await signInAs(page, 'engineer');
-    await page.goto('/');
-    // El hub ha cargado (se ve alguna card), pero la de encuestas no está.
-    await expect(page.locator('[data-personal]:not([data-tool-id])')).toBeVisible();
-    await expect(page.locator('[data-tool-id="surveys"]:not([hidden])')).toHaveCount(0);
-  });
-});
-
-test('al simular otra vista, Encuestas sigue la política y no el gobierno', async ({ page }) => {
-  // La card dejó de tener filtro propio, así que aquí manda la política con la
-  // ficha de quien mira: un superadmin cuya persona no está en la audiencia deja
-  // de verla en cuanto simula, porque simular apaga el gobierno (RMR-TSK-0477).
-  await conPoliticaDeEncuestas(async () => {
-    await signInAs(page, 'superadmin');
-    await page.goto('/');
-    await expect(page.locator('[data-tool-id="surveys"]:not([hidden])')).toBeVisible();
-
-    await page.getByRole('group', { name: 'Cambiar de vista' }).getByRole('button', { name: 'Empleado' }).click();
-    await expect(page.locator('[data-tool-id="surveys"]:not([hidden])')).toHaveCount(0);
-  });
+  await page.goto('/admin');
+  await expect(page.locator('[data-admin-id="team"]')).toBeVisible();
+  await expect(page.locator('[data-admin-id="surveys"]')).toHaveCount(0);
 });

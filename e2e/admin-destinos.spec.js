@@ -56,7 +56,7 @@ test('y desde la herramienta se vuelve a Administración, no al hub de herramien
   // herramientas obligaba a rehacer el camino a mano cada vez (RMR-BUG-0115).
   await signInAs(page, 'superadmin');
   await page.goto('/admin');
-  await page.locator('[data-admin-id="surveys"]').click();
+  await page.locator('[data-admin-id="team"]').click();
 
   const volver = page.locator('tool-nav').first();
   await expect(volver).toBeVisible();
@@ -68,7 +68,7 @@ test('y desde la herramienta se vuelve a Administración, no al hub de herramien
 
 test('quien entra por el hub de herramientas sigue volviendo al hub', async ({ page }) => {
   await signInAs(page, 'superadmin');
-  await page.goto('/tools/encuestas');
+  await page.goto('/kudos');
 
   const destino = await page.locator('tool-nav').first()
     .evaluate((el) => el.shadowRoot?.querySelector('a.back')?.getAttribute('href'));

@@ -26,7 +26,7 @@ test('quien gobierna ve la organización y todas las herramientas', async ({ pag
 
   await expect(tarjeta(page, 'organizacion')).toBeVisible();
   const ids = await visibles(page);
-  expect(ids).toContain('surveys');
+  expect(ids).toContain('team');
   expect(ids).toContain('o2o');
   expect(ids).toContain('motivators');
 });

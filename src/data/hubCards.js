@@ -144,13 +144,6 @@ export const HUB_TOOLS = [
     description: 'Da las gracias de forma anónima con un mensaje corto (público y/o privado). Cada semana, el muro muestra a las personas agradecidas — sin rankings ni competición.',
     available: true,
   },
-  {
-    name: 'Encuestas',
-    href: '/tools/encuestas',
-    group: 'estamos',
-    description: 'Encuestas de clima anónimas (eNPS + Q12): crea la encuesta, comparte los enlaces personales y consulta participación y resultados por segmento.',
-    available: true,
-  },
 ];
 
 /**
@@ -173,7 +166,6 @@ export const TOOL_ID = {
   '/marea': 'marea',
   '/retros': 'retros',
   '/poker': 'poker',
-  '/tools/encuestas': 'surveys',
   '/kudos': 'kudos',
   '/documentacion': 'docs',
 };
@@ -204,13 +196,6 @@ export const ADMIN_CARDS = [
     icon: '📖',
     href: '/admin/documentos',
     description: 'Las presentaciones que explican cómo trabajamos: subirlas, organizarlas en carpetas y retirarlas.',
-  },
-  {
-    id: 'surveys',
-    name: 'Encuestas',
-    icon: '📋',
-    href: '/tools/encuestas',
-    description: 'Plantillas y preguntas, padrón de participantes, ejes de segmentación y resultados.',
   },
   {
     id: 'rolemirror',
