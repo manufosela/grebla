@@ -50,6 +50,7 @@ import { getLevel, expectationsForLevel, addendumsForDisciplines, aspirationalLe
 import { setCareerTarget, getPersonLogbook } from '../lib/engineer.js';
 import { visibleTabsFor, effectiveTabFor } from './engineer-tabs.js';
 import './career-person/career-person-panel.js';
+import './o2o/my-perf-reviews.js';
 import { membershipLabel } from '../tools/team/domain/membership.js';
 import { conversationOrigin, conversationsNewestFirst } from '../tools/team/domain/conversationOrigin.js';
 
@@ -59,9 +60,9 @@ import { conversationOrigin, conversationsNewestFirst } from '../tools/team/doma
  * atrás/adelante, igual que el patrón de <superadmin-panel>. El mapa vive como
  * sub-pestaña dentro de «carrera» (RMR-TSK-0262); el hash legado `#mapa` sigue
  * aterrizando ahí. «Mis datos» ya no existe: todo está en «Mi ficha» (RMR-TSK-0697).
- * @type {ReadonlyArray<'ficha'|'carrera'|'rolemirror'|'motivadores'|'o2o'|'marea'|'retros'|'kudos'>}
+ * @type {ReadonlyArray<'ficha'|'carrera'|'review'|'rolemirror'|'motivadores'|'o2o'|'marea'|'retros'|'kudos'>}
  */
-const TABS = ['ficha', 'carrera', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros', 'kudos'];
+const TABS = ['ficha', 'carrera', 'review', 'rolemirror', 'motivadores', 'o2o', 'marea', 'retros', 'kudos'];
 /** Búsqueda O(1) de existencia (validar el hash de la URL). */
 const TAB_SET = new Set(TABS);
 
@@ -73,6 +74,7 @@ const TAB_SET = new Set(TABS);
 const TAB_META = {
   ficha: { label: 'Mi ficha', heading: 'Mi ficha', cls: 'ficha' },
   carrera: { label: 'Mi carrera', heading: 'Mi carrera', cls: 'career' },
+  review: { label: 'Mi performance review', heading: 'Mi performance review', cls: 'review' },
   rolemirror: { label: 'Mi Role Mirror', heading: 'Mi Role Mirror', cls: 'rolemirror' },
   motivadores: { label: 'Motivadores', heading: 'Motivadores', cls: 'motivadores' },
   o2o: { label: 'Mis O2O', heading: 'Mis O2O', cls: 'o2o' },
@@ -156,6 +158,7 @@ export class EngineerSpace extends LitElement {
     section > h2 { margin: 0 0 0.75rem; font-size: 1.2rem; }
     section.career { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     section.rolemirror { border-left: 4px solid var(--rm-accent, #2a9d8f); }
+    section.review { border-left: 4px solid var(--rm-accent, #2a9d8f); }
     .rm-intro { font-size: 0.88rem; color: var(--rm-muted, #5b6b7d); line-height: 1.5; margin: 0 0 1rem;
       background: var(--rm-surface-hover, #eef3f5); border-radius: 8px; padding: 0.7rem 0.9rem; }
     section.map { border-left: 4px solid var(--rm-coral, #f2887a); }
@@ -902,6 +905,9 @@ export class EngineerSpace extends LitElement {
     const panel = {
       ficha: () => this._renderFicha(),
       carrera: () => this._renderCareerTabbed(),
+      review: () => (this.person?.id
+        ? html`<my-perf-reviews .personId=${this.person.id}></my-perf-reviews>`
+        : html`<p class="empty">Cargando tus performance reviews…</p>`),
       rolemirror: () => this._renderRoleMirror(),
       motivadores: () => this._renderMotivadores(),
       o2o: () => this._renderO2O(),

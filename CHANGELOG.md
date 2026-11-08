@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.267.0] - 2026-11-08
+
+### Añadido
+
+- Mi espacio: pestaña «Mi performance review». Cada persona lee, sin poder
+  editarlas, las performance reviews que le ha hecho su manager. Las notas de
+  contexto siguen siendo privadas del manager.
+
 ## [1.266.5] - 2026-11-08
 
 ### Cambiado

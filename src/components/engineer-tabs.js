@@ -14,8 +14,9 @@
 /** Pestañas de un externo: no tiene carrera ni Role Mirror, solo sus datos y sus O2O. */
 export const EXTERNAL_TABS = ['ficha', 'o2o'];
 /** Pestañas de un interno. «Carrera» integra nivel/expectativas y el mapa como
- *  sub-pestañas (RMR-TSK-0262): no hay pestaña «mapa» suelta. */
-export const INTERNAL_TABS = ['ficha', 'carrera', 'rolemirror'];
+ *  sub-pestañas (RMR-TSK-0262): no hay pestaña «mapa» suelta. «review» son sus
+ *  performance reviews, en solo lectura (RMR-TSK-0544). */
+export const INTERNAL_TABS = ['ficha', 'carrera', 'review', 'rolemirror'];
 
 /**
  * Pestañas visibles según el tipo de persona.
