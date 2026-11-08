@@ -6,8 +6,8 @@ describe('engineer-space: pestañas por tipo de persona', () => {
     expect(visibleTabsFor({ external: true })).toEqual(['ficha', 'o2o']);
   });
 
-  it('un interno añade su carrera y su Role Mirror; sus O2O viven dentro de la carrera', () => {
-    const internal = ['ficha', 'carrera', 'rolemirror'];
+  it('un interno añade su carrera, su performance review y su Role Mirror; sus O2O viven dentro de la carrera', () => {
+    const internal = ['ficha', 'carrera', 'review', 'rolemirror'];
     expect(visibleTabsFor({ external: false })).toEqual(internal);
     expect(visibleTabsFor({})).toEqual(internal);
     expect(visibleTabsFor(null)).toEqual(internal);
