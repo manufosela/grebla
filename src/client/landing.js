@@ -6,7 +6,6 @@
 import { onUserChanged } from '../lib/auth.js';
 import { resolveAccess } from '../lib/access.js';
 import { canGovern, hubAsView, leadsTeam } from '../lib/accessRoles.js';
-import { isSurveyAdmin } from '../lib/survey.js';
 import { getMyPerson, ensureEmployeePerson } from '../lib/engineer.js';
 import { listToolPolicies } from '../lib/toolPolicies.js';
 import { canUseTool, canManageTool } from '../tools/team/domain/toolAccess.js';
@@ -57,16 +56,15 @@ const adminLink = document.getElementById('admin-link');
 onUserChanged(async (user) => {
   if (!user) return showLanding();
   try {
-    // Las cinco lecturas, en paralelo (RMR-BUG-0112). Antes eran cuatro esperas encadenadas
+    // Las cuatro lecturas, en paralelo (RMR-BUG-0112). Antes eran cuatro esperas encadenadas
     // y ninguna dependía de la anterior: se encadenaban solo porque cada
     // decisión se tomaba con el dato recién llegado. Con allSettled, un fallo
     // transitorio de una lectura no tumba a quien YA está autorizado: el hub se
     // pinta sin filtrar —como antes de las políticas— y cada herramienta sigue
     // aplicando su propio control.
-    const [accessRes, domainRes, surveyRes, personRes, policiesRes] = await Promise.allSettled([
+    const [accessRes, domainRes, personRes, policiesRes] = await Promise.allSettled([
       resolveAccess(user),
       getEmployeeDomain(),
-      isSurveyAdmin(user.uid),
       getMyPerson(user.uid),
       listToolPolicies(),
     ]);
@@ -79,12 +77,7 @@ onUserChanged(async (user) => {
     // si no entrara, no podría llegar a lo suyo (RMR-TSK-0475). Antes esto era
     // un caso especial de encuestas, heredado de cuando People era un rol
     // suelto; ahora vale para todas.
-    //
-    // `isSurveyAdmin` cubre además la colección /surveyAdmins, que sigue viva
-    // mientras dure la migración —hay cuentas que solo están ahí— exactamente
-    // igual que en las reglas de Firestore. Es lo único que queda del rol viejo.
     const managesAnyTool = canGovern(access)
-      || (surveyRes.status === 'fulfilled' && surveyRes.value === true)
       || managesSomeTool(
         buildPersonRef(personRes.status === 'fulfilled' ? personRes.value : null),
         policiesRes.status === 'fulfilled' ? policiesRes.value : [],

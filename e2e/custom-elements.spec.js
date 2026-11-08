@@ -17,7 +17,7 @@ import { test, expect, signInAs } from './fixtures.js';
 const PAGINAS = [
   '/', '/organigrama', '/kudos', '/marea', '/poker', '/retros', '/biblioteca',
   '/mi-espacio', '/admin', '/tools/team', '/tools/entrega', '/tools/o2o',
-  '/tools/career-map', '/tools/encuestas', '/tools/role-mirror', '/tools/motivators/moving',
+  '/tools/career-map', '/tools/role-mirror', '/tools/motivators/moving',
 ];
 
 test('ninguna página usa un componente que no llega a definirse', async ({ page }) => {

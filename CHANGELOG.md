@@ -15,6 +15,14 @@ cuando se arregla algo.
 > posteriori habría dado una historia inventada. Para esas, el historial de git
 > y las PR son la fuente.
 
+## [1.269.0] - 2026-11-08
+
+### Quitado
+
+- Encuestas sale de GREBLA: se retiran sus páginas (la de administración y la de
+  responder por enlace) y todo su código de pantalla. Los datos guardados no se
+  tocan.
+
 ## [1.268.0] - 2026-11-08
 
 ### Quitado
